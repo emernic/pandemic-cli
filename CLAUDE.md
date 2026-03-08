@@ -37,7 +37,17 @@ Both clone-and-mutate. Deterministic via seeded ChaCha8Rng.
 
 Key files: `src/state.rs` (data), `src/engine.rs` (logic), `src/action.rs` (input mapping), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
 
-Design docs: `docs/architecture.md`, `docs/gameplay.md`
+Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
+
+### Architectural Direction
+
+We're incrementally migrating toward separating UI state machines from game logic. See `docs/target-architecture.md` for the full plan. The short version:
+
+- **engine.rs should only contain game logic** — `tick()` and game commands (deploy medicine, start research). It should NOT know about panel navigation, wizard steps, or selection indices.
+- **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into game commands when appropriate.
+- **Layering: state.rs ← engine.rs ← ui/ ← main.rs** — Each layer only imports from layers below it. UI should NOT import from engine (currently `resources.rs` and `research.rs` violate this).
+
+When touching engine.rs or UI code, **actively migrate toward this structure.** Don't add new UI state machine logic to engine.rs. Don't add new engine imports to UI modules. Small steps, every PR.
 
 ## Play the Game Yourself
 

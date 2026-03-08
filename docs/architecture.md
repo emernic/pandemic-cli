@@ -35,3 +35,25 @@ RNG is seeded. Seed is stored in state. Same state + same inputs = same outputs,
 ## Real-Time With Pause
 
 Simulation advances in discrete ticks. "Real-time" = ticks fire automatically. "Pause" = they don't. Saves are always at a tick boundary. The engine has no concept of wall-clock time.
+
+## Current Module Map
+
+```
+src/
+  lib.rs          — Crate root, module declarations, format_number() utility
+  main.rs         — CLI args (clap), interactive loop, file I/O
+  state.rs        — GameState and all data structs (pure data, no logic)
+  engine.rs       — tick() + apply_action() (game logic + UI state machines — see note below)
+  action.rs       — Action enum, key-to-action mapping
+  snapshot.rs     — Non-interactive snapshot mode for testing
+  ui/
+    mod.rs        — Layout orchestration, panel routing
+    region_list.rs — World map grid with connections
+    threats.rs    — Disease info panel
+    medicines.rs  — Medicine deployment wizard
+    research.rs   — Research project panel + disease_display_name() utility
+    resources.rs  — Header status bar
+    hotkey_bar.rs — Footer hotkey legend + status messages
+```
+
+**Known debt:** `engine.rs` currently handles both game logic (deploy medicine, start research) and UI state machine transitions (wizard steps, panel navigation). See `docs/target-architecture.md` for the migration plan to separate these concerns.
