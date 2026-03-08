@@ -75,11 +75,16 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             }
 
             // Show knowledge bar
-            if disease.knowledge < 1.0 {
+            if disease.knowledge > 0.0 {
                 let pct = (disease.knowledge * 100.0).min(100.0);
+                let color = if disease.knowledge >= 1.0 {
+                    Color::Green
+                } else {
+                    Color::Blue
+                };
                 lines.push(Line::from(Span::styled(
                     format!("    Knowledge: {:.0}%", pct),
-                    Style::default().fg(Color::Blue),
+                    Style::default().fg(color),
                 )));
             }
 
