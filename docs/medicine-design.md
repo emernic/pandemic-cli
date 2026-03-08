@@ -2,7 +2,9 @@
 
 ## Concept
 
-Medicines are the player's primary tool to fight disease. You select a medicine, deploy it to a region, and choose who receives it: susceptible people (vaccination — prevents infection) or infected people (treatment — cures them). All medicines are unlocked by default; research gating comes later.
+Medicines are the player's primary tool to fight disease. You select a medicine, deploy it to a region, and choose who receives it: susceptible people (vaccination — prevents infection) or infected people (treatment — cures them).
+
+Medicines start locked and must be developed through the research pipeline: Identify Threat → Develop Medicine → (optional) Clinical Trial → Deploy.
 
 ## Data Model
 
@@ -14,32 +16,24 @@ struct Medicine {
     target_diseases: Vec<usize>,  // usually 1, occasionally multiple
     cost: f64,                     // funding per deployment
     doses: f64,                    // people treated per deployment
-    unlocked: bool,                // always true for now
+    unlocked: bool,                // false until developed via research
+    tested_against: Vec<usize>,    // diseases with completed clinical trials
 }
 ```
 
-### RegionDiseaseState — add `immune: f64`
+### Untested Medicine Risk
 
-Tracks vaccinated + cured people per disease per region. Changes the susceptible formula:
+Deploying a medicine that hasn't been clinically trialed against the target disease triggers a confirmation dialog. If the player proceeds, there's a 25% chance of adverse effects: 20% of the deployed doses kill instead of helping. This makes clinical trials strategically important but not mandatory — the player can gamble if the situation is desperate.
+
+### RegionDiseaseState.immune
+
+Tracks vaccinated + cured people per disease per region.
 
 ```
-Before: susceptible = pop - infected - dead
-After:  susceptible = pop - infected - dead - immune
+susceptible = pop - infected - dead - immune
 ```
 
-Vaccination before disease arrival creates entries with `infected: 0, immune: X`. The cross-region spread check changes from "entry exists" to "infected > 0" so the disease can still seed into vaccinated regions — it just finds fewer susceptible hosts.
-
-### UiState — add medicine flow state
-
-```rust
-enum MedicineUiState {
-    BrowseMedicines,
-    SelectRegion { medicine_idx: usize },
-    SelectTarget { medicine_idx: usize, region_idx: usize },
-}
-```
-
-The existing `panel_selection` index is reused at each step (reset on transitions). Opening the Medicines panel (via `OpenMedicines`) always resets to `BrowseMedicines` — switching away and back shouldn't leave you mid-flow.
+Vaccination before disease arrival creates entries with `infected: 0, immune: X`. Cross-region spread checks `infected > 0` (not entry existence) so disease can still seed into vaccinated regions — it just finds fewer susceptible hosts.
 
 ## Player Flow
 
@@ -49,11 +43,15 @@ The existing `panel_selection` index is reused at each step (reset on transition
  ├─ BrowseMedicines: up/down to browse, Enter to select
  │   └─ SelectRegion: up/down to pick region, Enter to select
  │       └─ SelectTarget: up/down to pick target, Enter to deploy
- │           → funding deducted, doses applied, back to SelectRegion
- │             (keeps medicine selected for rapid multi-region deployment)
+ │           ├─ If tested: deploy immediately, back to SelectRegion
+ │           └─ If untested: ConfirmDeploy warning dialog
+ │               ├─ Enter: deploy (with adverse effect risk), back to SelectRegion
+ │               └─ Esc: cancel, back to SelectTarget
  │
  └─ Esc goes back one step (or closes panel from BrowseMedicines)
 ```
+
+After deployment, the player returns to SelectRegion (same medicine selected) for rapid multi-region deployment.
 
 ### Target options
 
@@ -67,56 +65,35 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 
 ## Deployment Mechanics
 
-1. Check `funding >= medicine.cost`, refuse if insufficient
+1. Check `funding >= medicine.cost` — show error message if insufficient
 2. Find or create `RegionDiseaseState` for the target disease in the region
 3. Compute `actual_doses = min(medicine.doses, available_targets)`
-4. If `actual_doses == 0`, refuse (nothing to treat)
-5. Deduct `medicine.cost` (flat rate regardless of actual doses — creates strategic incentive to deploy at the right time, when there are enough targets to justify the cost)
-6. Apply: vaccinate adds to `immune` from susceptible pool; treat moves `infected` to `immune`
-7. Return to SelectRegion (same medicine selected) for quick follow-up deployments
+4. If `actual_doses == 0`, show message ("No susceptible/infected population") and stay on SelectTarget
+5. If untested: require confirmation via ConfirmDeploy step
+6. Deduct `medicine.cost` (flat rate regardless of actual doses — creates strategic incentive to deploy when there are enough targets to justify the cost)
+7. If untested: roll for adverse effects (25% chance, 20% of doses cause deaths)
+8. Apply: vaccinate adds to `immune` from susceptible pool; treat moves `infected` to `immune`
+9. Show deployment feedback message (doses used, region, cost, adverse effects if any)
+10. Return to SelectRegion for quick follow-up deployments
 
-## New Action: `Confirm` (Enter key)
+## Starting Medicines
 
-In the Medicines panel, Enter advances through the flow steps and executes deployment on the final step. In other panels, it's a no-op for now.
+| Medicine | Targets | Cost | Doses | Notes |
+|---|---|---|---|---|
+| Antiviral-A | Strain Alpha | $200 | 100K | Cheap, targeted |
+| Broad-Spectrum Antiviral | Both | $500 | 500K | Expensive, versatile, high-impact |
 
-## Modified Action: `ClosePanel` (Esc)
+Both start locked. The research pipeline to unlock a medicine: Identify Threat (20 ticks) → Develop Medicine (40 ticks) → medicine unlocked. Clinical Trial (25 ticks) makes it safe to deploy without adverse effect risk.
 
-When inside a medicine sub-step, Esc goes back one level instead of closing the panel. Only closes from the top-level BrowseMedicines state.
+At tick ~100 (earliest medicine availability), infections are ~170K. Antiviral-A's 100K doses can treat ~59% of infected — a meaningful intervention. Broad-Spectrum at 500K doses can treat all infected at that stage.
 
-## SelectNext/SelectPrev bounds
+## Selection Bounds
 
 ```
 BrowseMedicines  → unlocked_medicines.len() - 1
 SelectRegion     → regions.len() - 1
 SelectTarget     → 2 * target_diseases.len() - 1
+ConfirmDeploy    → 0 (single confirmation)
 ```
 
 BrowseMedicines filters to unlocked medicines only. The selection index maps into this filtered list.
-
-## Engine Changes
-
-**tick():** One-line change — susceptible calculation subtracts `immune`.
-
-**Cross-region spread:** Check `infected > 0` instead of entry existence. When seeding into a region that has a vaccination-only entry, set `infected = 1.0` on the existing entry instead of pushing a new one.
-
-**apply_action(Confirm):** State machine for medicine flow + deployment execution.
-
-**apply_action(ClosePanel):** Back-step logic when in medicine sub-states.
-
-## Starting Medicines
-
-Two medicines targeting Strain Alpha, offering a cost/efficiency tradeoff:
-
-| Medicine | Cost | Doses | Notes |
-|---|---|---|---|
-| Antiviral-A | $100 | 10K | Cheap, small batches |
-| Broad-Spectrum Antiviral | $300 | 50K | Better value per dose, bigger commitment |
-
-Starting infection is 50K in Asia. Antiviral-A's 10K doses can't outpace the ~7,500/tick growth rate alone — the player needs sustained spending to suppress. Broad-Spectrum can make a dent at 50K doses but costs $300. The intent is that focused effort can protect a small region but saving everyone requires research/policy tools that come later.
-
-## Future Compatibility
-
-- **Research:** The `unlocked` field gates access. Research system flips it to true.
-- **Policy:** Policies can modify `cost` or `doses` fields (e.g., "Pharmaceutical subsidies").
-- **Multiple diseases:** `target_diseases` vec handles this naturally.
-- **Save compatibility:** All new fields use `#[serde(default)]`.
