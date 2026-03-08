@@ -442,15 +442,6 @@ fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64,
     }
 }
 
-fn toggle_panel(ui: &mut crate::state::UiState, panel: Panel) {
-    if ui.open_panel == panel {
-        ui.open_panel = Panel::None;
-    } else {
-        ui.open_panel = panel;
-        ui.panel_selection = 0;
-    }
-}
-
 /// Apply a player action to the game state.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
@@ -463,97 +454,12 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.paused = !new.paused;
             }
         }
-        Action::OpenThreats => toggle_panel(&mut new.ui, Panel::Threats),
-        Action::OpenResearch => {
-            toggle_panel(&mut new.ui, Panel::Research);
-            if new.ui.open_panel == Panel::Research {
-                new.ui.research_ui = Some(ResearchUiState::BrowseCategories);
-            } else {
-                new.ui.research_ui = None;
-            }
-        }
-        Action::OpenMedicines => {
-            toggle_panel(&mut new.ui, Panel::Medicines);
-            if new.ui.open_panel == Panel::Medicines {
-                new.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
-            } else {
-                new.ui.medicine_ui = None;
-            }
-        }
-        Action::OpenPolicy => {
-            toggle_panel(&mut new.ui, Panel::Policy);
-            if new.ui.open_panel == Panel::Policy {
-                new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
-            } else {
-                new.ui.policy_ui = None;
-            }
-        }
-        Action::OpenHelp => toggle_panel(&mut new.ui, Panel::Help),
-        Action::ClosePanel => {
-            if new.ui.open_panel == Panel::Medicines {
-                match new.ui.medicine_ui.clone() {
-                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
-                        new.ui.medicine_ui = Some(MedicineUiState::SelectTarget {
-                            medicine_idx,
-                            region_idx,
-                        });
-                        new.ui.panel_selection = target_selection;
-                    }
-                    Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
-                        new.ui.medicine_ui =
-                            Some(MedicineUiState::SelectRegion { medicine_idx });
-                        new.ui.panel_selection = 0;
-                    }
-                    Some(MedicineUiState::SelectRegion { .. }) => {
-                        new.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
-                        new.ui.panel_selection = 0;
-                    }
-                    _ => {
-                        new.ui.open_panel = Panel::None;
-                        new.ui.panel_selection = 0;
-                        new.ui.medicine_ui = None;
-                    }
-                }
-            } else if new.ui.open_panel == Panel::Policy {
-                match &new.ui.policy_ui {
-                    Some(PolicyUiState::ManagePolicies { .. }) => {
-                        new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
-                        new.ui.panel_selection = 0;
-                    }
-                    _ => {
-                        new.ui.open_panel = Panel::None;
-                        new.ui.panel_selection = 0;
-                        new.ui.policy_ui = None;
-                    }
-                }
-            } else if new.ui.open_panel == Panel::Research {
-                match &new.ui.research_ui {
-                    Some(ResearchUiState::ConfirmProject { bench, .. }) => {
-                        new.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
-                        new.ui.panel_selection = 0;
-                    }
-                    Some(ResearchUiState::ViewActive { bench }) => {
-                        new.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
-                        new.ui.panel_selection = 0;
-                    }
-                    Some(ResearchUiState::BrowseProjects { .. }) => {
-                        new.ui.research_ui = Some(ResearchUiState::BrowseCategories);
-                        new.ui.panel_selection = 0;
-                    }
-                    _ => {
-                        new.ui.open_panel = Panel::None;
-                        new.ui.panel_selection = 0;
-                        new.ui.research_ui = None;
-                    }
-                }
-            } else {
-                new.ui.open_panel = Panel::None;
-                new.ui.panel_selection = 0;
-                new.ui.medicine_ui = None;
-                new.ui.research_ui = None;
-                new.ui.policy_ui = None;
-            }
-        }
+        Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
+        Action::OpenResearch => new.ui.toggle_panel(Panel::Research),
+        Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines),
+        Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy),
+        Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
+        Action::ClosePanel => new.ui.close_panel(),
         Action::SelectNext => {
             if new.ui.open_panel == Panel::None {
                 // Navigate map down
