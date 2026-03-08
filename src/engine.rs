@@ -162,88 +162,93 @@ fn deploy_medicine(
     let target = med.decode_deploy_target(target_selection);
 
     if let Some(target) = target {
-        if state.resources.funding >= cost {
-            let disease_idx = match &target {
-                DeployTarget::Vaccinate { disease_idx } => *disease_idx,
-                DeployTarget::Treat { disease_idx } => *disease_idx,
-            };
+        if state.resources.funding < cost {
+            state.ui.status_message = Some(
+                format!("Insufficient funds! Need ${cost:.0}, have ${:.0}", state.resources.funding),
+            );
+            return;
+        }
 
-            let region = &mut state.regions[region_idx];
-            let region_name = region.name.clone();
-            let pop = region.population as f64;
+        let disease_idx = match &target {
+            DeployTarget::Vaccinate { disease_idx } => *disease_idx,
+            DeployTarget::Treat { disease_idx } => *disease_idx,
+        };
 
-            // Find or create RegionDiseaseState entry
-            let inf_pos = region
-                .infections
-                .iter()
-                .position(|i| i.disease_idx == disease_idx);
-            let inf_idx = if let Some(pos) = inf_pos {
-                pos
-            } else {
-                region.infections.push(RegionDiseaseState {
-                    disease_idx,
-                    infected: 0.0,
-                    dead: 0.0,
-                    immune: 0.0,
-                });
-                region.infections.len() - 1
-            };
+        let region = &mut state.regions[region_idx];
+        let region_name = region.name.clone();
+        let pop = region.population as f64;
 
-            let inf = &mut region.infections[inf_idx];
+        // Find or create RegionDiseaseState entry
+        let inf_pos = region
+            .infections
+            .iter()
+            .position(|i| i.disease_idx == disease_idx);
+        let inf_idx = if let Some(pos) = inf_pos {
+            pos
+        } else {
+            region.infections.push(RegionDiseaseState {
+                disease_idx,
+                infected: 0.0,
+                dead: 0.0,
+                immune: 0.0,
+            });
+            region.infections.len() - 1
+        };
 
-            let is_tested = state.medicines[medicine_idx]
-                .tested_against
-                .contains(&disease_idx);
+        let inf = &mut region.infections[inf_idx];
 
-            match target {
-                DeployTarget::Vaccinate { .. } => {
-                    let susceptible =
-                        (pop - inf.infected - inf.dead - inf.immune).max(0.0);
-                    let actual = doses.min(susceptible);
-                    if actual > 0.0 {
-                        let mut adverse = false;
-                        if !is_tested {
-                            let roll: f64 = state.rng.r#gen();
-                            if roll < 0.25 {
-                                adverse = true;
-                                let harmed = (actual * 0.2).min(susceptible);
-                                inf.dead += harmed;
-                                inf.immune += actual - harmed;
-                            } else {
-                                inf.immune += actual;
-                            }
+        let is_tested = state.medicines[medicine_idx]
+            .tested_against
+            .contains(&disease_idx);
+
+        match target {
+            DeployTarget::Vaccinate { .. } => {
+                let susceptible =
+                    (pop - inf.infected - inf.dead - inf.immune).max(0.0);
+                let actual = doses.min(susceptible);
+                if actual > 0.0 {
+                    let mut adverse = false;
+                    if !is_tested {
+                        let roll: f64 = state.rng.r#gen();
+                        if roll < 0.25 {
+                            adverse = true;
+                            let harmed = (actual * 0.2).min(susceptible);
+                            inf.dead += harmed;
+                            inf.immune += actual - harmed;
                         } else {
                             inf.immune += actual;
                         }
-                        state.resources.funding -= cost;
-                        state.ui.status_message = Some(
-                            deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse),
-                        );
+                    } else {
+                        inf.immune += actual;
                     }
+                    state.resources.funding -= cost;
+                    state.ui.status_message = Some(
+                        deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse),
+                    );
                 }
-                DeployTarget::Treat { .. } => {
-                    let actual = doses.min(inf.infected);
-                    if actual > 0.0 {
-                        inf.infected -= actual;
-                        let mut adverse = false;
-                        if !is_tested {
-                            let roll: f64 = state.rng.r#gen();
-                            if roll < 0.25 {
-                                adverse = true;
-                                let harmed = actual * 0.2;
-                                inf.dead += harmed;
-                                inf.immune += actual - harmed;
-                            } else {
-                                inf.immune += actual;
-                            }
+            }
+            DeployTarget::Treat { .. } => {
+                let actual = doses.min(inf.infected);
+                if actual > 0.0 {
+                    inf.infected -= actual;
+                    let mut adverse = false;
+                    if !is_tested {
+                        let roll: f64 = state.rng.r#gen();
+                        if roll < 0.25 {
+                            adverse = true;
+                            let harmed = actual * 0.2;
+                            inf.dead += harmed;
+                            inf.immune += actual - harmed;
                         } else {
                             inf.immune += actual;
                         }
-                        state.resources.funding -= cost;
-                        state.ui.status_message = Some(
-                            deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse),
-                        );
+                    } else {
+                        inf.immune += actual;
                     }
+                    state.resources.funding -= cost;
+                    state.ui.status_message = Some(
+                        deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse),
+                    );
                 }
             }
         }
@@ -944,6 +949,17 @@ mod tests {
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
         assert_eq!(state.resources.funding, funding_before);
+        // Should show error message and stay on SelectTarget
+        assert!(
+            state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"),
+            "expected insufficient funds message, got: {:?}",
+            state.ui.status_message
+        );
+        assert!(
+            matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectTarget { .. })),
+            "should stay on SelectTarget, got: {:?}",
+            state.ui.medicine_ui
+        );
     }
 
     #[test]
