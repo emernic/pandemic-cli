@@ -36,6 +36,7 @@ Determine the issue type and priority:
 - `bug` — Something is broken or behaves incorrectly
 - `enhancement` — A new feature or improvement to existing functionality
 - `chore` — Refactoring, cleanup, tech debt, tooling improvements
+- `investigate` — Something looks off, incomplete, or unclear and needs follow-up to confirm whether it's actually a problem. These are free to file anytime — you don't need user permission. About 30% get closed with just a comment ("actually fine"), 30% lead to docs/cleanup, and 40% uncover real bugs or design issues that need fixing.
 
 **Priority** (pick one label):
 - `P0-critical` — Game-breaking, blocks core functionality
@@ -91,6 +92,23 @@ Think carefully about the title and body before writing. The title should be spe
 ## Possible Solution (do not use directly)
 [OPTIONAL — only if you have a concrete idea. The implementer should feel free to ignore this.]
 ```
+
+**For investigate issues**, use this structure:
+```markdown
+## What I Noticed
+[What looked off, incomplete, or unclear. Be specific about what you saw and why it caught your attention.]
+
+## Context
+[What you were doing when you noticed this. What's the current behavior?]
+
+## Why It Might Be a Problem
+[Your concern — what could be wrong, what might be incomplete, what's unclear about the design.]
+
+## Relevant Code
+[File paths and line numbers to look at]
+```
+
+Investigate issues should be filed freely whenever something seems funky. You do NOT need user permission to create them. Keep the title descriptive — e.g., "Investigate: save-on-quit only works when file path is provided — is that intentional?" rather than "Look into saving".
 
 **For chores**, use this structure:
 ```markdown

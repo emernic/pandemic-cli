@@ -34,3 +34,5 @@ Also, focus exclusively on changes you made in this Claude Code session since yo
 Make sure you ONLY return and display your final distilled/validated concerns, not all your intermediate thinking.
 
 After reflecting, you may immediately address the concerns you identified if the fixes are straightforward. For anything non-trivial, confirm with the user first.
+
+**Investigate issues:** If you notice anything that looks funky, incomplete, or unclear — even if it's not directly related to what you were working on — file an `investigate` issue for it. You don't need user permission; these are free and cheap. They ensure someone follows up on things that might otherwise get swept under the rug. Use `/create-issue` with the `investigate` label.

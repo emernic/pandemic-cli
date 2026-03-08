@@ -54,6 +54,17 @@ Use a short kebab-case description derived from the issue title (e.g., `issue-7-
 
 > **Note:** Do not use `git checkout master` — master may be checked out in another worktree. Always branch from `origin/master` after fetching.
 
+## Investigate Issues
+
+Issues labeled `investigate` are different from bugs/enhancements. They flag something that *looked off* and needs someone to follow up. When picking up an investigate issue:
+
+1. **Read the code and understand the current behavior.** Don't assume it's broken — it might be fine.
+2. **Determine the outcome:**
+   - **It's actually fine** — close the issue with a comment explaining why the behavior is correct. (~30% of the time)
+   - **It works but is confusing** — add documentation, rename things, or restructure code to make the behavior obvious. (~30%)
+   - **It's actually a problem** — fix the bug, clean up the design, or file a more specific bug/enhancement issue if the fix is large. (~40%)
+3. Investigate issues are often small and self-contained. Many can be resolved quickly.
+
 ## Step 4: Read and Understand the Issue
 
 Read the full issue body:

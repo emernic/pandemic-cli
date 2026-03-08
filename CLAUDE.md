@@ -47,3 +47,4 @@ For extended playtesting (e.g., as a final check after a feature is complete), u
   git fetch origin && git checkout -b my-branch origin/master
   ```
   Local `master` may be checked out in another worktree, which blocks `git checkout master`.
+- When you notice something that looks funky, incomplete, or unclear while working — file an `investigate` issue. These are cheap and free; you don't need user permission. They track things that *might* be wrong and need someone to follow up. Example: while fixing issue #6 (Help panel said "Quit & save", hotkey bar said "Quit"), we updated the text to be consistent, but realized the underlying save-on-quit behavior itself seemed incomplete — saving only happens if a file path was provided, which may or may not be the right design. That's an investigate issue: the immediate fix was correct, but the broader behavior deserves a second look.

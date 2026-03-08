@@ -21,3 +21,5 @@ You just reflected on your changes. Now do a second, more focused pass looking s
 Focus exclusively on changes since your last `/reflect`. Present only genuine findings — not nitpicks, not style preferences, not things you've already discussed. If you find nothing substantive, say so.
 
 After identifying issues, fix straightforward ones immediately. For anything that changes behavior or public interfaces, confirm with the user first.
+
+**Investigate issues:** If you spot something that smells off but isn't clearly broken — unclear behavior, naming that doesn't match reality, code that works but seems like it might not handle all cases — file an `investigate` issue. You don't need permission; these are free. They prevent the codebase from accumulating a cobblestone foundation of things nobody followed up on.
