@@ -165,7 +165,7 @@ fn medicines_partial_tested() {
     for med in &mut state.medicines {
         med.unlocked = true;
     }
-    state.medicines[1].tested_against = vec![0]; // BSA tested vs Strain Alpha only
+    state.medicines[2].tested_against = vec![0]; // Broad-Spectrum tested vs Strain Alpha only
     for disease in &mut state.diseases {
         disease.knowledge = 1.0;
     }
