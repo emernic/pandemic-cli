@@ -130,21 +130,57 @@ Make sure you understand:
 
 If the issue has a "Possible Solution" section, read it for context but do NOT follow it blindly — form your own approach.
 
-## Step 5: Think — Then Decide Whether to Do the Work
+## Step 5: Research the System — Not Just the Code You'll Touch
 
-**STOP. Do not start coding yet.** This is the step where most mistakes happen. You've read the issue, you've looked at the code, you've played the game. Now answer these questions honestly:
+**STOP. Do not start coding yet.** Before you can think clearly about what to do, you need to actually understand the system you're about to change. Not just the one function or file the issue points to — the whole neighborhood.
+
+1. **Read the code the issue references**, plus the code that calls it, the code it calls, and anything that shares data structures with it. If the issue is about medicine doses, don't just read the dose values — read how doses are consumed in `deploy_medicine`, how they're replenished via manufacturing, how efficacy modifies them, what the cost/income economy looks like. Understand the full lifecycle.
+
+2. **Play the game yourself.** Run snapshot commands to see what the player actually experiences in this area. Not one command — play through the relevant flow. If it's about medicines, actually do the research→develop→deploy pipeline. If it's about saves, test loading and saving. See what happens.
+
+3. **Map the interactions.** Ask yourself: what other systems does this touch? If you change X, what happens to Y and Z? A dose scaling change affects game balance, economy, win/lose conditions, and the usefulness of the entire research pipeline. A save path change affects every agent, every playtest, and every human player. Write down the systems involved so you don't miss one.
+
+4. **Check the design docs.** Read `docs/target-architecture.md`, `docs/gameplay.md`, and `docs/architecture.md` if they're relevant to what you're changing. They may contain context that changes your approach.
+
+The goal is to understand the system well enough that your change is *precise* — it fixes the actual problem without accidentally breaking something you didn't think about. If you find yourself saying "I'll just change this one number and see if it works," you haven't researched enough.
+
+## Step 6: Think — Then Decide Whether to Do the Work
+
+Now that you understand the system, answer these questions honestly:
 
 1. **Is this actually a problem?** Not every issue describes a real problem. The filer may have been confused, wrong, or working from incomplete information. If the current behavior is correct and makes sense, close the issue as not planned (`gh issue close <number> --reason "not planned"`) with an explanation. This is a valid outcome.
 2. **Does the proposed solution make sense?** Even if the problem is real, the suggested fix might be wrong. Think about what would actually be right for the game and the player. Would you make this change if no issue existed and you were just looking at the code?
 3. **Is this change making the game simpler or more complex?** Good changes almost always make things simpler. If your planned change adds complexity (new config, special-case logic, non-obvious scaling, etc.), that's a red flag. Step back and ask if there's a simpler approach — or if the "problem" is actually fine as-is.
+4. **What are the ripple effects?** Based on your research, what other systems will your change affect? Are those effects intentional and good, or unintended side effects you need to account for?
 
 **If you can't clearly articulate why the change improves the game, don't make it.** Close the issue as not planned (`--reason "not planned"`) or ask the user for guidance.
 
-Once you're confident the change is worth making, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
+## Step 7: Make a Task List, Then Implement
+
+**Before writing code, write down your plan as a task list.** This keeps you honest about what's actually involved and prevents the "I'll just change this one thing" trap where you miss follow-up work.
+
+A good task list for a typical issue:
+
+1. Research the system (Step 5 — you just did this)
+2. Decide on approach (Step 6 — you just did this)
+3. Make the code change
+4. Update any related code that's affected by your change
+5. Update docs/comments if behavior changed
+6. Run tests, fix failures
+7. Play the game to verify it looks/feels right
+8. Commit
+9. Run `/reflect`
+10. Fix anything found, commit
+11. Push, create PR, merge
+12. Close issue, remove label
+
+Adapt to the task — small fixes need fewer steps, big changes need more. But always include the full lifecycle. **The task isn't done until the PR is merged and the issue is closed.**
+
+Once you're confident in your plan, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
 
 **While you work, look around.** You are not a machine that processes one issue and exits. You are reading real code in a real codebase. If you see something broken, confusing, or architecturally wrong in the code you're touching or the code next to it — file an investigate issue. It takes 30 seconds. If you don't do it, no one will. See CLAUDE.md for the full ownership philosophy.
 
-## Step 6: Completion
+## Step 8: Completion
 
 When the work is done:
 

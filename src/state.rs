@@ -32,7 +32,7 @@ pub struct GameState {
 
 // Policy cost constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.0;
-pub const BASE_RP_INCOME: f64 = 1.0;
+pub const BASE_RP_INCOME: f64 = 0.5;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 10.0;
 pub const QUARANTINE_COST: f64 = 8.0;
@@ -356,18 +356,18 @@ impl ResearchKind {
     /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
     pub fn costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
         match self {
-            ResearchKind::IdentifyThreat { .. } => (10.0, 5, 20.0),
+            ResearchKind::IdentifyThreat { .. } => (15.0, 5, 40.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (15.0, 5, 25.0)   // narrow: fast and cheap
+                    (25.0, 5, 50.0)   // narrow: fast and cheap
                 } else {
-                    (40.0, 10, 50.0)  // broad: slow and expensive
+                    (60.0, 10, 80.0)  // broad: slow and expensive
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (15.0, 5, 25.0),
-            ResearchKind::ManufactureDoses { .. } => (10.0, 3, 15.0),
+            ResearchKind::ClinicalTrial { .. } => (20.0, 5, 40.0),
+            ResearchKind::ManufactureDoses { .. } => (15.0, 3, 30.0),
         }
     }
 }
@@ -716,8 +716,8 @@ impl GameState {
                 therapy_type: TherapyType::Antiviral,
                 target_diseases: vec![0],
                 cost: 200.0,
-                doses: 1_000_000.0,
-                max_doses: 1_000_000.0,
+                doses: 500_000.0,
+                max_doses: 500_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -727,8 +727,8 @@ impl GameState {
                 therapy_type: TherapyType::Antibiotic,
                 target_diseases: vec![1],
                 cost: 150.0,
-                doses: 1_000_000.0,
-                max_doses: 1_000_000.0,
+                doses: 500_000.0,
+                max_doses: 500_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -738,8 +738,8 @@ impl GameState {
                 therapy_type: TherapyType::BroadSpectrum,
                 target_diseases: vec![0, 1],
                 cost: 400.0,
-                doses: 2_000_000.0,
-                max_doses: 2_000_000.0,
+                doses: 750_000.0,
+                max_doses: 750_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -751,9 +751,9 @@ impl GameState {
             paused: false,
             rng,
             resources: Resources {
-                funding: 1000.0,
+                funding: 500.0,
                 research_points: 0.0,
-                personnel: 50,
+                personnel: 30,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             regions,

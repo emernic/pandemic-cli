@@ -1025,7 +1025,7 @@ mod tests {
             .iter()
             .find(|i| i.disease_idx == 0)
             .unwrap();
-        assert_eq!(na_inf.immune, 1_000_000.0);
+        assert_eq!(na_inf.immune, 500_000.0);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
@@ -1376,8 +1376,8 @@ mod tests {
         assert!(state.field_research.is_some());
         assert_eq!(state.diseases[0].knowledge, 0.0);
 
-        // Advance to completion (20 ticks)
-        for _ in 0..20 {
+        // Advance to completion (40 ticks)
+        for _ in 0..40 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none()); // Project completed
@@ -1401,7 +1401,7 @@ mod tests {
 
         assert!(state.bench_research.is_some());
 
-        for _ in 0..40 {
+        for _ in 0..50 {
             state = tick(&state);
         }
         assert!(state.bench_research.is_none());
@@ -1428,7 +1428,7 @@ mod tests {
 
         assert!(state.field_research.is_some());
 
-        for _ in 0..25 {
+        for _ in 0..40 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none());
@@ -1553,7 +1553,7 @@ mod tests {
     #[test]
     fn research_boost_insufficient_rp() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 15.0; // Enough to start (10 RP) but not boost again
+        state.resources.research_points = 20.0; // Enough to start (15 RP) but not boost again (10 RP)
 
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
@@ -1561,7 +1561,7 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm → starts (costs 10 RP, leaves 5)
 
         assert!(state.field_research.is_some());
-        assert_eq!(state.resources.research_points, 5.0);
+        assert_eq!(state.resources.research_points, 5.0); // 20 - 15 = 5
 
         state = apply_action(&state, &Action::Confirm); // → ViewActive
         let rp_before = state.resources.research_points;
