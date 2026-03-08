@@ -129,7 +129,6 @@ The user switches between many terminal tabs. They need to instantly see what wa
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
 - Diseases use vec index, not an id field (`RegionInfection.disease_idx`)
 - `tick()` is NOT an Action — simulation steps and player actions are separate concepts
-- Bump version in `Cargo.toml` when making a release
 - Always create branches from `origin/master`, not local `master`:
   ```
   git fetch origin && git checkout -b my-branch origin/master

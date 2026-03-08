@@ -50,13 +50,10 @@ Determine the issue type and priority:
 
 Think carefully about the title and body before writing. The title should be specific and scannable — someone skimming a list of 50 issues should immediately understand what this is about.
 
-**For bugs**, use this structure. **IMPORTANT:** Read the version from `Cargo.toml` — do NOT guess or use a memorized value.
+**For bugs**, use this structure:
 ```markdown
 ## Description
 [What's wrong, in plain language]
-
-## Version
-[Read from Cargo.toml — run `grep '^version' Cargo.toml` to get the current value]
 
 ## Steps to Reproduce
 1. [Concrete step]
@@ -155,7 +152,6 @@ Before creating the issue, re-read your draft and check:
 - [ ] **Self-contained** — a reader with no other context can fully understand the problem
 - [ ] **Scope is narrow** — one problem per issue
 - [ ] **Code references are included** so the reader can orient themselves
-- [ ] **Version is included** for bug reports
 - [ ] **Acceptance criteria are included** for enhancements and chores
 - [ ] **For investigate issues:** Does this read as a question/observation, or as a premature diagnosis? If it sounds like you already know the answer, rewrite it. Strip out any confident claims about what "should" happen or what the fix is.
 
