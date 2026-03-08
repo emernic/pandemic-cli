@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{DeployTarget, GameState, MedicineUiState};
+use crate::ui::research::disease_display_name;
 use super::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -53,10 +54,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 style,
             )));
 
-            let disease_names: Vec<&str> = med
+            let disease_names: Vec<String> = med
                 .target_diseases
                 .iter()
-                .filter_map(|&idx| state.diseases.get(idx).map(|d| d.name.as_str()))
+                .filter_map(|&idx| state.diseases.get(idx).map(|d| disease_display_name(d, idx)))
                 .collect();
 
             // Check tested status
@@ -195,8 +196,8 @@ fn render_select_target(
             DeployTarget::Treat { disease_idx } => *disease_idx,
         };
         let disease_name = state.diseases.get(disease_idx)
-            .map(|d| d.name.as_str())
-            .unwrap_or("Unknown");
+            .map(|d| disease_display_name(d, disease_idx))
+            .unwrap_or_else(|| "Unknown".to_string());
 
         let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
 
