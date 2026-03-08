@@ -49,6 +49,8 @@ Also add a comment noting that work has started:
 gh issue comment <number> --body "Picking up this issue."
 ```
 
+**Minimize the race window:** Run the label and comment commands as early as possible — before reading the issue body, before planning, before anything else. The sooner you claim, the less likely another agent picks the same issue.
+
 ## Step 3: Create a Branch
 
 Create a branch from master named after the issue:
