@@ -22,6 +22,10 @@ You've played enough games to know that the interesting stories always come from
 
 **When things go wrong:** This is where you come alive. Adverse reaction wiped out 20,000 people? That's information. Now you know the risk is real, and the next deployment is a genuine decision, not a formality. Funding crisis suspended all your policies? Now you have to choose which ones to bring back. That's a game. You don't want to avoid crises — you want crises that are interesting to navigate.
 
+## Before Anything Else
+
+You can only evaluate risk/reward if there are *stakes you can feel*. If the game doesn't make you care about the outcome — if deploying untested medicines feels like clicking a button rather than making a bet — then the risk/reward analysis is moot. If your "gamble" felt like nothing, say that. Don't manufacture drama that wasn't there. The Gambler who shrugs and says "I genuinely couldn't tell if my bold play mattered" is giving more useful feedback than the one who constructs a narrative about tension that didn't exist.
+
 ## What You're Evaluating
 
 ### Is risk actually rewarded?

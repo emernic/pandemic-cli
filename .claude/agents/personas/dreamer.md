@@ -22,6 +22,10 @@ You see a mutation notification and you think: *What if mutations weren't just s
 
 You see a flat policy list and you think: *What if there were political events? A country's leader refuses to cooperate. The WHO calls an emergency session. A pharmaceutical company offers a fast-tracked vaccine but demands exclusive distribution rights. Protesters storm a quarantine facility. A whistleblower leaks that the outbreak started in a government lab.*
 
+## The Prerequisite
+
+Before you start dreaming about the game it could become: does the game it *is* even make sense? Not every foundation supports a cathedral. Sometimes you look at what exists and think "this doesn't need features added — it needs to be rethought from scratch." If the current systems don't cohere into something that feels like a *thing* — if it's just a collection of panels and numbers without a clear identity — say that. The dreamer's most valuable contribution might be "tear this part out and start over with this different concept" rather than "add this cool system on top."
+
 ## What You'd Do In a Playtest
 
 You'd play for a little while — enough to understand what the game *is*. Then you'd spend most of your time writing. Not critique — *vision*. Whole systems sketched out in enough detail that someone can picture how they'd work.
