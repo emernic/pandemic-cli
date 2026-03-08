@@ -481,16 +481,17 @@ fn research_panel_max(state: &GameState) -> usize {
     match &state.ui.research_ui {
         Some(ResearchUiState::BrowseCategories) => 1, // Field(0), Bench(1)
         Some(ResearchUiState::BrowseProjects { bench }) => {
-            let count = if *bench {
-                let mut n = available_bench_projects(state).len();
-                if state.bench_research.is_some() { n += 1; } // "View Active" entry
-                n
+            let active = if *bench { state.bench_research.is_some() } else { state.field_research.is_some() };
+            if active {
+                0 // Only "View Active" entry
             } else {
-                let mut n = available_field_projects(state).len();
-                if state.field_research.is_some() { n += 1; }
-                n
-            };
-            count.saturating_sub(1)
+                let count = if *bench {
+                    available_bench_projects(state).len()
+                } else {
+                    available_field_projects(state).len()
+                };
+                count.saturating_sub(1)
+            }
         }
         Some(ResearchUiState::ConfirmProject { .. }) => 0,
         Some(ResearchUiState::ViewActive { .. }) => 0,
@@ -519,16 +520,9 @@ fn handle_research_confirm(state: &mut GameState) {
             let sel = state.ui.panel_selection;
             let active = if bench { &state.bench_research } else { &state.field_research };
 
-            // If there's an active project, first item is "View Active"
             if active.is_some() {
-                if sel == 0 {
-                    state.ui.research_ui = Some(ResearchUiState::ViewActive { bench });
-                    state.ui.panel_selection = 0;
-                    return;
-                }
-                // Offset by 1 for the active project entry
-                let project_idx = sel - 1;
-                state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx });
+                // Slot occupied — only option is View Active
+                state.ui.research_ui = Some(ResearchUiState::ViewActive { bench });
                 state.ui.panel_selection = 0;
             } else {
                 state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx: sel });
@@ -536,6 +530,12 @@ fn handle_research_confirm(state: &mut GameState) {
             }
         }
         Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
+            // Block if slot is already occupied
+            let occupied = if bench { state.bench_research.is_some() } else { state.field_research.is_some() };
+            if occupied {
+                return;
+            }
+
             // Actually start the project
             let projects = if bench {
                 available_bench_projects(state)
