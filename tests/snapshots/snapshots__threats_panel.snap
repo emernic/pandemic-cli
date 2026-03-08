@@ -2,18 +2,18 @@
 source: tests/snapshots.rs
 expression: result.screen
 ---
-PANDEMIC DEFENSE   PAUSED   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infected: 50.0K  Dead: 0
+PANDEMIC DEFENSE   PAUSED   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infected: 50.5K  Dead: 0
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ┌ World Status ────────────────────────────────────────────────────────────────────────────────────┐┌ Threats ─────────────────────────────────────────────────────────────────────────────────────────┐
-│Region             Pop    Alive Infected     Dead  Risk                                           ││▶ Strain Alpha                                                                                    │
-│North America   500.0M   500.0M        0        0    OK                                           ││    Infectivity: 15%  Lethality: 2%                                                               │
-│South America   430.0M   430.0M        0        0    OK                                           ││    Regions: Asia                                                                                 │
-│Europe          750.0M   750.0M        0        0    OK                                           ││                                                                                                  │
-│Africa            1.4B     1.4B        0        0    OK                                           ││                                                                                                  │
-│Asia              4.7B     4.7B    50.0K        0  HIGH                                           ││                                                                                                  │
-│Oceania          45.0M    45.0M        0        0    OK                                           ││                                                                                                  │
-│                                                                                                  ││                                                                                                  │
-│                                                                                                  ││                                                                                                  │
+│Region             Pop    Alive Infected   Immune     Dead  Risk                                  ││▶ Strain Alpha                                                                                    │
+│North America   500.0M   500.0M        0        0        0    OK                                  ││    Infect: 15%  Lethal: 2.0%  Recov: 10%                                                         │
+│South America   430.0M   430.0M      500        0        0   LOW                                  ││    Region            Infected    Immune      Dead                                                │
+│Europe          750.0M   750.0M        0        0        0    OK                                  ││    Asia                 50.0K         0         0                                                │
+│Africa            1.4B     1.4B        0        0        0    OK                                  ││    ──────────────────────────────────────────────                                                │
+│Asia              4.7B     4.7B    50.0K        0        0  HIGH                                  ││    TOTAL                50.0K         0         0                                                │
+│Oceania          45.0M    45.0M        0        0        0    OK                                  ││                                                                                                  │
+│                                                                                                  ││  Strain Beta                                                                                     │
+│                                                                                                  ││    Infect: 8%  Lethal: 0.5%  Recov: 3%                                                           │
 │                                                                                                  ││                                                                                                  │
 │                                                                                                  ││                                                                                                  │
 │                                                                                                  ││                                                                                                  │

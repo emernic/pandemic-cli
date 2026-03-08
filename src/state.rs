@@ -47,6 +47,10 @@ impl Region {
     pub fn total_immune(&self) -> f64 {
         self.infections.iter().map(|i| i.immune).sum()
     }
+
+    pub fn disease_state(&self, disease_idx: usize) -> Option<&RegionDiseaseState> {
+        self.infections.iter().find(|i| i.disease_idx == disease_idx)
+    }
 }
 
 /// Per-disease state within a region: infection, deaths, and immunity.
@@ -65,6 +69,8 @@ pub struct Disease {
     pub infectivity: f64,
     pub lethality: f64,
     pub cross_region_spread: f64,
+    #[serde(default)]
+    pub recovery_rate: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -141,7 +147,12 @@ impl GameState {
                 name: "South America".into(),
                 population: 430_000_000,
                 connections: vec![0, 2],
-                infections: vec![],
+                infections: vec![RegionDiseaseState {
+                    disease_idx: 1,
+                    infected: 500.0,
+                    dead: 0.0,
+                    immune: 0.0,
+                }],
             },
             Region {
                 name: "Europe".into(),
@@ -174,12 +185,22 @@ impl GameState {
             },
         ];
 
-        let diseases = vec![Disease {
-            name: "Strain Alpha".into(),
-            infectivity: 0.15,
-            lethality: 0.02,
-            cross_region_spread: 0.01,
-        }];
+        let diseases = vec![
+            Disease {
+                name: "Strain Alpha".into(),
+                infectivity: 0.15,
+                lethality: 0.02,
+                cross_region_spread: 0.01,
+                recovery_rate: 0.10,
+            },
+            Disease {
+                name: "Strain Beta".into(),
+                infectivity: 0.08,
+                lethality: 0.005,
+                cross_region_spread: 0.02,
+                recovery_rate: 0.03,
+            },
+        ];
 
         let medicines = vec![
             Medicine {
@@ -191,7 +212,7 @@ impl GameState {
             },
             Medicine {
                 name: "Broad-Spectrum Antiviral".into(),
-                target_diseases: vec![0],
+                target_diseases: vec![0, 1],
                 cost: 300.0,
                 doses: 50_000.0,
                 unlocked: true,
@@ -226,6 +247,9 @@ impl GameState {
         self.regions.iter().map(|r| r.total_dead()).sum()
     }
 
+    pub fn total_immune(&self) -> f64 {
+        self.regions.iter().map(|r| r.total_immune()).sum()
+    }
 }
 
 #[cfg(test)]

@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::state::GameState;
+use super::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
@@ -33,32 +34,23 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             lines.push(Line::from(vec![
                 Span::raw("    "),
                 Span::styled(
-                    format!("Infectivity: {:.0}%", disease.infectivity * 100.0),
+                    format!("Infect: {:.0}%", disease.infectivity * 100.0),
                     Style::default().fg(Color::Red),
                 ),
                 Span::raw("  "),
                 Span::styled(
-                    format!("Lethality: {:.0}%", disease.lethality * 100.0),
+                    format!("Lethal: {:.1}%", disease.lethality * 100.0),
                     Style::default().fg(Color::Magenta),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("Recov: {:.0}%", disease.recovery_rate * 100.0),
+                    Style::default().fg(Color::Green),
                 ),
             ]));
 
-            // Show which regions are infected
-            let affected: Vec<&str> = state
-                .regions
-                .iter()
-                .filter(|r| r.infections.iter().any(|inf| inf.disease_idx == i && inf.infected > 0.0))
-                .map(|r| r.name.as_str())
-                .collect();
-
-            if !affected.is_empty() {
-                lines.push(Line::from(vec![
-                    Span::raw("    Regions: "),
-                    Span::styled(
-                        affected.join(", "),
-                        Style::default().fg(Color::LightRed),
-                    ),
-                ]));
+            if selected {
+                render_disease_detail(&mut lines, state, i);
             }
 
             lines.push(Line::from(""));
@@ -72,4 +64,84 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
     let widget = Paragraph::new(lines).block(block);
     f.render_widget(widget, area);
+}
+
+fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: usize) {
+    let hdr = Style::default().fg(Color::DarkGray);
+    lines.push(Line::from(vec![
+        Span::raw("    "),
+        Span::styled(format!("{:<16}", "Region"), hdr),
+        Span::raw("  "),
+        Span::styled(format!("{:>8}", "Infected"), hdr),
+        Span::raw("  "),
+        Span::styled(format!("{:>8}", "Immune"), hdr),
+        Span::raw("  "),
+        Span::styled(format!("{:>8}", "Dead"), hdr),
+    ]));
+
+    let mut total_infected = 0.0;
+    let mut total_immune = 0.0;
+    let mut total_dead = 0.0;
+
+    for region in &state.regions {
+        if let Some(inf) = region.disease_state(disease_idx) {
+            if inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
+                continue;
+            }
+            total_infected += inf.infected;
+            total_immune += inf.immune;
+            total_dead += inf.dead;
+
+            let name = format!("{:<16}", region.name);
+            lines.push(Line::from(vec![
+                Span::raw("    "),
+                Span::styled(name, Style::default().fg(Color::White)),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:>8}", format_number(inf.infected)),
+                    Style::default().fg(Color::LightRed),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:>8}", format_number(inf.immune)),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:>8}", format_number(inf.dead)),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+    }
+
+    // Totals
+    lines.push(Line::from(vec![
+        Span::styled("    ────────────────", Style::default().fg(Color::DarkGray)),
+        Span::styled("──────────", Style::default().fg(Color::DarkGray)),
+        Span::styled("──────────", Style::default().fg(Color::DarkGray)),
+        Span::styled("──────────", Style::default().fg(Color::DarkGray)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::raw("    "),
+        Span::styled(
+            format!("{:<16}", "TOTAL"),
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            format!("{:>8}", format_number(total_infected)),
+            Style::default().fg(Color::LightRed),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            format!("{:>8}", format_number(total_immune)),
+            Style::default().fg(Color::Green),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            format!("{:>8}", format_number(total_dead)),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
 }

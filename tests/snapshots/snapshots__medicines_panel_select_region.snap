@@ -2,16 +2,16 @@
 source: tests/snapshots.rs
 expression: result.screen
 ---
-PANDEMIC DEFENSE   PAUSED   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infected: 50.0K  Dead: 0
+PANDEMIC DEFENSE   PAUSED   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infected: 50.5K  Dead: 0
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ┌ World Status ────────────────────────────────────────────────────────────────────────────────────┐┌ Deploy: Antiviral-A ─────────────────────────────────────────────────────────────────────────────┐
-│Region             Pop    Alive Infected     Dead  Risk                                           ││  Deploy: Antiviral-A                                                                             │
-│North America   500.0M   500.0M        0        0    OK                                           ││                                                                                                  │
-│South America   430.0M   430.0M        0        0    OK                                           ││▶ North America   500.0Ms 0i                                                                      │
-│Europe          750.0M   750.0M        0        0    OK                                           ││  South America   430.0Ms 0i                                                                      │
-│Africa            1.4B     1.4B        0        0    OK                                           ││  Europe          750.0Ms 0i                                                                      │
-│Asia              4.7B     4.7B    50.0K        0  HIGH                                           ││  Africa          1.4Bs 0i                                                                        │
-│Oceania          45.0M    45.0M        0        0    OK                                           ││  Asia            4.7Bs 50.0Ki                                                                    │
+│Region             Pop    Alive Infected   Immune     Dead  Risk                                  ││  Deploy: Antiviral-A                                                                             │
+│North America   500.0M   500.0M        0        0        0    OK                                  ││                                                                                                  │
+│South America   430.0M   430.0M      500        0        0   LOW                                  ││▶ North America   500.0Ms 0i                                                                      │
+│Europe          750.0M   750.0M        0        0        0    OK                                  ││  South America   430.0Ms 0i                                                                      │
+│Africa            1.4B     1.4B        0        0        0    OK                                  ││  Europe          750.0Ms 0i                                                                      │
+│Asia              4.7B     4.7B    50.0K        0        0  HIGH                                  ││  Africa          1.4Bs 0i                                                                        │
+│Oceania          45.0M    45.0M        0        0        0    OK                                  ││  Asia            4.7Bs 50.0Ki                                                                    │
 │                                                                                                  ││  Oceania         45.0Ms 0i                                                                       │
 │                                                                                                  ││                                                                                                  │
 │                                                                                                  ││  [Enter] Select  [Esc] Back                                                                      │

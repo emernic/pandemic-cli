@@ -18,10 +18,6 @@ pub fn tick(state: &GameState) -> GameState {
 
         for inf in &mut region.infections {
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                // Each disease has its own independent susceptible pool. A person
-                // infected with disease A can also be infected with disease B.
-                // When displaying aggregate stats, the UI may need to estimate
-                // "infected by any disease" (e.g. via inclusion-exclusion or capping).
                 let susceptible = pop - inf.infected - inf.dead - inf.immune;
                 if susceptible <= 0.0 {
                     continue;
@@ -32,10 +28,19 @@ pub fn tick(state: &GameState) -> GameState {
                     disease.infectivity * inf.infected * (susceptible / pop) * noise;
                 let new_infections = new_infections.max(0.0).min(susceptible);
 
-                let new_deaths = disease.lethality * inf.infected * noise;
-                let new_deaths = new_deaths.max(0.0).min(inf.infected);
+                // Deaths and recoveries are concurrent outflows from the infected pool.
+                // Compute both, then scale proportionally if they exceed infected.
+                let mut new_deaths = (disease.lethality * inf.infected * noise).max(0.0);
+                let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
+                let total_outflow = new_deaths + new_recoveries;
+                if total_outflow > inf.infected {
+                    let scale = inf.infected / total_outflow;
+                    new_deaths *= scale;
+                    new_recoveries *= scale;
+                }
 
-                inf.infected = inf.infected + new_infections - new_deaths;
+                inf.infected = inf.infected + new_infections - new_deaths - new_recoveries;
+                inf.immune += new_recoveries;
                 inf.dead += new_deaths;
             }
         }
@@ -50,9 +55,7 @@ pub fn tick(state: &GameState) -> GameState {
                 .iter()
                 .filter_map(|&conn_idx| {
                     regions_snapshot[conn_idx]
-                        .infections
-                        .iter()
-                        .find(|inf| inf.disease_idx == d_idx)
+                        .disease_state(d_idx)
                         .map(|inf| inf.infected)
                 })
                 .sum();
@@ -295,7 +298,6 @@ mod tests {
     #[test]
     fn tick_causes_deaths() {
         let state = GameState::new_default(42);
-        // Run several ticks to accumulate deaths
         let mut s = state;
         for _ in 0..20 {
             s = tick(&s);
@@ -322,6 +324,53 @@ mod tests {
         }
         assert_eq!(a.total_infected(), b.total_infected());
         assert_eq!(a.total_dead(), b.total_dead());
+        assert_eq!(a.total_immune(), b.total_immune());
+    }
+
+    #[test]
+    fn recovery_accumulates() {
+        let state = GameState::new_default(42);
+        let mut s = state;
+        for _ in 0..50 {
+            s = tick(&s);
+        }
+        assert!(
+            s.total_immune() > 0.0,
+            "should have immune (recovered) after 50 ticks, got {}",
+            s.total_immune()
+        );
+    }
+
+    #[test]
+    fn population_conservation() {
+        let state = GameState::new_default(42);
+        let mut s = state;
+        for _ in 0..100 {
+            s = tick(&s);
+        }
+        for region in &s.regions {
+            let pop = region.population as f64;
+            for inf in &region.infections {
+                let accounted = inf.infected + inf.immune + inf.dead;
+                assert!(
+                    accounted <= pop + 1.0,
+                    "region {} disease {}: accounted {} > population {}",
+                    region.name,
+                    inf.disease_idx,
+                    accounted,
+                    pop
+                );
+                assert!(
+                    inf.infected >= 0.0 && inf.immune >= 0.0 && inf.dead >= 0.0,
+                    "region {} disease {}: negative values: infected={}, immune={}, dead={}",
+                    region.name,
+                    inf.disease_idx,
+                    inf.infected,
+                    inf.immune,
+                    inf.dead
+                );
+            }
+        }
     }
 
     #[test]
@@ -331,7 +380,6 @@ mod tests {
         for _ in 0..200 {
             s = tick(&s);
         }
-        // At least one region besides Asia should be infected
         let infected_regions = s
             .regions
             .iter()
@@ -357,13 +405,10 @@ mod tests {
     #[test]
     fn open_close_panels() {
         let state = GameState::new_default(42);
-        // Open Threats
         let s = apply_action(&state, &Action::OpenThreats);
         assert_eq!(s.ui.open_panel, Panel::Threats);
-        // Press Threats again — should toggle closed
         let s = apply_action(&s, &Action::OpenThreats);
         assert_eq!(s.ui.open_panel, Panel::None);
-        // Open again then close with Esc
         let s = apply_action(&s, &Action::OpenThreats);
         assert_eq!(s.ui.open_panel, Panel::Threats);
         let s = apply_action(&s, &Action::ClosePanel);
@@ -375,20 +420,25 @@ mod tests {
         use crate::state::Disease;
 
         let mut state = GameState::new_default(42);
-        // Add a second disease so we can test navigation
+        // Add a third disease so we can test navigation bounds
         state.diseases.push(Disease {
-            name: "Strain Beta".into(),
+            name: "Strain Gamma".into(),
             infectivity: 0.1,
             lethality: 0.01,
             cross_region_spread: 0.005,
+            recovery_rate: 0.05,
         });
 
         let s = apply_action(&state, &Action::OpenThreats);
         assert_eq!(s.ui.panel_selection, 0);
         let s = apply_action(&s, &Action::SelectNext);
         assert_eq!(s.ui.panel_selection, 1);
+        let s = apply_action(&s, &Action::SelectNext);
+        assert_eq!(s.ui.panel_selection, 2);
         // Can't go past the last item
         let s = apply_action(&s, &Action::SelectNext);
+        assert_eq!(s.ui.panel_selection, 2);
+        let s = apply_action(&s, &Action::SelectPrev);
         assert_eq!(s.ui.panel_selection, 1);
         let s = apply_action(&s, &Action::SelectPrev);
         assert_eq!(s.ui.panel_selection, 0);
@@ -400,13 +450,11 @@ mod tests {
     #[test]
     fn immune_reduces_susceptible_pool() {
         let mut state = GameState::new_default(42);
-        // Give Asia a large immune population for disease 0
         state.regions[4].infections[0].immune = 4_000_000_000.0;
         let before = state.regions[4].infections[0].infected;
         let after = tick(&state);
         let growth = after.regions[4].infections[0].infected - before;
 
-        // Compare with no immunity
         let state2 = GameState::new_default(42);
         let after2 = tick(&state2);
         let growth2 = after2.regions[4].infections[0].infected
@@ -423,14 +471,12 @@ mod tests {
     #[test]
     fn disease_can_spread_into_vaccinated_region() {
         let mut state = GameState::new_default(42);
-        // Pre-vaccinate North America for disease 0 (no active infection)
         state.regions[0].infections.push(RegionDiseaseState {
             disease_idx: 0,
             infected: 0.0,
             dead: 0.0,
             immune: 100_000_000.0,
         });
-        // Run many ticks — disease should still be able to spread there
         let mut s = state;
         for _ in 0..200 {
             s = tick(&s);
@@ -450,25 +496,20 @@ mod tests {
     #[test]
     fn medicine_vaccination_deployment() {
         let mut state = GameState::new_default(42);
-        // Open medicines panel
         state = apply_action(&state, &Action::OpenMedicines);
         assert_eq!(state.ui.open_panel, Panel::Medicines);
-        // Select first medicine (Antiviral-A, idx 0)
         state = apply_action(&state, &Action::Confirm);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
         ));
-        // Select first region (North America, idx 0)
         state = apply_action(&state, &Action::Confirm);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectTarget { .. })
         ));
-        // Select first target option (Vaccinate susceptible for disease 0)
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
-        // Should have deducted cost and added immune
         assert_eq!(state.resources.funding, funding_before - 100.0);
         let na_inf = state.regions[0]
             .infections
@@ -476,7 +517,6 @@ mod tests {
             .find(|i| i.disease_idx == 0)
             .unwrap();
         assert_eq!(na_inf.immune, 10_000.0);
-        // Should be back at SelectRegion
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
@@ -486,23 +526,20 @@ mod tests {
     #[test]
     fn medicine_treatment_deployment() {
         let mut state = GameState::new_default(42);
-        // Run some ticks to build up infections in Asia
         for _ in 0..20 {
             state = tick(&state);
         }
         let asia_infected_before = state.regions[4].infections[0].infected;
 
         state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // select Antiviral-A
-        // Navigate to Asia (index 4)
+        state = apply_action(&state, &Action::Confirm);
         for _ in 0..4 {
             state = apply_action(&state, &Action::SelectNext);
         }
-        state = apply_action(&state, &Action::Confirm); // select Asia
-        // Select "Treat infected" (index 1 for single-disease medicine)
+        state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::SelectNext);
         let funding_before = state.resources.funding;
-        state = apply_action(&state, &Action::Confirm); // deploy treatment
+        state = apply_action(&state, &Action::Confirm);
 
         let asia_infected_after = state.regions[4].infections[0].infected;
         assert!(
@@ -517,32 +554,32 @@ mod tests {
     #[test]
     fn medicine_insufficient_funds() {
         let mut state = GameState::new_default(42);
-        state.resources.funding = 50.0; // not enough for Antiviral-A ($100)
+        state.resources.funding = 50.0;
         state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // select medicine
-        state = apply_action(&state, &Action::Confirm); // select region
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
         let funding_before = state.resources.funding;
-        state = apply_action(&state, &Action::Confirm); // try to deploy
-        assert_eq!(state.resources.funding, funding_before); // unchanged
+        state = apply_action(&state, &Action::Confirm);
+        assert_eq!(state.resources.funding, funding_before);
     }
 
     #[test]
     fn medicine_esc_backstep() {
         let mut state = GameState::new_default(42);
         state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // -> SelectRegion
-        state = apply_action(&state, &Action::Confirm); // -> SelectTarget
-        state = apply_action(&state, &Action::ClosePanel); // back to SelectRegion
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::ClosePanel);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { .. })
         ));
-        state = apply_action(&state, &Action::ClosePanel); // back to BrowseMedicines
+        state = apply_action(&state, &Action::ClosePanel);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::BrowseMedicines)
         ));
-        state = apply_action(&state, &Action::ClosePanel); // close panel
+        state = apply_action(&state, &Action::ClosePanel);
         assert_eq!(state.ui.open_panel, Panel::None);
         assert!(state.ui.medicine_ui.is_none());
     }
@@ -550,16 +587,12 @@ mod tests {
     #[test]
     fn medicine_zero_targets_refused() {
         let mut state = GameState::new_default(42);
-        // Try to treat in a region with 0 infected
         state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // select medicine
-        // Region 0 (North America) has no infection
-        state = apply_action(&state, &Action::Confirm); // select North America
-        // Select "Treat infected" (index 1)
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::SelectNext);
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
-        // Should not deduct — no infected to treat
         assert_eq!(state.resources.funding, funding_before);
     }
 
@@ -567,8 +600,7 @@ mod tests {
     fn open_medicines_resets_to_browse() {
         let mut state = GameState::new_default(42);
         state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // -> SelectRegion
-        // Switch away and back
+        state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::OpenThreats);
         state = apply_action(&state, &Action::OpenMedicines);
         assert!(matches!(
