@@ -73,6 +73,30 @@ fn medicines_panel_select_target() {
 }
 
 #[test]
+fn medicines_confirm_untested() {
+    let mut state = GameState::new_default(42);
+    // Unlock but do NOT mark as tested
+    for med in &mut state.medicines {
+        med.unlocked = true;
+    }
+    for disease in &mut state.diseases {
+        disease.knowledge = 1.0;
+    }
+    let result = run_snapshot(
+        state,
+        &[
+            "m".to_string(),
+            "enter".to_string(),
+            "enter".to_string(),
+            "enter".to_string(),
+        ],
+        None,
+    )
+    .unwrap();
+    insta::assert_snapshot!(result.screen);
+}
+
+#[test]
 fn research_panel_categories() {
     let state = GameState::new_default(42);
     let result = run_snapshot(state, &["r".to_string()], None).unwrap();
