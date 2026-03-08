@@ -3,7 +3,8 @@ use rand::Rng;
 use crate::action::Action;
 use crate::state::{
     map_navigate, DeployTarget, GameState, MapDirection, MedicineUiState, Panel,
-    RegionDiseaseState,
+    RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
+    KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL,
 };
 
 /// Advance the simulation by one tick.
@@ -96,6 +97,47 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Research progress
+    if let Some(ref mut project) = new.field_research {
+        project.progress += 1.0;
+        if project.is_complete() {
+            match &project.kind {
+                ResearchKind::IdentifyThreat { disease_idx } => {
+                    let d_idx = *disease_idx;
+                    if let Some(disease) = new.diseases.get_mut(d_idx) {
+                        disease.knowledge = (disease.knowledge + 0.34).min(KNOWLEDGE_FULL);
+                    }
+                }
+                ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
+                    let m_idx = *medicine_idx;
+                    let d_idx = *disease_idx;
+                    if let Some(medicine) = new.medicines.get_mut(m_idx) {
+                        if !medicine.tested_against.contains(&d_idx) {
+                            medicine.tested_against.push(d_idx);
+                        }
+                    }
+                }
+                ResearchKind::DevelopMedicine { .. } => {}
+            }
+            new.field_research = None;
+        }
+    }
+    if let Some(ref mut project) = new.bench_research {
+        project.progress += 1.0;
+        if project.is_complete() {
+            match &project.kind {
+                ResearchKind::DevelopMedicine { medicine_idx } => {
+                    let m_idx = *medicine_idx;
+                    if let Some(medicine) = new.medicines.get_mut(m_idx) {
+                        medicine.unlocked = true;
+                    }
+                }
+                _ => {}
+            }
+            new.bench_research = None;
+        }
+    }
+
     // Passive resource generation
     new.resources.funding += 5.0;
     new.resources.research_points += 1.0;
@@ -123,7 +165,14 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             new.paused = !new.paused;
         }
         Action::OpenThreats => toggle_panel(&mut new.ui, Panel::Threats),
-        Action::OpenResearch => toggle_panel(&mut new.ui, Panel::Research),
+        Action::OpenResearch => {
+            toggle_panel(&mut new.ui, Panel::Research);
+            if new.ui.open_panel == Panel::Research {
+                new.ui.research_ui = Some(ResearchUiState::BrowseCategories);
+            } else {
+                new.ui.research_ui = None;
+            }
+        }
         Action::OpenMedicines => {
             toggle_panel(&mut new.ui, Panel::Medicines);
             if new.ui.open_panel == Panel::Medicines {
@@ -135,21 +184,48 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenPolicy => toggle_panel(&mut new.ui, Panel::Policy),
         Action::OpenHelp => toggle_panel(&mut new.ui, Panel::Help),
         Action::ClosePanel => {
-            match &new.ui.medicine_ui {
-                Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
-                    new.ui.medicine_ui =
-                        Some(MedicineUiState::SelectRegion { medicine_idx: *medicine_idx });
-                    new.ui.panel_selection = 0;
+            if new.ui.open_panel == Panel::Medicines {
+                match &new.ui.medicine_ui {
+                    Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
+                        new.ui.medicine_ui =
+                            Some(MedicineUiState::SelectRegion { medicine_idx: *medicine_idx });
+                        new.ui.panel_selection = 0;
+                    }
+                    Some(MedicineUiState::SelectRegion { .. }) => {
+                        new.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
+                        new.ui.panel_selection = 0;
+                    }
+                    _ => {
+                        new.ui.open_panel = Panel::None;
+                        new.ui.panel_selection = 0;
+                        new.ui.medicine_ui = None;
+                    }
                 }
-                Some(MedicineUiState::SelectRegion { .. }) => {
-                    new.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
-                    new.ui.panel_selection = 0;
+            } else if new.ui.open_panel == Panel::Research {
+                match &new.ui.research_ui {
+                    Some(ResearchUiState::ConfirmProject { bench, .. }) => {
+                        new.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
+                        new.ui.panel_selection = 0;
+                    }
+                    Some(ResearchUiState::ViewActive { bench }) => {
+                        new.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
+                        new.ui.panel_selection = 0;
+                    }
+                    Some(ResearchUiState::BrowseProjects { .. }) => {
+                        new.ui.research_ui = Some(ResearchUiState::BrowseCategories);
+                        new.ui.panel_selection = 0;
+                    }
+                    _ => {
+                        new.ui.open_panel = Panel::None;
+                        new.ui.panel_selection = 0;
+                        new.ui.research_ui = None;
+                    }
                 }
-                _ => {
-                    new.ui.open_panel = Panel::None;
-                    new.ui.panel_selection = 0;
-                    new.ui.medicine_ui = None;
-                }
+            } else {
+                new.ui.open_panel = Panel::None;
+                new.ui.panel_selection = 0;
+                new.ui.medicine_ui = None;
+                new.ui.research_ui = None;
             }
         }
         Action::SelectNext => {
@@ -181,6 +257,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         }
                         None => 0,
                     },
+                    Panel::Research => research_panel_max(&new),
                     _ => 0,
                 };
                 if new.ui.panel_selection < max {
@@ -215,7 +292,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             );
         }
         Action::Confirm => {
-            if new.ui.open_panel == Panel::Medicines {
+            if new.ui.open_panel == Panel::Research {
+                handle_research_confirm(&mut new);
+            } else if new.ui.open_panel == Panel::Medicines {
                 match new.ui.medicine_ui.clone() {
                     Some(MedicineUiState::BrowseMedicines) => {
                         let unlocked: Vec<usize> = new
@@ -279,13 +358,28 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 
                                 let inf = &mut region.infections[inf_idx];
 
+                                let is_tested = new.medicines[medicine_idx]
+                                    .tested_against.contains(&disease_idx);
+
                                 match target {
                                     DeployTarget::Vaccinate { .. } => {
                                         let susceptible =
                                             (pop - inf.infected - inf.dead - inf.immune).max(0.0);
                                         let actual = doses.min(susceptible);
                                         if actual > 0.0 {
-                                            inf.immune += actual;
+                                            if !is_tested {
+                                                // Adverse effect: 25% chance, 20% of doses cause deaths
+                                                let roll: f64 = new.rng.r#gen();
+                                                if roll < 0.25 {
+                                                    let harmed = (actual * 0.2).min(susceptible);
+                                                    inf.dead += harmed;
+                                                    inf.immune += actual - harmed;
+                                                } else {
+                                                    inf.immune += actual;
+                                                }
+                                            } else {
+                                                inf.immune += actual;
+                                            }
                                             new.resources.funding -= cost;
                                         }
                                     }
@@ -293,7 +387,18 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                         let actual = doses.min(inf.infected);
                                         if actual > 0.0 {
                                             inf.infected -= actual;
-                                            inf.immune += actual;
+                                            if !is_tested {
+                                                let roll: f64 = new.rng.r#gen();
+                                                if roll < 0.25 {
+                                                    let harmed = actual * 0.2;
+                                                    inf.dead += harmed;
+                                                    inf.immune += actual - harmed;
+                                                } else {
+                                                    inf.immune += actual;
+                                                }
+                                            } else {
+                                                inf.immune += actual;
+                                            }
                                             new.resources.funding -= cost;
                                         }
                                     }
@@ -316,10 +421,163 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     new
 }
 
+/// Compute available field research projects.
+pub fn available_field_projects(state: &GameState) -> Vec<ResearchKind> {
+    let mut projects = Vec::new();
+    // Identify Threat: diseases not fully known
+    for (i, disease) in state.diseases.iter().enumerate() {
+        if disease.knowledge < KNOWLEDGE_FULL {
+            projects.push(ResearchKind::IdentifyThreat { disease_idx: i });
+        }
+    }
+    // Clinical Trial: unlocked medicines not yet tested against their target diseases
+    for (i, med) in state.medicines.iter().enumerate() {
+        if !med.unlocked {
+            continue;
+        }
+        for &d_idx in &med.target_diseases {
+            if !med.tested_against.contains(&d_idx) {
+                projects.push(ResearchKind::ClinicalTrial {
+                    medicine_idx: i,
+                    disease_idx: d_idx,
+                });
+            }
+        }
+    }
+    projects
+}
+
+/// Compute available bench research projects.
+pub fn available_bench_projects(state: &GameState) -> Vec<ResearchKind> {
+    let mut projects = Vec::new();
+    for (i, med) in state.medicines.iter().enumerate() {
+        if med.unlocked {
+            continue;
+        }
+        // Check if at least one target disease has enough knowledge
+        let has_knowledge = med.target_diseases.iter().any(|&d_idx| {
+            state.diseases.get(d_idx).map_or(false, |d| d.knowledge >= KNOWLEDGE_FOR_MEDICINE)
+        });
+        if has_knowledge {
+            projects.push(ResearchKind::DevelopMedicine { medicine_idx: i });
+        }
+    }
+    projects
+}
+
+/// Max selection index for the current research UI state.
+fn research_panel_max(state: &GameState) -> usize {
+    match &state.ui.research_ui {
+        Some(ResearchUiState::BrowseCategories) => 1, // Field(0), Bench(1)
+        Some(ResearchUiState::BrowseProjects { bench }) => {
+            let count = if *bench {
+                let mut n = available_bench_projects(state).len();
+                if state.bench_research.is_some() { n += 1; } // "View Active" entry
+                n
+            } else {
+                let mut n = available_field_projects(state).len();
+                if state.field_research.is_some() { n += 1; }
+                n
+            };
+            count.saturating_sub(1)
+        }
+        Some(ResearchUiState::ConfirmProject { .. }) => 0,
+        Some(ResearchUiState::ViewActive { .. }) => 0,
+        None => 0,
+    }
+}
+
+/// Project costs: (rp_cost, personnel, duration_ticks)
+pub fn project_costs(kind: &ResearchKind) -> (f64, u32, f64) {
+    match kind {
+        ResearchKind::IdentifyThreat { .. } => (10.0, 5, 20.0),
+        ResearchKind::DevelopMedicine { .. } => (30.0, 10, 40.0),
+        ResearchKind::ClinicalTrial { .. } => (15.0, 5, 25.0),
+    }
+}
+
+fn handle_research_confirm(state: &mut GameState) {
+    let research_ui = state.ui.research_ui.clone();
+    match research_ui {
+        Some(ResearchUiState::BrowseCategories) => {
+            let bench = state.ui.panel_selection == 1;
+            state.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+            state.ui.panel_selection = 0;
+        }
+        Some(ResearchUiState::BrowseProjects { bench }) => {
+            let sel = state.ui.panel_selection;
+            let active = if bench { &state.bench_research } else { &state.field_research };
+
+            // If there's an active project, first item is "View Active"
+            if active.is_some() {
+                if sel == 0 {
+                    state.ui.research_ui = Some(ResearchUiState::ViewActive { bench });
+                    state.ui.panel_selection = 0;
+                    return;
+                }
+                // Offset by 1 for the active project entry
+                let project_idx = sel - 1;
+                state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx });
+                state.ui.panel_selection = 0;
+            } else {
+                state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx: sel });
+                state.ui.panel_selection = 0;
+            }
+        }
+        Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
+            // Actually start the project
+            let projects = if bench {
+                available_bench_projects(state)
+            } else {
+                available_field_projects(state)
+            };
+
+            if let Some(kind) = projects.get(project_idx) {
+                let (rp_cost, personnel, duration) = project_costs(kind);
+
+                if state.resources.research_points >= rp_cost
+                    && state.personnel_available() >= personnel
+                {
+                    let project = ResearchProject {
+                        kind: kind.clone(),
+                        progress: 0.0,
+                        required_ticks: duration,
+                        personnel_assigned: personnel,
+                        rp_cost,
+                    };
+                    state.resources.research_points -= rp_cost;
+
+                    if bench {
+                        state.bench_research = Some(project);
+                    } else {
+                        state.field_research = Some(project);
+                    }
+
+                    // Return to browse projects
+                    state.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+                    state.ui.panel_selection = 0;
+                }
+            }
+        }
+        Some(ResearchUiState::ViewActive { .. }) => {
+            // No action on confirm when viewing active project
+        }
+        None => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::state::GameState;
+
+    /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
+    fn unlock_all_medicines(state: &mut GameState) {
+        for med in &mut state.medicines {
+            med.unlocked = true;
+            med.tested_against = med.target_diseases.clone();
+        }
+    }
 
     #[test]
     fn tick_increases_infections() {
@@ -466,6 +724,7 @@ mod tests {
             lethality: 0.01,
             cross_region_spread: 0.005,
             recovery_rate: 0.05,
+            knowledge: 0.0,
         });
 
         let s = apply_action(&state, &Action::OpenThreats);
@@ -535,6 +794,7 @@ mod tests {
     #[test]
     fn medicine_vaccination_deployment() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         state = apply_action(&state, &Action::OpenMedicines);
         assert_eq!(state.ui.open_panel, Panel::Medicines);
         state = apply_action(&state, &Action::Confirm);
@@ -565,6 +825,7 @@ mod tests {
     #[test]
     fn medicine_treatment_deployment() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         for _ in 0..20 {
             state = tick(&state);
         }
@@ -593,6 +854,7 @@ mod tests {
     #[test]
     fn medicine_insufficient_funds() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         state.resources.funding = 50.0;
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm);
@@ -605,6 +867,7 @@ mod tests {
     #[test]
     fn medicine_esc_backstep() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
@@ -626,6 +889,7 @@ mod tests {
     #[test]
     fn medicine_zero_targets_refused() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
@@ -638,6 +902,7 @@ mod tests {
     #[test]
     fn open_medicines_resets_to_browse() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::OpenThreats);
@@ -698,5 +963,166 @@ mod tests {
         let s = apply_action(&s, &Action::SelectRight);
         assert_eq!(s.ui.map_selection, 2); // EU
         assert_eq!(s.ui.panel_selection, 1); // panel unchanged
+    }
+
+    #[test]
+    fn research_identify_increases_knowledge() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 100.0;
+        // Start identify project on disease 0
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select Identify #1
+        state = apply_action(&state, &Action::Confirm); // Confirm start
+        assert!(state.field_research.is_some());
+        assert_eq!(state.diseases[0].knowledge, 0.0);
+
+        // Advance to completion (20 ticks)
+        for _ in 0..20 {
+            state = tick(&state);
+        }
+        assert!(state.field_research.is_none()); // Project completed
+        assert!((state.diseases[0].knowledge - 0.34).abs() < 0.01);
+    }
+
+    #[test]
+    fn research_develop_medicine_unlocks() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 200.0;
+        state.diseases[0].knowledge = 1.0; // Fully identified
+
+        assert!(!state.medicines[0].unlocked);
+
+        // Start bench research: Develop Antiviral-A
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::SelectNext); // Bench Research
+        state = apply_action(&state, &Action::Confirm);     // Enter Bench
+        state = apply_action(&state, &Action::Confirm);     // Select Develop Antiviral-A
+        state = apply_action(&state, &Action::Confirm);     // Confirm
+
+        assert!(state.bench_research.is_some());
+
+        for _ in 0..40 {
+            state = tick(&state);
+        }
+        assert!(state.bench_research.is_none());
+        assert!(state.medicines[0].unlocked);
+    }
+
+    #[test]
+    fn research_clinical_trial_marks_tested() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 200.0;
+        state.diseases[0].knowledge = 1.0;
+        state.medicines[0].unlocked = true; // Pre-unlock for testing
+
+        assert!(state.medicines[0].tested_against.is_empty());
+
+        // Start field research: Clinical Trial
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        // First two items are identify projects, then clinical trials
+        state = apply_action(&state, &Action::SelectNext); // Skip identify #2
+        state = apply_action(&state, &Action::SelectNext); // Clinical trial
+        state = apply_action(&state, &Action::Confirm);    // Select
+        state = apply_action(&state, &Action::Confirm);    // Confirm
+
+        assert!(state.field_research.is_some());
+
+        for _ in 0..25 {
+            state = tick(&state);
+        }
+        assert!(state.field_research.is_none());
+        assert!(state.medicines[0].tested_against.contains(&0));
+    }
+
+    #[test]
+    fn research_insufficient_rp_blocks_start() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 0.0; // No RP
+
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select Identify
+        state = apply_action(&state, &Action::Confirm); // Try to confirm
+
+        // Should not have started — still on confirm screen
+        assert!(state.field_research.is_none());
+    }
+
+    #[test]
+    fn research_panel_navigation() {
+        let mut state = GameState::new_default(42);
+        state = apply_action(&state, &Action::OpenResearch);
+
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)));
+        assert_eq!(state.ui.panel_selection, 0);
+
+        state = apply_action(&state, &Action::SelectNext);
+        assert_eq!(state.ui.panel_selection, 1);
+
+        // Can't go past last
+        state = apply_action(&state, &Action::SelectNext);
+        assert_eq!(state.ui.panel_selection, 1);
+
+        // Esc closes
+        state = apply_action(&state, &Action::ClosePanel);
+        assert_eq!(state.ui.open_panel, Panel::None);
+    }
+
+    #[test]
+    fn research_esc_backstep() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 100.0;
+
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { bench: false })));
+
+        state = apply_action(&state, &Action::Confirm); // Select project
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
+
+        state = apply_action(&state, &Action::ClosePanel); // Back to projects
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { .. })));
+
+        state = apply_action(&state, &Action::ClosePanel); // Back to categories
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)));
+
+        state = apply_action(&state, &Action::ClosePanel); // Close panel
+        assert_eq!(state.ui.open_panel, Panel::None);
+    }
+
+    #[test]
+    fn diseases_start_unknown() {
+        let state = GameState::new_default(42);
+        for disease in &state.diseases {
+            assert_eq!(disease.knowledge, 0.0);
+        }
+    }
+
+    #[test]
+    fn concurrent_field_and_bench_research() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 200.0;
+        state.diseases[0].knowledge = 1.0;
+
+        // Start field research
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select Identify #2
+        state = apply_action(&state, &Action::Confirm); // Confirm
+        assert!(state.field_research.is_some());
+
+        // Start bench research
+        state = apply_action(&state, &Action::ClosePanel); // Back to categories
+        state = apply_action(&state, &Action::SelectNext);  // Bench Research
+        state = apply_action(&state, &Action::Confirm);     // Enter Bench
+        state = apply_action(&state, &Action::Confirm);     // Select Develop
+        state = apply_action(&state, &Action::Confirm);     // Confirm
+        assert!(state.bench_research.is_some());
+
+        // Both running simultaneously
+        assert!(state.field_research.is_some());
+        assert!(state.bench_research.is_some());
     }
 }

@@ -12,6 +12,12 @@ pub struct GameState {
     pub diseases: Vec<Disease>,
     #[serde(default)]
     pub medicines: Vec<Medicine>,
+    /// Active field research project (Identify Threat or Clinical Trial).
+    #[serde(default)]
+    pub field_research: Option<ResearchProject>,
+    /// Active bench research project (Develop Medicine).
+    #[serde(default)]
+    pub bench_research: Option<ResearchProject>,
     pub ui: UiState,
 }
 
@@ -71,7 +77,16 @@ pub struct Disease {
     pub cross_region_spread: f64,
     #[serde(default)]
     pub recovery_rate: f64,
+    #[serde(default)]
+    pub knowledge: f64,
 }
+
+/// Knowledge thresholds for progressive disease revelation.
+pub const KNOWLEDGE_NAME: f64 = 0.33;
+pub const KNOWLEDGE_PARTIAL_STATS: f64 = 0.66;
+pub const KNOWLEDGE_FULL: f64 = 1.0;
+/// Minimum knowledge required to develop a medicine targeting this disease.
+pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.75;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Medicine {
@@ -80,6 +95,9 @@ pub struct Medicine {
     pub cost: f64,
     pub doses: f64,
     pub unlocked: bool,
+    /// Disease indices this medicine has been clinically trialed against.
+    #[serde(default)]
+    pub tested_against: Vec<usize>,
 }
 
 /// What a medicine deployment targets: vaccinate susceptible or treat infected.
@@ -109,6 +127,29 @@ impl Medicine {
     }
 }
 
+/// An active research project.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResearchProject {
+    pub kind: ResearchKind,
+    pub progress: f64,
+    pub required_ticks: f64,
+    pub personnel_assigned: u32,
+    pub rp_cost: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ResearchKind {
+    IdentifyThreat { disease_idx: usize },
+    DevelopMedicine { medicine_idx: usize },
+    ClinicalTrial { medicine_idx: usize, disease_idx: usize },
+}
+
+impl ResearchProject {
+    pub fn is_complete(&self) -> bool {
+        self.progress >= self.required_ticks
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Panel {
     None,
@@ -126,6 +167,19 @@ pub enum MedicineUiState {
     SelectTarget { medicine_idx: usize, region_idx: usize },
 }
 
+/// Research panel UI state machine, following the medicines panel pattern.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ResearchUiState {
+    /// Top level: choose Field Research or Bench Research category.
+    BrowseCategories,
+    /// Browsing available projects in the selected category.
+    BrowseProjects { bench: bool },
+    /// Confirming a project before starting it.
+    ConfirmProject { bench: bool, project_idx: usize },
+    /// Viewing the active project in a category.
+    ViewActive { bench: bool },
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
@@ -134,6 +188,8 @@ pub struct UiState {
     pub medicine_ui: Option<MedicineUiState>,
     #[serde(default)]
     pub map_selection: usize,
+    #[serde(default)]
+    pub research_ui: Option<ResearchUiState>,
 }
 
 /// Grid layout for the world map: 3 columns × 2 rows.
@@ -240,6 +296,7 @@ impl GameState {
                 lethality: 0.02,
                 cross_region_spread: 0.01,
                 recovery_rate: 0.10,
+                knowledge: 0.0,
             },
             Disease {
                 name: "Strain Beta".into(),
@@ -247,6 +304,7 @@ impl GameState {
                 lethality: 0.005,
                 cross_region_spread: 0.02,
                 recovery_rate: 0.03,
+                knowledge: 0.0,
             },
         ];
 
@@ -256,14 +314,16 @@ impl GameState {
                 target_diseases: vec![0],
                 cost: 100.0,
                 doses: 10_000.0,
-                unlocked: true,
+                unlocked: false,
+                tested_against: vec![],
             },
             Medicine {
                 name: "Broad-Spectrum Antiviral".into(),
                 target_diseases: vec![0, 1],
                 cost: 300.0,
                 doses: 50_000.0,
-                unlocked: true,
+                unlocked: false,
+                tested_against: vec![],
             },
         ];
 
@@ -279,11 +339,14 @@ impl GameState {
             regions,
             diseases,
             medicines,
+            field_research: None,
+            bench_research: None,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
                 medicine_ui: None,
                 map_selection: 0,
+                research_ui: None,
             },
         }
     }
@@ -298,6 +361,16 @@ impl GameState {
 
     pub fn total_immune(&self) -> f64 {
         self.regions.iter().map(|r| r.total_immune()).sum()
+    }
+
+    pub fn personnel_busy(&self) -> u32 {
+        let field = self.field_research.as_ref().map_or(0, |p| p.personnel_assigned);
+        let bench = self.bench_research.as_ref().map_or(0, |p| p.personnel_assigned);
+        field + bench
+    }
+
+    pub fn personnel_available(&self) -> u32 {
+        self.resources.personnel.saturating_sub(self.personnel_busy())
     }
 }
 
@@ -330,7 +403,8 @@ mod tests {
     fn default_state_has_medicines() {
         let state = GameState::new_default(1);
         assert_eq!(state.medicines.len(), 2);
-        assert!(state.medicines[0].unlocked);
-        assert!(state.medicines[1].unlocked);
+        // Medicines start locked — must be developed via research
+        assert!(!state.medicines[0].unlocked);
+        assert!(!state.medicines[1].unlocked);
     }
 }

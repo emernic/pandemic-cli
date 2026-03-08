@@ -1,5 +1,6 @@
 pub mod hotkey_bar;
 pub mod medicines;
+pub mod research;
 pub mod resources;
 pub mod threats;
 pub mod region_list;
@@ -64,6 +65,14 @@ pub fn render(f: &mut Frame, state: &GameState) {
                 .split(chunks[1]);
             region_list::render(f, split[0], state);
             medicines::render(f, split[1], state);
+        }
+        Panel::Research => {
+            let split = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(chunks[1]);
+            region_list::render(f, split[0], state);
+            research::render(f, split[1], state);
         }
         panel => {
             let split = Layout::default()

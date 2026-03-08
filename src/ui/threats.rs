@@ -6,7 +6,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::GameState;
+use crate::state::{GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS};
+use crate::ui::research::disease_display_name;
 use super::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -27,27 +28,60 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
+            let display_name = disease_display_name(disease, i);
             lines.push(Line::from(Span::styled(
-                format!("{}{}", marker, disease.name),
+                format!("{}{}", marker, display_name),
                 style,
             )));
-            lines.push(Line::from(vec![
-                Span::raw("    "),
-                Span::styled(
-                    format!("Infect: {:.0}%", disease.infectivity * 100.0),
-                    Style::default().fg(Color::Red),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    format!("Lethal: {:.1}%", disease.lethality * 100.0),
-                    Style::default().fg(Color::Magenta),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    format!("Recov: {:.0}%", disease.recovery_rate * 100.0),
-                    Style::default().fg(Color::Green),
-                ),
-            ]));
+
+            if disease.knowledge < KNOWLEDGE_NAME {
+                // Completely unknown — show nothing
+                lines.push(Line::from(Span::styled(
+                    "    ???",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
+                // Name known, partial stats
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!("Infect: {:.0}%", disease.infectivity * 100.0),
+                        Style::default().fg(Color::Red),
+                    ),
+                    Span::raw("  "),
+                    Span::styled("Lethal: ?", Style::default().fg(Color::DarkGray)),
+                    Span::raw("  "),
+                    Span::styled("Recov: ?", Style::default().fg(Color::DarkGray)),
+                ]));
+            } else {
+                // Full stats visible
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!("Infect: {:.0}%", disease.infectivity * 100.0),
+                        Style::default().fg(Color::Red),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("Lethal: {:.1}%", disease.lethality * 100.0),
+                        Style::default().fg(Color::Magenta),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("Recov: {:.0}%", disease.recovery_rate * 100.0),
+                        Style::default().fg(Color::Green),
+                    ),
+                ]));
+            }
+
+            // Show knowledge bar
+            if disease.knowledge < 1.0 {
+                let pct = (disease.knowledge * 100.0).min(100.0);
+                lines.push(Line::from(Span::styled(
+                    format!("    Knowledge: {:.0}%", pct),
+                    Style::default().fg(Color::Blue),
+                )));
+            }
 
             if selected {
                 render_disease_detail(&mut lines, state, i);
