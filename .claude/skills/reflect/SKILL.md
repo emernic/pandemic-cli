@@ -33,6 +33,6 @@ Also, focus exclusively on changes you made in this Claude Code session since yo
 
 Make sure you ONLY return and display your final distilled/validated concerns, not all your intermediate thinking.
 
-After reflecting, you may immediately address the concerns you identified if the fixes are straightforward. For anything non-trivial, confirm with the user first.
+After reflecting, you MUST address the concerns you identified — don't just list them and stop. Fix straightforward issues immediately. For anything non-trivial, confirm with the user first. If the PR is already merged, open and merge a follow-up PR for the fixes.
 
 **Investigate issues:** If you notice anything that looks funky, incomplete, or unclear — even tangential to what you were working on — file an `investigate` issue. You don't need user permission; these are free. But remember: an investigate issue says "this confused me, someone should look" — it does NOT diagnose the problem or propose a fix. You haven't investigated it; you just noticed it in passing. See the create-issue skill for the template and the good/bad examples.
