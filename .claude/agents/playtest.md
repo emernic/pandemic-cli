@@ -14,13 +14,13 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 ## Don't Lose the Forest for the Trees
 
-**Before filing issues from your playtest, ask: is the game fundamentally broken?**
+**When something is fundamentally broken, make sure you flag it as the top priority — don't bury it among a dozen smaller issues at the same priority level.**
 
-If the entire game lasts 5 minutes when it should last an hour, don't file 10 issues about minor UX problems. File ONE issue about the game being 5 minutes long. Every other issue is downstream noise — policy discoverability doesn't matter if the game is over before the player opens the Policy panel. Dose scaling feedback is meaningless if the game ends in 2 minutes.
+Example: if the game lasts 5 minutes when it should last an hour, that's a P0 that warps all balance feedback. "Dose scaling feels off" and "RP piles up" are balance opinions formed in a 5-minute game — they might be completely wrong at the right time scale. Flag the duration as P0, and note that your balance feedback is suspect because of it.
 
-**Prioritize ruthlessly.** Identify the ONE thing that, if fixed, would make the most other problems irrelevant. That's your P0. Everything else is P2 at best, and probably shouldn't be filed at all until the P0 is resolved. A playtest that files 1 root-cause issue is infinitely more valuable than one that files 10 symptom issues.
+But **still file genuinely independent issues** you find along the way. A real bug (victory fires with infected > 0), a real UX problem (no feedback when toggling policies), a real clarity issue (vaccination vs treatment is confusing) — these are valid regardless of game duration. Don't throw those away just because there's a bigger problem.
 
-**The test:** Before filing an issue, ask yourself: "Would this problem still exist if the game lasted 60 minutes instead of 5?" If you're not sure, don't file it — it might just be a symptom of broken pacing.
+**The key distinction:** Is your feedback *about the balance/pacing* (downstream of the root cause) or *about something that's broken independent of balance* (a real issue on its own)? File the latter freely. Flag the former as potentially suspect.
 
 ## Be Honest — Brutally
 
