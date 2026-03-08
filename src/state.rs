@@ -411,7 +411,8 @@ pub enum GameOutcome {
 /// Fraction of initial world population that, when dead, triggers game over.
 pub const LOSE_DEATH_FRACTION: f64 = 0.10;
 /// Win when total infected drops below this threshold (with other conditions met).
-pub const WIN_INFECTED_THRESHOLD: f64 = 1000.0;
+/// Individual region infections snap to 0.0 at < 0.5, so 1.0 here means "truly eradicated."
+pub const WIN_INFECTED_THRESHOLD: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Panel {
