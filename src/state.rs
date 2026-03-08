@@ -41,6 +41,7 @@ pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RegionPolicy {
     /// Blocks 90% of cross-region spread to/from this region.
+    /// Also halves the region's contribution to funding income.
     pub travel_ban: bool,
     /// Halves infection rate within the region.
     pub quarantine: bool,
