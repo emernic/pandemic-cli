@@ -242,8 +242,7 @@ pub fn tick(state: &GameState) -> GameState {
 
         if total_dead >= death_threshold {
             new.outcome = GameOutcome::Lost;
-            new.paused = true;
-            new.ui.open_panel = Panel::None;
+            new.events.push(GameEvent::GameOver(GameOutcome::Lost));
         } else if new.total_infected() < WIN_INFECTED_THRESHOLD {
             // Win requires: diseases identified, contained, and medicines tested
             let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
@@ -252,8 +251,7 @@ pub fn tick(state: &GameState) -> GameState {
             });
             if all_identified && all_have_tested_medicine {
                 new.outcome = GameOutcome::Won;
-                new.paused = true;
-                new.ui.open_panel = Panel::None;
+                new.events.push(GameEvent::GameOver(GameOutcome::Won));
             }
         }
     }
@@ -1582,6 +1580,7 @@ mod tests {
         // Run until game over
         for _ in 0..2000 {
             state = tick(&state);
+            crate::ui::process_events(&mut state);
             if state.outcome != GameOutcome::Playing {
                 break;
             }
@@ -1615,6 +1614,7 @@ mod tests {
         let disease_count = state.diseases.len();
         state.medicines[0].tested_against = (0..disease_count).collect();
         state = tick(&state);
+        crate::ui::process_events(&mut state);
         assert_eq!(state.outcome, GameOutcome::Won);
         assert!(state.paused);
     }
