@@ -9,7 +9,7 @@ use ratatui::{
 use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN};
 use crate::ui::research::disease_display_name;
 
-use super::format_number;
+use crate::format_number;
 
 #[derive(Clone, Copy)]
 enum ConnKind {

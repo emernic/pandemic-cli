@@ -255,24 +255,12 @@ fn deploy_medicine(
 }
 
 fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse: bool) -> String {
-    let doses_str = format_count(doses);
+    let doses_str = crate::format_number(doses);
     if adverse {
-        let killed = format_count(doses * 0.2);
+        let killed = crate::format_number(doses * 0.2);
         format!("{action} {doses_str} in {region} with {med} (-${cost:.0}) -- ADVERSE REACTION: {killed} died")
     } else {
         format!("{action} {doses_str} in {region} with {med} (-${cost:.0})")
-    }
-}
-
-fn format_count(n: f64) -> String {
-    if n >= 999_999_500.0 {
-        format!("{:.1}B", n / 1_000_000_000.0)
-    } else if n >= 999_950.0 {
-        format!("{:.1}M", n / 1_000_000.0)
-    } else if n >= 999.5 {
-        format!("{:.1}K", n / 1_000.0)
-    } else {
-        format!("{:.0}", n)
     }
 }
 

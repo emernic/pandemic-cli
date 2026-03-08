@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::state::{GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS};
 use crate::ui::research::disease_display_name;
-use super::format_number;
+use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();

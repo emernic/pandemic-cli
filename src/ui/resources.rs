@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::GameState;
-use super::format_number;
+use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let pause_indicator = if state.paused {
