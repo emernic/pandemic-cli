@@ -18,6 +18,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(MedicineUiState::SelectTarget { medicine_idx, region_idx }) => {
             render_select_target(state, *medicine_idx, *region_idx)
         }
+        Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
+            render_confirm_deploy(state, *medicine_idx, *region_idx, *target_selection)
+        }
         _ => render_browse(state),
     };
 
@@ -274,4 +277,64 @@ fn render_select_target(
     )));
 
     (format!(" {} → {} ", med.name, region.name), lines)
+}
+
+fn render_confirm_deploy(
+    state: &GameState,
+    medicine_idx: usize,
+    region_idx: usize,
+    target_selection: usize,
+) -> (String, Vec<Line<'static>>) {
+    let mut lines: Vec<Line> = Vec::new();
+    let med = &state.medicines[medicine_idx];
+    let region = &state.regions[region_idx];
+    let target = med.decode_deploy_target(target_selection);
+
+    let action_desc = match &target {
+        Some(DeployTarget::Vaccinate { disease_idx }) => {
+            let name = disease_display_name(&state.diseases[*disease_idx], *disease_idx);
+            format!("Vaccinate {} against {}", region.name, name)
+        }
+        Some(DeployTarget::Treat { disease_idx }) => {
+            let name = disease_display_name(&state.diseases[*disease_idx], *disease_idx);
+            format!("Treat {} in {}", name, region.name)
+        }
+        None => "Deploy".to_string(),
+    };
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("  {}", action_desc),
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  ⚠ WARNING: UNTESTED MEDICINE",
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  This medicine has not completed clinical trials.",
+        Style::default().fg(Color::Yellow),
+    )));
+    lines.push(Line::from(Span::styled(
+        "  25% chance of adverse effects — 20% of doses",
+        Style::default().fg(Color::Yellow),
+    )));
+    lines.push(Line::from(Span::styled(
+        "  will KILL instead of help.",
+        Style::default().fg(Color::Yellow),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Deploy anyway?",
+        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  [Enter] Confirm  [Esc] Cancel",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    (format!(" ⚠ {} ", med.name), lines)
 }
