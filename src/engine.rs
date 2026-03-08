@@ -140,9 +140,9 @@ pub fn tick(state: &GameState) -> GameState {
             // Small random parameter changes (±10% of current value), clamped to
             // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.005, 0.5);
+            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.005, 0.15);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality = (disease.lethality * leth_factor).clamp(0.0005, 0.1);
+            disease.lethality = (disease.lethality * leth_factor).clamp(0.0005, 0.03);
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,
@@ -1019,13 +1019,13 @@ mod tests {
         ));
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
-        assert_eq!(state.resources.funding, funding_before - 200.0);
+        assert_eq!(state.resources.funding, funding_before - 100.0);
         let na_inf = state.regions[0]
             .infections
             .iter()
             .find(|i| i.disease_idx == 0)
             .unwrap();
-        assert_eq!(na_inf.immune, 500_000.0);
+        assert_eq!(na_inf.immune, 100_000.0);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
@@ -1063,7 +1063,7 @@ mod tests {
             asia_infected_before,
             asia_infected_after
         );
-        assert_eq!(state.resources.funding, funding_before - 200.0);
+        assert_eq!(state.resources.funding, funding_before - 100.0);
         // Doses should have been depleted
         let treated = asia_infected_before - asia_infected_after;
         assert!(
@@ -1376,8 +1376,8 @@ mod tests {
         assert!(state.field_research.is_some());
         assert_eq!(state.diseases[0].knowledge, 0.0);
 
-        // Advance to completion (40 ticks)
-        for _ in 0..40 {
+        // Advance to completion (80 ticks)
+        for _ in 0..80 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none()); // Project completed
@@ -1401,7 +1401,7 @@ mod tests {
 
         assert!(state.bench_research.is_some());
 
-        for _ in 0..50 {
+        for _ in 0..150 {
             state = tick(&state);
         }
         assert!(state.bench_research.is_none());
@@ -1428,7 +1428,7 @@ mod tests {
 
         assert!(state.field_research.is_some());
 
-        for _ in 0..40 {
+        for _ in 0..80 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none());
