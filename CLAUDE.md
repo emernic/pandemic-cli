@@ -87,6 +87,17 @@ This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-ass
 
 When picking up an issue from the backlog, always use the `/pick-up-issue` skill.
 
+## Signing Off
+
+In your final message before stopping work, always include a concise status block:
+
+- **Branch**: which branch you're on
+- **Working tree**: clean, or are there uncommitted/unstaged changes?
+- **Pushed**: is everything pushed to the remote?
+- **Merged**: is the branch merged to master?
+
+The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
+
 ## Conventions
 
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
