@@ -157,7 +157,7 @@ Before creating the issue, re-read your draft and check:
 
 ### Step 5: Create the Issue
 
-Use `gh issue create` with appropriate labels:
+Use `gh issue create` with appropriate labels. Investigate issues should NOT have a priority label (the outcome is uncertain). All other types should have one.
 
 ```bash
 gh issue create \
