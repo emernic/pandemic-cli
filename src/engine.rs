@@ -114,7 +114,7 @@ pub fn tick(state: &GameState) -> GameState {
                 ResearchKind::IdentifyThreat { disease_idx } => {
                     let d_idx = *disease_idx;
                     if let Some(disease) = new.diseases.get_mut(d_idx) {
-                        disease.knowledge = (disease.knowledge + 0.34).min(KNOWLEDGE_FULL);
+                        disease.knowledge = (disease.knowledge + 0.50).min(KNOWLEDGE_FULL);
                     }
                 }
                 ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
@@ -1193,7 +1193,7 @@ mod tests {
             state = tick(&state);
         }
         assert!(state.field_research.is_none()); // Project completed
-        assert!((state.diseases[0].knowledge - 0.34).abs() < 0.01);
+        assert!((state.diseases[0].knowledge - 0.50).abs() < 0.01);
     }
 
     #[test]
