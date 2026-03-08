@@ -60,7 +60,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         "[Q]",
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     ));
-    spans.push(Span::styled(" Quit", Style::default().fg(Color::White)));
+    spans.push(Span::styled(" Save & Quit", Style::default().fg(Color::White)));
 
     let mut lines = Vec::new();
     match &state.outcome {

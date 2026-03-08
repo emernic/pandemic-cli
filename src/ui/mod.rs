@@ -146,7 +146,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [↑/↓/←/→] Navigate map & panels"),
             Line::from("  [Esc] Close panel"),
-            Line::from("  [Q] Quit"),
+            Line::from("  [Q] Save & Quit"),
         ],
         _ => vec![
             Line::from(""),
@@ -272,7 +272,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  [Q] Quit  [T/R/M] Browse panels",
+        "  [Q] Save & Quit  [T/R/M] Browse panels",
         Style::default().fg(Color::DarkGray),
     )));
 
