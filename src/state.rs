@@ -413,7 +413,7 @@ pub const LOSE_DEATH_FRACTION: f64 = 0.10;
 /// Win when total infected drops below this threshold (with other conditions met).
 pub const WIN_INFECTED_THRESHOLD: f64 = 1000.0;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Panel {
     None,
     Threats,
@@ -468,6 +468,102 @@ pub struct UiState {
     /// Temporary status message shown above the hotkey bar (cleared on next action).
     #[serde(default)]
     pub status_message: Option<String>,
+}
+
+impl UiState {
+    /// Toggle a panel open/closed. Resets selection and initializes panel-specific UI state.
+    pub fn toggle_panel(&mut self, panel: Panel) {
+        if self.open_panel == panel {
+            self.open_panel = Panel::None;
+            self.panel_selection = 0;
+            match panel {
+                Panel::Medicines => self.medicine_ui = None,
+                Panel::Research => self.research_ui = None,
+                Panel::Policy => self.policy_ui = None,
+                _ => {}
+            }
+        } else {
+            self.open_panel = panel;
+            self.panel_selection = 0;
+            match panel {
+                Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
+                Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
+                Panel::Policy => self.policy_ui = Some(PolicyUiState::BrowseRegions),
+                _ => {}
+            }
+        }
+    }
+
+    /// Handle Escape — go back one step in the current panel's wizard, or close the panel.
+    pub fn close_panel(&mut self) {
+        match self.open_panel {
+            Panel::Medicines => {
+                match self.medicine_ui.clone() {
+                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
+                        self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                            medicine_idx,
+                            region_idx,
+                        });
+                        self.panel_selection = target_selection;
+                    }
+                    Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
+                        self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                        self.panel_selection = 0;
+                    }
+                    Some(MedicineUiState::SelectRegion { .. }) => {
+                        self.medicine_ui = Some(MedicineUiState::BrowseMedicines);
+                        self.panel_selection = 0;
+                    }
+                    _ => {
+                        self.open_panel = Panel::None;
+                        self.panel_selection = 0;
+                        self.medicine_ui = None;
+                    }
+                }
+            }
+            Panel::Policy => {
+                match &self.policy_ui {
+                    Some(PolicyUiState::ManagePolicies { .. }) => {
+                        self.policy_ui = Some(PolicyUiState::BrowseRegions);
+                        self.panel_selection = 0;
+                    }
+                    _ => {
+                        self.open_panel = Panel::None;
+                        self.panel_selection = 0;
+                        self.policy_ui = None;
+                    }
+                }
+            }
+            Panel::Research => {
+                match &self.research_ui {
+                    Some(ResearchUiState::ConfirmProject { bench, .. }) => {
+                        self.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
+                        self.panel_selection = 0;
+                    }
+                    Some(ResearchUiState::ViewActive { bench }) => {
+                        self.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
+                        self.panel_selection = 0;
+                    }
+                    Some(ResearchUiState::BrowseProjects { .. }) => {
+                        self.research_ui = Some(ResearchUiState::BrowseCategories);
+                        self.panel_selection = 0;
+                    }
+                    _ => {
+                        self.open_panel = Panel::None;
+                        self.panel_selection = 0;
+                        self.research_ui = None;
+                    }
+                }
+            }
+            _ => {
+                self.open_panel = Panel::None;
+                self.panel_selection = 0;
+                self.medicine_ui = None;
+                self.research_ui = None;
+                self.policy_ui = None;
+            }
+        }
+    }
 }
 
 /// Grid layout for the world map: 3 columns × 2 rows.
