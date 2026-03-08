@@ -913,6 +913,7 @@ mod tests {
         // Add a third disease so we can test navigation bounds
         state.diseases.push(Disease {
             name: "Strain Gamma".into(),
+            pathogen_type: crate::state::PathogenType::DnaVirus,
             infectivity: 0.1,
             lethality: 0.01,
             cross_region_spread: 0.005,
