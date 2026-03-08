@@ -56,13 +56,15 @@ Use a short kebab-case description derived from the issue title (e.g., `issue-7-
 
 ## Investigate Issues
 
-Issues labeled `investigate` are different from bugs/enhancements. They flag something that *looked off* and needs someone to follow up. When picking up an investigate issue:
+Issues labeled `investigate` are fundamentally different from bugs and enhancements. **The person who filed the issue does not know if there is a problem.** They noticed something that looked off while doing other work and asked someone to take a closer look. Your job is to actually do that investigation with an open mind — not to assume the filer was right and jump straight to a fix.
 
-1. **Read the code and understand the current behavior.** Don't assume it's broken — it might be fine.
-2. **Determine the outcome:**
-   - **It's actually fine** — close the issue with a comment explaining why the behavior is correct. (~30% of the time)
-   - **It works but is confusing** — add documentation, rename things, or restructure code to make the behavior obvious. (~30%)
-   - **It's actually a problem** — fix the bug, clean up the design, or file a more specific bug/enhancement issue if the fix is large. (~40%)
+When picking up an investigate issue:
+
+1. **Start with no assumptions.** Read the code. Trace the logic. Understand the current behavior. The current behavior might be exactly correct — that's a fine outcome.
+2. **Determine the outcome** (only after you actually understand what's going on):
+   - **It's actually fine** (~30%) — close the issue with a comment explaining why the behavior is correct and makes sense. This is a perfectly valid and common outcome. Closing investigate issues is good hygiene, not a failure.
+   - **It works but is confusing** (~30%) — add documentation, rename things, add a code comment, or restructure to make the behavior obvious. The code was right, but understandably confusing.
+   - **It's actually a problem** (~40%) — fix the bug, clean up the design, or file a more specific bug/enhancement issue if the fix is too large for this pass.
 3. Investigate issues are often small and self-contained. Many can be resolved quickly.
 
 ## Step 4: Read and Understand the Issue

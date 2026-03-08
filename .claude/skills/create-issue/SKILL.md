@@ -36,7 +36,7 @@ Determine the issue type and priority:
 - `bug` — Something is broken or behaves incorrectly
 - `enhancement` — A new feature or improvement to existing functionality
 - `chore` — Refactoring, cleanup, tech debt, tooling improvements
-- `investigate` — Something looks off, incomplete, or unclear and needs follow-up to confirm whether it's actually a problem. These are free to file anytime — you don't need user permission. About 30% get closed with just a comment ("actually fine"), 30% lead to docs/cleanup, and 40% uncover real bugs or design issues that need fixing.
+- `investigate` — Something looks off or confusing and needs follow-up. **You are NOT claiming there is a problem.** You're asking someone to take a closer look. File these freely without user permission. ~30% turn out to be fine, ~30% lead to docs/cleanup, ~40% uncover real issues.
 
 **Priority** (pick one label):
 - `P0-critical` — Game-breaking, blocks core functionality
@@ -96,19 +96,35 @@ Think carefully about the title and body before writing. The title should be spe
 **For investigate issues**, use this structure:
 ```markdown
 ## What I Noticed
-[What looked off, incomplete, or unclear. Be specific about what you saw and why it caught your attention.]
+[What looked off, incomplete, or unclear. Be specific about what you observed.]
 
 ## Context
 [What you were doing when you noticed this. What's the current behavior?]
 
-## Why It Might Be a Problem
-[Your concern — what could be wrong, what might be incomplete, what's unclear about the design.]
+## Why This Caught My Attention
+[Why it seemed worth a second look. What confused you or seemed incomplete.]
 
 ## Relevant Code
 [File paths and line numbers to look at]
 ```
 
-Investigate issues should be filed freely whenever something seems funky. You do NOT need user permission to create them. Keep the title descriptive — e.g., "Investigate: save-on-quit only works when file path is provided — is that intentional?" rather than "Look into saving".
+**CRITICAL: Investigate issues are about asking questions, not making claims.** You have NOT investigated the thing yet. You noticed something in passing while doing other work. You do not know whether it's a problem, and you do not know what the fix would be if it is. Your job is to say "hey, can someone look at this?" — nothing more.
+
+**Do NOT include:**
+- A "Suggested Fix" or "Possible Solution" section. You haven't investigated — you have no basis for suggesting a fix.
+- Assertions about what the behavior "should" be. You don't know that yet.
+- Confident-sounding diagnoses like "the problem is X" or "this is broken because Y." You don't know if there IS a problem.
+
+**Good vs. bad examples:**
+
+Good title: `Investigate: save-on-quit only triggers when a file path is provided — is that the right UX?`
+Good body: "While fixing #6, I noticed the Help panel said 'Quit & save' but saving only happens if a file path was provided via CLI args. I didn't dig into this — I just fixed the label mismatch. But the save behavior itself seemed like it might be incomplete or confusing for players. Someone should take a look and confirm this is working the way we actually want."
+
+Bad title: `Fix save-on-quit to auto-generate save file path`
+Bad body: "The save system is broken — it silently discards the player's progress when no file path is provided. The fix is to auto-generate a save file with a random name in ~/.pandemic/ on startup. This would ensure saves always happen."
+— This is terrible. The filer didn't investigate anything. They have no idea if auto-generating a save file is the right design. They don't know if the current behavior is intentional. They jumped straight to a confident-sounding diagnosis and solution based on a surface-level observation. This is exactly the kind of premature conclusion that investigate issues are designed to AVOID.
+
+Investigate issues should be filed freely. You do NOT need user permission. Keep the title prefixed with "Investigate:" and phrase it as a question or observation, not a conclusion.
 
 **For chores**, use this structure:
 ```markdown
@@ -137,6 +153,7 @@ Before creating the issue, re-read your draft and check:
 - [ ] **Code references are included** so the reader can orient themselves
 - [ ] **Version is included** for bug reports
 - [ ] **Acceptance criteria are included** for enhancements and chores
+- [ ] **For investigate issues:** Does this read as a question/observation, or as a premature diagnosis? If it sounds like you already know the answer, rewrite it. Strip out any confident claims about what "should" happen or what the fix is.
 
 ### Step 5: Create the Issue
 

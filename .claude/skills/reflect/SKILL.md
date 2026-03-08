@@ -35,4 +35,4 @@ Make sure you ONLY return and display your final distilled/validated concerns, n
 
 After reflecting, you may immediately address the concerns you identified if the fixes are straightforward. For anything non-trivial, confirm with the user first.
 
-**Investigate issues:** If you notice anything that looks funky, incomplete, or unclear — even if it's not directly related to what you were working on — file an `investigate` issue for it. You don't need user permission; these are free and cheap. They ensure someone follows up on things that might otherwise get swept under the rug. Use `/create-issue` with the `investigate` label.
+**Investigate issues:** If you notice anything that looks funky, incomplete, or unclear — even tangential to what you were working on — file an `investigate` issue. You don't need user permission; these are free. But remember: an investigate issue says "this confused me, someone should look" — it does NOT diagnose the problem or propose a fix. You haven't investigated it; you just noticed it in passing. See the create-issue skill for the template and the good/bad examples.
