@@ -41,6 +41,14 @@ impl Region {
     pub fn total_dead(&self) -> f64 {
         self.infections.iter().map(|i| i.dead).sum()
     }
+
+    pub fn total_recovered(&self) -> f64 {
+        self.infections.iter().map(|i| i.recovered).sum()
+    }
+
+    pub fn infection_by_disease(&self, disease_idx: usize) -> Option<&RegionInfection> {
+        self.infections.iter().find(|i| i.disease_idx == disease_idx)
+    }
 }
 
 /// Per-disease infection state within a region.
@@ -48,6 +56,8 @@ impl Region {
 pub struct RegionInfection {
     pub disease_idx: usize,
     pub infected: f64,
+    #[serde(default)]
+    pub recovered: f64,
     pub dead: f64,
 }
 
@@ -58,6 +68,8 @@ pub struct Disease {
     pub severity: f64,
     pub lethality: f64,
     pub cross_region_spread: f64,
+    #[serde(default)]
+    pub recovery_rate: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -89,7 +101,12 @@ impl GameState {
                 name: "South America".into(),
                 population: 430_000_000,
                 connections: vec![0, 2],
-                infections: vec![],
+                infections: vec![RegionInfection {
+                    disease_idx: 1,
+                    infected: 500.0,
+                    recovered: 0.0,
+                    dead: 0.0,
+                }],
             },
             Region {
                 name: "Europe".into(),
@@ -110,6 +127,7 @@ impl GameState {
                 infections: vec![RegionInfection {
                     disease_idx: 0,
                     infected: 1000.0,
+                    recovered: 0.0,
                     dead: 0.0,
                 }],
             },
@@ -121,13 +139,24 @@ impl GameState {
             },
         ];
 
-        let diseases = vec![Disease {
-            name: "Strain Alpha".into(),
-            infectivity: 0.15,
-            severity: 0.05,
-            lethality: 0.02,
-            cross_region_spread: 0.01,
-        }];
+        let diseases = vec![
+            Disease {
+                name: "Strain Alpha".into(),
+                infectivity: 0.15,
+                severity: 0.05,
+                lethality: 0.02,
+                cross_region_spread: 0.01,
+                recovery_rate: 0.10,
+            },
+            Disease {
+                name: "Strain Beta".into(),
+                infectivity: 0.08,
+                severity: 0.15,
+                lethality: 0.005,
+                cross_region_spread: 0.02,
+                recovery_rate: 0.03,
+            },
+        ];
 
         Self {
             tick: 0,
@@ -155,6 +184,9 @@ impl GameState {
         self.regions.iter().map(|r| r.total_dead()).sum()
     }
 
+    pub fn total_recovered(&self) -> f64 {
+        self.regions.iter().map(|r| r.total_recovered()).sum()
+    }
 }
 
 #[cfg(test)]

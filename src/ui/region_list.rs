@@ -24,6 +24,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Span::raw(" "),
         Span::styled(format!("{:>8}", "Infected"), Style::default().fg(Color::DarkGray)),
         Span::raw(" "),
+        Span::styled(format!("{:>8}", "Recov"), Style::default().fg(Color::DarkGray)),
+        Span::raw(" "),
         Span::styled(format!("{:>8}", "Dead"), Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
         Span::styled(format!("{:>4}", "Risk"), Style::default().fg(Color::DarkGray)),
@@ -31,6 +33,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
     for region in &state.regions {
         let infected = region.total_infected();
+        let recovered = region.total_recovered();
         let dead = region.total_dead();
         let alive = region.alive();
 
@@ -64,6 +67,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Span::styled(
                 format!("{:>8}", format_number(infected)),
                 Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                format!("{:>8}", format_number(recovered)),
+                Style::default().fg(if recovered > 0.0 { Color::Green } else { Color::DarkGray }),
             ),
             Span::raw(" "),
             Span::styled(

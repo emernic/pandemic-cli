@@ -18,11 +18,7 @@ pub fn tick(state: &GameState) -> GameState {
 
         for inf in &mut region.infections {
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                // Each disease has its own independent susceptible pool. A person
-                // infected with disease A can also be infected with disease B.
-                // When displaying aggregate stats, the UI may need to estimate
-                // "infected by any disease" (e.g. via inclusion-exclusion or capping).
-                let susceptible = pop - inf.infected - inf.dead;
+                let susceptible = pop - inf.infected - inf.recovered - inf.dead;
                 if susceptible <= 0.0 {
                     continue;
                 }
@@ -32,10 +28,19 @@ pub fn tick(state: &GameState) -> GameState {
                     disease.infectivity * inf.infected * (susceptible / pop) * noise;
                 let new_infections = new_infections.max(0.0).min(susceptible);
 
-                let new_deaths = disease.lethality * inf.infected * noise;
-                let new_deaths = new_deaths.max(0.0).min(inf.infected);
+                // Deaths and recoveries are concurrent outflows from the infected pool.
+                // Compute both, then scale proportionally if they exceed infected.
+                let mut new_deaths = (disease.lethality * inf.infected * noise).max(0.0);
+                let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
+                let total_outflow = new_deaths + new_recoveries;
+                if total_outflow > inf.infected {
+                    let scale = inf.infected / total_outflow;
+                    new_deaths *= scale;
+                    new_recoveries *= scale;
+                }
 
-                inf.infected = inf.infected + new_infections - new_deaths;
+                inf.infected = inf.infected + new_infections - new_deaths - new_recoveries;
+                inf.recovered += new_recoveries;
                 inf.dead += new_deaths;
             }
         }
@@ -50,9 +55,7 @@ pub fn tick(state: &GameState) -> GameState {
                 .iter()
                 .filter_map(|&conn_idx| {
                     regions_snapshot[conn_idx]
-                        .infections
-                        .iter()
-                        .find(|inf| inf.disease_idx == d_idx)
+                        .infection_by_disease(d_idx)
                         .map(|inf| inf.infected)
                 })
                 .sum();
@@ -61,10 +64,7 @@ pub fn tick(state: &GameState) -> GameState {
                 continue;
             }
 
-            let has_infection = region
-                .infections
-                .iter()
-                .any(|inf| inf.disease_idx == d_idx);
+            let has_infection = region.infection_by_disease(d_idx).is_some();
 
             if !has_infection {
                 let roll: f64 = rng.r#gen();
@@ -73,6 +73,7 @@ pub fn tick(state: &GameState) -> GameState {
                     region.infections.push(RegionInfection {
                         disease_idx: d_idx,
                         infected: 1.0,
+                        recovered: 0.0,
                         dead: 0.0,
                     });
                 }
@@ -183,6 +184,53 @@ mod tests {
         }
         assert_eq!(a.total_infected(), b.total_infected());
         assert_eq!(a.total_dead(), b.total_dead());
+        assert_eq!(a.total_recovered(), b.total_recovered());
+    }
+
+    #[test]
+    fn recovery_accumulates() {
+        let state = GameState::new_default(42);
+        let mut s = state;
+        for _ in 0..50 {
+            s = tick(&s);
+        }
+        assert!(
+            s.total_recovered() > 0.0,
+            "should have recoveries after 50 ticks, got {}",
+            s.total_recovered()
+        );
+    }
+
+    #[test]
+    fn population_conservation() {
+        let state = GameState::new_default(42);
+        let mut s = state;
+        for _ in 0..100 {
+            s = tick(&s);
+        }
+        for region in &s.regions {
+            let pop = region.population as f64;
+            for inf in &region.infections {
+                let accounted = inf.infected + inf.recovered + inf.dead;
+                assert!(
+                    accounted <= pop + 1.0,
+                    "region {} disease {}: accounted {} > population {}",
+                    region.name,
+                    inf.disease_idx,
+                    accounted,
+                    pop
+                );
+                assert!(
+                    inf.infected >= 0.0 && inf.recovered >= 0.0 && inf.dead >= 0.0,
+                    "region {} disease {}: negative values: infected={}, recovered={}, dead={}",
+                    region.name,
+                    inf.disease_idx,
+                    inf.infected,
+                    inf.recovered,
+                    inf.dead
+                );
+            }
+        }
     }
 
     #[test]
@@ -238,19 +286,24 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Add a second disease so we can test navigation
         state.diseases.push(Disease {
-            name: "Strain Beta".into(),
+            name: "Strain Gamma".into(),
             infectivity: 0.1,
             severity: 0.03,
             lethality: 0.01,
             cross_region_spread: 0.005,
+            recovery_rate: 0.05,
         });
 
         let s = apply_action(&state, &Action::OpenThreats);
         assert_eq!(s.ui.panel_selection, 0);
         let s = apply_action(&s, &Action::SelectNext);
         assert_eq!(s.ui.panel_selection, 1);
+        let s = apply_action(&s, &Action::SelectNext);
+        assert_eq!(s.ui.panel_selection, 2);
         // Can't go past the last item
         let s = apply_action(&s, &Action::SelectNext);
+        assert_eq!(s.ui.panel_selection, 2);
+        let s = apply_action(&s, &Action::SelectPrev);
         assert_eq!(s.ui.panel_selection, 1);
         let s = apply_action(&s, &Action::SelectPrev);
         assert_eq!(s.ui.panel_selection, 0);

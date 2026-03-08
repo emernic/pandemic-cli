@@ -2,16 +2,16 @@
 source: tests/snapshots.rs
 expression: result.screen
 ---
-PANDEMIC DEFENSE   RUNNING   Tick: 10  Funds: $1050  RP: 10  Personnel: 50  Infected: 3.4K  Dead: 367
+PANDEMIC DEFENSE   RUNNING   Tick: 10  Funds: $1050  RP: 10  Personnel: 50  Infected: 2.1K  Dead: 262
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ┌ World Status ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│Region             Pop    Alive Infected     Dead  Risk                                                                                                                                               │
-│North America   500.0M   500.0M       -0       -0    OK                                                                                                                                               │
-│South America   430.0M   430.0M       -0       -0    OK                                                                                                                                               │
-│Europe          750.0M   750.0M       -0       -0    OK                                                                                                                                               │
-│Africa            1.4B     1.4B       -0       -0    OK                                                                                                                                               │
-│Asia              4.7B     4.7B     3.4K      367   MOD                                                                                                                                               │
-│Oceania          45.0M    45.0M       -0       -0    OK                                                                                                                                               │
+│Region             Pop    Alive Infected    Recov     Dead  Risk                                                                                                                                      │
+│North America   500.0M   500.0M       -0       -0       -0    OK                                                                                                                                      │
+│South America   430.0M   430.0M      780      186       31   LOW                                                                                                                                      │
+│Europe          750.0M   750.0M       -0       -0       -0    OK                                                                                                                                      │
+│Africa            1.4B     1.4B       -0       -0       -0    OK                                                                                                                                      │
+│Asia              4.7B     4.7B     1.3K     1.2K      231   MOD                                                                                                                                      │
+│Oceania          45.0M    45.0M       -0       -0       -0    OK                                                                                                                                      │
 │                                                                                                                                                                                                      │
 │                                                                                                                                                                                                      │
 │                                                                                                                                                                                                      │
