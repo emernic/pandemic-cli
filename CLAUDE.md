@@ -102,6 +102,7 @@ The user switches between many terminal tabs. They need to instantly see what wa
 
 ## Conventions
 
+- **When in doubt, Google it.** Do not guess about tool behavior, API syntax, library features, or Claude Code capabilities (hooks, skills, settings, etc.). These change frequently. A quick web search takes seconds; confidently stating something wrong wastes everyone's time. This applies especially to Claude Code's own documentation — always verify rather than assume.
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
 - Diseases use vec index, not an id field (`RegionInfection.disease_idx`)
 - `tick()` is NOT an Action — simulation steps and player actions are separate concepts
