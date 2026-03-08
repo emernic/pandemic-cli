@@ -100,6 +100,23 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ]));
             }
 
+            // Show affected regions once the disease is identified
+            if disease.knowledge >= KNOWLEDGE_NAME {
+                let regions: Vec<&str> = state.regions.iter()
+                    .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
+                    .map(|r| r.name.as_str())
+                    .collect();
+                if !regions.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled("    Present in: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            regions.join(", "),
+                            Style::default().fg(Color::White),
+                        ),
+                    ]));
+                }
+            }
+
             // Show knowledge bar
             if disease.knowledge > 0.0 {
                 let pct = (disease.knowledge * 100.0).min(100.0);
