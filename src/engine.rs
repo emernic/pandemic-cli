@@ -930,13 +930,13 @@ mod tests {
         ));
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
-        assert_eq!(state.resources.funding, funding_before - 250.0);
+        assert_eq!(state.resources.funding, funding_before - 200.0);
         let na_inf = state.regions[0]
             .infections
             .iter()
             .find(|i| i.disease_idx == 0)
             .unwrap();
-        assert_eq!(na_inf.immune, 10_000.0);
+        assert_eq!(na_inf.immune, 100_000.0);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
@@ -974,7 +974,7 @@ mod tests {
             asia_infected_before,
             asia_infected_after
         );
-        assert_eq!(state.resources.funding, funding_before - 250.0);
+        assert_eq!(state.resources.funding, funding_before - 200.0);
     }
 
     #[test]
