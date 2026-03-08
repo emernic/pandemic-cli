@@ -26,9 +26,9 @@ struct Cli {
     #[arg(long)]
     snapshot: bool,
 
-    /// Apply this key action before rendering (snapshot mode)
+    /// Apply key action(s) before rendering (snapshot mode, repeatable)
     #[arg(long)]
-    key: Option<String>,
+    key: Vec<String>,
 
     /// Advance this many ticks (snapshot mode)
     #[arg(long)]
@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if cli.snapshot {
-        let result = snapshot::run_snapshot(state, cli.key.as_deref(), cli.ticks)
+        let result = snapshot::run_snapshot(state, &cli.key, cli.ticks)
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
         print!("{}", result.screen);
         // Write updated state back to save file if one was provided

@@ -16,11 +16,11 @@ pub struct SnapshotResult {
 /// Returns both the rendered screen and the updated state.
 pub fn run_snapshot(
     mut state: GameState,
-    key: Option<&str>,
+    keys: &[String],
     ticks: Option<u64>,
 ) -> Result<SnapshotResult, String> {
-    // Apply key action if given
-    if let Some(key_str) = key {
+    // Apply key actions in order
+    for key_str in keys {
         match string_to_action(key_str) {
             Some(action) => {
                 state = apply_action(&state, &action);
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn snapshot_with_ticks() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, None, Some(10)).unwrap();
+        let result = run_snapshot(state, &[], Some(10)).unwrap();
         assert!(result.screen.contains("Tick: 10"));
         assert_eq!(result.state.tick, 10);
     }
@@ -100,15 +100,23 @@ mod tests {
     #[test]
     fn snapshot_with_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, Some("t"), None).unwrap();
+        let result = run_snapshot(state, &["t".to_string()], None).unwrap();
         assert!(result.screen.contains("Threats"));
         assert!(result.screen.contains("Strain Alpha"));
     }
 
     #[test]
+    fn snapshot_with_multiple_keys() {
+        let state = GameState::new_default(42);
+        // Navigate to Threats then press down to select second item
+        let result = run_snapshot(state, &["t".to_string(), "down".to_string()], None).unwrap();
+        assert!(result.screen.contains("Threats"));
+    }
+
+    #[test]
     fn snapshot_invalid_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, Some("x"), None);
+        let result = run_snapshot(state, &["x".to_string()], None);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown key"));
     }
