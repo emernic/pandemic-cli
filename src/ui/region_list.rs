@@ -85,7 +85,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let gap_col: u16 = 3;
     let gap_row: u16 = 1;
     let region_width = ((inner.width.saturating_sub(2 * gap_col)) / 3).min(30);
-    let region_height = ((inner.height.saturating_sub(gap_row)) / 2).min(8);
+    // Condensed boxes: 3 content lines + 2 border = 5
+    let region_height = ((inner.height.saturating_sub(gap_row)) / 2).min(5);
 
     // Draw connections in gap areas
     let connections = drawable_connections(state);
@@ -93,7 +94,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let buf = f.buffer_mut();
         let buf_area = buf.area;
         for conn in &connections {
-            // Grid positions are guaranteed valid by drawable_connections
             let (ca, ra) = map_grid_pos(conn.a).unwrap();
             let (_cb, rb) = map_grid_pos(conn.b).unwrap();
 
@@ -142,7 +142,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         }
     }
 
-    // Render each region box
+    // Render each region box (condensed: name, stats, health bar only)
     for (idx, region) in state.regions.iter().enumerate() {
         let (col, row) = match map_grid_pos(idx) {
             Some(p) => p,
@@ -152,17 +152,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let y = inner.y + row * (region_height + gap_row);
         let rect = Rect::new(x, y, region_width, region_height);
         let selected = idx == state.ui.map_selection;
-        let conn_hint = if selected {
-            let hidden = non_drawable_connections(state, idx);
-            let names: Vec<&str> = hidden
-                .iter()
-                .filter_map(|&j| state.regions.get(j).map(|r| r.name.as_str()))
-                .collect();
-            if names.is_empty() { None } else { Some(format!("↔ {}", names.join(", "))) }
-        } else {
-            None
-        };
-        render_region_box(f, rect, region, selected, state, conn_hint.as_deref());
+        render_region_box(f, rect, region, selected);
+    }
+
+    // Detail panel below the grid for the selected region
+    let grid_bottom = inner.y + 2 * region_height + gap_row;
+    let detail_height = (inner.y + inner.height).saturating_sub(grid_bottom);
+    if detail_height >= 2 {
+        let detail_area = Rect::new(inner.x, grid_bottom, inner.width, detail_height);
+        render_detail_panel(f, detail_area, state);
     }
 }
 
@@ -171,8 +169,6 @@ fn render_region_box(
     area: Rect,
     region: &Region,
     selected: bool,
-    state: &GameState,
-    conn_hint: Option<&str>,
 ) {
     let border_color = if selected {
         Color::Yellow
@@ -245,7 +241,7 @@ fn render_region_box(
         ),
     ]));
 
-    // Line 2: Key stats — show infected/dead when active, otherwise static pop
+    // Line 2: Key stats
     if inner.height >= 2 {
         if infected == 0.0 && dead == 0.0 {
             lines.push(Line::from(Span::styled(
@@ -270,7 +266,7 @@ fn render_region_box(
         }
     }
 
-    // Line 3: Health bar — nonzero values get at least 1 char
+    // Line 3: Health bar
     if inner.height >= 3 && pop > 0.0 {
         let bar_w = iw;
         let mut inf_w = if infected > 0.0 {
@@ -288,10 +284,8 @@ fn render_region_box(
         } else {
             0
         };
-        // Clamp so minimums don't exceed bar width
         let used = inf_w + imm_w + dead_w;
         if used > bar_w {
-            // Scale down proportionally, but keep at least 1 for each
             let excess = used - bar_w;
             for _ in 0..excess {
                 if dead_w > 1 {
@@ -339,55 +333,134 @@ fn render_region_box(
         lines.push(Line::from(spans));
     }
 
-    // Lines 4+: Per-disease detail (selected regions only)
-    if selected && inner.height >= 4 {
-        if region.infections.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "No infections",
-                Style::default().fg(Color::Green),
-            )));
-        } else {
-            for inf in &region.infections {
-                if lines.len() >= inner.height as usize {
-                    break;
-                }
-                if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                    let dname = disease.display_name(inf.disease_idx);
-                    // Disease name line
-                    lines.push(Line::from(Span::styled(
-                        dname,
-                        Style::default().fg(Color::Yellow),
-                    )));
-                    // Stats line for this disease
-                    if lines.len() < inner.height as usize {
-                        let mut spans = vec![
-                            Span::styled("  ", Style::default()),
-                            Span::styled(
-                                format!("Inf {}", format_number(inf.infected)),
-                                Style::default().fg(Color::Red),
-                            ),
-                        ];
-                        if inf.dead >= 0.5 {
-                            spans.push(Span::styled(
-                                format!("  Dead {}", format_number(inf.dead)),
-                                Style::default().fg(Color::DarkGray),
-                            ));
-                        }
-                        lines.push(Line::from(spans));
-                    }
-                }
-            }
-        }
+    let paragraph = Paragraph::new(lines);
+    f.render_widget(paragraph, inner);
+}
 
-        // Non-drawable connection hint (e.g., "↔ Oceania")
-        if let Some(hint) = conn_hint {
-            if lines.len() < inner.height as usize {
-                lines.push(Line::from(Span::styled(
-                    hint.to_string(),
-                    Style::default().fg(Color::DarkGray),
-                )));
+/// Detail panel below the region grid showing full info for the selected region.
+fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
+    let idx = state.ui.map_selection;
+    let region = match state.regions.get(idx) {
+        Some(r) => r,
+        None => return,
+    };
+
+    let border_color = Color::Yellow;
+    let block = Block::default()
+        .title(format!(" {} ", region.name))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .border_style(Style::default().fg(border_color).add_modifier(Modifier::BOLD));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.width < 10 || inner.height < 1 {
+        return;
+    }
+
+    let pop = region.population as f64;
+    let infected = region.total_infected();
+    let immune = region.total_immune();
+    let dead = region.total_dead();
+    let alive = region.alive();
+
+    let label = Style::default().fg(Color::DarkGray);
+    let val = Style::default().fg(Color::White);
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Population summary line
+    lines.push(Line::from(vec![
+        Span::styled("Pop ", label),
+        Span::styled(format_number(pop), val),
+        Span::styled("  Alive ", label),
+        Span::styled(format_number(alive), Style::default().fg(Color::Green)),
+        Span::styled("  Infected ", label),
+        Span::styled(format_number(infected), Style::default().fg(Color::Red)),
+        Span::styled("  Immune ", label),
+        Span::styled(format_number(immune), Style::default().fg(Color::Cyan)),
+        Span::styled("  Dead ", label),
+        Span::styled(format_number(dead), Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray })),
+    ]));
+
+    // Per-disease breakdown
+    if !region.infections.is_empty() {
+        for inf in &region.infections {
+            if lines.len() >= inner.height as usize {
+                break;
+            }
+            if let Some(disease) = state.diseases.get(inf.disease_idx) {
+                let dname = disease.display_name(inf.disease_idx);
+                let susceptible = pop - inf.infected - inf.dead - inf.immune;
+                let mut spans = vec![
+                    Span::styled(
+                        format!("  {:<20}", dname),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                    Span::styled("Inf ", label),
+                    Span::styled(
+                        format!("{:<10}", format_number(inf.infected)),
+                        Style::default().fg(Color::Red),
+                    ),
+                    Span::styled("Immune ", label),
+                    Span::styled(
+                        format!("{:<10}", format_number(inf.immune)),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                    Span::styled("Dead ", label),
+                    Span::styled(
+                        format!("{:<10}", format_number(inf.dead)),
+                        Style::default().fg(if inf.dead > 0.0 { Color::Red } else { Color::DarkGray }),
+                    ),
+                ];
+                if susceptible > 0.0 {
+                    spans.push(Span::styled("Susceptible ", label));
+                    spans.push(Span::styled(
+                        format_number(susceptible.max(0.0)),
+                        Style::default().fg(Color::Cyan),
+                    ));
+                }
+                lines.push(Line::from(spans));
             }
         }
+    } else {
+        lines.push(Line::from(Span::styled(
+            "  No infections",
+            Style::default().fg(Color::Green),
+        )));
+    }
+
+    // Active policies
+    if let Some(policy) = state.policies.get(idx) {
+        if policy.any_active() && lines.len() < inner.height as usize {
+            let mut policy_parts: Vec<Span> = vec![
+                Span::styled("  Policies: ", label),
+            ];
+            if policy.travel_ban {
+                policy_parts.push(Span::styled("Travel Ban ", Style::default().fg(Color::Yellow)));
+            }
+            if policy.quarantine {
+                policy_parts.push(Span::styled("Quarantine ", Style::default().fg(Color::Yellow)));
+            }
+            if policy.hospital_surge {
+                policy_parts.push(Span::styled("Hospital Surge ", Style::default().fg(Color::Yellow)));
+            }
+            lines.push(Line::from(policy_parts));
+        }
+    }
+
+    // Non-drawable connection hint
+    let hidden = non_drawable_connections(state, idx);
+    if !hidden.is_empty() && lines.len() < inner.height as usize {
+        let names: Vec<&str> = hidden
+            .iter()
+            .filter_map(|&j| state.regions.get(j).map(|r| r.name.as_str()))
+            .collect();
+        lines.push(Line::from(Span::styled(
+            format!("  Connected to: {}", names.join(", ")),
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     let paragraph = Paragraph::new(lines);
