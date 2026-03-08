@@ -1,6 +1,6 @@
 ---
 name: playtest
-description: Playtests the game via snapshot mode, playing as a real player and documenting feedback. Use when asked to playtest, do a playtest, or test the game experience.
+description: Extended playtest session — plays the game as a real player and documents feedback. Use for longer dedicated playtesting sessions (e.g., final check after a feature is complete), NOT for quick spot-checks during development (just run snapshot mode directly for those).
 tools: Bash, Read, Write, Glob, Grep
 model: opus
 maxTurns: 50

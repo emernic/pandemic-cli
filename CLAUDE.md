@@ -24,6 +24,18 @@ Key files: `src/state.rs` (data), `src/engine.rs` (logic), `src/action.rs` (inpu
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`
 
+## Testing During Development
+
+For quick checks while working on a feature, test it yourself directly:
+```bash
+cargo run -- --snapshot                          # see initial state
+cargo run -- /tmp/test.json --snapshot --ticks 10           # advance 10 ticks
+cargo run -- /tmp/test.json --snapshot --key m --ticks 5    # open medicines, advance 5
+```
+This gives you immediate, unfiltered feedback. Use it often.
+
+For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent.
+
 ## Conventions
 
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
