@@ -263,7 +263,7 @@ pub struct Medicine {
     pub cost: f64,
     pub doses: f64,
     /// Maximum doses this medicine can hold (set on creation, restored by manufacturing).
-    /// Defaults to 0.0 on deserialization; fixup_max_doses() sets it from `doses` for old saves.
+    /// Defaults to 0.0 on deserialization; `migrate()` sets it from `doses` for old saves.
     #[serde(default)]
     pub max_doses: f64,
     pub unlocked: bool,
@@ -700,6 +700,20 @@ impl GameState {
     /// Total initial population across all regions (before any deaths).
     pub fn initial_population(&self) -> f64 {
         self.regions.iter().map(|r| r.population as f64).sum()
+    }
+
+    /// Run all save-migration fixups. Call once after deserializing a save file.
+    pub fn migrate(&mut self) {
+        // Ensure policies vec matches regions (for saves before the policy system).
+        while self.policies.len() < self.regions.len() {
+            self.policies.push(RegionPolicy::default());
+        }
+        // Backfill max_doses for saves before dose depletion.
+        for med in &mut self.medicines {
+            if med.max_doses == 0.0 && med.doses > 0.0 {
+                med.max_doses = med.doses;
+            }
+        }
     }
 
     /// Available field research projects (excludes currently active).

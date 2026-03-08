@@ -9,28 +9,10 @@ use crate::state::{
     WIN_INFECTED_THRESHOLD,
 };
 
-/// Ensure policies vec matches regions length (for saves that predate the policy system).
-fn ensure_policies(state: &mut GameState) {
-    while state.policies.len() < state.regions.len() {
-        state.policies.push(crate::state::RegionPolicy::default());
-    }
-}
-
-/// Backfill max_doses for saves created before dose depletion was added.
-fn fixup_max_doses(state: &mut GameState) {
-    for med in &mut state.medicines {
-        if med.max_doses == 0.0 && med.doses > 0.0 {
-            med.max_doses = med.doses;
-        }
-    }
-}
-
 /// Advance the simulation by one tick.
 pub fn tick(state: &GameState) -> GameState {
     let mut new = state.clone();
     new.events.clear();
-    ensure_policies(&mut new);
-    fixup_max_doses(&mut new);
 
     // Don't advance simulation after game over
     if new.outcome != GameOutcome::Playing {
@@ -459,8 +441,6 @@ fn toggle_panel(ui: &mut crate::state::UiState, panel: Panel) {
 /// Apply a player action to the game state.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
-    ensure_policies(&mut new);
-    fixup_max_doses(&mut new);
     new.ui.status_message = None;
 
     match action {
