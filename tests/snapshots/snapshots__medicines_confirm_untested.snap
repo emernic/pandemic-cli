@@ -10,7 +10,7 @@ PANDEMIC DEFENSE   PAUSED   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infecte
 ││Pop: 500.0M                 │   │Pop: 750.0M                 │   │Inf 50.0K                   │  ││                                                                                                  │
 ││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││  ⚠ WARNING: UNTESTED MEDICINE                                                                    │
 ││No infections               │───│                            │───│                            │  ││                                                                                                  │
-││                            │   │                            │   │                            │  ││  This medicine has not completed clinical trials.                                                │
+││                            │   │                            │   │                            │  ││  Not tested against Strain Alpha.                                                                │
 ││                            │   │                            │   │                            │  ││  25% chance of adverse effects — 20% of doses                                                    │
 │└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘  ││  will KILL instead of help.                                                                      │
 │↔ Oceania      │               ╱                │               ╱                │                ││                                                                                                  │

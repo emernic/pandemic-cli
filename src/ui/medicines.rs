@@ -292,16 +292,16 @@ fn render_confirm_deploy(
     let region = &state.regions[region_idx];
     let target = med.decode_deploy_target(target_selection);
 
-    let action_desc = match &target {
+    let (action_desc, disease_name) = match &target {
         Some(DeployTarget::Vaccinate { disease_idx }) => {
             let name = disease_display_name(&state.diseases[*disease_idx], *disease_idx);
-            format!("Vaccinate {} against {}", region.name, name)
+            (format!("Vaccinate {} against {}", region.name, name), name)
         }
         Some(DeployTarget::Treat { disease_idx }) => {
             let name = disease_display_name(&state.diseases[*disease_idx], *disease_idx);
-            format!("Treat {} in {}", name, region.name)
+            (format!("Treat {} in {}", name, region.name), name)
         }
-        None => "Deploy".to_string(),
+        None => ("Deploy".to_string(), "Unknown".to_string()),
     };
 
     lines.push(Line::from(""));
@@ -316,7 +316,7 @@ fn render_confirm_deploy(
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  This medicine has not completed clinical trials.",
+        format!("  Not tested against {}.", disease_name),
         Style::default().fg(Color::Yellow),
     )));
     lines.push(Line::from(Span::styled(
