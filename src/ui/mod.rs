@@ -13,12 +13,12 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, Panel};
+use crate::state::{GameOutcome, GameState, Panel};
 
 pub fn render(f: &mut Frame, state: &GameState) {
     let header_height = resources::height(state);
-    let has_status = state.ui.status_message.is_some();
-    let hotkey_height = if has_status { 3 } else { 2 };
+    let has_extra_line = state.ui.status_message.is_some() || state.outcome != GameOutcome::Playing;
+    let hotkey_height = if has_extra_line { 3 } else { 2 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

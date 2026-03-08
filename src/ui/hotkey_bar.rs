@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, Panel};
+use crate::state::{GameOutcome, GameState, Panel};
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let hotkeys = vec![
@@ -35,15 +35,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ));
     }
 
-    spans.push(Span::raw("  "));
-    spans.push(Span::styled(
-        "[Space]",
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-    ));
-    spans.push(Span::styled(
-        if state.paused { " Resume" } else { " Pause" },
-        Style::default().fg(Color::White),
-    ));
+    // Only show pause/resume when game is still playing
+    if state.outcome == GameOutcome::Playing {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(
+            "[Space]",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(
+            if state.paused { " Resume" } else { " Pause" },
+            Style::default().fg(Color::White),
+        ));
+    }
 
     spans.push(Span::raw("  "));
     spans.push(Span::styled(
@@ -60,11 +63,27 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     spans.push(Span::styled(" Quit", Style::default().fg(Color::White)));
 
     let mut lines = Vec::new();
-    if let Some(msg) = &state.ui.status_message {
-        lines.push(Line::from(Span::styled(
-            msg.as_str(),
-            Style::default().fg(if msg.contains("ADVERSE") { Color::Red } else { Color::Yellow }),
-        )));
+    match &state.outcome {
+        GameOutcome::Lost => {
+            lines.push(Line::from(Span::styled(
+                "Humanity has fallen. Too many lives were lost.",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )));
+        }
+        GameOutcome::Won => {
+            lines.push(Line::from(Span::styled(
+                "All diseases eradicated! Humanity is saved.",
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            )));
+        }
+        GameOutcome::Playing => {
+            if let Some(msg) = &state.ui.status_message {
+                lines.push(Line::from(Span::styled(
+                    msg.as_str(),
+                    Style::default().fg(if msg.contains("ADVERSE") { Color::Red } else { Color::Yellow }),
+                )));
+            }
+        }
     }
     lines.push(Line::from(spans));
     let widget = Paragraph::new(lines).block(Block::default().borders(Borders::TOP));

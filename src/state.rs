@@ -18,6 +18,8 @@ pub struct GameState {
     /// Active bench research project (Develop Medicine).
     #[serde(default)]
     pub bench_research: Option<ResearchProject>,
+    #[serde(default)]
+    pub outcome: GameOutcome,
     pub ui: UiState,
 }
 
@@ -149,6 +151,18 @@ impl ResearchProject {
         self.progress >= self.required_ticks
     }
 }
+
+/// Game outcome — checked each tick after simulation.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum GameOutcome {
+    #[default]
+    Playing,
+    Won,
+    Lost,
+}
+
+/// Fraction of initial world population that, when dead, triggers game over.
+pub const LOSE_DEATH_FRACTION: f64 = 0.10;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Panel {
@@ -345,6 +359,7 @@ impl GameState {
             medicines,
             field_research: None,
             bench_research: None,
+            outcome: GameOutcome::Playing,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -376,6 +391,11 @@ impl GameState {
 
     pub fn personnel_available(&self) -> u32 {
         self.resources.personnel.saturating_sub(self.personnel_busy())
+    }
+
+    /// Total initial population across all regions (before any deaths).
+    pub fn initial_population(&self) -> f64 {
+        self.regions.iter().map(|r| r.population as f64).sum()
     }
 }
 

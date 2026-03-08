@@ -2,14 +2,19 @@ use rand::Rng;
 
 use crate::action::Action;
 use crate::state::{
-    map_navigate, DeployTarget, GameState, MapDirection, MedicineUiState, Panel,
+    map_navigate, DeployTarget, GameOutcome, GameState, MapDirection, MedicineUiState, Panel,
     RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL,
+    KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION,
 };
 
 /// Advance the simulation by one tick.
 pub fn tick(state: &GameState) -> GameState {
     let mut new = state.clone();
+
+    // Don't advance simulation after game over
+    if new.outcome != GameOutcome::Playing {
+        return new;
+    }
 
     // Clone the RNG out so we can mutably borrow both `rng` and `new.regions`
     // simultaneously. Written back to `new.rng` at the end of the function.
@@ -144,6 +149,25 @@ pub fn tick(state: &GameState) -> GameState {
 
     new.rng = rng;
     new.tick += 1;
+
+    // Check win/lose conditions (only while still playing)
+    if new.outcome == GameOutcome::Playing {
+        let total_dead = new.total_dead();
+        let death_threshold = new.initial_population() * LOSE_DEATH_FRACTION;
+
+        if total_dead >= death_threshold {
+            new.outcome = GameOutcome::Lost;
+            new.paused = true;
+        } else if new.total_infected() < 1.0 {
+            // Win requires player engagement: all diseases must be identified
+            let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
+            if all_identified {
+                new.outcome = GameOutcome::Won;
+                new.paused = true;
+            }
+        }
+    }
+
     new
 }
 
@@ -280,7 +304,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 
     match action {
         Action::TogglePause => {
-            new.paused = !new.paused;
+            // Can't unpause after game over
+            if new.outcome == GameOutcome::Playing {
+                new.paused = !new.paused;
+            }
         }
         Action::OpenThreats => toggle_panel(&mut new.ui, Panel::Threats),
         Action::OpenResearch => {
@@ -1248,6 +1275,61 @@ mod tests {
         for disease in &state.diseases {
             assert_eq!(disease.knowledge, 0.0);
         }
+    }
+
+    #[test]
+    fn lose_condition_triggers_on_mass_death() {
+        let mut state = GameState::new_default(42);
+        // Run until game over
+        for _ in 0..2000 {
+            state = tick(&state);
+            if state.outcome != GameOutcome::Playing {
+                break;
+            }
+        }
+        assert_eq!(state.outcome, GameOutcome::Lost);
+        assert!(state.paused);
+        // Deaths should be just over the threshold
+        let threshold = state.initial_population() * LOSE_DEATH_FRACTION;
+        assert!(state.total_dead() >= threshold);
+    }
+
+    #[test]
+    fn win_requires_identified_diseases() {
+        let mut state = GameState::new_default(42);
+        // Clear all infections to simulate eradication
+        for region in &mut state.regions {
+            region.infections.clear();
+        }
+        // Diseases NOT identified — should not trigger win
+        state = tick(&state);
+        assert_eq!(state.outcome, GameOutcome::Playing);
+
+        // Now identify all diseases
+        for disease in &mut state.diseases {
+            disease.knowledge = 1.0;
+        }
+        state = tick(&state);
+        assert_eq!(state.outcome, GameOutcome::Won);
+        assert!(state.paused);
+    }
+
+    #[test]
+    fn no_unpause_after_game_over() {
+        let mut state = GameState::new_default(42);
+        state.outcome = GameOutcome::Lost;
+        state.paused = true;
+        let s = apply_action(&state, &Action::TogglePause);
+        assert!(s.paused, "should not be able to unpause after game over");
+    }
+
+    #[test]
+    fn tick_does_not_advance_after_game_over() {
+        let mut state = GameState::new_default(42);
+        state.outcome = GameOutcome::Lost;
+        let tick_before = state.tick;
+        state = tick(&state);
+        assert_eq!(state.tick, tick_before, "tick should not advance after game over");
     }
 
     #[test]
