@@ -2,3 +2,5 @@
 .claude/settings.local.json
 playtests/*.md
 save.json
+playtest-*.json
+playtest_*.json

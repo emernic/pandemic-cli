@@ -214,7 +214,7 @@ Adapt the list to the task — small fixes won't need playtests, doc changes won
 - **Stay contained within your working directory.** Don't write files to shared locations like `~/.pandemic-cli/` or `/tmp/` — other agents may be doing the same thing and you'll collide. If you need scratch files, keep them in your worktree.
 - **Your worktree may have leftover state from a previous task.** Agents often work on multiple issues sequentially in the same worktree. You might start on a random feature branch with uncommitted changes from a completely unrelated task. Always check and clean up before starting new work.
 - **Other agents are picking up issues at the same time.** Always check the `in-progress` label before claiming work, and claim quickly to minimize race windows.
-- **Snapshot mode (`--snapshot`) is safe for concurrent use** — it doesn't write save files by default. Interactive mode (`cargo run` without `--snapshot`) writes to `~/.pandemic-cli/save.json`, which is shared across all agents. Avoid running interactive mode in automated/agent contexts.
+- **Snapshot mode (`--snapshot`) is safe for concurrent use** — it only writes if you pass an explicit save file path. Interactive mode (`cargo run` without `--snapshot`) defaults to `./save.json` in the working directory. Both are local to the worktree and safe for concurrent agents.
 
 ## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 
