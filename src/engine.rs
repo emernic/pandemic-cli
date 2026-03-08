@@ -1,15 +1,11 @@
 use rand::Rng;
 
 use crate::action::Action;
-
-/// Cost in RP to boost an active research project.
-pub const BOOST_RP_COST: f64 = 10.0;
-/// Ticks of progress added per boost.
-pub const BOOST_TICKS: f64 = 5.0;
 use crate::state::{
     map_navigate, DeployTarget, GameOutcome, GameState, MapDirection, MedicineUiState, Panel,
     RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION,
+    BOOST_RP_COST, BOOST_TICKS, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
+    LOSE_DEATH_FRACTION,
 };
 
 /// Advance the simulation by one tick.
