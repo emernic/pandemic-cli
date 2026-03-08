@@ -165,6 +165,7 @@ pub enum MedicineUiState {
     BrowseMedicines,
     SelectRegion { medicine_idx: usize },
     SelectTarget { medicine_idx: usize, region_idx: usize },
+    ConfirmDeploy { medicine_idx: usize, region_idx: usize, target_selection: usize },
 }
 
 /// Research panel UI state machine, following the medicines panel pattern.
