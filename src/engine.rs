@@ -649,6 +649,76 @@ pub fn project_costs(kind: &ResearchKind) -> (f64, u32, f64) {
     }
 }
 
+/// Start a research project. Pure game logic — does NOT modify UI state.
+///
+/// Returns true if the project was successfully started.
+fn start_research(state: &mut GameState, bench: bool, project_idx: usize) -> bool {
+    if state.outcome != GameOutcome::Playing {
+        return false;
+    }
+    let occupied = if bench { state.bench_research.is_some() } else { state.field_research.is_some() };
+    if occupied {
+        return false;
+    }
+
+    let projects = if bench {
+        available_bench_projects(state)
+    } else {
+        available_field_projects(state)
+    };
+
+    if let Some(kind) = projects.get(project_idx) {
+        let (rp_cost, personnel, duration) = project_costs(kind);
+
+        if state.resources.research_points >= rp_cost
+            && state.personnel_available() >= personnel
+        {
+            let project = ResearchProject {
+                kind: kind.clone(),
+                progress: 0.0,
+                required_ticks: duration,
+                personnel_assigned: personnel,
+                rp_cost,
+            };
+            state.resources.research_points -= rp_cost;
+
+            if bench {
+                state.bench_research = Some(project);
+            } else {
+                state.field_research = Some(project);
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// Boost an active research project. Pure game logic — does NOT modify UI state.
+///
+/// Returns an optional status message.
+fn boost_research(state: &mut GameState, bench: bool) -> Option<String> {
+    let project = if bench { &mut state.bench_research } else { &mut state.field_research };
+    if let Some(project) = project {
+        if !project.is_complete() && state.resources.research_points >= BOOST_RP_COST {
+            state.resources.research_points -= BOOST_RP_COST;
+            project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
+            Some(format!(
+                "Boosted research! (-{:.0} RP, +{:.0} ticks)",
+                BOOST_RP_COST, BOOST_TICKS
+            ))
+        } else if state.resources.research_points < BOOST_RP_COST {
+            Some(format!(
+                "Need {:.0} RP to boost (have {:.0})",
+                BOOST_RP_COST, state.resources.research_points
+            ))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn handle_research_confirm(state: &mut GameState) {
     let research_ui = state.ui.research_ui.clone();
     match research_ui {
@@ -662,11 +732,9 @@ fn handle_research_confirm(state: &mut GameState) {
             let active = if bench { &state.bench_research } else { &state.field_research };
 
             if active.is_some() {
-                // Slot occupied — only option is View Active
                 state.ui.research_ui = Some(ResearchUiState::ViewActive { bench });
                 state.ui.panel_selection = 0;
             } else {
-                // Only advance if there are actually projects to select
                 let count = if bench {
                     available_bench_projects(state).len()
                 } else {
@@ -679,68 +747,13 @@ fn handle_research_confirm(state: &mut GameState) {
             }
         }
         Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
-            // Block after game over — no point starting research
-            if state.outcome != GameOutcome::Playing {
-                return;
-            }
-            // Block if slot is already occupied
-            let occupied = if bench { state.bench_research.is_some() } else { state.field_research.is_some() };
-            if occupied {
-                return;
-            }
-
-            // Actually start the project
-            let projects = if bench {
-                available_bench_projects(state)
-            } else {
-                available_field_projects(state)
-            };
-
-            if let Some(kind) = projects.get(project_idx) {
-                let (rp_cost, personnel, duration) = project_costs(kind);
-
-                if state.resources.research_points >= rp_cost
-                    && state.personnel_available() >= personnel
-                {
-                    let project = ResearchProject {
-                        kind: kind.clone(),
-                        progress: 0.0,
-                        required_ticks: duration,
-                        personnel_assigned: personnel,
-                        rp_cost,
-                    };
-                    state.resources.research_points -= rp_cost;
-
-                    if bench {
-                        state.bench_research = Some(project);
-                    } else {
-                        state.field_research = Some(project);
-                    }
-
-                    // Return to browse projects
-                    state.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench });
-                    state.ui.panel_selection = 0;
-                }
+            if start_research(state, bench, project_idx) {
+                state.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+                state.ui.panel_selection = 0;
             }
         }
         Some(ResearchUiState::ViewActive { bench }) => {
-            // Boost: spend RP to advance the active project
-            let project = if bench { &mut state.bench_research } else { &mut state.field_research };
-            if let Some(project) = project {
-                if !project.is_complete() && state.resources.research_points >= BOOST_RP_COST {
-                    state.resources.research_points -= BOOST_RP_COST;
-                    project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
-                    state.ui.status_message = Some(format!(
-                        "Boosted research! (-{:.0} RP, +{:.0} ticks)",
-                        BOOST_RP_COST, BOOST_TICKS
-                    ));
-                } else if state.resources.research_points < BOOST_RP_COST {
-                    state.ui.status_message = Some(format!(
-                        "Need {:.0} RP to boost (have {:.0})",
-                        BOOST_RP_COST, state.resources.research_points
-                    ));
-                }
-            }
+            state.ui.status_message = boost_research(state, bench);
         }
         None => {}
     }
