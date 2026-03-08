@@ -56,10 +56,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Load or create state
-    let state = if let Some(ref path) = save_file {
+    let state: GameState = if let Some(ref path) = save_file {
         if std::path::Path::new(path).exists() {
             let data = fs::read_to_string(path)?;
-            serde_json::from_str(&data)?
+            let mut s: GameState = serde_json::from_str(&data)?;
+            s.migrate();
+            s
         } else {
             GameState::new_default(cli.seed)
         }
