@@ -99,7 +99,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [↑/↓] Navigate selections"),
             Line::from("  [Esc] Close panel"),
-            Line::from("  [Q] Quit & save"),
+            Line::from("  [Q] Quit"),
         ],
         _ => vec![
             Line::from(""),
