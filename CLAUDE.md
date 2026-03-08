@@ -36,6 +36,20 @@ This gives you immediate, unfiltered feedback. Use it often.
 
 For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent.
 
+## Session Start Checklist
+
+Before doing any work, get your repo into a clean state:
+
+1. **Fetch**: `git fetch origin`
+2. **Check status**: `git status` — flag any uncommitted changes, stale branches, or other surprises to the user before proceeding.
+3. **Clean branch**: Create a fresh branch off `origin/master` for new work:
+   ```
+   git checkout -b my-branch origin/master
+   ```
+   Only skip this if you're explicitly resuming work on an existing branch.
+
+Do NOT start implementing anything until the repo state is clean and understood.
+
 ## Conventions
 
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
