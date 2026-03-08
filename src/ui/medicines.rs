@@ -103,7 +103,14 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select", "Close"));
+    if unlocked.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  [Esc] Close",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        lines.push(hint_line(state, "Select", "Close"));
+    }
 
     (" Medicines ".to_string(), lines)
 }
