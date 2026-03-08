@@ -421,13 +421,17 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     new
 }
 
-/// Compute available field research projects.
+/// Compute available field research projects (excludes the currently active one).
 pub fn available_field_projects(state: &GameState) -> Vec<ResearchKind> {
+    let active_kind = state.field_research.as_ref().map(|p| &p.kind);
     let mut projects = Vec::new();
     // Identify Threat: diseases not fully known
     for (i, disease) in state.diseases.iter().enumerate() {
         if disease.knowledge < KNOWLEDGE_FULL {
-            projects.push(ResearchKind::IdentifyThreat { disease_idx: i });
+            let kind = ResearchKind::IdentifyThreat { disease_idx: i };
+            if active_kind != Some(&kind) {
+                projects.push(kind);
+            }
         }
     }
     // Clinical Trial: unlocked medicines not yet tested against their target diseases
@@ -437,18 +441,22 @@ pub fn available_field_projects(state: &GameState) -> Vec<ResearchKind> {
         }
         for &d_idx in &med.target_diseases {
             if !med.tested_against.contains(&d_idx) {
-                projects.push(ResearchKind::ClinicalTrial {
+                let kind = ResearchKind::ClinicalTrial {
                     medicine_idx: i,
                     disease_idx: d_idx,
-                });
+                };
+                if active_kind != Some(&kind) {
+                    projects.push(kind);
+                }
             }
         }
     }
     projects
 }
 
-/// Compute available bench research projects.
+/// Compute available bench research projects (excludes the currently active one).
 pub fn available_bench_projects(state: &GameState) -> Vec<ResearchKind> {
+    let active_kind = state.bench_research.as_ref().map(|p| &p.kind);
     let mut projects = Vec::new();
     for (i, med) in state.medicines.iter().enumerate() {
         if med.unlocked {
@@ -459,7 +467,10 @@ pub fn available_bench_projects(state: &GameState) -> Vec<ResearchKind> {
             state.diseases.get(d_idx).map_or(false, |d| d.knowledge >= KNOWLEDGE_FOR_MEDICINE)
         });
         if has_knowledge {
-            projects.push(ResearchKind::DevelopMedicine { medicine_idx: i });
+            let kind = ResearchKind::DevelopMedicine { medicine_idx: i };
+            if active_kind != Some(&kind) {
+                projects.push(kind);
+            }
         }
     }
     projects
@@ -809,7 +820,7 @@ mod tests {
         ));
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
-        assert_eq!(state.resources.funding, funding_before - 100.0);
+        assert_eq!(state.resources.funding, funding_before - 250.0);
         let na_inf = state.regions[0]
             .infections
             .iter()
@@ -848,7 +859,7 @@ mod tests {
             asia_infected_before,
             asia_infected_after
         );
-        assert_eq!(state.resources.funding, funding_before - 100.0);
+        assert_eq!(state.resources.funding, funding_before - 250.0);
     }
 
     #[test]

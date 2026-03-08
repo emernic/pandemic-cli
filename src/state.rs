@@ -312,7 +312,7 @@ impl GameState {
             Medicine {
                 name: "Antiviral-A".into(),
                 target_diseases: vec![0],
-                cost: 100.0,
+                cost: 250.0,
                 doses: 10_000.0,
                 unlocked: false,
                 tested_against: vec![],
@@ -320,7 +320,7 @@ impl GameState {
             Medicine {
                 name: "Broad-Spectrum Antiviral".into(),
                 target_diseases: vec![0, 1],
-                cost: 300.0,
+                cost: 600.0,
                 doses: 50_000.0,
                 unlocked: false,
                 tested_against: vec![],
