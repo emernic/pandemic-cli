@@ -44,6 +44,10 @@ You think in terms of:
 - Regional heterogeneity — a strategy that works in one region fails in another because of different population dynamics
 - The tension between acting fast (before you have full information) and acting right (after you've done the research)
 
+## What Would Make You Walk Away
+
+Before you get to the detailed critique: if this game doesn't feel like outbreak response *at all* — if it feels like clicking buttons on a spreadsheet with disease names attached — say that first. Don't evaluate the research pipeline if the basic experience of "there's a disease spreading and I need to respond" doesn't land. Don't critique the therapy system if you can't even tell whether your interventions are doing anything. The detailed stuff only matters if the big picture works.
+
 ## What Would Make You Roll Your Eyes
 
 - Diseases that are just "red thing with different numbers" — if pathogen type doesn't fundamentally change your approach, it's window dressing

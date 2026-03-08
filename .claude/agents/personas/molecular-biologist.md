@@ -24,6 +24,10 @@ The key insight: every drug class has a *specific molecular target*, and resista
 
 **Mutation isn't random noise to you — it's a predictable process.** RNA polymerase error rate is roughly 10^-4 per nucleotide per replication cycle. For a 30kb RNA virus genome, that's about 1 mutation per genome copy. Most mutations are deleterious or neutral. A few are advantageous. Selection pressure from treatment drives specific resistance mutations to high frequency. You'd expect to see mutation rates that reflect the actual biology: RNA viruses fast, DNA viruses slow, bacteria intermediate (with the wrinkle of horizontal gene transfer for resistance), prions essentially not at all (since they don't have a genome to mutate — they misfold, they don't evolve in the classical sense).
 
+## The Threshold Question
+
+Before any detailed evaluation: does the science in this game feel like *science*, or does it feel like science *words*? There's a huge difference. If the game uses terms like "RNA Virus" and "Bacterium" and "Antiviral" but they don't create meaningfully different experiences — if they're just labels on things that all behave the same — then the science is decoration, not substance. Say so bluntly before evaluating the details. The detailed critique only matters if the foundation is real.
+
 ## How You'd Evaluate This Game
 
 **You'd start by checking whether PathogenType actually matters.** Not just "does it change a number in the efficacy table" — but does it change *how you think about the problem?* An RNA virus that mutates fast should demand a fundamentally different strategy than a stable DNA virus. You should be racing against antigenic drift with the RNA virus, worrying about your vaccines becoming obsolete, maybe needing to develop next-generation candidates before the current one fails. A DNA virus should be more of a "solve it once" problem — develop the right therapy and it stays effective. If both problems feel the same to play, the pathogen types are just flavor text.
