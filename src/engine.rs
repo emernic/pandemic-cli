@@ -4,9 +4,9 @@ use crate::action::Action;
 use crate::state::{
     map_navigate, DeployTarget, GameEvent, GameOutcome, GameState, MapDirection, MedicineUiState,
     Panel, PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_PERSONNEL,
-    KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_PERSONNEL,
-    WIN_INFECTED_THRESHOLD,
+    BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
+    KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_COST, QUARANTINE_PERSONNEL,
+    TRAVEL_BAN_COST, WIN_INFECTED_THRESHOLD,
 };
 
 /// Advance the simulation by one tick.
@@ -212,23 +212,55 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Policy costs — deducted before income. Suspend all if insolvent.
-    let policy_cost = new.total_policy_funding_cost();
-    if policy_cost > 0.0 {
-        if new.resources.funding >= policy_cost {
-            new.resources.funding -= policy_cost;
-        } else {
-            // Funding crisis: suspend all policies
-            for p in &mut new.policies {
-                p.clear_all();
+    // Policy costs — suspend most expensive policies one at a time until affordable.
+    let mut policy_cost = new.total_policy_funding_cost();
+    while policy_cost > 0.0 && new.resources.funding < policy_cost {
+        // Find the most expensive active individual policy across all regions
+        let mut best: Option<(usize, &str, f64)> = None;
+        for (i, p) in new.policies.iter().enumerate() {
+            for (name, active, cost) in [
+                ("Travel Ban", p.travel_ban, TRAVEL_BAN_COST),
+                ("Quarantine", p.quarantine, QUARANTINE_COST),
+                ("Hospital Surge", p.hospital_surge, HOSPITAL_SURGE_COST),
+            ] {
+                if active {
+                    if best.is_none() || cost > best.unwrap().2 {
+                        best = Some((i, name, cost));
+                    }
+                }
             }
-            new.events.push(GameEvent::FundingCrisis);
         }
+        if let Some((region_idx, policy_name, _)) = best {
+            match policy_name {
+                "Travel Ban" => new.policies[region_idx].travel_ban = false,
+                "Quarantine" => new.policies[region_idx].quarantine = false,
+                "Hospital Surge" => new.policies[region_idx].hospital_surge = false,
+                _ => unreachable!(),
+            }
+            new.events.push(GameEvent::PolicySuspended {
+                region_idx,
+                policy_name: policy_name.to_string(),
+            });
+            policy_cost = new.total_policy_funding_cost();
+        } else {
+            break;
+        }
+    }
+    if policy_cost > 0.0 {
+        new.resources.funding -= policy_cost;
     }
 
     // Passive resource generation
-    new.resources.funding += new.funding_income_rate();
+    let funding_income = new.funding_income_rate();
+    new.resources.funding += funding_income;
     new.resources.research_points += 1.0;
+
+    // Low funding warning: warn when net burn rate will exhaust funds within ~5 ticks.
+    // Only warn if policies actually cost more than income (net negative).
+    let net_burn = policy_cost - funding_income;
+    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 5.0 {
+        new.events.push(GameEvent::FundingWarning);
+    }
 
     new.rng = rng;
     new.tick += 1;
@@ -1907,16 +1939,60 @@ mod tests {
     }
 
     #[test]
-    fn policy_funding_crisis_suspends_all() {
+    fn policy_funding_crisis_suspends_most_expensive_first() {
         let mut state = GameState::new_default(42);
-        state.resources.funding = 5.0; // Less than travel ban cost
-        state.policies[0].travel_ban = true; // $10/tick
+        state.resources.funding = 15.0; // Enough for quarantine ($8) but not both
+        state.policies[0].travel_ban = true; // $10/tick — most expensive
+        state.policies[0].quarantine = true; // $8/tick
         state = tick(&state);
-        // Should have suspended all policies
+        // Should have suspended travel ban (most expensive) but kept quarantine
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended");
+        assert!(state.policies[0].quarantine, "quarantine should survive");
         assert!(
-            state.events.iter().any(|e| matches!(e, GameEvent::FundingCrisis)),
-            "should emit FundingCrisis event"
+            state.events.iter().any(|e| matches!(e, GameEvent::PolicySuspended { .. })),
+            "should emit PolicySuspended event"
+        );
+    }
+
+    #[test]
+    fn policy_gradual_suspension_across_ticks() {
+        let mut state = GameState::new_default(42);
+        // Set up 3 policies: $10 + $8 + $5 = $23/tick total
+        state.policies[0].travel_ban = true;
+        state.policies[0].quarantine = true;
+        state.policies[0].hospital_surge = true;
+        // Enough for only $13/tick (quarantine + hospital surge)
+        state.resources.funding = 20.0;
+        state = tick(&state);
+        // Travel ban ($10, most expensive) should be suspended
+        assert!(!state.policies[0].travel_ban, "travel ban should be suspended first");
+        assert!(state.policies[0].quarantine, "quarantine should survive tick 1");
+        assert!(state.policies[0].hospital_surge, "hospital surge should survive tick 1");
+    }
+
+    #[test]
+    fn funding_warning_when_runway_low() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].travel_ban = true; // $10/tick, income ~$5/tick → net burn ~$5/tick
+        // After deducting $10 and adding ~$5 income, funding ≈ $15.
+        // Net burn ~$5/tick, threshold = 5 × $5 = $25 → $15 < $25 → warning
+        state.resources.funding = 20.0;
+        state = tick(&state);
+        assert!(
+            state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
+            "should emit FundingWarning when runway is low"
+        );
+    }
+
+    #[test]
+    fn no_funding_warning_when_flush() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].travel_ban = true; // $10/tick
+        state.resources.funding = 1000.0; // Plenty of runway after deduction
+        state = tick(&state);
+        assert!(
+            !state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
+            "should not warn when funding is high"
         );
     }
 
