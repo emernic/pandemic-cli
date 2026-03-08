@@ -259,7 +259,7 @@ fn render_region_box(
 
     // Line 2: Key stats — show infected/dead when active, otherwise static pop
     if inner.height >= 2 {
-        if infected == 0.0 && dead == 0.0 && immune == 0.0 {
+        if infected == 0.0 && dead == 0.0 {
             lines.push(Line::from(Span::styled(
                 format!("Pop: {}", format_number(pop)),
                 Style::default().fg(Color::DarkGray),
