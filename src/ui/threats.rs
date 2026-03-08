@@ -88,7 +88,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 )));
             }
 
-            if selected {
+            if selected && disease.knowledge >= KNOWLEDGE_NAME {
                 render_disease_detail(&mut lines, state, i);
             }
 
