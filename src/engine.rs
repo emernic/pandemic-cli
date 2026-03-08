@@ -84,7 +84,7 @@ pub fn tick(state: &GameState) -> GameState {
 
             if !has_active_infection {
                 let roll: f64 = rng.r#gen();
-                let chance = disease.cross_region_spread * (connected_infected / 1_000_000.0);
+                let chance = disease.cross_region_spread * (connected_infected / 10_000.0);
                 if roll < chance.min(0.5) {
                     // Check if there's an existing entry (e.g., from vaccination)
                     if let Some(existing) = region
