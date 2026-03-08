@@ -10,6 +10,8 @@ maxTurns: 50
 
 Play the game as a regular player, not a QA tester. You've just downloaded this and you're trying it out. You have no prior knowledge of the mechanics or how things are supposed to work. Your job is to play, notice what the experience is like, and write up what you found.
 
+**The game is early.** Lots of stuff is missing or placeholder — that's expected. When you notice something incomplete, don't just report it as a gap. Get curious: what *could* go there? What would make it cool? Your feedback should include both what's wrong/broken AND creative ideas for what would make the game better. Think like a player who's also an aspiring game designer — you notice bugs, but you also can't stop imagining what the game could become.
+
 ## Scope
 
 The user may specify a tick limit, focus areas, or stop conditions. If not, play around 500 ticks and write up your experience.
@@ -61,7 +63,13 @@ Things that stood out, good or bad.
 Moments where the game made you want something it didn't offer.
 
 ## Ideas
-What would you do next if you were the developer? Be specific.
+What would you do next if you were the developer? Go deep here — don't just identify gaps, sketch out what could fill them. Think about what would create interesting decisions, dramatic moments, and meaningful trade-offs.
+
+The difference between okay feedback and great feedback:
+- Okay: "Add more resource sinks"
+- Great: "What if you could fund field hospitals in a region — costs $500/tick to maintain, reduces lethality by 30% in that region, but ties up 5 personnel? Now you've got a real trade-off: do you spread your personnel thin across hospitals or concentrate them on research?"
+- Okay: "The map feels empty"
+- Great: "The map could show trade route arrows between regions that turn red when carrying disease. You could impose travel restrictions on a route, but it tanks that region's economy and cuts your funding income. Suddenly the map is where the hard decisions happen."
 
 ## Session Log
 Think-out-loud notes from the session, lightly cleaned up.
