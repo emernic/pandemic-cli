@@ -6,6 +6,7 @@ use crate::state::{
     Panel, PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
     BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_PERSONNEL,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_PERSONNEL,
+    WIN_INFECTED_THRESHOLD,
 };
 
 /// Ensure policies vec matches regions length (for saves that predate the policy system).
@@ -243,10 +244,13 @@ pub fn tick(state: &GameState) -> GameState {
             new.outcome = GameOutcome::Lost;
             new.paused = true;
             new.ui.open_panel = Panel::None;
-        } else if new.total_infected() < 1.0 {
-            // Win requires player engagement: all diseases must be identified
+        } else if new.total_infected() < WIN_INFECTED_THRESHOLD {
+            // Win requires: diseases identified, contained, and medicines tested
             let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
-            if all_identified {
+            let all_have_tested_medicine = (0..new.diseases.len()).all(|d_idx| {
+                new.medicines.iter().any(|m| m.tested_against.contains(&d_idx))
+            });
+            if all_identified && all_have_tested_medicine {
                 new.outcome = GameOutcome::Won;
                 new.paused = true;
                 new.ui.open_panel = Panel::None;
@@ -1590,9 +1594,9 @@ mod tests {
     }
 
     #[test]
-    fn win_requires_identified_diseases() {
+    fn win_requires_identification_and_tested_medicines() {
         let mut state = GameState::new_default(42);
-        // Clear all infections to simulate eradication
+        // Clear all infections to simulate containment
         for region in &mut state.regions {
             region.infections.clear();
         }
@@ -1600,10 +1604,16 @@ mod tests {
         state = tick(&state);
         assert_eq!(state.outcome, GameOutcome::Playing);
 
-        // Now identify all diseases
+        // Identify all diseases but no tested medicines — still no win
         for disease in &mut state.diseases {
             disease.knowledge = 1.0;
         }
+        state = tick(&state);
+        assert_eq!(state.outcome, GameOutcome::Playing);
+
+        // Test medicines against all diseases — now should win
+        let disease_count = state.diseases.len();
+        state.medicines[0].tested_against = (0..disease_count).collect();
         state = tick(&state);
         assert_eq!(state.outcome, GameOutcome::Won);
         assert!(state.paused);
