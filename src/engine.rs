@@ -511,21 +511,30 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         let target_selection = new.ui.panel_selection;
                         let med = &new.medicines[medicine_idx];
                         if let Some(target) = med.decode_deploy_target(target_selection) {
-                            let disease_idx = match &target {
-                                DeployTarget::Vaccinate { disease_idx } => *disease_idx,
-                                DeployTarget::Treat { disease_idx } => *disease_idx,
-                            };
-                            let is_tested = med.tested_against.contains(&disease_idx);
-
-                            if !is_tested {
-                                // Untested: require confirmation
-                                new.ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
-                                    medicine_idx,
-                                    region_idx,
-                                    target_selection,
-                                });
+                            // Check funds before anything else — no point warning
+                            // about untested risks if the player can't afford it
+                            if new.resources.funding < med.cost {
+                                new.ui.status_message = Some(format!(
+                                    "Insufficient funds! Need ${:.0}, have ${:.0}",
+                                    med.cost, new.resources.funding
+                                ));
                             } else {
-                                deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
+                                let disease_idx = match &target {
+                                    DeployTarget::Vaccinate { disease_idx } => *disease_idx,
+                                    DeployTarget::Treat { disease_idx } => *disease_idx,
+                                };
+                                let is_tested = med.tested_against.contains(&disease_idx);
+
+                                if !is_tested {
+                                    // Untested: require confirmation
+                                    new.ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
+                                        medicine_idx,
+                                        region_idx,
+                                        target_selection,
+                                    });
+                                } else {
+                                    deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
+                                }
                             }
                         }
                     }
@@ -1026,6 +1035,30 @@ mod tests {
             "should stay on SelectTarget, got: {:?}",
             state.ui.medicine_ui
         );
+    }
+
+    #[test]
+    fn untested_medicine_insufficient_funds_skips_warning() {
+        let mut state = GameState::new_default(42);
+        unlock_untested(&mut state);
+        state.resources.funding = 50.0; // Not enough for any medicine
+        state = apply_action(&state, &Action::OpenMedicines);
+        state = apply_action(&state, &Action::Confirm); // select medicine
+        state = apply_action(&state, &Action::Confirm); // select region
+        let funding_before = state.resources.funding;
+        state = apply_action(&state, &Action::Confirm); // select target
+        // Should show funds error, NOT the untested warning
+        assert!(
+            state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"),
+            "expected funds error, got: {:?}",
+            state.ui.status_message
+        );
+        assert!(
+            matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectTarget { .. })),
+            "should stay on SelectTarget, not go to ConfirmDeploy, got: {:?}",
+            state.ui.medicine_ui
+        );
+        assert_eq!(state.resources.funding, funding_before);
     }
 
     #[test]
