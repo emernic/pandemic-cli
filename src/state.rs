@@ -347,7 +347,7 @@ impl GameState {
 
         Self {
             tick: 0,
-            paused: true,
+            paused: false,
             rng: ChaCha8Rng::seed_from_u64(seed),
             resources: Resources {
                 funding: 1000.0,

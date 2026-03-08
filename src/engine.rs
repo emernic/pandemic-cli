@@ -850,11 +850,11 @@ mod tests {
     #[test]
     fn toggle_pause() {
         let state = GameState::new_default(42);
-        assert!(state.paused);
+        assert!(!state.paused);
         let s = apply_action(&state, &Action::TogglePause);
-        assert!(!s.paused);
-        let s = apply_action(&s, &Action::TogglePause);
         assert!(s.paused);
+        let s = apply_action(&s, &Action::TogglePause);
+        assert!(!s.paused);
     }
 
     #[test]
