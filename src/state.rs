@@ -498,7 +498,10 @@ pub enum MapDirection {
 
 impl GameState {
     pub fn new_default(seed: u64) -> Self {
-        let regions = vec![
+        use rand::Rng;
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+
+        let mut regions = vec![
             Region {
                 name: "North America".into(),
                 population: 500_000_000,
@@ -509,12 +512,7 @@ impl GameState {
                 name: "South America".into(),
                 population: 430_000_000,
                 connections: vec![0, 2],
-                infections: vec![RegionDiseaseState {
-                    disease_idx: 1,
-                    infected: 500.0,
-                    dead: 0.0,
-                    immune: 0.0,
-                }],
+                infections: vec![],
             },
             Region {
                 name: "Europe".into(),
@@ -532,12 +530,7 @@ impl GameState {
                 name: "Asia".into(),
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
-                infections: vec![RegionDiseaseState {
-                    disease_idx: 0,
-                    infected: 50_000.0,
-                    dead: 0.0,
-                    immune: 0.0,
-                }],
+                infections: vec![],
             },
             Region {
                 name: "Oceania".into(),
@@ -547,28 +540,59 @@ impl GameState {
             },
         ];
 
+        // Vary disease parameters ±30% from base values
+        let vary = |rng: &mut ChaCha8Rng, base: f64| -> f64 {
+            base * (0.7 + rng.r#gen::<f64>() * 0.6)
+        };
+
         let diseases = vec![
             Disease {
                 name: "Strain Alpha".into(),
                 pathogen_type: PathogenType::RnaVirus,
-                infectivity: 0.06,
-                lethality: 0.008,
-                cross_region_spread: 0.02,
-                recovery_rate: 0.04,
+                infectivity: vary(&mut rng, 0.06),
+                lethality: vary(&mut rng, 0.008),
+                cross_region_spread: vary(&mut rng, 0.02),
+                recovery_rate: vary(&mut rng, 0.04),
                 knowledge: 0.0,
                 strain_generation: 0,
             },
             Disease {
                 name: "Strain Beta".into(),
                 pathogen_type: PathogenType::Bacterium,
-                infectivity: 0.04,
-                lethality: 0.002,
-                cross_region_spread: 0.03,
-                recovery_rate: 0.015,
+                infectivity: vary(&mut rng, 0.04),
+                lethality: vary(&mut rng, 0.002),
+                cross_region_spread: vary(&mut rng, 0.03),
+                recovery_rate: vary(&mut rng, 0.015),
                 knowledge: 0.0,
                 strain_generation: 0,
             },
         ];
+
+        // Pick 2 different regions for initial infections
+        let region_count = regions.len();
+        let region_a = rng.r#gen::<usize>() % region_count;
+        let mut region_b = rng.r#gen::<usize>() % (region_count - 1);
+        if region_b >= region_a {
+            region_b += 1;
+        }
+
+        // Primary outbreak: 10K-100K infected
+        let infected_a = 10_000.0 + rng.r#gen::<f64>() * 90_000.0;
+        regions[region_a].infections.push(RegionDiseaseState {
+            disease_idx: 0,
+            infected: infected_a,
+            dead: 0.0,
+            immune: 0.0,
+        });
+
+        // Secondary outbreak: 100-5K infected
+        let infected_b = 100.0 + rng.r#gen::<f64>() * 4_900.0;
+        regions[region_b].infections.push(RegionDiseaseState {
+            disease_idx: 1,
+            infected: infected_b,
+            dead: 0.0,
+            immune: 0.0,
+        });
 
         let medicines = vec![
             Medicine {
@@ -606,7 +630,7 @@ impl GameState {
         Self {
             tick: 0,
             paused: false,
-            rng: ChaCha8Rng::seed_from_u64(seed),
+            rng,
             resources: Resources {
                 funding: 1000.0,
                 research_points: 0.0,
