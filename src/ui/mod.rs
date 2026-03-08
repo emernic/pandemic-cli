@@ -1,5 +1,6 @@
 pub mod hotkey_bar;
 pub mod medicines;
+pub mod policy;
 pub mod research;
 pub mod resources;
 pub mod threats;
@@ -80,6 +81,14 @@ pub fn render(f: &mut Frame, state: &GameState) {
             region_list::render(f, split[0], state);
             research::render(f, split[1], state);
         }
+        Panel::Policy => {
+            let split = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(chunks[1]);
+            region_list::render(f, split[0], state);
+            policy::render(f, split[1], state);
+        }
         panel => {
             let split = Layout::default()
                 .direction(Direction::Horizontal)
@@ -94,7 +103,6 @@ pub fn render(f: &mut Frame, state: &GameState) {
 fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
     let title = match panel {
         Panel::Research => " Research ",
-        Panel::Policy => " Policy ",
         Panel::Help => " Help ",
         _ => " Panel ",
     };

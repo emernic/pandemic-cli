@@ -18,9 +18,57 @@ pub struct GameState {
     /// Active bench research project (Develop Medicine).
     #[serde(default)]
     pub bench_research: Option<ResearchProject>,
+    /// Per-region active policies.
+    #[serde(default)]
+    pub policies: Vec<RegionPolicy>,
     #[serde(default)]
     pub outcome: GameOutcome,
     pub ui: UiState,
+}
+
+// Policy cost constants — single source of truth.
+pub const TRAVEL_BAN_COST: f64 = 10.0;
+pub const QUARANTINE_COST: f64 = 8.0;
+pub const QUARANTINE_PERSONNEL: u32 = 2;
+pub const HOSPITAL_SURGE_COST: f64 = 5.0;
+pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
+
+/// Per-region policy toggles. Each costs funding (and optionally personnel) per tick.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct RegionPolicy {
+    /// Blocks 90% of cross-region spread to/from this region.
+    pub travel_ban: bool,
+    /// Halves infection rate within the region.
+    pub quarantine: bool,
+    /// Halves lethality in the region.
+    pub hospital_surge: bool,
+}
+
+impl RegionPolicy {
+    pub fn funding_cost(&self) -> f64 {
+        let mut cost = 0.0;
+        if self.travel_ban { cost += TRAVEL_BAN_COST; }
+        if self.quarantine { cost += QUARANTINE_COST; }
+        if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
+        cost
+    }
+
+    pub fn personnel_cost(&self) -> u32 {
+        let mut cost = 0;
+        if self.quarantine { cost += QUARANTINE_PERSONNEL; }
+        if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; }
+        cost
+    }
+
+    pub fn any_active(&self) -> bool {
+        self.travel_ban || self.quarantine || self.hospital_surge
+    }
+
+    pub fn clear_all(&mut self) {
+        self.travel_ban = false;
+        self.quarantine = false;
+        self.hospital_surge = false;
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -269,6 +317,15 @@ pub enum MedicineUiState {
     ConfirmDeploy { medicine_idx: usize, region_idx: usize, target_selection: usize },
 }
 
+/// Policy panel UI state machine.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PolicyUiState {
+    /// Browse regions and their active policies.
+    BrowseRegions,
+    /// Manage policies for a specific region.
+    ManagePolicies { region_idx: usize },
+}
+
 /// Research panel UI state machine, following the medicines panel pattern.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchUiState {
@@ -292,6 +349,8 @@ pub struct UiState {
     pub map_selection: usize,
     #[serde(default)]
     pub research_ui: Option<ResearchUiState>,
+    #[serde(default)]
+    pub policy_ui: Option<PolicyUiState>,
     /// Temporary status message shown above the hotkey bar (cleared on next action).
     #[serde(default)]
     pub status_message: Option<String>,
@@ -454,6 +513,7 @@ impl GameState {
                 research_points: 0.0,
                 personnel: 50,
             },
+            policies: vec![RegionPolicy::default(); regions.len()],
             regions,
             diseases,
             medicines,
@@ -466,6 +526,7 @@ impl GameState {
                 medicine_ui: None,
                 map_selection: 0,
                 research_ui: None,
+                policy_ui: None,
                 status_message: None,
             },
         }
@@ -486,11 +547,16 @@ impl GameState {
     pub fn personnel_busy(&self) -> u32 {
         let field = self.field_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let bench = self.bench_research.as_ref().map_or(0, |p| p.personnel_assigned);
-        field + bench
+        let policy: u32 = self.policies.iter().map(|p| p.personnel_cost()).sum();
+        field + bench + policy
     }
 
     pub fn personnel_available(&self) -> u32 {
         self.resources.personnel.saturating_sub(self.personnel_busy())
+    }
+
+    pub fn total_policy_funding_cost(&self) -> f64 {
+        self.policies.iter().map(|p| p.funding_cost()).sum()
     }
 
     /// Total initial population across all regions (before any deaths).

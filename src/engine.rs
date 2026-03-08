@@ -3,14 +3,22 @@ use rand::Rng;
 use crate::action::Action;
 use crate::state::{
     map_navigate, DeployTarget, GameOutcome, GameState, MapDirection, MedicineUiState, Panel,
-    RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    BOOST_RP_COST, BOOST_TICKS, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
-    LOSE_DEATH_FRACTION,
+    PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
+    BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_PERSONNEL, KNOWLEDGE_FOR_MEDICINE,
+    KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_PERSONNEL,
 };
+
+/// Ensure policies vec matches regions length (for saves that predate the policy system).
+fn ensure_policies(state: &mut GameState) {
+    while state.policies.len() < state.regions.len() {
+        state.policies.push(crate::state::RegionPolicy::default());
+    }
+}
 
 /// Advance the simulation by one tick.
 pub fn tick(state: &GameState) -> GameState {
     let mut new = state.clone();
+    ensure_policies(&mut new);
 
     // Don't advance simulation after game over
     if new.outcome != GameOutcome::Playing {
@@ -23,8 +31,11 @@ pub fn tick(state: &GameState) -> GameState {
     let mut rng = new.rng.clone();
 
     // Disease spread within each region
-    for region in &mut new.regions {
+    for (region_idx, region) in new.regions.iter_mut().enumerate() {
         let pop = region.population as f64;
+        let policy = new.policies.get(region_idx);
+        let quarantine_active = policy.is_some_and(|p| p.quarantine);
+        let hospital_active = policy.is_some_and(|p| p.hospital_surge);
 
         for inf in &mut region.infections {
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
@@ -34,13 +45,23 @@ pub fn tick(state: &GameState) -> GameState {
                 }
 
                 let noise: f64 = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.1;
+                let infectivity = if quarantine_active {
+                    disease.infectivity * 0.5
+                } else {
+                    disease.infectivity
+                };
                 let new_infections =
-                    disease.infectivity * inf.infected * (susceptible / pop) * noise;
+                    infectivity * inf.infected * (susceptible / pop) * noise;
                 let new_infections = new_infections.max(0.0).min(susceptible);
 
                 // Deaths and recoveries are concurrent outflows from the infected pool.
                 // Compute both, then scale proportionally if they exceed infected.
-                let mut new_deaths = (disease.lethality * inf.infected * noise).max(0.0);
+                let lethality = if hospital_active {
+                    disease.lethality * 0.5
+                } else {
+                    disease.lethality
+                };
+                let mut new_deaths = (lethality * inf.infected * noise).max(0.0);
                 let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
                 let total_outflow = new_deaths + new_recoveries;
                 if total_outflow > inf.infected {
@@ -63,14 +84,24 @@ pub fn tick(state: &GameState) -> GameState {
     // Cross-region spread
     let regions_snapshot: Vec<_> = new.regions.clone();
     for (i, region) in new.regions.iter_mut().enumerate() {
+        let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
+
         for (d_idx, disease) in state.diseases.iter().enumerate() {
             let connected_infected: f64 = regions_snapshot[i]
                 .connections
                 .iter()
                 .filter_map(|&conn_idx| {
+                    let source_has_travel_ban =
+                        new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
+                    // Travel ban on either end reduces spread by 90%
+                    let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
+                        0.1
+                    } else {
+                        1.0
+                    };
                     regions_snapshot[conn_idx]
                         .disease_state(d_idx)
-                        .map(|inf| inf.infected)
+                        .map(|inf| inf.infected * ban_factor)
                 })
                 .sum();
 
@@ -145,6 +176,20 @@ pub fn tick(state: &GameState) -> GameState {
                 _ => {}
             }
             new.bench_research = None;
+        }
+    }
+
+    // Policy costs — deducted before income. Suspend all if insolvent.
+    let policy_cost = new.total_policy_funding_cost();
+    if policy_cost > 0.0 {
+        if new.resources.funding >= policy_cost {
+            new.resources.funding -= policy_cost;
+        } else {
+            // Funding crisis: suspend all policies
+            for p in &mut new.policies {
+                p.clear_all();
+            }
+            new.ui.status_message = Some("FUNDING CRISIS: All policies suspended!".to_string());
         }
     }
 
@@ -336,6 +381,7 @@ fn toggle_panel(ui: &mut crate::state::UiState, panel: Panel) {
 /// Apply a player action to the game state.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
+    ensure_policies(&mut new);
     new.ui.status_message = None;
 
     match action {
@@ -362,7 +408,14 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.ui.medicine_ui = None;
             }
         }
-        Action::OpenPolicy => toggle_panel(&mut new.ui, Panel::Policy),
+        Action::OpenPolicy => {
+            toggle_panel(&mut new.ui, Panel::Policy);
+            if new.ui.open_panel == Panel::Policy {
+                new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
+            } else {
+                new.ui.policy_ui = None;
+            }
+        }
         Action::OpenHelp => toggle_panel(&mut new.ui, Panel::Help),
         Action::ClosePanel => {
             if new.ui.open_panel == Panel::Medicines {
@@ -387,6 +440,18 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         new.ui.open_panel = Panel::None;
                         new.ui.panel_selection = 0;
                         new.ui.medicine_ui = None;
+                    }
+                }
+            } else if new.ui.open_panel == Panel::Policy {
+                match &new.ui.policy_ui {
+                    Some(PolicyUiState::ManagePolicies { .. }) => {
+                        new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
+                        new.ui.panel_selection = 0;
+                    }
+                    _ => {
+                        new.ui.open_panel = Panel::None;
+                        new.ui.panel_selection = 0;
+                        new.ui.policy_ui = None;
                     }
                 }
             } else if new.ui.open_panel == Panel::Research {
@@ -414,6 +479,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.ui.panel_selection = 0;
                 new.ui.medicine_ui = None;
                 new.ui.research_ui = None;
+                new.ui.policy_ui = None;
             }
         }
         Action::SelectNext => {
@@ -446,6 +512,13 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         Some(MedicineUiState::ConfirmDeploy { .. }) | None => 0,
                     },
                     Panel::Research => research_panel_max(&new),
+                    Panel::Policy => match &new.ui.policy_ui {
+                        Some(PolicyUiState::BrowseRegions) => {
+                            new.regions.len().saturating_sub(1)
+                        }
+                        Some(PolicyUiState::ManagePolicies { .. }) => 2, // 3 policy types
+                        None => 0,
+                    },
                     _ => 0,
                 };
                 if new.ui.panel_selection < max {
@@ -564,12 +637,60 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     }
                     None => {}
                 }
+            } else if new.ui.open_panel == Panel::Policy {
+                handle_policy_confirm(&mut new);
             }
         }
         Action::Quit => {} // Handled by the caller
     }
 
     new
+}
+
+fn handle_policy_confirm(state: &mut GameState) {
+    match state.ui.policy_ui.clone() {
+        Some(PolicyUiState::BrowseRegions) => {
+            let region_idx = state.ui.panel_selection;
+            if region_idx < state.regions.len() {
+                state.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
+                state.ui.panel_selection = 0;
+            }
+        }
+        Some(PolicyUiState::ManagePolicies { region_idx }) => {
+            if region_idx >= state.policies.len() {
+                return;
+            }
+            let available_personnel = state.personnel_available();
+            let selection = state.ui.panel_selection;
+            match selection {
+                0 => state.policies[region_idx].travel_ban = !state.policies[region_idx].travel_ban,
+                1 => {
+                    if state.policies[region_idx].quarantine {
+                        state.policies[region_idx].quarantine = false;
+                    } else if available_personnel >= QUARANTINE_PERSONNEL {
+                        state.policies[region_idx].quarantine = true;
+                    } else {
+                        state.ui.status_message = Some(format!(
+                            "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
+                        ));
+                    }
+                }
+                2 => {
+                    if state.policies[region_idx].hospital_surge {
+                        state.policies[region_idx].hospital_surge = false;
+                    } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
+                        state.policies[region_idx].hospital_surge = true;
+                    } else {
+                        state.ui.status_message = Some(format!(
+                            "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        None => {}
+    }
 }
 
 /// Compute available field research projects (excludes the currently active one).
@@ -1631,5 +1752,132 @@ mod tests {
         // Both running simultaneously
         assert!(state.field_research.is_some());
         assert!(state.bench_research.is_some());
+    }
+
+    #[test]
+    fn policy_travel_ban_reduces_spread() {
+        let mut state = GameState::new_default(42);
+        // Run without travel ban
+        let mut no_ban = state.clone();
+        for _ in 0..100 {
+            no_ban = tick(&no_ban);
+        }
+        let no_ban_regions_infected: usize = no_ban.regions.iter()
+            .filter(|r| r.total_infected() > 0.0)
+            .count();
+
+        // Run with travel bans on all regions (with enough funding)
+        state.resources.funding = 100_000.0;
+        for p in &mut state.policies {
+            p.travel_ban = true;
+        }
+        let mut with_ban = state;
+        for _ in 0..100 {
+            with_ban = tick(&with_ban);
+        }
+        let ban_regions_infected: usize = with_ban.regions.iter()
+            .filter(|r| r.total_infected() > 0.0)
+            .count();
+
+        assert!(
+            ban_regions_infected <= no_ban_regions_infected,
+            "travel bans should not increase spread: {} vs {} regions infected",
+            ban_regions_infected, no_ban_regions_infected
+        );
+    }
+
+    #[test]
+    fn policy_quarantine_reduces_infections() {
+        let mut state = GameState::new_default(42);
+        // Run without quarantine
+        let mut no_q = state.clone();
+        for _ in 0..50 {
+            no_q = tick(&no_q);
+        }
+
+        // Run with quarantine on Asia (where Strain Alpha starts)
+        state.policies[4].quarantine = true;
+        let mut with_q = state;
+        for _ in 0..50 {
+            with_q = tick(&with_q);
+        }
+
+        assert!(
+            with_q.regions[4].total_infected() < no_q.regions[4].total_infected(),
+            "quarantine should reduce infections in Asia: {} vs {}",
+            with_q.regions[4].total_infected(), no_q.regions[4].total_infected()
+        );
+    }
+
+    #[test]
+    fn policy_hospital_surge_reduces_deaths() {
+        let mut state = GameState::new_default(42);
+        // Run without hospital surge
+        let mut no_h = state.clone();
+        for _ in 0..50 {
+            no_h = tick(&no_h);
+        }
+
+        // Run with hospital surge on Asia
+        state.policies[4].hospital_surge = true;
+        let mut with_h = state;
+        for _ in 0..50 {
+            with_h = tick(&with_h);
+        }
+
+        assert!(
+            with_h.regions[4].total_dead() < no_h.regions[4].total_dead(),
+            "hospital surge should reduce deaths in Asia: {} vs {}",
+            with_h.regions[4].total_dead(), no_h.regions[4].total_dead()
+        );
+    }
+
+    #[test]
+    fn policy_costs_deducted_each_tick() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].travel_ban = true; // $10/tick
+        let initial_funding = state.resources.funding;
+        state = tick(&state);
+        // Should deduct $10 then add $5 passive income = net -$5
+        assert_eq!(state.resources.funding, initial_funding - 10.0 + 5.0);
+    }
+
+    #[test]
+    fn policy_funding_crisis_suspends_all() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5.0; // Less than travel ban cost
+        state.policies[0].travel_ban = true; // $10/tick
+        state = tick(&state);
+        // Should have suspended all policies
+        assert!(!state.policies[0].travel_ban, "travel ban should be suspended");
+        assert!(
+            state.ui.status_message.as_ref().unwrap().contains("FUNDING CRISIS"),
+            "should show funding crisis message"
+        );
+    }
+
+    #[test]
+    fn policy_toggle_via_confirm() {
+        let mut state = GameState::new_default(42);
+        state = apply_action(&state, &Action::OpenPolicy);
+        assert_eq!(state.ui.open_panel, Panel::Policy);
+
+        // Select Asia (index 4)
+        for _ in 0..4 {
+            state = apply_action(&state, &Action::SelectNext);
+        }
+        state = apply_action(&state, &Action::Confirm);
+        assert!(matches!(
+            state.ui.policy_ui,
+            Some(PolicyUiState::ManagePolicies { region_idx: 4 })
+        ));
+
+        // Toggle travel ban (selection 0)
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.policies[4].travel_ban);
+
+        // Toggle it off
+        state = apply_action(&state, &Action::Confirm);
+        assert!(!state.policies[4].travel_ban);
     }
 }
