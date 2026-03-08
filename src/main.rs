@@ -34,6 +34,12 @@ struct Cli {
     #[arg(long)]
     ticks: Option<u64>,
 
+    /// Ordered sequence of steps (snapshot mode, repeatable).
+    /// Use t<N> for ticks (e.g. t10), anything else is a key action.
+    /// Example: --do t10 --do r --do enter --do t25
+    #[arg(long = "do")]
+    steps: Vec<String>,
+
     /// RNG seed for new games
     #[arg(long, default_value = "42")]
     seed: u64,
@@ -63,7 +69,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if cli.snapshot {
-        let result = snapshot::run_snapshot(state, &cli.key, cli.ticks)
+        // Build step sequence: --do takes priority if provided, otherwise
+        // fall back to legacy --key/--ticks args
+        let steps = if !cli.steps.is_empty() {
+            cli.steps
+        } else {
+            let mut s: Vec<String> = cli.key.into_iter().collect();
+            if let Some(t) = cli.ticks {
+                s.push(format!("t{t}"));
+            }
+            s
+        };
+        let result = snapshot::run_snapshot(state, &steps)
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
         print!("{}", result.screen);
         // Write updated state back to save file if one was provided

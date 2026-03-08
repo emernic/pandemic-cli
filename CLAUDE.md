@@ -154,9 +154,20 @@ cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --ticks 3        # open medicines, advance 3
 ```
 
+### Interleaved steps with `--do`
+
+The `--do` flag lets you interleave ticks and key actions in a single invocation. Use `t<N>` for ticks, anything else is a key:
+
+```bash
+cargo run -- --snapshot --do t30 --do r --do enter --do enter --do enter  # advance 30, start research
+cargo run -- --snapshot --do t10 --do p --do enter --do enter --do t50    # advance 10, toggle policy, advance 50 more
+```
+
+This eliminates the need for save files in simple multi-step tests. For longer sessions, save files are still useful.
+
 ### ⚠️ Save files are REQUIRED for real playtesting
 
-**Without a save file, every `cargo run --snapshot` starts a brand new game from tick 0.** This means you can never test multi-step flows like research→develop→deploy, because each invocation forgets all previous state. To actually play the game:
+**Without a save file, every `cargo run --snapshot` starts a brand new game from tick 0.** This means you can never test multi-step flows that span multiple invocations. To actually play the game across invocations:
 
 ```bash
 # Use a save file (in your worktree, NOT in a shared location):

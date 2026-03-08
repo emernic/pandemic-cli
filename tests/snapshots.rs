@@ -13,7 +13,7 @@ fn initial_screen() {
 #[test]
 fn after_10_ticks() {
     let state = GameState::new_default(42);
-    let result = run_snapshot(state, &[], Some(10)).unwrap();
+    let result = run_snapshot(state, &["t10".to_string()]).unwrap();
     insta::assert_snapshot!(result.screen);
 }
 
