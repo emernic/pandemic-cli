@@ -328,6 +328,26 @@ pub enum ResearchKind {
     ClinicalTrial { medicine_idx: usize, disease_idx: usize },
 }
 
+impl ResearchKind {
+    /// Project costs: (rp_cost, personnel, duration_ticks).
+    /// DevelopMedicine scales by target count: narrow (1 target) is faster/cheaper.
+    pub fn project_costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
+        match self {
+            ResearchKind::IdentifyThreat { .. } => (10.0, 5, 20.0),
+            ResearchKind::DevelopMedicine { medicine_idx } => {
+                let targets = medicines.get(*medicine_idx)
+                    .map_or(1, |m| m.target_diseases.len());
+                if targets <= 1 {
+                    (15.0, 5, 25.0)
+                } else {
+                    (40.0, 10, 50.0)
+                }
+            }
+            ResearchKind::ClinicalTrial { .. } => (15.0, 5, 25.0),
+        }
+    }
+}
+
 impl ResearchProject {
     pub fn is_complete(&self) -> bool {
         self.progress >= self.required_ticks
