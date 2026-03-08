@@ -463,7 +463,12 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             );
         }
         Action::Confirm => {
-            if new.ui.open_panel == Panel::Research {
+            // Block resource-consuming actions after game over
+            if new.outcome != GameOutcome::Playing {
+                // Allow panel navigation (Confirm just opens sub-views in browse mode)
+                // but not actual resource-spending confirmations.
+                // For simplicity, block all Confirm actions after game over.
+            } else if new.ui.open_panel == Panel::Research {
                 handle_research_confirm(&mut new);
             } else if new.ui.open_panel == Panel::Medicines {
                 match new.ui.medicine_ui.clone() {
@@ -1348,6 +1353,29 @@ mod tests {
         state = tick(&state);
         assert_eq!(state.outcome, GameOutcome::Won);
         assert!(state.paused);
+    }
+
+    #[test]
+    fn no_confirm_after_game_over() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.resources.research_points = 200.0;
+        state.outcome = GameOutcome::Lost;
+        // Try to deploy medicine
+        state = apply_action(&state, &Action::OpenMedicines);
+        state = apply_action(&state, &Action::Confirm); // would select medicine
+        assert!(
+            matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines)),
+            "Confirm should be blocked after game over"
+        );
+        // Try to start research
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // would enter category
+        assert!(
+            matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)),
+            "Confirm should be blocked after game over"
+        );
+        assert_eq!(state.resources.research_points, 200.0, "RP should not be spent");
     }
 
     #[test]
