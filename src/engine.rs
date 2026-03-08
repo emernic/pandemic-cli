@@ -1,7 +1,10 @@
 use rand::Rng;
 
 use crate::action::Action;
-use crate::state::{DeployTarget, GameState, MedicineUiState, Panel, RegionDiseaseState};
+use crate::state::{
+    map_navigate, DeployTarget, GameState, MapDirection, MedicineUiState, Panel,
+    RegionDiseaseState,
+};
 
 /// Advance the simulation by one tick.
 pub fn tick(state: &GameState) -> GameState {
@@ -150,30 +153,66 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             }
         }
         Action::SelectNext => {
-            let max = match new.ui.open_panel {
-                Panel::Threats => new.diseases.len().saturating_sub(1),
-                Panel::Medicines => match &new.ui.medicine_ui {
-                    Some(MedicineUiState::BrowseMedicines) => {
-                        new.medicines.iter().filter(|m| m.unlocked).count().saturating_sub(1)
-                    }
-                    Some(MedicineUiState::SelectRegion { .. }) => {
-                        new.regions.len().saturating_sub(1)
-                    }
-                    Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
-                        new.medicines[*medicine_idx].num_deploy_targets().saturating_sub(1)
-                    }
-                    None => 0,
-                },
-                _ => 0,
-            };
-            if new.ui.panel_selection < max {
-                new.ui.panel_selection += 1;
+            if new.ui.open_panel == Panel::None {
+                // Navigate map down
+                new.ui.map_selection = map_navigate(
+                    new.ui.map_selection,
+                    MapDirection::Down,
+                    new.regions.len(),
+                );
+            } else {
+                let max = match new.ui.open_panel {
+                    Panel::Threats => new.diseases.len().saturating_sub(1),
+                    Panel::Medicines => match &new.ui.medicine_ui {
+                        Some(MedicineUiState::BrowseMedicines) => {
+                            new.medicines
+                                .iter()
+                                .filter(|m| m.unlocked)
+                                .count()
+                                .saturating_sub(1)
+                        }
+                        Some(MedicineUiState::SelectRegion { .. }) => {
+                            new.regions.len().saturating_sub(1)
+                        }
+                        Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
+                            new.medicines[*medicine_idx]
+                                .num_deploy_targets()
+                                .saturating_sub(1)
+                        }
+                        None => 0,
+                    },
+                    _ => 0,
+                };
+                if new.ui.panel_selection < max {
+                    new.ui.panel_selection += 1;
+                }
             }
         }
         Action::SelectPrev => {
-            if new.ui.panel_selection > 0 {
+            if new.ui.open_panel == Panel::None {
+                // Navigate map up
+                new.ui.map_selection = map_navigate(
+                    new.ui.map_selection,
+                    MapDirection::Up,
+                    new.regions.len(),
+                );
+            } else if new.ui.panel_selection > 0 {
                 new.ui.panel_selection -= 1;
             }
+        }
+        Action::SelectLeft => {
+            new.ui.map_selection = map_navigate(
+                new.ui.map_selection,
+                MapDirection::Left,
+                new.regions.len(),
+            );
+        }
+        Action::SelectRight => {
+            new.ui.map_selection = map_navigate(
+                new.ui.map_selection,
+                MapDirection::Right,
+                new.regions.len(),
+            );
         }
         Action::Confirm => {
             if new.ui.open_panel == Panel::Medicines {
@@ -608,5 +647,56 @@ mod tests {
             Some(MedicineUiState::BrowseMedicines)
         ));
         assert_eq!(state.ui.panel_selection, 0);
+    }
+
+    #[test]
+    fn map_navigation_right_left() {
+        let state = GameState::new_default(42);
+        assert_eq!(state.ui.map_selection, 0); // NA
+        let s = apply_action(&state, &Action::SelectRight);
+        assert_eq!(s.ui.map_selection, 2); // EU
+        let s = apply_action(&s, &Action::SelectRight);
+        assert_eq!(s.ui.map_selection, 4); // AS
+        // Can't go past rightmost column
+        let s = apply_action(&s, &Action::SelectRight);
+        assert_eq!(s.ui.map_selection, 4);
+        let s = apply_action(&s, &Action::SelectLeft);
+        assert_eq!(s.ui.map_selection, 2); // EU
+        let s = apply_action(&s, &Action::SelectLeft);
+        assert_eq!(s.ui.map_selection, 0); // NA
+        // Can't go past leftmost column
+        let s = apply_action(&s, &Action::SelectLeft);
+        assert_eq!(s.ui.map_selection, 0);
+    }
+
+    #[test]
+    fn map_navigation_up_down_no_panel() {
+        let state = GameState::new_default(42);
+        assert_eq!(state.ui.map_selection, 0); // NA (row 0)
+        let s = apply_action(&state, &Action::SelectNext);
+        assert_eq!(s.ui.map_selection, 1); // SA (row 1)
+        // Can't go past bottom row
+        let s = apply_action(&s, &Action::SelectNext);
+        assert_eq!(s.ui.map_selection, 1);
+        let s = apply_action(&s, &Action::SelectPrev);
+        assert_eq!(s.ui.map_selection, 0); // NA
+        // Can't go past top row
+        let s = apply_action(&s, &Action::SelectPrev);
+        assert_eq!(s.ui.map_selection, 0);
+    }
+
+    #[test]
+    fn map_navigation_with_panel_open() {
+        let state = GameState::new_default(42);
+        // Open threats panel — up/down should navigate panel, not map
+        let s = apply_action(&state, &Action::OpenThreats);
+        assert_eq!(s.ui.map_selection, 0);
+        let s = apply_action(&s, &Action::SelectNext);
+        assert_eq!(s.ui.panel_selection, 1); // panel navigated
+        assert_eq!(s.ui.map_selection, 0); // map unchanged
+        // But left/right should still navigate map
+        let s = apply_action(&s, &Action::SelectRight);
+        assert_eq!(s.ui.map_selection, 2); // EU
+        assert_eq!(s.ui.panel_selection, 1); // panel unchanged
     }
 }
