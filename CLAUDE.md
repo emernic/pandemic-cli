@@ -62,6 +62,29 @@ Before merging any significant feature or bug fix:
 2. **Run a fresh playtest**: Use the playtest agent to test your final changes. Guide it toward the specific things that matter — describe what you changed, what the key behaviors are, and what commands will exercise them. The playtest report should demonstrate that your changes work correctly.
 3. **Include the playtest in your PR**: The playtest file serves as a reviewable record that the feature was tested end-to-end. Reviewers should be able to read it and see that the important behaviors were verified.
 
+## Task Tracking
+
+**For any non-trivial task, create a to-do list up front and maintain it as you work.** Long tasks are where things get lost — steps get skipped, cleanup gets forgotten, PRs sit unmerged. The to-do list is your guardrail.
+
+Your to-do list should always include the operational steps, not just the coding. A typical feature task looks like:
+
+1. Read the issue / understand requirements
+2. Play the game yourself (snapshot mode)
+3. Create a fresh branch from `origin/master`
+4. Implement the feature
+5. Run tests, fix failures
+6. Play the game again to verify it looks right
+7. Commit
+8. Run `/reflect` to catch issues
+9. Fix anything found in reflection, commit
+10. Push, create PR
+11. Run a guided playtest (playtest agent)
+12. Rebase onto latest `origin/master` if needed, fix conflicts
+13. Merge the PR
+14. Close the issue if not auto-closed
+
+Adapt the list to the task — small fixes won't need playtests, doc changes won't need game testing. But always include the full lifecycle: **the task isn't done until the PR is merged and the issue is closed.**
+
 ## Session Start Checklist
 
 **This is enforced by a hook. You will be blocked from editing files until you run `git status`.**

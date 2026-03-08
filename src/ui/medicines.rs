@@ -59,6 +59,14 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 .filter_map(|&idx| state.diseases.get(idx).map(|d| d.name.as_str()))
                 .collect();
 
+            // Check tested status
+            let all_tested = med.target_diseases.iter().all(|d| med.tested_against.contains(d));
+            let tested_label = if all_tested {
+                Span::styled(" [Tested]", Style::default().fg(Color::Green))
+            } else {
+                Span::styled(" [UNTESTED]", Style::default().fg(Color::Red))
+            };
+
             lines.push(Line::from(vec![
                 Span::raw("    "),
                 Span::styled(
@@ -75,6 +83,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                     disease_names.join(", "),
                     Style::default().fg(Color::Red),
                 ),
+                tested_label,
             ]));
             lines.push(Line::from(""));
         }

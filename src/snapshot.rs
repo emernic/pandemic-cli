@@ -102,7 +102,8 @@ mod tests {
         let state = GameState::new_default(42);
         let result = run_snapshot(state, &["t".to_string()], None).unwrap();
         assert!(result.screen.contains("Threats"));
-        assert!(result.screen.contains("Strain Alpha"));
+        // Diseases start unknown — name is hidden until research reveals it
+        assert!(result.screen.contains("Unknown Pathogen #1"));
     }
 
     #[test]
