@@ -282,40 +282,61 @@ fn render_region_box(
         }
     }
 
-    // Line 3: Health bar — nonzero values get at least 1 char
+    // Line 3: Health bar — sqrt-scaled so small values are visible
     if inner.height >= 3 && pop > 0.0 {
         let bar_w = iw;
-        let mut inf_w = if infected > 0.0 {
-            ((infected / pop) * bar_w as f64).round().max(1.0) as usize
+
+        let inf_ratio = infected / pop;
+        let imm_ratio = immune / pop;
+        let dead_ratio = dead / pop;
+        let sus_ratio = (1.0 - inf_ratio - imm_ratio - dead_ratio).max(0.0);
+
+        // Sqrt scaling amplifies small proportions (e.g. 0.001% infection
+        // becomes visible instead of rounding to zero at linear scale)
+        let inf_s = inf_ratio.sqrt();
+        let imm_s = imm_ratio.sqrt();
+        let dead_s = dead_ratio.sqrt();
+        let sus_s = sus_ratio.sqrt();
+        let total = inf_s + imm_s + dead_s + sus_s;
+
+        let (mut inf_w, mut imm_w, mut dead_w, sus_w);
+        if total == 0.0 {
+            inf_w = 0;
+            imm_w = 0;
+            dead_w = 0;
+            sus_w = bar_w;
         } else {
-            0
-        };
-        let mut imm_w = if immune > 0.0 {
-            ((immune / pop) * bar_w as f64).round().max(1.0) as usize
-        } else {
-            0
-        };
-        let mut dead_w = if dead > 0.0 {
-            ((dead / pop) * bar_w as f64).round().max(1.0) as usize
-        } else {
-            0
-        };
-        // Clamp so minimums don't exceed bar width
-        let used = inf_w + imm_w + dead_w;
-        if used > bar_w {
-            // Scale down proportionally, but keep at least 1 for each
-            let excess = used - bar_w;
-            for _ in 0..excess {
-                if dead_w > 1 {
-                    dead_w -= 1;
-                } else if imm_w > 1 {
-                    imm_w -= 1;
-                } else if inf_w > 1 {
-                    inf_w -= 1;
+            inf_w = if infected > 0.0 {
+                ((inf_s / total) * bar_w as f64).round().max(1.0) as usize
+            } else {
+                0
+            };
+            imm_w = if immune > 0.0 {
+                ((imm_s / total) * bar_w as f64).round().max(1.0) as usize
+            } else {
+                0
+            };
+            dead_w = if dead > 0.0 {
+                ((dead_s / total) * bar_w as f64).round().max(1.0) as usize
+            } else {
+                0
+            };
+            // Clamp if minimums exceed bar width
+            let used = inf_w + imm_w + dead_w;
+            if used > bar_w {
+                let excess = used - bar_w;
+                for _ in 0..excess {
+                    if dead_w > 1 {
+                        dead_w -= 1;
+                    } else if imm_w > 1 {
+                        imm_w -= 1;
+                    } else if inf_w > 1 {
+                        inf_w -= 1;
+                    }
                 }
             }
+            sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
         }
-        let sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
 
         let mut spans = Vec::new();
         if sus_w > 0 {
