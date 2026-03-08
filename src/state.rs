@@ -379,8 +379,13 @@ impl ResearchProject {
 /// generate status messages, notifications, etc. Not persisted in saves.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum GameEvent {
-    /// All policies suspended due to insufficient funding.
-    FundingCrisis,
+    /// An individual policy was suspended due to insufficient funding.
+    PolicySuspended {
+        region_idx: usize,
+        policy_name: String,
+    },
+    /// Funding is low — player has only a few ticks of policy runway left.
+    FundingWarning,
     /// A disease mutated, changing its strain generation and stats.
     DiseaseMutated {
         disease_idx: usize,

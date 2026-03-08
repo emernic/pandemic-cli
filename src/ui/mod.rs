@@ -43,10 +43,23 @@ pub fn process_events(state: &mut GameState) {
     }
 
     // Pick the most important event to display as status message.
-    // Priority: FundingCrisis > DiseaseMutated (GameOver doesn't need a status
-    // message — the game-over overlay conveys the outcome).
-    let msg = if state.events.iter().any(|e| matches!(e, GameEvent::FundingCrisis)) {
-        "FUNDING CRISIS: All policies suspended!".to_string()
+    // Priority: PolicySuspended > FundingWarning > DiseaseMutated
+    let suspended: Vec<_> = state.events.iter()
+        .filter_map(|e| match e {
+            GameEvent::PolicySuspended { region_idx, policy_name } => {
+                let region = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str())
+                    .unwrap_or("Unknown");
+                Some(format!("{} in {}", policy_name, region))
+            }
+            _ => None,
+        })
+        .collect();
+
+    let msg = if !suspended.is_empty() {
+        format!("Funding crisis: suspended {}", suspended.join(", "))
+    } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {
+        "LOW FUNDS: Policies at risk of suspension!".to_string()
     } else if let Some(GameEvent::DiseaseMutated { disease_idx, new_generation }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
     {
