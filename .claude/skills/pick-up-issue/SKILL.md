@@ -1,6 +1,6 @@
 ---
 name: pick-up-issue
-description: Pick up a GitHub issue to work on — claims it, creates a branch, and guides you through completion
+description: Pick up a GitHub issue to work on — claims it, creates a branch, and guides you through completion. TRIGGER when the user asks to work on an issue, pick up an issue, grab something from the backlog, or find something to work on.
 disable-model-invocation: false
 ---
 
@@ -8,24 +8,32 @@ disable-model-invocation: false
 
 You are picking up a GitHub issue to work on. This process ensures no two agents work on the same issue and that the issue is properly tracked through completion.
 
+## How We Track Issue Ownership
+
+We run multiple agents in parallel, so we do NOT use GitHub's assignee feature. Instead, we use the `in-progress` label as our sole claiming mechanism:
+- **Available:** open, no `in-progress` label
+- **Claimed:** open, has `in-progress` label
+- **Done:** closed, label removed
+
+NEVER check or set GitHub assignees. Always filter by the `in-progress` label.
+
 ## Step 1: Select an Issue
 
 **If a specific issue was provided** (via arguments or conversation), use that issue number and skip to Step 2.
 
-**Otherwise**, find a good issue to work on. Start by listing available issues:
+**Otherwise**, find an available issue (no `in-progress` label), pick the best one, and start working on it immediately. Do NOT ask the user to choose — just pick one and go.
 
 ```bash
 gh issue list --state open --search "-label:in-progress" --json number,title,labels,createdAt
 ```
 
-When choosing which issue to recommend, consider:
-- **Priority labels** — P0-critical and P1-high issues should generally be addressed before P2/P3.
-- **Issue type** — bugs are usually more urgent than enhancements or chores, all else being equal.
-- **Scope** — prefer issues that are well-defined and self-contained. Vague or sprawling issues are harder to complete successfully.
-- **Dependencies** — if an issue clearly depends on another unfinished issue, skip it for now.
-- **Age** — older issues that keep getting skipped may be worth a look, but don't pick them just because they're old.
+Selection criteria (in priority order):
+1. **Priority labels** — P0-critical > P1-high > P2-medium > P3-low > unlabeled.
+2. **Issue type** — bugs before enhancements, all else being equal.
+3. **Scope** — prefer small, well-defined, self-contained issues you can finish in one pass. Skip sprawling or vague issues.
+4. **Dependencies** — skip issues that clearly depend on unfinished work.
 
-Present a short summary of the top candidates (3-5 issues) with your reasoning, and recommend one. Ask the user which to pick up. If there are no available issues, tell the user.
+Briefly tell the user which issue you picked and why, then move to Step 2. If there are no available issues, tell the user.
 
 ## Step 2: Claim the Issue
 

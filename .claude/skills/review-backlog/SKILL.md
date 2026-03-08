@@ -37,7 +37,7 @@ git log --oneline -20
 ```
 
 ### Stale In-Progress Claims
-Find issues with the `in-progress` label that appear to be abandoned — no associated PR, no recent comments, no branch activity. Check for associated branches and PRs:
+We use the `in-progress` label (NOT GitHub assignees) to track which issues are actively being worked on. Find issues with the `in-progress` label that appear to be abandoned — no associated PR, no recent comments, no branch activity. Check for associated branches and PRs:
 
 ```bash
 gh pr list --search "issue-<number>" --state all

@@ -76,6 +76,17 @@ Before doing any work, get your repo into a clean state:
 
 Do NOT start implementing anything until the repo state is clean and understood.
 
+## Issue Tracking
+
+We run multiple agents in parallel, so we do NOT use GitHub's assignee feature (all agents share the same GitHub user). Instead, we use the `in-progress` label as our sole claiming mechanism:
+- **Available issue:** open, no `in-progress` label
+- **Claimed issue:** open, has `in-progress` label (some agent is working on it)
+- **Done:** closed, `in-progress` label removed
+
+This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-assignee` or check assignees to determine ownership. Always check for the `in-progress` label.
+
+When picking up an issue from the backlog, always use the `/pick-up-issue` skill.
+
 ## Conventions
 
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
