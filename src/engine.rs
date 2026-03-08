@@ -669,7 +669,24 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     None => {}
                 }
             } else if new.ui.open_panel == Panel::Policy {
-                handle_policy_confirm(&mut new);
+                match new.ui.policy_ui.clone() {
+                    Some(PolicyUiState::BrowseRegions) => {
+                        // Pure UI navigation: drill into region's policy management
+                        let region_idx = new.ui.panel_selection;
+                        if region_idx < new.regions.len() {
+                            new.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
+                            new.ui.panel_selection = 0;
+                        }
+                    }
+                    Some(PolicyUiState::ManagePolicies { region_idx }) => {
+                        // Game command: toggle the selected policy
+                        let policy_idx = new.ui.panel_selection;
+                        if let Some(msg) = toggle_policy(&mut new, region_idx, policy_idx) {
+                            new.ui.status_message = Some(msg);
+                        }
+                    }
+                    None => {}
+                }
             }
         }
         Action::Quit => {} // Handled by the caller
@@ -678,49 +695,45 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     new
 }
 
-fn handle_policy_confirm(state: &mut GameState) {
-    match state.ui.policy_ui.clone() {
-        Some(PolicyUiState::BrowseRegions) => {
-            let region_idx = state.ui.panel_selection;
-            if region_idx < state.regions.len() {
-                state.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
-                state.ui.panel_selection = 0;
+/// Toggle a policy for a region. Returns an error message if the toggle fails
+/// (e.g., insufficient personnel). Does not touch UI state.
+fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) -> Option<String> {
+    if region_idx >= state.policies.len() {
+        return None;
+    }
+    let available_personnel = state.personnel_available();
+    match policy_idx {
+        0 => {
+            state.policies[region_idx].travel_ban = !state.policies[region_idx].travel_ban;
+            None
+        }
+        1 => {
+            if state.policies[region_idx].quarantine {
+                state.policies[region_idx].quarantine = false;
+                None
+            } else if available_personnel >= QUARANTINE_PERSONNEL {
+                state.policies[region_idx].quarantine = true;
+                None
+            } else {
+                Some(format!(
+                    "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
+                ))
             }
         }
-        Some(PolicyUiState::ManagePolicies { region_idx }) => {
-            if region_idx >= state.policies.len() {
-                return;
-            }
-            let available_personnel = state.personnel_available();
-            let selection = state.ui.panel_selection;
-            match selection {
-                0 => state.policies[region_idx].travel_ban = !state.policies[region_idx].travel_ban,
-                1 => {
-                    if state.policies[region_idx].quarantine {
-                        state.policies[region_idx].quarantine = false;
-                    } else if available_personnel >= QUARANTINE_PERSONNEL {
-                        state.policies[region_idx].quarantine = true;
-                    } else {
-                        state.ui.status_message = Some(format!(
-                            "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
-                        ));
-                    }
-                }
-                2 => {
-                    if state.policies[region_idx].hospital_surge {
-                        state.policies[region_idx].hospital_surge = false;
-                    } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
-                        state.policies[region_idx].hospital_surge = true;
-                    } else {
-                        state.ui.status_message = Some(format!(
-                            "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
-                        ));
-                    }
-                }
-                _ => {}
+        2 => {
+            if state.policies[region_idx].hospital_surge {
+                state.policies[region_idx].hospital_surge = false;
+                None
+            } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
+                state.policies[region_idx].hospital_surge = true;
+                None
+            } else {
+                Some(format!(
+                    "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
+                ))
             }
         }
-        None => {}
+        _ => None,
     }
 }
 
