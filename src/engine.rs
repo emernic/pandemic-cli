@@ -1018,7 +1018,7 @@ mod tests {
             .iter()
             .find(|i| i.disease_idx == 0)
             .unwrap();
-        assert_eq!(na_inf.immune, 100_000.0);
+        assert_eq!(na_inf.immune, 1_000_000.0);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
