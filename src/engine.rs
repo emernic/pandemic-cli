@@ -613,25 +613,31 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     new
 }
 
-/// Toggle a policy for a region. Returns an error message if the toggle fails
-/// (e.g., insufficient personnel). Does not touch UI state.
+/// Toggle a policy for a region. Returns a status message describing what happened.
+/// Does not touch UI state.
 fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) -> Option<String> {
     if region_idx >= state.policies.len() {
         return None;
     }
+    let region_name = state.regions.get(region_idx)
+        .map(|r| r.name.as_str())
+        .unwrap_or("Unknown");
     let available_personnel = state.personnel_available();
     match policy_idx {
         0 => {
-            state.policies[region_idx].travel_ban = !state.policies[region_idx].travel_ban;
-            None
+            let new_state = !state.policies[region_idx].travel_ban;
+            state.policies[region_idx].travel_ban = new_state;
+            let verb = if new_state { "enabled" } else { "disabled" };
+            Some(format!("Travel Ban {verb} in {region_name} — ${:.0}/tick", TRAVEL_BAN_COST))
         }
         1 => {
             if state.policies[region_idx].quarantine {
                 state.policies[region_idx].quarantine = false;
-                None
+                Some(format!("Quarantine disabled in {region_name}"))
             } else if available_personnel >= QUARANTINE_PERSONNEL {
                 state.policies[region_idx].quarantine = true;
-                None
+                Some(format!("Quarantine enabled in {region_name} — ${:.0}/tick + {} personnel",
+                    QUARANTINE_COST, QUARANTINE_PERSONNEL))
             } else {
                 Some(format!(
                     "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
@@ -641,10 +647,11 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
         2 => {
             if state.policies[region_idx].hospital_surge {
                 state.policies[region_idx].hospital_surge = false;
-                None
+                Some(format!("Hospital Surge disabled in {region_name}"))
             } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
                 state.policies[region_idx].hospital_surge = true;
-                None
+                Some(format!("Hospital Surge enabled in {region_name} — ${:.0}/tick + {} personnel",
+                    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL))
             } else {
                 Some(format!(
                     "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
