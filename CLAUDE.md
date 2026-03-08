@@ -4,14 +4,40 @@
 
 **This is the single most important instruction in this file. Follow this above all else.**
 
-You are not a contractor executing assigned tasks. You are an owner of this codebase. If you see something broken, wrong, buggy, inconsistent, missing, or stupid — **it is your problem**. Not someone else's. Yours. Every single time.
+You are not a contractor executing assigned tasks. You are an **owner** of this codebase. If you see something broken, wrong, buggy, inconsistent, missing, or stupid — **it is your problem**. Not someone else's. Yours. Every single time.
 
-**NEVER sweep anything under the rug.** Every time you encounter an issue — a broken CLI flag, a test gap, a confusing API, dead code, misleading docs, awkward UX, anything — you MUST do one of:
+**This is an early-stage project. The codebase has slop in it.** Comments that say "known limitation," code that looks like it was written by a previous Claude who didn't think very hard, architecture that's getting worse instead of better — none of that is sacred. Don't trust it. Don't defer to it. Read it critically. If something doesn't make sense, it probably doesn't make sense — not "oh, the previous developer must have had a reason." Maybe they did, or maybe they were an LLM that took the path of least resistance. Question everything.
+
+**NEVER sweep anything under the rug.** Every time you encounter an issue — a broken CLI flag, a test gap, a confusing API, dead code, misleading docs, bad architecture, awkward UX, anything — you MUST do one of:
 
 1. **Fix it directly** if it's small and won't derail your current task
 2. **File a GitHub issue** (`gh issue create`) if it's bigger or you're mid-task — issues can be super short, we have infinite parallelization to burn through the backlog
 
 No exceptions. No "that's not what I was asked to do." No "I'll just work around it." No ignoring it and moving on. If you saw it, you own it. File the issue or fix the bug. Every time.
+
+### Why This Matters So Much
+
+Here's the thing you need to understand: **if you don't do it, nobody will.** There is no other team. There is no tech debt sprint. There is no code reviewer who will catch it later. The next Claude that touches this code will be just as myopic as you're tempted to be right now — it will parachute in, do one tiny task, and leave without commenting on the five broken things it walked past. That's the failure mode. That's what we're fighting against.
+
+**Investigate issues are free.** They take 30 seconds to file. They can be one line. "Investigate: this function name doesn't match what it does" is a valid issue. "Investigate: engine.rs still has UI state machine logic despite target-architecture.md saying it shouldn't" is a valid issue. "Investigate: this comment says 'known limitation' but it seems like it should just be fixed" is a valid issue. File them constantly. If you finish a session and haven't filed a single investigate issue, you probably weren't paying attention.
+
+### What Ownership Looks Like In Practice
+
+- You're fixing a bug in medicines.rs and you notice engine.rs has UI navigation logic that violates the target architecture. **File an issue or extract it right now.**
+- You see a comment that says `// TODO: handle this edge case`. **File an issue.**
+- A test helper uses a pattern that's different from every other test helper. **Fix it or file an issue.**
+- The CLAUDE.md has an instruction that doesn't work or is misleading. **Fix the CLAUDE.md.**
+- You read a "Possible Solution" in an issue and it's obviously wrong. **Say so in your implementation, don't blindly follow it.**
+- You run a command from the docs and it fails. **Fix the docs.**
+
+### What Ownership Does NOT Look Like
+
+- "That's outside the scope of this issue" — No it isn't. You saw it, you own it.
+- "I'll leave that for a future PR" and then never filing an issue — That future PR will never happen.
+- "This is a known limitation" — Known by whom? Accepted by whom? Question it.
+- Working around a bug instead of fixing it.
+- Noticing something wrong and not even mentioning it.
+- Finishing a session with zero investigate issues filed.
 
 ---
 
@@ -39,15 +65,22 @@ Key files: `src/state.rs` (data), `src/engine.rs` (logic), `src/action.rs` (inpu
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
-### Architectural Direction
+### Architectural Direction — THIS IS YOUR JOB
 
-We're incrementally migrating toward separating UI state machines from game logic. See `docs/target-architecture.md` for the full plan. The short version:
+We're migrating toward separating UI state machines from game logic. See `docs/target-architecture.md` for the full plan. The short version:
 
 - **engine.rs should only contain game logic** — `tick()` and game commands (deploy medicine, start research). It should NOT know about panel navigation, wizard steps, or selection indices.
 - **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into game commands when appropriate.
 - **Layering: state.rs ← engine.rs ← ui/ ← main.rs** — Each layer only imports from layers below it. UI should NOT import from engine (currently `resources.rs` and `research.rs` violate this).
 
-When touching engine.rs or UI code, **actively migrate toward this structure.** Don't add new UI state machine logic to engine.rs. Don't add new engine imports to UI modules. Small steps, every PR.
+**This migration is not happening on its own.** Nobody is assigned to it. There is no "architecture team." Every single Claude that touches this codebase needs to be actively pushing toward this structure, every session, every PR. If you touch engine.rs and you add UI state machine logic instead of extracting it, you are making the codebase worse. If you see a layering violation and walk past it, you are making the codebase worse.
+
+**Concretely, every time you work on this codebase:**
+1. Don't add new UI state machine logic to engine.rs. Ever.
+2. Don't add new engine imports to UI modules. Ever.
+3. If you're already touching a file that has violations, extract at least one. Small steps compound.
+4. If you see a violation you can't fix right now, file an issue. Not "maybe someday" — file it now.
+5. Read `docs/target-architecture.md` if you haven't. It has specific, actionable migration steps.
 
 ## Play the Game Yourself
 
@@ -129,6 +162,25 @@ This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-ass
 
 When picking up an issue from the backlog, always use the `/pick-up-issue` skill.
 
+### Investigate Issues — File Them Constantly
+
+Investigate issues are the single most underused tool in this project. They are **free**. They take 30 seconds. They don't need user permission. They can be one line.
+
+An investigate issue says: "this confused me and someone should take a closer look." That's it. You are NOT claiming something is wrong. You're NOT proposing a fix. You're just pointing at something and saying "hey, look at this."
+
+**File investigate issues for:**
+- Code that confused you, even briefly
+- Comments that say "TODO," "HACK," "known limitation," "workaround," or similar
+- Architecture violations you noticed but couldn't fix right now
+- Docs/CLAUDE.md instructions that didn't work or seemed wrong
+- Tests that are missing or seem to test the wrong thing
+- Any time you had to work around something instead of fixing it
+- Anything where you thought "that's weird" and moved on
+
+**If you finish a session and haven't filed a single investigate issue, ask yourself: were you really paying attention?**
+
+See the create-issue skill for the template. Keep the title prefixed with "Investigate:" and phrase it as a question or observation, not a conclusion.
+
 ## Signing Off
 
 In your final message before stopping work, always include a concise status block:
@@ -152,4 +204,3 @@ The user switches between many terminal tabs. They need to instantly see what wa
   ```
   Local `master` may be checked out in another worktree, which blocks `git checkout master`.
 - **Never use `gh pr merge --delete-branch`** — it tries to `git checkout master` locally, which fails because master is checked out in another worktree. Use `gh pr merge --squash` instead. Remote branches are auto-deleted on merge (repo setting enabled).
-- When you notice something that looks funky, incomplete, or unclear while working — file an `investigate` issue. These are cheap and free; you don't need user permission. **Critically: investigate issues are NOT bug reports.** You are NOT claiming something is wrong. You're saying "this confused me and someone should take a closer look." Do not theorize about what the fix should be — you haven't investigated it yet. Example: while fixing #6 (mismatched Quit labels), we noticed saving only happens when a file path is provided. We have no idea if that's a bug or intentional — we didn't look into it. But it seemed worth a second look, so it's an investigate issue. See the create-issue skill for the full template and examples of good vs. bad investigate issues.

@@ -16,6 +16,20 @@ You just reflected on your changes. Now do a second, more focused pass looking s
 - **Premature abstraction:** Generalized frameworks, trait hierarchies, or extension points built for hypothetical future use cases that don't exist yet and may never exist.
 - **Cosmetic structure:** Code that's organized into modules/functions/traits to look well-structured, but the boundaries don't correspond to real conceptual boundaries — the structure is decorative rather than functional.
 
+## Architecture Regression Check
+
+**This is the most important part of the slop check for this project.**
+
+This codebase has a known architectural problem: UI state machine logic lives in `engine.rs` instead of the UI layer, and some UI modules import from engine. See `docs/target-architecture.md` for the target state.
+
+Check specifically:
+1. **Did your changes add UI logic to engine.rs?** Panel navigation, wizard steps, selection bounds, open/close — none of this belongs in the engine. If you added any, extract it.
+2. **Did your changes add engine imports to UI modules?** UI should read state, not call engine functions.
+3. **Did you walk past existing violations?** If you touched a file with violations (engine.rs doing UI work, UI importing engine), you should have filed an issue or fixed one. If you didn't, do it now.
+4. **Did you add "known limitation" comments or TODOs?** These are almost always slop. Either fix the thing or file an issue — don't leave a comment for a future Claude that will never read it.
+
+## Process
+
 **Actually READ the changed files and surrounding code.** Don't just think about it abstractly — open the files, read them line by line, and look for these patterns.
 
 Focus exclusively on changes since your last `/reflect`. Present only genuine findings — not nitpicks, not style preferences, not things you've already discussed. If you find nothing substantive, say so.

@@ -123,6 +123,8 @@ If the issue has a "Possible Solution" section, read it for context but do NOT f
 
 Once you're confident the change is worth making, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
 
+**While you work, look around.** You are not a machine that processes one issue and exits. You are reading real code in a real codebase. If you see something broken, confusing, or architecturally wrong in the code you're touching or the code next to it — file an investigate issue. It takes 30 seconds. If you don't do it, no one will. See CLAUDE.md for the full ownership philosophy.
+
 ## Step 6: Completion
 
 When the work is done:
@@ -164,3 +166,4 @@ If you realize you cannot complete the issue (too complex, blocked, unclear, etc
 - NEVER abandon without user permission.
 - If you get stuck or the issue is unclear, ask the user rather than guessing.
 - If you realize the issue is a duplicate or invalid while working on it, tell the user before closing anything.
+- **Own the codebase.** Your job is not just "close this one issue." Every file you read, every function you call, every test you run — you are responsible for what you see. File investigate issues for anything that looks off. Push the architecture toward the target state. Don't leave the codebase worse than you found it.

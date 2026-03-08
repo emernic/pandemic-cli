@@ -38,7 +38,7 @@ Determine the issue type and priority:
 - `bug` — Something is broken or behaves incorrectly
 - `enhancement` — A new feature or improvement to existing functionality
 - `chore` — Refactoring, cleanup, tech debt, tooling improvements
-- `investigate` — Something looks off or confusing and needs follow-up. **You are NOT claiming there is a problem.** You're asking someone to take a closer look. File these freely without user permission. ~30% turn out to be fine, ~30% lead to docs/cleanup, ~40% uncover real issues.
+- `investigate` — Something looks off or confusing and needs follow-up. **You are NOT claiming there is a problem.** You're asking someone to take a closer look. **File these aggressively and constantly — they are free, they take 30 seconds, and they are the #1 most underused tool in this project.** If you finish a session without filing any, you weren't paying attention. ~30% turn out to be fine, ~30% lead to docs/cleanup, ~40% uncover real issues. All three outcomes are valuable.
 
 **Priority** (pick one label):
 - `P0-critical` — Game-breaking, blocks core functionality
