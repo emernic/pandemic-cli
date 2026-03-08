@@ -256,6 +256,10 @@ This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-ass
 
 When picking up an issue from the backlog, always use the `/pick-up-issue` skill.
 
+### Root Causes Before Symptoms
+
+**Before filing ANY issue, ask: "Is this a symptom of something bigger?"** If the game lasts 5 minutes instead of 60, don't file 10 issues about mid-game UX — the mid-game doesn't exist yet. File ONE issue about the broken game duration. Ten symptom issues are worth less than one root-cause issue. This applies to everything: bugs, enhancements, investigate issues. Always look for the upstream cause.
+
 ### Investigate Issues — File Them Constantly
 
 Investigate issues are the single most underused tool in this project. They are **free**. They take 30 seconds. They don't need user permission. They can be one line.
