@@ -129,6 +129,8 @@ Investigate issues should be filed freely. You do NOT need user permission. Keep
 
 If the issue originates from a playtest session (either your own playtest or an automated playtest agent's report), add the `playtest-feedback` label. This signals to whoever picks up the issue that the report may be imprecise — the playtester's description of the problem and their suggested fix should not be taken at face value. The value is in identifying *which area* of the game triggered feedback, not in the specific diagnosis.
 
+**Color blindness check:** AI playtest agents cannot see console colors. Before filing a playtest issue about a "missing" visual indicator, consider whether it might be a color-based indicator that works fine for human players. If you suspect color blindness is the cause, either skip filing the issue or note it explicitly in the issue body (e.g., "Note: this may be a color-based indicator invisible to AI playtesters").
+
 **For chores**, use this structure:
 ```markdown
 ## Description
