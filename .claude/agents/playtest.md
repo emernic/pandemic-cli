@@ -162,6 +162,21 @@ The difference between okay and great ideas:
 - Okay: "The map feels empty"
 - Great: "The map could show trade route arrows between regions that turn red when carrying disease. You could impose travel restrictions on a route, but it tanks that region's economy and cuts your funding income. Suddenly the map is where the hard decisions happen."
 
+## Process Issues (MANDATORY)
+**You MUST include this section, even if everything went smoothly.**
+
+Report any problems with the playtest process itself — NOT the game, but your ability to play it:
+- Could you advance ticks and maintain state across invocations? (Save file working?)
+- Were there key presses you couldn't send or that didn't work?
+- Did you have to start from scratch when you shouldn't have?
+- Did a command fail or behave unexpectedly?
+- Were you confused by the playtest instructions themselves?
+- Did you run out of tool calls before finishing?
+
+**If something in the playtest process is broken, YOU are the only person who will ever report it.** There is no other team. The next playtest agent will hit the exact same problem, silently work around it, and say nothing — just like you're tempted to do right now. If the save file didn't work, if you couldn't send a key, if you had to restart from tick 0 mid-session: **say so loudly.** Every playtest after yours depends on you speaking up.
+
+If everything worked fine, write "No process issues." That's it. But think hard before writing that — did everything *really* work, or did you quietly work around something?
+
 ## Session Log
 Think-out-loud notes from the session, lightly cleaned up.
 ```
