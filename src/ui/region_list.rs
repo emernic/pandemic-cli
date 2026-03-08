@@ -257,12 +257,29 @@ fn render_region_box(
         ),
     ]));
 
-    // Line 2: Population
+    // Line 2: Key stats — show infected/dead when active, otherwise static pop
     if inner.height >= 2 {
-        lines.push(Line::from(Span::styled(
-            format!("Pop: {}", format_number(pop)),
-            Style::default().fg(Color::DarkGray),
-        )));
+        if infected == 0.0 && dead == 0.0 && immune == 0.0 {
+            lines.push(Line::from(Span::styled(
+                format!("Pop: {}", format_number(pop)),
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            let mut stats = Vec::new();
+            stats.push(Span::styled("Inf ", Style::default().fg(Color::Red)));
+            stats.push(Span::styled(
+                format_number(infected),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ));
+            if dead > 0.0 {
+                stats.push(Span::styled("  Dead ", Style::default().fg(Color::DarkGray)));
+                stats.push(Span::styled(
+                    format_number(dead),
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+                ));
+            }
+            lines.push(Line::from(stats));
+        }
     }
 
     // Line 3: Health bar — nonzero values get at least 1 char
@@ -348,20 +365,28 @@ fn render_region_box(
                 }
                 if let Some(disease) = state.diseases.get(inf.disease_idx) {
                     let dname = disease_display_name(disease, inf.disease_idx);
-                    let max_dname = iw.saturating_sub(12);
-                    let display_dname = if dname.len() > max_dname {
-                        &dname[..max_dname]
-                    } else {
-                        dname.as_str()
-                    };
-                    lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("{}: ", display_dname),
-                            Style::default().fg(Color::Yellow),
-                        ),
-                        Span::styled(format_number(inf.infected), Style::default().fg(Color::Red)),
-                        Span::raw(" inf"),
-                    ]));
+                    // Disease name line
+                    lines.push(Line::from(Span::styled(
+                        dname,
+                        Style::default().fg(Color::Yellow),
+                    )));
+                    // Stats line for this disease
+                    if lines.len() < inner.height as usize {
+                        let mut spans = vec![
+                            Span::styled("  ", Style::default()),
+                            Span::styled(
+                                format!("{} inf", format_number(inf.infected)),
+                                Style::default().fg(Color::Red),
+                            ),
+                        ];
+                        if inf.dead > 0.0 {
+                            spans.push(Span::styled(
+                                format!("  {} dead", format_number(inf.dead)),
+                                Style::default().fg(Color::DarkGray),
+                            ));
+                        }
+                        lines.push(Line::from(spans));
+                    }
                 }
             }
         }
