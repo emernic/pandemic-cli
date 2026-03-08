@@ -148,6 +148,16 @@ impl PathogenType {
             PathogenType::Prion => "Prion",
         }
     }
+
+    /// Per-tick probability that this pathogen type mutates.
+    pub fn mutation_rate(&self) -> f64 {
+        match self {
+            PathogenType::RnaVirus => 0.008,   // ~1 mutation per 125 ticks
+            PathogenType::DnaVirus => 0.002,   // ~1 per 500 ticks
+            PathogenType::Bacterium => 0.003,  // ~1 per 333 ticks
+            PathogenType::Prion => 0.0001,     // ~1 per 10000 ticks
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -162,6 +172,10 @@ pub struct Disease {
     pub recovery_rate: f64,
     #[serde(default)]
     pub knowledge: f64,
+    /// How many times this disease has mutated. Medicines developed against
+    /// earlier generations become less effective.
+    #[serde(default)]
+    pub strain_generation: u32,
 }
 
 /// Knowledge thresholds for progressive disease revelation.
@@ -235,6 +249,11 @@ pub struct Medicine {
     /// Disease indices this medicine has been clinically trialed against.
     #[serde(default)]
     pub tested_against: Vec<usize>,
+    /// Strain generation this medicine was calibrated for, per target disease.
+    /// Parallel to `target_diseases`. When a disease mutates past this generation,
+    /// the medicine becomes less effective. Re-running a clinical trial updates this.
+    #[serde(default)]
+    pub strain_generations: Vec<u32>,
 }
 
 /// What a medicine deployment targets: vaccinate susceptible or treat infected.
@@ -248,6 +267,30 @@ impl Medicine {
     /// Number of target options in the UI (vaccinate + treat per target disease).
     pub fn num_deploy_targets(&self) -> usize {
         2 * self.target_diseases.len()
+    }
+
+    /// Efficacy multiplier based on how many generations behind this medicine is
+    /// for a given disease. Each generation of drift reduces efficacy by 25%,
+    /// with a floor at 10%. Returns 1.0 if the medicine hasn't been calibrated yet
+    /// (strain_generations not populated — pre-mutation-system medicines).
+    pub fn strain_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
+        let pos = self.target_diseases.iter().position(|&d| d == disease_idx);
+        match pos {
+            Some(i) => {
+                let med_gen = self.strain_generations.get(i).copied();
+                match med_gen {
+                    Some(mg) => {
+                        let disease_gen = diseases.get(disease_idx)
+                            .map_or(0, |d| d.strain_generation);
+                        let behind = disease_gen.saturating_sub(mg);
+                        (1.0 - behind as f64 * 0.25).max(0.1)
+                    }
+                    // Not yet calibrated (developed before mutation system) — full efficacy
+                    None => 1.0,
+                }
+            }
+            None => 1.0,
+        }
     }
 
     /// Decode a UI selection index into a deploy target.
@@ -462,6 +505,7 @@ impl GameState {
                 cross_region_spread: 0.02,
                 recovery_rate: 0.04,
                 knowledge: 0.0,
+                strain_generation: 0,
             },
             Disease {
                 name: "Strain Beta".into(),
@@ -471,6 +515,7 @@ impl GameState {
                 cross_region_spread: 0.03,
                 recovery_rate: 0.015,
                 knowledge: 0.0,
+                strain_generation: 0,
             },
         ];
 
@@ -483,6 +528,7 @@ impl GameState {
                 doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
+                strain_generations: vec![],
             },
             Medicine {
                 name: "Antibiotic-B".into(),
@@ -492,6 +538,7 @@ impl GameState {
                 doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
+                strain_generations: vec![],
             },
             Medicine {
                 name: "Broad-Spectrum".into(),
@@ -501,6 +548,7 @@ impl GameState {
                 doses: 200_000.0,
                 unlocked: false,
                 tested_against: vec![],
+                strain_generations: vec![],
             },
         ];
 

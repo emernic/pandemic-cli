@@ -199,10 +199,12 @@ fn render_select_target(
 
         let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
 
-        // Compute efficacy for this therapy × pathogen match
-        let efficacy = state.diseases.get(disease_idx)
+        // Compute efficacy: therapy × pathogen × strain match
+        let therapy_efficacy = state.diseases.get(disease_idx)
             .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
             .unwrap_or(0.0);
+        let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
+        let efficacy = therapy_efficacy * strain_eff;
         let effective_doses = med.doses * efficacy;
         let eff_color = if efficacy >= 0.8 {
             Color::Green
@@ -211,6 +213,7 @@ fn render_select_target(
         } else {
             Color::Red
         };
+        let strain_outdated = strain_eff < 1.0;
 
         match &target {
             DeployTarget::Vaccinate { .. } => {
@@ -249,6 +252,12 @@ fn render_select_target(
                         Style::default().fg(eff_color),
                     ),
                 ]));
+                if strain_outdated {
+                    lines.push(Line::from(Span::styled(
+                        format!("    Strain outdated! ({:.0}% strain match — re-trial to update)", strain_eff * 100.0),
+                        Style::default().fg(Color::Yellow),
+                    )));
+                }
             }
             DeployTarget::Treat { .. } => {
                 let infected = inf.map(|i| i.infected).unwrap_or(0.0);
@@ -283,6 +292,12 @@ fn render_select_target(
                         Style::default().fg(eff_color),
                     ),
                 ]));
+                if strain_outdated {
+                    lines.push(Line::from(Span::styled(
+                        format!("    Strain outdated! ({:.0}% strain match — re-trial to update)", strain_eff * 100.0),
+                        Style::default().fg(Color::Yellow),
+                    )));
+                }
             }
         }
     }
