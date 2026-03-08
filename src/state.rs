@@ -132,6 +132,52 @@ pub struct UiState {
     pub panel_selection: usize,
     #[serde(default)]
     pub medicine_ui: Option<MedicineUiState>,
+    #[serde(default)]
+    pub map_selection: usize,
+}
+
+/// Grid layout for the world map: 3 columns × 2 rows.
+/// Maps region index to (col, row). Hardcoded for 6 regions.
+const MAP_GRID: [(u16, u16); 6] = [
+    (0, 0), // 0: North America
+    (0, 1), // 1: South America
+    (1, 0), // 2: Europe
+    (1, 1), // 3: Africa
+    (2, 0), // 4: Asia
+    (2, 1), // 5: Oceania
+];
+
+pub fn map_grid_pos(region_idx: usize) -> Option<(u16, u16)> {
+    MAP_GRID.get(region_idx).copied()
+}
+
+pub fn region_at_grid(col: u16, row: u16) -> Option<usize> {
+    MAP_GRID.iter().position(|&(c, r)| c == col && r == row)
+}
+
+/// Navigate the map selection in a direction. Returns the new selection index.
+pub fn map_navigate(current: usize, direction: MapDirection, num_regions: usize) -> usize {
+    if num_regions == 0 || current >= num_regions || current >= MAP_GRID.len() {
+        return current;
+    }
+    let (col, row) = MAP_GRID[current];
+    let (new_col, new_row) = match direction {
+        MapDirection::Up => (col, row.wrapping_sub(1)),
+        MapDirection::Down => (col, row + 1),
+        MapDirection::Left => (col.wrapping_sub(1), row),
+        MapDirection::Right => (col + 1, row),
+    };
+    region_at_grid(new_col, new_row)
+        .filter(|&idx| idx < num_regions)
+        .unwrap_or(current)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapDirection {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 impl GameState {
@@ -235,6 +281,7 @@ impl GameState {
                 open_panel: Panel::None,
                 panel_selection: 0,
                 medicine_ui: None,
+                map_selection: 0,
             },
         }
     }
