@@ -81,11 +81,11 @@ Build with `cargo build --release`, then use snapshot mode:
 # Generate a random seed — do NOT manually pick seeds like 42 or 12345
 SEED=$((RANDOM * RANDOM))
 
-# First look (creates save file automatically)
-./target/release/pandemic-cli /tmp/playtest-${SEED}.json --seed ${SEED} --snapshot
+# First look (creates save file automatically — MUST be in current directory, NOT /tmp/)
+./target/release/pandemic-cli ./playtest-${SEED}.json --seed ${SEED} --snapshot
 
 # Take an action and/or advance time (these combine in one call)
-./target/release/pandemic-cli /tmp/playtest-${SEED}.json --snapshot --key <key> --ticks <n>
+./target/release/pandemic-cli ./playtest-${SEED}.json --snapshot --key <key> --ticks <n>
 ```
 
 **Always use a random seed.** Different seeds produce different RNG outcomes for disease spread, adverse effects, etc. Don't use 42, 777, or other "nice" numbers — use `$((RANDOM * RANDOM))` to get genuine variety.
