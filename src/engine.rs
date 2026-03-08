@@ -1694,6 +1694,29 @@ mod tests {
     }
 
     #[test]
+    fn no_victory_while_infected_remain() {
+        let mut state = GameState::new_default(42);
+        // Set up: all diseases identified, tested medicines exist, but people still infected
+        for disease in &mut state.diseases {
+            disease.knowledge = 1.0;
+        }
+        let disease_count = state.diseases.len();
+        state.medicines[0].tested_against = (0..disease_count).collect();
+        // Reduce infections to a small but non-zero amount (above threshold)
+        for region in &mut state.regions {
+            for inf in &mut region.infections {
+                inf.infected = 50.0; // 50 people still infected per region
+            }
+        }
+        state = tick(&state);
+        assert_eq!(
+            state.outcome,
+            GameOutcome::Playing,
+            "should not declare victory while people are still infected"
+        );
+    }
+
+    #[test]
     fn concurrent_field_and_bench_research() {
         let mut state = GameState::new_default(42);
         state.resources.research_points = 200.0;
