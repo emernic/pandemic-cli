@@ -46,7 +46,7 @@ pub fn run_snapshot(
 }
 
 pub fn render_to_string(state: &GameState) -> String {
-    let backend = TestBackend::new(100, 24);
+    let backend = TestBackend::new(200, 48);
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal

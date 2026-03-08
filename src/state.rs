@@ -28,6 +28,21 @@ pub struct Region {
     pub infections: Vec<RegionInfection>,
 }
 
+impl Region {
+    /// Current living population: starting population minus total deaths.
+    pub fn alive(&self) -> f64 {
+        self.population as f64 - self.total_dead()
+    }
+
+    pub fn total_infected(&self) -> f64 {
+        self.infections.iter().map(|i| i.infected).sum()
+    }
+
+    pub fn total_dead(&self) -> f64 {
+        self.infections.iter().map(|i| i.dead).sum()
+    }
+}
+
 /// Per-disease infection state within a region.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RegionInfection {
@@ -133,24 +148,13 @@ impl GameState {
     }
 
     pub fn total_infected(&self) -> f64 {
-        self.regions
-            .iter()
-            .flat_map(|r| &r.infections)
-            .map(|i| i.infected)
-            .sum()
+        self.regions.iter().map(|r| r.total_infected()).sum()
     }
 
     pub fn total_dead(&self) -> f64 {
-        self.regions
-            .iter()
-            .flat_map(|r| &r.infections)
-            .map(|i| i.dead)
-            .sum()
+        self.regions.iter().map(|r| r.total_dead()).sum()
     }
 
-    pub fn total_population(&self) -> u64 {
-        self.regions.iter().map(|r| r.population).sum()
-    }
 }
 
 #[cfg(test)]

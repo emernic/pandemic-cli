@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::state::GameState;
+use super::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let pause_indicator = if state.paused {
@@ -41,12 +42,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         Span::styled(
-            format!("Infected: {:.0}", state.total_infected()),
+            format!("Infected: {}", format_number(state.total_infected())),
             Style::default().fg(Color::Red),
         ),
         Span::raw("  "),
         Span::styled(
-            format!("Dead: {:.0}", state.total_dead()),
+            format!("Dead: {}", format_number(state.total_dead())),
             Style::default().fg(Color::DarkGray),
         ),
     ]);

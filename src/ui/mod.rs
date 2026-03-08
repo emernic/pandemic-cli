@@ -13,6 +13,20 @@ use ratatui::{
 
 use crate::state::{GameState, Panel};
 
+/// Format a number with human-readable suffix (K, M, B).
+pub fn format_number(n: f64) -> String {
+    let abs = n.abs();
+    if abs >= 1_000_000_000.0 {
+        format!("{:.1}B", n / 1_000_000_000.0)
+    } else if abs >= 1_000_000.0 {
+        format!("{:.1}M", n / 1_000_000.0)
+    } else if abs >= 1_000.0 {
+        format!("{:.1}K", n / 1_000.0)
+    } else {
+        format!("{:.0}", n)
+    }
+}
+
 pub fn render(f: &mut Frame, state: &GameState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
