@@ -97,6 +97,8 @@ Do this **every time** you start working on something. It takes seconds and prev
 
 For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one.
 
+**AI playtester color blindness:** Playtest agents cannot see console colors (ANSI codes, background colors, border highlights). Many playtest reports about "missing indicators" are actually color-based indicators that work fine for human players. When filing or evaluating playtest issues, consider whether the "problem" is just color blindness. That said, the game should strive to be playable without color — use structural indicators (border styles, text markers, symbols) in addition to color, not instead of it.
+
 ## Merging
 
 **Always merge your own PRs. Do not ask for permission.** This is an early-stage project and it's far more important to get changes in than to risk leaving them behind. The user manages many agents and terminals and may not even see your request — so just take ownership and handle it.

@@ -96,6 +96,20 @@ Issues labeled `playtest-feedback` were filed by automated playtest agents. **Th
 
 **Example of what NOT to do:** A playtest agent reports "health bars are always solid green" because it can't see colors in snapshot mode. The bars are actually multi-colored and working perfectly. An agent blindly implements sqrt scaling to "fix" the bars, making them actively misleading. The right move was to play the game, realize the bars are fine, and close the issue.
 
+### Color Blindness in AI Playtests
+
+AI playtest agents (Claude Code) **cannot see console colors**. They receive raw text output from snapshot mode and have no awareness of ANSI color codes, background colors, border highlights, or any other color-based visual indicators. This is a permanent limitation — not a bug.
+
+**Many playtest-feedback issues are caused by this color blindness.** Common false reports include:
+- "No visual indicator of selected region" — there IS one, it's a color highlight
+- "Health bars are always solid green" — they're multi-colored
+- "Can't tell which panel is active" — it has a colored border
+- "No feedback after action" — there's a colored status message
+
+**When evaluating a playtest-feedback issue, always ask:** "Could this be caused by the playtester not seeing colors?" If the answer is yes, play the game yourself to verify. If the color-based indicator exists and works, close the issue as not planned.
+
+**However:** the game should still strive to be playable without color. If something relies *solely* on color to convey information (no structural/text indicator at all), that's a real accessibility concern worth addressing — but the fix should add a non-color indicator *in addition to* the color one, not replace it.
+
 ## Step 4: Read and Understand the Issue
 
 Read the full issue body:
