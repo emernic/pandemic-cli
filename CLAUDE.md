@@ -85,21 +85,28 @@ Your to-do list should always include the operational steps, not just the coding
 
 Adapt the list to the task — small fixes won't need playtests, doc changes won't need game testing. But always include the full lifecycle: **the task isn't done until the PR is merged and the issue is closed.**
 
-## Session Start Checklist
+## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 
-**This is enforced by a hook. You will be blocked from editing files until you run `git status`.**
+**This is the #1 source of preventable disasters in this project.** Multiple agents share this repo. If you skip this, you WILL end up building features on someone else's branch, testing against stale code, or committing to the wrong place. This has happened repeatedly.
 
-The VERY FIRST thing you do in every session — before reading code, before planning, before touching anything — is orient yourself:
+**You are NOT on a good branch right now. Assume your branch is wrong until you prove otherwise.**
+
+The VERY FIRST thing you do — before reading code, before planning, before touching ANYTHING — is:
 
 1. **Fetch**: `git fetch origin`
-2. **Check status**: `git status` — look at what branch you're on, whether there are uncommitted changes, and whether the branch is up to date. Flag any surprises to the user.
-3. **Think about your branch**: Are you on `master`? An old feature branch? Someone else's branch? If you're starting new work, create a fresh branch:
-   ```
-   git checkout -b my-branch origin/master
-   ```
-   Only skip this if the user explicitly says to continue work on the current branch.
+2. **Check status**: `git status` — read the output carefully. What branch are you on? Is it `master`? A feature branch? **Whose** feature branch? Are there uncommitted changes?
+3. **STOP AND THINK about your branch.** This is the critical step that everyone skips:
+   - If you're on ANY branch other than `master`, **tell the user what branch you're on and ask if that's expected.** Do not silently continue on a random branch.
+   - If you're starting new work, **always** create a fresh branch from `origin/master`:
+     ```
+     git checkout -b my-branch origin/master
+     ```
+   - Only continue on the current branch if the user **explicitly** says to.
+   - **Never assume the current branch is fine just because `git status` shows a clean working tree.** Clean working tree ≠ correct branch.
 
-Do NOT start implementing anything until the repo state is clean and understood. Multiple agents share this repo — you WILL end up on stale or wrong branches if you skip this.
+4. **Tell the user what you found.** Say something like: "I'm on branch `foo-bar`, working tree is clean, branch is up to date with remote." If anything looks off, flag it.
+
+**Do NOT proceed until you have reported the branch state to the user.** This is enforced by a hook — you will be blocked from editing files until you run `git status`. But the hook only checks that you ran the command; YOU are responsible for actually reading the output and acting on it.
 
 ## Issue Tracking
 
