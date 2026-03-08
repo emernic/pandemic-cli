@@ -1,0 +1,142 @@
+use std::fs;
+use std::io;
+use std::time::{Duration, Instant};
+
+use clap::Parser;
+use crossterm::{
+    event::{self, Event, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{backend::CrosstermBackend, Terminal};
+
+use pandemic_cli_lib::action::{key_to_action, Action};
+use pandemic_cli_lib::engine::{apply_action, tick};
+use pandemic_cli_lib::snapshot;
+use pandemic_cli_lib::state::GameState;
+use pandemic_cli_lib::ui;
+
+#[derive(Parser)]
+#[command(name = "pandemic-cli", about = "Defend humanity against disease outbreaks")]
+struct Cli {
+    /// Save file to load/save game state
+    save_file: Option<String>,
+
+    /// Run in snapshot mode (non-interactive, render to stdout)
+    #[arg(long)]
+    snapshot: bool,
+
+    /// Apply this key action before rendering (snapshot mode)
+    #[arg(long)]
+    key: Option<String>,
+
+    /// Advance this many ticks (snapshot mode)
+    #[arg(long)]
+    ticks: Option<u64>,
+
+    /// RNG seed for new games
+    #[arg(long, default_value = "42")]
+    seed: u64,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
+    // Load or create state
+    let state = if let Some(ref path) = cli.save_file {
+        if std::path::Path::new(path).exists() {
+            let data = fs::read_to_string(path)?;
+            serde_json::from_str(&data)?
+        } else {
+            GameState::new_default(cli.seed)
+        }
+    } else {
+        GameState::new_default(cli.seed)
+    };
+
+    if cli.snapshot {
+        let result = snapshot::run_snapshot(state, cli.key.as_deref(), cli.ticks)
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        print!("{}", result.screen);
+        // Write updated state back to save file if one was provided
+        if let Some(ref path) = cli.save_file {
+            let json = serde_json::to_string_pretty(&result.state)?;
+            fs::write(path, json)?;
+        }
+        Ok(())
+    } else {
+        run_interactive(state, cli.save_file)
+    }
+}
+
+fn install_panic_hook() {
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // Best-effort terminal cleanup
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
+}
+
+fn run_interactive(
+    mut state: GameState,
+    save_path: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    install_panic_hook();
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let tick_duration = Duration::from_millis(500);
+    let mut last_tick = Instant::now();
+
+    loop {
+        terminal.draw(|f| {
+            ui::render(f, &state);
+        })?;
+
+        let timeout = if state.paused {
+            Duration::from_millis(100)
+        } else {
+            tick_duration
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or(Duration::ZERO)
+        };
+
+        if event::poll(timeout)? {
+            if let Event::Key(key_event) = event::read()? {
+                // Only handle key press events (not release/repeat)
+                if key_event.kind == KeyEventKind::Press {
+                    if let Some(action) = key_to_action(key_event.code) {
+                        if action == Action::Quit {
+                            break;
+                        }
+                        state = apply_action(&state, &action);
+                    }
+                }
+            }
+        }
+
+        // Auto-tick when unpaused
+        if !state.paused && last_tick.elapsed() >= tick_duration {
+            state = tick(&state);
+            last_tick = Instant::now();
+        }
+    }
+
+    // Cleanup terminal
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
+    // Save state on quit
+    if let Some(path) = save_path {
+        let json = serde_json::to_string_pretty(&state)?;
+        fs::write(&path, json)?;
+        eprintln!("Game saved to {}", path);
+    }
+
+    Ok(())
+}
