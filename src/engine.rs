@@ -830,10 +830,23 @@ fn research_panel_max(state: &GameState) -> usize {
 }
 
 /// Project costs: (rp_cost, personnel, duration_ticks)
-pub fn project_costs(kind: &ResearchKind) -> (f64, u32, f64) {
+///
+/// DevelopMedicine costs scale with medicine target count:
+/// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
+/// This creates a strategic choice: rush a narrow medicine for an immediate crisis,
+/// or invest in broad-spectrum for comprehensive coverage.
+pub fn project_costs(kind: &ResearchKind, medicines: &[crate::state::Medicine]) -> (f64, u32, f64) {
     match kind {
         ResearchKind::IdentifyThreat { .. } => (10.0, 5, 20.0),
-        ResearchKind::DevelopMedicine { .. } => (30.0, 10, 40.0),
+        ResearchKind::DevelopMedicine { medicine_idx } => {
+            let targets = medicines.get(*medicine_idx)
+                .map_or(1, |m| m.target_diseases.len());
+            if targets <= 1 {
+                (15.0, 5, 25.0)   // narrow: fast and cheap
+            } else {
+                (40.0, 10, 50.0)  // broad: slow and expensive
+            }
+        }
         ResearchKind::ClinicalTrial { .. } => (15.0, 5, 25.0),
     }
 }
@@ -857,7 +870,7 @@ fn start_research(state: &mut GameState, bench: bool, project_idx: usize) -> boo
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (rp_cost, personnel, duration) = project_costs(kind);
+        let (rp_cost, personnel, duration) = project_costs(kind, &state.medicines);
 
         if state.resources.research_points >= rp_cost
             && state.personnel_available() >= personnel
@@ -2023,10 +2036,10 @@ mod tests {
         // Start and complete DevelopMedicine for medicine 0 (targets disease 0)
         state.bench_research = Some(ResearchProject {
             kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
-            progress: 39.0, // will complete on next tick
-            required_ticks: 40.0,
-            personnel_assigned: 10,
-            rp_cost: 30.0,
+            progress: 24.0, // will complete on next tick
+            required_ticks: 25.0,
+            personnel_assigned: 5,
+            rp_cost: 15.0,
         });
 
         state = tick(&state);
@@ -2062,6 +2075,19 @@ mod tests {
             state.medicines[0].strain_generations[0] >= 3,
             "clinical trial should update strain calibration"
         );
+    }
+
+    #[test]
+    fn narrow_medicine_cheaper_to_develop_than_broad() {
+        let state = GameState::new_default(1);
+        // Medicine 0 = Antiviral-A (1 target), Medicine 2 = Broad-Spectrum (2 targets)
+        let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
+        let broad = ResearchKind::DevelopMedicine { medicine_idx: 2 };
+        let (narrow_rp, narrow_pers, narrow_ticks) = project_costs(&narrow, &state.medicines);
+        let (broad_rp, broad_pers, broad_ticks) = project_costs(&broad, &state.medicines);
+        assert!(narrow_rp < broad_rp, "narrow should cost less RP");
+        assert!(narrow_pers <= broad_pers, "narrow should need fewer personnel");
+        assert!(narrow_ticks < broad_ticks, "narrow should be faster");
     }
 
     #[test]
