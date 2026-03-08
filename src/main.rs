@@ -39,20 +39,13 @@ struct Cli {
     seed: u64,
 }
 
-/// Return the default save file path (~/.pandemic-cli/save.json).
-fn default_save_path() -> Option<String> {
-    dirs::home_dir().map(|h| {
-        let dir = h.join(".pandemic-cli");
-        dir.join("save.json").to_string_lossy().into_owned()
-    })
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    // Use explicit path, or default to ~/.pandemic-cli/save.json for interactive mode
+    // Use explicit path, or default to ./save.json for interactive mode.
+    // Local to working directory so each worktree gets its own save.
     let save_file = cli.save_file.or_else(|| {
-        if !cli.snapshot { default_save_path() } else { None }
+        if !cli.snapshot { Some("save.json".into()) } else { None }
     });
 
     // Load or create state
