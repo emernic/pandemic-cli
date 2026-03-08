@@ -750,6 +750,63 @@ impl GameState {
         }
         projects
     }
+
+    /// Maximum selection index for the current panel and UI sub-state.
+    /// Used by navigation (SelectNext) to bounds-check panel_selection.
+    pub fn panel_selection_max(&self) -> usize {
+        match self.ui.open_panel {
+            Panel::Threats => self.diseases.len().saturating_sub(1),
+            Panel::Medicines => match &self.ui.medicine_ui {
+                Some(MedicineUiState::BrowseMedicines) => {
+                    self.medicines
+                        .iter()
+                        .filter(|m| m.unlocked)
+                        .count()
+                        .saturating_sub(1)
+                }
+                Some(MedicineUiState::SelectRegion { .. }) => {
+                    self.regions.len().saturating_sub(1)
+                }
+                Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
+                    self.medicines[*medicine_idx]
+                        .num_deploy_targets()
+                        .saturating_sub(1)
+                }
+                Some(MedicineUiState::ConfirmDeploy { .. }) | None => 0,
+            },
+            Panel::Research => match &self.ui.research_ui {
+                Some(ResearchUiState::BrowseCategories) => 1,
+                Some(ResearchUiState::BrowseProjects { bench }) => {
+                    let active = if *bench {
+                        self.bench_research.is_some()
+                    } else {
+                        self.field_research.is_some()
+                    };
+                    if active {
+                        0
+                    } else {
+                        let count = if *bench {
+                            self.available_bench_projects().len()
+                        } else {
+                            self.available_field_projects().len()
+                        };
+                        count.saturating_sub(1)
+                    }
+                }
+                Some(ResearchUiState::ConfirmProject { .. }) => 0,
+                Some(ResearchUiState::ViewActive { .. }) => 0,
+                None => 0,
+            },
+            Panel::Policy => match &self.ui.policy_ui {
+                Some(PolicyUiState::BrowseRegions) => {
+                    self.regions.len().saturating_sub(1)
+                }
+                Some(PolicyUiState::ManagePolicies { .. }) => 2,
+                None => 0,
+            },
+            _ => 0,
+        }
+    }
 }
 
 #[cfg(test)]

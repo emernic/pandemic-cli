@@ -527,36 +527,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     new.regions.len(),
                 );
             } else {
-                let max = match new.ui.open_panel {
-                    Panel::Threats => new.diseases.len().saturating_sub(1),
-                    Panel::Medicines => match &new.ui.medicine_ui {
-                        Some(MedicineUiState::BrowseMedicines) => {
-                            new.medicines
-                                .iter()
-                                .filter(|m| m.unlocked)
-                                .count()
-                                .saturating_sub(1)
-                        }
-                        Some(MedicineUiState::SelectRegion { .. }) => {
-                            new.regions.len().saturating_sub(1)
-                        }
-                        Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
-                            new.medicines[*medicine_idx]
-                                .num_deploy_targets()
-                                .saturating_sub(1)
-                        }
-                        Some(MedicineUiState::ConfirmDeploy { .. }) | None => 0,
-                    },
-                    Panel::Research => research_panel_max(&new),
-                    Panel::Policy => match &new.ui.policy_ui {
-                        Some(PolicyUiState::BrowseRegions) => {
-                            new.regions.len().saturating_sub(1)
-                        }
-                        Some(PolicyUiState::ManagePolicies { .. }) => 2, // 3 policy types
-                        None => 0,
-                    },
-                    _ => 0,
-                };
+                let max = new.panel_selection_max();
                 if new.ui.panel_selection < max {
                     new.ui.panel_selection += 1;
                 }
@@ -744,28 +715,6 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
 
 /// Compute available field research projects (excludes the currently active one).
 /// Max selection index for the current research UI state.
-fn research_panel_max(state: &GameState) -> usize {
-    match &state.ui.research_ui {
-        Some(ResearchUiState::BrowseCategories) => 1, // Field(0), Bench(1)
-        Some(ResearchUiState::BrowseProjects { bench }) => {
-            let active = if *bench { state.bench_research.is_some() } else { state.field_research.is_some() };
-            if active {
-                0 // Only "View Active" entry
-            } else {
-                let count = if *bench {
-                    state.available_bench_projects().len()
-                } else {
-                    state.available_field_projects().len()
-                };
-                count.saturating_sub(1)
-            }
-        }
-        Some(ResearchUiState::ConfirmProject { .. }) => 0,
-        Some(ResearchUiState::ViewActive { .. }) => 0,
-        None => 0,
-    }
-}
-
 /// Start a research project. Pure game logic — does NOT modify UI state.
 ///
 /// Returns true if the project was successfully started.
