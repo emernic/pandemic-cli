@@ -150,6 +150,7 @@ fn game_loop(
         // Auto-tick when unpaused
         if !state.paused && last_tick.elapsed() >= tick_duration {
             state = tick(&state);
+            ui::process_events(&mut state);
             last_tick += tick_duration;
         }
     }

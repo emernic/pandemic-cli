@@ -14,7 +14,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, Panel};
+use crate::state::{GameEvent, GameOutcome, GameState, KNOWLEDGE_NAME, Panel};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -26,6 +26,31 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
         format!("  [Esc] {esc_label}")
     };
     Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray)))
+}
+
+/// Convert game events from the most recent tick into a status message.
+/// Called after each tick by the game loop / snapshot runner. This keeps
+/// human-facing strings in the UI layer, not in engine.rs.
+pub fn process_events(state: &mut GameState) {
+    if state.events.is_empty() {
+        return;
+    }
+    // Pick the most important event to display as status message.
+    // Priority: FundingCrisis > DiseaseMutated
+    let msg = if state.events.iter().any(|e| matches!(e, GameEvent::FundingCrisis)) {
+        "FUNDING CRISIS: All policies suspended!".to_string()
+    } else if let Some(GameEvent::DiseaseMutated { disease_idx, new_generation }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
+    {
+        let name = state.diseases.get(*disease_idx)
+            .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
+        format!("{name} has mutated! (Gen {new_generation})")
+    } else {
+        return;
+    };
+    state.ui.status_message = Some(msg);
 }
 
 pub fn render(f: &mut Frame, state: &GameState) {

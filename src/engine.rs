@@ -2,8 +2,8 @@ use rand::Rng;
 
 use crate::action::Action;
 use crate::state::{
-    map_navigate, DeployTarget, GameOutcome, GameState, MapDirection, MedicineUiState, Panel,
-    PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
+    map_navigate, DeployTarget, GameEvent, GameOutcome, GameState, MapDirection, MedicineUiState,
+    Panel, PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
     BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_PERSONNEL, KNOWLEDGE_FOR_MEDICINE,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_PERSONNEL,
 };
@@ -18,6 +18,7 @@ fn ensure_policies(state: &mut GameState) {
 /// Advance the simulation by one tick.
 pub fn tick(state: &GameState) -> GameState {
     let mut new = state.clone();
+    new.events.clear();
     ensure_policies(&mut new);
 
     // Don't advance simulation after game over
@@ -139,7 +140,7 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Disease mutation
-    for disease in &mut new.diseases {
+    for (d_idx, disease) in new.diseases.iter_mut().enumerate() {
         let mutation_chance = disease.pathogen_type.mutation_rate();
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
@@ -149,6 +150,10 @@ pub fn tick(state: &GameState) -> GameState {
             disease.infectivity = (disease.infectivity * inf_factor).clamp(0.005, 0.5);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
             disease.lethality = (disease.lethality * leth_factor).clamp(0.0005, 0.1);
+            new.events.push(GameEvent::DiseaseMutated {
+                disease_idx: d_idx,
+                new_generation: disease.strain_generation,
+            });
         }
     }
 
@@ -218,7 +223,7 @@ pub fn tick(state: &GameState) -> GameState {
             for p in &mut new.policies {
                 p.clear_all();
             }
-            new.ui.status_message = Some("FUNDING CRISIS: All policies suspended!".to_string());
+            new.events.push(GameEvent::FundingCrisis);
         }
     }
 
@@ -1905,8 +1910,8 @@ mod tests {
         // Should have suspended all policies
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended");
         assert!(
-            state.ui.status_message.as_ref().unwrap().contains("FUNDING CRISIS"),
-            "should show funding crisis message"
+            state.events.iter().any(|e| matches!(e, GameEvent::FundingCrisis)),
+            "should emit FundingCrisis event"
         );
     }
 
