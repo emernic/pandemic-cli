@@ -22,7 +22,7 @@ The branch I'm on represents a significant PR from one of our engineers. Rather 
 Can you poke around using git's various diff tools (I'd start with a list of files modified against main) and help me break down the PR into manageable chunks I can assign? I want each chunk to have very specific files, functions, etc. assigned, but I do **NOT** want you to be opinionated w.r.t. what the engineers should look for (e.g. types of mistakes). That's their job. Just help me chunk it up reasonably so I can assign pieces out.
 
 You can use these commands to get the cleanest representation of the changes on this branch.
-git merge-base HEAD origin/main
+git merge-base HEAD origin/master
 git --no-pager diff <sha from merge-base>
 
 For this PR, I want you to use [N] slicing strategies, each dividing the PR into [A-B] chunks, for a total of [M] chunks.
@@ -92,7 +92,7 @@ Files to review:
 - `path/to/file2.py` (+XX/-YY changes)
 
 ## Your Task
-1. Read through the changes in your chunk. You can use commands like `git merge-base HEAD origin/main` + `git --no-pager diff <sha from merge-base> -- some/file.py` to get an accurate representation of changes. Also, make sure you read enough of the existing related code (including files up or down the callstack from the ones that were changed) to understand the full context of the changes.
+1. Read through the changes in your chunk. You can use commands like `git merge-base HEAD origin/master` + `git --no-pager diff <sha from merge-base> -- some/file.py` to get an accurate representation of changes. Also, make sure you read enough of the existing related code (including files up or down the callstack from the ones that were changed) to understand the full context of the changes.
 2. For each modified file, also find a couple pre-existing example files that do similar things (to understand established patterns).
 3. **Think critically for yourself** about what's wrong with these changes.
    Do not treat any of this prompt as a checklist. You need to actually understand the code and identify places where it doesn't make sense, diverges from patterns without justification, or could cause real problems.
