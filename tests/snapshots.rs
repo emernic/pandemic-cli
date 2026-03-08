@@ -1,5 +1,5 @@
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::{GameState, ResearchProject, ResearchKind};
+use pandemic_cli_lib::state::{GameOutcome, GameState, ResearchProject, ResearchKind};
 
 fn unlocked_state() -> GameState {
     let mut state = GameState::new_default(42);
@@ -120,6 +120,28 @@ fn research_progress_in_header() {
         personnel_assigned: 10,
         rp_cost: 30.0,
     });
+    let output = render_to_string(&state);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn game_over_defeat() {
+    let mut state = GameState::new_default(42);
+    state.outcome = GameOutcome::Lost;
+    state.paused = true;
+    let output = render_to_string(&state);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn game_over_victory() {
+    let mut state = GameState::new_default(42);
+    state.outcome = GameOutcome::Won;
+    state.paused = true;
+    // Clear infections to match victory state
+    for region in &mut state.regions {
+        region.infections.clear();
+    }
     let output = render_to_string(&state);
     insta::assert_snapshot!(output);
 }
