@@ -6,8 +6,17 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::GameState;
+use crate::state::{GameState, ResearchKind, KNOWLEDGE_NAME};
 use crate::format_number;
+
+/// Returns the height this bar needs: 2 normally, 3 when research is active.
+pub fn height(state: &GameState) -> u16 {
+    if state.field_research.is_some() || state.bench_research.is_some() {
+        3
+    } else {
+        2
+    }
+}
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let pause_indicator = if state.paused {
@@ -16,7 +25,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled(" RUNNING ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
     };
 
-    let line = Line::from(vec![
+    let line1 = Line::from(vec![
         Span::styled("PANDEMIC DEFENSE", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw("  "),
         pause_indicator,
@@ -60,6 +69,61 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]);
 
-    let widget = Paragraph::new(line).block(Block::default().borders(Borders::BOTTOM));
+    let mut lines = vec![line1];
+
+    // Show active research on a second line when any research is running
+    if state.field_research.is_some() || state.bench_research.is_some() {
+        let mut spans: Vec<Span> = Vec::new();
+
+        if let Some(ref project) = state.field_research {
+            let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
+            spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled(
+                format!("{} {}%", compact_research_label(&project.kind, state), pct),
+                Style::default().fg(Color::Cyan),
+            ));
+        }
+
+        if let Some(ref project) = state.bench_research {
+            if !spans.is_empty() {
+                spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
+            }
+            let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
+            spans.push(Span::styled("Bench: ", Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled(
+                format!("{} {}%", compact_research_label(&project.kind, state), pct),
+                Style::default().fg(Color::Magenta),
+            ));
+        }
+
+        lines.push(Line::from(spans));
+    }
+
+    let widget = Paragraph::new(lines).block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(widget, area);
+}
+
+/// Compact research description for the header status line.
+fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
+    match kind {
+        ResearchKind::IdentifyThreat { disease_idx } => {
+            let name = state.diseases.get(*disease_idx)
+                .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
+                .map(|d| d.name.as_str())
+                .unwrap_or("Unknown");
+            format!("Identifying {}", name)
+        }
+        ResearchKind::DevelopMedicine { medicine_idx } => {
+            let name = state.medicines.get(*medicine_idx)
+                .map(|m| m.name.as_str())
+                .unwrap_or("Unknown");
+            name.to_string()
+        }
+        ResearchKind::ClinicalTrial { medicine_idx, .. } => {
+            let name = state.medicines.get(*medicine_idx)
+                .map(|m| m.name.as_str())
+                .unwrap_or("Unknown");
+            format!("Trial: {}", name)
+        }
+    }
 }
