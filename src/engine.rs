@@ -213,9 +213,7 @@ fn deploy_medicine(
 
     if let Some(target) = target {
         if state.resources.funding < cost {
-            state.ui.status_message = Some(
-                format!("Insufficient funds! Need ${cost:.0}, have ${:.0}", state.resources.funding),
-            );
+            state.ui.status_message = Some(insufficient_funds_message(cost, state.resources.funding));
             return;
         }
 
@@ -304,6 +302,10 @@ fn deploy_medicine(
     // Return to SelectRegion for rapid multi-region deployment
     state.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
     state.ui.panel_selection = 0;
+}
+
+fn insufficient_funds_message(cost: f64, have: f64) -> String {
+    format!("Insufficient funds! Need ${cost:.0}, have ${have:.0}")
 }
 
 fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse: bool) -> String {
@@ -514,10 +516,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             // Check funds before anything else — no point warning
                             // about untested risks if the player can't afford it
                             if new.resources.funding < med.cost {
-                                new.ui.status_message = Some(format!(
-                                    "Insufficient funds! Need ${:.0}, have ${:.0}",
-                                    med.cost, new.resources.funding
-                                ));
+                                new.ui.status_message = Some(
+                                    insufficient_funds_message(med.cost, new.resources.funding),
+                                );
                             } else {
                                 let disease_idx = match &target {
                                     DeployTarget::Vaccinate { disease_idx } => *disease_idx,
