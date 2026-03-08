@@ -80,7 +80,7 @@ When the work is done:
 1. **Commit** your changes (with user approval).
 2. **Push** the branch and **create a PR** that references the issue:
    - Include `Closes #<number>` in the PR body so the issue auto-closes on merge.
-3. **Ask the user** to review and approve the merge. Do NOT merge without explicit user permission.
+3. **Small issues** (one-line fixes, label changes, typo corrections, etc.) — go ahead and merge the PR yourself without asking. **Larger issues** — ask the user to review and approve the merge first.
 4. **After merge**, verify the issue was closed automatically. If not, close it manually:
    ```bash
    gh issue close <number>
@@ -106,7 +106,7 @@ If you realize you cannot complete the issue (too complex, blocked, unclear, etc
 
 ## Important
 
-- NEVER merge without user permission.
+- For small issues, merge without asking. For anything non-trivial, get user permission first.
 - NEVER abandon without user permission.
 - If you get stuck or the issue is unclear, ask the user rather than guessing.
 - If you realize the issue is a duplicate or invalid while working on it, tell the user before closing anything.
