@@ -10,11 +10,13 @@ You are writing a GitHub issue based on something you encountered during this co
 
 ## Core Principles
 
-1. **Describe what you actually experienced.** What were you doing? What happened? What was confusing, broken, or missing? Write from your real experience — do not fabricate or embellish.
-2. **Do NOT prematurely plan the solution.** The issue describes a *problem* or *need*, not an implementation plan. Resist the urge to design the fix. The person working on this issue will figure out the right approach themselves.
-3. **If you have a solution idea**, you may include it, but it MUST go in a clearly marked section: `## Possible Solution (do not use directly)`. This section should be treated as a rough sketch, not a spec. The implementer should feel free to ignore it entirely.
-4. **Be self-contained.** The person reading this issue will NOT have access to your conversation. They need to understand the problem fully from the issue alone. Include relevant code paths, reproduction steps, and context.
-5. **Keep scope narrow.** One issue = one problem or one feature. If you noticed multiple things, file multiple issues.
+1. **Never claim more than you actually know.** This is the #1 rule. If the user said "the numbers look wrong," write "the numbers look wrong" — do NOT inflate that into detailed claims about which specific computation is wrong, what the correct values should be, or why the bug exists. Reading source code does NOT mean you know what happens at runtime. Skimming a function does NOT mean you understand the full data flow. **State observations at the level of confidence you actually have.** When in doubt, be vaguer, not more specific. A vague-but-true issue is infinitely better than a specific-but-wrong one.
+2. **Describe what you actually experienced.** What were you doing? What happened? What was confusing, broken, or missing? Write from your real experience — do not fabricate or embellish.
+3. **Do NOT prematurely plan the solution.** The issue describes a *problem* or *need*, not an implementation plan. Resist the urge to design the fix. The person working on this issue will figure out the right approach themselves.
+4. **If you have a solution idea**, you may include it, but it MUST go in a clearly marked section: `## Possible Solution (do not use directly)`. This section should be treated as a rough sketch, not a spec. The implementer should feel free to ignore it entirely.
+5. **Be self-contained.** The person reading this issue will NOT have access to your conversation. They need to understand the problem fully from the issue alone. Include relevant code paths, reproduction steps, and context.
+6. **Keep scope narrow.** One issue = one problem or one feature. If you noticed multiple things, file multiple issues.
+7. **Be concise.** Say what's wrong, point to where to look, and stop. Long issues full of analysis are a smell — they usually mean you're hallucinating specificity you don't have. If the issue body is longer than ~15 lines, ask yourself what you can cut.
 
 ## Process
 
@@ -145,6 +147,8 @@ Investigate issues should be filed freely. You do NOT need user permission. Keep
 ### Step 4: Review Before Submitting
 
 Before creating the issue, re-read your draft and check:
+- [ ] **No hallucinated specificity.** For every factual claim, ask: "Did I actually verify this, or did I infer it from skimming code?" If you inferred it, either soften the language ("appears to", "may be") or remove the claim entirely. This is the most important check.
+- [ ] **Concise.** Can you cut the body in half without losing essential information? If so, do it.
 - [ ] **Title is specific and scannable** (not vague like "Fix bug" or "Improve things")
 - [ ] **Description is grounded in real experience**, not hypothetical
 - [ ] **No premature solution design** leaked into the description (keep it in the optional section if anywhere)
