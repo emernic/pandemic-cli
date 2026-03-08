@@ -408,6 +408,28 @@ pub enum GameOutcome {
     Lost,
 }
 
+/// A game command produced by UI wizard completion. The engine executes these
+/// without knowing about wizard steps, panel states, or selection indices.
+#[derive(Clone, Debug, PartialEq)]
+pub enum GameCommand {
+    DeployMedicine {
+        medicine_idx: usize,
+        region_idx: usize,
+        target_selection: usize,
+    },
+    StartResearch {
+        bench: bool,
+        project_idx: usize,
+    },
+    BoostResearch {
+        bench: bool,
+    },
+    TogglePolicy {
+        region_idx: usize,
+        policy_idx: usize,
+    },
+}
+
 /// Fraction of initial world population that, when dead, triggers game over.
 pub const LOSE_DEATH_FRACTION: f64 = 0.10;
 /// Win when total infected drops below this threshold (with other conditions met).
@@ -563,6 +585,189 @@ impl UiState {
                 self.research_ui = None;
                 self.policy_ui = None;
             }
+        }
+    }
+
+
+    /// Handle a Confirm keypress. Advances wizard state machines and returns
+    /// a GameCommand when the wizard completes and a game action should fire.
+    /// All UI transitions happen here; the engine only executes returned commands.
+    pub fn handle_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
+        match self.open_panel {
+            Panel::Medicines => self.handle_medicine_confirm(state),
+            Panel::Research => self.handle_research_confirm(state),
+            Panel::Policy => self.handle_policy_confirm(state),
+            _ => None,
+        }
+    }
+
+    fn handle_medicine_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
+        match self.medicine_ui.clone() {
+            Some(MedicineUiState::BrowseMedicines) => {
+                let unlocked: Vec<usize> = state
+                    .medicines
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, m)| m.unlocked)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&med_idx) = unlocked.get(self.panel_selection) {
+                    self.medicine_ui =
+                        Some(MedicineUiState::SelectRegion { medicine_idx: med_idx });
+                    self.panel_selection = 0;
+                }
+                None
+            }
+            Some(MedicineUiState::SelectRegion { medicine_idx }) => {
+                let region_idx = self.panel_selection;
+                if region_idx < state.regions.len() {
+                    self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                        medicine_idx,
+                        region_idx,
+                    });
+                    self.panel_selection = 0;
+                }
+                None
+            }
+            Some(MedicineUiState::SelectTarget {
+                medicine_idx,
+                region_idx,
+            }) => {
+                let target_selection = self.panel_selection;
+                let med = &state.medicines[medicine_idx];
+                if let Some(target) = med.decode_deploy_target(target_selection) {
+                    if state.resources.funding < med.cost {
+                        self.status_message = Some(
+                            format!("Insufficient funds! Need ${:.0}, have ${:.0}",
+                                med.cost, state.resources.funding),
+                        );
+                        None
+                    } else {
+                        let disease_idx = match &target {
+                            DeployTarget::Vaccinate { disease_idx } => *disease_idx,
+                            DeployTarget::Treat { disease_idx } => *disease_idx,
+                        };
+                        let is_tested = med.tested_against.contains(&disease_idx);
+
+                        if !is_tested {
+                            self.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
+                                medicine_idx,
+                                region_idx,
+                                target_selection,
+                            });
+                            None
+                        } else {
+                            Some(GameCommand::DeployMedicine {
+                                medicine_idx,
+                                region_idx,
+                                target_selection,
+                            })
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            Some(MedicineUiState::ConfirmDeploy {
+                medicine_idx,
+                region_idx,
+                target_selection,
+            }) => {
+                Some(GameCommand::DeployMedicine {
+                    medicine_idx,
+                    region_idx,
+                    target_selection,
+                })
+            }
+            None => None,
+        }
+    }
+
+    fn handle_research_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
+        match self.research_ui.clone() {
+            Some(ResearchUiState::BrowseCategories) => {
+                let bench = self.panel_selection == 1;
+                self.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+                self.panel_selection = 0;
+                None
+            }
+            Some(ResearchUiState::BrowseProjects { bench }) => {
+                let active = if bench {
+                    &state.bench_research
+                } else {
+                    &state.field_research
+                };
+                if active.is_some() {
+                    self.research_ui = Some(ResearchUiState::ViewActive { bench });
+                    self.panel_selection = 0;
+                } else {
+                    let count = if bench {
+                        state.available_bench_projects().len()
+                    } else {
+                        state.available_field_projects().len()
+                    };
+                    if count > 0 {
+                        self.research_ui = Some(ResearchUiState::ConfirmProject {
+                            bench,
+                            project_idx: self.panel_selection,
+                        });
+                        self.panel_selection = 0;
+                    }
+                }
+                None
+            }
+            Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
+                Some(GameCommand::StartResearch { bench, project_idx })
+            }
+            Some(ResearchUiState::ViewActive { bench }) => {
+                Some(GameCommand::BoostResearch { bench })
+            }
+            None => None,
+        }
+    }
+
+    /// Update UI navigation after a game command completes.
+    /// Called by the action handler after execute_command returns.
+    pub fn apply_command_result(&mut self, cmd: &GameCommand, success: bool) {
+        match cmd {
+            GameCommand::DeployMedicine { medicine_idx, .. } => {
+                if success {
+                    self.medicine_ui =
+                        Some(MedicineUiState::SelectRegion { medicine_idx: *medicine_idx });
+                    self.panel_selection = 0;
+                }
+            }
+            GameCommand::StartResearch { bench, .. } => {
+                if success {
+                    self.research_ui =
+                        Some(ResearchUiState::BrowseProjects { bench: *bench });
+                    self.panel_selection = 0;
+                }
+            }
+            GameCommand::BoostResearch { .. } | GameCommand::TogglePolicy { .. } => {
+                // No UI navigation change needed
+            }
+        }
+    }
+
+    fn handle_policy_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
+        match self.policy_ui.clone() {
+            Some(PolicyUiState::BrowseRegions) => {
+                let region_idx = self.panel_selection;
+                if region_idx < state.regions.len() {
+                    self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
+                    self.panel_selection = 0;
+                }
+                None
+            }
+            Some(PolicyUiState::ManagePolicies { region_idx }) => {
+                let policy_idx = self.panel_selection;
+                Some(GameCommand::TogglePolicy {
+                    region_idx,
+                    policy_idx,
+                })
+            }
+            None => None,
         }
     }
 }
