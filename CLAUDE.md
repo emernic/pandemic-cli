@@ -120,6 +120,12 @@ Key files: `src/state.rs` (data), `src/engine.rs` (logic), `src/action.rs` (inpu
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
+### Key Game Systems
+
+- **Research pipeline**: Unknown threat → Identify (field research) → Develop medicine (bench research) → Clinical trial (field) → Deploy. One field + one bench project run simultaneously. Don't touch research without understanding this full lifecycle.
+- **Therapy/pathogen matching**: Medicines have a `TherapyType` (Antiviral, Antibiotic, BroadSpectrum), diseases have a `PathogenType` (RnaVirus, DnaVirus, Bacterium, Prion). Efficacy depends on the match. This affects deployment, balance, and player strategy.
+- **Mutation system**: Diseases mutate over time based on pathogen type. Medicines track which strain generation they were calibrated against. Drift reduces efficacy, prompting re-trials. This creates ongoing pressure even after developing a medicine.
+
 ### Architectural Direction — THIS IS YOUR JOB
 
 We're migrating toward separating UI state machines from game logic. See `docs/target-architecture.md` for the full plan. The short version:
