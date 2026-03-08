@@ -212,8 +212,8 @@ fn deploy_medicine(
     }
     let med = &state.medicines[medicine_idx];
     let cost = med.cost;
-    let doses = med.doses;
     let med_name = med.name.clone();
+    let therapy_type = med.therapy_type;
     let target = med.decode_deploy_target(target_selection);
 
     if let Some(target) = target {
@@ -225,6 +225,11 @@ fn deploy_medicine(
             DeployTarget::Vaccinate { disease_idx } => *disease_idx,
             DeployTarget::Treat { disease_idx } => *disease_idx,
         };
+
+        // Efficacy: therapy type × pathogen type determines effective dose count
+        let pathogen = &state.diseases[disease_idx].pathogen_type;
+        let efficacy = therapy_type.efficacy(pathogen);
+        let effective_doses = state.medicines[medicine_idx].doses * efficacy;
 
         let region = &mut state.regions[region_idx];
         let region_name = region.name.clone();
@@ -243,7 +248,7 @@ fn deploy_medicine(
         let msg = match target {
             DeployTarget::Vaccinate { .. } => {
                 let susceptible = (pop - infected - dead - immune).max(0.0);
-                let actual = doses.min(susceptible);
+                let actual = effective_doses.min(susceptible);
                 if actual > 0.0 {
                     // Now create entry if needed
                     let inf = get_or_create_infection(region, disease_idx);
@@ -262,13 +267,13 @@ fn deploy_medicine(
                         inf.immune += actual;
                     }
                     state.resources.funding -= cost;
-                    deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse)
+                    deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse, efficacy)
                 } else {
                     format!("No susceptible population in {region_name}")
                 }
             }
             DeployTarget::Treat { .. } => {
-                let actual = doses.min(infected);
+                let actual = effective_doses.min(infected);
                 if actual > 0.0 {
                     let inf = get_or_create_infection(region, disease_idx);
                     inf.infected -= actual;
@@ -287,7 +292,7 @@ fn deploy_medicine(
                         inf.immune += actual;
                     }
                     state.resources.funding -= cost;
-                    deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse)
+                    deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse, efficacy)
                 } else {
                     format!("No infected population in {region_name}")
                 }
@@ -304,13 +309,18 @@ fn insufficient_funds_message(cost: f64, have: f64) -> String {
     format!("Insufficient funds! Need ${cost:.0}, have ${have:.0}")
 }
 
-fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse: bool) -> String {
+fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse: bool, efficacy: f64) -> String {
     let doses_str = crate::format_number(doses);
+    let eff_note = if efficacy < 1.0 {
+        format!(" ({:.0}% efficacy)", efficacy * 100.0)
+    } else {
+        String::new()
+    };
     if adverse {
         let killed = crate::format_number(doses * 0.2);
-        format!("{action} {doses_str} in {region} with {med} (-${cost:.0}) -- ADVERSE REACTION: {killed} died")
+        format!("{action} {doses_str} in {region} with {med}{eff_note} (-${cost:.0}) -- ADVERSE REACTION: {killed} died")
     } else {
-        format!("{action} {doses_str} in {region} with {med} (-${cost:.0})")
+        format!("{action} {doses_str} in {region} with {med}{eff_note} (-${cost:.0})")
     }
 }
 

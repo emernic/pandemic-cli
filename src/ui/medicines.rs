@@ -53,10 +53,13 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 Style::default().fg(Color::White)
             };
 
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", marker, med.name),
-                style,
-            )));
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}{}", marker, med.name), style),
+                Span::styled(
+                    format!("  ({})", med.therapy_type.label()),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]));
 
             let disease_names: Vec<String> = med
                 .target_diseases
@@ -196,6 +199,19 @@ fn render_select_target(
 
         let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
 
+        // Compute efficacy for this therapy × pathogen match
+        let efficacy = state.diseases.get(disease_idx)
+            .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
+            .unwrap_or(0.0);
+        let effective_doses = med.doses * efficacy;
+        let eff_color = if efficacy >= 0.8 {
+            Color::Green
+        } else if efficacy >= 0.5 {
+            Color::Yellow
+        } else {
+            Color::Red
+        };
+
         match &target {
             DeployTarget::Vaccinate { .. } => {
                 let infected = inf.map(|i| i.infected).unwrap_or(0.0);
@@ -225,8 +241,12 @@ fn render_select_target(
                     ),
                     Span::raw(" | "),
                     Span::styled(
-                        format!("{} doses", format_number(med.doses)),
-                        Style::default().fg(Color::DarkGray),
+                        format!("{} eff. doses", format_number(effective_doses)),
+                        Style::default().fg(eff_color),
+                    ),
+                    Span::styled(
+                        format!(" ({:.0}%)", efficacy * 100.0),
+                        Style::default().fg(eff_color),
                     ),
                 ]));
             }
@@ -255,8 +275,12 @@ fn render_select_target(
                     ),
                     Span::raw(" | "),
                     Span::styled(
-                        format!("{} doses", format_number(med.doses)),
-                        Style::default().fg(Color::DarkGray),
+                        format!("{} eff. doses", format_number(effective_doses)),
+                        Style::default().fg(eff_color),
+                    ),
+                    Span::styled(
+                        format!(" ({:.0}%)", efficacy * 100.0),
+                        Style::default().fg(eff_color),
                     ),
                 ]));
             }

@@ -73,7 +73,7 @@ pub struct RegionDiseaseState {
 
 /// Fundamental category of pathogen — determines behavior characteristics
 /// and which therapy types are effective.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PathogenType {
     /// Fast-mutating, high infectivity, responds to antivirals
     RnaVirus,
@@ -128,9 +128,58 @@ pub const BOOST_RP_COST: f64 = 10.0;
 /// Ticks of progress added per boost.
 pub const BOOST_TICKS: f64 = 5.0;
 
+/// Category of therapeutic mechanism — determines efficacy against pathogen types.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TherapyType {
+    /// Targets viral replication; effective against RNA and DNA viruses.
+    Antiviral,
+    /// Kills or inhibits bacteria; effective against bacterial pathogens.
+    Antibiotic,
+    /// Works across pathogen types but at reduced efficacy.
+    BroadSpectrum,
+}
+
+impl Default for TherapyType {
+    fn default() -> Self {
+        TherapyType::BroadSpectrum
+    }
+}
+
+impl TherapyType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            TherapyType::Antiviral => "Antiviral",
+            TherapyType::Antibiotic => "Antibiotic",
+            TherapyType::BroadSpectrum => "Broad-Spectrum",
+        }
+    }
+
+    /// Efficacy multiplier when used against a given pathogen type (0.0–1.0).
+    /// Determines what fraction of doses are effective during deployment.
+    pub fn efficacy(&self, pathogen: &PathogenType) -> f64 {
+        match (self, pathogen) {
+            // Matched therapies: full efficacy
+            (TherapyType::Antiviral, PathogenType::RnaVirus) => 1.0,
+            (TherapyType::Antiviral, PathogenType::DnaVirus) => 0.8,
+            (TherapyType::Antibiotic, PathogenType::Bacterium) => 1.0,
+            // Broad-spectrum: partial efficacy against everything except prions
+            (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.1,
+            (TherapyType::BroadSpectrum, _) => 0.5,
+            // Mismatched: nearly useless
+            (TherapyType::Antiviral, PathogenType::Bacterium) => 0.1,
+            (TherapyType::Antibiotic, PathogenType::RnaVirus) => 0.1,
+            (TherapyType::Antibiotic, PathogenType::DnaVirus) => 0.1,
+            // Prions resist everything
+            (_, PathogenType::Prion) => 0.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Medicine {
     pub name: String,
+    #[serde(default)]
+    pub therapy_type: TherapyType,
     pub target_diseases: Vec<usize>,
     pub cost: f64,
     pub doses: f64,
@@ -369,6 +418,7 @@ impl GameState {
         let medicines = vec![
             Medicine {
                 name: "Antiviral-A".into(),
+                therapy_type: TherapyType::Antiviral,
                 target_diseases: vec![0],
                 cost: 200.0,
                 doses: 100_000.0,
@@ -376,10 +426,20 @@ impl GameState {
                 tested_against: vec![],
             },
             Medicine {
-                name: "Broad-Spectrum Antiviral".into(),
+                name: "Antibiotic-B".into(),
+                therapy_type: TherapyType::Antibiotic,
+                target_diseases: vec![1],
+                cost: 150.0,
+                doses: 100_000.0,
+                unlocked: false,
+                tested_against: vec![],
+            },
+            Medicine {
+                name: "Broad-Spectrum".into(),
+                therapy_type: TherapyType::BroadSpectrum,
                 target_diseases: vec![0, 1],
-                cost: 500.0,
-                doses: 500_000.0,
+                cost: 400.0,
+                doses: 200_000.0,
                 unlocked: false,
                 tested_against: vec![],
             },
@@ -467,9 +527,33 @@ mod tests {
     #[test]
     fn default_state_has_medicines() {
         let state = GameState::new_default(1);
-        assert_eq!(state.medicines.len(), 2);
+        assert_eq!(state.medicines.len(), 3);
         // Medicines start locked — must be developed via research
-        assert!(!state.medicines[0].unlocked);
-        assert!(!state.medicines[1].unlocked);
+        assert!(state.medicines.iter().all(|m| !m.unlocked));
+        // Verify therapy types
+        assert_eq!(state.medicines[0].therapy_type, TherapyType::Antiviral);
+        assert_eq!(state.medicines[1].therapy_type, TherapyType::Antibiotic);
+        assert_eq!(state.medicines[2].therapy_type, TherapyType::BroadSpectrum);
+    }
+
+    #[test]
+    fn therapy_efficacy_matches() {
+        // Matched therapies: full or near-full efficacy
+        assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::RnaVirus), 1.0);
+        assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::DnaVirus), 0.8);
+        assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::Bacterium), 1.0);
+
+        // Mismatched: nearly useless
+        assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Bacterium), 0.1);
+        assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::RnaVirus), 0.1);
+
+        // Broad-spectrum: partial efficacy
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.5);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.5);
+
+        // Prions resist everything
+        assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Prion), 0.0);
+        assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::Prion), 0.0);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Prion), 0.1);
     }
 }

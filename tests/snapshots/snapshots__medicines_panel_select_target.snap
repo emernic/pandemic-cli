@@ -8,9 +8,9 @@ PANDEMIC DEFENSE   RUNNING   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infect
 │┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐  ││  Antiviral-A → North America                                                                     │
 ││North America             OK│   │Europe                    OK│   │Asia                    HIGH│  ││                                                                                                  │
 ││Pop: 500.0M                 │   │Pop: 750.0M                 │   │Inf 50.0K                   │  ││▶ Vaccinate susceptible (Strain Alpha)                                                            │
-││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││    500.0M susceptible | 100.0K doses                                                             │
+││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││    500.0M susceptible | 100.0K eff. doses (100%)                                                 │
 ││No infections               │───│                            │───│                            │  ││  Treat infected (Strain Alpha)                                                                   │
-││↔ Oceania                   │   │                            │   │                            │  ││    0 infected | 100.0K doses                                                                     │
+││↔ Oceania                   │   │                            │   │                            │  ││    0 infected | 100.0K eff. doses (100%)                                                         │
 ││                            │   │                            │   │                            │  ││                                                                                                  │
 │└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘  ││  Cost: $200    Funding: $1000                                                                    │
 │               │               ╱                │               ╱                │                ││                                                                                                  │
