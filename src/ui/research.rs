@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::engine::{available_bench_projects, available_field_projects};
-use crate::state::{GameState, ResearchKind, ResearchUiState};
+use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -278,6 +278,20 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
             format!("  {} personnel assigned", project.personnel_assigned),
             Style::default().fg(Color::DarkGray),
         )));
+
+        // Boost option
+        if !project.is_complete() {
+            lines.push(Line::from(""));
+            let can_afford = state.resources.research_points >= BOOST_RP_COST;
+            let cost_color = if can_afford { Color::Magenta } else { Color::Red };
+            lines.push(Line::from(vec![
+                Span::styled("  [Enter] Boost ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("({:.0} RP → +{:.0} ticks)", BOOST_RP_COST, BOOST_TICKS),
+                    Style::default().fg(cost_color),
+                ),
+            ]));
+        }
     } else {
         lines.push(Line::from(Span::styled(
             "  No active project.",

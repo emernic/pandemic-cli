@@ -90,6 +90,11 @@ pub const KNOWLEDGE_FULL: f64 = 1.0;
 /// Minimum knowledge required to develop a medicine targeting this disease.
 pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.75;
 
+/// Cost in RP to boost an active research project.
+pub const BOOST_RP_COST: f64 = 10.0;
+/// Ticks of progress added per boost.
+pub const BOOST_TICKS: f64 = 5.0;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Medicine {
     pub name: String,

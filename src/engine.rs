@@ -4,7 +4,8 @@ use crate::action::Action;
 use crate::state::{
     map_navigate, DeployTarget, GameOutcome, GameState, MapDirection, MedicineUiState, Panel,
     RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION,
+    BOOST_RP_COST, BOOST_TICKS, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
+    LOSE_DEATH_FRACTION,
 };
 
 /// Advance the simulation by one tick.
@@ -722,8 +723,24 @@ fn handle_research_confirm(state: &mut GameState) {
                 }
             }
         }
-        Some(ResearchUiState::ViewActive { .. }) => {
-            // No action on confirm when viewing active project
+        Some(ResearchUiState::ViewActive { bench }) => {
+            // Boost: spend RP to advance the active project
+            let project = if bench { &mut state.bench_research } else { &mut state.field_research };
+            if let Some(project) = project {
+                if !project.is_complete() && state.resources.research_points >= BOOST_RP_COST {
+                    state.resources.research_points -= BOOST_RP_COST;
+                    project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
+                    state.ui.status_message = Some(format!(
+                        "Boosted research! (-{:.0} RP, +{:.0} ticks)",
+                        BOOST_RP_COST, BOOST_TICKS
+                    ));
+                } else if state.resources.research_points < BOOST_RP_COST {
+                    state.ui.status_message = Some(format!(
+                        "Need {:.0} RP to boost (have {:.0})",
+                        BOOST_RP_COST, state.resources.research_points
+                    ));
+                }
+            }
         }
         None => {}
     }
@@ -1399,6 +1416,67 @@ mod tests {
             state.ui.research_ui,
             Some(ResearchUiState::BrowseProjects { bench: false })
         ));
+    }
+
+    #[test]
+    fn research_boost_spends_rp_and_advances() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 100.0;
+
+        // Start a field research project
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select first project
+        state = apply_action(&state, &Action::Confirm); // Confirm → starts project
+
+        // Should be back at BrowseProjects with an active field project
+        assert!(state.field_research.is_some());
+        let progress_before = state.field_research.as_ref().unwrap().progress;
+        let rp_before = state.resources.research_points;
+
+        // Navigate to ViewActive and boost
+        state = apply_action(&state, &Action::Confirm); // → ViewActive
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ViewActive { bench: false })));
+
+        state = apply_action(&state, &Action::Confirm); // Boost!
+        assert_eq!(
+            state.resources.research_points,
+            rp_before - BOOST_RP_COST,
+            "should spend {} RP", BOOST_RP_COST
+        );
+        assert_eq!(
+            state.field_research.as_ref().unwrap().progress,
+            progress_before + BOOST_TICKS,
+            "should advance by {} ticks", BOOST_TICKS
+        );
+        assert!(state.ui.status_message.as_ref().unwrap().contains("Boosted"));
+    }
+
+    #[test]
+    fn research_boost_insufficient_rp() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 15.0; // Enough to start (10 RP) but not boost again
+
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select first project
+        state = apply_action(&state, &Action::Confirm); // Confirm → starts (costs 10 RP, leaves 5)
+
+        assert!(state.field_research.is_some());
+        assert_eq!(state.resources.research_points, 5.0);
+
+        state = apply_action(&state, &Action::Confirm); // → ViewActive
+        let rp_before = state.resources.research_points;
+        let progress_before = state.field_research.as_ref().unwrap().progress;
+
+        state = apply_action(&state, &Action::Confirm); // Try to boost — should fail
+        assert_eq!(state.resources.research_points, rp_before, "should not spend RP");
+        assert_eq!(
+            state.field_research.as_ref().unwrap().progress,
+            progress_before,
+            "should not advance"
+        );
+        assert!(state.ui.status_message.as_ref().unwrap().contains("Need"));
     }
 
     #[test]
