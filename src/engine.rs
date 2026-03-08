@@ -226,27 +226,8 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Passive resource generation — funding scales with healthy population.
-    // Each region contributes proportionally to its share of world population.
-    // Travel bans halve that region's economic contribution.
-    let base_funding = 5.0;
-    let total_pop: f64 = new.regions.iter().map(|r| r.population as f64).sum();
-    if total_pop > 0.0 {
-        let mut funding_income = 0.0;
-        for (i, region) in new.regions.iter().enumerate() {
-            let pop = region.population as f64;
-            let dead: f64 = region.infections.iter().map(|inf| inf.dead).sum();
-            let healthy_frac = (pop - dead).max(0.0) / pop;
-            let region_share = pop / total_pop;
-            let travel_ban_factor = if new.policies.get(i).is_some_and(|p| p.travel_ban) {
-                0.5
-            } else {
-                1.0
-            };
-            funding_income += base_funding * region_share * healthy_frac * travel_ban_factor;
-        }
-        new.resources.funding += funding_income;
-    }
+    // Passive resource generation
+    new.resources.funding += new.funding_income_rate();
     new.resources.research_points += 1.0;
 
     new.rng = rng;
