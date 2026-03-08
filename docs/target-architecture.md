@@ -77,11 +77,13 @@ Moved to `Disease::display_name()` in `state.rs`.
 
 The medicine wizard (BrowseMedicines → SelectRegion → SelectTarget → ConfirmDeploy) and research wizard (BrowseCategories → BrowseProjects → ConfirmProject) are purely UI flows. The engine shouldn't know about them.
 
-**Approach:** Create `ui/state.rs` or add methods to `UiState` that handle:
-- Panel open/close/toggle
+**Approach:** Add methods to `UiState` that handle:
+- ~~Panel open/close/toggle~~ — DONE (`UiState::toggle_panel()`, `UiState::close_panel()`)
 - Selection navigation (next/prev with bounds)
-- Wizard step forward/back
+- Wizard step forward/back (Confirm handler for medicines, research, policy)
 - Translating a Confirm press into a game command (or nothing, if mid-wizard)
+
+**What's left:** The `Action::Confirm` handler in `apply_action()` still mixes UI wizard transitions with game commands (deploy_medicine, start_research, toggle_policy). Each panel's Confirm logic needs to be split: UI transitions go to UiState methods, game commands stay in engine.
 
 The interactive loop becomes:
 ```
