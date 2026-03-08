@@ -1,5 +1,5 @@
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::GameState;
+use pandemic_cli_lib::state::{GameState, ResearchProject, ResearchKind};
 
 fn unlocked_state() -> GameState {
     let mut state = GameState::new_default(42);
@@ -101,6 +101,27 @@ fn research_panel_categories() {
     let state = GameState::new_default(42);
     let result = run_snapshot(state, &["r".to_string()], None).unwrap();
     insta::assert_snapshot!(result.screen);
+}
+
+#[test]
+fn research_progress_in_header() {
+    let mut state = GameState::new_default(42);
+    state.field_research = Some(ResearchProject {
+        kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+        progress: 8.0,
+        required_ticks: 20.0,
+        personnel_assigned: 5,
+        rp_cost: 10.0,
+    });
+    state.bench_research = Some(ResearchProject {
+        kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
+        progress: 15.0,
+        required_ticks: 40.0,
+        personnel_assigned: 10,
+        rp_cost: 30.0,
+    });
+    let output = render_to_string(&state);
+    insta::assert_snapshot!(output);
 }
 
 #[test]

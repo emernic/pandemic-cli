@@ -16,12 +16,13 @@ use ratatui::{
 use crate::state::{GameState, Panel};
 
 pub fn render(f: &mut Frame, state: &GameState) {
+    let header_height = resources::height(state);
     let has_status = state.ui.status_message.is_some();
     let hotkey_height = if has_status { 3 } else { 2 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),            // resources bar
+            Constraint::Length(header_height),  // resources bar (expands when research active)
             Constraint::Min(8),              // main area
             Constraint::Length(hotkey_height), // hotkey bar (+ status line)
         ])
