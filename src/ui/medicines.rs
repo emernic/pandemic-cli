@@ -178,12 +178,6 @@ fn render_select_target(
     for i in 0..med.num_deploy_targets() {
         let target = med.decode_deploy_target(i).unwrap();
         let selected = state.ui.panel_selection == i;
-        let marker = if selected { "▶ " } else { "  " };
-        let style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
 
         let disease_idx = match &target {
             DeployTarget::Vaccinate { disease_idx } => *disease_idx,
@@ -201,6 +195,16 @@ fn render_select_target(
                 let dead = inf.map(|i| i.dead).unwrap_or(0.0);
                 let immune = inf.map(|i| i.immune).unwrap_or(0.0);
                 let susceptible = (pop - infected - dead - immune).max(0.0);
+                let empty = susceptible == 0.0;
+
+                let marker = if selected { "▶ " } else { "  " };
+                let style = if empty {
+                    Style::default().fg(Color::DarkGray)
+                } else if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
 
                 lines.push(Line::from(Span::styled(
                     format!("{}Vaccinate susceptible ({})", marker, disease_name),
@@ -210,7 +214,7 @@ fn render_select_target(
                     Span::raw("    "),
                     Span::styled(
                         format!("{} susceptible", format_number(susceptible)),
-                        Style::default().fg(Color::Cyan),
+                        Style::default().fg(if empty { Color::DarkGray } else { Color::Cyan }),
                     ),
                     Span::raw(" | "),
                     Span::styled(
@@ -221,6 +225,16 @@ fn render_select_target(
             }
             DeployTarget::Treat { .. } => {
                 let infected = inf.map(|i| i.infected).unwrap_or(0.0);
+                let empty = infected == 0.0;
+
+                let marker = if selected { "▶ " } else { "  " };
+                let style = if empty {
+                    Style::default().fg(Color::DarkGray)
+                } else if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
 
                 lines.push(Line::from(Span::styled(
                     format!("{}Treat infected ({})", marker, disease_name),
@@ -230,7 +244,7 @@ fn render_select_target(
                     Span::raw("    "),
                     Span::styled(
                         format!("{} infected", format_number(infected)),
-                        Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
+                        Style::default().fg(if empty { Color::DarkGray } else { Color::Red }),
                     ),
                     Span::raw(" | "),
                     Span::styled(
