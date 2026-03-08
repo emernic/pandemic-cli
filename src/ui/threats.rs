@@ -7,7 +7,6 @@ use ratatui::{
 };
 
 use crate::state::{GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS};
-use crate::ui::research::disease_display_name;
 use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -28,7 +27,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
-            let display_name = disease_display_name(disease, i);
+            let display_name = disease.display_name(i);
             lines.push(Line::from(Span::styled(
                 format!("{}{}", marker, display_name),
                 style,

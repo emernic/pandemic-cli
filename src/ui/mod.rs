@@ -14,7 +14,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, KNOWLEDGE_NAME, Panel};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -43,8 +43,7 @@ pub fn process_events(state: &mut GameState) {
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
     {
         let name = state.diseases.get(*disease_idx)
-            .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
-            .map(|d| d.name.clone())
+            .map(|d| d.display_name(*disease_idx))
             .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
         format!("{name} has mutated! (Gen {new_generation})")
     } else {

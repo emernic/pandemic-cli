@@ -65,15 +65,13 @@ And `apply_command` never touches `UiState` at all.
 
 ## Specific Migrations
 
-### 1. Extract `disease_display_name()` from `research.rs`
+### 1. ~~Extract `disease_display_name()` from `research.rs`~~ — DONE
 
-Currently lives in `research.rs` but used by `threats.rs`, `medicines.rs`, `region_list.rs`, and `research.rs` itself. This is a shared display utility, not research-specific.
+Moved to `Disease::display_name()` in `state.rs`.
 
-**Move to:** `state.rs` as a method on `Disease`, or to a new `src/display.rs` utility module.
+### 2. ~~Move `project_costs()` and research query functions to `state.rs`~~ — DONE
 
-### 2. Move `project_costs()` and research constants to `state.rs`
-
-`resources.rs` currently imports `project_costs()` from `engine.rs`. This is a layering violation — UI should only read state. Research cost/duration should be data on the state types (e.g., methods on `ResearchKind`) rather than engine functions.
+`project_costs()` → `ResearchKind::costs()` method. `available_field_projects()` and `available_bench_projects()` → `GameState` methods. UI no longer imports from `engine.rs`.
 
 ### 3. Pull UI state machine transitions out of `engine.rs`
 

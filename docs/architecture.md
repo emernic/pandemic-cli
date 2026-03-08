@@ -51,7 +51,7 @@ src/
     region_list.rs — World map grid with connections
     threats.rs    — Disease info panel
     medicines.rs  — Medicine deployment wizard
-    research.rs   — Research project panel + disease_display_name() utility
+    research.rs   — Research project panel
     resources.rs  — Header status bar
     hotkey_bar.rs — Footer hotkey legend + status messages
 ```
