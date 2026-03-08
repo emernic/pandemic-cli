@@ -387,7 +387,8 @@ pub enum GameEvent {
         new_generation: u32,
     },
     /// The game just ended (win or lose). UI should pause and close panels.
-    GameOver(GameOutcome),
+    /// The actual outcome is on `GameState::outcome`; this just signals the transition.
+    GameOver,
 }
 
 /// Game outcome — checked each tick after simulation.

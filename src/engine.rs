@@ -259,7 +259,7 @@ pub fn tick(state: &GameState) -> GameState {
 
         if total_dead >= death_threshold {
             new.outcome = GameOutcome::Lost;
-            new.events.push(GameEvent::GameOver(GameOutcome::Lost));
+            new.events.push(GameEvent::GameOver);
         } else if new.total_infected() < WIN_INFECTED_THRESHOLD {
             // Win requires: diseases identified, contained, and medicines tested
             let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
@@ -268,7 +268,7 @@ pub fn tick(state: &GameState) -> GameState {
             });
             if all_identified && all_have_tested_medicine {
                 new.outcome = GameOutcome::Won;
-                new.events.push(GameEvent::GameOver(GameOutcome::Won));
+                new.events.push(GameEvent::GameOver);
             }
         }
     }
