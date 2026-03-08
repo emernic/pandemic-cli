@@ -37,7 +37,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         Span::styled(
-            format!("Personnel: {}", state.resources.personnel),
+            {
+                let avail = state.personnel_available();
+                let total = state.resources.personnel;
+                if avail < total {
+                    format!("Personnel: {}/{}", avail, total)
+                } else {
+                    format!("Personnel: {}", total)
+                }
+            },
             Style::default().fg(Color::White),
         ),
         Span::raw("  "),
