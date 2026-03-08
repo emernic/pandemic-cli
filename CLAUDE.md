@@ -48,7 +48,7 @@ Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rus
 ```bash
 cargo build                    # build
 cargo test                     # run all tests (unit + insta snapshots)
-cargo run                      # interactive mode (starts paused, Space to unpause)
+cargo run                      # interactive mode (starts running, Space to pause)
 cargo run -- --snapshot        # snapshot mode (for AI/automated testing)
 cargo insta review             # review snapshot test changes
 ```

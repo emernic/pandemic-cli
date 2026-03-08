@@ -85,7 +85,7 @@ mod tests {
         let state = GameState::new_default(42);
         let output = render_to_string(&state);
         assert!(output.contains("PANDEMIC DEFENSE"));
-        assert!(output.contains("PAUSED"));
+        assert!(output.contains("RUNNING"));
         assert!(output.contains("Asia"));
     }
 
