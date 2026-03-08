@@ -32,7 +32,7 @@ pub struct GameState {
 
 // Policy cost constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.0;
-pub const BASE_RP_INCOME: f64 = 0.5;
+pub const BASE_RP_INCOME: f64 = 0.4;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 10.0;
 pub const QUARANTINE_COST: f64 = 8.0;
@@ -356,18 +356,18 @@ impl ResearchKind {
     /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
     pub fn costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
         match self {
-            ResearchKind::IdentifyThreat { .. } => (15.0, 5, 40.0),
+            ResearchKind::IdentifyThreat { .. } => (15.0, 5, 80.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (25.0, 5, 50.0)   // narrow: fast and cheap
+                    (30.0, 5, 150.0)  // narrow
                 } else {
-                    (60.0, 10, 80.0)  // broad: slow and expensive
+                    (60.0, 10, 250.0) // broad: slow and expensive
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (20.0, 5, 40.0),
-            ResearchKind::ManufactureDoses { .. } => (15.0, 3, 30.0),
+            ResearchKind::ClinicalTrial { .. } => (20.0, 5, 80.0),
+            ResearchKind::ManufactureDoses { .. } => (15.0, 3, 60.0),
         }
     }
 }
@@ -666,20 +666,20 @@ impl GameState {
             Disease {
                 name: "Strain Alpha".into(),
                 pathogen_type: PathogenType::RnaVirus,
-                infectivity: vary(&mut rng, 0.06),
-                lethality: vary(&mut rng, 0.008),
-                cross_region_spread: vary(&mut rng, 0.02),
-                recovery_rate: vary(&mut rng, 0.04),
+                infectivity: vary(&mut rng, 0.03),
+                lethality: vary(&mut rng, 0.005),
+                cross_region_spread: vary(&mut rng, 0.01),
+                recovery_rate: vary(&mut rng, 0.015),
                 knowledge: 0.0,
                 strain_generation: 0,
             },
             Disease {
                 name: "Strain Beta".into(),
                 pathogen_type: PathogenType::Bacterium,
-                infectivity: vary(&mut rng, 0.04),
+                infectivity: vary(&mut rng, 0.02),
                 lethality: vary(&mut rng, 0.002),
-                cross_region_spread: vary(&mut rng, 0.03),
-                recovery_rate: vary(&mut rng, 0.015),
+                cross_region_spread: vary(&mut rng, 0.015),
+                recovery_rate: vary(&mut rng, 0.008),
                 knowledge: 0.0,
                 strain_generation: 0,
             },
@@ -693,8 +693,8 @@ impl GameState {
             region_b += 1;
         }
 
-        // Primary outbreak: 10K-100K infected
-        let infected_a = 10_000.0 + rng.r#gen::<f64>() * 90_000.0;
+        // Primary outbreak: 50K-200K infected
+        let infected_a = 50_000.0 + rng.r#gen::<f64>() * 150_000.0;
         regions[region_a].infections.push(RegionDiseaseState {
             disease_idx: 0,
             infected: infected_a,
@@ -702,8 +702,8 @@ impl GameState {
             immune: 0.0,
         });
 
-        // Secondary outbreak: 100-5K infected
-        let infected_b = 100.0 + rng.r#gen::<f64>() * 4_900.0;
+        // Secondary outbreak: 10K-50K infected
+        let infected_b = 10_000.0 + rng.r#gen::<f64>() * 40_000.0;
         regions[region_b].infections.push(RegionDiseaseState {
             disease_idx: 1,
             infected: infected_b,
@@ -716,9 +716,9 @@ impl GameState {
                 name: "Antiviral-A".into(),
                 therapy_type: TherapyType::Antiviral,
                 target_diseases: vec![0],
-                cost: 200.0,
-                doses: 500_000.0,
-                max_doses: 500_000.0,
+                cost: 100.0,
+                doses: 100_000.0,
+                max_doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -727,9 +727,9 @@ impl GameState {
                 name: "Antibiotic-B".into(),
                 therapy_type: TherapyType::Antibiotic,
                 target_diseases: vec![1],
-                cost: 150.0,
-                doses: 500_000.0,
-                max_doses: 500_000.0,
+                cost: 75.0,
+                doses: 100_000.0,
+                max_doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -738,9 +738,9 @@ impl GameState {
                 name: "Broad-Spectrum".into(),
                 therapy_type: TherapyType::BroadSpectrum,
                 target_diseases: vec![0, 1],
-                cost: 400.0,
-                doses: 750_000.0,
-                max_doses: 750_000.0,
+                cost: 200.0,
+                doses: 150_000.0,
+                max_doses: 150_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -752,9 +752,9 @@ impl GameState {
             paused: false,
             rng,
             resources: Resources {
-                funding: 500.0,
+                funding: 300.0,
                 research_points: 0.0,
-                personnel: 30,
+                personnel: 20,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             regions,
