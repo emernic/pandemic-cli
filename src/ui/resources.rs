@@ -126,5 +126,11 @@ fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or("Unknown");
             format!("Trial: {}", name)
         }
+        ResearchKind::ManufactureDoses { medicine_idx } => {
+            let name = state.medicines.get(*medicine_idx)
+                .map(|m| m.name.as_str())
+                .unwrap_or("Unknown");
+            format!("Mfg: {}", name)
+        }
     }
 }

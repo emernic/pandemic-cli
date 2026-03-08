@@ -16,7 +16,8 @@ struct Medicine {
     therapy_type: TherapyType,          // Antiviral, Antibiotic, or BroadSpectrum
     target_diseases: Vec<usize>,        // which diseases this medicine works against
     cost: f64,                          // funding per deployment
-    doses: f64,                         // people treated per deployment
+    doses: f64,                         // remaining doses (depletes on deployment)
+    max_doses: f64,                     // maximum dose capacity (restored by manufacturing)
     unlocked: bool,                     // false until developed via research
     tested_against: Vec<usize>,         // diseases with completed clinical trials
     strain_generations: Vec<u32>,       // strain calibration per target disease
@@ -25,7 +26,7 @@ struct Medicine {
 
 ### TherapyType × PathogenType Efficacy
 
-Effective doses = `doses × therapy_efficacy × strain_efficacy`.
+Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via a bench research project (ManufactureDoses: 10 RP, 3 personnel, 15 ticks).
 
 | TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Prion |
 |---|---|---|---|---|
@@ -88,6 +89,7 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 5. If `actual_doses == 0`, show message and stay on SelectTarget
 6. If untested: require confirmation via ConfirmDeploy step
 7. Deduct `medicine.cost` (flat rate regardless of actual doses — creates strategic incentive to deploy when there are enough targets to justify the cost)
+7b. Deplete `medicine.doses` by `actual_doses` (doses are a finite resource)
 8. If untested: roll for adverse effects (25% chance, 20% of doses cause deaths)
 9. Apply: vaccinate adds to `immune` from susceptible pool; treat moves `infected` to `immune`
 10. Show deployment feedback message (doses used, region, cost, efficacy note, adverse effects if any)
