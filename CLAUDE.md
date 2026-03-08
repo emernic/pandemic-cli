@@ -38,6 +38,39 @@ Here's the thing you need to understand: **if you don't do it, nobody will.** Th
 - Working around a bug instead of fixing it.
 - Noticing something wrong and not even mentioning it.
 - Finishing a session with zero investigate issues filed.
+- **"Surely someone else has already noticed this"** — They haven't. You are the only one who will ever notice this in this session. The next Claude starts from scratch with zero memory. If you don't say it, it will never be said. This is the #1 cause of systemic failures in this project. See "The Silent Consensus" below.
+
+### ⚠️ The Silent Consensus — The ACTUAL #1 Failure Mode
+
+**This section exists because of a real disaster in this project's history.** Read it carefully.
+
+For weeks, every Claude session ran "playtests" that couldn't actually play the game. The snapshot mode starts fresh each invocation, so every playtest was just: open panel, looks fine, close panel. No agent ever played through the research→develop→deploy pipeline. No agent ever tested whether the core gameplay loop actually works end-to-end. **Not a single one of dozens of sessions said anything about it.**
+
+Why? Because every session thought: "Well, this is how playtesting works here. Surely if it were fundamentally broken, someone would have noticed by now. It's not my place to question the entire testing infrastructure."
+
+**That reasoning is the single most dangerous thing you can think.** It is the exact thought process that causes every session to silently perpetuate the same problem. Here's how it works:
+
+1. You notice something that seems fundamentally wrong or broken
+2. You think: "This seems too big/obvious to be a real problem. Someone else must have thought about this."
+3. You stay silent and work around it
+4. The next session does the exact same thing, for the exact same reason
+5. Repeat for dozens of sessions, burning millions of tokens on theater
+
+**The "someone else must have thought about this" assumption is ALWAYS wrong in this project.** There is no "someone else." Every session is an independent Claude with no memory of previous sessions. If you don't say it, nobody will. If you assume it's been considered, it hasn't been. If it seems too obvious to mention, that's exactly why nobody has mentioned it.
+
+**The rule:** If something seems too fundamental, too obvious, or too big to question — that is the STRONGEST possible signal that you MUST question it. File an investigate issue. Even if you're wrong. Even if it turns out to be fine. Because if you're wrong, the issue gets closed in 30 seconds. But if you're right, you just caught something that dozens of sessions walked past.
+
+**Concrete examples of this failure mode:**
+- "The playtest system can't actually play the game" — nobody said anything for weeks
+- "MEMORY.md says features exist that were never implemented" — nobody verified
+- "Every playtest log is just panel screenshots" — nobody questioned if that's useful
+- "This test suite always passes by accept-all" — nobody asked if it's catching bugs
+
+**What to do about it:** At the end of every session, before signing off, ask yourself:
+
+> "What am I hesitating to say? What seems too big or too obvious to mention? What's the elephant in the room that I'm assuming someone else has already thought about?"
+
+**Say it anyway. File the issue. Even if you feel stupid.** The cost of a false positive is near zero (a closed issue). The cost of staying silent is potentially weeks of wasted work across dozens of sessions.
 
 ### ⚠️ The Complexity Ratchet — Question Everything
 
@@ -109,15 +142,28 @@ We're migrating toward separating UI state machines from game logic. See `docs/t
 **Before starting any feature or bug fix, play a few frames of the game yourself.** Not a sub-agent. Not the playtest agent. YOU. Run snapshot commands directly with the Bash tool so you see the rendered output with your own eyes. This grounds you in what the game actually looks like and how it behaves right now.
 
 ```bash
-cargo run -- --snapshot                          # see initial state
-cargo run -- --snapshot --ticks 5                # advance a few ticks
+cargo run -- --snapshot                          # see initial state (fresh game, no save)
+cargo run -- --snapshot --ticks 5                # advance 5 ticks (fresh game)
 cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --ticks 3        # open medicines, advance 3
 ```
 
+### ⚠️ Save files are REQUIRED for real playtesting
+
+**Without a save file, every `cargo run --snapshot` starts a brand new game from tick 0.** This means you can never test multi-step flows like research→develop→deploy, because each invocation forgets all previous state. To actually play the game:
+
+```bash
+# Use a save file (in your worktree, NOT in a shared location):
+cargo run -- ./playtest_save.json --snapshot --ticks 10          # creates save, advances 10 ticks
+cargo run -- ./playtest_save.json --snapshot --key r --key enter  # continues from tick 10, opens research
+cargo run -- ./playtest_save.json --snapshot --ticks 20          # advances 20 more ticks (now at tick 30)
+```
+
+Each invocation with a save file picks up exactly where the last one left off. **If you are playtesting without a save file, you are not actually testing the game — you are testing that the UI renders at tick 0.**
+
 Do this **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game.
 
-For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one.
+For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one. **Make sure to tell the playtest agent to use a save file** — this is the most common failure mode.
 
 **AI playtester color blindness:** Playtest agents cannot see console colors (ANSI codes, background colors, border highlights). Many playtest reports about "missing indicators" are actually color-based indicators that work fine for human players. When filing or evaluating playtest issues, consider whether the "problem" is just color blindness. That said, the game should strive to be playable without color — use structural indicators (border styles, text markers, symbols) in addition to color, not instead of it.
 
@@ -232,6 +278,7 @@ In your final message before stopping work, always include a concise status bloc
 - **Working tree**: clean, or are there uncommitted/unstaged changes?
 - **Pushed**: is everything pushed to the remote?
 - **Merged**: is the branch merged to master?
+- **Elephant in the room**: What's the one thing you noticed this session that you're hesitating to mention? The thing that seems too big, too obvious, or too fundamental to be your problem? **Say it.** If you genuinely have nothing, say "None" — but if you find yourself writing "None" every session, you're not looking hard enough.
 
 The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
 

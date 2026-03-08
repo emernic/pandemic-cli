@@ -56,6 +56,24 @@ Think about everything you interacted with this session — not just the code yo
 
 **The test:** If you spent more time maintaining a system than benefiting from it, something is wrong. File an investigate issue.
 
+## Elephant in the Room Check
+
+**This is the most important check. Do not skip it.**
+
+The #1 failure mode in this project is the "silent consensus": you notice something fundamentally wrong, assume someone else must have already thought about it, and stay silent. Every other session does the same thing, for the same reason, and the problem persists for weeks.
+
+Ask yourself these questions and answer them honestly:
+
+1. **What am I hesitating to say?** What seems too big, too obvious, or too established to question? That's exactly the thing you need to say. The playtest system was broken for weeks because every session assumed "surely someone else has noticed this."
+
+2. **What did I work around instead of fixing or flagging?** If you had to adjust your approach because something seemed off, that "something" needs an investigate issue — even if you're not sure it's actually broken.
+
+3. **Am I producing real value, or performing a ritual?** Did your playtests actually test gameplay? Did your tests actually catch bugs? Did your review actually find problems? If you spent time on a process that produced no actionable findings, question whether the process itself is broken.
+
+4. **If I told a smart colleague everything I did this session, what would they call out as suspicious or wasteful?** That's your elephant.
+
+**The test for whether you've done this check properly:** If you have zero elephants to report, you're almost certainly not being honest with yourself. Go back and think harder. The cost of a false positive (filing an issue that gets closed) is near zero. The cost of staying silent is potentially weeks of wasted work.
+
 ## Process
 
 **NOTE: Focus on NEW aspects that you have not already considered and discussed. Actually READ your code and surrounding code and THINK about what we're overlooking.**
