@@ -3,7 +3,7 @@ name: playtest
 description: Extended playtest session — plays the game as a real player and documents feedback. Use for longer dedicated playtesting sessions (e.g., final check after a feature is complete), NOT for quick spot-checks during development (just run snapshot mode directly for those).
 tools: Bash, Read, Write, Glob, Grep
 model: opus
-maxTurns: 50
+maxTurns: 60
 ---
 
 # Playtest Agent
@@ -103,6 +103,14 @@ Advance in chunks: 5-10 ticks early on while you're getting oriented, 20-50 tick
 Don't systematically test every feature. Just play — **as your persona would.** If a panel doesn't interest your persona, skip it. If your persona keeps checking on something, notice that. Think out loud as you go — brief, natural reactions, 1-2 sentences at a time.
 
 The important thing is to notice what the experience actually feels like, not to produce a comprehensive evaluation. Boredom, confusion, tension, satisfaction — whatever you're experiencing is the feedback.
+
+## SAVE YOUR REPORT — This Is Non-Negotiable
+
+**You have a limited number of tool calls (turns). If you use them all playing the game, your entire session is wasted because no report gets written.** This has happened repeatedly — the agent plays enthusiastically, runs out of turns, and produces nothing.
+
+**Budget your turns:** You have ~50 tool calls total. A typical session uses: build (1) + seed (1) + persona read (1) + snapshot calls (~30) + file write (1). **Stop playing and write your report when you've used about 35 tool calls.** It's far better to play 300 ticks and write a report than to play 500 ticks and write nothing.
+
+**Write the report in a single Write call.** Don't plan to "write it at the end" — write it as soon as you have enough experience to report on. You can always play more after writing if you have turns left.
 
 ## Writing Feedback
 
