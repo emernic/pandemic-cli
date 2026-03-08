@@ -59,7 +59,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     ));
     spans.push(Span::styled(" Quit", Style::default().fg(Color::White)));
 
-    let line = Line::from(spans);
-    let widget = Paragraph::new(line).block(Block::default().borders(Borders::TOP));
+    let mut lines = Vec::new();
+    if let Some(msg) = &state.ui.status_message {
+        lines.push(Line::from(Span::styled(
+            msg.as_str(),
+            Style::default().fg(if msg.contains("ADVERSE") { Color::Red } else { Color::Yellow }),
+        )));
+    }
+    lines.push(Line::from(spans));
+    let widget = Paragraph::new(lines).block(Block::default().borders(Borders::TOP));
     f.render_widget(widget, area);
 }

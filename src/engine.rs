@@ -159,6 +159,7 @@ fn toggle_panel(ui: &mut crate::state::UiState, panel: Panel) {
 /// Apply a player action to the game state.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
+    new.ui.status_message = None;
 
     match action {
         Action::TogglePause => {
@@ -327,6 +328,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         let med = &new.medicines[medicine_idx];
                         let cost = med.cost;
                         let doses = med.doses;
+                        let med_name = med.name.clone();
                         let target = med.decode_deploy_target(new.ui.panel_selection);
 
                         if let Some(target) = target {
@@ -337,6 +339,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                 };
 
                                 let region = &mut new.regions[region_idx];
+                                let region_name = region.name.clone();
                                 let pop = region.population as f64;
 
                                 // Find or create RegionDiseaseState entry
@@ -367,10 +370,11 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                             (pop - inf.infected - inf.dead - inf.immune).max(0.0);
                                         let actual = doses.min(susceptible);
                                         if actual > 0.0 {
+                                            let mut adverse = false;
                                             if !is_tested {
-                                                // Adverse effect: 25% chance, 20% of doses cause deaths
                                                 let roll: f64 = new.rng.r#gen();
                                                 if roll < 0.25 {
+                                                    adverse = true;
                                                     let harmed = (actual * 0.2).min(susceptible);
                                                     inf.dead += harmed;
                                                     inf.immune += actual - harmed;
@@ -381,15 +385,20 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                                 inf.immune += actual;
                                             }
                                             new.resources.funding -= cost;
+                                            new.ui.status_message = Some(
+                                                deploy_message(&med_name, &region_name, "Vaccinated", actual, cost, adverse),
+                                            );
                                         }
                                     }
                                     DeployTarget::Treat { .. } => {
                                         let actual = doses.min(inf.infected);
                                         if actual > 0.0 {
                                             inf.infected -= actual;
+                                            let mut adverse = false;
                                             if !is_tested {
                                                 let roll: f64 = new.rng.r#gen();
                                                 if roll < 0.25 {
+                                                    adverse = true;
                                                     let harmed = actual * 0.2;
                                                     inf.dead += harmed;
                                                     inf.immune += actual - harmed;
@@ -400,6 +409,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                                 inf.immune += actual;
                                             }
                                             new.resources.funding -= cost;
+                                            new.ui.status_message = Some(
+                                                deploy_message(&med_name, &region_name, "Treated", actual, cost, adverse),
+                                            );
                                         }
                                     }
                                 }
@@ -419,6 +431,28 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     }
 
     new
+}
+
+fn deploy_message(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse: bool) -> String {
+    let doses_str = format_count(doses);
+    if adverse {
+        let killed = format_count(doses * 0.2);
+        format!("{action} {doses_str} in {region} with {med} (-${cost:.0}) — ADVERSE REACTION: {killed} died")
+    } else {
+        format!("{action} {doses_str} in {region} with {med} (-${cost:.0})")
+    }
+}
+
+fn format_count(n: f64) -> String {
+    if n >= 999_999_500.0 {
+        format!("{:.1}B", n / 1_000_000_000.0)
+    } else if n >= 999_950.0 {
+        format!("{:.1}M", n / 1_000_000.0)
+    } else if n >= 999.5 {
+        format!("{:.1}K", n / 1_000.0)
+    } else {
+        format!("{:.0}", n)
+    }
 }
 
 /// Compute available field research projects (excludes the currently active one).
@@ -831,6 +865,11 @@ mod tests {
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
         ));
+        // Deployment feedback message should be set
+        let msg = state.ui.status_message.as_ref().expect("status message should be set after deploy");
+        assert!(msg.contains("Vaccinated"), "message should mention vaccination: {msg}");
+        assert!(msg.contains("North America"), "message should mention region: {msg}");
+        assert!(msg.contains("Antiviral-A"), "message should mention medicine: {msg}");
     }
 
     #[test]
