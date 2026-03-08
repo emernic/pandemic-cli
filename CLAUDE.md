@@ -97,6 +97,14 @@ Do this **every time** you start working on something. It takes seconds and prev
 
 For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one.
 
+## Merging
+
+**Always merge your own PRs. Do not ask for permission.** This is an early-stage project and it's far more important to get changes in than to risk leaving them behind. The user manages many agents and terminals and may not even see your request — so just take ownership and handle it.
+
+- When your tests pass and you're happy with the changes, merge immediately with `gh pr merge --squash`.
+- If you notice something else to improve after merging, that's fine — create a new branch, fix it, open a new PR, merge again. Iterate freely.
+- The only exception: if you're genuinely unsure whether a change is correct (e.g., it might break something you can't test), flag it. But this should be rare.
+
 ## Pre-Merge Checklist
 
 Before merging any significant feature or bug fix:

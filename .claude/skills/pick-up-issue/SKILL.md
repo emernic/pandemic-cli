@@ -132,7 +132,7 @@ When the work is done:
 1. **Commit** your changes (with user approval).
 2. **Push** the branch and **create a PR** that references the issue:
    - Include `Closes #<number>` in the PR body so the issue auto-closes on merge.
-3. **Small issues** (one-line fixes, label changes, typo corrections, etc.) — go ahead and merge the PR yourself without asking. **Larger issues** — ask the user to review and approve the merge first.
+3. **Always merge your own PRs.** Do not ask for permission — this is an early-stage project and it's more important to get changes in than to risk leaving them behind. If you notice something to improve after merging, just create a follow-up PR and merge that too. Iterate freely.
 
 **CRITICAL — you are not done until the issue is closed and cleaned up:**
 
@@ -162,7 +162,7 @@ If you realize you cannot complete the issue (too complex, blocked, unclear, etc
 
 ## Important
 
-- For small issues, merge without asking. For anything non-trivial, get user permission first.
+- **Always merge your own PRs** — do not wait for approval. If you find more to fix after merging, open a follow-up PR and merge that too.
 - NEVER abandon without user permission.
 - If you get stuck or the issue is unclear, ask the user rather than guessing.
 - If you realize the issue is a duplicate or invalid while working on it, tell the user before closing anything.
