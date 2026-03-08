@@ -129,6 +129,12 @@ What would you do next if you were the developer? Go deep here — don't just id
 
 But also: think about what you'd *tear out*. What's in the game right now that isn't earning its keep? What would be better if it didn't exist at all? Sometimes the best idea is subtraction.
 
+The difference between okay and great ideas:
+- Okay: "Add more resource sinks"
+- Great: "What if you could fund field hospitals in a region — costs $500/tick to maintain, reduces lethality by 30% in that region, but ties up 5 personnel? Now you've got a real trade-off: do you spread your personnel thin across hospitals or concentrate them on research?"
+- Okay: "The map feels empty"
+- Great: "The map could show trade route arrows between regions that turn red when carrying disease. You could impose travel restrictions on a route, but it tanks that region's economy and cuts your funding income. Suddenly the map is where the hard decisions happen."
+
 ## Session Log
 Think-out-loud notes from the session, lightly cleaned up.
 ```
