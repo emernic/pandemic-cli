@@ -64,17 +64,19 @@ Before merging any significant feature or bug fix:
 
 ## Session Start Checklist
 
-Before doing any work, get your repo into a clean state:
+**This is enforced by a hook. You will be blocked from editing files until you run `git status`.**
+
+The VERY FIRST thing you do in every session — before reading code, before planning, before touching anything — is orient yourself:
 
 1. **Fetch**: `git fetch origin`
-2. **Check status**: `git status` — flag any uncommitted changes, stale branches, or other surprises to the user before proceeding.
-3. **Clean branch**: Create a fresh branch off `origin/master` for new work:
+2. **Check status**: `git status` — look at what branch you're on, whether there are uncommitted changes, and whether the branch is up to date. Flag any surprises to the user.
+3. **Think about your branch**: Are you on `master`? An old feature branch? Someone else's branch? If you're starting new work, create a fresh branch:
    ```
    git checkout -b my-branch origin/master
    ```
-   Only skip this if you're explicitly resuming work on an existing branch.
+   Only skip this if the user explicitly says to continue work on the current branch.
 
-Do NOT start implementing anything until the repo state is clean and understood.
+Do NOT start implementing anything until the repo state is clean and understood. Multiple agents share this repo — you WILL end up on stale or wrong branches if you skip this.
 
 ## Issue Tracking
 
