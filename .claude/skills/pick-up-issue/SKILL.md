@@ -29,9 +29,12 @@ gh issue list --state open --search "-label:in-progress" --json number,title,lab
 
 Selection criteria (in priority order):
 1. **Priority labels** — P0-critical > P1-high > P2-medium > P3-low > unlabeled.
-2. **Issue type** — bugs before enhancements, all else being equal.
-3. **Scope** — prefer small, well-defined, self-contained issues you can finish in one pass. Skip sprawling or vague issues.
-4. **Dependencies** — skip issues that clearly depend on unfinished work.
+2. **Age** — older issues first, all else being equal. Issues that have been sitting in the backlog longest are the ones nobody picks up. That's exactly why YOU should pick them up. Sort by `createdAt` ascending and default to the oldest available issue unless a higher-priority one exists.
+3. **Dependencies** — skip issues that clearly depend on unfinished work.
+
+**DO NOT skip issues because they "don't look like code changes."** Infrastructure issues, documentation issues, design issues, tooling issues — they're all in the backlog because they matter. If you find yourself thinking "this isn't a real feature" or "this isn't self-contained enough," that's the bias talking. Pick it up anyway. Every agent that skips the same issue is proof the issue needs to be picked up.
+
+**DO NOT cherry-pick "easy wins."** The hard, ambiguous, or unfamiliar issues are the ones that rot in the backlog forever because every agent reaches for the comfortable code change instead. If an issue has been open for a while, that's a signal it needs attention, not a signal to skip it.
 
 Briefly tell the user which issue you picked and why, then move to Step 2. If there are no available issues, tell the user.
 
