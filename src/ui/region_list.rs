@@ -10,17 +10,37 @@ use crate::state::{map_grid_pos, GameState, Region};
 
 use super::format_number;
 
-/// Connections to render as visual lines between regions.
-/// Omits NA↔OC (indices 0↔5) since they're too far apart on the grid.
-const DRAW_CONNECTIONS: [(usize, usize); 7] = [
-    (0, 1), // NA ↔ SA (vertical)
-    (0, 2), // NA ↔ EU (horizontal)
-    (1, 2), // SA ↔ EU (diagonal)
-    (2, 3), // EU ↔ AF (vertical)
-    (2, 4), // EU ↔ AS (horizontal)
-    (3, 4), // AF ↔ AS (diagonal)
-    (4, 5), // AS ↔ OC (vertical)
-];
+/// Build the list of connections to draw from the actual region topology.
+/// Only includes connections that can be rendered on the grid (adjacent/diagonal).
+/// Each pair is (smaller_idx, larger_idx) to avoid duplicates.
+fn drawable_connections(state: &GameState) -> Vec<(usize, usize)> {
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+    for (i, region) in state.regions.iter().enumerate() {
+        for &j in &region.connections {
+            let pair = if i < j { (i, j) } else { (j, i) };
+            if !seen.insert(pair) {
+                continue;
+            }
+            // Only include if the grid positions allow drawing
+            let (ca, ra) = match map_grid_pos(pair.0) {
+                Some(p) => p,
+                None => continue,
+            };
+            let (cb, rb) = match map_grid_pos(pair.1) {
+                Some(p) => p,
+                None => continue,
+            };
+            let drawable = (ra == rb && cb == ca + 1)       // horizontal
+                || (ca == cb && rb == ra + 1)               // vertical
+                || (cb == ca + 1 && ra == rb + 1);          // diagonal up-right
+            if drawable {
+                result.push(pair);
+            }
+        }
+    }
+    result
+}
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let block = Block::default()
@@ -40,10 +60,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let region_height = ((inner.height.saturating_sub(gap_row)) / 2).min(8);
 
     // Draw connections in gap areas
+    let connections = drawable_connections(state);
     {
         let buf = f.buffer_mut();
         let buf_area = buf.area;
-        for &(a, b) in &DRAW_CONNECTIONS {
+        for &(a, b) in &connections {
             let (ca, ra) = match map_grid_pos(a) {
                 Some(p) => p,
                 None => continue,
