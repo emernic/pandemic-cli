@@ -71,9 +71,42 @@ pub struct RegionDiseaseState {
     pub immune: f64,
 }
 
+/// Fundamental category of pathogen — determines behavior characteristics
+/// and which therapy types are effective.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PathogenType {
+    /// Fast-mutating, high infectivity, responds to antivirals
+    RnaVirus,
+    /// Slower-mutating, stable, responds to antivirals
+    DnaVirus,
+    /// Responds to antibiotics, can develop resistance
+    Bacterium,
+    /// Extremely slow-spreading but nearly untreatable
+    Prion,
+}
+
+impl Default for PathogenType {
+    fn default() -> Self {
+        PathogenType::RnaVirus
+    }
+}
+
+impl PathogenType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            PathogenType::RnaVirus => "RNA Virus",
+            PathogenType::DnaVirus => "DNA Virus",
+            PathogenType::Bacterium => "Bacterium",
+            PathogenType::Prion => "Prion",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Disease {
     pub name: String,
+    #[serde(default)]
+    pub pathogen_type: PathogenType,
     pub infectivity: f64,
     pub lethality: f64,
     pub cross_region_spread: f64,
@@ -315,6 +348,7 @@ impl GameState {
         let diseases = vec![
             Disease {
                 name: "Strain Alpha".into(),
+                pathogen_type: PathogenType::RnaVirus,
                 infectivity: 0.06,
                 lethality: 0.008,
                 cross_region_spread: 0.02,
@@ -323,6 +357,7 @@ impl GameState {
             },
             Disease {
                 name: "Strain Beta".into(),
+                pathogen_type: PathogenType::Bacterium,
                 infectivity: 0.04,
                 lethality: 0.002,
                 cross_region_spread: 0.03,
