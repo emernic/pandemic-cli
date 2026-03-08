@@ -65,8 +65,8 @@ pub fn tick(state: &GameState) -> GameState {
                 }
 
                 inf.infected = inf.infected + new_infections - new_deaths - new_recoveries;
-                // Snap to zero when below 1 person to avoid floating-point residue
-                if inf.infected < 0.5 {
+                // Snap to zero when below 1 person — aligns with WIN_INFECTED_THRESHOLD
+                if inf.infected < 1.0 {
                     inf.infected = 0.0;
                 }
                 inf.immune += new_recoveries;
@@ -1593,12 +1593,12 @@ mod tests {
     fn tiny_infected_snaps_to_zero() {
         let mut state = GameState::new_default(42);
         // Set up a region with sub-person infected count
-        state.regions[4].infections[0].infected = 0.3;
+        state.regions[4].infections[0].infected = 0.7;
         state = tick(&state);
-        // Should have snapped to 0
+        // Should have snapped to 0 (threshold aligned with WIN_INFECTED_THRESHOLD)
         assert_eq!(
             state.regions[4].infections[0].infected, 0.0,
-            "infected below 0.5 should snap to zero"
+            "infected below 1.0 should snap to zero"
         );
     }
 
