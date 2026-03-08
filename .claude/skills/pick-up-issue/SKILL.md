@@ -83,7 +83,18 @@ When picking up an investigate issue:
 
 ## Playtest Feedback Issues
 
-Issues labeled `playtest-feedback` were filed based on automated playtest sessions. Treat these with a grain of salt. Playtesters don't always accurately describe what they saw, and they definitely don't know what they want. An incorrect bug report or a silly feature request can still be pointing at a part of the game that genuinely needs work — but the *diagnosis* and *solution* in the issue are probably wrong. Read the issue to understand what area of the game triggered the feedback, then look at that area with fresh eyes and form your own opinion about what (if anything) needs to change.
+Issues labeled `playtest-feedback` were filed by automated playtest agents. **These are the most dangerous issues in the backlog** because they look like real bug reports but are often completely wrong. Playtest agents can't see colors, they play for a few seconds, and they confidently file issues about "problems" that don't exist. They are LLMs describing a game they cannot actually see.
+
+**Do NOT trust the diagnosis.** The playtest agent's description of what's wrong is probably wrong. Their suggested fix is almost certainly wrong. What they *can* tell you is which area of the game triggered confusion — treat the issue as a pointer to a neighborhood, not as a specification.
+
+**Before writing a single line of code**, you MUST:
+
+1. **Play the game yourself** in the area the issue describes. Run snapshot commands, look at the output, understand what the player actually sees and experiences.
+2. **Ask yourself: is this actually a problem?** Not "does the issue describe a real thing" — but "if I were a human player, would this bother me? Does the current behavior make sense?" Many playtest issues describe behavior that is correct, intentional, and good.
+3. **If you conclude it's not a problem, close the issue.** Closing invalid playtest-feedback issues is good hygiene. Explain briefly why the current behavior is correct. This is a common and valid outcome — probably ~40% of playtest-feedback issues should just be closed.
+4. **If it IS a problem, form your own solution.** Do not implement the suggestion from the issue. Think about what the right behavior is from a game design perspective, then implement that.
+
+**Example of what NOT to do:** A playtest agent reports "health bars are always solid green" because it can't see colors in snapshot mode. The bars are actually multi-colored and working perfectly. An agent blindly implements sqrt scaling to "fix" the bars, making them actively misleading. The right move was to play the game, realize the bars are fine, and close the issue.
 
 ## Step 4: Read and Understand the Issue
 
@@ -100,9 +111,17 @@ Make sure you understand:
 
 If the issue has a "Possible Solution" section, read it for context but do NOT follow it blindly — form your own approach.
 
-## Step 5: Do the Work
+## Step 5: Think — Then Decide Whether to Do the Work
 
-Implement the fix or feature. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
+**STOP. Do not start coding yet.** This is the step where most mistakes happen. You've read the issue, you've looked at the code, you've played the game. Now answer these questions honestly:
+
+1. **Is this actually a problem?** Not every issue describes a real problem. The filer may have been confused, wrong, or working from incomplete information. If the current behavior is correct and makes sense, close the issue with an explanation. This is a valid outcome.
+2. **Does the proposed solution make sense?** Even if the problem is real, the suggested fix might be wrong. Think about what would actually be right for the game and the player. Would you make this change if no issue existed and you were just looking at the code?
+3. **Is this change making the game simpler or more complex?** Good changes almost always make things simpler. If your planned change adds complexity (new config, special-case logic, non-obvious scaling, etc.), that's a red flag. Step back and ask if there's a simpler approach — or if the "problem" is actually fine as-is.
+
+**If you can't clearly articulate why the change improves the game, don't make it.** Close the issue or ask the user for guidance.
+
+Once you're confident the change is worth making, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
 
 ## Step 6: Completion
 
