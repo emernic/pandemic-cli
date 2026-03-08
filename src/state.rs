@@ -31,6 +31,9 @@ pub struct GameState {
 }
 
 // Policy cost constants — single source of truth.
+pub const BASE_FUNDING_INCOME: f64 = 5.0;
+pub const BASE_RP_INCOME: f64 = 1.0;
+pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 10.0;
 pub const QUARANTINE_COST: f64 = 8.0;
 pub const QUARANTINE_PERSONNEL: u32 = 2;
@@ -705,7 +708,6 @@ impl GameState {
 
     /// Estimated funding income per tick, based on current population health and policies.
     pub fn funding_income_rate(&self) -> f64 {
-        let base_funding = 5.0;
         let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
         if total_pop <= 0.0 {
             return 0.0;
@@ -717,11 +719,11 @@ impl GameState {
             let healthy_frac = (pop - dead).max(0.0) / pop;
             let region_share = pop / total_pop;
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                0.5
+                TRAVEL_BAN_INCOME_PENALTY
             } else {
                 1.0
             };
-            income += base_funding * region_share * healthy_frac * travel_ban_factor;
+            income += BASE_FUNDING_INCOME * region_share * healthy_frac * travel_ban_factor;
         }
         income
     }
