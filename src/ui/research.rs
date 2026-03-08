@@ -139,6 +139,14 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     style,
                 )));
 
+                // Show target diseases for medicine development
+                if let Some(targets) = format_targets(kind, state) {
+                    lines.push(Line::from(Span::styled(
+                        format!("    Targets: {}", targets),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+
                 let (rp, personnel, ticks) = crate::engine::project_costs(kind);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
@@ -177,6 +185,12 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
             format!("  Start: {}", format_kind(kind, state)),
             Style::default().fg(Color::Cyan),
         )));
+        if let Some(targets) = format_targets(kind, state) {
+            lines.push(Line::from(Span::styled(
+                format!("  Targets: {}", targets),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::raw("  Cost: "),
@@ -302,6 +316,23 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or_else(|| "Unknown".to_string());
             format!("Trial: {} vs {}", med_name, dis_name)
         }
+    }
+}
+
+/// For DevelopMedicine projects, return the target disease names.
+fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
+    match kind {
+        ResearchKind::DevelopMedicine { medicine_idx } => {
+            let med = state.medicines.get(*medicine_idx)?;
+            let names: Vec<String> = med.target_diseases.iter()
+                .filter_map(|&d_idx| {
+                    state.diseases.get(d_idx)
+                        .map(|d| disease_display_name(d, d_idx))
+                })
+                .collect();
+            Some(names.join(", "))
+        }
+        _ => None,
     }
 }
 
