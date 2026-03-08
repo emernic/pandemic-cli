@@ -194,16 +194,20 @@ fn get_or_create_infection(region: &mut crate::state::Region, disease_idx: usize
 }
 
 /// Execute medicine deployment: deduct funds, apply doses (with adverse effect
-/// roll for untested medicines), and return UI to SelectRegion.
+/// roll for untested medicines). Pure game logic — does NOT modify UI state.
+///
+/// Returns (navigate_back, message):
+/// - `navigate_back`: true if the caller should return to SelectRegion
+/// - `message`: status feedback to display (if any)
 fn deploy_medicine(
     state: &mut GameState,
     medicine_idx: usize,
     region_idx: usize,
     target_selection: usize,
-) {
+) -> (bool, Option<String>) {
     // Block after game over
     if state.outcome != GameOutcome::Playing {
-        return;
+        return (false, None);
     }
     let med = &state.medicines[medicine_idx];
     let cost = med.cost;
@@ -213,8 +217,7 @@ fn deploy_medicine(
 
     if let Some(target) = target {
         if state.resources.funding < cost {
-            state.ui.status_message = Some(insufficient_funds_message(cost, state.resources.funding));
-            return;
+            return (false, Some(insufficient_funds_message(cost, state.resources.funding)));
         }
 
         let disease_idx = match &target {
@@ -236,7 +239,7 @@ fn deploy_medicine(
             .tested_against
             .contains(&disease_idx);
 
-        match target {
+        let msg = match target {
             DeployTarget::Vaccinate { .. } => {
                 let susceptible = (pop - infected - dead - immune).max(0.0);
                 let actual = doses.min(susceptible);
@@ -258,13 +261,9 @@ fn deploy_medicine(
                         inf.immune += actual;
                     }
                     state.resources.funding -= cost;
-                    state.ui.status_message = Some(
-                        deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse),
-                    );
+                    deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse)
                 } else {
-                    state.ui.status_message = Some(
-                        format!("No susceptible population in {region_name}"),
-                    );
+                    format!("No susceptible population in {region_name}")
                 }
             }
             DeployTarget::Treat { .. } => {
@@ -287,21 +286,17 @@ fn deploy_medicine(
                         inf.immune += actual;
                     }
                     state.resources.funding -= cost;
-                    state.ui.status_message = Some(
-                        deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse),
-                    );
+                    deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse)
                 } else {
-                    state.ui.status_message = Some(
-                        format!("No infected population in {region_name}"),
-                    );
+                    format!("No infected population in {region_name}")
                 }
             }
-        }
+        };
+
+        return (true, Some(msg));
     }
 
-    // Return to SelectRegion for rapid multi-region deployment
-    state.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-    state.ui.panel_selection = 0;
+    (true, None)
 }
 
 fn insufficient_funds_message(cost: f64, have: f64) -> String {
@@ -534,7 +529,12 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                         target_selection,
                                     });
                                 } else {
-                                    deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
+                                    let (nav_back, msg) = deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
+                                    new.ui.status_message = msg;
+                                    if nav_back {
+                                        new.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                                        new.ui.panel_selection = 0;
+                                    }
                                 }
                             }
                         }
@@ -544,7 +544,12 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         region_idx,
                         target_selection,
                     }) => {
-                        deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
+                        let (nav_back, msg) = deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
+                        new.ui.status_message = msg;
+                        if nav_back {
+                            new.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                            new.ui.panel_selection = 0;
+                        }
                     }
                     None => {}
                 }
