@@ -177,6 +177,22 @@ pub fn tick(state: &GameState) -> GameState {
     new
 }
 
+/// Find or create a RegionDiseaseState entry for the given disease in a region.
+fn get_or_create_infection(region: &mut crate::state::Region, disease_idx: usize) -> &mut RegionDiseaseState {
+    let pos = region.infections.iter().position(|i| i.disease_idx == disease_idx);
+    if let Some(idx) = pos {
+        &mut region.infections[idx]
+    } else {
+        region.infections.push(RegionDiseaseState {
+            disease_idx,
+            infected: 0.0,
+            dead: 0.0,
+            immune: 0.0,
+        });
+        region.infections.last_mut().unwrap()
+    }
+}
+
 /// Execute medicine deployment: deduct funds, apply doses (with adverse effect
 /// roll for untested medicines), and return UI to SelectRegion.
 fn deploy_medicine(
@@ -212,24 +228,11 @@ fn deploy_medicine(
         let region_name = region.name.clone();
         let pop = region.population as f64;
 
-        // Find or create RegionDiseaseState entry
-        let inf_pos = region
-            .infections
-            .iter()
-            .position(|i| i.disease_idx == disease_idx);
-        let inf_idx = if let Some(pos) = inf_pos {
-            pos
-        } else {
-            region.infections.push(RegionDiseaseState {
-                disease_idx,
-                infected: 0.0,
-                dead: 0.0,
-                immune: 0.0,
-            });
-            region.infections.len() - 1
-        };
-
-        let inf = &mut region.infections[inf_idx];
+        // Look up existing infection state (don't create yet — avoid ghost entries)
+        let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+        let infected = existing.map(|i| i.infected).unwrap_or(0.0);
+        let dead = existing.map(|i| i.dead).unwrap_or(0.0);
+        let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
         let is_tested = state.medicines[medicine_idx]
             .tested_against
@@ -237,10 +240,11 @@ fn deploy_medicine(
 
         match target {
             DeployTarget::Vaccinate { .. } => {
-                let susceptible =
-                    (pop - inf.infected - inf.dead - inf.immune).max(0.0);
+                let susceptible = (pop - infected - dead - immune).max(0.0);
                 let actual = doses.min(susceptible);
                 if actual > 0.0 {
+                    // Now create entry if needed
+                    let inf = get_or_create_infection(region, disease_idx);
                     let mut adverse = false;
                     if !is_tested {
                         let roll: f64 = state.rng.r#gen();
@@ -266,8 +270,9 @@ fn deploy_medicine(
                 }
             }
             DeployTarget::Treat { .. } => {
-                let actual = doses.min(inf.infected);
+                let actual = doses.min(infected);
                 if actual > 0.0 {
+                    let inf = get_or_create_infection(region, disease_idx);
                     inf.infected -= actual;
                     let mut adverse = false;
                     if !is_tested {
@@ -1042,6 +1047,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         // Deploy to North America (region 0) which has no infections for disease 0
+        let infections_before = state.regions[0].infections.len();
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm); // select medicine 0
         state = apply_action(&state, &Action::Confirm); // select region 0 (NA)
@@ -1053,6 +1059,12 @@ mod tests {
             state.ui.status_message.as_ref().unwrap().contains("No infected"),
             "expected zero-target message, got: {:?}",
             state.ui.status_message
+        );
+        // Should NOT create a ghost disease entry
+        assert_eq!(
+            state.regions[0].infections.len(),
+            infections_before,
+            "failed deployment should not create ghost disease entry"
         );
     }
 
