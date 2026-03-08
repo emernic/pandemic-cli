@@ -379,6 +379,8 @@ pub enum GameEvent {
         disease_idx: usize,
         new_generation: u32,
     },
+    /// The game just ended (win or lose). UI should pause and close panels.
+    GameOver(GameOutcome),
 }
 
 /// Game outcome — checked each tick after simulation.

@@ -35,8 +35,16 @@ pub fn process_events(state: &mut GameState) {
     if state.events.is_empty() {
         return;
     }
+
+    // Handle game-over: pause and close panels (UI concern, not engine's job)
+    if state.events.iter().any(|e| matches!(e, GameEvent::GameOver(_))) {
+        state.paused = true;
+        state.ui.open_panel = Panel::None;
+    }
+
     // Pick the most important event to display as status message.
-    // Priority: FundingCrisis > DiseaseMutated
+    // Priority: FundingCrisis > DiseaseMutated (GameOver doesn't need a status
+    // message — the game-over overlay conveys the outcome).
     let msg = if state.events.iter().any(|e| matches!(e, GameEvent::FundingCrisis)) {
         "FUNDING CRISIS: All policies suspended!".to_string()
     } else if let Some(GameEvent::DiseaseMutated { disease_idx, new_generation }) =
