@@ -30,3 +30,8 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`
 - Diseases use vec index, not an id field (`RegionInfection.disease_idx`)
 - `tick()` is NOT an Action — simulation steps and player actions are separate concepts
 - Bump version in `Cargo.toml` when making a release
+- Always create branches from `origin/master`, not local `master`:
+  ```
+  git fetch origin && git checkout -b my-branch origin/master
+  ```
+  Local `master` may be checked out in another worktree, which blocks `git checkout master`.
