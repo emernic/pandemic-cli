@@ -228,8 +228,27 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Passive resource generation
-    new.resources.funding += 5.0;
+    // Passive resource generation — funding scales with healthy population.
+    // Each region contributes proportionally to its share of world population.
+    // Travel bans halve that region's economic contribution.
+    let base_funding = 5.0;
+    let total_pop: f64 = new.regions.iter().map(|r| r.population as f64).sum();
+    if total_pop > 0.0 {
+        let mut funding_income = 0.0;
+        for (i, region) in new.regions.iter().enumerate() {
+            let pop = region.population as f64;
+            let dead: f64 = region.infections.iter().map(|inf| inf.dead).sum();
+            let healthy_frac = (pop - dead).max(0.0) / pop;
+            let region_share = pop / total_pop;
+            let travel_ban_factor = if new.policies.get(i).is_some_and(|p| p.travel_ban) {
+                0.5
+            } else {
+                1.0
+            };
+            funding_income += base_funding * region_share * healthy_frac * travel_ban_factor;
+        }
+        new.resources.funding += funding_income;
+    }
     new.resources.research_points += 1.0;
 
     new.rng = rng;
@@ -1737,6 +1756,37 @@ mod tests {
     }
 
     #[test]
+    fn travel_ban_reduces_funding_income() {
+        let mut state = GameState::new_default(42);
+        // Remove infections so income is purely population-based
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+        // Use a known starting value with enough to cover policy costs
+        state.resources.funding = 1000.0;
+
+        // Tick without any travel bans
+        let no_ban = tick(&state);
+        let income_no_ban = no_ban.resources.funding - 1000.0;
+
+        // Tick with travel ban on Asia (largest region, ~60% of world pop)
+        state.policies[4].travel_ban = true;
+        let with_ban = tick(&state);
+        let income_with_ban = with_ban.resources.funding - 1000.0 + 10.0; // add back $10 policy cost to isolate income effect
+
+        assert!(
+            income_with_ban < income_no_ban,
+            "travel ban should reduce income: {income_with_ban:.2} vs {income_no_ban:.2}"
+        );
+        // Asia is ~60% of pop, ban halves its contribution, so income should drop ~30%
+        let reduction = 1.0 - income_with_ban / income_no_ban;
+        assert!(
+            reduction > 0.2 && reduction < 0.4,
+            "Asia travel ban should reduce income by ~30%, got {:.0}%", reduction * 100.0
+        );
+    }
+
+    #[test]
     fn policy_quarantine_reduces_infections() {
         let mut state = GameState::new_default(42);
         // Run without quarantine
@@ -1785,11 +1835,24 @@ mod tests {
     #[test]
     fn policy_costs_deducted_each_tick() {
         let mut state = GameState::new_default(42);
-        state.policies[0].travel_ban = true; // $10/tick
-        let initial_funding = state.resources.funding;
+        // First tick without policy to measure income
+        let no_policy = tick(&state);
+        let income_no_policy = no_policy.resources.funding - state.resources.funding;
+
+        // Now tick with travel ban
+        state.policies[0].travel_ban = true; // $10/tick, also halves region 0 income
         state = tick(&state);
-        // Should deduct $10 then add $5 passive income = net -$5
-        assert_eq!(state.resources.funding, initial_funding - 10.0 + 5.0);
+        let net_change = state.resources.funding - 1000.0; // started at $1000
+
+        // Should have deducted $10 and added income (less than without ban)
+        assert!(
+            net_change < income_no_policy,
+            "travel ban should reduce net income: net {net_change:.1} vs no-policy {income_no_policy:.1}"
+        );
+        assert!(
+            net_change < 0.0,
+            "travel ban cost ($10) should exceed income (~$5): net change {net_change:.1}"
+        );
     }
 
     #[test]
