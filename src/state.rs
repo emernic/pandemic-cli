@@ -698,6 +698,29 @@ impl GameState {
         self.policies.iter().map(|p| p.funding_cost()).sum()
     }
 
+    /// Estimated funding income per tick, based on current population health and policies.
+    pub fn funding_income_rate(&self) -> f64 {
+        let base_funding = 5.0;
+        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
+        if total_pop <= 0.0 {
+            return 0.0;
+        }
+        let mut income = 0.0;
+        for (i, region) in self.regions.iter().enumerate() {
+            let pop = region.population as f64;
+            let dead: f64 = region.infections.iter().map(|inf| inf.dead).sum();
+            let healthy_frac = (pop - dead).max(0.0) / pop;
+            let region_share = pop / total_pop;
+            let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
+                0.5
+            } else {
+                1.0
+            };
+            income += base_funding * region_share * healthy_frac * travel_ban_factor;
+        }
+        income
+    }
+
     /// Total initial population across all regions (before any deaths).
     pub fn initial_population(&self) -> f64 {
         self.regions.iter().map(|r| r.population as f64).sum()
