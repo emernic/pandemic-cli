@@ -125,6 +125,10 @@ Bad body: "The save system is broken — it silently discards the player's progr
 
 Investigate issues should be filed freely. You do NOT need user permission. Keep the title prefixed with "Investigate:" and phrase it as a question or observation, not a conclusion.
 
+### Playtest Feedback Label
+
+If the issue originates from a playtest session (either your own playtest or an automated playtest agent's report), add the `playtest-feedback` label. This signals to whoever picks up the issue that the report may be imprecise — the playtester's description of the problem and their suggested fix should not be taken at face value. The value is in identifying *which area* of the game triggered feedback, not in the specific diagnosis.
+
 **For chores**, use this structure:
 ```markdown
 ## Description

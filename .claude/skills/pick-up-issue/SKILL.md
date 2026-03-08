@@ -81,6 +81,10 @@ When picking up an investigate issue:
 
 5. Investigate issues are often small and self-contained. Many can be resolved quickly — but don't use that as an excuse to skip the "step back and think" part.
 
+## Playtest Feedback Issues
+
+Issues labeled `playtest-feedback` were filed based on automated playtest sessions. Treat these with a grain of salt. Playtesters don't always accurately describe what they saw, and they definitely don't know what they want. An incorrect bug report or a silly feature request can still be pointing at a part of the game that genuinely needs work — but the *diagnosis* and *solution* in the issue are probably wrong. Read the issue to understand what area of the game triggered the feedback, then look at that area with fresh eyes and form your own opinion about what (if anything) needs to change.
+
 ## Step 4: Read and Understand the Issue
 
 Read the full issue body:
