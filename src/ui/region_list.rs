@@ -2,7 +2,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 
@@ -187,6 +187,7 @@ fn render_region_box(
     };
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(if selected { BorderType::Double } else { BorderType::Plain })
         .border_style(Style::default().fg(border_color).add_modifier(border_mod));
 
     let inner = block.inner(area);
