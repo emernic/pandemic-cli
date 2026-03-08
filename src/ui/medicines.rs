@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::state::{DeployTarget, GameState, MedicineUiState};
 use crate::ui::research::disease_display_name;
+use crate::ui::hint_line;
 use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -94,10 +95,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Enter] Select  [Esc] Close",
-        Style::default().fg(Color::DarkGray),
-    )));
+    lines.push(hint_line(state, "Select", "Close"));
 
     (" Medicines ".to_string(), lines)
 }
@@ -148,10 +146,7 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Enter] Select  [Esc] Back",
-        Style::default().fg(Color::DarkGray),
-    )));
+    lines.push(hint_line(state, "Select", "Back"));
 
     (format!(" Deploy: {} ", med.name), lines)
 }
@@ -259,10 +254,7 @@ fn render_select_target(
     ]));
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Enter] Deploy  [Esc] Back",
-        Style::default().fg(Color::DarkGray),
-    )));
+    lines.push(hint_line(state, "Deploy", "Back"));
 
     (format!(" {} → {} ", med.name, region.name), lines)
 }
@@ -319,10 +311,7 @@ fn render_confirm_deploy(
         Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Enter] Confirm  [Esc] Cancel",
-        Style::default().fg(Color::DarkGray),
-    )));
+    lines.push(hint_line(state, "Confirm", "Cancel"));
 
     (format!(" ⚠ {} ", med.name), lines)
 }

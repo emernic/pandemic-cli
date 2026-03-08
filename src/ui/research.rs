@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::engine::{available_bench_projects, available_field_projects};
 use crate::state::{GameState, ResearchKind, ResearchUiState};
+use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines) = match &state.ui.research_ui {
@@ -73,10 +74,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Enter] Select  [Esc] Close",
-        Style::default().fg(Color::DarkGray),
-    )));
+    lines.push(hint_line(state, "Select", "Close"));
 
     (" Research ".to_string(), lines)
 }
@@ -162,10 +160,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Enter] Select  [Esc] Back",
-        Style::default().fg(Color::DarkGray),
-    )));
+    lines.push(hint_line(state, "Select", "Back"));
 
     (title.to_string(), lines)
 }
@@ -218,10 +213,7 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
 
         lines.push(Line::from(""));
         if can_afford {
-            lines.push(Line::from(Span::styled(
-                "  [Enter] Confirm  [Esc] Back",
-                Style::default().fg(Color::DarkGray),
-            )));
+            lines.push(hint_line(state, "Confirm", "Back"));
         } else {
             lines.push(Line::from(Span::styled(
                 "  Insufficient resources!",

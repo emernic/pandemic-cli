@@ -16,6 +16,17 @@ use ratatui::{
 use crate::state::{GameOutcome, GameState, Panel};
 use crate::format_number;
 
+/// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
+/// portion when the game is over (Confirm is blocked post-game).
+pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<'static> {
+    let hint = if state.outcome == GameOutcome::Playing {
+        format!("  [Enter] {enter_label}  [Esc] {esc_label}")
+    } else {
+        format!("  [Esc] {esc_label}")
+    };
+    Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray)))
+}
+
 pub fn render(f: &mut Frame, state: &GameState) {
     let header_height = resources::height(state);
     let has_extra_line = state.ui.status_message.is_some() || state.outcome != GameOutcome::Playing;
