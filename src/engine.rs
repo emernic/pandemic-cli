@@ -143,11 +143,12 @@ pub fn tick(state: &GameState) -> GameState {
         let mutation_chance = disease.pathogen_type.mutation_rate();
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
-            // Small random parameter changes (±10% of current value)
+            // Small random parameter changes (±10% of current value), clamped to
+            // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.infectivity *= inf_factor;
+            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.005, 0.5);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality *= leth_factor;
+            disease.lethality = (disease.lethality * leth_factor).clamp(0.0005, 0.1);
         }
     }
 
