@@ -10,10 +10,10 @@ PANDEMIC DEFENSE   RUNNING   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infect
 ││Pop: 500.0M                 │   │Pop: 750.0M                 │   │Inf 50.0K                   │  ││    Infect: 6%  Lethal: 0.8%  Recov: 4%                                                           │
 ││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││    Knowledge: 100%                                                                               │
 ││No infections               │───│                            │───│                            │  ││    Region            Infected    Immune      Dead                                                │
-││                            │   │                            │   │                            │  ││    Asia                 50.0K         0         0                                                │
+││↔ Oceania                   │   │                            │   │                            │  ││    Asia                 50.0K         0         0                                                │
 ││                            │   │                            │   │                            │  ││    ──────────────────────────────────────────────                                                │
 │└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘  ││    TOTAL                50.0K         0         0                                                │
-│↔ Oceania      │               ╱                │               ╱                │                ││                                                                                                  │
+│               │               ╱                │               ╱                │                ││                                                                                                  │
 │┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐  ││  Strain Beta                                                                                     │
 ││South America            LOW│   │Africa                    OK│   │Oceania                   OK│  ││    Type: Bacterium                                                                               │
 ││Inf 500                     │   │Pop: 1.4B                   │   │Pop: 45.0M                  │  ││    Infect: 4%  Lethal: 0.2%  Recov: 2%                                                           │

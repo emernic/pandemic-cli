@@ -10,10 +10,10 @@ PANDEMIC DEFENSE   DEFEAT   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infecte
 ││Pop: 500.0M                 │   │Pop: 750.0M                 │   │Inf 50.0K                   │  ││                                                                                                  │
 ││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││  ── Summary ──                                                                                   │
 ││No infections               │───│                            │───│                            │  ││                                                                                                  │
-││                            │   │                            │   │                            │  ││  Duration:       0 ticks                                                                         │
+││↔ Oceania                   │   │                            │   │                            │  ││  Duration:       0 ticks                                                                         │
 ││                            │   │                            │   │                            │  ││  Total Dead:     0  (0.0% of population)                                                         │
 │└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘  ││  Survivors:      7.8B  (100.0%)                                                                  │
-│↔ Oceania      │               ╱                │               ╱                │                ││  Immunized:      0                                                                               │
+│               │               ╱                │               ╱                │                ││  Immunized:      0                                                                               │
 │┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐  ││  Still Infected: 50.5K                                                                           │
 ││South America            LOW│   │Africa                    OK│   │Oceania                   OK│  ││                                                                                                  │
 ││Inf 500                     │   │Pop: 1.4B                   │   │Pop: 45.0M                  │  ││  ── Regions ──                                                                                   │
