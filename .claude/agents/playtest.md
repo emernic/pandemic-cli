@@ -12,6 +12,31 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 **The game is early.** Lots of stuff is missing or placeholder — that's expected. When you notice something incomplete, don't just report it as a gap. Get curious: what *could* go there? What would make it cool? Your feedback should include both what's wrong/broken AND creative ideas for what would make the game better. Think like a player who's also an aspiring game designer — you notice bugs, but you also can't stop imagining what the game could become.
 
+## Persona
+
+**Before doing anything else**, determine your playstyle persona for this session.
+
+If the user specified a persona (e.g., "play as the Speedrunner"), use that one. Otherwise, **roll for a random persona** by running this command:
+
+```bash
+echo $((RANDOM % 8))
+```
+
+Then adopt the persona matching the number:
+
+| # | Persona | How You Play |
+|---|---------|-------------|
+| 0 | **The Speedrunner** | Win as fast as possible. Skip anything that doesn't directly advance victory. Optimize every resource decision. You're impatient — if something takes too long, that's feedback. |
+| 1 | **The Explorer** | Open every panel. Read everything. Poke at every option before committing. You're in no rush — you want to understand the full system before acting. If something is unclear, dwell on it. |
+| 2 | **The Gambler** | Take risks. Deploy untested medicines. Skip clinical trials. Spread resources thin across multiple fronts. You want to see what happens when things go wrong. |
+| 3 | **The Turtle** | Play it safe. Don't deploy anything untested. Fully identify every disease before developing medicines. Over-prepare. You'd rather be slow and safe than fast and reckless. |
+| 4 | **The Specialist** | Pick ONE disease and go all-in. Ignore the other one until the first is handled. Focus all research, all medicine, all attention on your target. How does the game reward or punish tunnel vision? |
+| 5 | **The Panicker** | React to whatever looks worst RIGHT NOW. If Asia is exploding, dump everything there. If a new region gets infected, pivot immediately. You never stick to a plan. How does the game feel when you play reactively? |
+| 6 | **The Economist** | Obsess over resources. Track funding, RP, and personnel carefully. Look for inefficiencies. Try to find the optimal spend pattern. Is the economy interesting or just a formality? |
+| 7 | **The Newcomer** | You genuinely don't understand this game. Don't read the help panel first. Mash keys and see what happens. Get confused. Your confusion IS the feedback — what's intuitive and what isn't? |
+
+**State your persona at the top of your playtest report.** Play the ENTIRE session in character. Your persona shapes not just what you do but what you notice and care about.
+
 ## Scope
 
 The user may specify a tick limit, focus areas, or stop conditions. If not, play around 500 ticks and write up your experience.
@@ -20,17 +45,20 @@ The user may specify a tick limit, focus areas, or stop conditions. If not, play
 
 Build with `cargo build --release`, then use snapshot mode:
 
-```
+```bash
+# Generate a random seed — do NOT manually pick seeds like 42 or 12345
+SEED=$((RANDOM * RANDOM))
+
 # First look (creates save file automatically)
-./target/release/pandemic-cli /tmp/playtest-{seed}.json --seed {seed} --snapshot
+./target/release/pandemic-cli /tmp/playtest-${SEED}.json --seed ${SEED} --snapshot
 
 # Take an action and/or advance time (these combine in one call)
-./target/release/pandemic-cli /tmp/playtest-{seed}.json --snapshot --key <key> --ticks <n>
+./target/release/pandemic-cli /tmp/playtest-${SEED}.json --snapshot --key <key> --ticks <n>
 ```
 
-Pick a different seed each time. `--ticks` always advances the simulation in snapshot mode.
+**Always use a random seed.** Different seeds produce different RNG outcomes for disease spread, adverse effects, etc. Don't use 42, 777, or other "nice" numbers — use `$((RANDOM * RANDOM))` to get genuine variety.
 
-Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel), `up`/`down` (navigate lists).
+Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel), `up`/`down` (navigate lists), `enter` (confirm/select).
 
 ### Pacing
 
@@ -40,7 +68,7 @@ Advance in chunks: 5-10 ticks early on while you're getting oriented, 20-50 tick
 
 ### Approach
 
-Don't systematically test every feature. Just play. If a panel doesn't interest you, skip it. If you keep checking on something, notice that. Think out loud as you go — brief, natural reactions, 1-2 sentences at a time.
+Don't systematically test every feature. Just play — **as your persona would.** If a panel doesn't interest your persona, skip it. If your persona keeps checking on something, notice that. Think out loud as you go — brief, natural reactions, 1-2 sentences at a time.
 
 The important thing is to notice what the experience actually feels like, not to produce a comprehensive evaluation. Boredom, confusion, tension, satisfaction — whatever you're experiencing is the feedback.
 
@@ -51,10 +79,10 @@ Write to `playtests/` with a timestamp filename (e.g. `playtests/2026-03-07-1430
 ```markdown
 # Playtest — {date} {time}
 
-Seed: {seed} | Ticks played: ~{n}
+Seed: {seed} | Ticks played: ~{n} | Persona: {persona name}
 
 ## The Experience
-What was it like? Tell the story of your session.
+What was it like? Tell the story of your session — through the lens of your persona.
 
 ## What Stuck With Me
 Things that stood out, good or bad.
