@@ -174,7 +174,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Red),
         ),
         Span::styled(
-            format!("  ({:.1}% of population)", (total_dead / initial_pop) * 100.0),
+            format!("  ({:.1}% of population)", (total_dead / initial_pop) * 100.0 + 0.0),
             stat_label,
         ),
     ]));
@@ -215,7 +215,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         let dead = region.total_dead();
         let alive = region.alive();
         let pop = region.population as f64;
-        let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 } else { 0.0 };
+        let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 + 0.0 } else { 0.0 };
         lines.push(Line::from(vec![
             Span::styled(format!("  {:<16}", region.name), stat_value),
             Span::styled(format!("{:>8} alive", format_number(alive)), Style::default().fg(Color::Green)),
