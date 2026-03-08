@@ -95,7 +95,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         for conn in &connections {
             // Grid positions are guaranteed valid by drawable_connections
             let (ca, ra) = map_grid_pos(conn.a).unwrap();
-            let (cb, rb) = map_grid_pos(conn.b).unwrap();
+            let (_cb, rb) = map_grid_pos(conn.b).unwrap();
 
             let has_spread = state.regions[conn.a].total_infected() > 0.0
                 || state.regions[conn.b].total_infected() > 0.0;
