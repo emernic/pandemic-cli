@@ -121,41 +121,40 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
             Style::default().fg(Color::White)
         };
 
-        // Show infection stats for target diseases
-        let mut info_parts: Vec<Span> = Vec::new();
+        // Show aggregate infection stats across all target diseases
+        let mut total_susceptible = 0.0_f64;
+        let mut total_infected = 0.0_f64;
+        let mut total_immune = 0.0_f64;
         for &d_idx in &med.target_diseases {
             let inf = region.infections.iter().find(|i| i.disease_idx == d_idx);
             let infected = inf.map(|i| i.infected).unwrap_or(0.0);
             let immune = inf.map(|i| i.immune).unwrap_or(0.0);
             let dead = inf.map(|i| i.dead).unwrap_or(0.0);
             let susceptible = (region.population as f64 - infected - dead - immune).max(0.0);
-
-            if !info_parts.is_empty() {
-                info_parts.push(Span::raw(" "));
-            }
-            info_parts.push(Span::styled(
-                format!("{}s", format_number(susceptible)),
-                Style::default().fg(Color::Cyan),
-            ));
-            info_parts.push(Span::raw(" "));
-            info_parts.push(Span::styled(
-                format!("{}i", format_number(infected)),
-                Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
-            ));
-            if immune > 0.0 {
-                info_parts.push(Span::raw(" "));
-                info_parts.push(Span::styled(
-                    format!("{}✓", format_number(immune)),
-                    Style::default().fg(Color::Green),
-                ));
-            }
+            total_susceptible += susceptible;
+            total_infected += infected;
+            total_immune += immune;
         }
 
         let mut spans = vec![
             Span::styled(format!("{}{:<14}", marker, region.name), style),
+            Span::styled(
+                format!("{:>6} sus", format_number(total_susceptible)),
+                Style::default().fg(Color::Cyan),
+            ),
             Span::raw("  "),
+            Span::styled(
+                format!("{:>6} inf", format_number(total_infected)),
+                Style::default().fg(if total_infected > 0.0 { Color::Red } else { Color::DarkGray }),
+            ),
         ];
-        spans.extend(info_parts);
+        if total_immune > 0.0 {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                format!("{:>6} imm", format_number(total_immune)),
+                Style::default().fg(Color::Green),
+            ));
+        }
         lines.push(Line::from(spans));
     }
 
