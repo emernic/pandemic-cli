@@ -249,6 +249,10 @@ fn deploy_medicine(
                     state.ui.status_message = Some(
                         deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse),
                     );
+                } else {
+                    state.ui.status_message = Some(
+                        format!("No susceptible population in {region_name}"),
+                    );
                 }
             }
             DeployTarget::Treat { .. } => {
@@ -272,6 +276,10 @@ fn deploy_medicine(
                     state.resources.funding -= cost;
                     state.ui.status_message = Some(
                         deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse),
+                    );
+                } else {
+                    state.ui.status_message = Some(
+                        format!("No infected population in {region_name}"),
                     );
                 }
             }
@@ -1015,13 +1023,19 @@ mod tests {
     fn medicine_zero_targets_refused() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
+        // Deploy to North America (region 0) which has no infections for disease 0
         state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::SelectNext);
+        state = apply_action(&state, &Action::Confirm); // select medicine 0
+        state = apply_action(&state, &Action::Confirm); // select region 0 (NA)
+        state = apply_action(&state, &Action::SelectNext); // Treat option
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm);
         assert_eq!(state.resources.funding, funding_before);
+        assert!(
+            state.ui.status_message.as_ref().unwrap().contains("No infected"),
+            "expected zero-target message, got: {:?}",
+            state.ui.status_message
+        );
     }
 
     #[test]
