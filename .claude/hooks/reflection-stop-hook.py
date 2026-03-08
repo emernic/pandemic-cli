@@ -6,6 +6,7 @@ MIN_LINES_CHANGED = 75
 REFLECTION_PROMPT = f"You've made significant changes (>{MIN_LINES_CHANGED} lines) since your last reflection. Please run `/reflect` to analyze them before continuing."
 SLOP_CHECK_PROMPT = "You've reflected but haven't done a slop check yet. Please run `/slop-check` to look for AI slop patterns before continuing."
 ISSUE_CLEANUP_PROMPT = "You picked up a GitHub issue during this session. Before stopping, make sure: (1) the issue is CLOSED, (2) the `in-progress` label is removed, and (3) any investigate issues you filed are either resolved or still valid. If you already handled this, you can ignore this reminder."
+UNCOMMITTED_CHANGES_PROMPT = "You have uncommitted or unpushed changes. Before stopping, make sure your work is committed, pushed, and merged (or intentionally abandoned). Don't leave work stranded on a local branch."
 
 
 def get_tool_uses(entry):
@@ -79,6 +80,20 @@ def has_unclosed_issue_work(entries):
     return found_pickup and not saw_label_remove
 
 
+def has_unpushed_edits(entries):
+    """Check if there are file edits after the last git push or pr merge."""
+    edits_since_push = 0
+    for entry in reversed(entries):
+        for tool in get_tool_uses(entry):
+            if tool["name"] in ("Write", "Edit"):
+                edits_since_push += 1
+            elif tool["name"] == "Bash":
+                cmd = tool["input"].get("command", "")
+                if "git push" in cmd or "gh pr merge" in cmd:
+                    return edits_since_push > 0
+    return edits_since_push > 0
+
+
 def main():
     data = json.load(sys.stdin)
 
@@ -103,6 +118,11 @@ def main():
     # Third check: picked up an issue but didn't close it / remove label?
     if has_unclosed_issue_work(entries):
         print(json.dumps({"decision": "block", "reason": ISSUE_CLEANUP_PROMPT}))
+        return
+
+    # Fourth check: file edits after last push/merge?
+    if has_unpushed_edits(entries):
+        print(json.dumps({"decision": "block", "reason": UNCOMMITTED_CHANGES_PROMPT}))
 
 
 if __name__ == "__main__":

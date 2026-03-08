@@ -75,7 +75,7 @@ When picking up an investigate issue:
 3. **Start with no assumptions.** The current behavior might be exactly correct. The issue filer might have been confused about something that's actually fine. Or the behavior might be wrong, but not in the way the issue suggests — the whole area might be poorly designed in a way that's more fundamental than what was called out.
 
 4. **Determine the outcome** (only after you genuinely understand the area):
-   - **It's actually fine** (~30%) — close the issue with a comment explaining why the behavior is correct and makes sense. This is a perfectly valid and common outcome. Closing investigate issues is good hygiene, not a failure.
+   - **It's actually fine** (~30%) — close the issue as not planned (`gh issue close <number> --reason "not planned"`) with a comment explaining why the behavior is correct and makes sense. This is a perfectly valid and common outcome. Closing investigate issues is good hygiene, not a failure.
    - **It works but is confusing** (~30%) — add documentation, rename things, add a code comment, or restructure to make the behavior obvious. The code was right, but understandably confusing.
    - **It's actually a problem** (~40%) — fix the bug, clean up the design, or file a more specific bug/enhancement issue if the fix is too large for this pass. The fix might be for the specific thing the issue mentioned, or it might be a broader redesign of the area.
 
@@ -91,7 +91,7 @@ Issues labeled `playtest-feedback` were filed by automated playtest agents. **Th
 
 1. **Play the game yourself** in the area the issue describes. Run snapshot commands, look at the output, understand what the player actually sees and experiences.
 2. **Ask yourself: is this actually a problem?** Not "does the issue describe a real thing" — but "if I were a human player, would this bother me? Does the current behavior make sense?" Many playtest issues describe behavior that is correct, intentional, and good.
-3. **If you conclude it's not a problem, close the issue.** Closing invalid playtest-feedback issues is good hygiene. Explain briefly why the current behavior is correct. This is a common and valid outcome — probably ~40% of playtest-feedback issues should just be closed.
+3. **If you conclude it's not a problem, close the issue as not planned** (`gh issue close <number> --reason "not planned"`). Closing invalid playtest-feedback issues is good hygiene. Explain briefly why the current behavior is correct. This is a common and valid outcome — probably ~40% of playtest-feedback issues should just be closed.
 4. **If it IS a problem, form your own solution.** Do not implement the suggestion from the issue. Think about what the right behavior is from a game design perspective, then implement that.
 
 **Example of what NOT to do:** A playtest agent reports "health bars are always solid green" because it can't see colors in snapshot mode. The bars are actually multi-colored and working perfectly. An agent blindly implements sqrt scaling to "fix" the bars, making them actively misleading. The right move was to play the game, realize the bars are fine, and close the issue.
@@ -115,11 +115,11 @@ If the issue has a "Possible Solution" section, read it for context but do NOT f
 
 **STOP. Do not start coding yet.** This is the step where most mistakes happen. You've read the issue, you've looked at the code, you've played the game. Now answer these questions honestly:
 
-1. **Is this actually a problem?** Not every issue describes a real problem. The filer may have been confused, wrong, or working from incomplete information. If the current behavior is correct and makes sense, close the issue with an explanation. This is a valid outcome.
+1. **Is this actually a problem?** Not every issue describes a real problem. The filer may have been confused, wrong, or working from incomplete information. If the current behavior is correct and makes sense, close the issue as not planned (`gh issue close <number> --reason "not planned"`) with an explanation. This is a valid outcome.
 2. **Does the proposed solution make sense?** Even if the problem is real, the suggested fix might be wrong. Think about what would actually be right for the game and the player. Would you make this change if no issue existed and you were just looking at the code?
 3. **Is this change making the game simpler or more complex?** Good changes almost always make things simpler. If your planned change adds complexity (new config, special-case logic, non-obvious scaling, etc.), that's a red flag. Step back and ask if there's a simpler approach — or if the "problem" is actually fine as-is.
 
-**If you can't clearly articulate why the change improves the game, don't make it.** Close the issue or ask the user for guidance.
+**If you can't clearly articulate why the change improves the game, don't make it.** Close the issue as not planned (`--reason "not planned"`) or ask the user for guidance.
 
 Once you're confident the change is worth making, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
 
