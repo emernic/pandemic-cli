@@ -153,30 +153,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let y = inner.y + row * (region_height + gap_row);
         let rect = Rect::new(x, y, region_width, region_height);
         let selected = idx == state.ui.map_selection;
-        render_region_box(f, rect, region, selected, state);
-    }
-
-    // Show hints for connections that can't be drawn on the grid
-    let hidden = non_drawable_connections(state, state.ui.map_selection);
-    if !hidden.is_empty() {
-        let names: Vec<&str> = hidden
-            .iter()
-            .filter_map(|&j| state.regions.get(j).map(|r| r.name.as_str()))
-            .collect();
-        if !names.is_empty() {
-            let (col, row) = map_grid_pos(state.ui.map_selection).unwrap();
-            let box_x = inner.x + col * (region_width + gap_col);
-            let box_y = inner.y + row * (region_height + gap_row) + region_height;
-            if box_y < inner.y + inner.height {
-                let hint = format!("↔ {}", names.join(", "));
-                let hint_line = Line::from(Span::styled(
-                    hint,
-                    Style::default().fg(Color::DarkGray),
-                ));
-                let hint_area = Rect::new(box_x, box_y, region_width, 1);
-                f.render_widget(Paragraph::new(vec![hint_line]), hint_area);
-            }
-        }
+        let conn_hint = if selected {
+            let hidden = non_drawable_connections(state, idx);
+            let names: Vec<&str> = hidden
+                .iter()
+                .filter_map(|&j| state.regions.get(j).map(|r| r.name.as_str()))
+                .collect();
+            if names.is_empty() { None } else { Some(format!("↔ {}", names.join(", "))) }
+        } else {
+            None
+        };
+        render_region_box(f, rect, region, selected, state, conn_hint.as_deref());
     }
 }
 
@@ -186,6 +173,7 @@ fn render_region_box(
     region: &Region,
     selected: bool,
     state: &GameState,
+    conn_hint: Option<&str>,
 ) {
     let border_color = if selected {
         Color::Yellow
@@ -388,6 +376,16 @@ fn render_region_box(
                         lines.push(Line::from(spans));
                     }
                 }
+            }
+        }
+
+        // Non-drawable connection hint (e.g., "↔ Oceania")
+        if let Some(hint) = conn_hint {
+            if lines.len() < inner.height as usize {
+                lines.push(Line::from(Span::styled(
+                    hint.to_string(),
+                    Style::default().fg(Color::DarkGray),
+                )));
             }
         }
     }

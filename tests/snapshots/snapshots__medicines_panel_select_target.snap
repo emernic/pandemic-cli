@@ -10,10 +10,10 @@ PANDEMIC DEFENSE   RUNNING   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infect
 ││Pop: 500.0M                 │   │Pop: 750.0M                 │   │Inf 50.0K                   │  ││▶ Vaccinate susceptible (Strain Alpha)                                                            │
 ││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││    500.0M susceptible | 100.0K doses                                                             │
 ││No infections               │───│                            │───│                            │  ││  Treat infected (Strain Alpha)                                                                   │
-││                            │   │                            │   │                            │  ││    0 infected | 100.0K doses                                                                     │
+││↔ Oceania                   │   │                            │   │                            │  ││    0 infected | 100.0K doses                                                                     │
 ││                            │   │                            │   │                            │  ││                                                                                                  │
 │└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘  ││  Cost: $200    Funding: $1000                                                                    │
-│↔ Oceania      │               ╱                │               ╱                │                ││                                                                                                  │
+│               │               ╱                │               ╱                │                ││                                                                                                  │
 │┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐  ││  [Enter] Deploy  [Esc] Back                                                                      │
 ││South America            LOW│   │Africa                    OK│   │Oceania                   OK│  ││                                                                                                  │
 ││Inf 500                     │   │Pop: 1.4B                   │   │Pop: 45.0M                  │  ││                                                                                                  │
