@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::action::Action;
 use crate::state::{
-    map_navigate, DeployTarget, GameCommand, GameEvent, GameOutcome, GameState, MapDirection,
+    DeployTarget, GameCommand, GameEvent, GameOutcome, GameState,
     Panel, RegionDiseaseState, ResearchKind, ResearchProject,
     BASE_RP_INCOME, BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_COST,
     HOSPITAL_SURGE_PERSONNEL, KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION,
@@ -504,45 +504,17 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
         Action::ClosePanel => new.ui.close_panel(),
         Action::SelectNext => {
-            if new.ui.open_panel == Panel::None {
-                // Navigate map down
-                new.ui.map_selection = map_navigate(
-                    new.ui.map_selection,
-                    MapDirection::Down,
-                    new.regions.len(),
-                );
-            } else {
-                let max = new.panel_selection_max();
-                if new.ui.panel_selection < max {
-                    new.ui.panel_selection += 1;
-                }
-            }
+            let max = new.panel_selection_max();
+            new.ui.select_next(new.regions.len(), max);
         }
         Action::SelectPrev => {
-            if new.ui.open_panel == Panel::None {
-                // Navigate map up
-                new.ui.map_selection = map_navigate(
-                    new.ui.map_selection,
-                    MapDirection::Up,
-                    new.regions.len(),
-                );
-            } else if new.ui.panel_selection > 0 {
-                new.ui.panel_selection -= 1;
-            }
+            new.ui.select_prev(new.regions.len());
         }
         Action::SelectLeft => {
-            new.ui.map_selection = map_navigate(
-                new.ui.map_selection,
-                MapDirection::Left,
-                new.regions.len(),
-            );
+            new.ui.select_left(new.regions.len());
         }
         Action::SelectRight => {
-            new.ui.map_selection = map_navigate(
-                new.ui.map_selection,
-                MapDirection::Right,
-                new.regions.len(),
-            );
+            new.ui.select_right(new.regions.len());
         }
         Action::Confirm => {
             if new.outcome == GameOutcome::Playing {

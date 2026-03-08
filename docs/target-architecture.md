@@ -79,11 +79,9 @@ The medicine wizard (BrowseMedicines → SelectRegion → SelectTarget → Confi
 
 **Approach:** Add methods to `UiState` that handle:
 - ~~Panel open/close/toggle~~ — DONE (`UiState::toggle_panel()`, `UiState::close_panel()`)
-- Selection navigation (next/prev with bounds)
+- ~~Selection navigation (next/prev with bounds)~~ — DONE (`UiState::select_next()`, `select_prev()`, `select_left()`, `select_right()`)
 - ~~Wizard step forward/back (Confirm handler for medicines, research, policy)~~ — DONE (`UiState::handle_confirm()`)
 - ~~Translating a Confirm press into a game command (or nothing, if mid-wizard)~~ — DONE (returns `Option<GameCommand>`)
-
-**What's left:** Selection navigation (SelectNext/SelectPrev) still lives in `apply_action()` in engine.rs. These should move to UiState methods.
 
 The Confirm flow now works as intended:
 ```

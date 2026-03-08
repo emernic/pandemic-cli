@@ -589,6 +589,51 @@ impl UiState {
     }
 
 
+    /// Navigate down (in map) or to the next item (in a panel).
+    /// `num_regions` is needed for map navigation; `panel_max` bounds panel selection.
+    pub fn select_next(&mut self, num_regions: usize, panel_max: usize) {
+        if self.open_panel == Panel::None {
+            self.map_selection = map_navigate(
+                self.map_selection,
+                MapDirection::Down,
+                num_regions,
+            );
+        } else if self.panel_selection < panel_max {
+            self.panel_selection += 1;
+        }
+    }
+
+    /// Navigate up (in map) or to the previous item (in a panel).
+    pub fn select_prev(&mut self, num_regions: usize) {
+        if self.open_panel == Panel::None {
+            self.map_selection = map_navigate(
+                self.map_selection,
+                MapDirection::Up,
+                num_regions,
+            );
+        } else if self.panel_selection > 0 {
+            self.panel_selection -= 1;
+        }
+    }
+
+    /// Navigate left on the map.
+    pub fn select_left(&mut self, num_regions: usize) {
+        self.map_selection = map_navigate(
+            self.map_selection,
+            MapDirection::Left,
+            num_regions,
+        );
+    }
+
+    /// Navigate right on the map.
+    pub fn select_right(&mut self, num_regions: usize) {
+        self.map_selection = map_navigate(
+            self.map_selection,
+            MapDirection::Right,
+            num_regions,
+        );
+    }
+
     /// Handle a Confirm keypress. Advances wizard state machines and returns
     /// a GameCommand when the wizard completes and a game action should fire.
     /// All UI transitions happen here; the engine only executes returned commands.
