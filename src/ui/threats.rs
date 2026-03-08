@@ -42,10 +42,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 )));
             } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
                 // Name known, partial stats + pathogen type
-                lines.push(Line::from(Span::styled(
-                    format!("    Type: {}", disease.pathogen_type.label()),
-                    Style::default().fg(Color::Cyan),
-                )));
+                let mut type_spans = vec![
+                    Span::styled(
+                        format!("    Type: {}", disease.pathogen_type.label()),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ];
+                if disease.strain_generation > 0 {
+                    type_spans.push(Span::styled(
+                        format!("  Strain Gen {}", disease.strain_generation),
+                        Style::default().fg(Color::Yellow),
+                    ));
+                }
+                lines.push(Line::from(type_spans));
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
@@ -59,10 +68,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ]));
             } else {
                 // Full stats visible + pathogen type
-                lines.push(Line::from(Span::styled(
-                    format!("    Type: {}", disease.pathogen_type.label()),
-                    Style::default().fg(Color::Cyan),
-                )));
+                let mut type_spans = vec![
+                    Span::styled(
+                        format!("    Type: {}", disease.pathogen_type.label()),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ];
+                if disease.strain_generation > 0 {
+                    type_spans.push(Span::styled(
+                        format!("  Strain Gen {}", disease.strain_generation),
+                        Style::default().fg(Color::Yellow),
+                    ));
+                }
+                lines.push(Line::from(type_spans));
                 // Full stats visible
                 lines.push(Line::from(vec![
                     Span::raw("    "),

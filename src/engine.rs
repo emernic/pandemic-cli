@@ -138,6 +138,19 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Disease mutation
+    for disease in &mut new.diseases {
+        let mutation_chance = disease.pathogen_type.mutation_rate();
+        if rng.r#gen::<f64>() < mutation_chance {
+            disease.strain_generation += 1;
+            // Small random parameter changes (±10% of current value)
+            let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
+            disease.infectivity *= inf_factor;
+            let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
+            disease.lethality *= leth_factor;
+        }
+    }
+
     // Research progress
     if let Some(ref mut project) = new.field_research {
         project.progress += 1.0;
@@ -156,6 +169,16 @@ pub fn tick(state: &GameState) -> GameState {
                         if !medicine.tested_against.contains(&d_idx) {
                             medicine.tested_against.push(d_idx);
                         }
+                        // Update strain calibration to current disease generation
+                        if let Some(pos) = medicine.target_diseases.iter().position(|&d| d == d_idx) {
+                            let current_gen = new.diseases.get(d_idx)
+                                .map_or(0, |d| d.strain_generation);
+                            // Extend strain_generations if needed
+                            while medicine.strain_generations.len() <= pos {
+                                medicine.strain_generations.push(0);
+                            }
+                            medicine.strain_generations[pos] = current_gen;
+                        }
                     }
                 }
                 ResearchKind::DevelopMedicine { .. } => {}
@@ -171,6 +194,11 @@ pub fn tick(state: &GameState) -> GameState {
                     let m_idx = *medicine_idx;
                     if let Some(medicine) = new.medicines.get_mut(m_idx) {
                         medicine.unlocked = true;
+                        // Calibrate to current strain generations of all target diseases
+                        medicine.strain_generations = medicine.target_diseases.iter()
+                            .map(|&d_idx| new.diseases.get(d_idx)
+                                .map_or(0, |d| d.strain_generation))
+                            .collect();
                     }
                 }
                 _ => {}
@@ -271,9 +299,11 @@ fn deploy_medicine(
             DeployTarget::Treat { disease_idx } => *disease_idx,
         };
 
-        // Efficacy: therapy type × pathogen type determines effective dose count
+        // Efficacy: therapy type × pathogen type × strain match
         let pathogen = &state.diseases[disease_idx].pathogen_type;
-        let efficacy = therapy_type.efficacy(pathogen);
+        let therapy_efficacy = therapy_type.efficacy(pathogen);
+        let strain_eff = state.medicines[medicine_idx].strain_efficacy(disease_idx, &state.diseases);
+        let efficacy = therapy_efficacy * strain_eff;
         let effective_doses = state.medicines[medicine_idx].doses * efficacy;
 
         let region = &mut state.regions[region_idx];
@@ -706,13 +736,22 @@ pub fn available_field_projects(state: &GameState) -> Vec<ResearchKind> {
             }
         }
     }
-    // Clinical Trial: unlocked medicines not yet tested against their target diseases
+    // Clinical Trial: unlocked medicines not yet tested, OR tested but strain-outdated
     for (i, med) in state.medicines.iter().enumerate() {
         if !med.unlocked {
             continue;
         }
-        for &d_idx in &med.target_diseases {
-            if !med.tested_against.contains(&d_idx) {
+        for (target_pos, &d_idx) in med.target_diseases.iter().enumerate() {
+            let needs_trial = if !med.tested_against.contains(&d_idx) {
+                true // Never tested
+            } else {
+                // Tested, but check if strain has drifted
+                let med_gen = med.strain_generations.get(target_pos).copied().unwrap_or(0);
+                let disease_gen = state.diseases.get(d_idx)
+                    .map_or(0, |d| d.strain_generation);
+                disease_gen > med_gen
+            };
+            if needs_trial {
                 let kind = ResearchKind::ClinicalTrial {
                     medicine_idx: i,
                     disease_idx: d_idx,
@@ -1050,6 +1089,7 @@ mod tests {
             cross_region_spread: 0.005,
             recovery_rate: 0.05,
             knowledge: 0.0,
+            strain_generation: 0,
         });
 
         let s = apply_action(&state, &Action::OpenThreats);
@@ -1879,5 +1919,144 @@ mod tests {
         // Toggle it off
         state = apply_action(&state, &Action::Confirm);
         assert!(!state.policies[4].travel_ban);
+    }
+
+    #[test]
+    fn disease_mutates_over_time() {
+        let mut state = GameState::new_default(42);
+        // RNA virus (Strain Alpha) has mutation_rate 0.008, so over 500 ticks
+        // we expect ~4 mutations. Run enough ticks to virtually guarantee at least one.
+        let original_infectivity = state.diseases[0].infectivity;
+        for _ in 0..500 {
+            state = tick(&state);
+        }
+        assert!(
+            state.diseases[0].strain_generation > 0,
+            "RNA virus should have mutated at least once in 500 ticks"
+        );
+        assert_ne!(
+            state.diseases[0].infectivity, original_infectivity,
+            "infectivity should have changed after mutation"
+        );
+    }
+
+    #[test]
+    fn mutation_is_deterministic() {
+        let state = GameState::new_default(42);
+        let mut a = state.clone();
+        let mut b = state;
+        for _ in 0..300 {
+            a = tick(&a);
+            b = tick(&b);
+        }
+        assert_eq!(a.diseases[0].strain_generation, b.diseases[0].strain_generation);
+        assert_eq!(a.diseases[0].infectivity, b.diseases[0].infectivity);
+        assert_eq!(a.diseases[0].lethality, b.diseases[0].lethality);
+    }
+
+    #[test]
+    fn strain_efficacy_degrades_with_mutation() {
+        use crate::state::{Disease, Medicine, TherapyType, PathogenType};
+
+        let diseases = vec![Disease {
+            name: "Test".into(),
+            pathogen_type: PathogenType::RnaVirus,
+            infectivity: 0.05,
+            lethality: 0.01,
+            cross_region_spread: 0.01,
+            recovery_rate: 0.03,
+            knowledge: 1.0,
+            strain_generation: 3,
+        }];
+
+        let med = Medicine {
+            name: "TestMed".into(),
+            therapy_type: TherapyType::Antiviral,
+            target_diseases: vec![0],
+            cost: 100.0,
+            doses: 1000.0,
+            unlocked: true,
+            tested_against: vec![0],
+            strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
+        };
+
+        // 3 generations behind = 1.0 - 3*0.25 = 0.25
+        let eff = med.strain_efficacy(0, &diseases);
+        assert!((eff - 0.25).abs() < 0.001, "expected 0.25, got {eff}");
+
+        // Re-calibrated medicine should have full efficacy
+        let med_current = Medicine {
+            strain_generations: vec![3],
+            ..med.clone()
+        };
+        let eff2 = med_current.strain_efficacy(0, &diseases);
+        assert!((eff2 - 1.0).abs() < 0.001, "expected 1.0, got {eff2}");
+    }
+
+    #[test]
+    fn develop_medicine_sets_strain_generation() {
+        let mut state = GameState::new_default(42);
+        // Manually mutate disease 0 to gen 2
+        state.diseases[0].strain_generation = 2;
+        state.diseases[0].knowledge = 1.0;
+        state.resources.research_points = 100.0;
+
+        // Start and complete DevelopMedicine for medicine 0 (targets disease 0)
+        state.bench_research = Some(ResearchProject {
+            kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
+            progress: 39.0, // will complete on next tick
+            required_ticks: 40.0,
+            personnel_assigned: 10,
+            rp_cost: 30.0,
+        });
+
+        state = tick(&state);
+        assert!(state.medicines[0].unlocked);
+        assert_eq!(
+            state.medicines[0].strain_generations,
+            vec![2], // should match disease gen at time of completion
+            "medicine should be calibrated to disease generation at completion"
+        );
+    }
+
+    #[test]
+    fn clinical_trial_updates_strain_generation() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].strain_generation = 3;
+        state.medicines[0].unlocked = true;
+        state.medicines[0].strain_generations = vec![0]; // outdated
+        state.resources.research_points = 100.0;
+
+        state.field_research = Some(ResearchProject {
+            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
+            progress: 24.0, // will complete on next tick
+            required_ticks: 25.0,
+            personnel_assigned: 5,
+            rp_cost: 15.0,
+        });
+
+        state = tick(&state);
+        assert!(state.medicines[0].tested_against.contains(&0));
+        // strain_generation should be updated to current disease gen
+        // Note: disease might have mutated during this tick too, so check >= 3
+        assert!(
+            state.medicines[0].strain_generations[0] >= 3,
+            "clinical trial should update strain calibration"
+        );
+    }
+
+    #[test]
+    fn outdated_strain_shows_retrial_available() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].strain_generation = 2;
+        state.medicines[0].unlocked = true;
+        state.medicines[0].tested_against = vec![0]; // already tested
+        state.medicines[0].strain_generations = vec![0]; // but outdated
+
+        let field_projects = available_field_projects(&state);
+        let has_retrial = field_projects.iter().any(|k| matches!(k,
+            ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 }
+        ));
+        assert!(has_retrial, "should offer clinical trial for strain-outdated medicine");
     }
 }
