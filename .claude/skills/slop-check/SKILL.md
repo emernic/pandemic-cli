@@ -16,6 +16,21 @@ You just reflected on your changes. Now do a second, more focused pass looking s
 - **Premature abstraction:** Generalized frameworks, trait hierarchies, or extension points built for hypothetical future use cases that don't exist yet and may never exist.
 - **Cosmetic structure:** Code that's organized into modules/functions/traits to look well-structured, but the boundaries don't correspond to real conceptual boundaries — the structure is decorative rather than functional.
 
+## Architecture Regression Check
+
+**This is the most important part of the slop check for this project.**
+
+Right now, UI state machine logic lives in `engine.rs` where it doesn't belong, and some UI modules import from engine. This is wrong and needs to be actively fixed — not accepted, not worked around, not labeled as a "known issue." See `docs/target-architecture.md` for where we're going. **Your job is to make progress toward that target every time you touch this code.**
+
+Check specifically:
+1. **Did your changes add UI logic to engine.rs?** Panel navigation, wizard steps, selection bounds, open/close — none of this belongs in the engine. If you added any, extract it now.
+2. **Did your changes add engine imports to UI modules?** UI should read state, not call engine functions. If you added one, remove it now.
+3. **Did you walk past existing violations without acting?** If you touched a file with violations (engine.rs doing UI work, UI importing engine), you should have filed an issue or fixed one. If you didn't, do it now. "It was already like that" is not an excuse — you saw it, you own it.
+4. **Did you add "known limitation" comments, TODOs, or workarounds?** These are slop. A comment that says "known limitation" is a previous Claude sweeping something under the rug for the next Claude to also ignore. Either fix the thing or file an issue so someone can fix it. Don't add a comment that will never be acted on.
+5. **Did you see any existing "known limitation" / "TODO" / "HACK" comments while reading code?** Same rule applies. File an issue or fix it. These comments are not sacred — they're tech debt someone was too lazy to track properly.
+
+## Process
+
 **Actually READ the changed files and surrounding code.** Don't just think about it abstractly — open the files, read them line by line, and look for these patterns.
 
 Focus exclusively on changes since your last `/reflect`. Present only genuine findings — not nitpicks, not style preferences, not things you've already discussed. If you find nothing substantive, say so.

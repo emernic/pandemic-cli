@@ -19,6 +19,32 @@ The implementation may be "complete", but it's very possible that we've overlook
 - Any other nuances or problems that you haven't communicated already
 - Specific comments from the **user** (or CLAUDE.md and skills) that you failed to fully incorporate into your work. Are there any details that were specifically mentioned that you didn't act on?
 
+## Architecture Check
+
+**This is mandatory. Do not skip it.**
+
+Look at the code you touched and the code surrounding it. Ask yourself:
+
+1. **Did you add UI state machine logic to engine.rs?** If so, that's a regression. The target architecture (see `docs/target-architecture.md`) says engine.rs should only contain game logic. Fix it or file an issue.
+2. **Did you add engine imports to UI modules?** Same problem, same expectation.
+3. **Did you walk past existing architecture violations without doing anything?** If you touched a file that has layering violations, you should have either fixed one or filed an issue. "I noticed it but it wasn't my task" is not acceptable.
+4. **Is the code you wrote making the overall architecture simpler or more complex?** Good changes almost always make things simpler. If you added complexity, ask why.
+
+## Ownership Check
+
+**Also mandatory. Also do not skip it.**
+
+Think back through your entire session:
+
+1. **Did you notice anything that seemed off, confusing, or wrong — even tangentially?** If so, did you file an investigate issue? If not, do it now.
+2. **Did you encounter any "known limitations," TODOs, or workarounds in the code?** Did you question whether they're actually acceptable, or did you just accept them?
+3. **Did any commands from CLAUDE.md or skills not work as documented?** If so, fix the docs.
+4. **Did you read code that confused you and just move on?** File an investigate issue pointing at it.
+
+**If you have zero investigate issues to file after a non-trivial session, you almost certainly weren't paying enough attention.** Go back and look harder.
+
+## Process
+
 **NOTE: Focus on NEW aspects that you have not already considered and discussed. Actually READ your code and surrounding code and THINK about what we're overlooking.**
 
 After coming up with your first draft list of concerns, do not present it to the user. Think more about each one and whether it represents a genuine concern that the user may not be aware of yet (or whether it's a silly objection that doesn't actually make sense in the context of what we're working on). Once you're confident in your thinking, you can present the final distilled list.
