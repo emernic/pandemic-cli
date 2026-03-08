@@ -39,6 +39,7 @@ pub fn run_snapshot(
         state.paused = false;
         for _ in 0..n {
             state = tick(&state);
+            ui::process_events(&mut state);
         }
     }
 
