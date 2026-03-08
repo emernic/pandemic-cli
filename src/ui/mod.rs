@@ -37,7 +37,7 @@ pub fn process_events(state: &mut GameState) {
     }
 
     // Handle game-over: pause and close panels (UI concern, not engine's job)
-    if state.events.iter().any(|e| matches!(e, GameEvent::GameOver(_))) {
+    if state.events.iter().any(|e| matches!(e, GameEvent::GameOver)) {
         state.paused = true;
         state.ui.open_panel = Panel::None;
     }
