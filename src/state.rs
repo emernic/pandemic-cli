@@ -182,6 +182,18 @@ pub struct Disease {
     pub strain_generation: u32,
 }
 
+impl Disease {
+    /// Display name, respecting knowledge level. Unknown diseases show as
+    /// "Unknown Pathogen #N" where N is the 1-based index.
+    pub fn display_name(&self, idx: usize) -> String {
+        if self.knowledge >= KNOWLEDGE_NAME {
+            self.name.clone()
+        } else {
+            format!("Unknown Pathogen #{}", idx + 1)
+        }
+    }
+}
+
 /// Knowledge thresholds for progressive disease revelation.
 pub const KNOWLEDGE_NAME: f64 = 0.33;
 pub const KNOWLEDGE_PARTIAL_STATS: f64 = 0.66;
@@ -330,17 +342,19 @@ pub enum ResearchKind {
 
 impl ResearchKind {
     /// Project costs: (rp_cost, personnel, duration_ticks).
-    /// DevelopMedicine scales by target count: narrow (1 target) is faster/cheaper.
-    pub fn project_costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
+    ///
+    /// DevelopMedicine costs scale with medicine target count:
+    /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
+    pub fn costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (10.0, 5, 20.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (15.0, 5, 25.0)
+                    (15.0, 5, 25.0)   // narrow: fast and cheap
                 } else {
-                    (40.0, 10, 50.0)
+                    (40.0, 10, 50.0)  // broad: slow and expensive
                 }
             }
             ResearchKind::ClinicalTrial { .. } => (15.0, 5, 25.0),
@@ -648,6 +662,69 @@ impl GameState {
     /// Total initial population across all regions (before any deaths).
     pub fn initial_population(&self) -> f64 {
         self.regions.iter().map(|r| r.population as f64).sum()
+    }
+
+    /// Available field research projects (excludes currently active).
+    pub fn available_field_projects(&self) -> Vec<ResearchKind> {
+        let active_kind = self.field_research.as_ref().map(|p| &p.kind);
+        let mut projects = Vec::new();
+        // Identify Threat: diseases not fully known
+        for (i, disease) in self.diseases.iter().enumerate() {
+            if disease.knowledge < KNOWLEDGE_FULL {
+                let kind = ResearchKind::IdentifyThreat { disease_idx: i };
+                if active_kind != Some(&kind) {
+                    projects.push(kind);
+                }
+            }
+        }
+        // Clinical Trial: unlocked medicines not yet tested, OR tested but strain-outdated
+        for (i, med) in self.medicines.iter().enumerate() {
+            if !med.unlocked {
+                continue;
+            }
+            for (target_pos, &d_idx) in med.target_diseases.iter().enumerate() {
+                let needs_trial = if !med.tested_against.contains(&d_idx) {
+                    true // Never tested
+                } else {
+                    // Tested, but check if strain has drifted
+                    let med_gen = med.strain_generations.get(target_pos).copied().unwrap_or(0);
+                    let disease_gen = self.diseases.get(d_idx)
+                        .map_or(0, |d| d.strain_generation);
+                    disease_gen > med_gen
+                };
+                if needs_trial {
+                    let kind = ResearchKind::ClinicalTrial {
+                        medicine_idx: i,
+                        disease_idx: d_idx,
+                    };
+                    if active_kind != Some(&kind) {
+                        projects.push(kind);
+                    }
+                }
+            }
+        }
+        projects
+    }
+
+    /// Available bench research projects (excludes currently active).
+    pub fn available_bench_projects(&self) -> Vec<ResearchKind> {
+        let active_kind = self.bench_research.as_ref().map(|p| &p.kind);
+        let mut projects = Vec::new();
+        for (i, med) in self.medicines.iter().enumerate() {
+            if med.unlocked {
+                continue;
+            }
+            let has_knowledge = med.target_diseases.iter().any(|&d_idx| {
+                self.diseases.get(d_idx).map_or(false, |d| d.knowledge >= KNOWLEDGE_FOR_MEDICINE)
+            });
+            if has_knowledge {
+                let kind = ResearchKind::DevelopMedicine { medicine_idx: i };
+                if active_kind != Some(&kind) {
+                    projects.push(kind);
+                }
+            }
+        }
+        projects
     }
 }
 

@@ -7,7 +7,6 @@ use ratatui::{
 };
 
 use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN};
-use crate::ui::research::disease_display_name;
 
 use crate::format_number;
 
@@ -353,7 +352,7 @@ fn render_region_box(
                     break;
                 }
                 if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                    let dname = disease_display_name(disease, inf.disease_idx);
+                    let dname = disease.display_name(inf.disease_idx);
                     // Disease name line
                     lines.push(Line::from(Span::styled(
                         dname,

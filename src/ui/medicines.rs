@@ -7,7 +7,6 @@ use ratatui::{
 };
 
 use crate::state::{DeployTarget, GameState, MedicineUiState};
-use crate::ui::research::disease_display_name;
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -64,7 +63,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             let disease_names: Vec<String> = med
                 .target_diseases
                 .iter()
-                .filter_map(|&idx| state.diseases.get(idx).map(|d| disease_display_name(d, idx)))
+                .filter_map(|&idx| state.diseases.get(idx).map(|d| d.display_name(idx)))
                 .collect();
 
             // Check tested status
@@ -194,7 +193,7 @@ fn render_select_target(
             DeployTarget::Treat { disease_idx } => *disease_idx,
         };
         let disease_name = state.diseases.get(disease_idx)
-            .map(|d| disease_display_name(d, disease_idx))
+            .map(|d| d.display_name(disease_idx))
             .unwrap_or_else(|| "Unknown".to_string());
 
         let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
@@ -340,11 +339,11 @@ fn render_confirm_deploy(
 
     let (action_desc, disease_name) = match &target {
         Some(DeployTarget::Vaccinate { disease_idx }) => {
-            let name = disease_display_name(&state.diseases[*disease_idx], *disease_idx);
+            let name = state.diseases[*disease_idx].display_name(*disease_idx);
             (format!("Vaccinate {} against {}", region.name, name), name)
         }
         Some(DeployTarget::Treat { disease_idx }) => {
-            let name = disease_display_name(&state.diseases[*disease_idx], *disease_idx);
+            let name = state.diseases[*disease_idx].display_name(*disease_idx);
             (format!("Treat {} in {}", name, region.name), name)
         }
         None => ("Deploy".to_string(), "Unknown".to_string()),

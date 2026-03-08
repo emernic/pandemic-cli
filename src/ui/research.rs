@@ -6,7 +6,6 @@ use ratatui::{
     Frame,
 };
 
-use crate::engine::{available_bench_projects, available_field_projects};
 use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS};
 use crate::ui::hint_line;
 
@@ -108,9 +107,9 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
         )));
     } else {
         let projects = if bench {
-            available_bench_projects(state)
+            state.available_bench_projects()
         } else {
-            available_field_projects(state)
+            state.available_field_projects()
         };
 
         if projects.is_empty() {
@@ -148,7 +147,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     )));
                 }
 
-                let (rp, personnel, ticks) = kind.project_costs(&state.medicines);
+                let (rp, personnel, ticks) = kind.costs(&state.medicines);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(format!("{:.0} RP", rp), Style::default().fg(Color::Magenta)),
@@ -178,13 +177,13 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
 fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let projects = if bench {
-        available_bench_projects(state)
+        state.available_bench_projects()
     } else {
-        available_field_projects(state)
+        state.available_field_projects()
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (rp, personnel, ticks) = kind.project_costs(&state.medicines);
+        let (rp, personnel, ticks) = kind.costs(&state.medicines);
 
         lines.push(Line::from(Span::styled(
             format!("  Start: {}", format_kind(kind, state)),
@@ -313,7 +312,7 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
     match kind {
         ResearchKind::IdentifyThreat { disease_idx } => {
             let name = state.diseases.get(*disease_idx)
-                .map(|d| disease_display_name(d, *disease_idx))
+                .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "Unknown".to_string());
             format!("Identify: {}", name)
         }
@@ -328,7 +327,7 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
                 .map(|m| m.name.as_str())
                 .unwrap_or("Unknown");
             let dis_name = state.diseases.get(*disease_idx)
-                .map(|d| disease_display_name(d, *disease_idx))
+                .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "Unknown".to_string());
             format!("Trial: {} vs {}", med_name, dis_name)
         }
@@ -343,20 +342,11 @@ fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let names: Vec<String> = med.target_diseases.iter()
                 .filter_map(|&d_idx| {
                     state.diseases.get(d_idx)
-                        .map(|d| disease_display_name(d, d_idx))
+                        .map(|d| d.display_name(d_idx))
                 })
                 .collect();
             Some(names.join(", "))
         }
         _ => None,
-    }
-}
-
-/// Display name for a disease based on knowledge level.
-pub fn disease_display_name(disease: &crate::state::Disease, idx: usize) -> String {
-    if disease.knowledge >= crate::state::KNOWLEDGE_NAME {
-        disease.name.clone()
-    } else {
-        format!("Unknown Pathogen #{}", idx + 1)
     }
 }

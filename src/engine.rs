@@ -4,7 +4,7 @@ use crate::action::Action;
 use crate::state::{
     map_navigate, DeployTarget, GameEvent, GameOutcome, GameState, MapDirection, MedicineUiState,
     Panel, PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_PERSONNEL, KNOWLEDGE_FOR_MEDICINE,
+    BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_PERSONNEL,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_PERSONNEL,
 };
 
@@ -743,69 +743,6 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
 }
 
 /// Compute available field research projects (excludes the currently active one).
-pub fn available_field_projects(state: &GameState) -> Vec<ResearchKind> {
-    let active_kind = state.field_research.as_ref().map(|p| &p.kind);
-    let mut projects = Vec::new();
-    // Identify Threat: diseases not fully known
-    for (i, disease) in state.diseases.iter().enumerate() {
-        if disease.knowledge < KNOWLEDGE_FULL {
-            let kind = ResearchKind::IdentifyThreat { disease_idx: i };
-            if active_kind != Some(&kind) {
-                projects.push(kind);
-            }
-        }
-    }
-    // Clinical Trial: unlocked medicines not yet tested, OR tested but strain-outdated
-    for (i, med) in state.medicines.iter().enumerate() {
-        if !med.unlocked {
-            continue;
-        }
-        for (target_pos, &d_idx) in med.target_diseases.iter().enumerate() {
-            let needs_trial = if !med.tested_against.contains(&d_idx) {
-                true // Never tested
-            } else {
-                // Tested, but check if strain has drifted
-                let med_gen = med.strain_generations.get(target_pos).copied().unwrap_or(0);
-                let disease_gen = state.diseases.get(d_idx)
-                    .map_or(0, |d| d.strain_generation);
-                disease_gen > med_gen
-            };
-            if needs_trial {
-                let kind = ResearchKind::ClinicalTrial {
-                    medicine_idx: i,
-                    disease_idx: d_idx,
-                };
-                if active_kind != Some(&kind) {
-                    projects.push(kind);
-                }
-            }
-        }
-    }
-    projects
-}
-
-/// Compute available bench research projects (excludes the currently active one).
-pub fn available_bench_projects(state: &GameState) -> Vec<ResearchKind> {
-    let active_kind = state.bench_research.as_ref().map(|p| &p.kind);
-    let mut projects = Vec::new();
-    for (i, med) in state.medicines.iter().enumerate() {
-        if med.unlocked {
-            continue;
-        }
-        // Check if at least one target disease has enough knowledge
-        let has_knowledge = med.target_diseases.iter().any(|&d_idx| {
-            state.diseases.get(d_idx).map_or(false, |d| d.knowledge >= KNOWLEDGE_FOR_MEDICINE)
-        });
-        if has_knowledge {
-            let kind = ResearchKind::DevelopMedicine { medicine_idx: i };
-            if active_kind != Some(&kind) {
-                projects.push(kind);
-            }
-        }
-    }
-    projects
-}
-
 /// Max selection index for the current research UI state.
 fn research_panel_max(state: &GameState) -> usize {
     match &state.ui.research_ui {
@@ -816,9 +753,9 @@ fn research_panel_max(state: &GameState) -> usize {
                 0 // Only "View Active" entry
             } else {
                 let count = if *bench {
-                    available_bench_projects(state).len()
+                    state.available_bench_projects().len()
                 } else {
-                    available_field_projects(state).len()
+                    state.available_field_projects().len()
                 };
                 count.saturating_sub(1)
             }
@@ -828,7 +765,6 @@ fn research_panel_max(state: &GameState) -> usize {
         None => 0,
     }
 }
-
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
 ///
@@ -843,13 +779,13 @@ fn start_research(state: &mut GameState, bench: bool, project_idx: usize) -> boo
     }
 
     let projects = if bench {
-        available_bench_projects(state)
+        state.available_bench_projects()
     } else {
-        available_field_projects(state)
+        state.available_field_projects()
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (rp_cost, personnel, duration) = kind.project_costs(&state.medicines);
+        let (rp_cost, personnel, duration) = kind.costs(&state.medicines);
 
         if state.resources.research_points >= rp_cost
             && state.personnel_available() >= personnel
@@ -917,9 +853,9 @@ fn handle_research_confirm(state: &mut GameState) {
                 state.ui.panel_selection = 0;
             } else {
                 let count = if bench {
-                    available_bench_projects(state).len()
+                    state.available_bench_projects().len()
                 } else {
-                    available_field_projects(state).len()
+                    state.available_field_projects().len()
                 };
                 if count > 0 {
                     state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx: sel });
@@ -2062,8 +1998,8 @@ mod tests {
         // Medicine 0 = Antiviral-A (1 target), Medicine 2 = Broad-Spectrum (2 targets)
         let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
         let broad = ResearchKind::DevelopMedicine { medicine_idx: 2 };
-        let (narrow_rp, narrow_pers, narrow_ticks) = narrow.project_costs(&state.medicines);
-        let (broad_rp, broad_pers, broad_ticks) = broad.project_costs(&state.medicines);
+        let (narrow_rp, narrow_pers, narrow_ticks) = narrow.costs(&state.medicines);
+        let (broad_rp, broad_pers, broad_ticks) = broad.costs(&state.medicines);
         assert!(narrow_rp < broad_rp, "narrow should cost less RP");
         assert!(narrow_pers <= broad_pers, "narrow should need fewer personnel");
         assert!(narrow_ticks < broad_ticks, "narrow should be faster");
@@ -2077,7 +2013,7 @@ mod tests {
         state.medicines[0].tested_against = vec![0]; // already tested
         state.medicines[0].strain_generations = vec![0]; // but outdated
 
-        let field_projects = available_field_projects(&state);
+        let field_projects = state.available_field_projects();
         let has_retrial = field_projects.iter().any(|k| matches!(k,
             ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 }
         ));
