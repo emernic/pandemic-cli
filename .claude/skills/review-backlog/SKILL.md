@@ -48,7 +48,10 @@ git branch -r --list "*issue-<number>*"
 Flag issues that are too vague to act on — missing reproduction steps for bugs, no acceptance criteria for enhancements, unclear descriptions, scope too broad for a single issue.
 
 ### Mislabeled Issues
-Check whether type labels (bug/enhancement/chore) and priority labels (P0-P3) are accurate based on the issue content. Flag anything that seems miscategorized or is missing labels.
+Check whether type labels (bug/enhancement/chore/investigate) and priority labels (P0-P3) are accurate based on the issue content. Flag anything that seems miscategorized or is missing labels. Note that `investigate` issues may not have a priority label — that's fine, since their outcome is uncertain.
+
+### Resolved Investigate Issues
+Check open `investigate` issues to see if the question they raised has since been answered by other work (code changes, other issues, etc.). If the concern has been addressed, flag it for closing.
 
 ## Step 3: Present Findings
 
