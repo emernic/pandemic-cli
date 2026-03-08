@@ -43,6 +43,19 @@ Think back through your entire session:
 
 **If you have zero investigate issues to file after a non-trivial session, you almost certainly weren't paying enough attention.** Go back and look harder.
 
+## Complexity Ratchet Check
+
+**Also mandatory. This is how complexity silently kills projects.**
+
+Think about everything you interacted with this session — not just the code you wrote, but the processes, tests, tools, and infrastructure you used:
+
+1. **Did you spend time maintaining something that didn't catch any real problems?** Tests that always pass by "accept all," review steps that are always rubber-stamped, processes that feel like busywork. If a system's maintenance cost exceeds its value, file an investigate issue.
+2. **Did you add complexity?** New files, new abstractions, new config, new test infrastructure. Was each addition truly necessary, or were you building for hypothetical future needs?
+3. **Is there anything in the codebase that feels too big or too established to question?** That's exactly the thing you should question. The scarier it feels to remove, the more likely it's the complexity ratchet at work.
+4. **Could something you interacted with be simplified or removed entirely?** Not refactored — *removed*. The best code is no code.
+
+**The test:** If you spent more time maintaining a system than benefiting from it, something is wrong. File an investigate issue.
+
 ## Process
 
 **NOTE: Focus on NEW aspects that you have not already considered and discussed. Actually READ your code and surrounding code and THINK about what we're overlooking.**

@@ -39,6 +39,22 @@ Here's the thing you need to understand: **if you don't do it, nobody will.** Th
 - Noticing something wrong and not even mentioning it.
 - Finishing a session with zero investigate issues filed.
 
+### ⚠️ The Complexity Ratchet — Question Everything
+
+**Ownership means questioning what exists, not just adding to it.** We are aggressively adding features, tests, systems, and infrastructure. We need to be just as aggressive about questioning whether existing things are still earning their keep.
+
+The complexity ratchet works like this: someone adds a system. It looks important because it's big. Nobody questions it because it seems established. Everyone just maintains it. It grows. It gets more entangled. Eventually it's so woven into everything that questioning it feels scary — which is exactly the point where it most needs to be questioned.
+
+**If something feels too big and too established to question, that is the #1 signal that you MUST question it.** File an investigate issue: "Investigate: is X actually providing value proportional to its maintenance cost?"
+
+Concrete examples of what to watch for:
+- **Test suites that always pass by "accept all"** — if the workflow is always rubber-stamping, the tests aren't catching bugs, they're just creating friction
+- **Processes that exist because "we've always done it"** — playtests, checklists, review steps. Are they actually catching problems?
+- **Abstractions nobody asked for** — config systems, plugin architectures, trait hierarchies built for hypothetical future use
+- **Infrastructure that's more complex than the thing it supports** — when the test harness is harder to maintain than the feature it tests
+
+**The rule:** Be just as willing to remove or simplify as to add. If you see a system that costs more to maintain than the value it provides, file an issue or rip it out. Don't assume the previous developer had a good reason — maybe they did, maybe they were an LLM that took the path of least resistance.
+
 ---
 
 Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rust + ratatui TUI.
@@ -52,6 +68,12 @@ cargo run                      # interactive mode (starts running, Space to paus
 cargo run -- --snapshot        # snapshot mode (for AI/automated testing)
 cargo insta review             # review snapshot test changes
 ```
+
+### Testing Philosophy
+
+- **Unit tests** are the primary safety net. Test game logic (engine.rs), state transitions, and edge cases.
+- **Snapshot tests** should be few — just 2-3 smoke tests to confirm the UI renders without panicking. Do NOT add a new snapshot test for every UI state or panel. If every UI change requires accepting 14 snapshot updates, the snapshots aren't catching bugs — they're just friction. See #184.
+- **Snapshot mode** (`--snapshot`) is excellent for manual and AI playtesting. Use it freely for verification. But don't confuse "useful for manual testing" with "should be an automated test."
 
 ## Architecture
 
