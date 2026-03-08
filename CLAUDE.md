@@ -179,9 +179,8 @@ For extended playtesting (e.g., as a final check after a feature is complete), u
 
 Before merging any significant feature or bug fix:
 
-1. **Clean up playtests**: Delete any outdated playtest files from your branch (e.g., playtests from earlier iterations that no longer reflect the final state).
-2. **Run a fresh playtest**: Use the playtest agent to test your final changes. Guide it toward the specific things that matter — describe what you changed, what the key behaviors are, and what commands will exercise them. The playtest report should demonstrate that your changes work correctly.
-3. **Include the playtest in your PR**: The playtest file serves as a reviewable record that the feature was tested end-to-end. Reviewers should be able to read it and see that the important behaviors were verified.
+1. **Run a fresh playtest**: Use the playtest agent to test your final changes. Guide it toward the specific things that matter — describe what you changed, what the key behaviors are, and what commands will exercise them.
+2. **Summarize results in the PR body**: Describe what the playtest found — key behaviors verified, any issues discovered. Do NOT commit playtest log files to the repo (they are gitignored). The PR description is the reviewable record.
 
 ## Task Tracking
 
