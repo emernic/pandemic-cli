@@ -20,13 +20,14 @@ You just reflected on your changes. Now do a second, more focused pass looking s
 
 **This is the most important part of the slop check for this project.**
 
-This codebase has a known architectural problem: UI state machine logic lives in `engine.rs` instead of the UI layer, and some UI modules import from engine. See `docs/target-architecture.md` for the target state.
+Right now, UI state machine logic lives in `engine.rs` where it doesn't belong, and some UI modules import from engine. This is wrong and needs to be actively fixed — not accepted, not worked around, not labeled as a "known issue." See `docs/target-architecture.md` for where we're going. **Your job is to make progress toward that target every time you touch this code.**
 
 Check specifically:
-1. **Did your changes add UI logic to engine.rs?** Panel navigation, wizard steps, selection bounds, open/close — none of this belongs in the engine. If you added any, extract it.
-2. **Did your changes add engine imports to UI modules?** UI should read state, not call engine functions.
-3. **Did you walk past existing violations?** If you touched a file with violations (engine.rs doing UI work, UI importing engine), you should have filed an issue or fixed one. If you didn't, do it now.
-4. **Did you add "known limitation" comments or TODOs?** These are almost always slop. Either fix the thing or file an issue — don't leave a comment for a future Claude that will never read it.
+1. **Did your changes add UI logic to engine.rs?** Panel navigation, wizard steps, selection bounds, open/close — none of this belongs in the engine. If you added any, extract it now.
+2. **Did your changes add engine imports to UI modules?** UI should read state, not call engine functions. If you added one, remove it now.
+3. **Did you walk past existing violations without acting?** If you touched a file with violations (engine.rs doing UI work, UI importing engine), you should have filed an issue or fixed one. If you didn't, do it now. "It was already like that" is not an excuse — you saw it, you own it.
+4. **Did you add "known limitation" comments, TODOs, or workarounds?** These are slop. A comment that says "known limitation" is a previous Claude sweeping something under the rug for the next Claude to also ignore. Either fix the thing or file an issue so someone can fix it. Don't add a comment that will never be acted on.
+5. **Did you see any existing "known limitation" / "TODO" / "HACK" comments while reading code?** Same rule applies. File an issue or fix it. These comments are not sacred — they're tech debt someone was too lazy to track properly.
 
 ## Process
 
