@@ -160,6 +160,17 @@ Your to-do list should always include the operational steps, not just the coding
 
 Adapt the list to the task — small fixes won't need playtests, doc changes won't need game testing. But always include the full lifecycle: **the task isn't done until the PR is merged and the issue is closed.**
 
+## Multi-Agent Development Environment
+
+**You are one of several AI agents working on this codebase simultaneously.** Multiple Claude Code instances run in parallel, each in its own git worktree on the same machine. They share the same home directory, the same GitHub repo, and the same issue tracker.
+
+**What this means for you:**
+
+- **Stay contained within your working directory.** Don't write files to shared locations like `~/.pandemic-cli/` or `/tmp/` — other agents may be doing the same thing and you'll collide. If you need scratch files, keep them in your worktree.
+- **Your worktree may have leftover state from a previous task.** Agents often work on multiple issues sequentially in the same worktree. You might start on a random feature branch with uncommitted changes from a completely unrelated task. Always check and clean up before starting new work.
+- **Other agents are picking up issues at the same time.** Always check the `in-progress` label before claiming work, and claim quickly to minimize race windows.
+- **Snapshot mode (`--snapshot`) is safe for concurrent use** — it doesn't write save files by default. Interactive mode (`cargo run` without `--snapshot`) writes to `~/.pandemic-cli/save.json`, which is shared across all agents. Avoid running interactive mode in automated/agent contexts.
+
 ## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 
 **This is the #1 source of preventable disasters in this project.** Multiple agents share this repo. If you skip this, you WILL end up building features on someone else's branch, testing against stale code, or committing to the wrong place. This has happened repeatedly.
