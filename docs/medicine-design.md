@@ -13,17 +13,33 @@ Medicines start locked and must be developed through the research pipeline: Iden
 ```rust
 struct Medicine {
     name: String,
-    target_diseases: Vec<usize>,  // usually 1, occasionally multiple
-    cost: f64,                     // funding per deployment
-    doses: f64,                    // people treated per deployment
-    unlocked: bool,                // false until developed via research
-    tested_against: Vec<usize>,    // diseases with completed clinical trials
+    therapy_type: TherapyType,          // Antiviral, Antibiotic, or BroadSpectrum
+    target_diseases: Vec<usize>,        // which diseases this medicine works against
+    cost: f64,                          // funding per deployment
+    doses: f64,                         // people treated per deployment
+    unlocked: bool,                     // false until developed via research
+    tested_against: Vec<usize>,         // diseases with completed clinical trials
+    strain_generations: Vec<u32>,       // strain calibration per target disease
 }
 ```
 
+### TherapyType × PathogenType Efficacy
+
+Effective doses = `doses × therapy_efficacy × strain_efficacy`.
+
+| TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Prion |
+|---|---|---|---|---|
+| Antiviral | 1.0 | 0.8 | 0.1 | 0.0 |
+| Antibiotic | 0.1 | 0.1 | 1.0 | 0.0 |
+| BroadSpectrum | 0.5 | 0.5 | 0.5 | 0.1 |
+
+### Strain Drift
+
+When a disease mutates (increments `strain_generation`), medicines calibrated to older generations lose efficacy: `-25% per generation behind` (floor 10%). Re-running a Clinical Trial re-calibrates the medicine to the current strain.
+
 ### Untested Medicine Risk
 
-Deploying a medicine that hasn't been clinically trialed against the target disease triggers a confirmation dialog. If the player proceeds, there's a 25% chance of adverse effects: 20% of the deployed doses kill instead of helping. This makes clinical trials strategically important but not mandatory — the player can gamble if the situation is desperate.
+Deploying a medicine that hasn't been clinically trialed against the target disease triggers a confirmation dialog. If the player proceeds, there's a 25% chance of adverse effects: 20% of the deployed doses kill instead of helping.
 
 ### RegionDiseaseState.immune
 
@@ -67,25 +83,30 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 
 1. Check `funding >= medicine.cost` — show error message if insufficient
 2. Find or create `RegionDiseaseState` for the target disease in the region
-3. Compute `actual_doses = min(medicine.doses, available_targets)`
-4. If `actual_doses == 0`, show message ("No susceptible/infected population") and stay on SelectTarget
-5. If untested: require confirmation via ConfirmDeploy step
-6. Deduct `medicine.cost` (flat rate regardless of actual doses — creates strategic incentive to deploy when there are enough targets to justify the cost)
-7. If untested: roll for adverse effects (25% chance, 20% of doses cause deaths)
-8. Apply: vaccinate adds to `immune` from susceptible pool; treat moves `infected` to `immune`
-9. Show deployment feedback message (doses used, region, cost, adverse effects if any)
-10. Return to SelectRegion for quick follow-up deployments
+3. Compute `effective_doses = doses × therapy_efficacy × strain_efficacy`
+4. Compute `actual_doses = min(effective_doses, available_targets)`
+5. If `actual_doses == 0`, show message and stay on SelectTarget
+6. If untested: require confirmation via ConfirmDeploy step
+7. Deduct `medicine.cost` (flat rate regardless of actual doses — creates strategic incentive to deploy when there are enough targets to justify the cost)
+8. If untested: roll for adverse effects (25% chance, 20% of doses cause deaths)
+9. Apply: vaccinate adds to `immune` from susceptible pool; treat moves `infected` to `immune`
+10. Show deployment feedback message (doses used, region, cost, efficacy note, adverse effects if any)
+11. Return to SelectRegion for quick follow-up deployments
 
 ## Starting Medicines
 
-| Medicine | Targets | Cost | Doses | Notes |
+| Medicine | TherapyType | Targets | Cost | Doses |
 |---|---|---|---|---|
-| Antiviral-A | Strain Alpha | $200 | 100K | Cheap, targeted |
-| Broad-Spectrum Antiviral | Both | $500 | 500K | Expensive, versatile, high-impact |
+| Antiviral-A | Antiviral | Disease 0 | $200 | 100K |
+| Antibiotic-B | Antibiotic | Disease 1 | $150 | 100K |
+| Broad-Spectrum | BroadSpectrum | Both | $400 | 200K |
 
-Both start locked. The research pipeline to unlock a medicine: Identify Threat (20 ticks) → Develop Medicine (40 ticks) → medicine unlocked. Clinical Trial (25 ticks) makes it safe to deploy without adverse effect risk.
+All start locked. Research costs scale by target count:
+- **Narrow (1 target):** 15 RP, 5 personnel, 25 ticks
+- **Broad (2+ targets):** 40 RP, 10 personnel, 50 ticks
+- **Clinical Trial:** 15 RP, 5 personnel, 25 ticks (same for all)
 
-At tick ~100 (earliest medicine availability), infections are ~170K. Antiviral-A's 100K doses can treat ~59% of infected — a meaningful intervention. Broad-Spectrum at 500K doses can treat all infected at that stage.
+The trade-off: narrow medicines are faster and cheaper to develop (crisis response), while broad-spectrum takes longer but covers everything.
 
 ## Selection Bounds
 
