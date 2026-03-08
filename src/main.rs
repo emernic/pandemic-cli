@@ -39,11 +39,24 @@ struct Cli {
     seed: u64,
 }
 
+/// Return the default save file path (~/.pandemic-cli/save.json).
+fn default_save_path() -> Option<String> {
+    dirs::home_dir().map(|h| {
+        let dir = h.join(".pandemic-cli");
+        dir.join("save.json").to_string_lossy().into_owned()
+    })
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    // Use explicit path, or default to ~/.pandemic-cli/save.json for interactive mode
+    let save_file = cli.save_file.or_else(|| {
+        if !cli.snapshot { default_save_path() } else { None }
+    });
+
     // Load or create state
-    let state = if let Some(ref path) = cli.save_file {
+    let state = if let Some(ref path) = save_file {
         if std::path::Path::new(path).exists() {
             let data = fs::read_to_string(path)?;
             serde_json::from_str(&data)?
@@ -59,13 +72,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
         print!("{}", result.screen);
         // Write updated state back to save file if one was provided
-        if let Some(ref path) = cli.save_file {
+        if let Some(ref path) = save_file {
             let json = serde_json::to_string_pretty(&result.state)?;
             fs::write(path, json)?;
         }
         Ok(())
     } else {
-        run_interactive(state, cli.save_file)
+        run_interactive(state, save_file)
     }
 }
 
@@ -100,6 +113,9 @@ fn run_interactive(
 
     // Save state on quit
     if let Some(path) = save_path {
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            fs::create_dir_all(parent)?;
+        }
         let json = serde_json::to_string_pretty(&state)?;
         fs::write(&path, json)?;
         eprintln!("Game saved to {}", path);
