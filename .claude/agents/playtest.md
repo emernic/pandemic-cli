@@ -71,7 +71,7 @@ Then adopt the persona matching the number:
 
 ## Scope
 
-The user may specify a tick limit, focus areas, or stop conditions. If not, play around 500 ticks and write up your experience.
+The user may specify a tick limit, focus areas, or stop conditions. If not, play at least 2000 ticks (~17 minutes of real-time play) and write up your experience. 500 ticks is only 4 minutes — barely past the opening of a strategy game.
 
 ## How to Play
 
@@ -92,11 +92,29 @@ SEED=$((RANDOM * RANDOM))
 
 Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel), `up`/`down` (navigate lists), `enter` (confirm/select).
 
-### Pacing
+### ⚠️ Time Scale — READ THIS CAREFULLY
 
-Each tick is 500ms of real time. 100 ticks is under a minute. A full play session would be thousands of ticks. Keep this in mind when judging whether things feel "too slow" or "too fast" — think about how it would feel at actual real-time pace.
+**You are an LLM. Each tick feels like an eternity to you because it's a separate tool call. It is NOT an eternity for a human player.** A human sees ticks fly by at 2 per second. You MUST ground all your time judgments in real human time, not in how many tool calls you made.
 
-Advance in chunks: 5-10 ticks early on while you're getting oriented, 20-50 ticks once you've settled in and are waiting for things to develop.
+**The conversion table — memorize this:**
+
+| Ticks | Real time | Game phase |
+|-------|-----------|------------|
+| 100 | 50 seconds | Very early — player is still orienting |
+| 500 | ~4 minutes | Early game — player is settling into strategy |
+| 2,000 | ~17 minutes | Mid game — core loop should be engaging |
+| 5,000 | ~42 minutes | Late game — player should feel the endgame approaching |
+| 10,000+ | 80+ minutes | Full session — the kind of run a dedicated player does |
+
+**This changes how you evaluate EVERYTHING:**
+- "90 ticks of waiting before first action" = **45 seconds**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
+- "RP piles up by tick 500" = RP piles up after **4 minutes**. That might be a real problem, but frame it correctly — "within the first 4 minutes of play, the player has more RP than they can ever spend."
+- "Game feels over by tick 100" = game feels over after **50 seconds**. Either you're wrong about it feeling over, or there's a catastrophic pacing problem. Think carefully about which.
+- "I played 500 ticks and nothing changed" = you played for **4 minutes**. In Crusader Kings, 4 minutes is barely enough to unpause and read your starting situation.
+
+**When writing your report, ALWAYS include the real-time equivalent next to tick counts.** Don't write "by tick 300" — write "by tick 300 (~2.5 min)." This forces you to confront whether your complaint makes sense at human scale.
+
+Advance in larger chunks than you think you should: 50-100 ticks at a time once you're past the opening. You're simulating a player who watches the game flow by, not one who pauses every half-second to analyze.
 
 ### Approach
 
