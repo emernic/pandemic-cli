@@ -4,17 +4,17 @@ expression: result.screen
 ---
 PANDEMIC DEFENSE   PAUSED   Tick: 0  Funds: $1000  RP: 0  Personnel: 50  Infected: 50.0K  Dead: 0
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-┌ World Status ────────────────────────────────────────────────────────────────────────────────────┐┌ Threats ─────────────────────────────────────────────────────────────────────────────────────────┐
-│Region             Pop    Alive Infected     Dead  Risk                                           ││▶ Strain Alpha                                                                                    │
-│North America   500.0M   500.0M        0        0    OK                                           ││    Infectivity: 15%  Lethality: 2%                                                               │
-│South America   430.0M   430.0M        0        0    OK                                           ││    Regions: Asia                                                                                 │
-│Europe          750.0M   750.0M        0        0    OK                                           ││                                                                                                  │
-│Africa            1.4B     1.4B        0        0    OK                                           ││                                                                                                  │
-│Asia              4.7B     4.7B    50.0K        0  HIGH                                           ││                                                                                                  │
+┌ World Status ────────────────────────────────────────────────────────────────────────────────────┐┌ Antiviral-A → North America ─────────────────────────────────────────────────────────────────────┐
+│Region             Pop    Alive Infected     Dead  Risk                                           ││  Antiviral-A → North America                                                                     │
+│North America   500.0M   500.0M        0        0    OK                                           ││                                                                                                  │
+│South America   430.0M   430.0M        0        0    OK                                           ││▶ Vaccinate susceptible (Strain Alpha)                                                            │
+│Europe          750.0M   750.0M        0        0    OK                                           ││    500.0M susceptible | 10.0K doses                                                              │
+│Africa            1.4B     1.4B        0        0    OK                                           ││  Treat infected (Strain Alpha)                                                                   │
+│Asia              4.7B     4.7B    50.0K        0  HIGH                                           ││    0 infected | 10.0K doses                                                                      │
 │Oceania          45.0M    45.0M        0        0    OK                                           ││                                                                                                  │
+│                                                                                                  ││  Cost: $100    Funding: $1000                                                                    │
 │                                                                                                  ││                                                                                                  │
-│                                                                                                  ││                                                                                                  │
-│                                                                                                  ││                                                                                                  │
+│                                                                                                  ││  [Enter] Deploy  [Esc] Back                                                                      │
 │                                                                                                  ││                                                                                                  │
 │                                                                                                  ││                                                                                                  │
 │                                                                                                  ││                                                                                                  │

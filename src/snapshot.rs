@@ -27,7 +27,7 @@ pub fn run_snapshot(
             }
             None => {
                 return Err(format!(
-                    "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, q",
+                    "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, enter, q",
                     key_str
                 ));
             }

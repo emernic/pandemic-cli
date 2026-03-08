@@ -2,16 +2,16 @@
 source: tests/snapshots.rs
 expression: result.screen
 ---
-PANDEMIC DEFENSE   RUNNING   Tick: 10  Funds: $1050  RP: 10  Personnel: 50  Infected: 3.4K  Dead: 367
+PANDEMIC DEFENSE   RUNNING   Tick: 10  Funds: $1050  RP: 10  Personnel: 50  Infected: 169.3K  Dead: 18.3K
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ┌ World Status ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Region             Pop    Alive Infected     Dead  Risk                                                                                                                                               │
-│North America   500.0M   500.0M       -0       -0    OK                                                                                                                                               │
-│South America   430.0M   430.0M       -0       -0    OK                                                                                                                                               │
-│Europe          750.0M   750.0M       -0       -0    OK                                                                                                                                               │
-│Africa            1.4B     1.4B       -0       -0    OK                                                                                                                                               │
-│Asia              4.7B     4.7B     3.4K      367   MOD                                                                                                                                               │
-│Oceania          45.0M    45.0M       -0       -0    OK                                                                                                                                               │
+│North America   500.0M   500.0M        0        0    OK                                                                                                                                               │
+│South America   430.0M   430.0M        0        0    OK                                                                                                                                               │
+│Europe          750.0M   750.0M        0        0    OK                                                                                                                                               │
+│Africa            1.4B     1.4B        0        0    OK                                                                                                                                               │
+│Asia              4.7B     4.7B   169.3K    18.3K  CRIT                                                                                                                                               │
+│Oceania          45.0M    45.0M        0        0    OK                                                                                                                                               │
 │                                                                                                                                                                                                      │
 │                                                                                                                                                                                                      │
 │                                                                                                                                                                                                      │

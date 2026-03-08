@@ -47,7 +47,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let affected: Vec<&str> = state
                 .regions
                 .iter()
-                .filter(|r| r.infections.iter().any(|inf| inf.disease_idx == i))
+                .filter(|r| r.infections.iter().any(|inf| inf.disease_idx == i && inf.infected > 0.0))
                 .map(|r| r.name.as_str())
                 .collect();
 

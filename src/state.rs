@@ -10,6 +10,8 @@ pub struct GameState {
     pub resources: Resources,
     pub regions: Vec<Region>,
     pub diseases: Vec<Disease>,
+    #[serde(default)]
+    pub medicines: Vec<Medicine>,
     pub ui: UiState,
 }
 
@@ -25,7 +27,7 @@ pub struct Region {
     pub name: String,
     pub population: u64,
     pub connections: Vec<usize>,
-    pub infections: Vec<RegionInfection>,
+    pub infections: Vec<RegionDiseaseState>,
 }
 
 impl Region {
@@ -41,23 +43,64 @@ impl Region {
     pub fn total_dead(&self) -> f64 {
         self.infections.iter().map(|i| i.dead).sum()
     }
+
+    pub fn total_immune(&self) -> f64 {
+        self.infections.iter().map(|i| i.immune).sum()
+    }
 }
 
-/// Per-disease infection state within a region.
+/// Per-disease state within a region: infection, deaths, and immunity.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RegionInfection {
+pub struct RegionDiseaseState {
     pub disease_idx: usize,
     pub infected: f64,
     pub dead: f64,
+    #[serde(default)]
+    pub immune: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Disease {
     pub name: String,
     pub infectivity: f64,
-    pub severity: f64,
     pub lethality: f64,
     pub cross_region_spread: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Medicine {
+    pub name: String,
+    pub target_diseases: Vec<usize>,
+    pub cost: f64,
+    pub doses: f64,
+    pub unlocked: bool,
+}
+
+/// What a medicine deployment targets: vaccinate susceptible or treat infected.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DeployTarget {
+    Vaccinate { disease_idx: usize },
+    Treat { disease_idx: usize },
+}
+
+impl Medicine {
+    /// Number of target options in the UI (vaccinate + treat per target disease).
+    pub fn num_deploy_targets(&self) -> usize {
+        2 * self.target_diseases.len()
+    }
+
+    /// Decode a UI selection index into a deploy target.
+    /// Indices 0..n are vaccinate options, n..2n are treat options.
+    pub fn decode_deploy_target(&self, selection: usize) -> Option<DeployTarget> {
+        let n = self.target_diseases.len();
+        if selection < n {
+            Some(DeployTarget::Vaccinate { disease_idx: self.target_diseases[selection] })
+        } else if selection < 2 * n {
+            Some(DeployTarget::Treat { disease_idx: self.target_diseases[selection - n] })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -70,10 +113,19 @@ pub enum Panel {
     Help,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MedicineUiState {
+    BrowseMedicines,
+    SelectRegion { medicine_idx: usize },
+    SelectTarget { medicine_idx: usize, region_idx: usize },
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
     pub panel_selection: usize,
+    #[serde(default)]
+    pub medicine_ui: Option<MedicineUiState>,
 }
 
 impl GameState {
@@ -107,10 +159,11 @@ impl GameState {
                 name: "Asia".into(),
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
-                infections: vec![RegionInfection {
+                infections: vec![RegionDiseaseState {
                     disease_idx: 0,
-                    infected: 1000.0,
+                    infected: 50_000.0,
                     dead: 0.0,
+                    immune: 0.0,
                 }],
             },
             Region {
@@ -124,10 +177,26 @@ impl GameState {
         let diseases = vec![Disease {
             name: "Strain Alpha".into(),
             infectivity: 0.15,
-            severity: 0.05,
             lethality: 0.02,
             cross_region_spread: 0.01,
         }];
+
+        let medicines = vec![
+            Medicine {
+                name: "Antiviral-A".into(),
+                target_diseases: vec![0],
+                cost: 100.0,
+                doses: 10_000.0,
+                unlocked: true,
+            },
+            Medicine {
+                name: "Broad-Spectrum Antiviral".into(),
+                target_diseases: vec![0],
+                cost: 300.0,
+                doses: 50_000.0,
+                unlocked: true,
+            },
+        ];
 
         Self {
             tick: 0,
@@ -140,9 +209,11 @@ impl GameState {
             },
             regions,
             diseases,
+            medicines,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
+                medicine_ui: None,
             },
         }
     }
@@ -180,5 +251,13 @@ mod tests {
         let state = GameState::new_default(1);
         assert!(state.total_infected() > 0.0);
         assert_eq!(state.total_dead(), 0.0);
+    }
+
+    #[test]
+    fn default_state_has_medicines() {
+        let state = GameState::new_default(1);
+        assert_eq!(state.medicines.len(), 2);
+        assert!(state.medicines[0].unlocked);
+        assert!(state.medicines[1].unlocked);
     }
 }

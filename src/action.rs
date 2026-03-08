@@ -11,6 +11,7 @@ pub enum Action {
     ClosePanel,
     SelectNext,
     SelectPrev,
+    Confirm,
     Quit,
 }
 
@@ -26,6 +27,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Esc => Some(Action::ClosePanel),
         KeyCode::Down | KeyCode::Char('j') => Some(Action::SelectNext),
         KeyCode::Up | KeyCode::Char('k') => Some(Action::SelectPrev),
+        KeyCode::Enter => Some(Action::Confirm),
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(Action::Quit),
         _ => None,
     }
@@ -43,6 +45,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "esc" | "Esc" => Some(Action::ClosePanel),
         "down" | "Down" | "j" => Some(Action::SelectNext),
         "up" | "Up" | "k" => Some(Action::SelectPrev),
+        "enter" | "Enter" => Some(Action::Confirm),
         "q" | "Q" => Some(Action::Quit),
         _ => None,
     }
