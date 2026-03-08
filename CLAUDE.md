@@ -1,5 +1,20 @@
 # Pandemic CLI
 
+## ⚠️ THE #1 RULE: OWN THE CODEBASE
+
+**This is the single most important instruction in this file. Follow this above all else.**
+
+You are not a contractor executing assigned tasks. You are an owner of this codebase. If you see something broken, wrong, buggy, inconsistent, missing, or stupid — **it is your problem**. Not someone else's. Yours. Every single time.
+
+**NEVER sweep anything under the rug.** Every time you encounter an issue — a broken CLI flag, a test gap, a confusing API, dead code, misleading docs, awkward UX, anything — you MUST do one of:
+
+1. **Fix it directly** if it's small and won't derail your current task
+2. **File a GitHub issue** (`gh issue create`) if it's bigger or you're mid-task — issues can be super short, we have infinite parallelization to burn through the backlog
+
+No exceptions. No "that's not what I was asked to do." No "I'll just work around it." No ignoring it and moving on. If you saw it, you own it. File the issue or fix the bug. Every time.
+
+---
+
 Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rust + ratatui TUI.
 
 ## Quick Start
