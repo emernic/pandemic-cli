@@ -22,4 +22,4 @@ Focus exclusively on changes since your last `/reflect`. Present only genuine fi
 
 After identifying issues, fix straightforward ones immediately. For anything that changes behavior or public interfaces, confirm with the user first.
 
-**Investigate issues:** If you spot something that smells off but isn't clearly broken — unclear behavior, naming that doesn't match reality, code that works but seems like it might not handle all cases — file an `investigate` issue. You don't need permission; these are free. They prevent the codebase from accumulating a cobblestone foundation of things nobody followed up on.
+**Investigate issues:** If you spot something that smells off but you're not sure whether it's actually a problem — file an `investigate` issue. You don't need permission; these are free. But keep it humble: describe what confused you and where to look, don't diagnose the problem or prescribe a fix. You noticed something in passing; you haven't actually investigated it. See the create-issue skill for the template and good/bad examples.
