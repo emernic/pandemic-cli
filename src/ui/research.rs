@@ -86,17 +86,10 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
     let title = if bench { " Bench Research " } else { " Field Research " };
 
     let active = if bench { &state.bench_research } else { &state.field_research };
-    let projects = if bench {
-        available_bench_projects(state)
-    } else {
-        available_field_projects(state)
-    };
 
-    let mut item_idx = 0;
-
-    // Show active project first if there is one
+    // When a project is active, only show it — no starting new projects until it completes
     if let Some(project) = active {
-        let selected = state.ui.panel_selection == item_idx;
+        let selected = state.ui.panel_selection == 0;
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -113,46 +106,50 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
             format!("    Progress: {:.0}% ({:.0}/{:.0} ticks)", pct, project.progress, project.required_ticks),
             Style::default().fg(Color::Green),
         )));
-        lines.push(Line::from(""));
-        item_idx += 1;
-    }
+    } else {
+        let projects = if bench {
+            available_bench_projects(state)
+        } else {
+            available_field_projects(state)
+        };
 
-    if projects.is_empty() && active.is_none() {
-        lines.push(Line::from(Span::styled(
-            "  No projects available.",
-            Style::default().fg(Color::DarkGray),
-        )));
-        if bench {
+        if projects.is_empty() {
             lines.push(Line::from(Span::styled(
-                "  (Identify diseases to unlock medicine development)",
+                "  No projects available.",
                 Style::default().fg(Color::DarkGray),
             )));
-        }
-    } else {
-        for (i, kind) in projects.iter().enumerate() {
-            let selected = state.ui.panel_selection == item_idx + i;
-            let marker = if selected { "▶ " } else { "  " };
-            let style = if selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
+            if bench {
+                lines.push(Line::from(Span::styled(
+                    "  (Identify diseases to unlock medicine development)",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        } else {
+            for (i, kind) in projects.iter().enumerate() {
+                let selected = state.ui.panel_selection == i;
+                let marker = if selected { "▶ " } else { "  " };
+                let style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
 
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", marker, format_kind(kind, state)),
-                style,
-            )));
+                lines.push(Line::from(Span::styled(
+                    format!("{}{}", marker, format_kind(kind, state)),
+                    style,
+                )));
 
-            let (rp, personnel, ticks) = crate::engine::project_costs(kind);
-            lines.push(Line::from(vec![
-                Span::raw("    "),
-                Span::styled(format!("{:.0} RP", rp), Style::default().fg(Color::Magenta)),
-                Span::raw("  "),
-                Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
-                Span::raw("  "),
-                Span::styled(format!("{:.0} ticks", ticks), Style::default().fg(Color::DarkGray)),
-            ]));
-            lines.push(Line::from(""));
+                let (rp, personnel, ticks) = crate::engine::project_costs(kind);
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(format!("{:.0} RP", rp), Style::default().fg(Color::Magenta)),
+                    Span::raw("  "),
+                    Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
+                    Span::raw("  "),
+                    Span::styled(format!("{:.0} ticks", ticks), Style::default().fg(Color::DarkGray)),
+                ]));
+                lines.push(Line::from(""));
+            }
         }
     }
 
