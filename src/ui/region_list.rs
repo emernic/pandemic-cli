@@ -271,7 +271,7 @@ fn render_region_box(
                 format_number(infected),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ));
-            if dead > 0.0 {
+            if dead >= 0.5 {
                 stats.push(Span::styled("  Dead ", Style::default().fg(Color::DarkGray)));
                 stats.push(Span::styled(
                     format_number(dead),
@@ -375,13 +375,13 @@ fn render_region_box(
                         let mut spans = vec![
                             Span::styled("  ", Style::default()),
                             Span::styled(
-                                format!("{} inf", format_number(inf.infected)),
+                                format!("Inf {}", format_number(inf.infected)),
                                 Style::default().fg(Color::Red),
                             ),
                         ];
-                        if inf.dead > 0.0 {
+                        if inf.dead >= 0.5 {
                             spans.push(Span::styled(
-                                format!("  {} dead", format_number(inf.dead)),
+                                format!("  Dead {}", format_number(inf.dead)),
                                 Style::default().fg(Color::DarkGray),
                             ));
                         }
