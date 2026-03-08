@@ -147,6 +147,8 @@ const MAP_GRID: [(u16, u16); 6] = [
     (2, 1), // 5: Oceania
 ];
 
+pub const MAP_GRID_LEN: usize = MAP_GRID.len();
+
 pub fn map_grid_pos(region_idx: usize) -> Option<(u16, u16)> {
     MAP_GRID.get(region_idx).copied()
 }

@@ -6,14 +6,41 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{map_grid_pos, GameState, Region};
+use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN};
 
 use super::format_number;
 
-/// Build the list of connections to draw from the actual region topology.
-/// Only includes connections that can be rendered on the grid (adjacent/diagonal).
-/// Each pair is (smaller_idx, larger_idx) to avoid duplicates.
-fn drawable_connections(state: &GameState) -> Vec<(usize, usize)> {
+#[derive(Clone, Copy)]
+enum ConnKind {
+    Horizontal,
+    Vertical,
+    Diagonal,
+}
+
+struct MapConnection {
+    a: usize,
+    b: usize,
+    kind: ConnKind,
+}
+
+/// Classify a connection between two regions by grid adjacency.
+/// Pair must be (smaller_idx, larger_idx). Returns None if not drawable.
+fn classify_connection(a: usize, b: usize) -> Option<ConnKind> {
+    let (ca, ra) = map_grid_pos(a)?;
+    let (cb, rb) = map_grid_pos(b)?;
+    if ra == rb && cb == ca + 1 {
+        Some(ConnKind::Horizontal)
+    } else if ca == cb && rb == ra + 1 {
+        Some(ConnKind::Vertical)
+    } else if cb == ca + 1 && ra == rb + 1 {
+        Some(ConnKind::Diagonal)
+    } else {
+        None
+    }
+}
+
+/// Build drawable connections from region topology, classifying each by kind.
+fn drawable_connections(state: &GameState) -> Vec<MapConnection> {
     let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
     for (i, region) in state.regions.iter().enumerate() {
@@ -22,24 +49,25 @@ fn drawable_connections(state: &GameState) -> Vec<(usize, usize)> {
             if !seen.insert(pair) {
                 continue;
             }
-            // Only include if the grid positions allow drawing
-            let (ca, ra) = match map_grid_pos(pair.0) {
-                Some(p) => p,
-                None => continue,
-            };
-            let (cb, rb) = match map_grid_pos(pair.1) {
-                Some(p) => p,
-                None => continue,
-            };
-            let drawable = (ra == rb && cb == ca + 1)       // horizontal
-                || (ca == cb && rb == ra + 1)               // vertical
-                || (cb == ca + 1 && ra == rb + 1);          // diagonal up-right
-            if drawable {
-                result.push(pair);
+            if let Some(kind) = classify_connection(pair.0, pair.1) {
+                result.push(MapConnection { a: pair.0, b: pair.1, kind });
             }
         }
     }
     result
+}
+
+/// Find connections for a region that can't be drawn on the grid.
+fn non_drawable_connections(state: &GameState, region_idx: usize) -> Vec<usize> {
+    state.regions[region_idx]
+        .connections
+        .iter()
+        .filter(|&&j| {
+            let (a, b) = if region_idx < j { (region_idx, j) } else { (j, region_idx) };
+            classify_connection(a, b).is_none()
+        })
+        .copied()
+        .collect()
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -50,7 +78,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    if inner.width < 20 || inner.height < 6 || state.regions.len() < 6 {
+    if inner.width < 20 || inner.height < 6 || state.regions.len() < MAP_GRID_LEN {
         return;
     }
 
@@ -64,18 +92,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     {
         let buf = f.buffer_mut();
         let buf_area = buf.area;
-        for &(a, b) in &connections {
-            let (ca, ra) = match map_grid_pos(a) {
-                Some(p) => p,
-                None => continue,
-            };
-            let (cb, rb) = match map_grid_pos(b) {
-                Some(p) => p,
-                None => continue,
-            };
+        for conn in &connections {
+            // Grid positions are guaranteed valid by drawable_connections
+            let (ca, ra) = map_grid_pos(conn.a).unwrap();
+            let (cb, rb) = map_grid_pos(conn.b).unwrap();
 
-            let has_spread =
-                state.regions[a].total_infected() > 0.0 || state.regions[b].total_infected() > 0.0;
+            let has_spread = state.regions[conn.a].total_infected() > 0.0
+                || state.regions[conn.b].total_infected() > 0.0;
             let color = if has_spread {
                 Color::Red
             } else {
@@ -83,36 +106,37 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             };
             let style = Style::default().fg(color);
 
-            if ra == rb && cb == ca + 1 {
-                // Horizontal: same row, adjacent columns
-                let x_start = inner.x + ca * (region_width + gap_col) + region_width;
-                let y = inner.y + ra * (region_height + gap_row) + region_height / 2;
-                for x in x_start..x_start + gap_col {
-                    if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
-                        let cell = &mut buf[(x, y)];
-                        cell.set_symbol("─");
-                        cell.set_style(style);
+            match conn.kind {
+                ConnKind::Horizontal => {
+                    let x_start = inner.x + ca * (region_width + gap_col) + region_width;
+                    let y = inner.y + ra * (region_height + gap_row) + region_height / 2;
+                    for x in x_start..x_start + gap_col {
+                        if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
+                            let cell = &mut buf[(x, y)];
+                            cell.set_symbol("─");
+                            cell.set_style(style);
+                        }
                     }
                 }
-            } else if ca == cb && rb == ra + 1 {
-                // Vertical: same column, adjacent rows
-                let x = inner.x + ca * (region_width + gap_col) + region_width / 2;
-                let y_start = inner.y + ra * (region_height + gap_row) + region_height;
-                for y in y_start..y_start + gap_row {
-                    if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
-                        let cell = &mut buf[(x, y)];
-                        cell.set_symbol("│");
-                        cell.set_style(style);
+                ConnKind::Vertical => {
+                    let x = inner.x + ca * (region_width + gap_col) + region_width / 2;
+                    let y_start = inner.y + ra * (region_height + gap_row) + region_height;
+                    for y in y_start..y_start + gap_row {
+                        if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
+                            let cell = &mut buf[(x, y)];
+                            cell.set_symbol("│");
+                            cell.set_style(style);
+                        }
                     }
                 }
-            } else if cb == ca + 1 && ra == rb + 1 {
-                // Diagonal up-right (╱): e.g. SA(0,1)↔EU(1,0), AF(1,1)↔AS(2,0)
-                let x = inner.x + ca * (region_width + gap_col) + region_width + gap_col / 2;
-                let y = inner.y + rb * (region_height + gap_row) + region_height;
-                if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
-                    let cell = &mut buf[(x, y)];
-                    cell.set_symbol("╱");
-                    cell.set_style(style);
+                ConnKind::Diagonal => {
+                    let x = inner.x + ca * (region_width + gap_col) + region_width + gap_col / 2;
+                    let y = inner.y + rb * (region_height + gap_row) + region_height;
+                    if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
+                        let cell = &mut buf[(x, y)];
+                        cell.set_symbol("╱");
+                        cell.set_style(style);
+                    }
                 }
             }
         }
@@ -131,21 +155,26 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         render_region_box(f, rect, region, selected, state);
     }
 
-    // Show NA↔OC connection hint for selected endpoints
-    if state.ui.map_selection == 0 || state.ui.map_selection == 5 {
-        let hint_region = if state.ui.map_selection == 0 { 5 } else { 0 };
-        let hint_name = &state.regions[hint_region].name;
-        let (col, row) = map_grid_pos(state.ui.map_selection).unwrap();
-        let box_x = inner.x + col * (region_width + gap_col);
-        let box_y = inner.y + row * (region_height + gap_row) + region_height;
-        if box_y < inner.y + inner.height {
-            let hint = format!("↔ {}", hint_name);
-            let hint_line = Line::from(Span::styled(
-                hint,
-                Style::default().fg(Color::DarkGray),
-            ));
-            let hint_area = Rect::new(box_x, box_y, region_width, 1);
-            f.render_widget(Paragraph::new(vec![hint_line]), hint_area);
+    // Show hints for connections that can't be drawn on the grid
+    let hidden = non_drawable_connections(state, state.ui.map_selection);
+    if !hidden.is_empty() {
+        let names: Vec<&str> = hidden
+            .iter()
+            .filter_map(|&j| state.regions.get(j).map(|r| r.name.as_str()))
+            .collect();
+        if !names.is_empty() {
+            let (col, row) = map_grid_pos(state.ui.map_selection).unwrap();
+            let box_x = inner.x + col * (region_width + gap_col);
+            let box_y = inner.y + row * (region_height + gap_row) + region_height;
+            if box_y < inner.y + inner.height {
+                let hint = format!("↔ {}", names.join(", "));
+                let hint_line = Line::from(Span::styled(
+                    hint,
+                    Style::default().fg(Color::DarkGray),
+                ));
+                let hint_area = Rect::new(box_x, box_y, region_width, 1);
+                f.render_widget(Paragraph::new(vec![hint_line]), hint_area);
+            }
         }
     }
 }
