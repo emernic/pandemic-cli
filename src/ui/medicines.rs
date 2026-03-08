@@ -65,9 +65,17 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 .collect();
 
             // Check tested status
-            let all_tested = med.target_diseases.iter().all(|d| med.tested_against.contains(d));
-            let tested_label = if all_tested {
+            let tested_count = med.target_diseases.iter()
+                .filter(|d| med.tested_against.contains(d))
+                .count();
+            let total_targets = med.target_diseases.len();
+            let tested_label = if tested_count == total_targets {
                 Span::styled(" [Tested]", Style::default().fg(Color::Green))
+            } else if tested_count > 0 {
+                Span::styled(
+                    format!(" [Tested: {}/{}]", tested_count, total_targets),
+                    Style::default().fg(Color::Yellow),
+                )
             } else {
                 Span::styled(" [UNTESTED]", Style::default().fg(Color::Red))
             };

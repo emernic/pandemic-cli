@@ -157,3 +157,18 @@ fn research_panel_field_projects() {
     .unwrap();
     insta::assert_snapshot!(result.screen);
 }
+
+#[test]
+fn medicines_partial_tested() {
+    let mut state = GameState::new_default(42);
+    // Unlock medicines, mark BSA as tested against disease 0 only (partial)
+    for med in &mut state.medicines {
+        med.unlocked = true;
+    }
+    state.medicines[1].tested_against = vec![0]; // BSA tested vs Strain Alpha only
+    for disease in &mut state.diseases {
+        disease.knowledge = 1.0;
+    }
+    let result = run_snapshot(state, &["m".to_string()], None).unwrap();
+    insta::assert_snapshot!(result.screen);
+}
