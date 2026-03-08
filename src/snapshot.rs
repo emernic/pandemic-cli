@@ -12,34 +12,51 @@ pub struct SnapshotResult {
     pub state: GameState,
 }
 
-/// Run snapshot mode: apply inputs, advance ticks, render.
+/// Parse a snapshot step string. Returns either a tick count or a key string.
+fn parse_step(s: &str) -> Result<SnapshotStep, String> {
+    if let Some(rest) = s.strip_prefix('t') {
+        if let Ok(n) = rest.parse::<u64>() {
+            return Ok(SnapshotStep::Ticks(n));
+        }
+    }
+    // "t" alone is a valid key (opens Threats panel)
+    Ok(SnapshotStep::Key(s.to_string()))
+}
+
+enum SnapshotStep {
+    Ticks(u64),
+    Key(String),
+}
+
+/// Run snapshot mode: process an ordered sequence of steps, then render.
+/// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
 /// Returns both the rendered screen and the updated state.
 pub fn run_snapshot(
     mut state: GameState,
-    keys: &[String],
-    ticks: Option<u64>,
+    steps: &[String],
 ) -> Result<SnapshotResult, String> {
-    // Apply key actions in order
-    for key_str in keys {
-        match string_to_action(key_str) {
-            Some(action) => {
-                state = apply_action(&state, &action);
+    for step_str in steps {
+        match parse_step(step_str)? {
+            SnapshotStep::Key(key_str) => {
+                match string_to_action(&key_str) {
+                    Some(action) => {
+                        state = apply_action(&state, &action);
+                    }
+                    None => {
+                        return Err(format!(
+                            "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, left, right, h, l, enter, q",
+                            key_str
+                        ));
+                    }
+                }
             }
-            None => {
-                return Err(format!(
-                    "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, left, right, h, l, enter, q",
-                    key_str
-                ));
+            SnapshotStep::Ticks(n) => {
+                state.paused = false;
+                for _ in 0..n {
+                    state = tick(&state);
+                    ui::process_events(&mut state);
+                }
             }
-        }
-    }
-
-    // Advance ticks if requested — unpause so simulation actually advances
-    if let Some(n) = ticks {
-        state.paused = false;
-        for _ in 0..n {
-            state = tick(&state);
-            ui::process_events(&mut state);
         }
     }
 
@@ -93,7 +110,7 @@ mod tests {
     #[test]
     fn snapshot_with_ticks() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &[], Some(10)).unwrap();
+        let result = run_snapshot(state, &["t10".to_string()]).unwrap();
         assert!(result.screen.contains("Tick: 10"));
         assert_eq!(result.state.tick, 10);
     }
@@ -101,7 +118,7 @@ mod tests {
     #[test]
     fn snapshot_with_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["t".to_string()], None).unwrap();
+        let result = run_snapshot(state, &["t".to_string()]).unwrap();
         assert!(result.screen.contains("Threats"));
         // Diseases start unknown — name is hidden until research reveals it
         assert!(result.screen.contains("Unknown Pathogen #1"));
@@ -111,15 +128,29 @@ mod tests {
     fn snapshot_with_multiple_keys() {
         let state = GameState::new_default(42);
         // Navigate to Threats then press down to select second item
-        let result = run_snapshot(state, &["t".to_string(), "down".to_string()], None).unwrap();
+        let result = run_snapshot(state, &["t".to_string(), "down".to_string()]).unwrap();
         assert!(result.screen.contains("Threats"));
     }
 
     #[test]
     fn snapshot_invalid_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["x".to_string()], None);
+        let result = run_snapshot(state, &["x".to_string()]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown key"));
+    }
+
+    #[test]
+    fn snapshot_interleaved_ticks_and_keys() {
+        let state = GameState::new_default(42);
+        // Advance 5 ticks, open threats panel, advance 5 more ticks
+        let result = run_snapshot(
+            state,
+            &["t5".to_string(), "t".to_string(), "t5".to_string()],
+        )
+        .unwrap();
+        assert_eq!(result.state.tick, 10);
+        assert!(result.screen.contains("Threats"));
+        assert!(result.screen.contains("Tick: 10"));
     }
 }
