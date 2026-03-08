@@ -92,14 +92,18 @@ When the work is done:
 2. **Push** the branch and **create a PR** that references the issue:
    - Include `Closes #<number>` in the PR body so the issue auto-closes on merge.
 3. **Small issues** (one-line fixes, label changes, typo corrections, etc.) — go ahead and merge the PR yourself without asking. **Larger issues** — ask the user to review and approve the merge first.
-4. **After merge**, verify the issue was closed automatically. If not, close it manually:
+
+**CRITICAL — you are not done until the issue is closed and cleaned up:**
+
+4. **After merge**, verify the issue was closed by running `gh issue view <number>`. If it's still open, close it manually:
    ```bash
    gh issue close <number>
    ```
-5. **Remove the in-progress label** (it will be on the now-closed issue, but clean up for good hygiene):
+5. **Remove the in-progress label**:
    ```bash
    gh issue edit <number> --remove-label "in-progress"
    ```
+6. **Confirm** the issue shows as CLOSED before moving on. This is the definition of done.
 
 ## Abandoning Work
 
