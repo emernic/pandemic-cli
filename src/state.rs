@@ -191,6 +191,9 @@ pub struct UiState {
     pub map_selection: usize,
     #[serde(default)]
     pub research_ui: Option<ResearchUiState>,
+    /// Temporary status message shown above the hotkey bar (cleared on next action).
+    #[serde(default)]
+    pub status_message: Option<String>,
 }
 
 /// Grid layout for the world map: 3 columns × 2 rows.
@@ -348,6 +351,7 @@ impl GameState {
                 medicine_ui: None,
                 map_selection: 0,
                 research_ui: None,
+                status_message: None,
             },
         }
     }

@@ -33,12 +33,14 @@ pub fn format_number(n: f64) -> String {
 }
 
 pub fn render(f: &mut Frame, state: &GameState) {
+    let has_status = state.ui.status_message.is_some();
+    let hotkey_height = if has_status { 3 } else { 2 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),  // resources bar
-            Constraint::Min(8),    // main area
-            Constraint::Length(2), // hotkey bar
+            Constraint::Length(2),            // resources bar
+            Constraint::Min(8),              // main area
+            Constraint::Length(hotkey_height), // hotkey bar (+ status line)
         ])
         .split(f.area());
 
