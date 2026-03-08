@@ -650,8 +650,16 @@ fn handle_research_confirm(state: &mut GameState) {
                 state.ui.research_ui = Some(ResearchUiState::ViewActive { bench });
                 state.ui.panel_selection = 0;
             } else {
-                state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx: sel });
-                state.ui.panel_selection = 0;
+                // Only advance if there are actually projects to select
+                let count = if bench {
+                    available_bench_projects(state).len()
+                } else {
+                    available_field_projects(state).len()
+                };
+                if count > 0 {
+                    state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx: sel });
+                    state.ui.panel_selection = 0;
+                }
             }
         }
         Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
@@ -1327,6 +1335,31 @@ mod tests {
 
         state = apply_action(&state, &Action::ClosePanel); // Close panel
         assert_eq!(state.ui.open_panel, Panel::None);
+    }
+
+    #[test]
+    fn research_confirm_noop_on_empty_list() {
+        let mut state = GameState::new_default(42);
+        // Make all diseases fully known so no identify projects are available
+        for disease in &mut state.diseases {
+            disease.knowledge = 1.0;
+        }
+        // No medicines are unlocked, so no clinical trials either
+        // => available_field_projects returns empty
+
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Enter Field Research
+        assert!(matches!(
+            state.ui.research_ui,
+            Some(ResearchUiState::BrowseProjects { bench: false })
+        ));
+
+        // Pressing Enter on empty list should stay on BrowseProjects
+        state = apply_action(&state, &Action::Confirm);
+        assert!(matches!(
+            state.ui.research_ui,
+            Some(ResearchUiState::BrowseProjects { bench: false })
+        ));
     }
 
     #[test]

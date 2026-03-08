@@ -82,11 +82,13 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
 fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let title = if bench { " Bench Research " } else { " Field Research " };
+    let mut has_selectable_items = false;
 
     let active = if bench { &state.bench_research } else { &state.field_research };
 
     // When a project is active, only show it — no starting new projects until it completes
     if let Some(project) = active {
+        has_selectable_items = true;
         let selected = state.ui.panel_selection == 0;
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
@@ -123,6 +125,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                 )));
             }
         } else {
+            has_selectable_items = true;
             for (i, kind) in projects.iter().enumerate() {
                 let selected = state.ui.panel_selection == i;
                 let marker = if selected { "▶ " } else { "  " };
@@ -160,7 +163,14 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select", "Back"));
+    if has_selectable_items {
+        lines.push(hint_line(state, "Select", "Back"));
+    } else {
+        lines.push(Line::from(Span::styled(
+            "  [Esc] Back",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
 
     (title.to_string(), lines)
 }
