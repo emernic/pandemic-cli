@@ -162,12 +162,14 @@ pub fn tick(state: &GameState) -> GameState {
         if total_dead >= death_threshold {
             new.outcome = GameOutcome::Lost;
             new.paused = true;
+            new.ui.open_panel = Panel::None;
         } else if new.total_infected() < 1.0 {
             // Win requires player engagement: all diseases must be identified
             let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
             if all_identified {
                 new.outcome = GameOutcome::Won;
                 new.paused = true;
+                new.ui.open_panel = Panel::None;
             }
         }
     }
