@@ -2,11 +2,11 @@ use rand::Rng;
 
 use crate::action::Action;
 use crate::state::{
-    map_navigate, DeployTarget, GameEvent, GameOutcome, GameState, MapDirection, MedicineUiState,
-    Panel, PolicyUiState, RegionDiseaseState, ResearchKind, ResearchProject, ResearchUiState,
-    BASE_RP_INCOME, BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
-    KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, QUARANTINE_COST, QUARANTINE_PERSONNEL,
-    TRAVEL_BAN_COST, WIN_INFECTED_THRESHOLD,
+    map_navigate, DeployTarget, GameCommand, GameEvent, GameOutcome, GameState, MapDirection,
+    Panel, RegionDiseaseState, ResearchKind, ResearchProject,
+    BASE_RP_INCOME, BOOST_RP_COST, BOOST_TICKS, HOSPITAL_SURGE_COST,
+    HOSPITAL_SURGE_PERSONNEL, KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION,
+    QUARANTINE_COST, QUARANTINE_PERSONNEL, TRAVEL_BAN_COST, WIN_INFECTED_THRESHOLD,
 };
 
 /// Advance the simulation by one tick.
@@ -442,6 +442,49 @@ fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64,
     }
 }
 
+/// Result of executing a game command. Contains feedback message and whether
+/// the command succeeded (so the UI layer can update navigation accordingly).
+pub struct CommandResult {
+    pub message: Option<String>,
+    pub success: bool,
+}
+
+/// Execute a game command. Pure game logic — does NOT touch UI state.
+/// The caller is responsible for UI transitions based on the result.
+pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResult {
+    if state.outcome != GameOutcome::Playing {
+        return CommandResult { message: None, success: false };
+    }
+    match cmd {
+        GameCommand::DeployMedicine {
+            medicine_idx,
+            region_idx,
+            target_selection,
+        } => {
+            let (nav_back, msg) =
+                deploy_medicine(state, *medicine_idx, *region_idx, *target_selection);
+            CommandResult { message: msg, success: nav_back }
+        }
+        GameCommand::StartResearch { bench, project_idx } => {
+            let ok = start_research(state, *bench, *project_idx);
+            CommandResult { message: None, success: ok }
+        }
+        GameCommand::BoostResearch { bench } => {
+            let msg = boost_research(state, *bench);
+            let success = msg.is_some();
+            CommandResult { message: msg, success }
+        }
+        GameCommand::TogglePolicy {
+            region_idx,
+            policy_idx,
+        } => {
+            let msg = toggle_policy(state, *region_idx, *policy_idx);
+            let success = msg.is_some();
+            CommandResult { message: msg, success }
+        }
+    }
+}
+
 /// Apply a player action to the game state.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
@@ -502,108 +545,14 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             );
         }
         Action::Confirm => {
-            // Block all Confirm actions after game over (no deploying or starting research).
-            // Players can still browse panels via arrow keys and open/close.
-            if new.outcome != GameOutcome::Playing {
-                // no-op
-            } else if new.ui.open_panel == Panel::Research {
-                handle_research_confirm(&mut new);
-            } else if new.ui.open_panel == Panel::Medicines {
-                match new.ui.medicine_ui.clone() {
-                    Some(MedicineUiState::BrowseMedicines) => {
-                        let unlocked: Vec<usize> = new
-                            .medicines
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, m)| m.unlocked)
-                            .map(|(i, _)| i)
-                            .collect();
-                        if let Some(&med_idx) = unlocked.get(new.ui.panel_selection) {
-                            new.ui.medicine_ui =
-                                Some(MedicineUiState::SelectRegion { medicine_idx: med_idx });
-                            new.ui.panel_selection = 0;
-                        }
+            if new.outcome == GameOutcome::Playing {
+                let state_snapshot = new.clone();
+                if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
+                    let result = execute_command(&mut new, &cmd);
+                    new.ui.apply_command_result(&cmd, result.success);
+                    if new.ui.status_message.is_none() {
+                        new.ui.status_message = result.message;
                     }
-                    Some(MedicineUiState::SelectRegion { medicine_idx }) => {
-                        let region_idx = new.ui.panel_selection;
-                        if region_idx < new.regions.len() {
-                            new.ui.medicine_ui = Some(MedicineUiState::SelectTarget {
-                                medicine_idx,
-                                region_idx,
-                            });
-                            new.ui.panel_selection = 0;
-                        }
-                    }
-                    Some(MedicineUiState::SelectTarget {
-                        medicine_idx,
-                        region_idx,
-                    }) => {
-                        let target_selection = new.ui.panel_selection;
-                        let med = &new.medicines[medicine_idx];
-                        if let Some(target) = med.decode_deploy_target(target_selection) {
-                            // Check funds before anything else — no point warning
-                            // about untested risks if the player can't afford it
-                            if new.resources.funding < med.cost {
-                                new.ui.status_message = Some(
-                                    insufficient_funds_message(med.cost, new.resources.funding),
-                                );
-                            } else {
-                                let disease_idx = match &target {
-                                    DeployTarget::Vaccinate { disease_idx } => *disease_idx,
-                                    DeployTarget::Treat { disease_idx } => *disease_idx,
-                                };
-                                let is_tested = med.tested_against.contains(&disease_idx);
-
-                                if !is_tested {
-                                    // Untested: require confirmation
-                                    new.ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
-                                        medicine_idx,
-                                        region_idx,
-                                        target_selection,
-                                    });
-                                } else {
-                                    let (nav_back, msg) = deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
-                                    new.ui.status_message = msg;
-                                    if nav_back {
-                                        new.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-                                        new.ui.panel_selection = 0;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Some(MedicineUiState::ConfirmDeploy {
-                        medicine_idx,
-                        region_idx,
-                        target_selection,
-                    }) => {
-                        let (nav_back, msg) = deploy_medicine(&mut new, medicine_idx, region_idx, target_selection);
-                        new.ui.status_message = msg;
-                        if nav_back {
-                            new.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-                            new.ui.panel_selection = 0;
-                        }
-                    }
-                    None => {}
-                }
-            } else if new.ui.open_panel == Panel::Policy {
-                match new.ui.policy_ui.clone() {
-                    Some(PolicyUiState::BrowseRegions) => {
-                        // Pure UI navigation: drill into region's policy management
-                        let region_idx = new.ui.panel_selection;
-                        if region_idx < new.regions.len() {
-                            new.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
-                            new.ui.panel_selection = 0;
-                        }
-                    }
-                    Some(PolicyUiState::ManagePolicies { region_idx }) => {
-                        // Game command: toggle the selected policy
-                        let policy_idx = new.ui.panel_selection;
-                        if let Some(msg) = toggle_policy(&mut new, region_idx, policy_idx) {
-                            new.ui.status_message = Some(msg);
-                        }
-                    }
-                    None => {}
                 }
             }
         }
@@ -734,50 +683,10 @@ fn boost_research(state: &mut GameState, bench: bool) -> Option<String> {
     }
 }
 
-fn handle_research_confirm(state: &mut GameState) {
-    let research_ui = state.ui.research_ui.clone();
-    match research_ui {
-        Some(ResearchUiState::BrowseCategories) => {
-            let bench = state.ui.panel_selection == 1;
-            state.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench });
-            state.ui.panel_selection = 0;
-        }
-        Some(ResearchUiState::BrowseProjects { bench }) => {
-            let sel = state.ui.panel_selection;
-            let active = if bench { &state.bench_research } else { &state.field_research };
-
-            if active.is_some() {
-                state.ui.research_ui = Some(ResearchUiState::ViewActive { bench });
-                state.ui.panel_selection = 0;
-            } else {
-                let count = if bench {
-                    state.available_bench_projects().len()
-                } else {
-                    state.available_field_projects().len()
-                };
-                if count > 0 {
-                    state.ui.research_ui = Some(ResearchUiState::ConfirmProject { bench, project_idx: sel });
-                    state.ui.panel_selection = 0;
-                }
-            }
-        }
-        Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
-            if start_research(state, bench, project_idx) {
-                state.ui.research_ui = Some(ResearchUiState::BrowseProjects { bench });
-                state.ui.panel_selection = 0;
-            }
-        }
-        Some(ResearchUiState::ViewActive { bench }) => {
-            state.ui.status_message = boost_research(state, bench);
-        }
-        None => {}
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::{GameState, MedicineUiState, PolicyUiState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {

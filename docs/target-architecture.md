@@ -80,30 +80,22 @@ The medicine wizard (BrowseMedicines → SelectRegion → SelectTarget → Confi
 **Approach:** Add methods to `UiState` that handle:
 - ~~Panel open/close/toggle~~ — DONE (`UiState::toggle_panel()`, `UiState::close_panel()`)
 - Selection navigation (next/prev with bounds)
-- Wizard step forward/back (Confirm handler for medicines, research, policy)
-- Translating a Confirm press into a game command (or nothing, if mid-wizard)
+- ~~Wizard step forward/back (Confirm handler for medicines, research, policy)~~ — DONE (`UiState::handle_confirm()`)
+- ~~Translating a Confirm press into a game command (or nothing, if mid-wizard)~~ — DONE (returns `Option<GameCommand>`)
 
-**What's left:** The `Action::Confirm` handler in `apply_action()` still mixes UI wizard transitions with game commands (deploy_medicine, start_research, toggle_policy). Each panel's Confirm logic needs to be split: UI transitions go to UiState methods, game commands stay in engine.
+**What's left:** Selection navigation (SelectNext/SelectPrev) still lives in `apply_action()` in engine.rs. These should move to UiState methods.
 
-The interactive loop becomes:
+The Confirm flow now works as intended:
 ```
 keypress → action
-  → update UiState (navigation, wizard steps)
-  → if action produces a Command → engine::apply_command()
+  → UiState::handle_confirm() (wizard transitions, returns Option<GameCommand>)
+  → if command → engine::execute_command() (pure game logic, returns CommandResult)
+  → UiState::apply_command_result() (post-command UI navigation)
 ```
 
-### 4. Give `apply_command` a result type
+### 4. ~~Give `apply_command` a result type~~ — DONE
 
-Currently `apply_action` communicates outcomes by setting `ui.status_message` inside the engine — the engine reaches into UI state to report what happened. Better:
-
-```rust
-struct CommandResult {
-    state: GameState,
-    message: Option<String>,  // "Vaccinated 10K in Asia..."
-}
-```
-
-The UI layer reads the message and puts it in `status_message`. The engine never touches `UiState`.
+`execute_command()` returns `CommandResult { message, success }`. The caller (apply_action) reads the message and puts it in `status_message`. The engine's `execute_command` never touches `UiState`.
 
 ## Migration Strategy
 
