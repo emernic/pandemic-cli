@@ -907,12 +907,13 @@ mod tests {
 
     #[test]
     fn panel_navigation() {
-        use crate::state::Disease;
+        use crate::state::{Disease, PathogenType};
 
         let mut state = GameState::new_default(42);
         // Add a third disease so we can test navigation bounds
         state.diseases.push(Disease {
             name: "Strain Gamma".into(),
+            pathogen_type: PathogenType::DnaVirus,
             infectivity: 0.1,
             lethality: 0.01,
             cross_region_spread: 0.005,

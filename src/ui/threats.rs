@@ -40,7 +40,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     "    ???",
                     Style::default().fg(Color::DarkGray),
                 )));
-            } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
+            } else {
+                // Show pathogen type once name is known
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!("Type: {}", disease.pathogen_type.label()),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]));
+            }
+
+            if disease.knowledge >= KNOWLEDGE_NAME && disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
                 // Name known, partial stats
                 lines.push(Line::from(vec![
                     Span::raw("    "),
@@ -53,7 +64,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Span::raw("  "),
                     Span::styled("Recov: ?", Style::default().fg(Color::DarkGray)),
                 ]));
-            } else {
+            } else if disease.knowledge >= KNOWLEDGE_PARTIAL_STATS {
                 // Full stats visible
                 lines.push(Line::from(vec![
                     Span::raw("    "),
