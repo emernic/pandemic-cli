@@ -60,12 +60,18 @@ Issues labeled `investigate` are fundamentally different from bugs and enhanceme
 
 When picking up an investigate issue:
 
-1. **Start with no assumptions.** Read the code. Trace the logic. Understand the current behavior. The current behavior might be exactly correct — that's a fine outcome.
-2. **Determine the outcome** (only after you actually understand what's going on):
+1. **Don't narrow onto the specific thing the issue mentions.** The issue points you to a *neighborhood* of the code that confused someone. Your job is to look at that whole area — not just the one detail they called out. Read the surrounding code, understand the broader system, and think about how it all fits together. The real issue is often something the filer didn't even mention, because they only saw a surface symptom.
+
+2. **Think about what's actually right for the game.** This is the most important step and the one most likely to be skipped. Don't think in terms of "issues and fixes." Think like a game designer: How should this system work? What would make sense for the player? What's the intended experience? Step back from the code and ask yourself what the *right* behavior is before you start evaluating whether the *current* behavior matches it. If you can't articulate what the system should do and why, you haven't thought about it enough yet.
+
+3. **Start with no assumptions.** The current behavior might be exactly correct. The issue filer might have been confused about something that's actually fine. Or the behavior might be wrong, but not in the way the issue suggests — the whole area might be poorly designed in a way that's more fundamental than what was called out.
+
+4. **Determine the outcome** (only after you genuinely understand the area):
    - **It's actually fine** (~30%) — close the issue with a comment explaining why the behavior is correct and makes sense. This is a perfectly valid and common outcome. Closing investigate issues is good hygiene, not a failure.
    - **It works but is confusing** (~30%) — add documentation, rename things, add a code comment, or restructure to make the behavior obvious. The code was right, but understandably confusing.
-   - **It's actually a problem** (~40%) — fix the bug, clean up the design, or file a more specific bug/enhancement issue if the fix is too large for this pass.
-3. Investigate issues are often small and self-contained. Many can be resolved quickly.
+   - **It's actually a problem** (~40%) — fix the bug, clean up the design, or file a more specific bug/enhancement issue if the fix is too large for this pass. The fix might be for the specific thing the issue mentioned, or it might be a broader redesign of the area.
+
+5. Investigate issues are often small and self-contained. Many can be resolved quickly — but don't use that as an excuse to skip the "step back and think" part.
 
 ## Step 4: Read and Understand the Issue
 
