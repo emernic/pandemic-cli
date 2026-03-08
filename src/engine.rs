@@ -185,6 +185,10 @@ fn deploy_medicine(
     region_idx: usize,
     target_selection: usize,
 ) {
+    // Block after game over
+    if state.outcome != GameOutcome::Playing {
+        return;
+    }
     let med = &state.medicines[medicine_idx];
     let cost = med.cost;
     let doses = med.doses;
@@ -646,6 +650,10 @@ fn handle_research_confirm(state: &mut GameState) {
             }
         }
         Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
+            // Block after game over — no point starting research
+            if state.outcome != GameOutcome::Playing {
+                return;
+            }
             // Block if slot is already occupied
             let occupied = if bench { state.bench_research.is_some() } else { state.field_research.is_some() };
             if occupied {
@@ -1355,26 +1363,31 @@ mod tests {
     }
 
     #[test]
-    fn no_confirm_after_game_over() {
+    fn no_research_after_game_over() {
         let mut state = GameState::new_default(42);
-        unlock_all_medicines(&mut state);
-        state.resources.research_points = 200.0;
         state.outcome = GameOutcome::Lost;
-        // Try to deploy medicine
-        state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // would select medicine
-        assert!(
-            matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines)),
-            "Confirm should be blocked after game over"
-        );
+        state.resources.research_points = 100.0;
+        let rp_before = state.resources.research_points;
         // Try to start research
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // would enter category
-        assert!(
-            matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)),
-            "Confirm should be blocked after game over"
-        );
-        assert_eq!(state.resources.research_points, 200.0, "RP should not be spent");
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select project
+        state = apply_action(&state, &Action::Confirm); // Try to confirm
+        assert!(state.field_research.is_none(), "should not start research after game over");
+        assert_eq!(state.resources.research_points, rp_before, "should not spend RP after game over");
+    }
+
+    #[test]
+    fn no_deploy_after_game_over() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.outcome = GameOutcome::Lost;
+        let funding_before = state.resources.funding;
+        state = apply_action(&state, &Action::OpenMedicines);
+        state = apply_action(&state, &Action::Confirm); // select medicine
+        state = apply_action(&state, &Action::Confirm); // select region
+        state = apply_action(&state, &Action::Confirm); // try to deploy
+        assert_eq!(state.resources.funding, funding_before, "should not spend funds after game over");
     }
 
     #[test]
