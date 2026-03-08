@@ -463,11 +463,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             );
         }
         Action::Confirm => {
-            // Block resource-consuming actions after game over
+            // Block all Confirm actions after game over (no deploying or starting research).
+            // Players can still browse panels via arrow keys and open/close.
             if new.outcome != GameOutcome::Playing {
-                // Allow panel navigation (Confirm just opens sub-views in browse mode)
-                // but not actual resource-spending confirmations.
-                // For simplicity, block all Confirm actions after game over.
+                // no-op
             } else if new.ui.open_panel == Panel::Research {
                 handle_research_confirm(&mut new);
             } else if new.ui.open_panel == Panel::Medicines {
