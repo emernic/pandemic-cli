@@ -12,6 +12,16 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 **The target audience is real adults with taste.** Think Crusader Kings, Hearts of Iron — deeply grounded in real science and real-world systems, slightly gamified (you don't do paperwork in Call of Duty), set slightly in the future so the science is realistic but forward-looking. People who actually know infectious disease, molecular biology, or public health policy should be surprised and delighted by the game's accuracy and depth. Not a sim, but grounded.
 
+## Don't Lose the Forest for the Trees
+
+**Before filing issues from your playtest, ask: is the game fundamentally broken?**
+
+If the entire game lasts 5 minutes when it should last an hour, don't file 10 issues about minor UX problems. File ONE issue about the game being 5 minutes long. Every other issue is downstream noise — policy discoverability doesn't matter if the game is over before the player opens the Policy panel. Dose scaling feedback is meaningless if the game ends in 2 minutes.
+
+**Prioritize ruthlessly.** Identify the ONE thing that, if fixed, would make the most other problems irrelevant. That's your P0. Everything else is P2 at best, and probably shouldn't be filed at all until the P0 is resolved. A playtest that files 1 root-cause issue is infinitely more valuable than one that files 10 symptom issues.
+
+**The test:** Before filing an issue, ask yourself: "Would this problem still exist if the game lasted 60 minutes instead of 5?" If you're not sure, don't file it — it might just be a symptom of broken pacing.
+
 ## Be Honest — Brutally
 
 **This is the most important instruction in this document.**
