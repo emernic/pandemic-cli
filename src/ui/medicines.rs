@@ -121,38 +121,27 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
             Style::default().fg(Color::White)
         };
 
-        // Show aggregate infection stats across all target diseases
-        let mut total_susceptible = 0.0_f64;
-        let mut total_infected = 0.0_f64;
-        let mut total_immune = 0.0_f64;
-        for &d_idx in &med.target_diseases {
-            let inf = region.infections.iter().find(|i| i.disease_idx == d_idx);
-            let infected = inf.map(|i| i.infected).unwrap_or(0.0);
-            let immune = inf.map(|i| i.immune).unwrap_or(0.0);
-            let dead = inf.map(|i| i.dead).unwrap_or(0.0);
-            let susceptible = (region.population as f64 - infected - dead - immune).max(0.0);
-            total_susceptible += susceptible;
-            total_infected += infected;
-            total_immune += immune;
-        }
+        // Show region stats: population, total infected, total dead
+        let infected = region.total_infected();
+        let dead = region.total_dead();
 
         let mut spans = vec![
             Span::styled(format!("{}{:<14}", marker, region.name), style),
             Span::styled(
-                format!("{:>6} sus", format_number(total_susceptible)),
+                format!("{:>6} pop", format_number(region.population as f64)),
                 Style::default().fg(Color::Cyan),
             ),
             Span::raw("  "),
             Span::styled(
-                format!("{:>6} inf", format_number(total_infected)),
-                Style::default().fg(if total_infected > 0.0 { Color::Red } else { Color::DarkGray }),
+                format!("{:>6} inf", format_number(infected)),
+                Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
             ),
         ];
-        if total_immune > 0.0 {
+        if dead > 0.0 {
             spans.push(Span::raw("  "));
             spans.push(Span::styled(
-                format!("{:>6} imm", format_number(total_immune)),
-                Style::default().fg(Color::Green),
+                format!("{:>6} dead", format_number(dead)),
+                Style::default().fg(Color::DarkGray),
             ));
         }
         lines.push(Line::from(spans));
