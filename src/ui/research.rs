@@ -148,7 +148,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     )));
                 }
 
-                let (rp, personnel, ticks) = crate::engine::project_costs(kind, &state.medicines);
+                let (rp, personnel, ticks) = kind.project_costs(&state.medicines);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(format!("{:.0} RP", rp), Style::default().fg(Color::Magenta)),
@@ -184,7 +184,7 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (rp, personnel, ticks) = crate::engine::project_costs(kind, &state.medicines);
+        let (rp, personnel, ticks) = kind.project_costs(&state.medicines);
 
         lines.push(Line::from(Span::styled(
             format!("  Start: {}", format_kind(kind, state)),
