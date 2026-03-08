@@ -1622,6 +1622,10 @@ mod tests {
     #[test]
     fn lose_condition_triggers_on_mass_death() {
         let mut state = GameState::new_default(42);
+        // Ensure a highly lethal disease so the game reliably ends in a loss
+        state.diseases[0].infectivity = 0.10;
+        state.diseases[0].lethality = 0.05;
+        state.diseases[0].cross_region_spread = 0.05;
         // Run until game over
         for _ in 0..2000 {
             state = tick(&state);
