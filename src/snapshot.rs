@@ -34,8 +34,9 @@ pub fn run_snapshot(
         }
     }
 
-    // Advance ticks if requested
+    // Advance ticks if requested — unpause so simulation actually advances
     if let Some(n) = ticks {
+        state.paused = false;
         for _ in 0..n {
             state = tick(&state);
         }

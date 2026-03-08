@@ -32,3 +32,5 @@ This whole process might take 15 seconds (if the changes are small) or 20 minute
 Also, focus exclusively on changes you made in this Claude Code session since your last reflection (or start of conversation if you haven't reflected yet). That is to say, you should be looking at our conversation history here and what **you** actually did and your process. **DO NOT** use git to see all changes on the branch (that's not what's relevant here).
 
 Make sure you ONLY return and display your final distilled/validated concerns, not all your intermediate thinking.
+
+After reflecting, you may immediately address the concerns you identified if the fixes are straightforward. For anything non-trivial, confirm with the user first.

@@ -68,7 +68,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Span::raw(" "),
             Span::styled(
                 format!("{:>8}", format_number(dead)),
-                Style::default().fg(if dead > 0.0 { Color::DarkGray } else { Color::DarkGray }),
+                Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray }),
             ),
             Span::raw("  "),
             Span::styled(

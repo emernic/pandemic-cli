@@ -80,7 +80,7 @@ fn install_panic_hook() {
 }
 
 fn run_interactive(
-    mut state: GameState,
+    state: GameState,
     save_path: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     install_panic_hook();
@@ -90,6 +90,28 @@ fn run_interactive(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    let result = game_loop(&mut terminal, state);
+
+    // Always cleanup, even if game_loop errored
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
+    let state = result?; // Now propagate error
+
+    // Save state on quit
+    if let Some(path) = save_path {
+        let json = serde_json::to_string_pretty(&state)?;
+        fs::write(&path, json)?;
+        eprintln!("Game saved to {}", path);
+    }
+
+    Ok(())
+}
+
+fn game_loop(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    mut state: GameState,
+) -> Result<GameState, Box<dyn std::error::Error>> {
     let tick_duration = Duration::from_millis(500);
     let mut last_tick = Instant::now();
 
@@ -112,9 +134,14 @@ fn run_interactive(
                 if key_event.kind == KeyEventKind::Press {
                     if let Some(action) = key_to_action(key_event.code) {
                         if action == Action::Quit {
-                            break;
+                            return Ok(state);
                         }
+                        let was_paused = state.paused;
                         state = apply_action(&state, &action);
+                        // Reset tick timer on unpause to avoid burst of catch-up ticks
+                        if was_paused && !state.paused {
+                            last_tick = Instant::now();
+                        }
                     }
                 }
             }
@@ -123,20 +150,7 @@ fn run_interactive(
         // Auto-tick when unpaused
         if !state.paused && last_tick.elapsed() >= tick_duration {
             state = tick(&state);
-            last_tick = Instant::now();
+            last_tick += tick_duration;
         }
     }
-
-    // Cleanup terminal
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-
-    // Save state on quit
-    if let Some(path) = save_path {
-        let json = serde_json::to_string_pretty(&state)?;
-        fs::write(&path, json)?;
-        eprintln!("Game saved to {}", path);
-    }
-
-    Ok(())
 }

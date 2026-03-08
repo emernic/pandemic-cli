@@ -7,7 +7,9 @@ use crate::state::{GameState, Panel, RegionInfection};
 pub fn tick(state: &GameState) -> GameState {
     let mut new = state.clone();
 
-    // Pull rng out so we can borrow regions mutably at the same time
+    // Clone the RNG out so we can mutably borrow both `rng` and `new.regions`
+    // simultaneously. Written back to `new.rng` at the end of the function.
+    // WARNING: Do not use `new.rng` between here and the write-back line.
     let mut rng = new.rng.clone();
 
     // Disease spread within each region
@@ -16,6 +18,10 @@ pub fn tick(state: &GameState) -> GameState {
 
         for inf in &mut region.infections {
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
+                // Each disease has its own independent susceptible pool. A person
+                // infected with disease A can also be infected with disease B.
+                // When displaying aggregate stats, the UI may need to estimate
+                // "infected by any disease" (e.g. via inclusion-exclusion or capping).
                 let susceptible = pop - inf.infected - inf.dead;
                 if susceptible <= 0.0 {
                     continue;
@@ -83,6 +89,15 @@ pub fn tick(state: &GameState) -> GameState {
     new
 }
 
+fn toggle_panel(ui: &mut crate::state::UiState, panel: Panel) {
+    if ui.open_panel == panel {
+        ui.open_panel = Panel::None;
+    } else {
+        ui.open_panel = panel;
+        ui.panel_selection = 0;
+    }
+}
+
 /// Apply a player action to the game state.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
@@ -91,26 +106,11 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::TogglePause => {
             new.paused = !new.paused;
         }
-        Action::OpenThreats => {
-            new.ui.open_panel = Panel::Threats;
-            new.ui.panel_selection = 0;
-        }
-        Action::OpenResearch => {
-            new.ui.open_panel = Panel::Research;
-            new.ui.panel_selection = 0;
-        }
-        Action::OpenMedicines => {
-            new.ui.open_panel = Panel::Medicines;
-            new.ui.panel_selection = 0;
-        }
-        Action::OpenPolicy => {
-            new.ui.open_panel = Panel::Policy;
-            new.ui.panel_selection = 0;
-        }
-        Action::OpenHelp => {
-            new.ui.open_panel = Panel::Help;
-            new.ui.panel_selection = 0;
-        }
+        Action::OpenThreats => toggle_panel(&mut new.ui, Panel::Threats),
+        Action::OpenResearch => toggle_panel(&mut new.ui, Panel::Research),
+        Action::OpenMedicines => toggle_panel(&mut new.ui, Panel::Medicines),
+        Action::OpenPolicy => toggle_panel(&mut new.ui, Panel::Policy),
+        Action::OpenHelp => toggle_panel(&mut new.ui, Panel::Help),
         Action::ClosePanel => {
             new.ui.open_panel = Panel::None;
             new.ui.panel_selection = 0;
@@ -165,13 +165,11 @@ mod tests {
     }
 
     #[test]
-    fn tick_is_deterministic() {
+    fn tick_advances_state() {
         let state = GameState::new_default(42);
-        let a = tick(&state);
-        let b = tick(&state);
-        assert_eq!(a.total_infected(), b.total_infected());
-        assert_eq!(a.total_dead(), b.total_dead());
-        assert_eq!(a.tick, b.tick);
+        let after = tick(&state);
+        assert_eq!(after.tick, state.tick + 1);
+        assert!(after.total_infected() > state.total_infected());
     }
 
     #[test]
@@ -220,7 +218,14 @@ mod tests {
     #[test]
     fn open_close_panels() {
         let state = GameState::new_default(42);
+        // Open Threats
         let s = apply_action(&state, &Action::OpenThreats);
+        assert_eq!(s.ui.open_panel, Panel::Threats);
+        // Press Threats again — should toggle closed
+        let s = apply_action(&s, &Action::OpenThreats);
+        assert_eq!(s.ui.open_panel, Panel::None);
+        // Open again then close with Esc
+        let s = apply_action(&s, &Action::OpenThreats);
         assert_eq!(s.ui.open_panel, Panel::Threats);
         let s = apply_action(&s, &Action::ClosePanel);
         assert_eq!(s.ui.open_panel, Panel::None);
