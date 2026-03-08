@@ -62,7 +62,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
                 } else {
                     ""
                 };
-                format!("    Develop new medicines{}", active)
+                format!("    Develop medicines, manufacture doses{}", active)
             }
         };
         lines.push(Line::from(Span::styled(
@@ -331,6 +331,12 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or_else(|| "Unknown".to_string());
             format!("Trial: {} vs {}", med_name, dis_name)
         }
+        ResearchKind::ManufactureDoses { medicine_idx } => {
+            let name = state.medicines.get(*medicine_idx)
+                .map(|m| m.name.as_str())
+                .unwrap_or("Unknown");
+            format!("Manufacture: {}", name)
+        }
     }
 }
 
@@ -346,6 +352,10 @@ fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
                 })
                 .collect();
             Some(names.join(", "))
+        }
+        ResearchKind::ManufactureDoses { medicine_idx } => {
+            let med = state.medicines.get(*medicine_idx)?;
+            Some(format!("Restores to {} doses", crate::format_number(med.max_doses)))
         }
         _ => None,
     }

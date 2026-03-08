@@ -262,6 +262,10 @@ pub struct Medicine {
     pub target_diseases: Vec<usize>,
     pub cost: f64,
     pub doses: f64,
+    /// Maximum doses this medicine can hold (set on creation, restored by manufacturing).
+    /// Defaults to 0.0 on deserialization; fixup_max_doses() sets it from `doses` for old saves.
+    #[serde(default)]
+    pub max_doses: f64,
     pub unlocked: bool,
     /// Disease indices this medicine has been clinically trialed against.
     #[serde(default)]
@@ -339,6 +343,7 @@ pub enum ResearchKind {
     IdentifyThreat { disease_idx: usize },
     DevelopMedicine { medicine_idx: usize },
     ClinicalTrial { medicine_idx: usize, disease_idx: usize },
+    ManufactureDoses { medicine_idx: usize },
 }
 
 impl ResearchKind {
@@ -359,6 +364,7 @@ impl ResearchKind {
                 }
             }
             ResearchKind::ClinicalTrial { .. } => (15.0, 5, 25.0),
+            ResearchKind::ManufactureDoses { .. } => (10.0, 3, 15.0),
         }
     }
 }
@@ -606,6 +612,7 @@ impl GameState {
                 target_diseases: vec![0],
                 cost: 200.0,
                 doses: 100_000.0,
+                max_doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -616,6 +623,7 @@ impl GameState {
                 target_diseases: vec![1],
                 cost: 150.0,
                 doses: 100_000.0,
+                max_doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -626,6 +634,7 @@ impl GameState {
                 target_diseases: vec![0, 1],
                 cost: 400.0,
                 doses: 200_000.0,
+                max_doses: 200_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
@@ -741,6 +750,13 @@ impl GameState {
         let mut projects = Vec::new();
         for (i, med) in self.medicines.iter().enumerate() {
             if med.unlocked {
+                // Unlocked medicines can be manufactured if doses are depleted
+                if med.doses < med.max_doses {
+                    let kind = ResearchKind::ManufactureDoses { medicine_idx: i };
+                    if active_kind != Some(&kind) {
+                        projects.push(kind);
+                    }
+                }
                 continue;
             }
             let has_knowledge = med.target_diseases.iter().any(|&d_idx| {

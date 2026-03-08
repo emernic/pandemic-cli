@@ -16,11 +16,21 @@ fn ensure_policies(state: &mut GameState) {
     }
 }
 
+/// Backfill max_doses for saves created before dose depletion was added.
+fn fixup_max_doses(state: &mut GameState) {
+    for med in &mut state.medicines {
+        if med.max_doses == 0.0 && med.doses > 0.0 {
+            med.max_doses = med.doses;
+        }
+    }
+}
+
 /// Advance the simulation by one tick.
 pub fn tick(state: &GameState) -> GameState {
     let mut new = state.clone();
     new.events.clear();
     ensure_policies(&mut new);
+    fixup_max_doses(&mut new);
 
     // Don't advance simulation after game over
     if new.outcome != GameOutcome::Playing {
@@ -188,7 +198,7 @@ pub fn tick(state: &GameState) -> GameState {
                         }
                     }
                 }
-                ResearchKind::DevelopMedicine { .. } => {}
+                ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } => {}
             }
             new.field_research = None;
         }
@@ -206,6 +216,12 @@ pub fn tick(state: &GameState) -> GameState {
                             .map(|&d_idx| new.diseases.get(d_idx)
                                 .map_or(0, |d| d.strain_generation))
                             .collect();
+                    }
+                }
+                ResearchKind::ManufactureDoses { medicine_idx } => {
+                    let m_idx = *medicine_idx;
+                    if let Some(medicine) = new.medicines.get_mut(m_idx) {
+                        medicine.doses = medicine.max_doses;
                     }
                 }
                 _ => {}
@@ -320,6 +336,9 @@ fn deploy_medicine(
         if state.resources.funding < cost {
             return (false, Some(insufficient_funds_message(cost, state.resources.funding)));
         }
+        if state.medicines[medicine_idx].doses <= 0.0 {
+            return (false, Some(format!("No doses remaining for {med_name} — manufacture more via Research")));
+        }
 
         let disease_idx = match &target {
             DeployTarget::Vaccinate { disease_idx } => *disease_idx,
@@ -369,6 +388,7 @@ fn deploy_medicine(
                         inf.immune += actual;
                     }
                     state.resources.funding -= cost;
+                    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
                     deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse, efficacy)
                 } else {
                     format!("No susceptible population in {region_name}")
@@ -394,6 +414,7 @@ fn deploy_medicine(
                         inf.immune += actual;
                     }
                     state.resources.funding -= cost;
+                    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
                     deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse, efficacy)
                 } else {
                     format!("No infected population in {region_name}")
@@ -439,6 +460,7 @@ fn toggle_panel(ui: &mut crate::state::UiState, panel: Panel) {
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
     ensure_policies(&mut new);
+    fixup_max_doses(&mut new);
     new.ui.status_message = None;
 
     match action {
@@ -1136,6 +1158,74 @@ mod tests {
             asia_infected_after
         );
         assert_eq!(state.resources.funding, funding_before - 200.0);
+        // Doses should have been depleted
+        let treated = asia_infected_before - asia_infected_after;
+        assert!(
+            state.medicines[0].doses < state.medicines[0].max_doses,
+            "doses should have been depleted after deployment"
+        );
+        assert!(
+            (state.medicines[0].max_doses - state.medicines[0].doses - treated).abs() < 1.0,
+            "doses depleted should equal people treated"
+        );
+    }
+
+    #[test]
+    fn medicine_empty_doses_blocks_deployment() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].doses = 0.0; // Empty
+        for _ in 0..20 {
+            state = tick(&state);
+        }
+
+        state = apply_action(&state, &Action::OpenMedicines);
+        state = apply_action(&state, &Action::Confirm); // select medicine
+        for _ in 0..4 {
+            state = apply_action(&state, &Action::SelectNext);
+        }
+        state = apply_action(&state, &Action::Confirm); // select region (Asia)
+        state = apply_action(&state, &Action::SelectNext); // Treat
+        let funding_before = state.resources.funding;
+        state = apply_action(&state, &Action::Confirm); // try deploy
+
+        assert_eq!(state.resources.funding, funding_before, "should not charge when empty");
+        assert!(
+            state.ui.status_message.as_ref().unwrap().contains("No doses remaining"),
+            "expected no doses message, got: {:?}",
+            state.ui.status_message
+        );
+    }
+
+    #[test]
+    fn manufacture_doses_restores_supply() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].doses = 0.0; // Depleted
+
+        // ManufactureDoses should appear in available bench projects
+        let bench = state.available_bench_projects();
+        assert!(
+            bench.iter().any(|k| matches!(k, ResearchKind::ManufactureDoses { medicine_idx: 0 })),
+            "manufacture should be available for depleted medicine"
+        );
+
+        // Start and complete manufacture
+        state.resources.research_points = 100.0;
+        state.bench_research = Some(ResearchProject {
+            kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
+            progress: 14.0,
+            required_ticks: 15.0,
+            personnel_assigned: 3,
+            rp_cost: 10.0,
+        });
+        state = tick(&state);
+
+        assert!(state.bench_research.is_none(), "project should be complete");
+        assert_eq!(
+            state.medicines[0].doses, state.medicines[0].max_doses,
+            "doses should be restored to max"
+        );
     }
 
     #[test]
@@ -1948,6 +2038,7 @@ mod tests {
             target_diseases: vec![0],
             cost: 100.0,
             doses: 1000.0,
+            max_doses: 1000.0,
             unlocked: true,
             tested_against: vec![0],
             strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3

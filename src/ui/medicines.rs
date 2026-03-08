@@ -6,9 +6,19 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{DeployTarget, GameState, MedicineUiState};
+use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState};
 use crate::ui::hint_line;
 use crate::format_number;
+
+fn dose_color(med: &Medicine) -> Color {
+    if med.doses <= 0.0 {
+        Color::Red
+    } else if med.doses < med.max_doses * 0.5 {
+        Color::Yellow
+    } else {
+        Color::Cyan
+    }
+}
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines) = match &state.ui.medicine_ui {
@@ -82,6 +92,15 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 Span::styled(" [UNTESTED]", Style::default().fg(Color::Red))
             };
 
+            let dc = dose_color(med);
+            let dose_text = if med.doses <= 0.0 {
+                "EMPTY".to_string()
+            } else if med.doses < med.max_doses {
+                format!("{}/{} doses", format_number(med.doses), format_number(med.max_doses))
+            } else {
+                format!("{} doses", format_number(med.doses))
+            };
+
             lines.push(Line::from(vec![
                 Span::raw("    "),
                 Span::styled(
@@ -90,8 +109,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 ),
                 Span::raw("  "),
                 Span::styled(
-                    format!("{} doses", format_number(med.doses)),
-                    Style::default().fg(Color::Cyan),
+                    dose_text,
+                    Style::default().fg(dc),
                 ),
                 Span::raw("  "),
                 Span::styled(
@@ -317,6 +336,13 @@ fn render_select_target(
             } else {
                 Color::Red
             }),
+        ),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  Doses: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{}/{}", format_number(med.doses), format_number(med.max_doses)),
+            Style::default().fg(dose_color(med)),
         ),
     ]));
 
