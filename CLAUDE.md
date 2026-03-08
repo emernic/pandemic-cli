@@ -39,15 +39,18 @@ Key files: `src/state.rs` (data), `src/engine.rs` (logic), `src/action.rs` (inpu
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`
 
-## Testing During Development
+## Play the Game Yourself
 
-For quick checks while working on a feature, test it yourself directly:
+**Before starting any feature or bug fix, play a few frames of the game yourself.** Not a sub-agent. Not the playtest agent. YOU. Run snapshot commands directly with the Bash tool so you see the rendered output with your own eyes. This grounds you in what the game actually looks like and how it behaves right now.
+
 ```bash
 cargo run -- --snapshot                          # see initial state
-cargo run -- /tmp/test.json --snapshot --ticks 10           # advance 10 ticks
-cargo run -- /tmp/test.json --snapshot --key m --ticks 5    # open medicines, advance 5
+cargo run -- --snapshot --ticks 5                # advance a few ticks
+cargo run -- --snapshot --key right              # navigate panels
+cargo run -- --snapshot --key m --ticks 3        # open medicines, advance 3
 ```
-This gives you immediate, unfiltered feedback. Use it often.
+
+Do this **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game.
 
 For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one.
 
