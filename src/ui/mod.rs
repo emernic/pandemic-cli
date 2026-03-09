@@ -62,8 +62,16 @@ pub fn process_events(state: &mut GameState) {
         })
         .collect();
 
-    // Priority: NewDiseaseEmerged > PolicySuspended > FundingWarning > DiseaseMutated
-    let msg = if let Some(GameEvent::NewDiseaseEmerged { region_idx, .. }) =
+    // Priority: RegionCollapsed > NewDiseaseEmerged > PolicySuspended > FundingWarning > DiseaseMutated
+    let msg = if let Some(GameEvent::RegionCollapsed { region_idx }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::RegionCollapsed { .. }))
+    {
+        let region_name = state.regions.get(*region_idx)
+            .map(|r| r.name.as_str())
+            .unwrap_or("Unknown");
+        let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
+        format!("COLLAPSE: {region_name} has fallen! {remaining} regions remain.")
+    } else if let Some(GameEvent::NewDiseaseEmerged { region_idx, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::NewDiseaseEmerged { .. }))
     {
         let region_name = state.regions.get(*region_idx)

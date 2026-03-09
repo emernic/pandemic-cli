@@ -167,6 +167,19 @@ pub struct Region {
     pub population: u64,
     pub connections: Vec<usize>,
     pub infections: Vec<RegionDiseaseState>,
+    /// Fraction of population that must remain alive to avoid collapse.
+    /// E.g., 0.75 means the region collapses when alive drops below 75% of initial population.
+    /// More developed regions have higher thresholds (fragile); less developed are more resilient.
+    #[serde(default = "default_collapse_threshold")]
+    pub collapse_threshold: f64,
+    /// Whether this region has collapsed. Collapsed regions lose all policies,
+    /// cannot conduct field research, and are cut off from flight connections.
+    #[serde(default)]
+    pub collapsed: bool,
+}
+
+fn default_collapse_threshold() -> f64 {
+    0.50
 }
 
 impl Region {
@@ -246,8 +259,7 @@ impl PathogenType {
     /// Each tuple is (min, max) for that stat.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast-spreading, variable lethality, quick recovery
-            // Ranges tightened to ~60% of original width to reduce seed difficulty variance
+            // RNA viruses: fast-spreading, moderate lethality, quick recovery
             PathogenType::RnaVirus => DiseaseStatRanges {
                 infectivity: (0.015, 0.027),
                 lethality: (0.002, 0.006),
@@ -261,7 +273,7 @@ impl PathogenType {
                 recovery: (0.008, 0.012),
                 cross_region: (0.005, 0.009),
             },
-            // Bacteria: moderate spread, low lethality, moderate recovery
+            // Bacteria: moderate spread, moderate lethality, moderate recovery
             PathogenType::Bacterium => DiseaseStatRanges {
                 infectivity: (0.011, 0.019),
                 lethality: (0.002, 0.004),
@@ -755,6 +767,10 @@ pub enum GameEvent {
     /// A disease spread to a new region via cross-region transmission.
     DiseaseSpreadToRegion {
         disease_idx: usize,
+        region_idx: usize,
+    },
+    /// A region's society has collapsed — too many deaths.
+    RegionCollapsed {
         region_idx: usize,
     },
     /// The game just ended (win or lose). UI should pause and close panels.
@@ -1391,36 +1407,48 @@ impl GameState {
                 population: 500_000_000,
                 connections: vec![1, 2, 5],
                 infections: vec![],
+                collapse_threshold: 0.75, // Fragile — collapses at 25% dead
+                collapsed: false,
             },
             Region {
                 name: "South America".into(),
                 population: 430_000_000,
                 connections: vec![0, 2],
                 infections: vec![],
+                collapse_threshold: 0.50, // Moderate resilience — 50% dead
+                collapsed: false,
             },
             Region {
                 name: "Europe".into(),
                 population: 750_000_000,
                 connections: vec![0, 1, 3, 4],
                 infections: vec![],
+                collapse_threshold: 0.70, // Fragile — 30% dead
+                collapsed: false,
             },
             Region {
                 name: "Africa".into(),
                 population: 1_400_000_000,
                 connections: vec![2, 4],
                 infections: vec![],
+                collapse_threshold: 0.30, // Very resilient — 70% dead
+                collapsed: false,
             },
             Region {
                 name: "Asia".into(),
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
                 infections: vec![],
+                collapse_threshold: 0.60, // Moderate — 40% dead
+                collapsed: false,
             },
             Region {
                 name: "Oceania".into(),
                 population: 45_000_000,
                 connections: vec![0, 4],
                 infections: vec![],
+                collapse_threshold: 0.65, // Moderate — 35% dead
+                collapsed: false,
             },
         ];
 

@@ -197,7 +197,9 @@ fn render_region_box(
     let dead = region.total_dead();
     let pop = region.population as f64;
 
-    let threat = if infected > 100_000.0 {
+    let threat = if region.collapsed {
+        ("FELL", Color::Red)
+    } else if infected > 100_000.0 {
         ("CRIT", Color::Red)
     } else if infected > 10_000.0 {
         ("HIGH", Color::LightRed)
@@ -369,6 +371,14 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     let val = Style::default().fg(Color::White);
 
     let mut lines: Vec<Line> = Vec::new();
+
+    // Collapse banner
+    if region.collapsed {
+        lines.push(Line::from(Span::styled(
+            "  ██ COLLAPSED — society has broken down ██",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+    }
 
     // Population summary line
     lines.push(Line::from(vec![

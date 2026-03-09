@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::format_number;
-use crate::state::{GameState, LOSE_DEATH_FRACTION, ticks_to_days};
+use crate::state::{GameState, ticks_to_days};
 
 // ── Splash (first visit) ──────────────────────────────────────────────
 
@@ -213,25 +213,22 @@ fn bar(filled: f64, width: usize, fill_color: Color) -> Vec<Span<'static>> {
     ]
 }
 
-fn threat_color(fraction: f64) -> Color {
-    if fraction >= 0.07 { Color::Red }
-    else if fraction >= 0.03 { Color::Yellow }
-    else if fraction >= 0.01 { Color::Cyan }
-    else { Color::Green }
-}
-
 fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     let dim = Style::default().fg(Color::DarkGray);
     let cyan = Style::default().fg(Color::Cyan);
     let yellow = Style::default().fg(Color::Yellow);
 
     let mut lines: Vec<Line> = Vec::new();
-    let initial_pop = state.initial_population();
 
-    // ── Global threat meter ──
-    let death_frac = if initial_pop > 0.0 { state.total_dead() / initial_pop } else { 0.0 };
-    let threat_pct = (death_frac / LOSE_DEATH_FRACTION * 100.0).min(100.0);
-    let threat_col = threat_color(death_frac);
+    // ── Global threat meter (based on regional collapse) ──
+    let total_regions = state.regions.len();
+    let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
+    let collapse_frac = if total_regions > 0 { collapsed_count as f64 / total_regions as f64 } else { 0.0 };
+    let threat_pct = (collapse_frac * 100.0).min(100.0);
+    let threat_col = if collapsed_count == 0 { Color::Green }
+        else if collapsed_count <= 1 { Color::Yellow }
+        else if collapsed_count <= 3 { Color::Red }
+        else { Color::LightRed };
     let bar_width = (area.width as usize).saturating_sub(6).min(40);
 
     lines.push(Line::from(""));
@@ -239,18 +236,18 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     lines.push(Line::from(""));
 
     let mut threat_spans = vec![Span::styled("  ", dim)];
-    threat_spans.extend(bar(death_frac / LOSE_DEATH_FRACTION, bar_width, threat_col));
+    threat_spans.extend(bar(collapse_frac, bar_width, threat_col));
     threat_spans.push(Span::styled(format!(" {:.0}%", threat_pct), Style::default().fg(threat_col)));
     lines.push(Line::from(threat_spans));
 
-    let threat_label = if death_frac < 0.01 { "CONTAINED" }
-        else if death_frac < 0.03 { "MODERATE" }
-        else if death_frac < 0.07 { "SEVERE" }
-        else { "CRITICAL" };
+    let threat_label = if collapsed_count == 0 { "STABLE" }
+        else if collapsed_count <= 1 { "CRITICAL" }
+        else if collapsed_count < total_regions { "CASCADING" }
+        else { "TOTAL COLLAPSE" };
     lines.push(Line::from(vec![
         Span::styled("  Status: ", dim),
         Span::styled(threat_label, Style::default().fg(threat_col)),
-        Span::styled(format!("  Deaths: {} / {}", format_number(state.total_dead()), format_number(initial_pop * LOSE_DEATH_FRACTION)), dim),
+        Span::styled(format!("  Regions fallen: {} / {}", collapsed_count, total_regions), dim),
     ]));
 
     // ── Infection & death sparklines ──
