@@ -202,13 +202,15 @@ pub fn tick(state: &GameState) -> GameState {
 pub struct CommandResult {
     pub message: Option<String>,
     pub success: bool,
+    /// True if medicine deployment caused an adverse reaction.
+    pub adverse: bool,
 }
 
 /// Execute a game command. Pure game logic — does NOT touch UI state.
 /// The caller is responsible for UI transitions based on the result.
 pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResult {
     if state.outcome != GameOutcome::Playing {
-        return CommandResult { message: None, success: false };
+        return CommandResult { message: None, success: false, adverse: false };
     }
     match cmd {
         GameCommand::DeployMedicine {
@@ -216,32 +218,32 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             region_idx,
             target_selection,
         } => {
-            let (nav_back, msg) =
+            let (nav_back, msg, adverse) =
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, *target_selection);
-            CommandResult { message: msg, success: nav_back }
+            CommandResult { message: msg, success: nav_back, adverse }
         }
         GameCommand::StartResearch { bench, project_idx } => {
             let (ok, msg) = research::start_research(state, *bench, *project_idx);
-            CommandResult { message: msg, success: ok }
+            CommandResult { message: msg, success: ok, adverse: false }
         }
         GameCommand::AddResearchPersonnel { bench } => {
             let msg = research::add_personnel(state, *bench);
-            CommandResult { message: msg, success: true }
+            CommandResult { message: msg, success: true, adverse: false }
         }
         GameCommand::RemoveResearchPersonnel { bench } => {
             let msg = research::remove_personnel(state, *bench);
-            CommandResult { message: msg, success: true }
+            CommandResult { message: msg, success: true, adverse: false }
         }
         GameCommand::TogglePolicy {
             region_idx,
             policy_idx,
         } => {
             let (msg, success) = policy::toggle_policy(state, *region_idx, *policy_idx);
-            CommandResult { message: msg, success }
+            CommandResult { message: msg, success, adverse: false }
         }
         GameCommand::ResolveCrisis { choice } => {
             let msg = crisis::resolve_crisis(state, *choice);
-            CommandResult { message: Some(msg), success: true }
+            CommandResult { message: Some(msg), success: true, adverse: false }
         }
     }
 }

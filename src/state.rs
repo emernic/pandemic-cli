@@ -1499,12 +1499,11 @@ impl UiState {
 
     /// Update UI navigation after a game command completes.
     /// Called by the action handler after execute_command returns.
-    pub fn apply_command_result(&mut self, cmd: &GameCommand, success: bool, message: &Option<String>) {
+    pub fn apply_command_result(&mut self, cmd: &GameCommand, success: bool, message: &Option<String>, adverse: bool) {
         match cmd {
             GameCommand::DeployMedicine { medicine_idx, .. } => {
                 if success {
                     let msg = message.clone().unwrap_or_default();
-                    let adverse = msg.contains("ADVERSE");
                     self.medicine_ui =
                         Some(MedicineUiState::DeployResult {
                             medicine_idx: *medicine_idx,
