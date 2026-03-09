@@ -199,7 +199,12 @@ pub fn tick(state: &GameState) -> GameState {
                     .filter(|&&c| !new.regions[c].collapsed)
                     .copied()
                     .collect();
-                if let Some(&to) = neighbors.first() {
+                let to = if neighbors.len() > 1 {
+                    Some(neighbors[new.rng.r#gen::<usize>() % neighbors.len()])
+                } else {
+                    neighbors.first().copied()
+                };
+                if let Some(to) = to {
                     let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to };
                     new.active_crisis = Some(crisis::build_crisis_event(&new, kind));
                     new.sim_state = SimState::Event {

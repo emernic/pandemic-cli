@@ -932,7 +932,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::RefugeeWave { from_region, to_region }, 0) => {
             // Open borders — refugees arrive with their diseases.
-            // Transfer surviving population and proportional infections.
+            // Transfer surviving population and all infections/immune to destination.
             let from_name = state.regions.get(*from_region)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             let to_name = state.regions.get(*to_region)
@@ -941,15 +941,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 .map(|r| r.alive()).unwrap_or(0.0);
             // Transfer population
             state.regions[*to_region].population += survivors as u64;
-            // Transfer infections proportional to the collapsed region's infection rate
+            // Transfer all infected and immune from the collapsed region
             let disease_states: Vec<(usize, f64, f64)> = state.regions.get(*from_region)
                 .map(|r| r.infections.iter()
-                    .filter(|i| i.infected > 0.0)
-                    .map(|i| {
-                        // Proportion of living population that is infected
-                        let rate = if survivors > 0.0 { i.infected / survivors } else { 0.0 };
-                        (i.disease_idx, survivors * rate, survivors * (i.immune / survivors.max(1.0)))
-                    })
+                    .filter(|i| i.infected > 0.0 || i.immune > 0.0)
+                    .map(|i| (i.disease_idx, i.infected, i.immune))
                     .collect())
                 .unwrap_or_default();
             for (d_idx, infected, immune) in &disease_states {
