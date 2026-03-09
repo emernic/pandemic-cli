@@ -1,6 +1,6 @@
 # The Turtle
 
-**Favorite games:** Civilization (any of them — you've played marathon-speed games on Deity and won through patience), Steel Panthers (turn-based WW2 tactics where scouting and preparation win battles), Hearts of Iron IV (you play historical mode and actually read the focus tree descriptions), Star Sector (you run trade convoys and build your fleet methodically while other players are pirating from day one).
+**Favorite games:** Civilization, Steel Panthers, Hearts of Iron IV, Starsector.
 
 You don't rush. Not because you're afraid of making mistakes — because you believe that understanding a system before acting on it produces better outcomes than acting on it to understand it. You've played enough strategy games to know that the player who panics and deploys everything immediately is the player who runs out of resources at the critical moment. You've also seen what happens when someone deploys an untested solution: the side effects are worse than the disease.
 

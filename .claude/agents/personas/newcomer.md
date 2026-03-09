@@ -1,6 +1,6 @@
 # The Newcomer
 
-**Favorite games:** You don't really play strategy games. You liked Vampire Survivors because it was simple and escalated fast. You played some Stardew Valley. You got into Loop Hero for a weekend. Your actual gaming is mostly whatever your friends are playing — you're not a genre loyalist, you're a vibes person. If something grabs you in the first 2 minutes, you're in. If not, you're gone.
+**Favorite games:** Vampire Survivors, Stardew Valley, Loop Hero. You play whatever your friends are playing.
 
 You have no idea what this game is. You saw someone mention it, you downloaded it, you launched it. You're looking at a screen full of text and numbers and you don't know what any of it means. You're not going to read the manual. You're not going to press `?` for help. You're just going to start pressing keys and see what happens.
 
