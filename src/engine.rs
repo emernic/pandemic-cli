@@ -7,7 +7,7 @@ use crate::state::{
     BORDER_SCREENING_COST, BOOST_RP_COST, BOOST_TICKS, CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
-    KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, MAX_DISEASES,
+    KNOWLEDGE_FULL, KNOWLEDGE_NAME, MAX_DISEASES,
     QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
     TREATMENT_FRACTION, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     WIN_INFECTED_THRESHOLD,
@@ -92,6 +92,10 @@ pub fn tick(state: &GameState) -> GameState {
     // Cross-region spread
     let regions_snapshot: Vec<_> = new.regions.clone();
     for (i, region) in new.regions.iter_mut().enumerate() {
+        // No spread into collapsed regions
+        if regions_snapshot[i].collapsed {
+            continue;
+        }
         let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
         let dest_has_screening = new.policies.get(i).is_some_and(|p| p.border_screening);
 
@@ -100,6 +104,10 @@ pub fn tick(state: &GameState) -> GameState {
                 .connections
                 .iter()
                 .filter_map(|&conn_idx| {
+                    // No spread from collapsed regions
+                    if regions_snapshot[conn_idx].collapsed {
+                        return None;
+                    }
                     let source_has_travel_ban =
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
                     let source_has_screening =
@@ -334,12 +342,28 @@ pub fn tick(state: &GameState) -> GameState {
     new.rng = rng;
     new.tick += 1;
 
+    // Check regional collapse
+    for i in 0..new.regions.len() {
+        if new.regions[i].collapsed {
+            continue;
+        }
+        let pop = new.regions[i].population as f64;
+        let alive = new.regions[i].alive();
+        if alive < pop * new.regions[i].collapse_threshold {
+            new.regions[i].collapsed = true;
+            // Clear all policies in the collapsed region
+            if let Some(policy) = new.policies.get_mut(i) {
+                policy.clear_all();
+            }
+            new.events.push(GameEvent::RegionCollapsed { region_idx: i });
+        }
+    }
+
     // Check win/lose conditions (only while still playing)
     if new.outcome == GameOutcome::Playing {
-        let total_dead = new.total_dead();
-        let death_threshold = new.initial_population() * LOSE_DEATH_FRACTION;
+        let all_collapsed = new.regions.iter().all(|r| r.collapsed);
 
-        let game_over = if total_dead >= death_threshold {
+        let game_over = if all_collapsed {
             new.outcome = GameOutcome::Lost;
             true
         } else if new.total_infected() < WIN_INFECTED_THRESHOLD {
@@ -411,6 +435,11 @@ fn deploy_medicine(
     // Block after game over
     if state.outcome != GameOutcome::Playing {
         return (false, None);
+    }
+    // Block deployment to collapsed regions
+    if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
+        let region_name = &state.regions[region_idx].name;
+        return (false, Some(format!("{region_name} has collapsed — deployment impossible")));
     }
     let med = &state.medicines[medicine_idx];
     let cost = med.cost;
@@ -907,6 +936,11 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) -> Option<String> {
     if region_idx >= state.policies.len() {
         return None;
+    }
+    // Collapsed regions cannot have policies toggled
+    if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
+        let region_name = state.regions[region_idx].name.as_str();
+        return Some(format!("{region_name} has collapsed — policies unavailable"));
     }
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.as_str())
@@ -1895,14 +1929,18 @@ mod tests {
     }
 
     #[test]
-    fn lose_condition_triggers_on_mass_death() {
+    fn lose_condition_triggers_when_all_regions_collapse() {
         let mut state = GameState::new_default(42);
-        // Ensure a highly lethal disease so the game reliably ends in a loss
-        state.diseases[0].infectivity = 0.10;
-        state.diseases[0].lethality = 0.05;
-        state.diseases[0].cross_region_spread = 0.05;
-        // Run until game over
-        for _ in 0..2000 {
+        // Ensure a highly lethal, fast-spreading disease so all regions collapse.
+        // Lethality must be high enough to overcome recovery and kill >70% (Africa's threshold).
+        for disease in &mut state.diseases {
+            disease.infectivity = 0.08;
+            disease.lethality = 0.06;
+            disease.recovery_rate = 0.005;
+            disease.cross_region_spread = 0.08;
+        }
+        // Run until game over (collapse requires all regions to fall)
+        for _ in 0..10000 {
             state = tick(&state);
             crate::ui::process_events(&mut state);
             if state.outcome != GameOutcome::Playing {
@@ -1911,9 +1949,8 @@ mod tests {
         }
         assert_eq!(state.outcome, GameOutcome::Lost);
         assert_eq!(state.sim_state, crate::state::SimState::Paused);
-        // Deaths should be just over the threshold
-        let threshold = state.initial_population() * LOSE_DEATH_FRACTION;
-        assert!(state.total_dead() >= threshold);
+        // All regions should be collapsed
+        assert!(state.regions.iter().all(|r| r.collapsed));
     }
 
     #[test]
@@ -2927,10 +2964,13 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
         let mut state = GameState::new_default(42);
-        // Set up a lethal disease to trigger game over quickly
-        state.diseases[0].infectivity = 0.10;
-        state.diseases[0].lethality = 0.05;
-        state.diseases[0].cross_region_spread = 0.05;
+        // Set up a lethal disease to trigger collapse of all regions
+        for disease in &mut state.diseases {
+            disease.infectivity = 0.08;
+            disease.lethality = 0.06;
+            disease.recovery_rate = 0.005;
+            disease.cross_region_spread = 0.08;
+        }
 
         // Inject an active crisis
         state.active_crisis = Some(CrisisEvent {
@@ -2943,8 +2983,8 @@ mod tests {
         });
         state.sim_state = SimState::Event { was_running: true };
 
-        // Run until game over
-        for _ in 0..2000 {
+        // Run until game over (collapse requires all regions to fall)
+        for _ in 0..10000 {
             state = tick(&state);
             crate::ui::process_events(&mut state);
             if state.outcome != GameOutcome::Playing {
