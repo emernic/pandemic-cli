@@ -96,16 +96,15 @@ Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rus
 
 ```bash
 cargo build                    # build
-cargo test                     # run all tests (unit + insta snapshots)
+cargo test                     # run all tests
 cargo run                      # interactive mode (starts running, Space to pause)
 cargo run -- --snapshot        # snapshot mode (for AI/automated testing)
-cargo insta review             # review snapshot test changes
 ```
 
 ### Testing Philosophy
 
 - **Unit tests** are the primary safety net. Test game logic (engine.rs), state transitions, and edge cases.
-- **Snapshot tests** should be few — just 2-3 smoke tests to confirm the UI renders without panicking. Do NOT add a new snapshot test for every UI state or panel. If every UI change requires accepting 14 snapshot updates, the snapshots aren't catching bugs — they're just friction. See #184.
+- **Smoke tests** in `tests/snapshots.rs` verify the UI renders without panicking using structural assertions (checking for key strings like "PANDEMIC DEFENSE", "World Map"). They should NOT use exact-match snapshots — balance changes would break them constantly.
 - **Snapshot mode** (`--snapshot`) is excellent for manual and AI playtesting. Use it freely for verification. But don't confuse "useful for manual testing" with "should be an automated test."
 
 ## Architecture
