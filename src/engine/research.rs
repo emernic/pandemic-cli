@@ -1062,4 +1062,38 @@ mod tests {
             state.resources.funding
         );
     }
+
+    #[test]
+    fn genomic_sequencing_unavailable_after_effective_rate_drops() {
+        use crate::state::PathogenType;
+
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = 1.0;
+        state.diseases[0].pathogen_type = PathogenType::RnaVirus; // base rate 0.001
+        // Ensure disease has infected population so sequencing can be considered
+        state.regions[0].infections[0].infected = 1000.0;
+        state.field_research.clear();
+
+        // After 4 sequencings: 0.001 * 0.5^4 = 0.0000625 < 0.0001 threshold
+        state.diseases[0].sequencing_count = 4;
+        let field_projects = state.available_field_projects();
+        assert!(
+            !field_projects.iter().any(|k| matches!(k,
+                ResearchKind::GenomicSequencing { disease_idx: 0 }
+            )),
+            "sequencing should not be available when effective rate ({}) is below threshold",
+            state.diseases[0].effective_mutation_rate()
+        );
+
+        // After 3 sequencings: 0.001 * 0.5^3 = 0.000125 > 0.0001 — still available
+        state.diseases[0].sequencing_count = 3;
+        let field_projects = state.available_field_projects();
+        assert!(
+            field_projects.iter().any(|k| matches!(k,
+                ResearchKind::GenomicSequencing { disease_idx: 0 }
+            )),
+            "sequencing should still be available when effective rate ({}) is above threshold",
+            state.diseases[0].effective_mutation_rate()
+        );
+    }
 }
