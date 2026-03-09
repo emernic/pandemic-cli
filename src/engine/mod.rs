@@ -569,9 +569,10 @@ mod tests {
         let susceptible = (region.population as f64 - infected - region.dead - immune).max(0.0);
         let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
         let expected_immune = target_vaccinated.min(state.medicines[0].doses);
+        let deploy_cost = state.medicines[0].cost + region.population as f64 / 1_000_000_000.0 * 50.0;
         state = apply_action(&state, &Action::Confirm);
         // Computed outputs: cost deducted, immunity applied proportionally
-        assert_eq!(state.resources.funding, funding_before - state.medicines[0].cost);
+        assert_eq!(state.resources.funding, funding_before - deploy_cost);
         let na_inf = state.regions[0]
             .infections
             .iter()
@@ -621,7 +622,8 @@ mod tests {
             infected_before,
             infected_after
         );
-        assert_eq!(state.resources.funding, funding_before - state.medicines[0].cost);
+        let deploy_cost = state.medicines[0].cost + state.regions[ri].population as f64 / 1_000_000_000.0 * 50.0;
+        assert_eq!(state.resources.funding, funding_before - deploy_cost);
         // Treatment is proportional — treats TREATMENT_FRACTION * efficacy of infected
         let treated = infected_before - infected_after;
         assert!(
@@ -2739,8 +2741,8 @@ mod tests {
         let before_personnel = state.resources.personnel;
         setup_crisis(&mut state, CrisisKind::BillionaireOffer, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - (before_funding + 2000.0)).abs() < 1.0,
-            "option B should gain $2000");
+        assert!((after.resources.funding - (before_funding + 500.0)).abs() < 1.0,
+            "option B should gain $500");
         assert_eq!(after.resources.personnel, before_personnel - 3,
             "option B should lose 3 personnel");
     }

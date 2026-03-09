@@ -704,7 +704,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
         CrisisKind::BillionaireOffer => {
             CrisisEvent {
                 title: "Billionaire's Generous Offer".into(),
-                description: "A tech billionaire offers $2000 in emergency funding — but wants \
+                description: "A tech billionaire offers $500 in emergency funding — but wants \
                     naming rights to every medicine you develop. Your scientists are furious. \
                     The money would save lives. The morale cost might lose them.".into(),
                 option_a: CrisisOption {
@@ -714,7 +714,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Accept the deal".into(),
-                    description: "+$2000 funding, −3 personnel quit in protest".into(),
+                    description: "+$500 funding, −3 personnel quit in protest".into(),
                     cost: None,
                 },
                 kind,
@@ -1105,9 +1105,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::BillionaireOffer, _) => {
             // Accept — gain funding, lose personnel
-            state.resources.funding += 2000.0;
+            state.resources.funding += 500.0;
             state.resources.personnel = state.resources.personnel.saturating_sub(3);
-            "Accepted the deal — $2000 received, but 3 researchers quit in protest".into()
+            "Accepted the deal — $500 received, but 3 researchers quit in protest".into()
         }
 
         (CrisisKind::WHOEvacuation, 0) => {

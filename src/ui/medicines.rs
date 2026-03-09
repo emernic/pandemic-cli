@@ -107,7 +107,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             lines.push(Line::from(vec![
                 Span::raw("    "),
                 Span::styled(
-                    format!("${:.0}", med.cost),
+                    format!("${:.0}+", med.cost),
                     Style::default().fg(Color::Yellow),
                 ),
                 Span::raw("  "),
@@ -326,18 +326,20 @@ fn render_select_target(
         }
     }
 
+    // Deployment cost: base + population surcharge
+    let deploy_cost = med.cost + region.population as f64 / 1_000_000_000.0 * 50.0;
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("${:.0}", med.cost),
+            format!("${:.0}", deploy_cost),
             Style::default().fg(Color::Yellow),
         ),
         Span::raw("    "),
         Span::styled("Funding: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             format!("${:.0}", state.resources.funding),
-            Style::default().fg(if state.resources.funding >= med.cost {
+            Style::default().fg(if state.resources.funding >= deploy_cost {
                 Color::Green
             } else {
                 Color::Red
