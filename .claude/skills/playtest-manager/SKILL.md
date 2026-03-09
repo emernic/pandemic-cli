@@ -31,7 +31,7 @@ A good feature issue is NOT:
 A good feature issue IS:
 - "Add evacuation mechanic: spend $500 to evacuate healthy population from a collapsing region to a stable one. Saves lives but risks spreading disease. Player must choose destination region. Evacuees arrive over 3 days. If destination region is already strained, evacuation causes civil unrest (+10% spread)."
 - "Add black market medicine dealer: appears as a crisis event after day 15. Offers untested medicine at half price. 40% chance it works great, 30% chance it does nothing, 30% chance it makes things worse. The temptation should feel real."
-- "Add region specialization: each region has a unique trait (e.g., North America has +50% research speed, Africa has -30% medicine cost, Asia has double personnel capacity). This makes 'which region do I protect?' a meaningful strategic decision, not just 'which has the most people.'"
+- "Add refugee system: when a region collapses, surviving population flees to neighboring regions over 5 days. Player chooses whether to open borders (saves lives, spreads disease) or close borders (people die at the border, but your regions stay clean). Closing borders costs POL. Opening borders strains receiving region's hospitals. Either choice has visible, dramatic consequences."
 
 Notice: each of these is a THING THE PLAYER DOES. Not a number that changes behind the scenes. Not a modifier. A feature with player agency, visible consequences, and drama.
 
