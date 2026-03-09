@@ -878,8 +878,10 @@ pub const CRISIS_MIN_TICK: u64 = 200;
 /// Average ticks between crises (~2 days).
 pub const CRISIS_INTERVAL: u64 = 200;
 
-/// Fraction of initial world population that, when dead, triggers game over.
-pub const LOSE_DEATH_FRACTION: f64 = 0.10;
+/// Death fraction at which RP income degrades to its 10% floor.
+/// Originally the loss threshold; now only used for income scaling
+/// since the loss condition is all-regions-collapsed.
+pub const INCOME_DEGRADATION_SCALE: f64 = 0.10;
 /// Win when total infected drops below this threshold (with other conditions met).
 /// Individual region infections snap to 0.0 at < 1.0, so this means "truly eradicated."
 pub const WIN_INFECTED_THRESHOLD: f64 = 1.0;
@@ -1656,7 +1658,7 @@ impl GameState {
             return 0.0;
         }
         let death_fraction = self.total_dead() / initial_pop;
-        let health_multiplier = (1.0 - death_fraction / LOSE_DEATH_FRACTION).max(0.1);
+        let health_multiplier = (1.0 - death_fraction / INCOME_DEGRADATION_SCALE).max(0.1);
         BASE_RP_INCOME * health_multiplier
     }
 
