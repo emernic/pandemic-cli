@@ -2557,7 +2557,7 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_official_option_b_recovers_funding() {
+    fn corrupt_official_option_b_prevents_theft() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 2000.0;
