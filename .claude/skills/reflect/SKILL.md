@@ -89,21 +89,9 @@ Ask yourself these questions and answer them honestly:
 
 **The test for whether you've done this check properly:** If you have zero elephants to report, you're almost certainly not being honest with yourself. Go back and think harder. The cost of a false positive (filing an issue that gets closed) is near zero. The cost of staying silent is potentially weeks of wasted work.
 
-## Document and Design Meticulousness Check
+## Document Meticulousness Check
 
-**Also mandatory. This is the failure mode that's hardest to catch because there's no compiler.**
-
-Code gives you fast feedback — tests fail, the compiler rejects bad syntax, playtests reveal broken mechanics. Documents and design decisions give you **no feedback at all** until weeks later when you've shipped a pile of work built on top of them. A wrong sentence in CLAUDE.md, a misleading description in gameplay.md, an inaccurate game inspiration — these silently poison every session that reads them.
-
-**This means documents require MORE care than code, not less.** You cannot "test" a document. You cannot "compile" a design decision. The only defense is meticulousness: reading every sentence you wrote, asking "is this actually true?", checking claims against reality, and revising until it's right.
-
-Check specifically:
-
-1. **Did you write or edit any documents this session?** (CLAUDE.md, docs/*.md, skill files, issue descriptions, PR bodies.) If so, go back and read them line by line. Not skim — *read*. Is every sentence factually accurate? Does every claim match the actual code and actual game? Could any sentence mislead a future session that reads it with fresh eyes and no context?
-2. **Did you make a claim you didn't verify?** "This game is a TUI" — is it? "This function halves the value" — does it actually? "This is how the system works" — did you read the code, or are you guessing from the name? Every factual claim in a document needs to be checked against reality. If you can't verify it, flag the uncertainty explicitly.
-3. **Did you do one pass and call it done?** One pass is never enough for documents. Write it, re-read it, question every sentence, revise. The standard is: a future Claude session reading this with zero context should get an accurate, complete picture. If they'd be misled by anything you wrote, you're not done.
-
-**The failure mode:** You write a document quickly, it sounds plausible, you move on. Six months later someone reads it, builds on a wrong assumption, and wastes days. Documents are landmines if they're inaccurate. Treat them with proportional care.
+**If you wrote or edited anything — documents, comments, descriptions, renamed variables — go back and re-read every word.** Is every single word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
 
 ## Process
 
