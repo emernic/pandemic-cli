@@ -6,6 +6,16 @@ use crate::engine::tick;
 use crate::state::{GameEvent, GameState, GameOutcome, SimState};
 use crate::ui;
 
+/// Actions that the crisis handler processes (not silently dropped).
+fn is_crisis_action(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::SelectNext | Action::SelectPrev
+            | Action::SelectLeft | Action::SelectRight
+            | Action::Confirm | Action::ToggleExtra | Action::Quit
+    )
+}
+
 /// Result of running snapshot mode: the rendered screen and the updated state.
 #[derive(Debug)]
 pub struct SnapshotResult {
@@ -146,6 +156,12 @@ pub fn run_snapshot(
                 match string_to_action(&key_str) {
                     Some(action) => {
                         let had_crisis = state.active_crisis.is_some();
+                        // Warn when a non-crisis key is silently eaten
+                        if had_crisis && !is_crisis_action(&action) {
+                            eprintln!(
+                                "Key '{key_str}' ignored: crisis active (resolve with enter, or left/right to choose)"
+                            );
+                        }
                         state = apply_action(&state, &action);
 
                         // If this key resolved a crisis, resume pending ticks.
