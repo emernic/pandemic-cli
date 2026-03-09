@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, RegionDiseaseState, TransmissionVector,
+    Disease, GameEvent, GameState, RegionDiseaseState,
 };
 
 /// Per-disease outflows computed in phase 1, applied in phase 2.
@@ -51,8 +51,8 @@ pub(super) fn tick_spread_within(
                 if hospital_active {
                     infectivity *= disease.transmission.hospital_infectivity_factor();
                 }
-                if sanitation_active && disease.transmission == TransmissionVector::Waterborne {
-                    infectivity *= 0.5;
+                if sanitation_active {
+                    infectivity *= disease.transmission.water_sanitation_factor();
                 }
                 let new_infections =
                     (infectivity * inf.infected * (susceptible / pop) * noise)
