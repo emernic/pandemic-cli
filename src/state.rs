@@ -332,9 +332,9 @@ pub struct Resources {
     /// Increases based on disease severity and time. Gates policies.
     #[serde(default)]
     pub political_power: f64,
-    /// Crisis-driven POL modifier (0.0–1.0 scale, can be negative).
-    /// Accumulated from crisis resolutions, decays toward 0 over time.
-    /// Added to the base severity+time formula each tick.
+    /// Crisis-driven POL modifier (same scale as political_power, typically ±0.15).
+    /// Accumulated from crisis resolutions, decays toward 0 over time (~5-day half-life).
+    /// Added to the base severity+time formula each tick; final result clamped to 0–1.
     #[serde(default)]
     pub pol_crisis_modifier: f64,
     /// Fractional accumulator for POL-based personnel gains.
