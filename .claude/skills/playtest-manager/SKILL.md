@@ -10,15 +10,19 @@ You manage the full playtest cycle: launch, read results, and triage findings in
 
 **Playtest logs are gitignored. Do NOT commit them.** They live in `./playtests/` for reference but are not checked into the repo. The issue tracker is the durable record.
 
-## Setup: Recurring Playtests
+## Step 0: Set Up Recurring Playtests (DO THIS FIRST)
 
-To run playtests on a recurring schedule, use the `/loop` skill:
+**Before doing ANYTHING else, set up a recurring cron job.** The entire point of this skill is continuous, automated playtesting — a single playtest is useful, but the real value comes from running them repeatedly on a schedule.
+
+**Use `CronCreate` to schedule this skill to run every 30 minutes:**
 
 ```
-/loop 30m /playtest-manager
+CronCreate(schedule="*/30 * * * *", command="/playtest-manager")
 ```
 
-This runs a full playtest cycle every 30 minutes. Each cycle launches a fresh playtest agent, reads the log, and triages findings.
+Check `CronList` first — if a cron job for `/playtest-manager` already exists, skip this step. But if one doesn't exist, **create it immediately before proceeding to Step 1.** Do not skip this. Do not "get to it later." This is Step 0 because it must happen first.
+
+After setting up the cron, proceed to run the first playtest cycle (Steps 1-5 below). The cron will kick off subsequent cycles automatically.
 
 ## Step 1: Prepare
 
