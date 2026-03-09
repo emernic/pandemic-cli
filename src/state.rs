@@ -238,13 +238,23 @@ pub struct RegionPolicy {
 }
 
 /// Total number of policy types available per region.
-/// Indices 0-4: standard boolean policies, 5-7: screening tiers,
-/// 8: martial law, 9: nuclear annihilation.
+///
+/// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
+///   0 = Travel Ban        5 = Low Screening      8 = Martial Law
+///   1 = Quarantine         6 = Medium Screening   9 = Nuclear Annihilation
+///   2 = Hospital Surge     7 = High Screening
+///   3 = Border Controls
+///   4 = Water Sanitation
+///
+/// Display position equals policy_idx. If you add a new policy, you must update:
+///   - POLICY_COUNT and POLICY_POL_THRESHOLDS (this file)
+///   - get_bool/set_bool if it's a boolean policy (this file)
+///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
+///   - render_manage policies vec (ui/policy.rs)
 pub const POLICY_COUNT: usize = 10;
 
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
-/// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_controls,
-/// water_sanitation, screening_low, screening_medium, screening_high.
+/// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.30, // Travel Ban — major action, needs moderate political will
     0.25, // Quarantine — strong measure but regionally justified
@@ -1904,6 +1914,8 @@ impl UiState {
                 None
             }
             Some(PolicyUiState::ManagePolicies { region_idx }) => {
+                // panel_selection is display position; currently matches policy_idx
+                // (see POLICY_COUNT doc for the index mapping)
                 let policy_idx = self.panel_selection;
                 Some(GameCommand::TogglePolicy {
                     region_idx,
