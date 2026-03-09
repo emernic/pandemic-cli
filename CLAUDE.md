@@ -125,6 +125,14 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 - **Therapy/pathogen matching**: Medicines have a `TherapyType` (Antiviral, Antibiotic, BroadSpectrum), diseases have a `PathogenType` (RnaVirus, DnaVirus, Bacterium, Prion). Efficacy depends on the match. This affects deployment, balance, and player strategy.
 - **Mutation system**: Diseases mutate over time based on pathogen type. Medicines track which strain generation they were calibrated against. Drift reduces efficacy, prompting re-trials. This creates ongoing pressure even after developing a medicine.
 
+### Navigation Convention — Left/Right Always Controls Regions
+
+**Left/right arrow keys (h/l) always navigate the region map**, even when a panel is open. Up/down arrow keys (j/k) navigate panel items when a panel is open, or the map when no panel is open. This split lets players browse threats/research/medicines/policies with up/down while simultaneously cycling through regions with left/right.
+
+- **Never use left/right for panel item navigation.** All panel lists (threats, research categories, medicines, policies) must use up/down only.
+- Left/right use **reading order with wrap-around**: NA → Europe → Asia → SA → Africa → Oceania → NA (and reverse). This means players can reach any region with just left/right arrows.
+- Up/down on the map move within the same column (no wrap).
+
 ### Architectural Direction — THIS IS YOUR JOB
 
 We're migrating toward separating UI state machines from game logic. See `docs/target-architecture.md` for the full plan. The short version:

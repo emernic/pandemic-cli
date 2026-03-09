@@ -911,7 +911,8 @@ impl UiState {
         }
     }
 
-    /// Navigate left on the map.
+    /// Navigate left on the map (always, regardless of open panel).
+    /// Left/right are reserved for region navigation — panels use up/down only.
     pub fn select_left(&mut self, num_regions: usize) {
         self.map_selection = map_navigate(
             self.map_selection,
@@ -920,7 +921,8 @@ impl UiState {
         );
     }
 
-    /// Navigate right on the map.
+    /// Navigate right on the map (always, regardless of open panel).
+    /// Left/right are reserved for region navigation — panels use up/down only.
     pub fn select_right(&mut self, num_regions: usize) {
         self.map_selection = map_navigate(
             self.map_selection,
@@ -1133,21 +1135,59 @@ pub fn region_at_grid(col: u16, row: u16) -> Option<usize> {
     MAP_GRID.iter().position(|&(c, r)| c == col && r == row)
 }
 
+/// Reading order of regions: left-to-right, top-to-bottom through the grid.
+/// Used for left/right wrap-around navigation.
+fn grid_reading_order(num_regions: usize) -> Vec<usize> {
+    let max_row = MAP_GRID.iter().take(num_regions).map(|&(_, r)| r).max().unwrap_or(0);
+    let max_col = MAP_GRID.iter().take(num_regions).map(|&(c, _)| c).max().unwrap_or(0);
+    let mut order = Vec::new();
+    for r in 0..=max_row {
+        for c in 0..=max_col {
+            if let Some(idx) = region_at_grid(c, r) {
+                if idx < num_regions {
+                    order.push(idx);
+                }
+            }
+        }
+    }
+    order
+}
+
 /// Navigate the map selection in a direction. Returns the new selection index.
+///
+/// Left/right use reading order (left-to-right, top-to-bottom) with full
+/// wrap-around: right from the last region goes to the first, left from the
+/// first goes to the last. This lets players cycle through all regions with
+/// arrow keys even while a panel is open (panels only use up/down).
+///
+/// Up/down move within the same column without wrapping.
 pub fn map_navigate(current: usize, direction: MapDirection, num_regions: usize) -> usize {
     if num_regions == 0 || current >= num_regions || current >= MAP_GRID.len() {
         return current;
     }
-    let (col, row) = MAP_GRID[current];
-    let (new_col, new_row) = match direction {
-        MapDirection::Up => (col, row.wrapping_sub(1)),
-        MapDirection::Down => (col, row + 1),
-        MapDirection::Left => (col.wrapping_sub(1), row),
-        MapDirection::Right => (col + 1, row),
-    };
-    region_at_grid(new_col, new_row)
-        .filter(|&idx| idx < num_regions)
-        .unwrap_or(current)
+    match direction {
+        MapDirection::Up | MapDirection::Down => {
+            let (col, row) = MAP_GRID[current];
+            let (new_col, new_row) = match direction {
+                MapDirection::Up => (col, row.wrapping_sub(1)),
+                MapDirection::Down => (col, row + 1),
+                _ => unreachable!(),
+            };
+            region_at_grid(new_col, new_row)
+                .filter(|&idx| idx < num_regions)
+                .unwrap_or(current)
+        }
+        MapDirection::Left | MapDirection::Right => {
+            let order = grid_reading_order(num_regions);
+            let pos = order.iter().position(|&idx| idx == current).unwrap_or(0);
+            let new_pos = match direction {
+                MapDirection::Right => (pos + 1) % order.len(),
+                MapDirection::Left => (pos + order.len() - 1) % order.len(),
+                _ => unreachable!(),
+            };
+            order[new_pos]
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
