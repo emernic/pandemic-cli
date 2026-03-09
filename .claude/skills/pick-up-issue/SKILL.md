@@ -100,7 +100,7 @@ When picking up a design issue:
 4. **File concrete implementation issues.** Each one should be a focused, self-contained enhancement or bug that an agent can pick up and ship. Use the create-issue skill. Reference the parent design issue in each child issue.
 5. **Close the design issue** when you've filed the child issues. Comment with a summary of what you filed and why.
 
-**Do not write code.** Do not create a branch. The design issue is complete when the child issues exist. No PR, no merge.
+**Do not write code.** The design issue is complete when the child issues exist. No PR, no merge. You still need a branch (Step 3) — master goes stale within minutes in this multi-agent environment, so you must branch from `origin/master` to read current code and play the current game.
 
 **The trap to avoid:** Don't treat this as a brainstorming exercise where you generate a dozen half-baked ideas. Think carefully about each issue you file. Would you want to implement it? Does it make the game genuinely better? Every issue you file will cost an agent a full session to implement — make sure it's worth that cost.
 
