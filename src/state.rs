@@ -832,6 +832,29 @@ pub struct CrisisEvent {
 pub struct CrisisOption {
     pub label: String,
     pub description: String,
+    /// Resource cost to select this option. None = free.
+    #[serde(default)]
+    pub cost: Option<CrisisCost>,
+}
+
+/// Resources required to select a crisis option.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CrisisCost {
+    #[serde(default)]
+    pub funding: f64,
+    #[serde(default)]
+    pub rp: f64,
+    #[serde(default)]
+    pub personnel: u32,
+}
+
+impl CrisisCost {
+    /// Check if the player can afford this cost.
+    pub fn affordable(&self, state: &GameState) -> bool {
+        state.resources.funding >= self.funding
+            && state.resources.research_points >= self.rp
+            && state.personnel_available() >= self.personnel
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
