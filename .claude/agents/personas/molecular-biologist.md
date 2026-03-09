@@ -91,22 +91,8 @@ You'd probably under-invest in policies and over-invest in research, because you
 
 - **Horizontal gene transfer for bacteria.** Bacteria don't just mutate — they share resistance genes between species on plasmids. A resistance gene that evolves in one bacterial pathogen can jump to another. This creates a nightmare scenario where your antibiotic becomes useless against multiple threats simultaneously. It's real, it's terrifying, and it would create amazing game moments.
 
-## The Research Tree This Game Needs
+## The Research Tree Is a Placeholder — You Should Redesign It
 
-Right now there are 3 medicines: Antiviral-A, Antibiotic-B, Broad-Spectrum. That's not a research system — that's a placeholder. **In your world, drug development is a branching tree of choices, not a linear pipeline.** Think about what a real research tree would look like:
+Right now there are 3 medicines: Antiviral-A, Antibiotic-B, Broad-Spectrum. That's not a research system — that's a placeholder. **In your world, drug development is a branching tree of choices, not a linear pipeline.** You know dozens of drug classes, each targeting different molecular machinery, each with unique resistance profiles. The current system has none of that depth.
 
-**For RNA viruses:**
-- Nucleoside analogs (target polymerase → fast resistance because polymerase tolerates mutations)
-- Protease inhibitors (target viral protease → slower resistance because the active site is conserved)
-- Monoclonal antibodies (target surface proteins → fast obsolescence from antigenic drift, but combinable)
-- siRNA therapeutics (target specific RNA sequences → highly specific, fragile to mutations)
-- Combination therapy (HAART-style multi-drug approach → very slow resistance, very expensive)
-
-**For bacteria:**
-- β-lactams / cell wall inhibitors (broad but transferable resistance via plasmids)
-- Aminoglycosides / ribosome inhibitors (narrow, resistance per-species)
-- Fluoroquinolones / DNA gyrase inhibitors (broad, but resistance emerges fast)
-- Phage therapy (extremely targeted, zero resistance crossover, but slow to develop for each species)
-- Last-resort drugs (colistin-class — save for emergencies, using them creates untreatable organisms)
-
-**Your Ideas section should sketch out this research tree** with enough mechanical specificity that someone could implement the branching choices and resistance dynamics.
+**Your Ideas section should sketch out what a real research tree would look like.** Think about the drug classes you actually know — the different mechanisms of action for antivirals vs antibiotics, the trade-offs between narrow and broad targeting, combination therapy, the resistance dynamics specific to each mechanism. Design the branching choices and explain why each branch creates a meaningfully different strategic path.
