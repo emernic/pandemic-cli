@@ -212,19 +212,11 @@ cargo run -- --snapshot --do d0.5 --do p --do enter --do enter --do d1     # adv
 
 This eliminates the need for save files in simple multi-step tests. For longer sessions, save files are still useful.
 
-### ⚠️ Snapshot mode must mirror interactive mode
+### Snapshot mode crisis handling
 
-**Snapshot mode is NOT a simplified version of the game.** It must behave identically to interactive mode so that AI playtest feedback is meaningful. If snapshot mode silently skips game events, auto-dismisses popups, or otherwise diverges from what a real player experiences, then playtest feedback is about a different game than what humans play.
+Crisis events are always auto-resolved during snapshot mode (picks cheapest affordable option, prefers option A). This ensures `--do` step sequences run to completion without desynchronizing due to random crises. Auto-resolved crises are logged to stderr so playtest agents can see what happened.
 
-Concretely: **crisis events and game over interrupt `--days` advancement**, just like they pause the game in interactive mode. If you request `--days 10` and a crisis fires at day 3, execution stops at day 3 and remaining steps are dropped. The stderr log tells you what was dropped. To continue, dismiss the crisis (e.g., `--do enter`) and issue another `--days` command.
-
-**Never add code that silently skips game events in snapshot mode.** If an event blocks the player in interactive mode, it must also block in snapshot mode by default. The inconvenience is the point — it forces playtest agents to learn to handle crises, which produces better feedback.
-
-The one exception is `--auto-crises`, which explicitly opts into auto-resolving crisis events (picks the cheapest affordable option). Use this for economy/balance testing where you need to reach late-game state, NOT for gameplay playtests:
-
-```bash
-cargo run -- --snapshot --auto-crises --do d60  # run 60 days, auto-resolving crises
-```
+Game over always stops execution immediately.
 
 ### Snapshot persistence and real playtesting
 
