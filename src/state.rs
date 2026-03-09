@@ -2108,10 +2108,17 @@ impl GameState {
             );
         } else if unlocked_meds == 0 && unidentified < self.diseases.len() {
             // Identified threats but never developed medicine
-            tips.push(
-                "You identified threats but never developed a medicine. Use Bench Research to develop treatments."
-                    .to_string(),
-            );
+            if !self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign) {
+                tips.push(
+                    "Research Targeted Drug Design in [R] Basic Research to unlock targeted medicine development."
+                        .to_string(),
+                );
+            } else {
+                tips.push(
+                    "You identified threats but never developed a medicine. Use Bench Research to develop treatments."
+                        .to_string(),
+                );
+            }
         }
 
         // Check if policies were ever used
@@ -2263,7 +2270,12 @@ impl GameState {
             let has_knowledge = med.target_diseases.iter().any(|&d_idx| {
                 self.diseases.get(d_idx).map_or(false, |d| d.knowledge >= KNOWLEDGE_FOR_MEDICINE)
             });
-            if has_knowledge {
+            // Targeted medicines (Antiviral/Antibiotic) require TargetedDrugDesign.
+            // BroadSpectrum medicines can be developed without basic research.
+            let needs_tech = med.therapy_type != TherapyType::BroadSpectrum;
+            let has_tech = !needs_tech
+                || self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
+            if has_knowledge && has_tech {
                 let kind = ResearchKind::DevelopMedicine { medicine_idx: i };
                 if active_kind != Some(&kind) {
                     projects.push(kind);

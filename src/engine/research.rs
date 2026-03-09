@@ -219,6 +219,7 @@ mod tests {
     fn research_develop_medicine_unlocks() {
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0; // Fully identified
+        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         assert!(!state.medicines[0].unlocked);
 
@@ -391,6 +392,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 1000.0; // enough for both projects
+        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         // Start field research
         state = apply_action(&state, &Action::OpenResearch);
@@ -629,6 +631,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 2000.0;
+        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
         state.resources.personnel = 30;
 
         // Start field research directly
