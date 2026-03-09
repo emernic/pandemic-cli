@@ -384,13 +384,10 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
 }
 
 impl RegionPolicy {
-    pub fn funding_cost(&self) -> f64 {
-        self.funding_cost_with_traits(&[])
-    }
-
     /// Funding cost adjusted for regional traits.
     /// TradeDependent: travel ban costs 2x.
-    pub fn funding_cost_with_traits(&self, traits: &[RegionTrait]) -> f64 {
+    /// Always pass the region's traits — use `&[]` only when no region context exists.
+    pub fn funding_cost(&self, traits: &[RegionTrait]) -> f64 {
         let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
         let mut cost = 0.0;
         if self.travel_ban {
@@ -405,13 +402,10 @@ impl RegionPolicy {
         cost
     }
 
-    pub fn personnel_cost(&self) -> u32 {
-        self.personnel_cost_with_traits(&[])
-    }
-
     /// Personnel cost adjusted for regional traits.
     /// LowInfrastructure: each active policy needs +1 personnel.
-    pub fn personnel_cost_with_traits(&self, traits: &[RegionTrait]) -> u32 {
+    /// Always pass the region's traits — use `&[]` only when no region context exists.
+    pub fn personnel_cost(&self, traits: &[RegionTrait]) -> u32 {
         let low_infra = traits.contains(&RegionTrait::LowInfrastructure);
         let mut cost = 0u32;
         let mut active_count = 0u32;
@@ -3224,7 +3218,7 @@ impl GameState {
         let policy: u32 = self.policies.iter().enumerate()
             .map(|(i, p)| {
                 let traits = self.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-                p.personnel_cost_with_traits(traits)
+                p.personnel_cost(traits)
             })
             .sum();
         field + applied + basic + policy
@@ -3238,7 +3232,7 @@ impl GameState {
         self.policies.iter().enumerate()
             .map(|(i, p)| {
                 let traits = self.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-                p.funding_cost_with_traits(traits)
+                p.funding_cost(traits)
             })
             .sum()
     }
@@ -4089,8 +4083,8 @@ mod tests {
     fn trade_dependent_travel_ban_costs_more() {
         let mut policy = RegionPolicy::default();
         policy.travel_ban = true;
-        let base_cost = policy.funding_cost_with_traits(&[]);
-        let trade_cost = policy.funding_cost_with_traits(&[RegionTrait::TradeDependent]);
+        let base_cost = policy.funding_cost(&[]);
+        let trade_cost = policy.funding_cost(&[RegionTrait::TradeDependent]);
         assert!(trade_cost > base_cost,
             "TradeDependent should increase travel ban cost: {} vs {}", trade_cost, base_cost);
         assert!((trade_cost - base_cost * 2.0).abs() < 0.01,
@@ -4102,8 +4096,8 @@ mod tests {
         let mut policy = RegionPolicy::default();
         policy.quarantine = true;
         policy.hospital_surge = true;
-        let base = policy.personnel_cost_with_traits(&[]);
-        let low_infra = policy.personnel_cost_with_traits(&[RegionTrait::LowInfrastructure]);
+        let base = policy.personnel_cost(&[]);
+        let low_infra = policy.personnel_cost(&[RegionTrait::LowInfrastructure]);
         // 2 active policies, each +1 = base + 2
         assert_eq!(low_infra, base + 2,
             "LowInfrastructure should add +1 per active policy");
