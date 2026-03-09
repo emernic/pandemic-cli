@@ -63,21 +63,21 @@ pub fn tick(state: &GameState) -> GameState {
         new.resources.attrition_accum = 0.0;
     }
 
-    // Political Power: ramps based on severity + time + crisis modifier.
-    // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
-    // Time = linear ramp reaching 0.4 at day 30 (baseline even if player contains well).
-    // Crisis modifier = accumulated POL changes from crisis resolutions, decays over time.
+    // Political Power: drifts toward a severity-based target.
+    // Target = f(severity, time) — how much mandate the public grants.
+    // POL moves toward target at ~30%/day, so crisis hits take 1-3 days to recover.
+    // Crisis choices modify political_power directly (no separate modifier).
     {
         let initial_pop = new.initial_population();
         let death_frac = if initial_pop > 0.0 { new.total_dead() / initial_pop } else { 0.0 };
         let infected_frac = if initial_pop > 0.0 { new.total_infected() / initial_pop } else { 0.0 };
         let time_frac = new.tick as f64 / (30.0 * TICKS_PER_DAY);
         let severity = death_frac.sqrt() * 3.0 + infected_frac.sqrt() * 1.5;
-        // Decay crisis modifier toward 0 (half-life ~5 days)
-        let decay = 0.5_f64.powf(1.0 / (5.0 * TICKS_PER_DAY));
-        new.resources.pol_crisis_modifier *= decay;
-        new.resources.political_power =
-            (severity + time_frac * 0.4 + new.resources.pol_crisis_modifier).clamp(0.0, 1.0);
+        let target = (severity + time_frac * 0.3).clamp(0.0, 1.0);
+        // Drift toward target at 30% of the gap per day
+        let drift_rate = 0.30 / TICKS_PER_DAY;
+        let delta = (target - new.resources.political_power) * drift_rate;
+        new.resources.political_power = (new.resources.political_power + delta).clamp(0.0, 1.0);
     }
 
     // POL-based personnel: ~1 person per 15 days at max POL
@@ -2503,11 +2503,12 @@ mod tests {
     #[test]
     fn refugee_wave_option_b_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.10)).abs() < 0.001,
-            "option B should decrease pol_crisis_modifier by 0.10");
+        assert!((after.resources.political_power - (before - 0.10)).abs() < 0.001,
+            "option B should decrease political_power by 0.10");
     }
 
     #[test]
@@ -2520,24 +2521,25 @@ mod tests {
             required_ticks: 1000.0,
             personnel_assigned: 3,
         });
-        let before_pol = state.resources.pol_crisis_modifier;
+        let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::DataLeak, 0);
         let after = apply_action(&state, &Action::Confirm);
         let expected_progress = (500.0 - 2.0 * TICKS_PER_DAY as f64).max(0.0);
         assert!((after.field_research.as_ref().unwrap().progress - expected_progress).abs() < 0.01,
             "option A should lose 2 days of field research progress");
-        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.05)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol + 0.05)).abs() < 0.001,
             "option A should gain 0.05 POL modifier");
     }
 
     #[test]
     fn data_leak_option_b_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::DataLeak, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.10)).abs() < 0.001,
-            "option B should decrease pol_crisis_modifier by 0.10");
+        assert!((after.resources.political_power - (before - 0.10)).abs() < 0.001,
+            "option B should decrease political_power by 0.10");
     }
 
     #[test]
@@ -2573,7 +2575,8 @@ mod tests {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.policies[0].quarantine = true;
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -2585,25 +2588,26 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.15)).abs() < 0.001,
-            "option B should decrease pol_crisis_modifier by 0.15");
+        assert!((after.resources.political_power - (before - 0.15)).abs() < 0.001,
+            "option B should decrease political_power by 0.15");
     }
 
     #[test]
     fn media_panic_option_a_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::MediaPanic, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.08)).abs() < 0.001,
-            "option A should decrease pol_crisis_modifier by 0.08");
+        assert!((after.resources.political_power - (before - 0.08)).abs() < 0.001,
+            "option A should decrease political_power by 0.08");
     }
 
     #[test]
     fn media_panic_option_b_gains_pol() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        let before = state.resources.political_power;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -2615,39 +2619,41 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before + 0.05)).abs() < 0.001,
-            "option B should increase pol_crisis_modifier by 0.05");
+        assert!((after.resources.political_power - (before + 0.05)).abs() < 0.001,
+            "option B should increase political_power by 0.05");
     }
 
     #[test]
     fn trial_shortcut_option_a_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.05)).abs() < 0.001,
-            "option A should decrease pol_crisis_modifier by 0.05");
+        assert!((after.resources.political_power - (before - 0.05)).abs() < 0.001,
+            "option A should decrease political_power by 0.05");
     }
 
     #[test]
     fn trial_shortcut_option_b_gains_pol() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
-        let before = state.resources.pol_crisis_modifier;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before + 0.10)).abs() < 0.001,
-            "option B should increase pol_crisis_modifier by 0.10");
+        assert!((after.resources.political_power - (before + 0.10)).abs() < 0.001,
+            "option B should increase political_power by 0.10");
     }
 
     #[test]
     fn vaccine_hesitancy_option_a_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::VaccineHesitancy { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.10)).abs() < 0.001,
-            "option A should decrease pol_crisis_modifier by 0.10");
+        assert!((after.resources.political_power - (before - 0.10)).abs() < 0.001,
+            "option A should decrease political_power by 0.10");
     }
 
     #[test]
@@ -2655,7 +2661,7 @@ mod tests {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        let before = state.resources.pol_crisis_modifier;
+        let before = state.resources.political_power;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -2667,8 +2673,8 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before + 0.05)).abs() < 0.001,
-            "option B should increase pol_crisis_modifier by 0.05");
+        assert!((after.resources.political_power - (before + 0.05)).abs() < 0.001,
+            "option B should increase political_power by 0.05");
     }
 
     #[test]
@@ -2748,46 +2754,48 @@ mod tests {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].doses = 1000.0;
-        let before_pol = state.resources.pol_crisis_modifier;
+        let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.medicines[0].doses, 700.0,
             "option A should destroy 30% of doses");
-        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.05)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol + 0.05)).abs() < 0.001,
             "option A should gain 0.05 POL modifier");
     }
 
     #[test]
     fn whistleblower_option_b_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.08)).abs() < 0.001,
-            "option B should decrease pol_crisis_modifier by 0.08");
+        assert!((after.resources.political_power - (before - 0.08)).abs() < 0.001,
+            "option B should decrease political_power by 0.08");
     }
 
     #[test]
     fn military_takeover_option_a_loses_personnel_gains_pol() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
-        let before_pol = state.resources.pol_crisis_modifier;
+        let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::MilitaryTakeover, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.personnel, before_personnel - 5,
             "option A should lose 5 personnel");
-        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.15)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol + 0.15)).abs() < 0.001,
             "option A should gain 0.15 POL modifier");
     }
 
     #[test]
     fn cult_blockade_option_a_loses_pol() {
         let mut state = GameState::new_default(42);
-        let before = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::CultBlockade { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before - 0.08)).abs() < 0.001,
-            "option A should decrease pol_crisis_modifier by 0.08");
+        assert!((after.resources.political_power - (before - 0.08)).abs() < 0.001,
+            "option A should decrease political_power by 0.08");
     }
 
     #[test]
@@ -2820,12 +2828,13 @@ mod tests {
     fn who_evacuation_option_a_loses_funding_and_pol() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        let before_pol = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::WHOEvacuation, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.funding - 700.0).abs() < 1.0,
             "option A should lose $300");
-        assert!((after.resources.pol_crisis_modifier - (before_pol - 0.05)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol - 0.05)).abs() < 0.001,
             "option A should lose 0.05 POL modifier");
     }
 
@@ -2834,7 +2843,7 @@ mod tests {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 2000.0;
-        let before_pol = state.resources.pol_crisis_modifier;
+        let before_pol = state.resources.political_power;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -2846,7 +2855,7 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.10)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol + 0.10)).abs() < 0.001,
             "option B should gain 0.10 POL modifier");
     }
 
@@ -2854,11 +2863,11 @@ mod tests {
     fn warlord_demand_option_a_gains_pol_region_stays_collapsed() {
         let mut state = GameState::new_default(42);
         state.regions[0].collapsed = true;
-        let before_pol = state.resources.pol_crisis_modifier;
+        let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::WarlordDemand { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.regions[0].collapsed, "option A should keep region collapsed");
-        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.05)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol + 0.05)).abs() < 0.001,
             "option A should gain 0.05 POL modifier");
     }
 
@@ -2897,12 +2906,13 @@ mod tests {
     fn vaccine_dispute_option_b_gains_funding_loses_pol() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        let before_pol = state.resources.pol_crisis_modifier;
+        state.resources.political_power = 0.50;
+        let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::VaccineDispute, 1);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.funding - 1600.0).abs() < 1.0,
             "option B should gain $600");
-        assert!((after.resources.pol_crisis_modifier - (before_pol - 0.15)).abs() < 0.001,
+        assert!((after.resources.political_power - (before_pol - 0.15)).abs() < 0.001,
             "option B should lose 0.15 POL modifier");
     }
 
