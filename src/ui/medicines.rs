@@ -192,38 +192,33 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
 
         let cooldown = region.deploy_cooldown_remaining(state.tick);
         let on_cooldown = cooldown > 0;
-        let region_style = if on_cooldown {
-            Style::default().fg(Color::DarkGray)
-        } else {
-            style
-        };
 
         let mut spans = vec![
-            Span::styled(format!("{}{:<14}", marker, region.name), region_style),
-        ];
-        if on_cooldown {
-            let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
-            spans.push(Span::styled(
-                format!("  Cooldown: {days:.1}d"),
-                Style::default().fg(Color::Yellow),
-            ));
-        } else {
-            spans.push(Span::styled(
+            Span::styled(format!("{}{:<14}", marker, region.name), style),
+            Span::styled(
                 format!("{:>6} pop", format_number(region.population as f64)),
                 Style::default().fg(Color::Cyan),
-            ));
-            spans.push(Span::raw("  "));
-            spans.push(Span::styled(
+            ),
+            Span::raw("  "),
+            Span::styled(
                 format!("{:>6} inf", format_number(infected)),
                 Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
+            ),
+        ];
+        if dead > 0.0 {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                format!("{:>6} dead", format_number(dead)),
+                Style::default().fg(Color::DarkGray),
             ));
-            if dead > 0.0 {
-                spans.push(Span::raw("  "));
-                spans.push(Span::styled(
-                    format!("{:>6} dead", format_number(dead)),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
+        }
+        if on_cooldown {
+            let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                format!("[{days:.1}d cooldown]"),
+                Style::default().fg(Color::Yellow),
+            ));
         }
         lines.push(Line::from(spans));
     }
