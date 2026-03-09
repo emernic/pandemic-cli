@@ -86,6 +86,10 @@ pub struct GameState {
     /// Used to prevent the same crisis type repeating within CRISIS_TYPE_COOLDOWN ticks.
     #[serde(default)]
     pub crisis_cooldowns: HashMap<String, u64>,
+    /// Scheduled follow-up crises from previous choices. Each entry is
+    /// (fire_at_tick, crisis_kind). Checked every tick; fires when due.
+    #[serde(default)]
+    pub pending_crises: Vec<(u64, CrisisKind)>,
     /// Auto-resolve preferences: crisis tag → choice index (0 = A, 1 = B).
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
@@ -1905,6 +1909,17 @@ pub enum CrisisKind {
     WarlordDemand { region_idx: usize },
     /// Two nations claim credit for your vaccine, threaten war.
     VaccineDispute { neutral_loss: f64, credit_gain: f64 },
+
+    // --- Follow-up crisis types (spawned by earlier choices) ---
+
+    /// Follow-up to BlackMarketMedicine (Allow): counterfeit drugs killing people.
+    CounterfeitEpidemic { region_idx: usize },
+    /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
+    EmbezzlementRing { stolen_per_day: f64 },
+    /// Follow-up to MilitaryTakeover (Cooperate): military wants your research.
+    MilitaryOverreach,
+    /// Follow-up to DataLeak (Suppress): cover-up exposed, inquiry demanded.
+    PublicInquiry,
 }
 
 impl CrisisKind {
@@ -1935,6 +1950,10 @@ impl CrisisKind {
             CrisisKind::WHOEvacuation { .. } => "who_evac",
             CrisisKind::WarlordDemand { .. } => "warlord",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
+            CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
+            CrisisKind::EmbezzlementRing { .. } => "embezzlement",
+            CrisisKind::MilitaryOverreach => "military_overreach",
+            CrisisKind::PublicInquiry => "public_inquiry",
         }
     }
 }
@@ -2844,6 +2863,7 @@ impl GameState {
             events: vec![],
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
+            pending_crises: vec![],
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_research: [false; 3],
