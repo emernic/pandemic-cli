@@ -102,6 +102,10 @@ pub struct GameState {
     /// all regions collapsing. Used by the UI to show a distinct defeat message.
     #[serde(default)]
     pub mercy_rule: bool,
+    /// Per-disease highest threat alert level already fired (0=none, 1=1M, 2=100M, 3=1B).
+    /// Prevents repeat alerts for the same threshold.
+    #[serde(default)]
+    pub threat_alert_level: Vec<u8>,
     pub ui: UiState,
 }
 
@@ -1692,6 +1696,13 @@ pub enum GameEvent {
         from_disease_idx: usize,
         to_disease_idx: usize,
     },
+    /// A disease's death toll crossed a major threshold. Fires once per
+    /// threshold per disease. Auto-pauses the game.
+    ThreatEscalation {
+        disease_idx: usize,
+        deaths: f64,
+        has_medicine: bool,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -2694,6 +2705,7 @@ impl GameState {
             rapid: false,
         });
 
+        let num_diseases = diseases.len();
         Self {
             tick: 0,
             sim_state: SimState::Running,
@@ -2723,6 +2735,7 @@ impl GameState {
             auto_research: [false; 3],
             zero_agency_ticks: 0,
             mercy_rule: false,
+            threat_alert_level: vec![0; num_diseases],
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,

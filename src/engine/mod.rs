@@ -125,6 +125,45 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Threat escalation alerts: warn when a detected disease's deaths cross
+    // major thresholds (1M, 100M, 1B). Fires once per threshold per disease.
+    // Auto-pauses the game so the player can't miss an escalating threat.
+    {
+        const THRESHOLDS: &[(u8, f64)] = &[
+            (1, 1_000_000.0),
+            (2, 100_000_000.0),
+            (3, 1_000_000_000.0),
+        ];
+        // Grow tracking vec if new diseases were spawned
+        while new.threat_alert_level.len() < new.diseases.len() {
+            new.threat_alert_level.push(0);
+        }
+        for (d_idx, disease) in new.diseases.iter().enumerate() {
+            if !disease.detected {
+                continue;
+            }
+            let deaths: f64 = new.regions.iter()
+                .filter_map(|r| r.disease_state(d_idx))
+                .map(|inf| inf.dead)
+                .sum();
+            let current_level = new.threat_alert_level[d_idx];
+            for &(level, threshold) in THRESHOLDS {
+                if level > current_level && deaths >= threshold {
+                    new.threat_alert_level[d_idx] = level;
+                    let has_medicine = new.medicines.iter().any(|m| {
+                        m.unlocked && m.target_diseases.contains(&d_idx)
+                    });
+                    new.events.push(GameEvent::ThreatEscalation {
+                        disease_idx: d_idx,
+                        deaths,
+                        has_medicine,
+                    });
+                    new.sim_state = SimState::Paused;
+                }
+            }
+        }
+    }
+
     // Crisis event generation (only when no crisis is active).
     // Frequency scales with game day: early game ~1/10 days, late game ~1/3 days.
     let crisis_interval = {
@@ -3584,5 +3623,64 @@ mod tests {
         state.resources.funding = 1_000_000.0;
         let (nav4, _, _) = medicine::deploy_medicine(&mut state, med_idx, 1, 1);
         assert!(nav4, "deploying to different region should work during cooldown");
+    }
+
+    #[test]
+    fn threat_escalation_fires_at_death_thresholds() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
+        // Set deaths above 1M threshold on the existing infection entry
+        // (new_default already seeds disease 0 in some region)
+        for region in &mut state.regions {
+            if let Some(inf) = region.infections.iter_mut().find(|i| i.disease_idx == 0) {
+                inf.dead = 1_500_000.0;
+                inf.infected = 100_000.0;
+            }
+            if region.dead > 0.0 {
+                region.dead = 1_500_000.0;
+            }
+        }
+
+        let new_state = tick(&state);
+        let escalation = new_state.events.iter().find(|e|
+            matches!(e, GameEvent::ThreatEscalation { .. })
+        );
+        assert!(escalation.is_some(), "should fire escalation at 1M deaths");
+
+        if let Some(GameEvent::ThreatEscalation { disease_idx, has_medicine, .. }) = escalation {
+            assert_eq!(*disease_idx, 0);
+            assert!(!has_medicine, "no medicine unlocked yet");
+        }
+        assert_eq!(new_state.threat_alert_level[0], 1, "should set alert level to 1");
+
+        // Second tick should NOT re-fire the same threshold
+        let state2 = tick(&new_state);
+        let escalation2 = state2.events.iter().find(|e|
+            matches!(e, GameEvent::ThreatEscalation { .. })
+        );
+        assert!(escalation2.is_none(), "should not re-fire same threshold");
+    }
+
+    #[test]
+    fn threat_escalation_skips_undetected_diseases() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = false; // Not yet detected
+        // Set deaths high but infected below detection threshold (10K)
+        // so the disease stays undetected during the tick
+        for region in &mut state.regions {
+            if let Some(inf) = region.infections.iter_mut().find(|i| i.disease_idx == 0) {
+                inf.dead = 2_000_000.0;
+                inf.infected = 100.0;
+            }
+            if region.dead > 0.0 {
+                region.dead = 2_000_000.0;
+            }
+        }
+
+        let new_state = tick(&state);
+        let escalation = new_state.events.iter().find(|e|
+            matches!(e, GameEvent::ThreatEscalation { .. })
+        );
+        assert!(escalation.is_none(), "should not fire for undetected disease");
     }
 }

@@ -51,7 +51,7 @@ pub fn process_events(state: &mut GameState) {
     }
     // Reset speed display when tick() auto-paused on critical events
     if state.events.iter().any(|e| matches!(e,
-        GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }))
+        GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. } | GameEvent::ThreatEscalation { .. }))
     {
         state.ui.speed_multiplier = 1;
     }
@@ -69,7 +69,7 @@ pub fn process_events(state: &mut GameState) {
         })
         .collect();
 
-    // Priority: RegionCollapsed > DiseaseDetected > PolicySuspended > FundingWarning > DiseaseMutated > ... > ResistanceTransferred > DiseaseSpread
+    // Priority: RegionCollapsed > DiseaseDetected > ThreatEscalation > PolicySuspended > FundingWarning > DiseaseMutated > ... > ResistanceTransferred > DiseaseSpread
     let msg = if let Some(GameEvent::RegionCollapsed { region_idx }) =
         state.events.iter().find(|e| matches!(e, GameEvent::RegionCollapsed { .. }))
     {
@@ -91,6 +91,18 @@ pub fn process_events(state: &mut GameState) {
         } else {
             let region_name = affected.first().unwrap_or(&"unknown");
             format!("NEW THREAT detected in {region_name}! Use [R] Research to identify it.")
+        }
+    } else if let Some(GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::ThreatEscalation { .. }))
+    {
+        let name = state.diseases.get(*disease_idx)
+            .map(|d| d.display_name(*disease_idx))
+            .unwrap_or_else(|| "Unknown".to_string());
+        let deaths_str = crate::format_number(*deaths);
+        if *has_medicine {
+            format!("THREAT: {name} has killed {deaths_str} — deploy medicine!")
+        } else {
+            format!("THREAT: {name} has killed {deaths_str} — NO MEDICINE AVAILABLE! Use [R] Research.")
         }
     } else if !suspended.is_empty() {
         format!("Funding crisis: suspended {}", suspended.join(", "))
