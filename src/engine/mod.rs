@@ -1711,6 +1711,7 @@ mod tests {
         let med = Medicine {
             name: "TestMed".into(),
             therapy_type: TherapyType::Antiviral,
+            mechanism: None,
             target_diseases: vec![0],
             cost: 100.0,
             doses: 1000.0,
@@ -1732,6 +1733,26 @@ mod tests {
         };
         let eff2 = med_current.strain_efficacy(0, &diseases);
         assert!((eff2 - 1.0).abs() < 0.001, "expected 1.0, got {eff2}");
+    }
+
+    #[test]
+    fn targeted_medicines_have_mechanism_of_action() {
+        use crate::state::{MechanismOfAction, TherapyType};
+
+        let state = GameState::new_default(42);
+        // First disease is an RNA virus — targeted medicine should have a viral mechanism
+        let targeted = &state.medicines[0];
+        assert!(targeted.mechanism.is_some(), "targeted medicine should have a mechanism");
+        let mech = targeted.mechanism.unwrap();
+        assert!(
+            MechanismOfAction::viral_mechanisms().contains(&mech),
+            "RNA virus medicine should have a viral mechanism, got {:?}", mech
+        );
+
+        // Broad-spectrum medicine (last one) should have no mechanism
+        let broad = state.medicines.last().unwrap();
+        assert!(broad.mechanism.is_none(), "broad-spectrum should have no mechanism");
+        assert_eq!(broad.therapy_type, TherapyType::BroadSpectrum);
     }
 
     #[test]

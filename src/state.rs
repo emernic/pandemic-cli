@@ -888,11 +888,87 @@ impl TherapyType {
     }
 }
 
+/// Molecular mechanism by which a medicine acts. Targeted medicines have a specific
+/// mechanism; broad-spectrum medicines do not. Future resistance systems will track
+/// resistance per mechanism — overusing one mechanism builds resistance to all drugs
+/// sharing it, creating pressure to diversify treatment strategies.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MechanismOfAction {
+    // Bacterial mechanisms
+    /// Beta-lactams: disrupt cell wall synthesis (e.g., penicillin, cephalosporins).
+    CellWallInhibitor,
+    /// Aminoglycosides: block bacterial protein synthesis at the ribosome.
+    RibosomeInhibitor,
+    /// Fluoroquinolones: inhibit DNA gyrase/topoisomerase, preventing replication.
+    DnaGyraseInhibitor,
+    /// Sulfonamides: block folate synthesis, starving bacteria of essential metabolites.
+    MetabolicInhibitor,
+
+    // Viral mechanisms
+    /// Nucleoside analogs: mimic building blocks to halt viral genome replication.
+    PolymeraseInhibitor,
+    /// Protease inhibitors: prevent viral polyprotein cleavage, blocking maturation.
+    ProteaseInhibitor,
+    /// Fusion/entry inhibitors: block viral attachment or membrane fusion.
+    EntryInhibitor,
+}
+
+impl MechanismOfAction {
+    /// Human-readable label for display in UI.
+    pub fn label(&self) -> &'static str {
+        match self {
+            MechanismOfAction::CellWallInhibitor => "Cell Wall Inhibitor",
+            MechanismOfAction::RibosomeInhibitor => "Ribosome Inhibitor",
+            MechanismOfAction::DnaGyraseInhibitor => "DNA Gyrase Inhibitor",
+            MechanismOfAction::MetabolicInhibitor => "Metabolic Inhibitor",
+            MechanismOfAction::PolymeraseInhibitor => "Polymerase Inhibitor",
+            MechanismOfAction::ProteaseInhibitor => "Protease Inhibitor",
+            MechanismOfAction::EntryInhibitor => "Entry Inhibitor",
+        }
+    }
+
+    /// Short label for compact display (e.g., medicine list).
+    pub fn short_label(&self) -> &'static str {
+        match self {
+            MechanismOfAction::CellWallInhibitor => "CellWall",
+            MechanismOfAction::RibosomeInhibitor => "Ribosome",
+            MechanismOfAction::DnaGyraseInhibitor => "Gyrase",
+            MechanismOfAction::MetabolicInhibitor => "Metabolic",
+            MechanismOfAction::PolymeraseInhibitor => "Polymerase",
+            MechanismOfAction::ProteaseInhibitor => "Protease",
+            MechanismOfAction::EntryInhibitor => "Entry",
+        }
+    }
+
+    /// Mechanisms applicable to bacterial pathogens.
+    pub fn bacterial_mechanisms() -> &'static [MechanismOfAction] {
+        &[
+            MechanismOfAction::CellWallInhibitor,
+            MechanismOfAction::RibosomeInhibitor,
+            MechanismOfAction::DnaGyraseInhibitor,
+            MechanismOfAction::MetabolicInhibitor,
+        ]
+    }
+
+    /// Mechanisms applicable to viral pathogens.
+    pub fn viral_mechanisms() -> &'static [MechanismOfAction] {
+        &[
+            MechanismOfAction::PolymeraseInhibitor,
+            MechanismOfAction::ProteaseInhibitor,
+            MechanismOfAction::EntryInhibitor,
+        ]
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Medicine {
     pub name: String,
     #[serde(default)]
     pub therapy_type: TherapyType,
+    /// Molecular mechanism of action. `None` for broad-spectrum medicines.
+    /// Targeted medicines get a specific mechanism assigned during development.
+    #[serde(default)]
+    pub mechanism: Option<MechanismOfAction>,
     pub target_diseases: Vec<usize>,
     pub cost: f64,
     pub doses: f64,
@@ -929,12 +1005,26 @@ impl Medicine {
     }
 
     /// Create a targeted medicine for a disease. Name format: "TherapyType-A", "TherapyType-B", etc.
+    /// Assigns a mechanism of action deterministically based on disease index and pathogen type.
     pub fn new_targeted(disease_idx: usize, pathogen_type: PathogenType) -> Medicine {
         let therapy = pathogen_type.matched_therapy();
         let letter = (b'A' + disease_idx as u8) as char;
+        // Pick mechanism deterministically: rotate through available mechanisms for this pathogen type.
+        let mechanism = match pathogen_type {
+            PathogenType::Bacterium => {
+                let mechs = MechanismOfAction::bacterial_mechanisms();
+                Some(mechs[disease_idx % mechs.len()])
+            }
+            PathogenType::RnaVirus | PathogenType::DnaVirus => {
+                let mechs = MechanismOfAction::viral_mechanisms();
+                Some(mechs[disease_idx % mechs.len()])
+            }
+            PathogenType::Prion => None, // Prions have no known molecular target
+        };
         Medicine {
             name: format!("{}-{}", therapy.label(), letter),
             therapy_type: therapy,
+            mechanism,
             target_diseases: vec![disease_idx],
             cost: 50.0,
             doses: 100_000_000.0,
@@ -2143,6 +2233,7 @@ impl GameState {
         medicines.push(Medicine {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
+            mechanism: None,
             target_diseases: all_disease_indices,
             cost: 100.0,
             doses: 200_000_000.0,
