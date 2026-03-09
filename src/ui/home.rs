@@ -49,6 +49,9 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
     segments.push(("  The former director of the N.W.H.O. has been removed\n".to_string(), dim));
     segments.push(("  for inaction. You are the replacement.\n".to_string(), dim));
     segments.push(("\n".to_string(), dim));
+    segments.push(("  Your mandate: assess and defend humanity against\n".to_string(), white));
+    segments.push(("  all biological threats — foreign, domestic, and alien.\n".to_string(), white));
+    segments.push(("\n".to_string(), dim));
     segments.push(("  Your first priority: send a field research team\n".to_string(), white));
     segments.push(("  to identify what we're dealing with.\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
