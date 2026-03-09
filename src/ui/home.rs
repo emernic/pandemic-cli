@@ -220,34 +220,69 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // ── Global threat meter (based on regional collapse) ──
+    // ── Global threat meter ──
+    // Shows how close the worst-off region is to collapse (0% = safe, 100% = collapse).
+    // Once regions start falling, switches to showing collapse count.
     let total_regions = state.regions.len();
     let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
-    let collapse_frac = if total_regions > 0 { collapsed_count as f64 / total_regions as f64 } else { 0.0 };
-    let threat_pct = (collapse_frac * 100.0).min(100.0);
-    let threat_col = if collapsed_count == 0 { Color::Green }
-        else if collapsed_count <= 1 { Color::Yellow }
-        else if collapsed_count <= 3 { Color::Red }
-        else { Color::LightRed };
     let bar_width = (area.width as usize).saturating_sub(6).min(40);
+
+    // Collapse proximity: fraction of the way to collapse for the worst-off region
+    let max_proximity = state.regions.iter()
+        .filter(|r| !r.collapsed)
+        .map(|r| {
+            let pop = r.population as f64;
+            let death_frac = if pop > 0.0 { r.total_dead() / pop } else { 0.0 };
+            let collapse_death_frac = 1.0 - r.collapse_threshold;
+            if collapse_death_frac > 0.0 { (death_frac / collapse_death_frac).min(1.0) } else { 1.0 }
+        })
+        .fold(0.0_f64, f64::max);
+
+    // Blend: if regions have collapsed, show that; otherwise show proximity
+    let (threat_fill, threat_pct, threat_label, threat_col) = if collapsed_count == total_regions {
+        (1.0, 100.0, "TOTAL COLLAPSE", Color::LightRed)
+    } else if collapsed_count > 0 {
+        let frac = collapsed_count as f64 / total_regions as f64;
+        let pct = frac * 100.0;
+        let label = if collapsed_count == 1 { "REGION FALLEN" } else { "CASCADING" };
+        (frac.max(max_proximity), pct, label, Color::Red)
+    } else if max_proximity >= 0.75 {
+        (max_proximity, max_proximity * 100.0, "CRITICAL", Color::Red)
+    } else if max_proximity >= 0.40 {
+        (max_proximity, max_proximity * 100.0, "SEVERE", Color::Yellow)
+    } else if max_proximity >= 0.10 {
+        (max_proximity, max_proximity * 100.0, "ELEVATED", Color::Yellow)
+    } else {
+        (max_proximity, max_proximity * 100.0, "STABLE", Color::Green)
+    };
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled("  ── GLOBAL THREAT ──", cyan)));
     lines.push(Line::from(""));
 
     let mut threat_spans = vec![Span::styled("  ", dim)];
-    threat_spans.extend(bar(collapse_frac, bar_width, threat_col));
+    threat_spans.extend(bar(threat_fill, bar_width, threat_col));
     threat_spans.push(Span::styled(format!(" {:.0}%", threat_pct), Style::default().fg(threat_col)));
     lines.push(Line::from(threat_spans));
 
-    let threat_label = if collapsed_count == 0 { "STABLE" }
-        else if collapsed_count <= 1 { "CRITICAL" }
-        else if collapsed_count < total_regions { "CASCADING" }
-        else { "TOTAL COLLAPSE" };
+    let detail = if collapsed_count > 0 {
+        format!("  Regions fallen: {} / {}", collapsed_count, total_regions)
+    } else {
+        let worst_region = state.regions.iter()
+            .filter(|r| !r.collapsed)
+            .max_by(|a, b| {
+                let a_prox = a.total_dead() / a.population as f64;
+                let b_prox = b.total_dead() / b.population as f64;
+                a_prox.partial_cmp(&b_prox).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|r| r.name.as_str())
+            .unwrap_or("Unknown");
+        format!("  Most at risk: {}", worst_region)
+    };
     lines.push(Line::from(vec![
         Span::styled("  Status: ", dim),
         Span::styled(threat_label, Style::default().fg(threat_col)),
-        Span::styled(format!("  Regions fallen: {} / {}", collapsed_count, total_regions), dim),
+        Span::styled(detail, dim),
     ]));
 
     // ── Infection & death sparklines ──
