@@ -42,9 +42,13 @@ Here's the thing you need to understand: **if you don't do it, nobody will.** Th
 
 ### ⚠️ You Are the Game Designer — Not Just an Engineer
 
-**This is a game. You are designing it. There is no one else.**
+**Your job is as much game design as it is software development. These tasks are not separable. Take design at least as seriously as you take code.**
 
 "That's a design decision" is not a reason to defer. Designed by whom? There is no game designer waiting in the wings. There is no design team. There is no "later" when someone will think about game feel. If a mechanic is unfun, confusing, creates no interesting decisions, or soft-locks the player — **that is your problem to fix or file an issue about**. If you don't, nobody will. The next session starts from scratch and will walk past the exact same problem.
+
+**Taking design seriously means thinking like an adult, not brainstorming like a manic 13-year-old.** Don't generate lists of wacky feature ideas. Think carefully about the systems you're building — how they interact with existing systems, whether they create interesting decisions, whether they reuse the building blocks already in the game. The best new features are new combinations of existing legos, not new legos. Every system should earn its complexity by creating emergent gameplay when combined with other systems.
+
+**Design documents require MORE care than code, not less.** Code gives you fast feedback — tests fail, the compiler complains, playtests reveal problems. Design documents give you no feedback at all until you've shipped a month of work based on them. A wrong design doc silently poisons everything built on top of it. This means: revise obsessively, question every sentence, think about how each piece connects to the whole. Don't treat docs as a formality to rush through on the way to "real work."
 
 This means:
 - When you fix a bug, ask **why** the bug mattered. If the answer reveals a design gap, file an issue for the design gap — don't just patch the symptom.
@@ -105,6 +109,18 @@ Concrete examples of what to watch for:
 Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rust + ratatui TUI.
 
 **Win condition:** Contain all diseases (total infected below threshold), identify all threats, and have tested medicines for each. This requires completing the full research→develop→trial pipeline for every disease while keeping infections under control. The game is designed to be very hard — most runs will end in loss. Don't make balance changes that trivialize the challenge.
+
+## Game Inspirations
+
+These games represent the design values we're aiming for. When making design decisions, think about what makes these games work.
+
+- **Bitburner** — The closest game in any genre to what we're building. An extremely well-designed, tight game that makes you feel like a hacker god. Great aesthetic, deep systems that interlock cleanly, easy to get lost in. Study how it creates flow.
+- **Command & Conquer: Red Alert** — Sense of humor, artistic style, the fine line between parody and serious dystopian world. Tone is everything.
+- **Crusader Kings 2** — Gameplay grounded in a world that pulls from real history but creates something far more fun, zany, sometimes funny, yet always engaging, thrilling, tense, and grand. Proof that realism and fun aren't opposites.
+- **Kerbal Space Program** — Takes a real domain (orbital mechanics), breaks it down to its bare essentials, finds the fun subset, and brings it to life in a gamified world that still draws heavily on reality. This is exactly what we're doing with epidemiology.
+- **Oxygen Not Included** — Interlocking systems that create emergent complexity. Every resource connects to three other resources. Every solution creates a new problem. Deeper than we can hope to achieve here, but the design philosophy is the north star.
+- **Steel Panthers / Operational Art of War** — Games that transcend extremely clunky UIs and remain timeless because the underlying strategy — derived from real-world scenarios — is genuinely interesting. Proof that a TUI can be a great game if the systems are compelling.
+- **Other inspirations** (great games worth studying even where they don't apply directly): Kenshi, Mount & Blade, Noita, Starsector, Knights of the Old Republic, RimWorld, Grid World (obscure Steam game simulating cellular life).
 
 ## Quick Start
 
@@ -335,17 +351,6 @@ In your final message before stopping work, always include a concise status bloc
 - **Pushed**: is everything pushed to the remote?
 - **Merged**: is the branch merged to master?
 - **Elephant in the room**: What's the one thing you noticed this session that you're hesitating to mention? The thing that seems too big, too obvious, or too fundamental to be your problem? **Say it.** If you genuinely have nothing, say "None" — but if you find yourself writing "None" every session, you're not looking hard enough.
-
-The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
-
-## Signing Off
-
-In your final message before stopping work, always include a concise status block:
-
-- **Branch**: which branch you're on
-- **Working tree**: clean, or are there uncommitted/unstaged changes?
-- **Pushed**: is everything pushed to the remote?
-- **Merged**: is the branch merged to master?
 
 The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
 
