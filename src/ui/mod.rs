@@ -33,9 +33,9 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
 /// Called after each tick by the game loop / snapshot runner. This keeps
 /// human-facing strings in the UI layer, not in engine.rs.
 ///
-/// Game-rule state transitions (sim_state pausing on game-over/crisis) are
-/// handled directly in `tick()`. This function handles UI responses to events
-/// (closing panels, resetting selections) and formats status messages.
+/// Also auto-pauses on critical events (DiseaseDetected, RegionCollapsed) so
+/// the player can react. Note: this means process_events modifies SimState,
+/// which is a game-rule concern living in the UI layer (see #713).
 pub fn process_events(state: &mut GameState) {
     if state.events.is_empty() {
         return;
