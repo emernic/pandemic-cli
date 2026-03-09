@@ -667,7 +667,7 @@ impl Medicine {
     }
 
     /// Efficacy multiplier based on how many generations behind this medicine is
-    /// for a given disease. Each generation of drift reduces efficacy by 25%,
+    /// for a given disease. Each generation of drift reduces efficacy by 15%,
     /// with a floor at 10%. Returns 1.0 if the medicine hasn't been calibrated yet
     /// (strain_generations not populated — pre-mutation-system medicines).
     pub fn strain_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
@@ -680,7 +680,7 @@ impl Medicine {
                         let disease_gen = diseases.get(disease_idx)
                             .map_or(0, |d| d.strain_generation);
                         let behind = disease_gen.saturating_sub(mg);
-                        (1.0 - behind as f64 * 0.25).max(0.1)
+                        (1.0 - behind as f64 * 0.15).max(0.1)
                     }
                     // Not yet calibrated (developed before mutation system) — full efficacy
                     None => 1.0,

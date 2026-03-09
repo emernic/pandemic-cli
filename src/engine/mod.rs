@@ -1258,7 +1258,7 @@ mod tests {
         let state = GameState::new_default(42);
         let mut a = state.clone();
         let mut b = state;
-        for _ in 0..300 {
+        for _ in 0..1000 {
             a = tick(&a);
             b = tick(&b);
         }
@@ -1296,9 +1296,9 @@ mod tests {
             strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
         };
 
-        // 3 generations behind = 1.0 - 3*0.25 = 0.25
+        // 3 generations behind = 1.0 - 3*0.15 = 0.55
         let eff = med.strain_efficacy(0, &diseases);
-        assert!((eff - 0.25).abs() < 0.001, "expected 0.25, got {eff}");
+        assert!((eff - 0.55).abs() < 0.001, "expected 0.55, got {eff}");
 
         // Re-calibrated medicine should have full efficacy
         let med_current = Medicine {
