@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days};
+use crate::state::{GameState, ResearchKind, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -146,11 +146,9 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     )));
                 }
 
-                let (rp, personnel, ticks) = kind.costs(&state.medicines);
+                let (personnel, ticks) = kind.costs(&state.medicines);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
-                    Span::styled(format!("{:.0} RP", rp), Style::default().fg(Color::Magenta)),
-                    Span::raw("  "),
                     Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
                     Span::raw("  "),
                     Span::styled(format_days(ticks), Style::default().fg(Color::DarkGray)),
@@ -182,7 +180,7 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (rp, personnel, ticks) = kind.costs(&state.medicines);
+        let (personnel, ticks) = kind.costs(&state.medicines);
 
         lines.push(Line::from(Span::styled(
             format!("  Start: {}", format_kind(kind, state)),
@@ -195,12 +193,6 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
             )));
         }
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![
-            Span::raw("  Cost: "),
-            Span::styled(format!("{:.0} RP", rp), Style::default().fg(
-                if state.resources.research_points >= rp { Color::Green } else { Color::Red }
-            )),
-        ]));
         lines.push(Line::from(vec![
             Span::raw("  Personnel: "),
             Span::styled(format!("{}", personnel), Style::default().fg(
@@ -216,8 +208,7 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
             Span::styled(format_days(ticks), Style::default().fg(Color::White)),
         ]));
 
-        let can_afford = state.resources.research_points >= rp
-            && state.personnel_available() >= personnel;
+        let can_afford = state.personnel_available() >= personnel;
 
         lines.push(Line::from(""));
         if can_afford {
@@ -272,22 +263,28 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
             format!("  {} remaining", format_days(remaining)),
             Style::default().fg(Color::White),
         )));
+        let (base_personnel, _) = project.kind.costs(&state.medicines);
+        let speed = project.personnel_assigned as f64 / base_personnel.max(1) as f64;
         lines.push(Line::from(Span::styled(
-            format!("  {} personnel assigned", project.personnel_assigned),
-            Style::default().fg(Color::DarkGray),
+            format!("  {} personnel assigned ({}x speed)", project.personnel_assigned, format!("{:.1}", speed)),
+            Style::default().fg(Color::Cyan),
         )));
 
-        // Boost option
+        // Personnel adjustment controls
         if !project.is_complete() {
             lines.push(Line::from(""));
-            let can_afford = state.resources.research_points >= BOOST_RP_COST;
-            let cost_color = if can_afford { Color::Magenta } else { Color::Red };
             lines.push(Line::from(vec![
-                Span::styled("  [Enter] Boost ", Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("({:.0} RP → +{})", BOOST_RP_COST, format_days(BOOST_TICKS)),
-                    Style::default().fg(cost_color),
-                ),
+                Span::styled("  [↓/j] ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Add personnel", Style::default().fg(
+                    if state.personnel_available() >= 1 { Color::Green } else { Color::Red }
+                )),
+                Span::styled(format!("  ({} available)", state.personnel_available()), Style::default().fg(Color::DarkGray)),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("  [↑/k] ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Remove personnel", Style::default().fg(
+                    if project.personnel_assigned > 1 { Color::Yellow } else { Color::Red }
+                )),
             ]));
         }
     } else {

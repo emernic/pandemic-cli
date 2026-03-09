@@ -85,15 +85,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         },
         Span::raw("  "),
         Span::styled(
-            format!("RP: {:.0}", state.resources.research_points),
-            Style::default().fg(Color::Magenta),
-        ),
-        Span::styled(
-            format!(" (+{:.0}/day)", state.rp_income_rate() * TICKS_PER_DAY),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::raw("  "),
-        Span::styled(
             {
                 let avail = state.personnel_available();
                 let total = state.resources.personnel;

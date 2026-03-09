@@ -43,8 +43,6 @@ pub fn tick(state: &GameState) -> GameState {
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;
-    let rp_income = new.rp_income_rate();
-    new.resources.research_points += rp_income;
 
     // Political Power: ramps based on severity + time.
     // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
@@ -196,9 +194,13 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let ok = research::start_research(state, *bench, *project_idx);
             CommandResult { message: None, success: ok }
         }
-        GameCommand::BoostResearch { bench } => {
-            let (msg, success) = research::boost_research(state, *bench);
-            CommandResult { message: msg, success }
+        GameCommand::AddResearchPersonnel { bench } => {
+            let msg = research::add_personnel(state, *bench);
+            CommandResult { message: msg, success: true }
+        }
+        GameCommand::RemoveResearchPersonnel { bench } => {
+            let msg = research::remove_personnel(state, *bench);
+            CommandResult { message: msg, success: true }
         }
         GameCommand::TogglePolicy {
             region_idx,
@@ -829,8 +831,6 @@ mod tests {
     #[test]
     fn research_esc_backstep() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 100.0;
-
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { bench: false })));
@@ -1581,7 +1581,7 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 300.0, rp: 50.0 },
+            kind: CrisisKind::InternationalAid { funding: 300.0, personnel: 3 },
             title: "Test Crisis".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "A".into(), description: "A".into(), cost: None },
@@ -1607,7 +1607,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         let initial_funding = state.resources.funding;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, rp: 100.0 },
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
@@ -1621,21 +1621,21 @@ mod tests {
         assert_eq!(after.resources.funding, initial_funding + 500.0,
             "should have received funding");
 
-        // Reset and choose option B (RP)
-        let initial_rp = state.resources.research_points;
+        // Reset and choose option B (personnel)
+        let initial_personnel = state.resources.personnel;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, rp: 100.0 },
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "RP".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "Personnel".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::SelectNext); // select option B
         let after = apply_action(&after, &Action::Confirm);
         assert!(after.active_crisis.is_none(), "crisis should be resolved");
-        assert_eq!(after.resources.research_points, initial_rp + 100.0,
-            "should have received RP");
+        assert_eq!(after.resources.personnel, initial_personnel + 5,
+            "should have received personnel");
     }
 
     #[test]
@@ -1650,7 +1650,7 @@ mod tests {
             description: "Test".into(),
             option_a: CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
             option_b: CrisisOption { label: "Pay $400".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 400.0, rp: 0.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
             tick_created: 0,
         });
 
@@ -1674,7 +1674,7 @@ mod tests {
         // Game is running, crisis fires
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -1696,7 +1696,7 @@ mod tests {
         // Game was paused when crisis fired
         state.sim_state = SimState::Event { was_running: false };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -1717,7 +1717,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -1747,7 +1747,7 @@ mod tests {
 
         // Inject an active crisis
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },

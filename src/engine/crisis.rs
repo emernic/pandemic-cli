@@ -43,10 +43,10 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // International aid: always available
     let funding = 300.0 + (state.tick as f64 * 0.1).min(500.0);
-    let rp = 50.0 + (state.tick as f64 * 0.02).min(100.0);
+    let personnel = 3 + ((state.tick as f64 * 0.005).min(5.0) as u32);
     candidates.push(CrisisKind::InternationalAid {
         funding,
-        rp,
+        personnel,
     });
 
     // Mutation surge: requires a disease with strain_generation > 0 AND active infections
@@ -99,7 +99,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_b: CrisisOption {
                     label: "Emergency reroute ($300)".into(),
                     description: "Pay $300 to save the supply".into(),
-                    cost: Some(CrisisCost { funding: 300.0, rp: 0.0, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: 300.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -116,9 +116,9 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Emergency containment (50 RP, 3 personnel)".into(),
+                    label: "Emergency containment ($200, 3 personnel)".into(),
                     description: "Spend resources to save the project".into(),
-                    cost: Some(CrisisCost { funding: 0.0, rp: 50.0, personnel: 3 }),
+                    cost: Some(CrisisCost { funding: 200.0, personnel: 3 }),
                 },
                 kind,
                 tick_created: tick,
@@ -142,7 +142,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_b: CrisisOption {
                     label: "Resist ($500)".into(),
                     description: "Pay $500 in political capital to maintain quarantine".into(),
-                    cost: Some(CrisisCost { funding: 500.0, rp: 0.0, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: 500.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -164,13 +164,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_b: CrisisOption {
                     label: "Retention bonus ($400)".into(),
                     description: "Pay $400 to retain staff".into(),
-                    cost: Some(CrisisCost { funding: 400.0, rp: 0.0, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: 400.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
             }
         }
-        CrisisKind::InternationalAid { funding, rp } => {
+        CrisisKind::InternationalAid { funding, personnel } => {
             // Both options are free (they give resources, not cost them)
             CrisisEvent {
                 title: "International Aid Package".into(),
@@ -182,8 +182,8 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: format!("Research support (+{:.0} RP)", rp),
-                    description: "Scientific collaboration and equipment".into(),
+                    label: format!("Personnel support (+{} staff)", personnel),
+                    description: "Trained researchers and field workers".into(),
                     cost: None,
                 },
                 kind,
@@ -207,9 +207,9 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Emergency analysis (75 RP)".into(),
+                    label: "Emergency analysis ($300)".into(),
                     description: "Gain +0.15 knowledge of this pathogen".into(),
-                    cost: Some(CrisisCost { funding: 0.0, rp: 75.0, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: 300.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -235,7 +235,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
     if let Some(cost) = &option.cost {
         state.resources.funding -= cost.funding;
-        state.resources.research_points -= cost.rp;
         state.resources.personnel = state.resources.personnel.saturating_sub(cost.personnel);
     }
 
@@ -286,9 +285,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.funding += funding;
             format!("Received ${:.0} in emergency funding", funding)
         }
-        (CrisisKind::InternationalAid { rp, .. }, _) => {
-            state.resources.research_points += rp;
-            format!("Received {:.0} research points from international collaboration", rp)
+        (CrisisKind::InternationalAid { personnel, .. }, _) => {
+            state.resources.personnel += personnel;
+            format!("Received {} personnel from international collaboration", personnel)
         }
         (CrisisKind::MutationSurge { .. }, 0) => {
             "Mutation surge ignored — focusing resources elsewhere".into()

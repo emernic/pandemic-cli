@@ -88,7 +88,6 @@ pub const MAX_DISEASES: usize = 5;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
-pub const BASE_RP_INCOME: f64 = 0.15;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 6.0;
 pub const QUARANTINE_COST: f64 = 5.0;
@@ -167,7 +166,6 @@ impl RegionPolicy {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Resources {
     pub funding: f64,
-    pub research_points: f64,
     pub personnel: u32,
     /// Political Power (0.0–1.0). Represents global willingness to act.
     /// Increases based on disease severity and time. Gates policies.
@@ -543,10 +541,6 @@ pub const KNOWLEDGE_FULL: f64 = 1.0;
 /// One identification (0.50 knowledge) is enough to start development.
 pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.50;
 
-/// Cost in RP to boost an active research project.
-pub const BOOST_RP_COST: f64 = 10.0;
-/// Ticks of progress added per boost (20 ticks = 4 hours).
-pub const BOOST_TICKS: f64 = 20.0;
 
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
 /// 120 chosen so 5 ticks = 1 hour exactly (120 / 24 = 5).
@@ -714,7 +708,6 @@ pub struct ResearchProject {
     pub progress: f64,
     pub required_ticks: f64,
     pub personnel_assigned: u32,
-    pub rp_cost: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -730,26 +723,26 @@ pub enum ResearchKind {
 }
 
 impl ResearchKind {
-    /// Project costs: (rp_cost, personnel, duration_ticks).
+    /// Project costs: (personnel, duration_ticks).
     ///
     /// DevelopMedicine costs scale with medicine target count:
     /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
-    pub fn costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
+    pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64) {
         match self {
-            ResearchKind::IdentifyThreat { .. } => (20.0, 5, 160.0),
+            ResearchKind::IdentifyThreat { .. } => (5, 160.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (30.0, 3, 200.0)  // narrow: fast and cheap, single-target
+                    (3, 200.0)  // narrow: fast and cheap, single-target
                 } else {
-                    (80.0, 10, 400.0) // broad: slow and expensive, covers all
+                    (10, 400.0) // broad: slow and expensive, covers all
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (25.0, 5, 160.0),
-            ResearchKind::ManufactureDoses { .. } => (20.0, 3, 120.0),
-            ResearchKind::GenomicSequencing { .. } => (35.0, 5, 200.0),
-            ResearchKind::TrainPersonnel => (25.0, 1, 160.0),
+            ResearchKind::ClinicalTrial { .. } => (5, 160.0),
+            ResearchKind::ManufactureDoses { .. } => (3, 120.0),
+            ResearchKind::GenomicSequencing { .. } => (5, 200.0),
+            ResearchKind::TrainPersonnel => (1, 160.0),
         }
     }
 }
@@ -819,7 +812,10 @@ pub enum GameCommand {
         bench: bool,
         project_idx: usize,
     },
-    BoostResearch {
+    AddResearchPersonnel {
+        bench: bool,
+    },
+    RemoveResearchPersonnel {
         bench: bool,
     },
     TogglePolicy {
@@ -860,8 +856,6 @@ pub struct CrisisCost {
     #[serde(default)]
     pub funding: f64,
     #[serde(default)]
-    pub rp: f64,
-    #[serde(default)]
     pub personnel: u32,
 }
 
@@ -869,7 +863,6 @@ impl CrisisCost {
     /// Check if the player can afford this cost.
     pub fn affordable(&self, state: &GameState) -> bool {
         state.resources.funding >= self.funding
-            && state.resources.research_points >= self.rp
             && state.personnel_available() >= self.personnel
     }
 }
@@ -884,9 +877,9 @@ pub enum CrisisKind {
     PoliticalPressure { region_idx: usize },
     /// Staff burnout — lose personnel or pay retention bonus.
     PersonnelCrisis { amount: u32 },
-    /// International aid offer — choose funding or research points.
-    InternationalAid { funding: f64, rp: f64 },
-    /// Mutation surge — pay RP to gain knowledge or let it drift.
+    /// International aid offer — choose funding or personnel.
+    InternationalAid { funding: f64, personnel: u32 },
+    /// Mutation surge — pay to gain knowledge or let it drift.
     MutationSurge { disease_idx: usize },
 }
 
@@ -895,10 +888,6 @@ pub const CRISIS_MIN_TICK: u64 = 200;
 /// Average ticks between crises (~2 days).
 pub const CRISIS_INTERVAL: u64 = 200;
 
-/// Death fraction at which RP income degrades to its 10% floor.
-/// Originally the loss threshold; now only used for income scaling
-/// since the loss condition is all-regions-collapsed.
-pub const INCOME_DEGRADATION_SCALE: f64 = 0.10;
 /// Win when total infected drops below this threshold (with other conditions met).
 /// Individual region infections snap to 0.0 at < 1.0, so this means "truly eradicated."
 pub const WIN_INFECTED_THRESHOLD: f64 = 1.0;
@@ -1312,7 +1301,10 @@ impl UiState {
                 Some(GameCommand::StartResearch { bench, project_idx })
             }
             Some(ResearchUiState::ViewActive { bench }) => {
-                Some(GameCommand::BoostResearch { bench })
+                // ViewActive uses up/down for personnel, Confirm goes back
+                self.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+                self.panel_selection = 0;
+                None
             }
             None => None,
         }
@@ -1336,7 +1328,8 @@ impl UiState {
                     self.panel_selection = 0;
                 }
             }
-            GameCommand::BoostResearch { .. }
+            GameCommand::AddResearchPersonnel { .. }
+            | GameCommand::RemoveResearchPersonnel { .. }
             | GameCommand::TogglePolicy { .. }
             | GameCommand::ResolveCrisis { .. } => {
                 // No UI navigation change needed
@@ -1569,7 +1562,6 @@ impl GameState {
             rng,
             resources: Resources {
                 funding: 300.0,
-                research_points: 30.0,
                 personnel: 20,
                 political_power: 0.0,
                 personnel_accum: 0.0,
@@ -1669,18 +1661,6 @@ impl GameState {
             }
         }
         penalty
-    }
-
-    /// RP income per tick, degraded by global death toll.
-    /// Scales linearly from full at 0% deaths to 10% floor at the loss threshold.
-    pub fn rp_income_rate(&self) -> f64 {
-        let initial_pop = self.initial_population();
-        if initial_pop <= 0.0 {
-            return 0.0;
-        }
-        let death_fraction = self.total_dead() / initial_pop;
-        let health_multiplier = (1.0 - death_fraction / INCOME_DEGRADATION_SCALE).max(0.1);
-        BASE_RP_INCOME * health_multiplier
     }
 
     /// Total initial population across all regions (before any deaths).
