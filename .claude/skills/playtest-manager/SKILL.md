@@ -24,14 +24,16 @@ Check `CronList` first — if a cron job for `/playtest-manager` already exists,
 
 After setting up the cron, proceed to run the first playtest cycle (Steps 1-5 below). The cron will kick off subsequent cycles automatically.
 
-## Step 1: Prepare
+## Step 1: Fresh Branch From origin/master (EVERY TIME — NO EXCEPTIONS)
 
-Create a branch if not already on one:
+**Every single playtest cycle MUST start by creating a fresh branch from `origin/master`.** This is not optional. This is not "if not already on one." This happens every time, even if you just ran a playtest 30 minutes ago. Other agents are merging features and fixes constantly — if you playtest on a stale branch, you are testing old code and generating noise instead of signal.
 
 ```bash
 git fetch origin
 git checkout -b playtest-$(date +%Y%m%d-%H%M%S) origin/master
 ```
+
+**Why this is non-negotiable:** The whole point of recurring playtests is to test the *latest* version of the game. If you skip this step, your playtest findings may be about bugs that were already fixed, and you'll file duplicate issues or reopen things that are actually resolved. That's worse than not playtesting at all — it's actively harmful.
 
 ## Step 2: Launch Playtest
 
