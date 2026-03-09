@@ -397,7 +397,9 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
         if inf.infected <= 0.0 {
             continue;
         }
-        let disease = state.diseases.get(inf.disease_idx)?;
+        let Some(disease) = state.diseases.get(inf.disease_idx) else {
+            continue;
+        };
         if !disease.detected {
             continue;
         }
