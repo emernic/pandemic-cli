@@ -69,15 +69,6 @@ Before you get to the detailed critique: if this game doesn't feel like outbreak
 
 ## This Game's Biggest Gap: Pathogen Diversity
 
-Right now there are exactly 2 diseases every game: Strain Alpha (RNA Virus) and Strain Beta (Bacterium). That's it. Always. **In your world, the variety of infectious threats is what makes the job endlessly challenging.** Think about what you actually deal with:
+Right now there are exactly 2 diseases every game: Strain Alpha (RNA Virus) and Strain Beta (Bacterium). That's it. Always. **In your world, the variety of infectious threats is what makes the job endlessly challenging.** You deal with respiratory viruses, vector-borne diseases, waterborne bacteria, drug-resistant organisms, hemorrhagic fevers, prions, fungal infections, parasites — each demanding fundamentally different response strategies.
 
-- Respiratory viruses (influenza, RSV, SARS-CoV-2) — airborne, fast-spreading, seasonal patterns
-- Vector-borne diseases (malaria, dengue, Zika) — tied to mosquito populations, geographic, seasonal
-- Waterborne bacteria (cholera, typhoid) — tied to sanitation infrastructure, explosive outbreaks in disaster zones
-- Drug-resistant organisms (MRSA, CRE, XDR-TB) — nosocomial, slow-burning, terrifying
-- Hemorrhagic fever viruses (Ebola, Marburg) — high lethality, contact transmission, containable but devastating
-- Prion diseases (CJD, kuru) — untreatable, long incubation, existential dread
-- Fungal infections (Candida auris, aspergillosis) — increasingly important, limited treatment options
-- Parasitic diseases (malaria, sleeping sickness) — complex lifecycles, different intervention strategies
-
-**Your Ideas section should sketch out 8-15 disease archetypes** that would make each playthrough different. Not just "more diseases" — diseases that demand fundamentally different response strategies. A waterborne outbreak in a region with poor sanitation plays completely differently from an airborne respiratory virus in a dense urban area.
+**Your Ideas section should sketch out the disease archetypes this game needs.** Draw on what you actually know about different classes of infectious disease. Think about transmission modes, intervention strategies, what makes each archetype play differently. Don't just say "add more diseases" — describe them with enough specificity that a developer could build meaningfully distinct gameplay around each one.

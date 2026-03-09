@@ -102,13 +102,6 @@ You'd plan your entire resource allocation in advance. Not just "start this proj
 
 ## The Economy Needs More Things to Buy
 
-The fundamental economic problem isn't the numbers — it's that there are only about 5 things to spend resources on: identify, develop, trial, manufacture, deploy. That's not an economy, that's a shopping list. **Victoria 3's economy works because there are dozens of competing demands.** Think about what economic systems this game should have:
+The fundamental economic problem isn't the numbers — it's that there are only about 5 things to spend resources on: identify, develop, trial, manufacture, deploy. That's not an economy, that's a shopping list. **Victoria 3's economy works because there are dozens of competing demands.** Right now you can analyze this game's economy in 30 seconds because there are so few moving parts.
 
-- **Infrastructure investment** — build hospital capacity, surveillance networks, manufacturing plants. Upfront costs for ongoing returns.
-- **Regional economic variance** — wealthy regions contribute more funding but expect more support. Poor regions are cheaper to help but contribute less.
-- **Supply chains** — medicines need to be manufactured somewhere and shipped. Manufacturing capacity is a resource you build, not something that magically appears.
-- **International aid / loans** — emergency funding with strings attached. Take IMF money now, lose policy autonomy later.
-- **Dynamic pricing** — medicine costs increase during pandemics (supply/demand). Travel ban costs increase over time (political resistance).
-- **Personnel specialization** — epidemiologists, lab techs, field medics, logistics coordinators. Not just "5 generic personnel" but specialists who unlock different capabilities.
-
-Your Ideas section should sketch the economy this game needs — not better numbers for the existing 5 options, but 20 options that create genuine trade-offs.
+**Your Ideas section should sketch the economy this game needs.** Think about what kinds of spending would create genuine competing demands — infrastructure, supply chains, personnel specialization, regional variance, dynamic pricing, whatever your economic instincts tell you. Design an economy with enough sinks and sources that resource allocation is a real ongoing challenge, not a solved problem after tick 100.
