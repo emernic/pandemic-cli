@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, ticks_to_days};
 use crate::format_number;
 
 const EVENT_LOG_MAX: usize = 50;
@@ -59,7 +59,7 @@ pub fn process_events(state: &mut GameState) {
     }
 
     // Build log messages for each event, then pick the best for the status bar.
-    let day = state.tick as f64 / TICKS_PER_DAY;
+    let day = ticks_to_days(state.tick as f64);
     let mut log_entries: Vec<String> = Vec::new();
     let mut status_msg: Option<(u8, String)> = None; // (priority, message) — lower = more important
 
@@ -69,7 +69,7 @@ pub fn process_events(state: &mut GameState) {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
-                (0, format!("COLLAPSE: {} has fallen! {} regions remain.", region_name, remaining))
+                (0, format!("COLLAPSE: {} has fallen! {} regions remain", region_name, remaining))
             }
             GameEvent::DiseaseDetected { disease_idx } => {
                 let affected: Vec<&str> = state.regions.iter()
@@ -182,7 +182,9 @@ pub fn process_events(state: &mut GameState) {
         let status = match priority {
             0 => format!("{}. Personnel lost.", msg),
             1 => format!("{}! Use [R] Research to identify it.", msg),
-            2 => msg,
+            10 if !state.policies.iter().any(|p| p.any_active()) => {
+                format!("{}! Use [P] Policy to contain.", msg)
+            }
             _ => msg,
         };
         state.ui.status_message = Some(status);
