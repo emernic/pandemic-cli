@@ -1210,9 +1210,8 @@ impl GameState {
         income
     }
 
-    /// RP income per tick, degraded by pandemic damage (mirrors funding income).
-    /// As deaths mount, research infrastructure collapses — labs close, scientists
-    /// die or flee, supply chains break. At the loss threshold, RP income is near zero.
+    /// RP income per tick, degraded by global death toll.
+    /// Scales linearly from full at 0% deaths to 10% floor at the loss threshold.
     pub fn rp_income_rate(&self) -> f64 {
         let initial_pop = self.initial_population();
         if initial_pop <= 0.0 {
