@@ -303,6 +303,20 @@ impl RegionPolicy {
             || self.martial_law || self.nuclear_annihilation
     }
 
+    /// Count of active policy toggles (each boolean that's true, plus
+    /// screening levels above None count as 1).
+    pub fn active_count(&self) -> u32 {
+        let mut n = 0u32;
+        if self.travel_ban { n += 1; }
+        if self.quarantine { n += 1; }
+        if self.hospital_surge { n += 1; }
+        if self.border_controls { n += 1; }
+        if self.water_sanitation { n += 1; }
+        if self.martial_law { n += 1; }
+        if self.screening != ScreeningLevel::None { n += 1; }
+        n
+    }
+
     pub fn clear_all(&mut self) {
         self.travel_ban = false;
         self.quarantine = false;

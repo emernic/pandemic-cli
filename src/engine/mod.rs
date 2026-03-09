@@ -64,16 +64,19 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Political Power: drifts toward a severity-based target.
-    // Target = f(severity, time) — how much mandate the public grants.
-    // POL moves toward target at ~30%/day, so crisis hits take 1-3 days to recover.
-    // Crisis choices modify political_power directly (no separate modifier).
+    // Target = f(severity, time, active policies).
+    // Severity (deaths + infections) drives POL up — the public grants mandate.
+    // Active policies drain the target — exercising power costs political capital.
+    // POL moves toward target at ~30%/day, so crisis hits take 3-5 days to recover.
     {
         let initial_pop = new.initial_population();
         let death_frac = if initial_pop > 0.0 { new.total_dead() / initial_pop } else { 0.0 };
         let infected_frac = if initial_pop > 0.0 { new.total_infected() / initial_pop } else { 0.0 };
         let time_frac = new.tick as f64 / (30.0 * TICKS_PER_DAY);
-        let severity = death_frac.sqrt() * 3.0 + infected_frac.sqrt() * 1.5;
-        let target = (severity + time_frac * 0.3).clamp(0.0, 1.0);
+        let severity = death_frac.sqrt() * 1.0 + infected_frac.sqrt() * 0.4;
+        let active_policies: u32 = new.policies.iter().map(|p| p.active_count()).sum();
+        let policy_drain = active_policies as f64 * 0.02;
+        let target = (severity + time_frac * 0.1 - policy_drain).clamp(0.0, 0.90);
         // Drift toward target at 30% of the gap per day
         let drift_rate = 0.30 / TICKS_PER_DAY;
         let delta = (target - new.resources.political_power) * drift_rate;
@@ -2995,26 +2998,37 @@ mod tests {
 
     #[test]
     fn pol_drifts_toward_severity_target() {
+        use crate::state::RegionDiseaseState;
         let mut state = GameState::new_default(42);
-        // Start with zero POL and some infections to create a severity target > 0
+        // Start with zero POL and significant infections to create a target > 0.
+        // With the flattened curve (sqrt * 1.0), need ~8% infected for a meaningful target.
         state.resources.political_power = 0.0;
-        state.regions[0].infections[0].infected = 1_000_000.0;
+        for region in &mut state.regions {
+            region.infections.push(RegionDiseaseState {
+                disease_idx: 0, infected: 100_000_000.0, dead: 0.0, immune: 0.0,
+            });
+        }
 
         // Run several ticks — POL should drift upward toward the severity target
         let mut s = state.clone();
         for _ in 0..(TICKS_PER_DAY as u64 * 5) {
             s = tick(&s);
         }
-        assert!(s.resources.political_power > 0.10,
-            "POL should drift up significantly after 5 days with infections, got {}",
+        assert!(s.resources.political_power > 0.05,
+            "POL should drift up after 5 days with ~8% infected, got {}",
             s.resources.political_power);
     }
 
     #[test]
     fn pol_recovers_after_crisis_hit() {
+        use crate::state::RegionDiseaseState;
         let mut state = GameState::new_default(42);
-        // Give some infections so the severity target is above zero
-        state.regions[0].infections[0].infected = 500_000.0;
+        // Need large infections for meaningful POL target with flattened severity curve
+        for region in &mut state.regions {
+            region.infections.push(RegionDiseaseState {
+                disease_idx: 0, infected: 200_000_000.0, dead: 0.0, immune: 0.0,
+            });
+        }
 
         // Let POL reach a steady state over 10 days
         let mut s = state.clone();
@@ -3034,5 +3048,63 @@ mod tests {
         assert!(s.resources.political_power > after_hit + 0.05,
             "POL should recover after crisis hit: was {}, now {}",
             after_hit, s.resources.political_power);
+    }
+
+    #[test]
+    fn active_policies_drain_pol_target() {
+        use crate::state::RegionDiseaseState;
+        // Two identical states: one with policies, one without.
+        // The one with policies should have lower POL after the same time.
+        let mut base = GameState::new_default(42);
+        for region in &mut base.regions {
+            region.infections.push(RegionDiseaseState {
+                disease_idx: 0, infected: 200_000_000.0, dead: 0.0, immune: 0.0,
+            });
+        }
+        base.resources.political_power = 0.0;
+        base.resources.funding = 100_000.0; // enough to sustain policies
+
+        let mut with_policies = base.clone();
+        // Enable quarantine + hospital surge in all 6 regions = 12 active policies
+        for policy in &mut with_policies.policies {
+            policy.quarantine = true;
+            policy.hospital_surge = true;
+        }
+
+        // Run both for 10 days
+        let mut s_base = base;
+        let mut s_pol = with_policies;
+        for _ in 0..(TICKS_PER_DAY as u64 * 10) {
+            s_base = tick(&s_base);
+            s_pol = tick(&s_pol);
+        }
+
+        // 12 policies × 2% drain = 24% lower target
+        assert!(s_pol.resources.political_power < s_base.resources.political_power - 0.10,
+            "active policies should significantly reduce POL: without={:.3}, with={:.3}",
+            s_base.resources.political_power, s_pol.resources.political_power);
+    }
+
+    #[test]
+    fn pol_target_capped_at_90_percent() {
+        use crate::state::RegionDiseaseState;
+        let mut state = GameState::new_default(42);
+        // Massive deaths + infections to maximize severity
+        for region in &mut state.regions {
+            region.infections.push(RegionDiseaseState {
+                disease_idx: 0, infected: 500_000_000.0, dead: 0.0, immune: 0.0,
+            });
+            region.dead = 500_000_000.0;
+        }
+        state.resources.political_power = 0.95; // Start above the 0.90 cap
+        state.tick = TICKS_PER_DAY as u64 * 100; // far into the game
+
+        // Run a few days — POL should drift DOWN toward the 0.90 cap
+        let mut s = state;
+        for _ in 0..(TICKS_PER_DAY as u64 * 5) {
+            s = tick(&s);
+        }
+        assert!(s.resources.political_power < 0.92,
+            "POL should drift toward 0.90 cap, got {:.3}", s.resources.political_power);
     }
 }
