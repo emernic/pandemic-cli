@@ -89,7 +89,7 @@ Each subsystem module follows the same pattern:
 
 `tick()` produces `GameEvent` variants (stored in `state.events`, cleared each tick). These are ephemeral signals — `#[serde(skip)]`, not persisted.
 
-**Game-rule transitions live in `tick()`:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `tick()` sets `active_crisis` and `sim_state = Event { was_running }`. The engine decides *when* to pause, not the UI.
+**Game-rule transitions live in `tick()`:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `tick()` sets `active_crisis` and `sim_state = Event { was_running }`. On disease detection or region collapse, `tick()` sets `sim_state = Paused`. The engine decides *when* to pause, not the UI.
 
 **UI responses live in `ui::process_events()`:** After each tick, the game loop calls `process_events()` to handle UI-specific reactions (close panels on game-over, reset crisis selection) and format events into status messages. It does not mutate `sim_state`, `outcome`, or other game-rule state.
 

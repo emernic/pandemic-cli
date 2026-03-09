@@ -33,9 +33,9 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
 /// Called after each tick by the game loop / snapshot runner. This keeps
 /// human-facing strings in the UI layer, not in engine.rs.
 ///
-/// Also auto-pauses on critical events (DiseaseDetected, RegionCollapsed) so
-/// the player can react. Note: this means process_events modifies SimState,
-/// which is a game-rule concern living in the UI layer (see #713).
+/// Game-rule state transitions (pausing on game-over, disease detection,
+/// region collapse, crisis events) are handled in tick(). This function
+/// only handles UI presentation responses.
 pub fn process_events(state: &mut GameState) {
     if state.events.is_empty() {
         return;
@@ -49,12 +49,10 @@ pub fn process_events(state: &mut GameState) {
         state.ui.crisis_selection = 0;
         state.ui.crisis_auto_resolve = false;
     }
-    // Auto-pause on critical events — creates a dramatic "stop" moment
-    // so the player notices and can react before things spiral.
+    // Reset speed display when tick() auto-paused on critical events
     if state.events.iter().any(|e| matches!(e,
         GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }))
     {
-        state.sim_state = crate::state::SimState::Paused;
         state.ui.speed_multiplier = 1;
     }
 
