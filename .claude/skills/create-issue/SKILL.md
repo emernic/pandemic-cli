@@ -109,7 +109,7 @@ Think carefully about the title and body before writing. The title should be spe
 [File paths and line numbers to look at]
 ```
 
-**For design issues**, describe what area of the game needs design work and what the player experience problem is. Be specific about what's wrong or missing today. The person picking this up will play the game, think, and file concrete implementation issues — so give them enough context to understand the problem, but don't prescribe the solution. There is no fixed template; just describe the problem clearly and concisely like any other issue. The issue is done when child issues have been filed, not when code ships.
+**For design issues**, point at an area of the game. Don't narrow it — the whole point is for someone to think broadly. Don't describe what's wrong or what's missing; you don't know yet, that's the job of whoever picks it up. The issue is done when child issues have been filed, not when code ships.
 
 **CRITICAL: Investigate issues are about asking questions, not making claims.** You have NOT investigated the thing yet. You noticed something in passing while doing other work. You do not know whether it's a problem, and you do not know what the fix would be if it is. Your job is to say "hey, can someone look at this?" — nothing more.
 
