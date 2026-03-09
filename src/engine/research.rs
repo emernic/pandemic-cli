@@ -597,6 +597,71 @@ mod tests {
     }
 
     #[test]
+    fn basic_research_unlocks_tech() {
+        let mut state = GameState::new_default(42);
+        // Prereq for TargetedDrugDesign: identify any pathogen
+        state.diseases[0].knowledge = 0.5;
+        state.resources.funding = 1000.0;
+        assert!(state.unlocked_techs.is_empty());
+
+        // Navigate: Research → Basic → first project → Confirm
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Basic
+        state = apply_action(&state, &Action::Confirm);     // Enter Basic
+        state = apply_action(&state, &Action::Confirm);     // Select TargetedDrugDesign
+        state = apply_action(&state, &Action::Confirm);     // Confirm start
+        assert!(state.basic_research.is_some(), "basic research should have started");
+
+        // Advance to completion (240 ticks at 1x speed)
+        for _ in 0..240 {
+            state = tick(&state);
+        }
+        assert!(state.basic_research.is_none(), "project should be complete");
+        assert!(
+            state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign),
+            "TargetedDrugDesign should be unlocked"
+        );
+    }
+
+    #[test]
+    fn three_concurrent_research_tracks() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = 1.0;
+        state.resources.funding = 2000.0;
+        state.resources.personnel = 30;
+
+        // Start field research directly
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field
+        state = apply_action(&state, &Action::Confirm); // Select first
+        state = apply_action(&state, &Action::Confirm); // Confirm
+        assert!(state.field_research.is_some());
+
+        // Start bench research
+        state = apply_action(&state, &Action::ClosePanel);
+        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.bench_research.is_some());
+
+        // Start basic research
+        state = apply_action(&state, &Action::ClosePanel);
+        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Basic
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.basic_research.is_some());
+
+        // All three running simultaneously
+        assert!(state.field_research.is_some());
+        assert!(state.bench_research.is_some());
+        assert!(state.basic_research.is_some());
+    }
+
+    #[test]
     fn no_research_after_game_over() {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;
