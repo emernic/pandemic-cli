@@ -490,8 +490,8 @@ pub struct Region {
     /// contributes more funding per person. Default 1.0.
     #[serde(default = "default_one")]
     pub income_modifier: f64,
-    /// Lethality multiplier from baseline healthcare quality. Lower values
-    /// mean better healthcare infrastructure reduces deaths. Default 1.0.
+    /// Lethality multiplier from baseline healthcare quality. Lower = better
+    /// healthcare = fewer deaths. Stacks with `healthcare_invested`. Default 1.0.
     #[serde(default = "default_one")]
     pub healthcare_modifier: f64,
 }
