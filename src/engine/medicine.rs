@@ -7,8 +7,8 @@ use crate::state::{
 /// Execute medicine deployment: deduct funds, apply doses (with adverse effect
 /// roll for untested medicines). Pure game logic — does NOT modify UI state.
 ///
-/// Returns (navigate_back, message, adverse):
-/// - `navigate_back`: true if the caller should return to SelectRegion
+/// Returns (success, message, adverse):
+/// - `success`: true if deployment was attempted (maps to CommandResult.success)
 /// - `message`: status feedback to display (if any)
 /// - `adverse`: true if an adverse reaction occurred
 pub(super) fn deploy_medicine(
@@ -115,7 +115,7 @@ pub(super) fn deploy_medicine(
         return (true, Some(msg), adverse);
     }
 
-    (true, None, false)
+    (false, None, false)
 }
 
 /// Roll for adverse reaction on untested medicines.
