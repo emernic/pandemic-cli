@@ -1237,23 +1237,30 @@ mod tests {
     }
 
     #[test]
-    fn map_navigation_right_left() {
+    fn map_navigation_right_left_wraps() {
+        // Reading order: NA(0) → EU(2) → Asia(4) → SA(1) → Africa(3) → Oceania(5) → NA(0)
         let state = GameState::new_default(42);
         assert_eq!(state.ui.map_selection, 0); // NA
         let s = apply_action(&state, &Action::SelectRight);
         assert_eq!(s.ui.map_selection, 2); // EU
         let s = apply_action(&s, &Action::SelectRight);
-        assert_eq!(s.ui.map_selection, 4); // AS
-        // Can't go past rightmost column
+        assert_eq!(s.ui.map_selection, 4); // Asia
+        // Wraps from end of row 0 to start of row 1
         let s = apply_action(&s, &Action::SelectRight);
-        assert_eq!(s.ui.map_selection, 4);
-        let s = apply_action(&s, &Action::SelectLeft);
-        assert_eq!(s.ui.map_selection, 2); // EU
-        let s = apply_action(&s, &Action::SelectLeft);
+        assert_eq!(s.ui.map_selection, 1); // SA
+        let s = apply_action(&s, &Action::SelectRight);
+        assert_eq!(s.ui.map_selection, 3); // Africa
+        let s = apply_action(&s, &Action::SelectRight);
+        assert_eq!(s.ui.map_selection, 5); // Oceania
+        // Wraps from last region back to first
+        let s = apply_action(&s, &Action::SelectRight);
         assert_eq!(s.ui.map_selection, 0); // NA
-        // Can't go past leftmost column
+
+        // Left wraps the other direction
+        let s = apply_action(&state, &Action::SelectLeft);
+        assert_eq!(s.ui.map_selection, 5); // Oceania (wrap from first to last)
         let s = apply_action(&s, &Action::SelectLeft);
-        assert_eq!(s.ui.map_selection, 0);
+        assert_eq!(s.ui.map_selection, 3); // Africa
     }
 
     #[test]
