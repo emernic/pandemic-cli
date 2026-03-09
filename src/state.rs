@@ -732,7 +732,7 @@ impl ResearchKind {
             ResearchKind::ClinicalTrial { .. } => (25.0, 5, 160.0),
             ResearchKind::ManufactureDoses { .. } => (20.0, 3, 120.0),
             ResearchKind::GenomicSequencing { .. } => (35.0, 5, 200.0),
-            ResearchKind::TrainPersonnel => (25.0, 0, 160.0),
+            ResearchKind::TrainPersonnel => (25.0, 1, 160.0),
         }
     }
 }
