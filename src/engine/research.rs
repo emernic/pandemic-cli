@@ -39,7 +39,7 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
 
         match track {
             ResearchTrack::Field => state.field_research = Some(project),
-            ResearchTrack::Bench => state.bench_research = Some(project),
+            ResearchTrack::Applied => state.applied_research = Some(project),
             ResearchTrack::Basic => state.basic_research = Some(project),
         }
         return (true, None);
@@ -51,7 +51,7 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
 fn research_slot_mut(state: &mut GameState, track: ResearchTrack) -> &mut Option<ResearchProject> {
     match track {
         ResearchTrack::Field => &mut state.field_research,
-        ResearchTrack::Bench => &mut state.bench_research,
+        ResearchTrack::Applied => &mut state.applied_research,
         ResearchTrack::Basic => &mut state.basic_research,
     }
 }
@@ -142,7 +142,7 @@ pub(super) fn tick_research(state: &mut GameState) {
             state.field_research = None;
         }
     }
-    if let Some(ref mut project) = state.bench_research {
+    if let Some(ref mut project) = state.applied_research {
         let speed = project.speed(&state.medicines);
         project.progress += speed;
         if project.is_complete() {
@@ -169,7 +169,7 @@ pub(super) fn tick_research(state: &mut GameState) {
                 }
                 _ => {}
             }
-            state.bench_research = None;
+            state.applied_research = None;
         }
     }
     if let Some(ref mut project) = state.basic_research {
@@ -223,19 +223,19 @@ mod tests {
 
         assert!(!state.medicines[0].unlocked);
 
-        // Start bench research: Develop Antiviral-A
+        // Start applied research: Develop Antiviral-A
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Bench Research
-        state = apply_action(&state, &Action::Confirm);     // Enter Bench
+        state = apply_action(&state, &Action::SelectNext); // Applied Research
+        state = apply_action(&state, &Action::Confirm);     // Enter Applied
         state = apply_action(&state, &Action::Confirm);     // Select Develop Antiviral-A
         state = apply_action(&state, &Action::Confirm);     // Confirm
 
-        assert!(state.bench_research.is_some());
+        assert!(state.applied_research.is_some());
 
         for _ in 0..200 {
             state = tick(&state);
         }
-        assert!(state.bench_research.is_none());
+        assert!(state.applied_research.is_none());
         assert!(state.medicines[0].unlocked);
     }
 
@@ -388,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_field_and_bench_research() {
+    fn concurrent_field_and_applied_research() {
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 1000.0; // enough for both projects
@@ -401,17 +401,17 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm
         assert!(state.field_research.is_some());
 
-        // Start bench research
+        // Start applied research
         state = apply_action(&state, &Action::ClosePanel); // Back to categories
-        state = apply_action(&state, &Action::SelectNext);  // Bench Research
-        state = apply_action(&state, &Action::Confirm);     // Enter Bench
+        state = apply_action(&state, &Action::SelectNext);  // Applied Research
+        state = apply_action(&state, &Action::Confirm);     // Enter Applied
         state = apply_action(&state, &Action::Confirm);     // Select Develop
         state = apply_action(&state, &Action::Confirm);     // Confirm
-        assert!(state.bench_research.is_some());
+        assert!(state.applied_research.is_some());
 
         // Both running simultaneously
         assert!(state.field_research.is_some());
-        assert!(state.bench_research.is_some());
+        assert!(state.applied_research.is_some());
     }
 
     #[test]
@@ -441,7 +441,7 @@ mod tests {
         state.diseases[0].knowledge = 1.0;
 
         // Start and complete DevelopMedicine for medicine 0 (targets disease 0)
-        state.bench_research = Some(ResearchProject {
+        state.applied_research = Some(ResearchProject {
             kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
             progress: 24.0, // will complete on next tick
             required_ticks: 25.0,
@@ -522,13 +522,13 @@ mod tests {
         }
         state.medicines[0].doses = 0.0;
 
-        let bench = state.available_bench_projects();
+        let applied = state.available_applied_projects();
         assert!(
-            bench.iter().any(|k| matches!(k, ResearchKind::ManufactureDoses { medicine_idx: 0 })),
+            applied.iter().any(|k| matches!(k, ResearchKind::ManufactureDoses { medicine_idx: 0 })),
             "manufacture should be available for depleted medicine"
         );
 
-        state.bench_research = Some(ResearchProject {
+        state.applied_research = Some(ResearchProject {
             kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
             progress: 14.0,
             required_ticks: 15.0,
@@ -536,7 +536,7 @@ mod tests {
         });
         state = tick(&state);
 
-        assert!(state.bench_research.is_none(), "project should be complete");
+        assert!(state.applied_research.is_none(), "project should be complete");
         assert_eq!(
             state.medicines[0].doses, state.medicines[0].max_doses,
             "doses should be restored to max"
@@ -578,10 +578,10 @@ mod tests {
         let initial_personnel = state.resources.personnel;
 
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Bench Research
-        state = apply_action(&state, &Action::Confirm);     // Enter Bench
-        let bench_projects = state.available_bench_projects();
-        let train_idx = bench_projects.iter().position(|k| matches!(k,
+        state = apply_action(&state, &Action::SelectNext); // Applied Research
+        state = apply_action(&state, &Action::Confirm);     // Enter Applied
+        let applied_projects = state.available_applied_projects();
+        let train_idx = applied_projects.iter().position(|k| matches!(k,
             ResearchKind::TrainPersonnel
         )).expect("should have train personnel available");
         for _ in 0..train_idx {
@@ -589,12 +589,12 @@ mod tests {
         }
         state = apply_action(&state, &Action::Confirm); // Select
         state = apply_action(&state, &Action::Confirm); // Confirm
-        assert!(state.bench_research.is_some());
+        assert!(state.applied_research.is_some());
 
         for _ in 0..160 {
             state = tick(&state);
         }
-        assert!(state.bench_research.is_none());
+        assert!(state.applied_research.is_none());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
     }
 
@@ -608,7 +608,7 @@ mod tests {
 
         // Navigate: Research → Basic → first project → Confirm
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Applied
         state = apply_action(&state, &Action::SelectNext); // Basic
         state = apply_action(&state, &Action::Confirm);     // Enter Basic
         state = apply_action(&state, &Action::Confirm);     // Select TargetedDrugDesign
@@ -641,17 +641,17 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm
         assert!(state.field_research.is_some());
 
-        // Start bench research
+        // Start applied research
         state = apply_action(&state, &Action::ClosePanel);
-        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Applied
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
-        assert!(state.bench_research.is_some());
+        assert!(state.applied_research.is_some());
 
         // Start basic research
         state = apply_action(&state, &Action::ClosePanel);
-        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Applied
         state = apply_action(&state, &Action::SelectNext); // Basic
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
@@ -660,7 +660,7 @@ mod tests {
 
         // All three running simultaneously
         assert!(state.field_research.is_some());
-        assert!(state.bench_research.is_some());
+        assert!(state.applied_research.is_some());
         assert!(state.basic_research.is_some());
     }
 

@@ -40,9 +40,9 @@ pub struct GameState {
     /// Active field research project (Identify Threat or Clinical Trial).
     #[serde(default)]
     pub field_research: Option<ResearchProject>,
-    /// Active bench research project (Develop Medicine).
-    #[serde(default)]
-    pub bench_research: Option<ResearchProject>,
+    /// Active applied research project (Develop Medicine).
+    #[serde(default, alias = "applied_research")]
+    pub applied_research: Option<ResearchProject>,
     /// Active basic research project (tech tree unlocks).
     #[serde(default)]
     pub basic_research: Option<ResearchProject>,
@@ -852,7 +852,8 @@ impl Medicine {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchTrack {
     Field,
-    Bench,
+    #[serde(alias = "Bench")]
+    Applied,
     Basic,
 }
 
@@ -880,7 +881,7 @@ pub enum ResearchKind {
 }
 
 /// Technology nodes in the Basic Research tech tree.
-/// Each unlocks new capabilities in Applied (Bench) Research.
+/// Each unlocks new capabilities in Applied Research.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BasicTech {
     /// Unlocks targeted drug development (Antiviral / Antibiotic).
@@ -1139,7 +1140,7 @@ impl CrisisCost {
 pub enum CrisisKind {
     /// Supply chain disrupted — lose medicine doses or pay to protect them.
     SupplyDisruption { medicine_idx: usize },
-    /// Lab accident — lose bench research or spend resources to contain.
+    /// Lab accident — lose applied research or spend resources to contain.
     LabAccident,
     /// Political pressure — lift quarantine in a region or pay to resist.
     PoliticalPressure { region_idx: usize },
@@ -1212,7 +1213,7 @@ pub enum PolicyUiState {
 /// Research panel UI state machine, following the medicines panel pattern.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchUiState {
-    /// Top level: choose Field, Bench, or Basic Research category.
+    /// Top level: choose Field, Applied, or Basic Research category.
     BrowseCategories,
     /// Browsing available projects in the selected category.
     BrowseProjects { track: ResearchTrack },
@@ -1384,7 +1385,7 @@ impl UiState {
                 | None => 0,
             },
             Panel::Research => match &self.research_ui {
-                Some(ResearchUiState::BrowseCategories) => 2, // Field, Bench, Basic
+                Some(ResearchUiState::BrowseCategories) => 2, // Field, Applied, Basic
                 Some(ResearchUiState::BrowseProjects { track }) => {
                     let active = state.research_slot(*track).is_some();
                     if active {
@@ -1564,7 +1565,7 @@ impl UiState {
             Some(ResearchUiState::BrowseCategories) => {
                 let track = match self.panel_selection {
                     0 => ResearchTrack::Field,
-                    1 => ResearchTrack::Bench,
+                    1 => ResearchTrack::Applied,
                     _ => ResearchTrack::Basic,
                 };
                 self.research_ui = Some(ResearchUiState::BrowseProjects { track });
@@ -1840,7 +1841,7 @@ impl GameState {
             diseases,
             medicines,
             field_research: None,
-            bench_research: None,
+            applied_research: None,
             basic_research: None,
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
@@ -1928,10 +1929,10 @@ impl GameState {
 
     pub fn personnel_busy(&self) -> u32 {
         let field = self.field_research.as_ref().map_or(0, |p| p.personnel_assigned);
-        let bench = self.bench_research.as_ref().map_or(0, |p| p.personnel_assigned);
+        let applied = self.applied_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let basic = self.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let policy: u32 = self.policies.iter().map(|p| p.personnel_cost()).sum();
-        field + bench + basic + policy
+        field + applied + basic + policy
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -2118,7 +2119,7 @@ impl GameState {
                 );
             } else {
                 tips.push(
-                    "You identified threats but never developed a medicine. Use Bench Research to develop treatments."
+                    "You identified threats but never developed a medicine. Use Applied Research to develop treatments."
                         .to_string(),
                 );
             }
@@ -2227,7 +2228,7 @@ impl GameState {
     pub fn research_slot(&self, track: ResearchTrack) -> Option<&ResearchProject> {
         match track {
             ResearchTrack::Field => self.field_research.as_ref(),
-            ResearchTrack::Bench => self.bench_research.as_ref(),
+            ResearchTrack::Applied => self.applied_research.as_ref(),
             ResearchTrack::Basic => self.basic_research.as_ref(),
         }
     }
@@ -2236,7 +2237,7 @@ impl GameState {
     pub fn available_projects(&self, track: ResearchTrack) -> Vec<ResearchKind> {
         match track {
             ResearchTrack::Field => self.available_field_projects(),
-            ResearchTrack::Bench => self.available_bench_projects(),
+            ResearchTrack::Applied => self.available_applied_projects(),
             ResearchTrack::Basic => self.available_basic_projects(),
         }
     }
@@ -2255,9 +2256,9 @@ impl GameState {
             .collect()
     }
 
-    /// Available bench research projects (excludes currently active).
-    pub fn available_bench_projects(&self) -> Vec<ResearchKind> {
-        let active_kind = self.bench_research.as_ref().map(|p| &p.kind);
+    /// Available applied research projects (excludes currently active).
+    pub fn available_applied_projects(&self) -> Vec<ResearchKind> {
+        let active_kind = self.applied_research.as_ref().map(|p| &p.kind);
         let mut projects = Vec::new();
         for (i, med) in self.medicines.iter().enumerate() {
             if med.unlocked {
@@ -2285,7 +2286,7 @@ impl GameState {
                 }
             }
         }
-        // Train Personnel: always available as a bench project
+        // Train Personnel: always available as an applied project
         let kind = ResearchKind::TrainPersonnel;
         if active_kind != Some(&kind) {
             projects.push(kind);
@@ -2421,7 +2422,7 @@ mod tests {
             d.knowledge = KNOWLEDGE_NAME;
         }
         let tips = state.defeat_tips();
-        assert!(tips.iter().any(|t| t.contains("develop") || t.contains("Bench")),
+        assert!(tips.iter().any(|t| t.contains("develop") || t.contains("Applied")),
             "should suggest developing medicine: {:?}", tips);
     }
 }

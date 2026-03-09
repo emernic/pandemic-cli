@@ -123,7 +123,7 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 
 ### Key Game Systems
 
-- **Research pipeline**: Unknown threat → Identify (field research) → Develop medicine (bench research) → Clinical trial (field) → Deploy. One field + one bench project run simultaneously. Don't touch research without understanding this full lifecycle.
+- **Research pipeline**: Unknown threat → Identify (field research) → Develop medicine (applied research) → Clinical trial (field) → Deploy. Three tracks run simultaneously: field, applied, and basic. Don't touch research without understanding this full lifecycle.
 - **Therapy/pathogen matching**: Medicines have a `TherapyType` (Antiviral, Antibiotic, BroadSpectrum), diseases have a `PathogenType` (RnaVirus, DnaVirus, Bacterium, Prion). Efficacy depends on the match. This affects deployment, balance, and player strategy.
 - **Mutation system**: Diseases mutate over time based on pathogen type. Medicines track which strain generation they were calibrated against. Drift reduces efficacy, prompting re-trials. This creates ongoing pressure even after developing a medicine.
 

@@ -34,7 +34,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
 
     let categories = [
         ("Field Research", "Identify threats, run clinical trials", ResearchTrack::Field),
-        ("Bench Research", "Develop medicines, manufacture doses", ResearchTrack::Bench),
+        ("Applied Research", "Develop medicines, manufacture doses", ResearchTrack::Applied),
         ("Basic Research", "Unlock new therapeutic technologies", ResearchTrack::Basic),
     ];
     for (i, (name, desc, track)) in categories.iter().enumerate() {
@@ -55,7 +55,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
         let (status, status_color) = if active {
             (" [ACTIVE]", match track {
                 ResearchTrack::Field => Color::Cyan,
-                ResearchTrack::Bench => Color::Magenta,
+                ResearchTrack::Applied => Color::Magenta,
                 ResearchTrack::Basic => Color::Green,
             })
         } else {
@@ -78,7 +78,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
     let mut lines: Vec<Line> = Vec::new();
     let title = match track {
         ResearchTrack::Field => " Field Research ",
-        ResearchTrack::Bench => " Bench Research ",
+        ResearchTrack::Applied => " Applied Research ",
         ResearchTrack::Basic => " Basic Research ",
     };
     let mut has_selectable_items = false;
@@ -114,7 +114,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                 Style::default().fg(Color::DarkGray),
             )));
             let hint = match track {
-                ResearchTrack::Bench => Some("(Identify diseases to unlock medicine development)"),
+                ResearchTrack::Applied => Some("(Identify diseases to unlock medicine development)"),
                 ResearchTrack::Basic => Some("(Identify a pathogen to unlock basic research)"),
                 ResearchTrack::Field => None,
             };
@@ -338,7 +338,7 @@ fn render_active(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'
 
     let title = match track {
         ResearchTrack::Field => " Active: Field ",
-        ResearchTrack::Bench => " Active: Bench ",
+        ResearchTrack::Applied => " Active: Applied ",
         ResearchTrack::Basic => " Active: Basic ",
     };
     (title.to_string(), lines)

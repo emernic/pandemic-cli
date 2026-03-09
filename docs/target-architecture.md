@@ -107,6 +107,6 @@ When adding new event types: game-rule transitions go in `tick()`. Presentation 
 These are done. Listed for historical context only.
 
 1. **UI state machines extracted from engine** — `apply_action()` moved to `lib.rs`. Panel navigation, wizard steps, selection indices all live in `UiState` methods. Engine only exports `tick()` and `execute_command()`.
-2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_bench_projects()` → `GameState` methods. UI no longer imports from engine.
+2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_applied_projects()` → `GameState` methods. UI no longer imports from engine.
 3. **`CommandResult` type** — `execute_command()` returns `CommandResult { message, success }` instead of directly modifying UI state.
 4. **Engine god file broken up** — Research, medicine, policy, and crisis logic extracted into subsystem modules.

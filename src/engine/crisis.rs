@@ -21,8 +21,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::SupplyDisruption { medicine_idx: idx });
     }
 
-    // Lab accident: requires active bench research
-    if state.bench_research.is_some() {
+    // Lab accident: requires active applied research
+    if state.applied_research.is_some() {
         candidates.push(CrisisKind::LabAccident);
     }
 
@@ -118,10 +118,10 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
             CrisisEvent {
                 title: "Laboratory Accident".into(),
                 description: "A containment breach in your research lab threatens \
-                    to destroy the current bench project.".into(),
+                    to destroy the current applied research project.".into(),
                 option_a: CrisisOption {
                     label: "Evacuate lab".into(),
-                    description: "Lose current bench research progress".into(),
+                    description: "Lose current applied research progress".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -266,9 +266,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Emergency reroute successful — supply chain restored".into()
         }
         (CrisisKind::LabAccident, 0) => {
-            // Evacuate — lose bench research
-            state.bench_research = None;
-            "Lab evacuated — bench research project lost".into()
+            // Evacuate — lose applied research
+            state.applied_research = None;
+            "Lab evacuated — applied research project lost".into()
         }
         (CrisisKind::LabAccident, _) => {
             "Containment successful — research project saved".into()

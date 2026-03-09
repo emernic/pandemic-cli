@@ -26,7 +26,7 @@ struct Medicine {
 
 ### TherapyType × PathogenType Efficacy
 
-Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via a bench research project (ManufactureDoses: 3 personnel, 120 ticks).
+Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via an applied research project (ManufactureDoses: 3 personnel, 120 ticks).
 
 | TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Prion |
 |---|---|---|---|---|
