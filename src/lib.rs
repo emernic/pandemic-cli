@@ -347,4 +347,23 @@ mod tests {
         assert!(!state.auto_resolve_crises.contains_key("aid"),
             "manually handling a crisis should clear saved preference");
     }
+
+    #[test]
+    fn panel_hotkey_resets_to_top_when_deep_in_wizard() {
+        let state = GameState::new_default(42);
+        // Open research → enter field category → now at BrowseProjects
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.open_panel, Panel::Research);
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { .. })));
+
+        // Press R again — should reset to BrowseCategories, NOT close the panel
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.open_panel, Panel::Research);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)));
+
+        // Press R again at top level — now it closes
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.open_panel, Panel::None);
+    }
 }

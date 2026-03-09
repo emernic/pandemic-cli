@@ -2182,16 +2182,36 @@ fn default_speed() -> u8 {
 }
 
 impl UiState {
-    /// Toggle a panel open/closed. Resets selection and initializes panel-specific UI state.
+    /// Toggle a panel open/closed. If deep in a panel wizard, pressing the same
+    /// panel key resets to the top level instead of closing. Only closes when
+    /// already at the top level.
     pub fn toggle_panel(&mut self, panel: Panel, num_regions: usize) {
         if self.open_panel == panel {
-            self.open_panel = Panel::None;
-            self.panel_selection = 0;
-            match panel {
-                Panel::Medicines => self.medicine_ui = None,
-                Panel::Research => self.research_ui = None,
-                Panel::Policy => self.policy_ui = None,
-                _ => {}
+            // Check if we're deeper than the top level — if so, reset to top
+            let at_top = match panel {
+                Panel::Medicines => matches!(self.medicine_ui, Some(MedicineUiState::BrowseMedicines) | None),
+                Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseCategories) | None),
+                Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::BrowseRegions) | None),
+                _ => true,
+            };
+            if at_top {
+                self.open_panel = Panel::None;
+                self.panel_selection = 0;
+                match panel {
+                    Panel::Medicines => self.medicine_ui = None,
+                    Panel::Research => self.research_ui = None,
+                    Panel::Policy => self.policy_ui = None,
+                    _ => {}
+                }
+            } else {
+                // Reset to top level of this panel
+                self.panel_selection = 0;
+                match panel {
+                    Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
+                    Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
+                    Panel::Policy => self.policy_ui = Some(PolicyUiState::BrowseRegions),
+                    _ => {}
+                }
             }
         } else {
             self.open_panel = panel;
