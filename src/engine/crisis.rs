@@ -64,6 +64,11 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::MutationSurge { disease_idx: idx });
     }
 
+    // Filter out the most recently resolved crisis type to prevent back-to-back repeats
+    if let Some(ref last_tag) = state.last_crisis_tag {
+        candidates.retain(|k| k.tag() != last_tag.as_str());
+    }
+
     if candidates.is_empty() {
         return None;
     }
@@ -229,6 +234,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         Some(c) => c,
         None => return "No active crisis".into(),
     };
+
+    // Record this crisis type to prevent back-to-back repeats
+    state.last_crisis_tag = Some(crisis.kind.tag().to_string());
 
     // Deduct costs generically from the chosen option (affordability was
     // already checked in apply_action before we get here).
