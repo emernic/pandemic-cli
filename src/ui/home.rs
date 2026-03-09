@@ -20,26 +20,23 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
 
     let mut segments: Vec<(String, Style)> = Vec::new();
 
-    let art_lines = [
-        "",
-        "       ██████████       ",
-        "     ██░░░░░░░░░░██     ",
-        "    █░░  ██████  ░░█    ",
-        "   █░░ ██      ██ ░░█   ",
-        "   █░░██  ████  ██░░█   ",
-        "   █░░██ ██  ██ ██░░█   ",
-        "    █░░ ██ ░░ ██ ░░█    ",
-        "     ██  ██░░██  ██     ",
-        "       ████░░████       ",
-        "           ░░           ",
-        "       ████████████     ",
-        "",
+    // Block-letter "PANDEMIC" — fits in ~66 chars wide.
+    // If terminal is very narrow, we split as "PAN" / "DEMIC" per user request.
+    let pandemic_full = [
+        " ████  █████ █   █ ████  █████ █   █ █  ████ ",
+        " █   █ █   █ ██  █ █   █ █     ██ ██ █ █     ",
+        " ████  █████ █ █ █ █   █ ████  █ █ █ █ █     ",
+        " █     █   █ █  ██ █   █ █     █   █ █ █     ",
+        " █     █   █ █   █ ████  █████ █   █ █  ████ ",
     ];
-    for line in &art_lines {
+    segments.push(("\n".to_string(), red));
+    // Full "PANDEMIC" is 46 chars — fits in the ~96-char panel
+    for line in &pandemic_full {
         segments.push((format!("{}\n", line), red));
     }
 
-    segments.push(("    P A N D E M I C  C.L.I.\n".to_string(), white));
+    segments.push(("\n".to_string(), red));
+    segments.push(("              C . L . I .\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
 
     segments.push(("  ── Getting Started ──\n".to_string(), cyan));
