@@ -1258,8 +1258,8 @@ impl CrisisCost {
 pub enum CrisisKind {
     /// Supply chain disrupted — lose medicine doses or pay to protect them.
     SupplyDisruption { medicine_idx: usize },
-    /// Lab accident — lose applied research or spend resources to contain.
-    LabAccident,
+    /// Lab accident — lose applied or basic research, or spend resources to contain.
+    LabAccident { targets_basic: bool },
     /// Political pressure — lift quarantine in a region or pay to resist.
     PoliticalPressure { region_idx: usize },
     /// Staff burnout — lose personnel or pay retention bonus.
@@ -1310,7 +1310,7 @@ impl CrisisKind {
     pub fn tag(&self) -> &'static str {
         match self {
             CrisisKind::SupplyDisruption { .. } => "supply",
-            CrisisKind::LabAccident => "lab",
+            CrisisKind::LabAccident { .. } => "lab",
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::InternationalAid { .. } => "aid",
