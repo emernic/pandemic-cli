@@ -7,7 +7,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    GameCommand, GameEvent, GameOutcome, GameState, SimState,
+    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
@@ -191,8 +191,27 @@ pub fn tick(state: &GameState) -> GameState {
             let lost_personnel = 2u32.min(new.resources.personnel);
             new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
-            // Auto-pause so the player sees the collapse and can react
-            new.sim_state = SimState::Paused;
+
+            // Trigger refugee crisis toward a non-collapsed neighbor (if any).
+            // This fires immediately as a crisis event, not from the random pool.
+            if new.active_crisis.is_none() {
+                let neighbors: Vec<usize> = new.regions[i].connections.iter()
+                    .filter(|&&c| !new.regions[c].collapsed)
+                    .copied()
+                    .collect();
+                if let Some(&to) = neighbors.first() {
+                    let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to };
+                    new.active_crisis = Some(crisis::build_crisis_event(&new, kind));
+                    new.sim_state = SimState::Event {
+                        was_running: new.sim_state.is_running(),
+                    };
+                    new.events.push(GameEvent::CrisisStarted);
+                } else {
+                    new.sim_state = SimState::Paused;
+                }
+            } else {
+                new.sim_state = SimState::Paused;
+            }
         }
     }
 
@@ -2683,18 +2702,25 @@ mod tests {
     }
 
     #[test]
-    fn refugee_wave_option_a_spreads_infections() {
+    fn refugee_wave_option_a_transfers_population_and_infections() {
         let mut state = GameState::new_default(42);
         // Set up: region 0 collapsed with infections, region 1 as destination
         state.regions[0].collapsed = true;
+        state.regions[0].dead = 200_000_000.0; // 200M dead of 500M
         state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+            disease_idx: 0, infected: 10_000.0, dead: 200_000_000.0, immune: 5_000.0,
         }];
+        let survivors = state.regions[0].alive(); // 300M
+        let dest_pop_before = state.regions[1].population;
         let dest_infected_before = state.regions[1].infections
             .iter().find(|i| i.disease_idx == 0)
             .map(|i| i.infected).unwrap_or(0.0);
         setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 0);
         let after = apply_action(&state, &Action::Confirm);
+        // Population should increase by survivor count
+        assert_eq!(after.regions[1].population, dest_pop_before + survivors as u64,
+            "option A should transfer surviving population to destination");
+        // Infections should increase
         let dest_infected_after = after.regions[1].infections
             .iter().find(|i| i.disease_idx == 0)
             .map(|i| i.infected).unwrap_or(0.0);
@@ -2703,14 +2729,41 @@ mod tests {
     }
 
     #[test]
-    fn refugee_wave_option_b_loses_pol() {
+    fn refugee_wave_option_b_loses_pol_and_kills_refugees() {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 0.50;
-        let before = state.resources.political_power;
+        state.regions[0].collapsed = true;
+        let dead_before = state.regions[0].dead;
+        let survivors_before = state.regions[0].alive();
         setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.political_power - (before - 0.10)).abs() < 0.001,
-            "option B should decrease political_power by 0.10");
+        // 15% POL loss
+        assert!((after.resources.political_power - 0.35).abs() < 0.001,
+            "option B should decrease political_power by 0.15");
+        // 20% of survivors die at the border
+        let expected_deaths = survivors_before * 0.20;
+        assert!((after.regions[0].dead - dead_before - expected_deaths).abs() < 1.0,
+            "option B should kill 20% of survivors at the border");
+    }
+
+    #[test]
+    fn collapse_triggers_refugee_crisis_immediately() {
+        let mut state = GameState::new_default(42);
+        // Push region 0 right to the edge of collapse
+        let threshold = state.regions[0].collapse_threshold;
+        let pop = state.regions[0].population as f64;
+        // Need alive < pop * threshold, so dead > pop * (1 - threshold)
+        state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
+        state.regions[0].infections[0].dead = state.regions[0].dead;
+        // Ensure no other crisis is active
+        assert!(state.active_crisis.is_none());
+        // Tick should trigger collapse AND refugee crisis
+        let after = tick(&state);
+        assert!(after.regions[0].collapsed, "region should collapse");
+        assert!(after.active_crisis.is_some(), "refugee crisis should fire immediately");
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS");
+        assert!(matches!(after.sim_state, SimState::Event { .. }),
+            "sim state should be Event (not just Paused)");
     }
 
     #[test]

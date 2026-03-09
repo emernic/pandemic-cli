@@ -82,19 +82,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // --- New crisis types ---
 
-    // Refugee wave: requires at least one collapsed region with a non-collapsed neighbor
-    let collapsed_with_neighbor: Vec<(usize, usize)> = state.regions.iter().enumerate()
-        .filter(|(_, r)| r.collapsed)
-        .flat_map(|(i, r)| {
-            r.connections.iter()
-                .filter(|&&c| !state.regions[c].collapsed)
-                .map(move |&c| (i, c))
-        })
-        .collect();
-    if !collapsed_with_neighbor.is_empty() {
-        let (from, to) = collapsed_with_neighbor[rng.r#gen::<usize>() % collapsed_with_neighbor.len()];
-        candidates.push(CrisisKind::RefugeeWave { from_region: from, to_region: to });
-    }
+    // RefugeeWave is triggered deterministically on collapse (see engine/mod.rs),
+    // not generated randomly.
 
     // Data leak: requires any active research (field or applied)
     if !state.field_research.is_empty() || state.applied_research.is_some() {
@@ -257,7 +246,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 /// Build a CrisisEvent with human-readable text for the given kind.
 /// INVARIANT: option_a must ALWAYS be free (cost: None) so the player
 /// is never softlocked. Paid options go in option_b.
-fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
+pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
     let event = match &kind {
         CrisisKind::SupplyDisruption { medicine_idx } => {
@@ -420,21 +409,30 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let to_name = state.regions.get(*to_region)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let survivors = state.regions.get(*from_region)
+                .map(|r| r.alive()).unwrap_or(0.0);
+            let survivors_m = survivors / 1_000_000.0;
             CrisisEvent {
-                title: "Refugee Crisis".into(),
+                title: "REFUGEE CRISIS".into(),
                 description: format!(
-                    "Millions are fleeing the collapse of {}. {} is the nearest safe haven, \
-                     but refugees may carry infections.",
-                    from_name, to_name,
+                    "{} has fallen. {:.0}M survivors are fleeing toward {}. \
+                     Disease carriers among them WILL spread infection.",
+                    from_name, survivors_m, to_name,
                 ),
                 option_a: CrisisOption {
                     label: "Open borders".into(),
-                    description: format!("Accept refugees — infections spike in {}", to_name),
+                    description: format!(
+                        "Accept {:.0}M refugees into {}. Population rises, infections spread. But you save lives.",
+                        survivors_m, to_name,
+                    ),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Close borders (−10% POL)".into(),
-                    description: "Turn refugees away — public backlash".into(),
+                    label: "Close borders (−15% POL)".into(),
+                    description: format!(
+                        "Seal the borders. Millions die at the gates. {} stays clean. The world watches.",
+                        to_name,
+                    ),
                     cost: None, // POL cost applied in resolve
                 },
                 kind,
@@ -933,29 +931,50 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         // --- New crisis resolutions ---
 
         (CrisisKind::RefugeeWave { from_region, to_region }, 0) => {
-            // Accept refugees — spread disease from collapsed region to destination
+            // Open borders — refugees arrive with their diseases.
+            // Transfer surviving population and proportional infections.
             let from_name = state.regions.get(*from_region)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             let to_name = state.regions.get(*to_region)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            // Add infections from the collapsed region's diseases
-            let disease_states: Vec<(usize, f64)> = state.regions.get(*from_region)
+            let survivors = state.regions.get(*from_region)
+                .map(|r| r.alive()).unwrap_or(0.0);
+            // Transfer population
+            state.regions[*to_region].population += survivors as u64;
+            // Transfer infections proportional to the collapsed region's infection rate
+            let disease_states: Vec<(usize, f64, f64)> = state.regions.get(*from_region)
                 .map(|r| r.infections.iter()
-                    .filter(|i| i.infected > 0.0 || i.dead > 0.0)
-                    .map(|i| (i.disease_idx, (i.infected * 0.05).max(100.0)))
+                    .filter(|i| i.infected > 0.0)
+                    .map(|i| {
+                        // Proportion of living population that is infected
+                        let rate = if survivors > 0.0 { i.infected / survivors } else { 0.0 };
+                        (i.disease_idx, survivors * rate, survivors * (i.immune / survivors.max(1.0)))
+                    })
                     .collect())
                 .unwrap_or_default();
-            for (d_idx, infected) in &disease_states {
+            for (d_idx, infected, immune) in &disease_states {
                 let inf = crate::engine::medicine::get_or_create_infection(
                     &mut state.regions[*to_region], *d_idx);
                 inf.infected += infected;
+                inf.immune += immune;
             }
-            format!("Refugees from {} accepted into {} — infections spreading", from_name, to_name)
+            let survivors_m = survivors / 1_000_000.0;
+            format!("{:.0}M refugees from {} accepted into {} — population surging, infections spreading",
+                survivors_m, from_name, to_name)
         }
-        (CrisisKind::RefugeeWave { .. }, _) => {
-            // Close borders — lose POL
-            state.resources.political_power -= 0.10;
-            "Borders closed — refugees turned away. Public outrage.".into()
+        (CrisisKind::RefugeeWave { from_region, .. }, _) => {
+            // Close borders — refugees die at the gates, POL tanks.
+            let from_name = state.regions.get(*from_region)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            let survivors = state.regions.get(*from_region)
+                .map(|r| r.alive()).unwrap_or(0.0);
+            // 20% of refugees perish (added to the collapsed region's death toll)
+            let border_deaths = survivors * 0.20;
+            state.regions[*from_region].dead += border_deaths;
+            state.resources.political_power = (state.resources.political_power - 0.15).max(0.0);
+            let deaths_m = border_deaths / 1_000_000.0;
+            format!("Borders closed. {:.0}M dead at the gates of {}. The world is horrified.",
+                deaths_m, from_name)
         }
 
         (CrisisKind::DataLeak, 0) => {
