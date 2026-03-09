@@ -599,6 +599,11 @@ pub enum GameEvent {
         disease_idx: usize,
         region_idx: usize,
     },
+    /// A disease spread to a new region via cross-region transmission.
+    DiseaseSpreadToRegion {
+        disease_idx: usize,
+        region_idx: usize,
+    },
     /// The game just ended (win or lose). UI should pause and close panels.
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
     GameOver,

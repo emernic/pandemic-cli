@@ -134,6 +134,10 @@ pub fn tick(state: &GameState) -> GameState {
                             immune: 0.0,
                         });
                     }
+                    new.events.push(GameEvent::DiseaseSpreadToRegion {
+                        disease_idx: d_idx,
+                        region_idx: i,
+                    });
                 }
             }
         }

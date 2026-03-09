@@ -78,6 +78,18 @@ pub fn process_events(state: &mut GameState) {
         } else {
             format!("{name} has mutated.")
         }
+    } else if let Some(GameEvent::DiseaseSpreadToRegion { region_idx, .. }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::DiseaseSpreadToRegion { .. }))
+    {
+        let region_name = state.regions.get(*region_idx)
+            .map(|r| r.name.as_str())
+            .unwrap_or("Unknown");
+        let any_policy_active = state.policies.iter().any(|p| p.any_active());
+        if any_policy_active {
+            format!("Disease spreading to {region_name}.")
+        } else {
+            format!("Disease spreading to {region_name}! Use [P] Policy to contain.")
+        }
     } else {
         return;
     };
