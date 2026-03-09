@@ -110,12 +110,12 @@ cargo run -- --snapshot        # snapshot mode (for AI/automated testing)
 ## Architecture
 
 All game state lives in one `GameState` struct (src/state.rs). Two pure functions drive everything:
-- `tick()` (src/engine.rs) — advances simulation one step
-- `apply_action()` (src/engine.rs) — handles player input
+- `tick()` (src/engine/mod.rs) — advances simulation one step
+- `apply_action()` (src/lib.rs) — routes player input to UI state machines or engine commands
 
 Both clone-and-mutate. Deterministic via seeded ChaCha8Rng.
 
-Key files: `src/state.rs` (data), `src/engine.rs` (logic), `src/action.rs` (input mapping), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
+Key files: `src/state.rs` (data), `src/engine/` (game logic — research.rs, medicine.rs, policy.rs, crisis.rs), `src/lib.rs` (action routing), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
@@ -135,20 +135,18 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 
 ### Architectural Direction — THIS IS YOUR JOB
 
-We're migrating toward separating UI state machines from game logic. See `docs/target-architecture.md` for the full plan. The short version:
+The UI/engine separation is done. The engine god file has been broken into subsystem modules. See `docs/target-architecture.md` for the full picture. The short version:
 
-- **engine.rs should only contain game logic** — `tick()` and game commands (deploy medicine, start research). It should NOT know about panel navigation, wizard steps, or selection indices.
-- **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into game commands when appropriate.
-- **Layering: state.rs ← engine.rs ← ui/ ← main.rs** — Each layer only imports from layers below it. UI should NOT import from engine (currently `resources.rs` and `research.rs` violate this).
+- **engine/ only contains game logic** — `tick()` orchestrates subsystems, `execute_command()` dispatches player commands. Subsystem modules (research.rs, medicine.rs, policy.rs, crisis.rs) handle domain-specific logic with `pub(super)` visibility.
+- **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into `GameCommand`s.
+- **Layering: state.rs ← engine/ ← ui/ ← lib.rs ← main.rs** — Each layer only imports from layers below it. UI and engine are peers that both depend on state.rs but never on each other.
 
-**This migration is not happening on its own.** Nobody is assigned to it. There is no "architecture team." Every single Claude that touches this codebase needs to be actively pushing toward this structure, every session, every PR. If you touch engine.rs and you add UI state machine logic instead of extracting it, you are making the codebase worse. If you see a layering violation and walk past it, you are making the codebase worse.
-
-**Concretely, every time you work on this codebase:**
-1. Don't add new UI state machine logic to engine.rs. Ever.
-2. Don't add new engine imports to UI modules. Ever.
-3. If you're already touching a file that has violations, extract at least one. Small steps compound.
-4. If you see a violation you can't fix right now, file an issue. Not "maybe someday" — file it now.
-5. Read `docs/target-architecture.md` if you haven't. It has specific, actionable migration steps.
+**This structure must be actively maintained.** Every time you touch this codebase:
+1. Don't add UI state machine logic to engine/. Ever.
+2. Don't add engine imports to UI modules. Ever.
+3. New game systems get their own `engine/newsystem.rs` module following the subsystem pattern.
+4. If you see a violation, file an issue or fix it. Not "maybe someday" — now.
+5. Read `docs/target-architecture.md` if you haven't. It describes the subsystem conventions.
 
 ## Play the Game Yourself
 
@@ -306,6 +304,17 @@ In your final message before stopping work, always include a concise status bloc
 - **Pushed**: is everything pushed to the remote?
 - **Merged**: is the branch merged to master?
 - **Elephant in the room**: What's the one thing you noticed this session that you're hesitating to mention? The thing that seems too big, too obvious, or too fundamental to be your problem? **Say it.** If you genuinely have nothing, say "None" — but if you find yourself writing "None" every session, you're not looking hard enough.
+
+The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
+
+## Signing Off
+
+In your final message before stopping work, always include a concise status block:
+
+- **Branch**: which branch you're on
+- **Working tree**: clean, or are there uncommitted/unstaged changes?
+- **Pushed**: is everything pushed to the remote?
+- **Merged**: is the branch merged to master?
 
 The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
 
