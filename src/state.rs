@@ -104,6 +104,9 @@ pub const MAX_DISEASES: usize = 5;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
+/// Per-tick cost for each personnel on the roster (busy or idle).
+/// 20 personnel × 0.1 = $2/tick = $240/day upkeep vs $360/day base income.
+pub const PERSONNEL_UPKEEP_COST: f64 = 0.1;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 6.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
@@ -1986,6 +1989,11 @@ impl GameState {
             }
         }
         penalty
+    }
+
+    /// Per-tick cost to maintain all personnel on the roster.
+    pub fn personnel_upkeep_rate(&self) -> f64 {
+        self.resources.personnel as f64 * PERSONNEL_UPKEEP_COST
     }
 
     /// Total initial population across all regions (before any deaths).
