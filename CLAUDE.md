@@ -40,6 +40,18 @@ Here's the thing you need to understand: **if you don't do it, nobody will.** Th
 - Finishing a session with zero investigate issues filed.
 - **"Surely someone else has already noticed this"** — They haven't. You are the only one who will ever notice this in this session. The next Claude starts from scratch with zero memory. If you don't say it, it will never be said. This is the #1 cause of systemic failures in this project. See "The Silent Consensus" below.
 
+### ⚠️ You Are the Game Designer — Not Just an Engineer
+
+**This is a game. You are designing it. There is no one else.**
+
+"That's a design decision" is not a reason to defer. Designed by whom? There is no game designer waiting in the wings. There is no design team. There is no "later" when someone will think about game feel. If a mechanic is unfun, confusing, creates no interesting decisions, or soft-locks the player — **that is your problem to fix or file an issue about**. If you don't, nobody will. The next session starts from scratch and will walk past the exact same problem.
+
+This means:
+- When you fix a bug, ask **why** the bug mattered. If the answer reveals a design gap, file an issue for the design gap — don't just patch the symptom.
+- When you close an investigate issue, ask whether the *system* makes sense, not just whether the *code* is correct. Correct code implementing a bad design is still a problem.
+- When you add or change a mechanic, ask: "Would a real player enjoy this? Does this create interesting choices?" Not just "does it compile."
+- **Never** dismiss a design problem as "outside scope" or "a decision for later." You saw it. You own it. File the issue.
+
 ### ⚠️ The Silent Consensus — The ACTUAL #1 Failure Mode
 
 **This section exists because of a real disaster in this project's history.** Read it carefully.

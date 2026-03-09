@@ -157,6 +157,12 @@ Now that you understand the system, answer these questions honestly:
 
 **If you can't clearly articulate why the change improves the game, don't make it.** Close the issue as not planned (`--reason "not planned"`) or ask the user for guidance.
 
+### You Are the Game Designer
+
+**This is not optional.** You are not just an engineer executing tickets. You are the game designer. There is no one else. If a mechanic is unfun, if a system creates no interesting decisions, if a fix addresses a symptom but leaves the real design problem untouched — that is YOUR problem. Not "a design decision for later." Not "outside the scope of this issue." Yours, right now.
+
+When you fix a bug, ask: **why did this bug matter?** If the answer reveals a deeper design gap (e.g., "funding goes negative because players can't dismiss personnel"), fix the bug AND file an issue for the design gap. Don't just clamp a number and walk away. The game being unfun or nonsensical is a failure that belongs to you, because you are the only one who will ever notice it in this session. The next session starts fresh with zero memory. If you don't act on what you see, nobody will.
+
 ## Step 7: Make a Task List, Then Implement
 
 **Before writing code, write down your plan as a task list.** This keeps you honest about what's actually involved and prevents the "I'll just change this one thing" trap where you miss follow-up work.
