@@ -93,13 +93,23 @@ pub fn process_events(state: &mut GameState) {
     } else if let Some(GameEvent::DiseaseMutated { disease_idx, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
     {
-        let name = state.diseases.get(*disease_idx)
-            .map(|d| d.display_name(*disease_idx))
-            .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
+        // Only show mutation messages when the player has medicines affected by the drift.
+        // Without an outdated medicine, mutations are invisible to gameplay — showing
+        // "X has mutated" is noise the player can't act on.
         if state.has_outdated_medicine(*disease_idx) {
-            format!("{name} mutated — medicines less effective! Re-trial in [R] to recalibrate.")
+            let name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
+            // Find the worst strain efficacy across affected medicines
+            let worst_eff = state.medicines.iter()
+                .filter(|m| m.target_diseases.contains(disease_idx)
+                    && (m.tested_against.contains(disease_idx) || m.unlocked))
+                .map(|m| m.strain_efficacy(*disease_idx, &state.diseases))
+                .fold(1.0_f64, f64::min);
+            format!("{name} mutated — medicine efficacy dropped to {:.0}%! Re-trial in [R] to recalibrate.",
+                worst_eff * 100.0)
         } else {
-            format!("{name} has mutated.")
+            return; // No actionable medicine — suppress noise
         }
     } else if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
         "Crisis auto-resolved (saved preference)".to_string()
