@@ -4,9 +4,21 @@ use crate::state::{
     Disease, GameEvent, GameState, RegionDiseaseState, TransmissionVector,
 };
 
+/// Per-disease outflows computed in phase 1, applied in phase 2.
+struct DiseaseOutflows {
+    new_infections: f64,
+    new_deaths: f64,
+    new_recoveries: f64,
+}
+
 /// Spread diseases within each region. Uses `diseases` (the original tick's
 /// disease parameters) to avoid borrow conflicts — the caller passes
 /// `&state.diseases` from the immutable input while `new` is the mutable clone.
+///
+/// Uses a shared death model: `region.dead` is the single authoritative death
+/// counter. When people die from any disease, they are proportionally removed
+/// from all other diseases' infected/immune pools (dead people can't be sick
+/// with or immune to anything).
 pub(super) fn tick_spread_within(
     new: &mut GameState,
     diseases: &[Disease],
@@ -18,16 +30,15 @@ pub(super) fn tick_spread_within(
         let quarantine_active = policy.is_some_and(|p| p.quarantine);
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
+        let alive = (pop - region.dead).max(0.0);
 
-        // Total dead across ALL diseases — dead people can't catch any disease.
-        // Capped at population to prevent floating-point accumulation drift.
-        let total_dead_all: f64 = region.infections.iter()
-            .map(|i| i.dead).sum::<f64>().min(pop);
-
-        for inf in &mut region.infections {
+        // Phase 1: compute outflows for each disease without mutating yet.
+        let mut outflows: Vec<DiseaseOutflows> = Vec::with_capacity(region.infections.len());
+        for inf in &region.infections {
             if let Some(disease) = diseases.get(inf.disease_idx) {
-                let susceptible = pop - total_dead_all - inf.infected - inf.immune;
+                let susceptible = alive - inf.infected - inf.immune;
                 if susceptible <= 0.0 {
+                    outflows.push(DiseaseOutflows { new_infections: 0.0, new_deaths: 0.0, new_recoveries: 0.0 });
                     continue;
                 }
 
@@ -37,21 +48,16 @@ pub(super) fn tick_spread_within(
                 } else {
                     disease.infectivity
                 };
-                // Contact diseases spread faster when hospital surge is active
-                // (healthcare workers in close contact with patients)
                 if hospital_active {
                     infectivity *= disease.transmission.hospital_infectivity_factor();
                 }
-                // Water sanitation halves waterborne disease infectivity
                 if sanitation_active && disease.transmission == TransmissionVector::Waterborne {
                     infectivity *= 0.5;
                 }
                 let new_infections =
-                    infectivity * inf.infected * (susceptible / pop) * noise;
-                let new_infections = new_infections.max(0.0).min(susceptible);
+                    (infectivity * inf.infected * (susceptible / pop) * noise)
+                        .max(0.0).min(susceptible);
 
-                // Deaths and recoveries are concurrent outflows from the infected pool.
-                // Compute both, then scale proportionally if they exceed infected.
                 let lethality = if hospital_active {
                     disease.lethality * 0.5
                 } else {
@@ -66,13 +72,50 @@ pub(super) fn tick_spread_within(
                     new_recoveries *= scale;
                 }
 
-                inf.infected = inf.infected + new_infections - new_deaths - new_recoveries;
-                // Snap to zero when below 1 person — sub-person counts are meaningless
-                if inf.infected < 1.0 {
-                    inf.infected = 0.0;
+                outflows.push(DiseaseOutflows { new_infections, new_deaths, new_recoveries });
+            } else {
+                outflows.push(DiseaseOutflows { new_infections: 0.0, new_deaths: 0.0, new_recoveries: 0.0 });
+            }
+        }
+
+        // Phase 2: apply outflows and accumulate total deaths.
+        // Cap total deaths at alive population, then scale per-disease attribution
+        // proportionally so sum(inf.dead) stays consistent with region.dead.
+        let raw_total_deaths: f64 = outflows.iter().map(|o| o.new_deaths).sum();
+        let total_new_deaths = raw_total_deaths.min(alive);
+        let death_scale = if raw_total_deaths > 0.0 { total_new_deaths / raw_total_deaths } else { 1.0 };
+
+        for (i, outflow) in outflows.iter().enumerate() {
+            let actual_deaths = outflow.new_deaths * death_scale;
+            let inf = &mut region.infections[i];
+            inf.infected = inf.infected + outflow.new_infections - actual_deaths - outflow.new_recoveries;
+            if inf.infected < 1.0 {
+                inf.infected = 0.0;
+            }
+            inf.immune += outflow.new_recoveries;
+            inf.dead += actual_deaths; // attribution counter for display
+        }
+        region.dead += total_new_deaths;
+
+        // Phase 3: cross-disease culling. Dead people are removed from ALL
+        // diseases' pools proportionally. A person who died from Disease A
+        // might have been infected with or immune to Disease B — reduce B's
+        // pools by the fraction of the alive population that just died.
+        if total_new_deaths > 0.0 && alive > 0.0 {
+            // Each disease's pools are reduced proportionally by OTHER diseases' deaths.
+            for (i, outflow) in outflows.iter().enumerate() {
+                let inf = &mut region.infections[i];
+                // This disease's own deaths already reduced inf.infected above.
+                // Only cull for OTHER diseases' deaths.
+                let other_deaths = total_new_deaths - outflow.new_deaths * death_scale;
+                if other_deaths > 0.0 {
+                    let other_survive = 1.0 - (other_deaths / alive);
+                    inf.infected *= other_survive;
+                    inf.immune *= other_survive;
+                    if inf.infected < 1.0 {
+                        inf.infected = 0.0;
+                    }
                 }
-                inf.immune += new_recoveries;
-                inf.dead += new_deaths;
             }
         }
     }

@@ -325,6 +325,11 @@ pub struct Region {
     /// More developed regions have higher thresholds (fragile); less developed are more resilient.
     #[serde(default = "default_collapse_threshold")]
     pub collapse_threshold: f64,
+    /// Total deaths across all diseases. This is the authoritative death count —
+    /// used for susceptible calculations and population accounting. Per-disease
+    /// `RegionDiseaseState.dead` tracks attribution for display only.
+    #[serde(default)]
+    pub dead: f64,
     /// Whether this region has collapsed. Collapsed regions lose all policies,
     /// cannot conduct field research, and are cut off from flight connections.
     #[serde(default)]
@@ -350,12 +355,10 @@ impl Region {
         raw.min(self.population as f64)
     }
 
-    /// Total dead across all diseases, capped at population.
-    /// Independent SIR pools can double-count (a person "dies" in multiple
-    /// disease models), so the raw sum may exceed population.
+    /// Total dead across all diseases. Uses the shared `dead` counter which
+    /// is maintained by the simulation — no double-counting possible.
     pub fn total_dead(&self) -> f64 {
-        let raw: f64 = self.infections.iter().map(|i| i.dead).sum();
-        raw.min(self.population as f64)
+        self.dead
     }
 
     /// Total immune across all diseases, capped at population (same
@@ -1831,6 +1834,7 @@ impl GameState {
                 connections: vec![1, 2],
                 infections: vec![],
                 collapse_threshold: 0.55, // Fragile — collapses at 45% dead
+                dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1840,6 +1844,7 @@ impl GameState {
                 connections: vec![0, 3],
                 infections: vec![],
                 collapse_threshold: 0.55, // Moderate resilience — 45% dead
+                dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1849,6 +1854,7 @@ impl GameState {
                 connections: vec![0, 3, 4],
                 infections: vec![],
                 collapse_threshold: 0.50, // Developed infrastructure — 50% dead
+                dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1858,6 +1864,7 @@ impl GameState {
                 connections: vec![1, 2, 4],
                 infections: vec![],
                 collapse_threshold: 0.50, // Resilient — 50% dead
+                dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1867,6 +1874,7 @@ impl GameState {
                 connections: vec![2, 3, 5],
                 infections: vec![],
                 collapse_threshold: 0.50, // Huge population — 50% dead
+                dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1876,6 +1884,7 @@ impl GameState {
                 connections: vec![4],
                 infections: vec![],
                 collapse_threshold: 0.50, // Small but developed — 50% dead
+                dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1915,6 +1924,7 @@ impl GameState {
             dead,
             immune: 0.0,
         });
+        regions[region_idx].dead = dead;
 
         // --- Generate medicines to match diseases ---
         let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
@@ -2305,6 +2315,15 @@ impl GameState {
         for med in &mut self.medicines {
             if med.max_doses == 0.0 && med.doses > 0.0 {
                 med.max_doses = med.doses;
+            }
+        }
+        // Migrate shared death counter from per-disease attribution (pre-shared-death saves).
+        for region in &mut self.regions {
+            if region.dead == 0.0 {
+                let attributed: f64 = region.infections.iter().map(|i| i.dead).sum();
+                if attributed > 0.0 {
+                    region.dead = attributed.min(region.population as f64);
+                }
             }
         }
     }
