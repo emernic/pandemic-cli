@@ -1027,13 +1027,15 @@ impl GameState {
         let mut used_names: Vec<String> = Vec::new();
         for pathogen_type in &chosen_types {
             let pool = pathogen_type.name_pool();
-            // Pick a name not already used
-            let name = loop {
-                let idx = rng.r#gen::<usize>() % pool.len();
-                let candidate = pool[idx].to_string();
-                if !used_names.contains(&candidate) {
-                    break candidate;
-                }
+            // Pick a name not already used (with fallback to avoid infinite loop)
+            let mut available: Vec<_> = pool.iter()
+                .filter(|n| !used_names.contains(&n.to_string()))
+                .collect();
+            let name = if available.is_empty() {
+                format!("Pathogen-{}", used_names.len() + 1)
+            } else {
+                let idx = rng.r#gen::<usize>() % available.len();
+                available[idx].to_string()
             };
             used_names.push(name.clone());
 
