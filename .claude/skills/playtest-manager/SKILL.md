@@ -41,7 +41,7 @@ git checkout -b playtest-$(date +%Y%m%d-%H%M%S) origin/master
 
 Other agents are merging features constantly. Playtesting stale code generates noise, not signal.
 
-**⚠️ THIS ALSO APPLIES DURING TRIAGE (Step 4).** If you need to read source code to verify a finding, file a bug, or check current values — **re-fetch first**: `git fetch origin && git diff HEAD..origin/master -- <file>` to see if the file changed. If it did, check out the latest: `git checkout origin/master -- <file>` or just re-branch. **Never read code that might be stale. Never file issues about code that's already been changed.** This has caused real damage — issues filed about constants that were already rebalanced, bugs reported about code that was already fixed. Every time you read a source file during triage, ask yourself: "Is this still current on master?"
+**⚠️ THIS ALSO APPLIES DURING TRIAGE (Step 4).** If you need to read source code to verify a finding, file a bug, or check current values — **re-fetch first**: `git fetch origin` then use `git show origin/master:<filepath>` to see the current code on master. **Never read code that might be stale. Never file issues about code that's already been changed.** This has caused real damage — issues filed about constants that were already rebalanced, bugs reported about code that was already fixed. Every time you read a source file during triage, ask yourself: "Is this still current on master?"
 
 ## Step 2: Launch Playtest
 
