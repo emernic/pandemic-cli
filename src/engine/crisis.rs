@@ -236,6 +236,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     if let Some(cost) = &option.cost {
         state.resources.funding -= cost.funding;
         state.resources.research_points -= cost.rp;
+        state.resources.personnel = state.resources.personnel.saturating_sub(cost.personnel);
     }
 
     match (&crisis.kind, choice) {
