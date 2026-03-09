@@ -42,17 +42,17 @@ pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.01; // ~1 every 100 ticks
 /// Maximum number of simultaneous diseases.
 pub const MAX_DISEASES: usize = 8;
 
-// Policy cost constants — single source of truth.
-pub const BASE_FUNDING_INCOME: f64 = 5.0;
-pub const BASE_RP_INCOME: f64 = 0.4;
+// Economy constants — single source of truth.
+pub const BASE_FUNDING_INCOME: f64 = 3.0;
+pub const BASE_RP_INCOME: f64 = 0.15;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
-pub const TRAVEL_BAN_COST: f64 = 10.0;
-pub const QUARANTINE_COST: f64 = 8.0;
+pub const TRAVEL_BAN_COST: f64 = 6.0;
+pub const QUARANTINE_COST: f64 = 5.0;
 pub const QUARANTINE_PERSONNEL: u32 = 2;
-pub const HOSPITAL_SURGE_COST: f64 = 5.0;
+pub const HOSPITAL_SURGE_COST: f64 = 3.0;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
-pub const BORDER_SCREENING_COST: f64 = 4.0;
-pub const WATER_SANITATION_COST: f64 = 6.0;
+pub const BORDER_SCREENING_COST: f64 = 2.5;
+pub const WATER_SANITATION_COST: f64 = 4.0;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 
 /// Per-region policy toggles. Each costs funding (and optionally personnel) per tick.
@@ -662,20 +662,20 @@ impl ResearchKind {
     /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
     pub fn costs(&self, medicines: &[Medicine]) -> (f64, u32, f64) {
         match self {
-            ResearchKind::IdentifyThreat { .. } => (15.0, 5, 80.0),
+            ResearchKind::IdentifyThreat { .. } => (20.0, 5, 160.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (20.0, 3, 100.0)  // narrow: fast and cheap, single-target
+                    (30.0, 3, 200.0)  // narrow: fast and cheap, single-target
                 } else {
-                    (60.0, 10, 250.0) // broad: slow and expensive, covers all
+                    (80.0, 10, 400.0) // broad: slow and expensive, covers all
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (20.0, 5, 80.0),
-            ResearchKind::ManufactureDoses { .. } => (15.0, 3, 60.0),
-            ResearchKind::GenomicSequencing { .. } => (25.0, 5, 120.0),
-            ResearchKind::TrainPersonnel => (20.0, 0, 100.0),
+            ResearchKind::ClinicalTrial { .. } => (25.0, 5, 160.0),
+            ResearchKind::ManufactureDoses { .. } => (20.0, 3, 120.0),
+            ResearchKind::GenomicSequencing { .. } => (35.0, 5, 200.0),
+            ResearchKind::TrainPersonnel => (25.0, 0, 160.0),
         }
     }
 }
@@ -1457,7 +1457,7 @@ impl GameState {
             rng,
             resources: Resources {
                 funding: 300.0,
-                research_points: 0.0,
+                research_points: 30.0,
                 personnel: 20,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
