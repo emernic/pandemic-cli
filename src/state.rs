@@ -888,6 +888,11 @@ pub enum DeployTarget {
 }
 
 impl Medicine {
+    /// Deployment cost: base cost + $50 per billion population in the target region.
+    pub fn deploy_cost(&self, region_population: u64) -> f64 {
+        self.cost + region_population as f64 / 1_000_000_000.0 * 50.0
+    }
+
     /// Create a targeted medicine for a disease. Name format: "TherapyType-A", "TherapyType-B", etc.
     pub fn new_targeted(disease_idx: usize, pathogen_type: PathogenType) -> Medicine {
         let therapy = pathogen_type.matched_therapy();
@@ -1726,7 +1731,7 @@ impl UiState {
                 let target_selection = self.panel_selection;
                 let med = &state.medicines[medicine_idx];
                 if let Some(target) = med.decode_deploy_target(target_selection) {
-                    let deploy_cost = med.cost + state.regions[region_idx].population as f64 / 1_000_000_000.0 * 50.0;
+                    let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
                     if state.resources.funding < deploy_cost {
                         self.status_message = Some(
                             format!("Insufficient funds! Need ${:.0}, have ${:.0}",

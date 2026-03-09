@@ -326,8 +326,7 @@ fn render_select_target(
         }
     }
 
-    // Deployment cost: base + population surcharge
-    let deploy_cost = med.cost + region.population as f64 / 1_000_000_000.0 * 50.0;
+    let deploy_cost = med.deploy_cost(region.population);
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),

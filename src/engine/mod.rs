@@ -569,7 +569,7 @@ mod tests {
         let susceptible = (region.population as f64 - infected - region.dead - immune).max(0.0);
         let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
         let expected_immune = target_vaccinated.min(state.medicines[0].doses);
-        let deploy_cost = state.medicines[0].cost + region.population as f64 / 1_000_000_000.0 * 50.0;
+        let deploy_cost = state.medicines[0].deploy_cost(region.population);
         state = apply_action(&state, &Action::Confirm);
         // Computed outputs: cost deducted, immunity applied proportionally
         assert_eq!(state.resources.funding, funding_before - deploy_cost);
@@ -622,7 +622,7 @@ mod tests {
             infected_before,
             infected_after
         );
-        let deploy_cost = state.medicines[0].cost + state.regions[ri].population as f64 / 1_000_000_000.0 * 50.0;
+        let deploy_cost = state.medicines[0].deploy_cost(state.regions[ri].population);
         assert_eq!(state.resources.funding, funding_before - deploy_cost);
         // Treatment is proportional — treats TREATMENT_FRACTION * efficacy of infected
         let treated = infected_before - infected_after;
