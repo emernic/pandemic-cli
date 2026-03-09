@@ -73,13 +73,7 @@ pub fn process_events(state: &mut GameState) {
         let name = state.diseases.get(*disease_idx)
             .map(|d| d.display_name(*disease_idx))
             .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
-        // Check if any deployed/tested medicines are now outdated
-        let has_affected_medicine = state.medicines.iter().any(|m| {
-            m.target_diseases.contains(disease_idx)
-                && (m.tested_against.contains(disease_idx) || m.unlocked)
-                && m.strain_efficacy(*disease_idx, &state.diseases) < 1.0
-        });
-        if has_affected_medicine {
+        if state.has_outdated_medicine(*disease_idx) {
             format!("{name} mutated — medicines less effective! Re-trial in [R] to recalibrate.")
         } else {
             format!("{name} has mutated.")
