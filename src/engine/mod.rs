@@ -1773,6 +1773,7 @@ mod tests {
             strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
             deployed_count: 0,
             rapid: false,
+            resistance: vec![],
         };
 
         // 3 generations behind = 1.0 - 3*0.15 = 0.55
@@ -1786,6 +1787,72 @@ mod tests {
         };
         let eff2 = med_current.strain_efficacy(0, &diseases);
         assert!((eff2 - 1.0).abs() < 0.001, "expected 1.0, got {eff2}");
+    }
+
+    #[test]
+    fn resistance_builds_from_treatment_pressure() {
+        use crate::state::TherapyType;
+        let mut state = GameState::new_default(42);
+        // Find first non-prion disease and unlock its targeted medicines
+        let disease_idx = state.diseases.iter().position(|d| {
+            d.pathogen_type != crate::state::PathogenType::Prion
+        }).unwrap();
+        let med_idx = state.medicines.iter().position(|m| {
+            m.target_diseases.contains(&disease_idx)
+                && m.therapy_type != TherapyType::BroadSpectrum
+        }).unwrap();
+        state.medicines[med_idx].unlocked = true;
+        state.medicines[med_idx].tested_against.push(disease_idx);
+        state.medicines[med_idx].doses = 1_000_000_000.0;
+        state.medicines[med_idx].max_doses = 1_000_000_000.0;
+        state.resources.funding = 1_000_000.0;
+
+        // Seed infection in region 0
+        let region = &mut state.regions[0];
+        region.infections.push(crate::state::RegionDiseaseState {
+            disease_idx,
+            infected: 100_000.0,
+            dead: 0.0,
+            immune: 0.0,
+        });
+
+        // Record initial resistance
+        let initial_res = state.medicines[med_idx].resistance_factor(disease_idx);
+        assert!((initial_res - 1.0).abs() < 0.001, "should start with no resistance");
+
+        // Deploy treatment multiple times
+        for _ in 0..10 {
+            // Replenish infection for each deployment
+            if let Some(inf) = state.regions[0].infections.iter_mut().find(|i| i.disease_idx == disease_idx) {
+                inf.infected = 100_000.0;
+            }
+            state.resources.funding = 1_000_000.0;
+            let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1); // target_selection 1 = Treat
+        }
+
+        let after_res = state.medicines[med_idx].resistance_factor(disease_idx);
+        assert!(after_res < 1.0, "resistance should have built up after 10 treatments, got factor {after_res}");
+        assert!(after_res > 0.2, "resistance shouldn't be maxed after only 10 treatments, got factor {after_res}");
+
+        // Broad-spectrum builds faster
+        let bs_idx = state.medicines.iter().position(|m| {
+            m.therapy_type == TherapyType::BroadSpectrum
+        }).unwrap();
+        state.medicines[bs_idx].unlocked = true;
+        state.medicines[bs_idx].tested_against.push(disease_idx);
+        state.medicines[bs_idx].doses = 1_000_000_000.0;
+        state.medicines[bs_idx].max_doses = 1_000_000_000.0;
+
+        for _ in 0..10 {
+            if let Some(inf) = state.regions[0].infections.iter_mut().find(|i| i.disease_idx == disease_idx) {
+                inf.infected = 100_000.0;
+            }
+            state.resources.funding = 1_000_000.0;
+            let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, 1);
+        }
+
+        let bs_res = state.medicines[bs_idx].resistance_factor(disease_idx);
+        assert!(bs_res < after_res, "broad-spectrum should build resistance faster than targeted: bs={bs_res} vs targeted={after_res}");
     }
 
     #[test]

@@ -1122,6 +1122,10 @@ pub struct Medicine {
     /// Standard variants are slower to develop but have more doses and lower deploy cost.
     #[serde(default)]
     pub rapid: bool,
+    /// Per-disease resistance level (0.0–1.0), parallel to `target_diseases`.
+    /// Grows with each deployment (treatment pressure). Reduces efficacy multiplicatively.
+    #[serde(default)]
+    pub resistance: Vec<f64>,
 }
 
 /// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
@@ -1165,6 +1169,7 @@ impl Medicine {
                     strain_generations: vec![],
                     deployed_count: 0,
                     rapid: false,
+                    resistance: vec![],
                 }];
             }
         };
@@ -1187,6 +1192,7 @@ impl Medicine {
                 strain_generations: vec![],
                 deployed_count: 0,
                 rapid: true,
+                resistance: vec![],
             },
             // Standard variant: slower to develop, more doses, lower deploy cost
             Medicine {
@@ -1202,6 +1208,7 @@ impl Medicine {
                 strain_generations: vec![],
                 deployed_count: 0,
                 rapid: false,
+                resistance: vec![],
             },
         ]
     }
@@ -1227,6 +1234,16 @@ impl Medicine {
                     None => 1.0,
                 }
             }
+            None => 1.0,
+        }
+    }
+
+    /// Efficacy multiplier from resistance (0.2–1.0). Resistance builds from deployment
+    /// pressure. Floor at 0.2 so even fully-resistant medicines retain some effectiveness.
+    pub fn resistance_factor(&self, disease_idx: usize) -> f64 {
+        let pos = self.target_diseases.iter().position(|&d| d == disease_idx);
+        match pos {
+            Some(i) => (1.0 - self.resistance.get(i).copied().unwrap_or(0.0)).max(0.2),
             None => 1.0,
         }
     }
@@ -2535,6 +2552,7 @@ impl GameState {
             strain_generations: vec![],
             deployed_count: 0,
             rapid: false,
+            resistance: vec![],
         });
 
         Self {
@@ -2919,6 +2937,15 @@ impl GameState {
             m.target_diseases.contains(&disease_idx)
                 && (m.tested_against.contains(&disease_idx) || m.unlocked)
                 && m.strain_efficacy(disease_idx, &self.diseases) < 1.0
+        })
+    }
+
+    /// True if any deployed medicine targeting this disease has significant resistance (≥30%).
+    pub fn has_resistant_medicine(&self, disease_idx: usize) -> bool {
+        self.medicines.iter().any(|m| {
+            m.target_diseases.contains(&disease_idx)
+                && m.deployed_count > 0
+                && m.resistance_factor(disease_idx) < 0.7
         })
     }
 

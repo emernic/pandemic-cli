@@ -211,6 +211,12 @@ fn push_mutation_indicator(
             Style::default().fg(Color::Red),
         ));
     }
+    if state.has_resistant_medicine(disease_idx) {
+        spans.push(Span::styled(
+            "  Resistance building!".to_string(),
+            Style::default().fg(Color::Yellow),
+        ));
+    }
 }
 
 enum MedStatus {
