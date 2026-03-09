@@ -96,7 +96,7 @@ pub(super) fn deploy_medicine(
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
                     deduct_deploy_costs(state, medicine_idx, cost, actual);
-                    (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse, efficacy), adverse)
+                    (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse_deaths, efficacy), adverse)
                 } else {
                     (format!("No susceptible population in {region_name}"), false)
                 }
@@ -110,7 +110,7 @@ pub(super) fn deploy_medicine(
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
                     deduct_deploy_costs(state, medicine_idx, cost, actual);
-                    (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse, efficacy), adverse)
+                    (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse_deaths, efficacy), adverse)
                 } else {
                     (format!("No infected population in {region_name}"), false)
                 }
@@ -163,15 +163,15 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
     format!("Insufficient funds! Need ${cost:.0}, have ${have:.0}")
 }
 
-fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse: bool, efficacy: f64) -> String {
+fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse_deaths: f64, efficacy: f64) -> String {
     let doses_str = crate::format_number(doses);
     let eff_note = if efficacy < 1.0 {
         format!(" ({:.0}% efficacy)", efficacy * 100.0)
     } else {
         String::new()
     };
-    if adverse {
-        let killed = crate::format_number(doses * 0.2);
+    if adverse_deaths > 0.0 {
+        let killed = crate::format_number(adverse_deaths);
         format!("{action} {doses_str} in {region} with {med}{eff_note} (-${cost:.0}) -- ADVERSE REACTION: {killed} died")
     } else {
         format!("{action} {doses_str} in {region} with {med}{eff_note} (-${cost:.0})")
