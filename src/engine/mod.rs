@@ -1444,6 +1444,32 @@ mod tests {
     }
 
     #[test]
+    fn coinfection_increases_deaths() {
+        // With 2 diseases both above the co-infection threshold,
+        // deaths should be higher than with a single disease.
+        let mut single = GameState::new_default(42);
+        let ri = primary_outbreak_region(&single);
+        single.regions[ri].get_or_create_infection(0).infected = 100_000.0;
+
+        let mut dual = single.clone();
+        // Add a second disease with significant infection
+        dual.diseases.push(dual.diseases[0].clone());
+        dual.regions[ri].get_or_create_infection(1).infected = 100_000.0;
+
+        // Run some ticks
+        for _ in 0..100 {
+            single = tick(&single);
+            dual = tick(&dual);
+        }
+
+        let single_dead = single.regions[ri].dead;
+        let dual_dead = dual.regions[ri].dead;
+        assert!(dual_dead > single_dead,
+            "co-infection should cause more deaths: dual={:.0} vs single={:.0}",
+            dual_dead, single_dead);
+    }
+
+    #[test]
     fn burn_out_spawns_scaled_disease() {
         let mut state = GameState::new_default(42);
         // Clear all infections to simulate burn-out

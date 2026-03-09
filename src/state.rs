@@ -185,6 +185,11 @@ pub const HOSPITAL_SURGE_COST: f64 = 0.4;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
 /// Hospital Surge increases infectivity by this factor (1.25 = +25% spread).
 pub const HOSPITAL_SURGE_SPREAD_FACTOR: f64 = 1.25;
+/// Co-infection lethality multiplier per additional active disease in the same
+/// region. With 2 diseases: +25% lethality; 3 diseases: +50%.
+/// Threshold: a disease counts as "co-infecting" when it has >= 1000 infected.
+pub const COINFECTION_LETHALITY_PER_DISEASE: f64 = 0.25;
+pub const COINFECTION_THRESHOLD: f64 = 1000.0;
 pub const BORDER_CONTROLS_COST: f64 = 0.1;
 pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
 pub const WATER_SANITATION_COST: f64 = 0.3;
