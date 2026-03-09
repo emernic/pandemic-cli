@@ -44,12 +44,12 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 **Your most valuable contribution is IDEAS for extending existing systems.** When you play, think about:
 - What would make this system deeper? Not "fix the numbers" — "what if there were 10 more options here, what would they be?"
 - What's missing entirely? What systems should exist that don't?
-- What would make each playthrough different? Right now every game is the same 2 diseases with the same 3 medicines.
+- What would make each playthrough different? Right now every game starts with 1 disease and spawns up to 5, but they're drawn from a small pool.
 - What would create the "one more turn" feeling? What would make a player want to replay?
 
 **Concrete examples of what we need:**
 - "The research tree should branch — after identifying an RNA virus, you could choose between developing a polymerase inhibitor (fast, narrow) or a protease inhibitor (slow, broad resistance profile). Different mechanisms should have different resistance profiles."
-- "There should be 8-12 possible diseases drawn from a pool, not always the same 2. Each playthrough should surprise you."
+- "There should be 8-12 possible diseases drawn from a larger, more varied pool. Each playthrough should surprise you."
 - "Policies should include surveillance infrastructure, public communication campaigns, emergency funding measures, not just 3 toggles."
 - "There should be mid-game events: a mutation makes a disease airborne, a region refuses your vaccines, a supply chain breaks, a new disease emerges."
 
@@ -225,7 +225,7 @@ Moments where the game made you want something it didn't offer.
 The game has placeholder systems with 2-3 hardcoded options each. Your job is to imagine what those systems look like when they're real. Not "balance the 3 medicines better" — "what 15 medicines should exist and how should the research tree branch?"
 
 **For each existing system, ask: what would this look like with 5-10x more content?**
-- **Diseases:** Currently 2 hardcoded diseases every game. What if there were 15-20 possible diseases in a pool, with 3-5 drawn per game? What disease types, transmission modes, special mechanics?
+- **Diseases:** Currently starts with 1 disease, spawns up to 5 from a small pool. What if there were 15-20 possible diseases in a larger pool with more variety? What disease types, transmission modes, special mechanics?
 - **Medicines:** Currently 3 medicines. What if there were research trees with branching paths? Different mechanism classes (polymerase inhibitors, protease inhibitors, monoclonal antibodies, cell wall inhibitors)? Combination therapy?
 - **Research:** Currently a linear pipeline. What if there were tech trees, specialization choices, breakthrough discoveries?
 - **Policies:** Currently 3 toggles. What if there were 10-15 policy options with real trade-offs? Surveillance networks, public communication, emergency powers, international cooperation?
