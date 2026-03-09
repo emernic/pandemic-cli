@@ -19,16 +19,9 @@ pub(super) fn tick_spread_within(
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
 
-        // Dead people from ANY disease can't catch other diseases.
-        // Compute total dead across all diseases so each disease's
-        // susceptible pool accounts for cross-disease mortality.
-        let total_dead: f64 = region.infections.iter().map(|i| i.dead).sum();
-
         for inf in &mut region.infections {
             if let Some(disease) = diseases.get(inf.disease_idx) {
-                // Susceptible = population minus dead (all diseases) minus
-                // this disease's infected and immune.
-                let susceptible = (pop - total_dead - inf.infected - inf.immune).max(0.0);
+                let susceptible = pop - inf.infected - inf.dead - inf.immune;
                 if susceptible <= 0.0 {
                     continue;
                 }
