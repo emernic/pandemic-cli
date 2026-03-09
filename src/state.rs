@@ -2441,7 +2441,7 @@ impl GameState {
         }
 
         // Check if policies were ever used
-        let any_policy_active = self.policies.iter().any(|p| p.travel_ban || p.quarantine || p.hospital_surge);
+        let any_policy_active = self.policies.iter().any(|p| p.any_active());
         if !any_policy_active && tips.len() < 2 {
             // Find the worst-hit region
             let worst_region = self.regions.iter()
