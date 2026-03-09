@@ -543,7 +543,7 @@ pub struct RegionDiseaseState {
 
 /// Fundamental category of pathogen — determines behavior characteristics
 /// and which therapy types are effective.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PathogenType {
     /// Fast-mutating, high infectivity, responds to antivirals
     RnaVirus,
@@ -2693,7 +2693,12 @@ impl GameState {
             return None;
         }
 
-        // Pick a pathogen type (weighted: prions rare)
+        // Pick a pathogen type (weighted: prions rare).
+        // Enforce diversity: no type appears more than twice among active diseases.
+        let mut type_counts = HashMap::new();
+        for d in &self.diseases {
+            *type_counts.entry(d.pathogen_type).or_insert(0usize) += 1;
+        }
         let mut types = vec![
             PathogenType::RnaVirus,
             PathogenType::RnaVirus,
@@ -2703,6 +2708,16 @@ impl GameState {
         ];
         if rng.r#gen::<f64>() < 0.15 {
             types.push(PathogenType::Prion);
+        }
+        types.retain(|t| type_counts.get(t).copied().unwrap_or(0) < 2);
+        // Fallback: if all types are saturated, allow any type
+        if types.is_empty() {
+            types = vec![
+                PathogenType::RnaVirus,
+                PathogenType::DnaVirus,
+                PathogenType::Bacterium,
+                PathogenType::Prion,
+            ];
         }
         let pathogen_type = types[rng.r#gen::<usize>() % types.len()];
 

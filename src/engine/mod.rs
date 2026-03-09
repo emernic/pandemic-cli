@@ -1889,6 +1889,36 @@ mod tests {
     }
 
     #[test]
+    fn pathogen_type_diversity_enforced() {
+        use crate::state::MAX_DISEASES;
+        // Try many seeds — no seed should produce 3+ diseases of the same type
+        for seed in 0..50u64 {
+            let mut state = GameState::new_default(seed);
+            while state.diseases.len() < MAX_DISEASES {
+                let mut rng = state.rng.clone();
+                state.spawn_disease(&mut rng);
+                state.rng = rng;
+            }
+            let mut counts = std::collections::HashMap::new();
+            for d in &state.diseases {
+                *counts.entry(d.pathogen_type).or_insert(0usize) += 1;
+            }
+            for (pt, count) in &counts {
+                assert!(
+                    *count <= 2,
+                    "seed {seed}: pathogen type {pt:?} appears {count} times (max 2)",
+                );
+            }
+            // With 5 diseases and max 2 per type, we need at least 3 distinct types
+            assert!(
+                counts.len() >= 3,
+                "seed {seed}: only {} distinct pathogen types with {} diseases",
+                counts.len(), state.diseases.len(),
+            );
+        }
+    }
+
+    #[test]
     fn transmission_vector_affects_quarantine() {
         use crate::state::TransmissionVector;
 
