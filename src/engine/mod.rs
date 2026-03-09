@@ -1772,6 +1772,7 @@ mod tests {
             tested_against: vec![0],
             strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
             deployed_count: 0,
+            rapid: false,
         };
 
         // 3 generations behind = 1.0 - 3*0.15 = 0.55
@@ -1789,16 +1790,31 @@ mod tests {
 
     #[test]
     fn targeted_medicines_have_mechanism_of_action() {
-        use crate::state::{MechanismOfAction, TherapyType};
+        use crate::state::TherapyType;
 
         let state = GameState::new_default(42);
-        // First disease is an RNA virus — targeted medicine should have a viral mechanism
-        let targeted = &state.medicines[0];
-        assert!(targeted.mechanism.is_some(), "targeted medicine should have a mechanism");
-        let mech = targeted.mechanism.unwrap();
-        assert!(
-            MechanismOfAction::viral_mechanisms().contains(&mech),
-            "RNA virus medicine should have a viral mechanism, got {:?}", mech
+        // Disease 0 is never a prion — both targeted medicines should have mechanisms
+        let targeted_meds: Vec<_> = state.medicines.iter()
+            .filter(|m| m.target_diseases.contains(&0)
+                && m.therapy_type != TherapyType::BroadSpectrum)
+            .collect();
+        assert_eq!(targeted_meds.len(), 2,
+            "should have 2 targeted medicines for disease 0, got {}: {:?}",
+            targeted_meds.len(),
+            targeted_meds.iter().map(|m| &m.name).collect::<Vec<_>>());
+        for med in &targeted_meds {
+            assert!(med.mechanism.is_some(),
+                "targeted medicine '{}' should have a mechanism", med.name);
+        }
+        // The two medicines should have DIFFERENT mechanisms
+        assert_ne!(
+            targeted_meds[0].mechanism, targeted_meds[1].mechanism,
+            "two medicines for same disease should have different mechanisms"
+        );
+        // One should be rapid, one standard
+        assert_ne!(
+            targeted_meds[0].rapid, targeted_meds[1].rapid,
+            "should have one rapid and one standard variant"
         );
 
         // Broad-spectrum medicine (last one) should have no mechanism

@@ -68,12 +68,14 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 Style::default().fg(Color::White)
             };
 
+            let type_info = if let Some(mech) = med.mechanism {
+                format!("  ({} — {})", med.therapy_type.label(), mech.label())
+            } else {
+                format!("  ({})", med.therapy_type.label())
+            };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}{}", marker, med.name), style),
-                Span::styled(
-                    format!("  ({})", med.therapy_type.label()),
-                    Style::default().fg(Color::Cyan),
-                ),
+                Span::styled(type_info, Style::default().fg(Color::Cyan)),
             ]));
 
             let dc = dose_color(med);
