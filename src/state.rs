@@ -666,6 +666,15 @@ impl TransmissionVector {
             TransmissionVector::Contact => 1.15,    // 15% increase
         }
     }
+
+    /// Infectivity multiplier when water sanitation is active.
+    /// Only waterborne diseases are affected.
+    pub fn water_sanitation_factor(&self) -> f64 {
+        match self {
+            TransmissionVector::Waterborne => 0.5,  // 50% reduction
+            _ => 1.0,                                // no effect
+        }
+    }
 }
 
 /// Stat ranges for procedural disease generation.
