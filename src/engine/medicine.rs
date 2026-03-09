@@ -71,6 +71,7 @@ pub(super) fn deploy_medicine(
             1.0
         };
         let efficacy = therapy_efficacy * strain_eff * cross_reactive;
+        let vax_mult = state.vaccination_multiplier();
         let region = &mut state.regions[region_idx];
         let region_name = region.name.clone();
         let pop = region.population as f64;
@@ -92,7 +93,7 @@ pub(super) fn deploy_medicine(
                 // This mirrors treatment's scaling — each deploy is
                 // meaningful, and repeated deploys build herd immunity.
                 let susceptible = (pop - infected - dead - immune).max(0.0);
-                let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy);
+                let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
                 if actual > 0.0 {
                     let mut adverse = false;
                     let mut adverse_deaths = 0.0;

@@ -1179,8 +1179,9 @@ impl Medicine {
 
     /// Estimate how many people a vaccination deployment would protect.
     /// Returns the number of doses that would be consumed (capped by available doses).
-    pub fn estimate_vaccination(&self, susceptible: f64, efficacy: f64) -> f64 {
-        let target = susceptible * VACCINATION_FRACTION * efficacy;
+    /// `vax_multiplier` is 1.0 normally, 3.0 with VaccinePlatform tech.
+    pub fn estimate_vaccination(&self, susceptible: f64, efficacy: f64, vax_multiplier: f64) -> f64 {
+        let target = susceptible * VACCINATION_FRACTION * vax_multiplier * efficacy;
         target.min(self.doses)
     }
 
@@ -1296,6 +1297,9 @@ pub enum BasicTech {
     /// Halves genomic sequencing duration and reveals mutation stat details.
     /// Prereq: completed at least one genomic sequencing project.
     RapidSequencing,
+    /// Triples preventive vaccination effectiveness.
+    /// Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform).
+    VaccinePlatform,
 }
 
 impl BasicTech {
@@ -1306,6 +1310,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Monoclonal Antibodies",
             BasicTech::PhageTherapy => "Phage Therapy",
             BasicTech::RapidSequencing => "Rapid Sequencing",
+            BasicTech::VaccinePlatform => "Vaccine Platform",
         }
     }
 
@@ -1316,6 +1321,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Unlocks high-efficacy mAb drugs for viruses",
             BasicTech::PhageTherapy => "Unlocks phage therapy drugs for bacteria",
             BasicTech::RapidSequencing => "Halves sequencing time, reveals mutation details",
+            BasicTech::VaccinePlatform => "3x preventive vaccination effectiveness",
         }
     }
 
@@ -1345,6 +1351,11 @@ impl BasicTech {
                 // Prereq: completed at least one genomic sequencing on any disease
                 state.diseases.iter().any(|d| d.sequencing_count > 0)
             }
+            BasicTech::VaccinePlatform => {
+                // Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform)
+                state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
+                    || state.unlocked_techs.contains(&BasicTech::PhageTherapy)
+            }
         }
     }
 
@@ -1355,6 +1366,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
             BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
+            BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
         }
     }
 
@@ -1365,6 +1377,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
             BasicTech::RapidSequencing,
+            BasicTech::VaccinePlatform,
         ]
     }
 }
@@ -1398,6 +1411,7 @@ impl ResearchKind {
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
                 BasicTech::RapidSequencing => (4, 300.0, 750.0),
+                BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
             },
         }
     }
@@ -3046,6 +3060,15 @@ impl GameState {
             duration *= 0.5;
         }
         (personnel, duration, funding)
+    }
+
+    /// Vaccination effectiveness multiplier. VaccinePlatform tech triples it.
+    pub fn vaccination_multiplier(&self) -> f64 {
+        if self.unlocked_techs.contains(&BasicTech::VaccinePlatform) {
+            3.0
+        } else {
+            1.0
+        }
     }
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
