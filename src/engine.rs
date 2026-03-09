@@ -40,11 +40,16 @@ pub fn tick(state: &GameState) -> GameState {
                 }
 
                 let noise: f64 = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.1;
-                let infectivity = if quarantine_active {
-                    disease.infectivity * 0.5
+                let mut infectivity = if quarantine_active {
+                    disease.infectivity * disease.transmission.quarantine_factor()
                 } else {
                     disease.infectivity
                 };
+                // Contact diseases spread faster when hospital surge is active
+                // (healthcare workers in close contact with patients)
+                if hospital_active {
+                    infectivity *= disease.transmission.hospital_infectivity_factor();
+                }
                 let new_infections =
                     infectivity * inf.infected * (susceptible / pop) * noise;
                 let new_infections = new_infections.max(0.0).min(susceptible);
@@ -88,9 +93,8 @@ pub fn tick(state: &GameState) -> GameState {
                 .filter_map(|&conn_idx| {
                     let source_has_travel_ban =
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
-                    // Travel ban on either end reduces spread by 90%
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
-                        0.1
+                        disease.transmission.travel_ban_factor()
                     } else {
                         1.0
                     };
@@ -111,7 +115,9 @@ pub fn tick(state: &GameState) -> GameState {
 
             if !has_active_infection {
                 let roll: f64 = rng.r#gen();
-                let chance = disease.cross_region_spread * (connected_infected / 10_000.0);
+                let chance = disease.cross_region_spread
+                    * disease.transmission.cross_region_modifier()
+                    * (connected_infected / 10_000.0);
                 if roll < chance.min(0.5) {
                     // Check if there's an existing entry (e.g., from vaccination)
                     if let Some(existing) = region
@@ -1922,6 +1928,7 @@ mod tests {
         let diseases = vec![Disease {
             name: "Test".into(),
             pathogen_type: PathogenType::RnaVirus,
+            transmission: crate::state::TransmissionVector::Airborne,
             infectivity: 0.05,
             lethality: 0.01,
             cross_region_spread: 0.01,
@@ -2163,5 +2170,124 @@ mod tests {
         }
         assert!(state.bench_research.is_none());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
+    }
+
+    #[test]
+    fn transmission_vector_affects_quarantine() {
+        use crate::state::TransmissionVector;
+
+        let mut state = GameState::new_default(42);
+        let region_idx = primary_outbreak_region(&state);
+
+        // Set first disease to Contact transmission (quarantine factor = 0.30)
+        state.diseases[0].transmission = TransmissionVector::Contact;
+        state.diseases[0].infectivity = 0.02;
+        state.diseases[0].knowledge = 1.0;
+        // Give the region a big susceptible pool
+        state.regions[region_idx].infections[0].infected = 1000.0;
+
+        // Run without quarantine
+        let no_quarantine = tick(&state);
+        let inf_no_q = no_quarantine.regions[region_idx].infections[0].infected;
+
+        // Run with quarantine
+        state.policies[region_idx].quarantine = true;
+        let with_quarantine = tick(&state);
+        let inf_with_q = with_quarantine.regions[region_idx].infections[0].infected;
+
+        // Quarantine should reduce new infections significantly for Contact
+        // (quarantine_factor = 0.30, so infectivity drops to 30%)
+        assert!(inf_with_q < inf_no_q, "quarantine should reduce infections");
+
+        // Now test Waterborne (quarantine factor = 0.75, less effective)
+        state.diseases[0].transmission = TransmissionVector::Waterborne;
+        let with_q_waterborne = tick(&state);
+        let inf_with_q_wb = with_q_waterborne.regions[region_idx].infections[0].infected;
+
+        // Waterborne quarantine should be less effective than Contact quarantine
+        assert!(inf_with_q_wb > inf_with_q,
+            "waterborne quarantine should be less effective than contact quarantine");
+    }
+
+    #[test]
+    fn contact_hospital_surge_increases_infectivity() {
+        use crate::state::TransmissionVector;
+
+        let mut state = GameState::new_default(42);
+        let region_idx = primary_outbreak_region(&state);
+
+        state.diseases[0].transmission = TransmissionVector::Contact;
+        state.diseases[0].infectivity = 0.02;
+        state.diseases[0].lethality = 0.01;
+        state.regions[region_idx].infections[0].infected = 5000.0;
+
+        // Run with hospital surge but no quarantine
+        state.policies[region_idx].hospital_surge = true;
+        let with_hospital = tick(&state);
+
+        // Run Airborne with hospital surge (no infectivity penalty)
+        state.diseases[0].transmission = TransmissionVector::Airborne;
+        let with_hospital_airborne = tick(&state);
+
+        // Contact + hospital surge should have MORE new infections than Airborne + hospital surge
+        let contact_inf = with_hospital.regions[region_idx].infections[0].infected;
+        let airborne_inf = with_hospital_airborne.regions[region_idx].infections[0].infected;
+        assert!(contact_inf > airborne_inf,
+            "contact disease with hospital surge should spread faster than airborne: {} vs {}",
+            contact_inf, airborne_inf);
+    }
+
+    #[test]
+    fn transmission_vector_affects_cross_region_spread() {
+        use crate::state::TransmissionVector;
+        use rand::SeedableRng;
+
+        // Test that airborne diseases spread to new regions faster than contact
+        let mut airborne_spreads = 0u32;
+        let mut contact_spreads = 0u32;
+
+        // Run many trials to get statistical significance
+        for seed in 0..200 {
+            let mut state = GameState::new_default(42);
+            // Single disease, single region, force specific vector
+            state.diseases.truncate(1);
+            state.diseases[0].knowledge = 1.0;
+            state.diseases[0].cross_region_spread = 0.01;
+
+            // Clear all infections, place one outbreak
+            for region in &mut state.regions {
+                region.infections.clear();
+            }
+            state.regions[0].infections.push(RegionDiseaseState {
+                disease_idx: 0,
+                infected: 10_000.0,
+                dead: 0.0,
+                immune: 0.0,
+            });
+
+            // Test airborne
+            state.diseases[0].transmission = TransmissionVector::Airborne;
+            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            let after = tick(&state);
+            if after.regions.iter().skip(1).any(|r|
+                r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
+            ) {
+                airborne_spreads += 1;
+            }
+
+            // Test contact
+            state.diseases[0].transmission = TransmissionVector::Contact;
+            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            let after = tick(&state);
+            if after.regions.iter().skip(1).any(|r|
+                r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
+            ) {
+                contact_spreads += 1;
+            }
+        }
+
+        assert!(airborne_spreads > contact_spreads,
+            "airborne should spread to more regions than contact: {} vs {}",
+            airborne_spreads, contact_spreads);
     }
 }

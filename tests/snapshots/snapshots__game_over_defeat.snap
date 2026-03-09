@@ -2,23 +2,23 @@
 source: tests/snapshots.rs
 expression: output
 ---
-PANDEMIC DEFENSE   DEFEAT   Tick: 0  Funds: $300 (+$5/t)  RP: 0 (+0.4/t)  Personnel: 20  Infected: 13.2K  Dead: 0
+PANDEMIC DEFENSE   DEFEAT   Tick: 0  Funds: $300 (+$5/t)  RP: 0  Personnel: 20  Infected: 13.6K  Dead: 0
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ┌ World Map ───────────────────────────────────────────────────────────────────────────────────────┐┌ DEFEAT ──────────────────────────────────────────────────────────────────────────────────────────┐
 │╔════════════════════════════╗   ┌────────────────────────────┐   ┌────────────────────────────┐  ││                                                                                                  │
-│║North America            MOD║   │Europe                    OK│   │Asia                     MOD│  ││  Humanity has fallen. Too many lives were lost.                                                  │
-│║Inf 2.0K                    ║───│Pop: 750.0M                 │───│Inf 1.3K                    │  ││                                                                                                  │
+│║North America             OK║   │Europe                   MOD│   │Asia                     MOD│  ││  Humanity has fallen. Too many lives were lost.                                                  │
+│║Pop: 500.0M                 ║───│Inf 4.4K                    │───│Inf 5.6K                    │  ││                                                                                                  │
 │║████████████████████████████║   │████████████████████████████│   │████████████████████████████│  ││  ── Summary ──                                                                                   │
 │╚════════════════════════════╝   └────────────────────────────┘   └────────────────────────────┘  ││                                                                                                  │
 │               │               ╱                │               ╱                │                ││  Duration:       0 ticks                                                                         │
 │┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐  ││  Total Dead:     0  (0.0% of population)                                                         │
-││South America             OK│   │Africa                   MOD│   │Oceania                   OK│  ││  Survivors:      7.8B  (100.0%)                                                                  │
-││Pop: 430.0M                 │   │Inf 9.8K                    │   │Pop: 45.0M                  │  ││  Immunized:      0                                                                               │
-││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││  Still Infected: 13.2K                                                                           │
+││South America            MOD│   │Africa                    OK│   │Oceania                   OK│  ││  Survivors:      7.8B  (100.0%)                                                                  │
+││Inf 3.7K                    │   │Pop: 1.4B                   │   │Pop: 45.0M                  │  ││  Immunized:      0                                                                               │
+││████████████████████████████│   │████████████████████████████│   │████████████████████████████│  ││  Still Infected: 13.6K                                                                           │
 │└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘  ││                                                                                                  │
 │╔ North America ═════════════════════════════════════════════════════════════════════════════════╗││  ── Regions ──                                                                                   │
-│║Pop 500.0M  Alive 500.0M  Infected 2.0K  Immune 0  Dead 0                                       ║││                                                                                                  │
-│║  Unknown Pathogen #3 Inf 2.0K      Immune 0         Dead 0         Susceptible 500.0M          ║││  North America     500.0M alive         0 dead (0.0%)                                            │
+│║Pop 500.0M  Alive 500.0M  Infected 0  Immune 0  Dead 0                                          ║││                                                                                                  │
+│║  No infections                                                                                 ║││  North America     500.0M alive         0 dead (0.0%)                                            │
 │║  Connected to: Oceania                                                                         ║││  South America     430.0M alive         0 dead (0.0%)                                            │
 │║                                                                                                ║││  Europe            750.0M alive         0 dead (0.0%)                                            │
 │║                                                                                                ║││  Africa              1.4B alive         0 dead (0.0%)                                            │

@@ -1,3 +1,4 @@
+use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
@@ -235,12 +236,108 @@ impl PathogenType {
         }
     }
 
+    /// Pick a biologically plausible transmission vector for this pathogen type.
+    pub fn random_transmission(&self, rng: &mut ChaCha8Rng) -> TransmissionVector {
+        let roll: f64 = rng.r#gen();
+        match self {
+            // RNA viruses: flu, COVID (airborne), Ebola (contact), rare waterborne
+            PathogenType::RnaVirus => {
+                if roll < 0.6 { TransmissionVector::Airborne }
+                else if roll < 0.9 { TransmissionVector::Contact }
+                else { TransmissionVector::Waterborne }
+            }
+            // DNA viruses: smallpox (airborne/contact), HPV (contact)
+            PathogenType::DnaVirus => {
+                if roll < 0.4 { TransmissionVector::Airborne }
+                else if roll < 0.85 { TransmissionVector::Contact }
+                else { TransmissionVector::Waterborne }
+            }
+            // Bacteria: cholera (waterborne), TB (airborne), MRSA (contact)
+            PathogenType::Bacterium => {
+                if roll < 0.25 { TransmissionVector::Airborne }
+                else if roll < 0.60 { TransmissionVector::Contact }
+                else { TransmissionVector::Waterborne }
+            }
+            // Prions: food/contact (mad cow), never truly airborne
+            PathogenType::Prion => {
+                if roll < 0.7 { TransmissionVector::Contact }
+                else { TransmissionVector::Waterborne }
+            }
+        }
+    }
+
     /// The therapy type that's most effective against this pathogen.
     pub fn matched_therapy(&self) -> TherapyType {
         match self {
             PathogenType::RnaVirus | PathogenType::DnaVirus => TherapyType::Antiviral,
             PathogenType::Bacterium => TherapyType::Antibiotic,
             PathogenType::Prion => TherapyType::BroadSpectrum,
+        }
+    }
+}
+
+/// How a disease transmits between hosts. Determines which policies are
+/// effective and how cross-region spread works.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum TransmissionVector {
+    /// Spreads via respiratory droplets/aerosols. Fast cross-region spread.
+    /// Quarantine and travel bans are highly effective.
+    #[default]
+    Airborne,
+    /// Spreads via contaminated water/food. Harder to contain with quarantine.
+    /// Travel bans are less effective. Larger populations hit harder.
+    Waterborne,
+    /// Requires close physical contact. Slow cross-region spread.
+    /// Quarantine is extremely effective. Hospital surge is risky
+    /// (healthcare workers exposed).
+    Contact,
+}
+
+impl TransmissionVector {
+    pub fn label(&self) -> &'static str {
+        match self {
+            TransmissionVector::Airborne => "Airborne",
+            TransmissionVector::Waterborne => "Waterborne",
+            TransmissionVector::Contact => "Contact",
+        }
+    }
+
+    /// Infectivity multiplier when quarantine is active in a region.
+    /// Lower = quarantine is more effective at reducing spread.
+    pub fn quarantine_factor(&self) -> f64 {
+        match self {
+            TransmissionVector::Airborne => 0.50,   // standard: halves infectivity
+            TransmissionVector::Waterborne => 0.75,  // weak: only 25% reduction
+            TransmissionVector::Contact => 0.30,     // strong: 70% reduction
+        }
+    }
+
+    /// Cross-region spread leakage when travel ban is active.
+    /// Lower = travel ban blocks more spread.
+    pub fn travel_ban_factor(&self) -> f64 {
+        match self {
+            TransmissionVector::Airborne => 0.10,   // 90% reduction
+            TransmissionVector::Waterborne => 0.50,  // only 50% reduction
+            TransmissionVector::Contact => 0.05,     // 95% reduction
+        }
+    }
+
+    /// Multiplier on base cross-region spread chance.
+    pub fn cross_region_modifier(&self) -> f64 {
+        match self {
+            TransmissionVector::Airborne => 1.5,
+            TransmissionVector::Waterborne => 0.7,
+            TransmissionVector::Contact => 0.5,
+        }
+    }
+
+    /// Infectivity multiplier when hospital surge is active.
+    /// Contact diseases spread faster in hospitals (healthcare workers exposed).
+    pub fn hospital_infectivity_factor(&self) -> f64 {
+        match self {
+            TransmissionVector::Airborne => 1.0,
+            TransmissionVector::Waterborne => 1.0,
+            TransmissionVector::Contact => 1.15,    // 15% increase
         }
     }
 }
@@ -258,6 +355,8 @@ pub struct Disease {
     pub name: String,
     #[serde(default)]
     pub pathogen_type: PathogenType,
+    #[serde(default)]
+    pub transmission: TransmissionVector,
     pub infectivity: f64,
     pub lethality: f64,
     pub cross_region_spread: f64,
@@ -1063,6 +1162,7 @@ impl GameState {
             diseases.push(Disease {
                 name,
                 pathogen_type: *pathogen_type,
+                transmission: pathogen_type.random_transmission(&mut rng),
                 infectivity: range_val(&mut rng, ranges.infectivity),
                 lethality: range_val(&mut rng, ranges.lethality),
                 cross_region_spread: range_val(&mut rng, ranges.cross_region),
@@ -1275,6 +1375,7 @@ impl GameState {
         self.diseases.push(Disease {
             name,
             pathogen_type,
+            transmission: pathogen_type.random_transmission(rng),
             infectivity: biased_range_val(rng, ranges.infectivity),
             lethality: biased_range_val(rng, ranges.lethality),
             cross_region_spread: range_val(rng, ranges.cross_region),
