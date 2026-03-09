@@ -313,24 +313,48 @@ fn render_region_box(
             (death_fraction_at_collapse * bar_w as f64).round() as usize
         );
 
-        // Build bar character by character to insert the collapse marker
-        let mut bar_chars: Vec<(char, Color)> = Vec::with_capacity(bar_w);
-        let mut pos = 0;
-        for _ in 0..sus_w { bar_chars.push(('█', Color::Cyan)); pos += 1; }
-        for _ in 0..inf_w { bar_chars.push(('█', Color::Red)); pos += 1; }
-        for _ in 0..imm_w { bar_chars.push(('█', Color::Green)); pos += 1; }
-        for _ in 0..dead_w { bar_chars.push(('█', Color::DarkGray)); pos += 1; }
-        // Fill remaining with healthy
-        while pos < bar_w { bar_chars.push(('█', Color::Cyan)); pos += 1; }
+        // Build bar segments, splitting at collapse marker position
+        let show_marker = !region.collapsed && collapse_pos > 0 && collapse_pos < bar_w;
+        let segments: [(usize, Color); 4] = [
+            (sus_w, Color::Cyan),
+            (inf_w, Color::Red),
+            (imm_w, Color::Green),
+            (dead_w, Color::DarkGray),
+        ];
 
-        // Place collapse marker (overwrite the char at that position)
-        if !region.collapsed && collapse_pos > 0 && collapse_pos < bar_w {
-            bar_chars[collapse_pos] = ('▼', Color::Red);
+        let mut spans = Vec::new();
+        let mut char_idx = 0;
+        for (width, color) in segments {
+            if width == 0 { continue; }
+            let seg_start = char_idx;
+            let seg_end = char_idx + width;
+            if show_marker && collapse_pos > seg_start && collapse_pos < seg_end {
+                // Split this segment around the marker
+                let before = collapse_pos - seg_start;
+                if before > 0 {
+                    spans.push(Span::styled("█".repeat(before), Style::default().fg(color)));
+                }
+                spans.push(Span::styled("▼", Style::default().fg(Color::Red)));
+                let after = seg_end - collapse_pos - 1;
+                if after > 0 {
+                    spans.push(Span::styled("█".repeat(after), Style::default().fg(color)));
+                }
+            } else if show_marker && collapse_pos == seg_start {
+                // Marker at the very start of this segment
+                spans.push(Span::styled("▼", Style::default().fg(Color::Red)));
+                if width > 1 {
+                    spans.push(Span::styled("█".repeat(width - 1), Style::default().fg(color)));
+                }
+            } else {
+                spans.push(Span::styled("█".repeat(width), Style::default().fg(color)));
+            }
+            char_idx = seg_end;
         }
-
-        let spans: Vec<Span> = bar_chars.iter().map(|(ch, color)| {
-            Span::styled(ch.to_string(), Style::default().fg(*color))
-        }).collect();
+        // Fill remaining with healthy (if rounding left gaps)
+        if char_idx < bar_w {
+            let remaining = bar_w - char_idx;
+            spans.push(Span::styled("█".repeat(remaining), Style::default().fg(Color::Cyan)));
+        }
 
         lines.push(Line::from(spans));
     }
