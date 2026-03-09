@@ -114,7 +114,7 @@ RNG is seeded (ChaCha8Rng). Seed is stored in state. Same state + same inputs = 
 
 ## Real-Time With Pause
 
-Simulation advances in discrete ticks (internal unit). The UI displays "days" (1 day = 100 ticks, so ~4 ticks = 1 hour). "Real-time" = ticks fire automatically. "Pause" = they don't. `SimState` tracks running/paused/event modes. Saves are always at a tick boundary. The engine has no concept of wall-clock time.
+Simulation advances in discrete ticks (internal unit). The UI displays "days" (1 day = 120 ticks, so 5 ticks = 1 hour). "Real-time" = ticks fire automatically. "Pause" = they don't. `SimState` tracks running/paused/event modes. Saves are always at a tick boundary. The engine has no concept of wall-clock time.
 
 ## Module Map
 
