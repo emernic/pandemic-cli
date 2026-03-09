@@ -128,23 +128,23 @@ Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicin
 
 ### ⚠️ Time Scale — READ THIS CAREFULLY
 
-**The game UI displays "days" — one in-game day is about 50 seconds of real time for a human player.** A full game is expected to last 20-40 days, which is 1-2 hours of real-time play. We're not there yet content-wise, but that's the target.
+**The game UI displays "days" — one in-game day is about 1 minute of real time for a human player** (120 ticks at 500ms each). A full game is expected to last 20-40 days, which is 20-40 minutes of real-time play. We're not there yet content-wise, but that's the target.
 
 **The reference table:**
 
 | Days | Real time | Game phase |
 |------|-----------|------------|
-| 1 | ~50 seconds | Very early — player is still orienting |
-| 5 | ~4 minutes | Early game — player is settling into strategy |
-| 20 | ~17 minutes | Mid game — core loop should be engaging |
-| 50 | ~42 minutes | Late game — player should feel the endgame approaching |
-| 100+ | 80+ minutes | Full session — the kind of run a dedicated player does |
+| 1 | ~1 minute | Very early — player is still orienting |
+| 5 | ~5 minutes | Early game — player is settling into strategy |
+| 20 | ~20 minutes | Mid game — core loop should be engaging |
+| 40 | ~40 minutes | Late game — player should feel the endgame approaching |
+| 60+ | 60+ minutes | Full session — the kind of run a dedicated player does |
 
 **This changes how you evaluate EVERYTHING:**
-- "1 day before first action is possible" = **50 seconds**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
-- "RP piles up by day 5" = RP piles up after **4 minutes**. That might be a real problem, but frame it correctly — "within the first 4 minutes of play, the player has more RP than they can ever spend."
-- "Game feels over after 1 day" = game feels over after **50 seconds**. Either you're wrong about it feeling over, or there's a catastrophic pacing problem. Think carefully about which.
-- "I played 5 days and nothing changed" = you played for **4 minutes**. In Crusader Kings, 4 minutes is barely enough to unpause and read your starting situation.
+- "1 day before first action is possible" = **1 minute**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
+- "RP piles up by day 5" = RP piles up after **5 minutes**. That might be a real problem, but frame it correctly — "within the first 5 minutes of play, the player has more RP than they can ever spend."
+- "Game feels over after 1 day" = game feels over after **1 minute**. Either you're wrong about it feeling over, or there's a catastrophic pacing problem. Think carefully about which.
+- "I played 5 days and nothing changed" = you played for **5 minutes**. In Crusader Kings, 5 minutes is barely enough to unpause and read your starting situation.
 
 **When writing your report, ALWAYS include the real-time equivalent next to day counts.** Don't write "by day 3" — write "by day 3 (~2.5 min)." This forces you to confront whether your complaint makes sense at human scale.
 
