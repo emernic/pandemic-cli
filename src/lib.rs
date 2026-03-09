@@ -92,21 +92,11 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 };
             }
         }
-        Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
-        Action::OpenResearch => new.ui.toggle_panel(Panel::Research),
-        Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines),
-        Action::OpenPolicy => {
-            let was_open = new.ui.open_panel == Panel::Policy;
-            new.ui.toggle_panel(Panel::Policy);
-            if !was_open {
-                // Pre-select the region matching the current map selection
-                let order = state::grid_reading_order(new.regions.len());
-                if let Some(pos) = order.iter().position(|&idx| idx == new.ui.map_selection) {
-                    new.ui.panel_selection = pos;
-                }
-            }
-        }
-        Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
+        Action::OpenThreats => new.ui.toggle_panel(Panel::Threats, new.regions.len()),
+        Action::OpenResearch => new.ui.toggle_panel(Panel::Research, new.regions.len()),
+        Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines, new.regions.len()),
+        Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy, new.regions.len()),
+        Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(),
         Action::SelectNext => {
             // In ViewActive, up/down adjusts personnel assignment
