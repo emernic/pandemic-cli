@@ -83,7 +83,7 @@ pub(super) fn deploy_medicine(
             .tested_against
             .contains(&disease_idx);
 
-        let (msg, adverse) = match target {
+        let (mut msg, adverse) = match target {
             DeployTarget::Vaccinate { .. } => {
                 let susceptible = (pop - infected - dead - immune).max(0.0);
                 let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
@@ -115,6 +115,18 @@ pub(super) fn deploy_medicine(
                 }
             }
         };
+
+        // Warn if resistance is building — the player needs to know their medicine
+        // is becoming less effective so they can research alternatives.
+        if let Some(disease) = state.diseases.get(disease_idx) {
+            let mech = state.medicines[medicine_idx].mechanism;
+            let res_factor = disease.resistance_factor(mech);
+            if res_factor < 0.5 {
+                msg += " \u{26a0} HIGH RESISTANCE — consider alternative therapy";
+            } else if res_factor < 0.7 {
+                msg += " \u{26a0} Resistance building — efficacy declining";
+            }
+        }
 
         return (true, Some(msg), adverse);
     }
