@@ -3732,5 +3732,9 @@ mod tests {
         assert!(state.enacted_decrees.sacrificed_region.is_some());
         let sacrificed_idx = state.enacted_decrees.sacrificed_region.unwrap();
         assert!(state.regions[sacrificed_idx].collapsed);
+
+        // UI should return to BrowseRegions after successful sacrifice
+        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions),
+            "should return to BrowseRegions after enacting sacrifice");
     }
 }

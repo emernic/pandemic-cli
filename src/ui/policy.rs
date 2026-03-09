@@ -407,7 +407,7 @@ fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>) {
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        format!("  The chosen region will be abandoned. Remaining regions"),
+        "  The chosen region will be abandoned. Remaining regions",
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(Span::styled(
