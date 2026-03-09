@@ -1097,6 +1097,32 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
     event
 }
 
+/// Activate a crisis: check for a saved auto-resolve preference and either
+/// resolve immediately or pause the game for player input.
+/// Called from tick() for both scheduled and randomly generated crises.
+pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
+    use crate::state::GameEvent;
+
+    let auto_choice = state.auto_resolve_crises.get(crisis.kind.tag()).copied();
+    let can_auto = match auto_choice {
+        Some(choice) => {
+            let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
+            option.cost.as_ref().map_or(true, |c| c.affordable(state))
+        }
+        None => false,
+    };
+    state.active_crisis = Some(crisis);
+    if can_auto {
+        resolve_crisis(state, auto_choice.unwrap());
+        state.events.push(GameEvent::CrisisAutoResolved);
+    } else {
+        state.sim_state = crate::state::SimState::Event {
+            was_running: state.sim_state.is_running(),
+        };
+        state.events.push(GameEvent::CrisisStarted);
+    }
+}
+
 /// Apply the chosen crisis resolution. Returns a status message.
 pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     let crisis = match state.active_crisis.take() {
