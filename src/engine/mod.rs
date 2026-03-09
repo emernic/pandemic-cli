@@ -128,6 +128,8 @@ pub fn tick(state: &GameState) -> GameState {
         if total >= effective_threshold {
             new.diseases[disease_idx].detected = true;
             new.events.push(GameEvent::DiseaseDetected { disease_idx });
+            // Auto-pause so the player sees the detection and can react
+            new.sim_state = SimState::Paused;
         }
     }
 
@@ -194,6 +196,8 @@ pub fn tick(state: &GameState) -> GameState {
                 policy.clear_all();
             }
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
+            // Auto-pause so the player sees the collapse and can react
+            new.sim_state = SimState::Paused;
         }
     }
 
@@ -2224,13 +2228,14 @@ mod tests {
         let mut auto_resolved = false;
         for _ in 0..5000 {
             state = tick(&state);
-            // If a personnel crisis auto-resolved, the game stays running (not Event state)
+            // If a personnel crisis auto-resolved, the game isn't in Event state
+            // (it may be Paused from a DiseaseDetected in the same tick, which is fine)
             if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
                 auto_resolved = true;
                 assert!(state.active_crisis.is_none(),
                     "crisis should be resolved immediately");
-                assert!(state.sim_state.is_running(),
-                    "game should still be running after auto-resolve");
+                assert!(!matches!(state.sim_state, SimState::Event { .. }),
+                    "sim_state should not be Event after auto-resolve, got {:?}", state.sim_state);
                 break;
             }
             // If a non-personnel crisis fires, it should pause normally
