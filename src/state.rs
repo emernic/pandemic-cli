@@ -617,6 +617,24 @@ impl Region {
         self.infections.iter().find(|i| i.disease_idx == disease_idx)
     }
 
+    /// Get or create an infection entry for the given disease. Prevents duplicate
+    /// entries for the same disease_idx, which would cause silent data corruption
+    /// (only the first entry is visible to `disease_state()`).
+    pub fn get_or_create_infection(&mut self, disease_idx: usize) -> &mut RegionDiseaseState {
+        let pos = self.infections.iter().position(|i| i.disease_idx == disease_idx);
+        if let Some(idx) = pos {
+            &mut self.infections[idx]
+        } else {
+            self.infections.push(RegionDiseaseState {
+                disease_idx,
+                infected: 0.0,
+                dead: 0.0,
+                immune: 0.0,
+            });
+            self.infections.last_mut().unwrap()
+        }
+    }
+
     /// Total infected from detected diseases only (for UI display).
     pub fn detected_infected(&self, diseases: &[Disease]) -> f64 {
         self.infections.iter()

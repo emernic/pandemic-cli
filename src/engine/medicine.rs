@@ -4,22 +4,6 @@ use crate::state::{
     DeployTarget, GameOutcome, GameState, RegionDiseaseState,
 };
 
-/// Find or create a RegionDiseaseState entry for the given disease in a region.
-pub(super) fn get_or_create_infection(region: &mut crate::state::Region, disease_idx: usize) -> &mut RegionDiseaseState {
-    let pos = region.infections.iter().position(|i| i.disease_idx == disease_idx);
-    if let Some(idx) = pos {
-        &mut region.infections[idx]
-    } else {
-        region.infections.push(RegionDiseaseState {
-            disease_idx,
-            infected: 0.0,
-            dead: 0.0,
-            immune: 0.0,
-        });
-        region.infections.last_mut().unwrap()
-    }
-}
-
 /// Execute medicine deployment: deduct funds, apply doses (with adverse effect
 /// roll for untested medicines). Pure game logic — does NOT modify UI state.
 ///
@@ -89,7 +73,7 @@ pub(super) fn deploy_medicine(
                 let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
                 if actual > 0.0 {
                     let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
-                    let inf = get_or_create_infection(region, disease_idx);
+                    let inf = region.get_or_create_infection(disease_idx);
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
                     deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
@@ -103,7 +87,7 @@ pub(super) fn deploy_medicine(
                 let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
                 if actual > 0.0 {
                     let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
-                    let inf = get_or_create_infection(region, disease_idx);
+                    let inf = region.get_or_create_infection(disease_idx);
                     inf.infected -= actual;
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;

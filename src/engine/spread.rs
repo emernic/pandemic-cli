@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, PathogenType, RegionDiseaseState,
+    Disease, GameEvent, GameState, PathogenType,
     HOSPITAL_SURGE_SPREAD_FACTOR, TICKS_PER_DAY,
 };
 
@@ -205,21 +205,7 @@ pub(super) fn tick_spread_cross_region(
                     // Seed proportional to connected infected — a larger outbreak
                     // next door means more travelers carrying the disease.
                     let seed_count = (connected_infected * 0.001).clamp(1.0, 1000.0);
-                    // Check if there's an existing entry (e.g., from vaccination)
-                    if let Some(existing) = region
-                        .infections
-                        .iter_mut()
-                        .find(|inf| inf.disease_idx == d_idx)
-                    {
-                        existing.infected = seed_count;
-                    } else {
-                        region.infections.push(RegionDiseaseState {
-                            disease_idx: d_idx,
-                            infected: seed_count,
-                            dead: 0.0,
-                            immune: 0.0,
-                        });
-                    }
+                    region.get_or_create_infection(d_idx).infected = seed_count;
                     // Only notify the player about detected diseases spreading
                     if new.diseases[d_idx].detected {
                         new.events.push(GameEvent::DiseaseSpreadToRegion {

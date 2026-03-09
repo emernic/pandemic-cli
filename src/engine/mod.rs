@@ -604,12 +604,7 @@ mod tests {
         let clean_region = (0..state.regions.len())
             .find(|&i| !state.regions[i].infections.iter().any(|inf| inf.disease_idx == 0))
             .expect("should have an uninfected region");
-        state.regions[clean_region].infections.push(RegionDiseaseState {
-            disease_idx: 0,
-            infected: 0.0,
-            dead: 0.0,
-            immune: 100_000_000.0,
-        });
+        state.regions[clean_region].get_or_create_infection(0).immune = 100_000_000.0;
         let mut s = state;
         for _ in 0..200 {
             s = tick(&s);
@@ -1357,18 +1352,12 @@ mod tests {
 
     #[test]
     fn multi_disease_dead_never_exceeds_population() {
-        use crate::state::RegionDiseaseState;
         let mut state = GameState::new_default(42);
         let ri = primary_outbreak_region(&state);
         let pop = state.regions[ri].population as f64;
         // Add a second disease with heavy infection in the same region
         state.diseases.push(state.diseases[0].clone());
-        state.regions[ri].infections.push(RegionDiseaseState {
-            disease_idx: 1,
-            infected: pop * 0.3,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        state.regions[ri].get_or_create_infection(1).infected = pop * 0.3;
         // Also boost first disease
         state.regions[ri].infections[0].infected = pop * 0.3;
         // Run many ticks — both diseases should share the population
@@ -1881,13 +1870,7 @@ mod tests {
         state.resources.funding = 1_000_000.0;
 
         // Seed infection in region 0
-        let region = &mut state.regions[0];
-        region.infections.push(crate::state::RegionDiseaseState {
-            disease_idx,
-            infected: 100_000.0,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        state.regions[0].get_or_create_infection(disease_idx).infected = 100_000.0;
 
         // Record initial resistance
         let initial_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
@@ -3312,15 +3295,12 @@ mod tests {
 
     #[test]
     fn pol_drifts_toward_severity_target() {
-        use crate::state::RegionDiseaseState;
         let mut state = GameState::new_default(42);
         // Start with zero POL and significant infections to create a target > 0.
         // With the flattened curve (sqrt * 1.0), need ~8% infected for a meaningful target.
         state.resources.political_power = 0.0;
         for region in &mut state.regions {
-            region.infections.push(RegionDiseaseState {
-                disease_idx: 0, infected: 100_000_000.0, dead: 0.0, immune: 0.0,
-            });
+            region.get_or_create_infection(0).infected = 100_000_000.0;
         }
 
         // Run several ticks — POL should drift upward toward the severity target
@@ -3335,13 +3315,10 @@ mod tests {
 
     #[test]
     fn pol_recovers_after_crisis_hit() {
-        use crate::state::RegionDiseaseState;
         let mut state = GameState::new_default(42);
         // Need large infections for meaningful POL target with flattened severity curve
         for region in &mut state.regions {
-            region.infections.push(RegionDiseaseState {
-                disease_idx: 0, infected: 200_000_000.0, dead: 0.0, immune: 0.0,
-            });
+            region.get_or_create_infection(0).infected = 200_000_000.0;
         }
 
         // Let POL reach a steady state over 10 days
@@ -3366,14 +3343,11 @@ mod tests {
 
     #[test]
     fn active_policies_drain_pol_target() {
-        use crate::state::RegionDiseaseState;
         // Two identical states: one with policies, one without.
         // The one with policies should have lower POL after the same time.
         let mut base = GameState::new_default(42);
         for region in &mut base.regions {
-            region.infections.push(RegionDiseaseState {
-                disease_idx: 0, infected: 200_000_000.0, dead: 0.0, immune: 0.0,
-            });
+            region.get_or_create_infection(0).infected = 200_000_000.0;
         }
         base.resources.political_power = 0.0;
         base.resources.funding = 100_000.0; // enough to sustain policies
@@ -3401,13 +3375,11 @@ mod tests {
 
     #[test]
     fn pol_target_capped_at_90_percent() {
-        use crate::state::{RegionDiseaseState, ResearchProject, ResearchKind, BasicTech};
+        use crate::state::{ResearchProject, ResearchKind, BasicTech};
         let mut state = GameState::new_default(42);
         // Massive deaths + infections to maximize severity
         for region in &mut state.regions {
-            region.infections.push(RegionDiseaseState {
-                disease_idx: 0, infected: 500_000_000.0, dead: 0.0, immune: 0.0,
-            });
+            region.get_or_create_infection(0).infected = 500_000_000.0;
             region.dead = 500_000_000.0;
         }
         state.resources.political_power = 0.95; // Start above the 0.90 cap
@@ -3484,15 +3456,7 @@ mod tests {
 
         // Ensure both diseases have infections in the same region
         let region_idx = primary_outbreak_region(&state);
-        let has_d1 = state.regions[region_idx].disease_state(1).is_some();
-        if !has_d1 {
-            state.regions[region_idx].infections.push(RegionDiseaseState {
-                disease_idx: 1,
-                infected: 1000.0,
-                dead: 0.0,
-                immune: 0.0,
-            });
-        }
+        state.regions[region_idx].get_or_create_infection(1).infected = 1000.0;
 
         // Disease 1 should start with no resistance
         assert_eq!(state.diseases[1].get_resistance(None), 0.0);
@@ -3536,14 +3500,7 @@ mod tests {
 
         // Ensure co-location
         let region_idx = primary_outbreak_region(&state);
-        if state.regions[region_idx].disease_state(1).is_none() {
-            state.regions[region_idx].infections.push(RegionDiseaseState {
-                disease_idx: 1,
-                infected: 1000.0,
-                dead: 0.0,
-                immune: 0.0,
-            });
-        }
+        state.regions[region_idx].get_or_create_infection(1).infected = 1000.0;
 
         for _ in 0..1200 {
             state = tick(&state);
@@ -3600,12 +3557,7 @@ mod tests {
         state.medicines[med_idx].doses = 1_000_000.0;
         state.medicines[med_idx].max_doses = 1_000_000.0;
         state.resources.funding = 1_000_000.0;
-        state.regions[0].infections.push(crate::state::RegionDiseaseState {
-            disease_idx,
-            infected: 50_000.0,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
 
         // First deploy should succeed
         let (nav, msg, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
@@ -3617,7 +3569,7 @@ mod tests {
 
         // Second deploy at same tick should be blocked
         state.resources.funding = 1_000_000.0;
-        state.regions[0].infections[0].infected = 50_000.0;
+        state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
         let (nav2, msg2, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
         assert!(!nav2, "second deploy should be blocked by cooldown");
         assert!(msg2.unwrap().contains("cooldown"), "should mention cooldown");
@@ -3625,7 +3577,7 @@ mod tests {
         // After cooldown expires, deploy should work again
         state.tick = crate::state::DEPLOY_COOLDOWN_TICKS + 1;
         state.resources.funding = 1_000_000.0;
-        state.regions[0].infections[0].infected = 50_000.0;
+        state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
         let (nav3, msg3, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
         assert!(nav3, "deploy after cooldown should succeed");
         assert!(msg3.unwrap().contains("Treated"));
@@ -3633,12 +3585,7 @@ mod tests {
         // Different region should still be deployable (cooldown is per-region)
         state.tick = 0;
         state.regions[0].last_deploy_tick = Some(0);
-        state.regions[1].infections.push(crate::state::RegionDiseaseState {
-            disease_idx,
-            infected: 50_000.0,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        state.regions[1].get_or_create_infection(disease_idx).infected = 50_000.0;
         state.resources.funding = 1_000_000.0;
         let (nav4, _, _) = medicine::deploy_medicine(&mut state, med_idx, 1, 1);
         assert!(nav4, "deploying to different region should work during cooldown");

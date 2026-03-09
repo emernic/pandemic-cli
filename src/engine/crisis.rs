@@ -949,8 +949,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     .collect())
                 .unwrap_or_default();
             for (d_idx, infected, immune) in &disease_states {
-                let inf = crate::engine::medicine::get_or_create_infection(
-                    &mut state.regions[*to_region], *d_idx);
+                let inf = state.regions[*to_region].get_or_create_infection(*d_idx);
                 inf.infected += infected;
                 inf.immune += immune;
             }
