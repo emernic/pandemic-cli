@@ -2682,6 +2682,17 @@ impl GameState {
         self.policies.iter().map(|p| p.funding_cost()).sum()
     }
 
+    /// Per-region income contribution before travel ban modifier.
+    /// `total_pop` must be > 0 (caller checks).
+    fn region_base_income(region: &Region, total_pop: f64) -> f64 {
+        let pop = region.population as f64;
+        let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
+        let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
+        let healthy_frac = (pop - incapacitated).max(0.0) / pop;
+        let region_share = pop / total_pop;
+        BASE_FUNDING_INCOME * region_share * healthy_frac
+    }
+
     /// Estimated funding income per tick, based on current population health and policies.
     pub fn funding_income_rate(&self) -> f64 {
         let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
@@ -2690,17 +2701,13 @@ impl GameState {
         }
         let mut income = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
-            let pop = region.population as f64;
-            let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
-            let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
-            let healthy_frac = (pop - incapacitated).max(0.0) / pop;
-            let region_share = pop / total_pop;
+            let base = Self::region_base_income(region, total_pop);
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
                 TRAVEL_BAN_INCOME_PENALTY
             } else {
                 1.0
             };
-            income += BASE_FUNDING_INCOME * region_share * healthy_frac * travel_ban_factor;
+            income += base * travel_ban_factor;
         }
         income
     }
@@ -2715,13 +2722,7 @@ impl GameState {
         let mut penalty = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
             if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                let pop = region.population as f64;
-                let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
-                let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
-                let healthy_frac = (pop - incapacitated).max(0.0) / pop;
-                let region_share = pop / total_pop;
-                // Penalty is the income lost: the portion that travel_ban_factor removes
-                penalty += BASE_FUNDING_INCOME * region_share * healthy_frac * (1.0 - TRAVEL_BAN_INCOME_PENALTY);
+                penalty += Self::region_base_income(region, total_pop) * (1.0 - TRAVEL_BAN_INCOME_PENALTY);
             }
         }
         penalty
