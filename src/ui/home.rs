@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::format_number;
-use crate::state::{GameState, ticks_to_days};
+use crate::state::{GameState, TICKS_PER_DAY, ticks_to_days};
 
 // ── Splash (first visit) ──────────────────────────────────────────────
 
@@ -276,6 +276,64 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         "Deaths",
         &format_number(state.total_dead_detected()),
     ));
+
+    // ── Budget breakdown ──
+    {
+        let gross = state.funding_income_rate() * TICKS_PER_DAY;
+        let upkeep = state.personnel_upkeep_rate() * TICKS_PER_DAY;
+        let policy = state.total_policy_funding_cost() * TICKS_PER_DAY;
+        let net = gross - upkeep - policy;
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("  ── BUDGET ──", cyan)));
+        lines.push(Line::from(""));
+
+        let green = Style::default().fg(Color::Green);
+        let red_style = Style::default().fg(Color::Red);
+
+        // Income line
+        let alive_regions = state.regions.iter().filter(|r| !r.collapsed).count();
+        lines.push(Line::from(vec![
+            Span::styled("  Income:   ", dim),
+            Span::styled(format!("+${:.0}/day", gross), green),
+            Span::styled(format!("  ({} regions)", alive_regions), dim),
+        ]));
+
+        // Upkeep line
+        if upkeep > 0.0 {
+            lines.push(Line::from(vec![
+                Span::styled("  Upkeep:   ", dim),
+                Span::styled(format!("-${:.0}/day", upkeep), red_style),
+                Span::styled(format!("  ({} personnel)", state.resources.personnel), dim),
+            ]));
+        }
+
+        // Policy line
+        if policy > 0.0 {
+            let active_count: usize = state.policies.iter()
+                .filter(|p| p.any_active())
+                .count();
+            lines.push(Line::from(vec![
+                Span::styled("  Policies: ", dim),
+                Span::styled(format!("-${:.0}/day", policy), red_style),
+                Span::styled(format!("  (in {} region{})", active_count, if active_count == 1 { "" } else { "s" }), dim),
+            ]));
+        }
+
+        // Net line
+        let (net_str, net_color) = if net >= 0.0 {
+            (format!("+${:.0}/day", net), Color::Green)
+        } else {
+            (format!("-${:.0}/day", net.abs()), Color::Red)
+        };
+        lines.push(Line::from(vec![
+            Span::styled("  ────────────────────", dim),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("  Net:      ", dim),
+            Span::styled(net_str, Style::default().fg(net_color)),
+        ]));
+    }
 
     // ── Active diseases ──
     lines.push(Line::from(""));
