@@ -2921,6 +2921,8 @@ mod tests {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
+        // Disease at gen 0 — fast-track should still impose 2-gen penalty
+        assert_eq!(state.diseases[0].strain_generation, 0);
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
 
         let after = apply_action(&state, &Action::Confirm);
@@ -2928,6 +2930,11 @@ mod tests {
             "fast-track should mark medicine as tested");
         assert!(!after.medicines[0].strain_generations.is_empty(),
             "strain_generations should be populated");
+        assert_eq!(after.medicines[0].strain_generations[0], -2,
+            "at gen 0, fast-track should calibrate to gen -2");
+        let efficacy = after.medicines[0].strain_efficacy(0, &after.diseases);
+        assert!((efficacy - 0.70).abs() < 0.01,
+            "fast-track should always impose ~30% penalty, got {}", efficacy);
         assert!(after.active_crisis.is_none());
     }
 

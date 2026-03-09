@@ -119,7 +119,7 @@ pub(super) fn tick_research(state: &mut GameState) {
                         // Update strain calibration to current disease generation
                         if let Some(pos) = medicine.target_diseases.iter().position(|&d| d == d_idx) {
                             let current_gen = state.diseases.get(d_idx)
-                                .map_or(0, |d| d.strain_generation);
+                                .map_or(0, |d| d.strain_generation) as i32;
                             // Extend strain_generations if needed
                             while medicine.strain_generations.len() <= pos {
                                 medicine.strain_generations.push(0);
@@ -154,7 +154,7 @@ pub(super) fn tick_research(state: &mut GameState) {
                         // Calibrate to current strain generations of all target diseases
                         medicine.strain_generations = medicine.target_diseases.iter()
                             .map(|&d_idx| state.diseases.get(d_idx)
-                                .map_or(0, |d| d.strain_generation))
+                                .map_or(0, |d| d.strain_generation as i32))
                             .collect();
                     }
                 }
