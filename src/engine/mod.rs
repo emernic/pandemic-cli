@@ -50,6 +50,20 @@ pub fn tick(state: &GameState) -> GameState {
     let upkeep = new.personnel_upkeep_rate();
     new.resources.funding = (new.resources.funding - upkeep).max(0.0);
 
+    // Personnel attrition: when funding is $0, unassigned personnel leave.
+    // Rate: ~1 person per day. Thematic: unpaid workers resign.
+    if new.resources.funding <= 0.0 && new.personnel_available() > 0 {
+        new.resources.attrition_accum += 1.0 / TICKS_PER_DAY;
+        if new.resources.attrition_accum >= 1.0 {
+            let lost = (new.resources.attrition_accum as u32).min(new.personnel_available());
+            new.resources.personnel = new.resources.personnel.saturating_sub(lost);
+            new.resources.attrition_accum -= lost as f64;
+            new.events.push(GameEvent::PersonnelAttrition { count: lost });
+        }
+    } else {
+        new.resources.attrition_accum = 0.0;
+    }
+
     // Political Power: ramps based on severity + time.
     // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
     // Time = linear ramp reaching 0.4 at day 30 (baseline even if player contains well).
