@@ -13,13 +13,25 @@ pub struct SnapshotResult {
 }
 
 /// Parse a snapshot step string. Returns either a tick count or a key string.
+/// `d<N>` means N days (converted to ticks). `t<N>` means N raw ticks (legacy).
 fn parse_step(s: &str) -> Result<SnapshotStep, String> {
+    // d<N> — days (primary user-facing unit)
+    if let Some(rest) = s.strip_prefix('d') {
+        if let Ok(days) = rest.parse::<f64>() {
+            let ticks = (days * crate::state::TICKS_PER_DAY) as u64;
+            return Ok(SnapshotStep::Ticks(ticks));
+        }
+    }
+    // t<N> — raw ticks (legacy/internal use)
     if let Some(rest) = s.strip_prefix('t') {
         if let Ok(n) = rest.parse::<u64>() {
             return Ok(SnapshotStep::Ticks(n));
         }
     }
-    // "t" alone is a valid key (opens Threats panel)
+    // "t" alone is a valid key (opens Threats panel), "d" alone is not a key
+    if s == "d" {
+        return Err("Invalid step: 'd' — did you mean 'd1' (1 day)?".to_string());
+    }
     Ok(SnapshotStep::Key(s.to_string()))
 }
 
@@ -108,10 +120,20 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_with_ticks() {
+    fn snapshot_with_days() {
         let state = GameState::new_default(42);
+        // d1 = 1 day = 100 ticks
+        let result = run_snapshot(state, &["d1".to_string()]).unwrap();
+        assert!(result.screen.contains("Day: 1.0"));
+        assert_eq!(result.state.tick, 100);
+    }
+
+    #[test]
+    fn snapshot_with_raw_ticks() {
+        let state = GameState::new_default(42);
+        // Legacy: t10 = 10 raw ticks
         let result = run_snapshot(state, &["t10".to_string()]).unwrap();
-        assert!(result.screen.contains("Tick: 10"));
+        assert!(result.screen.contains("Day: 0.1"));
         assert_eq!(result.state.tick, 10);
     }
 
@@ -141,16 +163,16 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_interleaved_ticks_and_keys() {
+    fn snapshot_interleaved_days_and_keys() {
         let state = GameState::new_default(42);
-        // Advance 5 ticks, open threats panel, advance 5 more ticks
+        // Advance 0.5 days (50 ticks), open threats panel, advance 0.5 more days
         let result = run_snapshot(
             state,
-            &["t5".to_string(), "t".to_string(), "t5".to_string()],
+            &["d0.5".to_string(), "t".to_string(), "d0.5".to_string()],
         )
         .unwrap();
-        assert_eq!(result.state.tick, 10);
+        assert_eq!(result.state.tick, 100);
         assert!(result.screen.contains("Threats"));
-        assert!(result.screen.contains("Tick: 10"));
+        assert!(result.screen.contains("Day: 1.0"));
     }
 }

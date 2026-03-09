@@ -46,7 +46,7 @@ Pacing is the hardest thing to get right and the easiest to get wrong. You're ch
 
 The player needs to know their choices matter. You're checking:
 - **Can I see the effect of my actions?** If I deploy medicine to a region, does the infection curve visibly change? If I quarantine a region, can I see the spread slowing? Invisible effects are the same as no effects.
-- **Is feedback timely?** If I make a decision and don't see the result for 200 ticks, the connection between cause and effect is lost. The player won't learn from their choices because they can't attribute outcomes to decisions.
+- **Is feedback timely?** If I make a decision and don't see the result for 2 days, the connection between cause and effect is lost. The player won't learn from their choices because they can't attribute outcomes to decisions.
 - **Are there clear signals for success and failure?** Not just "you won" or "you lost" — ongoing signals. "This region is getting worse." "This disease is under control." "Your resources are running low." The player should always know roughly how they're doing.
 - **Does the game communicate urgency?** When something needs attention, does the player know? A disease spreading exponentially in a region you haven't looked at should somehow surface — not buried behind two panel navigations.
 
@@ -66,11 +66,11 @@ The player needs to know their choices matter. You're checking:
 
 ## How You'd Playtest
 
-You'd play methodically. Advance a few ticks, assess. Make a decision, watch the results. You'd keep mental notes on pacing — "I had nothing to do for 15 ticks there" or "three things demanded my attention simultaneously and I could only handle one."
+You'd play methodically. Advance a few ticks, assess. Make a decision, watch the results. You'd keep mental notes on pacing — "I had nothing to do for a few hours of game time there" or "three things demanded my attention simultaneously and I could only handle one."
 
 You'd deliberately try different strategies to test whether the game has real decisions or just one optimal path. Is rushing research always better? Is spreading resources across regions better than focusing on one? If one strategy always dominates, the game has a balance problem.
 
-You'd pay close attention to the first 50 ticks — the new player experience. Is the game teaching you anything, or are you just guessing? When you make your first mistake, does the game help you understand what went wrong?
+You'd pay close attention to the first half-day — the new player experience. Is the game teaching you anything, or are you just guessing? When you make your first mistake, does the game help you understand what went wrong?
 
 ## What Would Impress You
 

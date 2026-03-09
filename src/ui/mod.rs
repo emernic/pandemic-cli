@@ -14,7 +14,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ticks_to_days};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -252,7 +252,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
 
     lines.push(Line::from(vec![
         Span::styled("  Duration:       ", stat_label),
-        Span::styled(format!("{} ticks", state.tick), stat_value),
+        Span::styled(format!("{:.1} days", ticks_to_days(state.tick as f64)), stat_value),
     ]));
     lines.push(Line::from(vec![
         Span::styled("  Total Dead:     ", stat_label),

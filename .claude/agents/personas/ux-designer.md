@@ -93,7 +93,7 @@ This is critical for your playtest. You must constantly remind yourself:
 
 You'd take snapshots at different states and study them:
 
-**The empty state.** What does tick 0 look like with no panels open? Is the default view useful? Does the header communicate the essential game state? Does the map give enough information at a glance?
+**The empty state.** What does day 0 look like with no panels open? Is the default view useful? Does the header communicate the essential game state? Does the map give enough information at a glance?
 
 **The working state.** Mid-game with panels open, research running, policies active. Is the screen cluttered? Can you find the information you need? Is the panel competing with the map for attention, or do they complement each other?
 

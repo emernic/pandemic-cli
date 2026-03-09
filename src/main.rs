@@ -30,13 +30,13 @@ struct Cli {
     #[arg(long)]
     key: Vec<String>,
 
-    /// Advance this many ticks (snapshot mode)
+    /// Advance this many days (snapshot mode). 1 day = 100 ticks.
     #[arg(long)]
-    ticks: Option<u64>,
+    days: Option<f64>,
 
     /// Ordered sequence of steps (snapshot mode, repeatable).
-    /// Use t<N> for ticks (e.g. t10), anything else is a key action.
-    /// Example: --do t10 --do r --do enter --do t25
+    /// Use d<N> for days (e.g. d1 = 1 day = 100 ticks), anything else is a key action.
+    /// Example: --do d1 --do r --do enter --do d2.5
     #[arg(long = "do")]
     steps: Vec<String>,
 
@@ -75,8 +75,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cli.steps
         } else {
             let mut s: Vec<String> = cli.key.into_iter().collect();
-            if let Some(t) = cli.ticks {
-                s.push(format!("t{t}"));
+            if let Some(d) = cli.days {
+                s.push(format!("d{d}"));
             }
             s
         };

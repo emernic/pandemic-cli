@@ -452,6 +452,26 @@ pub const BOOST_RP_COST: f64 = 10.0;
 /// Ticks of progress added per boost.
 pub const BOOST_TICKS: f64 = 5.0;
 
+/// Number of simulation ticks per in-game day. The UI displays days, not ticks.
+pub const TICKS_PER_DAY: f64 = 100.0;
+
+/// Convert ticks to days for display purposes.
+pub fn ticks_to_days(ticks: f64) -> f64 {
+    ticks / TICKS_PER_DAY
+}
+
+/// Convert ticks to a formatted day string for the UI.
+pub fn format_days(ticks: f64) -> String {
+    let days = ticks_to_days(ticks);
+    if days < 0.1 {
+        format!("{:.2} days", days)
+    } else if days < 1.0 {
+        format!("{:.1} days", days)
+    } else {
+        format!("{:.1} days", days)
+    }
+}
+
 /// Category of therapeutic mechanism — determines efficacy against pathogen types.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TherapyType {

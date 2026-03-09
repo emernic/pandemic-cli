@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, KNOWLEDGE_NAME};
+use crate::state::{GameOutcome, GameState, ResearchKind, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: 2 normally, 3 when research is active.
@@ -32,7 +32,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         pause_indicator,
         Span::raw("  "),
         Span::styled(
-            format!("Tick: {}", state.tick),
+            format!("Day: {:.1}", ticks_to_days(state.tick as f64)),
             Style::default().fg(Color::Yellow),
         ),
         Span::raw("  "),
@@ -41,14 +41,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Green),
         ),
         Span::styled(
-            format!(" (+${:.0}/t)", state.funding_income_rate()),
+            format!(" (+${:.0}/day)", state.funding_income_rate() * TICKS_PER_DAY),
             Style::default().fg(Color::DarkGray),
         ),
         {
             let cost = state.total_policy_funding_cost();
             if cost > 0.0 {
                 Span::styled(
-                    format!(" −${:.0} policy", cost),
+                    format!(" −${:.0}/day policy", cost * TICKS_PER_DAY),
                     Style::default().fg(Color::Yellow),
                 )
             } else {
@@ -61,7 +61,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Magenta),
         ),
         Span::styled(
-            format!(" (+{:.1}/t)", state.rp_income_rate()),
+            format!(" (+{:.0}/day)", state.rp_income_rate() * TICKS_PER_DAY),
             Style::default().fg(Color::DarkGray),
         ),
         Span::raw("  "),

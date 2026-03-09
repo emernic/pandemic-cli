@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS};
+use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS, format_days};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -102,7 +102,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
             style,
         )));
         lines.push(Line::from(Span::styled(
-            format!("    Progress: {:.0}% ({:.0}/{:.0} ticks)", pct, project.progress, project.required_ticks),
+            format!("    Progress: {:.0}% ({}/{})", pct, format_days(project.progress), format_days(project.required_ticks)),
             Style::default().fg(Color::Green),
         )));
     } else {
@@ -154,7 +154,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     Span::raw("  "),
                     Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
                     Span::raw("  "),
-                    Span::styled(format!("{:.0} ticks", ticks), Style::default().fg(Color::DarkGray)),
+                    Span::styled(format_days(ticks), Style::default().fg(Color::DarkGray)),
                 ]));
                 lines.push(Line::from(""));
             }
@@ -214,7 +214,7 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
         ]));
         lines.push(Line::from(vec![
             Span::raw("  Duration: "),
-            Span::styled(format!("{:.0} ticks", ticks), Style::default().fg(Color::White)),
+            Span::styled(format_days(ticks), Style::default().fg(Color::White)),
         ]));
 
         let can_afford = state.resources.research_points >= rp
@@ -270,7 +270,7 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
         ]));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            format!("  {:.0} ticks remaining", remaining),
+            format!("  {} remaining", format_days(remaining)),
             Style::default().fg(Color::White),
         )));
         lines.push(Line::from(Span::styled(
@@ -286,7 +286,7 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
             lines.push(Line::from(vec![
                 Span::styled("  [Enter] Boost ", Style::default().fg(Color::DarkGray)),
                 Span::styled(
-                    format!("({:.0} RP → +{:.0} ticks)", BOOST_RP_COST, BOOST_TICKS),
+                    format!("({:.0} RP → +{})", BOOST_RP_COST, format_days(BOOST_TICKS)),
                     Style::default().fg(cost_color),
                 ),
             ]));

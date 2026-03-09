@@ -105,7 +105,7 @@ Then adopt the persona matching the number:
 
 ## Scope
 
-The user may specify a tick limit, focus areas, or stop conditions. If not, play at least 2000 ticks (~17 minutes of real-time play) and write up your experience. 500 ticks is only 4 minutes — barely past the opening of a strategy game.
+The user may specify a day limit, focus areas, or stop conditions. If not, play at least 20 days (~17 minutes of real-time play) and write up your experience. 5 days is only 4 minutes — barely past the opening of a strategy game.
 
 ## How to Play
 
@@ -119,7 +119,7 @@ SEED=$((RANDOM * RANDOM))
 ./target/release/pandemic-cli ./playtest-${SEED}.json --seed ${SEED} --snapshot
 
 # Take an action and/or advance time (these combine in one call)
-./target/release/pandemic-cli ./playtest-${SEED}.json --snapshot --key <key> --ticks <n>
+./target/release/pandemic-cli ./playtest-${SEED}.json --snapshot --key <key> --days <n>
 ```
 
 **Always use a random seed.** Different seeds produce different RNG outcomes for disease spread, adverse effects, etc. Don't use 42, 777, or other "nice" numbers — use `$((RANDOM * RANDOM))` to get genuine variety.
@@ -128,27 +128,29 @@ Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicin
 
 ### ⚠️ Time Scale — READ THIS CAREFULLY
 
-**You are an LLM. Each tick feels like an eternity to you because it's a separate tool call. It is NOT an eternity for a human player.** A human sees ticks fly by at 2 per second. You MUST ground all your time judgments in real human time, not in how many tool calls you made.
+**The game UI displays "days" — one in-game day is about 50 seconds of real time for a human player.** A full game is expected to last 20-40 days, which is 1-2 hours of real-time play. We're not there yet content-wise, but that's the target.
 
-**The conversion table — memorize this:**
+**The reference table:**
 
-| Ticks | Real time | Game phase |
-|-------|-----------|------------|
-| 100 | 50 seconds | Very early — player is still orienting |
-| 500 | ~4 minutes | Early game — player is settling into strategy |
-| 2,000 | ~17 minutes | Mid game — core loop should be engaging |
-| 5,000 | ~42 minutes | Late game — player should feel the endgame approaching |
-| 10,000+ | 80+ minutes | Full session — the kind of run a dedicated player does |
+| Days | Real time | Game phase |
+|------|-----------|------------|
+| 1 | ~50 seconds | Very early — player is still orienting |
+| 5 | ~4 minutes | Early game — player is settling into strategy |
+| 20 | ~17 minutes | Mid game — core loop should be engaging |
+| 50 | ~42 minutes | Late game — player should feel the endgame approaching |
+| 100+ | 80+ minutes | Full session — the kind of run a dedicated player does |
 
 **This changes how you evaluate EVERYTHING:**
-- "90 ticks of waiting before first action" = **45 seconds**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
-- "RP piles up by tick 500" = RP piles up after **4 minutes**. That might be a real problem, but frame it correctly — "within the first 4 minutes of play, the player has more RP than they can ever spend."
-- "Game feels over by tick 100" = game feels over after **50 seconds**. Either you're wrong about it feeling over, or there's a catastrophic pacing problem. Think carefully about which.
-- "I played 500 ticks and nothing changed" = you played for **4 minutes**. In Crusader Kings, 4 minutes is barely enough to unpause and read your starting situation.
+- "1 day before first action is possible" = **50 seconds**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
+- "RP piles up by day 5" = RP piles up after **4 minutes**. That might be a real problem, but frame it correctly — "within the first 4 minutes of play, the player has more RP than they can ever spend."
+- "Game feels over after 1 day" = game feels over after **50 seconds**. Either you're wrong about it feeling over, or there's a catastrophic pacing problem. Think carefully about which.
+- "I played 5 days and nothing changed" = you played for **4 minutes**. In Crusader Kings, 4 minutes is barely enough to unpause and read your starting situation.
 
-**When writing your report, ALWAYS include the real-time equivalent next to tick counts.** Don't write "by tick 300" — write "by tick 300 (~2.5 min)." This forces you to confront whether your complaint makes sense at human scale.
+**When writing your report, ALWAYS include the real-time equivalent next to day counts.** Don't write "by day 3" — write "by day 3 (~2.5 min)." This forces you to confront whether your complaint makes sense at human scale.
 
-Advance in larger chunks than you think you should: 50-100 ticks at a time once you're past the opening. You're simulating a player who watches the game flow by, not one who pauses every half-second to analyze.
+Advance in larger chunks than you think you should: 0.5-1 day at a time once you're past the opening. You're simulating a player who watches the game flow by, not one who pauses every half-second to analyze.
+
+**CLI note:** Use `--days <N>` or `--do d<N>` to advance time. Example: `--days 2` advances 2 days. `--do d0.5` advances half a day. The `d` prefix is for days; `t` prefix is for raw ticks (internal, rarely needed).
 
 ### Approach
 
@@ -171,7 +173,7 @@ Write to `playtests/` with a timestamp filename (e.g. `playtests/2026-03-07-1430
 ```markdown
 # Playtest — {date} {time}
 
-Seed: {seed} | Ticks played: ~{n} | Persona: {persona name}
+Seed: {seed} | Days played: ~{n} | Persona: {persona name}
 
 ## The Hard Truth
 Start here. Before anything else. What is this game, actually? Not what it's *trying* to be — what is it *right now*, based on what you experienced? If you had to describe it to a friend, what would you say? If the honest answer is "I don't really know" or "it's a bunch of panels with numbers," say that.
@@ -201,7 +203,7 @@ Also think about what you'd *tear out* or *replace*. Sometimes the best idea is 
 
 The difference between okay and great ideas:
 - Okay: "Add more resource sinks"
-- Great: "What if you could fund field hospitals in a region — costs $500/tick to maintain, reduces lethality by 30% in that region, but ties up 5 personnel? Now you've got a real trade-off: do you spread your personnel thin across hospitals or concentrate them on research?"
+- Great: "What if you could fund field hospitals in a region — costs $500/day to maintain, reduces lethality by 30% in that region, but ties up 5 personnel? Now you've got a real trade-off: do you spread your personnel thin across hospitals or concentrate them on research?"
 - Okay: "The map feels empty"
 - Great: "The map could show trade route arrows between regions that turn red when carrying disease. You could impose travel restrictions on a route, but it tanks that region's economy and cuts your funding income. Suddenly the map is where the hard decisions happen."
 - Okay: "Add more medicines"
@@ -211,7 +213,7 @@ The difference between okay and great ideas:
 **You MUST include this section, even if everything went smoothly.**
 
 Report any problems with the playtest process itself — NOT the game, but your ability to play it:
-- Could you advance ticks and maintain state across invocations? (Save file working?)
+- Could you advance days and maintain state across invocations? (Save file working?)
 - Were there key presses you couldn't send or that didn't work?
 - Did you have to start from scratch when you shouldn't have?
 - Did a command fail or behave unexpectedly?

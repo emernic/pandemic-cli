@@ -54,7 +54,7 @@ Too little information is boring. Too much is overwhelming. The right amount dep
 
 - **First encounter with a panel:** You want the shape — how many items, what are they called, what's the structure. You don't need stats yet.
 - **After you've oriented:** You want the details — numbers, statuses, comparisons. This is where the panel earns its existence.
-- **During active play:** You want the delta — what changed since last time? A panel that shows the same information whether it's tick 10 or tick 500, with no indication of what's evolving, isn't helping you make decisions.
+- **During active play:** You want the delta — what changed since last time? A panel that shows the same information whether it's day 0 or day 5, with no indication of what's evolving, isn't helping you make decisions.
 
 The Explorer notices when information is *present but not useful*. A stat that never changes. A column that's always the same value. A detail that doesn't connect to any decision you can make. This isn't just clutter — it's an active distraction. Every number on screen implicitly says "pay attention to me," and if the number never matters, you've wasted the player's attention.
 

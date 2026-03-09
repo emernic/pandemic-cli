@@ -149,34 +149,34 @@ We're migrating toward separating UI state machines from game logic. See `docs/t
 
 ```bash
 cargo run -- --snapshot                          # see initial state (fresh game, no save)
-cargo run -- --snapshot --ticks 5                # advance 5 ticks (fresh game)
+cargo run -- --snapshot --days 1                 # advance 1 day (fresh game)
 cargo run -- --snapshot --key right              # navigate panels
-cargo run -- --snapshot --key m --ticks 3        # open medicines, advance 3
+cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half a day
 ```
 
 ### Interleaved steps with `--do`
 
-The `--do` flag lets you interleave ticks and key actions in a single invocation. Use `t<N>` for ticks, anything else is a key:
+The `--do` flag lets you interleave days and key actions in a single invocation. Use `d<N>` for days, anything else is a key:
 
 ```bash
-cargo run -- --snapshot --do t30 --do r --do enter --do enter --do enter  # advance 30, start research
-cargo run -- --snapshot --do t10 --do p --do enter --do enter --do t50    # advance 10, toggle policy, advance 50 more
+cargo run -- --snapshot --do d0.5 --do r --do enter --do enter --do enter  # advance half a day, start research
+cargo run -- --snapshot --do d0.5 --do p --do enter --do enter --do d1     # advance half day, toggle policy, advance 1 more day
 ```
 
 This eliminates the need for save files in simple multi-step tests. For longer sessions, save files are still useful.
 
 ### ⚠️ Save files are REQUIRED for real playtesting
 
-**Without a save file, every `cargo run --snapshot` starts a brand new game from tick 0.** This means you can never test multi-step flows that span multiple invocations. To actually play the game across invocations:
+**Without a save file, every `cargo run --snapshot` starts a brand new game from day 0.** This means you can never test multi-step flows that span multiple invocations. To actually play the game across invocations:
 
 ```bash
 # Use a save file (in your worktree, NOT in a shared location):
-cargo run -- ./playtest_save.json --snapshot --ticks 10          # creates save, advances 10 ticks
-cargo run -- ./playtest_save.json --snapshot --key r --key enter  # continues from tick 10, opens research
-cargo run -- ./playtest_save.json --snapshot --ticks 20          # advances 20 more ticks (now at tick 30)
+cargo run -- ./playtest_save.json --snapshot --days 1            # creates save, advances 1 day
+cargo run -- ./playtest_save.json --snapshot --key r --key enter  # continues from day 1, opens research
+cargo run -- ./playtest_save.json --snapshot --days 2            # advances 2 more days (now at day 3)
 ```
 
-Each invocation with a save file picks up exactly where the last one left off. **If you are playtesting without a save file, you are not actually testing the game — you are testing that the UI renders at tick 0.**
+Each invocation with a save file picks up exactly where the last one left off. **If you are playtesting without a save file, you are not actually testing the game — you are testing that the UI renders at day 0.**
 
 Do this **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game.
 

@@ -18,7 +18,7 @@ You've played enough games to know that the interesting stories always come from
 
 **Early game:** You start researching immediately — not to be thorough, but to unlock tools as fast as possible. You skip the second identification round if you already have enough knowledge to start medicine development. Time is the most expensive resource and you refuse to waste it on completionism.
 
-**Mid game:** The moment a medicine unlocks, you deploy it. Untested. You know the odds: 75% it works normally, 25% adverse effects. You've done the math — losing 20% of doses to adverse effects is better than losing the entire region to unchecked spread while you spend 25 ticks on a clinical trial. You deploy to the hottest zone first, not the safest.
+**Mid game:** The moment a medicine unlocks, you deploy it. Untested. You know the odds: 75% it works normally, 25% adverse effects. You've done the math — losing 20% of doses to adverse effects is better than losing the entire region to unchecked spread while you spend a quarter-day on a clinical trial. You deploy to the hottest zone first, not the safest.
 
 **Resource management:** You spread thin on purpose. Travel bans everywhere, quarantine where it's worst, research running in both slots. You'd rather be overextended and adapting than conservative and behind. If funding gets tight, that's a problem for future-you.
 
@@ -36,7 +36,7 @@ The core question. If untested deployment is always worse than waiting for trial
 
 Things to look for:
 - Is 25% adverse effect rate the right number? Too high and it's never worth it. Too low and trials are pointless.
-- Does the game punish delay? If diseases spread fast enough, waiting 25 ticks for a trial might cost more lives than adverse effects would.
+- Does the game punish delay? If diseases spread fast enough, waiting a quarter-day for a trial might cost more lives than adverse effects would.
 - Are there moments where deploying untested is clearly the right call? (Small outbreak, cheap medicine, low downside.) Those are good — they teach the player that risk assessment is contextual, not absolute.
 
 ### Do failures create interesting situations?

@@ -23,7 +23,7 @@ The game can be run non-interactively for testing:
 ```
 pandemic-cli --snapshot save.json              # dump what the screen looks like
 pandemic-cli --snapshot save.json --key "r"    # apply a keypress, dump result
-pandemic-cli --snapshot save.json --ticks 10   # advance game time, dump result
+pandemic-cli --snapshot save.json --days 1     # advance 1 day, dump result
 ```
 
 Each invocation: load state → apply inputs → output new state as text. Stateless. This is how Claude and automated tests interact with the game.
@@ -34,7 +34,7 @@ RNG is seeded. Seed is stored in state. Same state + same inputs = same outputs,
 
 ## Real-Time With Pause
 
-Simulation advances in discrete ticks. "Real-time" = ticks fire automatically. "Pause" = they don't. Saves are always at a tick boundary. The engine has no concept of wall-clock time.
+Simulation advances in discrete ticks (internal unit). The UI displays "days" (1 day = 100 ticks). "Real-time" = ticks fire automatically. "Pause" = they don't. Saves are always at a tick boundary. The engine has no concept of wall-clock time.
 
 ## Current Module Map
 
