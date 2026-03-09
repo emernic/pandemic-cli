@@ -1,7 +1,9 @@
 use crate::state::{
     GameEvent, GameState, ScreeningLevel,
-    BORDER_SCREENING_COST, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
-    QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
+    BORDER_SCREENING_COST, BORDER_SCREENING_PERSONNEL,
+    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
+    QUARANTINE_COST, QUARANTINE_PERSONNEL,
+    TICKS_PER_DAY, TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
 };
 
@@ -108,12 +110,17 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     let available_personnel = state.personnel_available();
     match policy_idx {
         0 => {
-            let new_state = !state.policies[region_idx].travel_ban;
-            state.policies[region_idx].travel_ban = new_state;
-            if new_state {
-                (Some(format!("Travel Ban enabled in {region_name} — ${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY)), true)
-            } else {
+            if state.policies[region_idx].travel_ban {
+                state.policies[region_idx].travel_ban = false;
                 (Some(format!("Travel Ban disabled in {region_name}")), true)
+            } else if available_personnel >= TRAVEL_BAN_PERSONNEL {
+                state.policies[region_idx].travel_ban = true;
+                (Some(format!("Travel Ban enabled in {region_name} — ${:.0}/day + {} personnel",
+                    TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL)), true)
+            } else {
+                (Some(format!(
+                    "Not enough personnel for travel ban (need {})", TRAVEL_BAN_PERSONNEL
+                )), false)
             }
         }
         1 => {
@@ -145,13 +152,17 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             }
         }
         3 => {
-            let new_state = !state.policies[region_idx].border_screening;
-            state.policies[region_idx].border_screening = new_state;
-            if new_state {
-                (Some(format!("Border Screening enabled in {region_name} — ${:.0}/day",
-                    BORDER_SCREENING_COST * TICKS_PER_DAY)), true)
-            } else {
+            if state.policies[region_idx].border_screening {
+                state.policies[region_idx].border_screening = false;
                 (Some(format!("Border Screening disabled in {region_name}")), true)
+            } else if available_personnel >= BORDER_SCREENING_PERSONNEL {
+                state.policies[region_idx].border_screening = true;
+                (Some(format!("Border Screening enabled in {region_name} — ${:.0}/day + {} personnel",
+                    BORDER_SCREENING_COST * TICKS_PER_DAY, BORDER_SCREENING_PERSONNEL)), true)
+            } else {
+                (Some(format!(
+                    "Not enough personnel for border screening (need {})", BORDER_SCREENING_PERSONNEL
+                )), false)
             }
         }
         4 => {
@@ -183,10 +194,19 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 state.policies[region_idx].screening = ScreeningLevel::None;
                 (Some(format!("Disease Screening disabled in {region_name}")), true)
             } else {
-                // Enable/upgrade
-                state.policies[region_idx].screening = target;
-                (Some(format!("{} Disease Screening enabled in {region_name} — ${:.0}/day",
-                    target.label(), target.funding_cost() * TICKS_PER_DAY)), true)
+                // Check personnel — account for personnel freed from current tier
+                let needed = target.personnel_cost();
+                let freed = current.personnel_cost();
+                let effective_available = available_personnel + freed;
+                if effective_available >= needed {
+                    state.policies[region_idx].screening = target;
+                    (Some(format!("{} Disease Screening enabled in {region_name} — ${:.0}/day + {} personnel",
+                        target.label(), target.funding_cost() * TICKS_PER_DAY, needed)), true)
+                } else {
+                    (Some(format!(
+                        "Not enough personnel for {} screening (need {})", target.label().to_lowercase(), needed
+                    )), false)
+                }
             }
         }
         _ => (None, false),
