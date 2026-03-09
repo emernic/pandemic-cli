@@ -32,11 +32,11 @@ pub struct GameState {
 
 // Disease emergence constants.
 /// First new disease can emerge after this many ticks.
-pub const EMERGENCE_MIN_TICK: u64 = 200;
+pub const EMERGENCE_MIN_TICK: u64 = 100;
 /// Per-tick probability of a new disease emerging (after min tick).
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.004; // ~1 every 250 ticks
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.01; // ~1 every 100 ticks
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 5;
+pub const MAX_DISEASES: usize = 8;
 
 // Policy cost constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.0;
@@ -1208,6 +1208,19 @@ impl GameState {
             income += BASE_FUNDING_INCOME * region_share * healthy_frac * travel_ban_factor;
         }
         income
+    }
+
+    /// RP income per tick, degraded by pandemic damage (mirrors funding income).
+    /// As deaths mount, research infrastructure collapses — labs close, scientists
+    /// die or flee, supply chains break. At the loss threshold, RP income is near zero.
+    pub fn rp_income_rate(&self) -> f64 {
+        let initial_pop = self.initial_population();
+        if initial_pop <= 0.0 {
+            return 0.0;
+        }
+        let death_fraction = self.total_dead() / initial_pop;
+        let health_multiplier = (1.0 - death_fraction / LOSE_DEATH_FRACTION).max(0.1);
+        BASE_RP_INCOME * health_multiplier
     }
 
     /// Total initial population across all regions (before any deaths).
