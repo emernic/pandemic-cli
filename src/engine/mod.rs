@@ -2969,14 +2969,15 @@ mod tests {
     }
 
     #[test]
-    fn trial_shortcut_not_generated_at_low_strain_gen() {
+    fn trial_shortcut_generates_at_any_strain_gen() {
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
         state.tick = 5000; // past CRISIS_MIN_TICK
-        // Disease at gen 0 — TrialShortcut should never appear
+        // Disease at gen 0 — TrialShortcut should still be possible
+        // (penalty mechanism uses i32 strain_generations, works at any gen)
         state.diseases[0].strain_generation = 0;
         let mut got_trial = false;
         for seed in 0..500u64 {
@@ -2988,21 +2989,7 @@ mod tests {
                 }
             }
         }
-        assert!(!got_trial, "TrialShortcut should not generate when disease strain_generation < 2");
-
-        // At gen 2, it should be possible
-        state.diseases[0].strain_generation = 2;
-        let mut got_trial = false;
-        for seed in 0..500u64 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            if let Some(event) = crisis::generate_crisis(&state, &mut rng) {
-                if matches!(event.kind, CrisisKind::TrialShortcut { .. }) {
-                    got_trial = true;
-                    break;
-                }
-            }
-        }
-        assert!(got_trial, "TrialShortcut should be possible when disease strain_generation >= 2");
+        assert!(got_trial, "TrialShortcut should generate even at gen 0");
     }
 
     #[test]
