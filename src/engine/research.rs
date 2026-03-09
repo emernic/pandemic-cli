@@ -5,14 +5,14 @@ use crate::state::{
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
 ///
-/// Returns true if the project was successfully started.
-pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: usize) -> bool {
+/// Returns (success, message).
+pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: usize) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
-        return false;
+        return (false, None);
     }
     let occupied = if bench { state.bench_research.is_some() } else { state.field_research.is_some() };
     if occupied {
-        return false;
+        return (false, None);
     }
 
     let projects = if bench {
@@ -22,25 +22,36 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (personnel, duration) = kind.costs(&state.medicines);
+        let (personnel, duration, funding_cost) = kind.costs(&state.medicines);
 
-        if state.personnel_available() >= personnel {
-            let project = ResearchProject {
-                kind: kind.clone(),
-                progress: 0.0,
-                required_ticks: duration,
-                personnel_assigned: personnel,
-            };
-
-            if bench {
-                state.bench_research = Some(project);
-            } else {
-                state.field_research = Some(project);
-            }
-            return true;
+        if state.resources.funding < funding_cost {
+            return (false, Some(format!(
+                "Insufficient funds! Need ${:.0}, have ${:.0}",
+                funding_cost, state.resources.funding,
+            )));
         }
+        if state.personnel_available() < personnel {
+            return (false, Some(format!(
+                "Need {} personnel, only {} available",
+                personnel, state.personnel_available(),
+            )));
+        }
+        state.resources.funding -= funding_cost;
+        let project = ResearchProject {
+            kind: kind.clone(),
+            progress: 0.0,
+            required_ticks: duration,
+            personnel_assigned: personnel,
+        };
+
+        if bench {
+            state.bench_research = Some(project);
+        } else {
+            state.field_research = Some(project);
+        }
+        return (true, None);
     }
-    false
+    (false, None)
 }
 
 /// Add personnel to an active research project. More personnel = faster progress.
@@ -342,6 +353,7 @@ mod tests {
     fn concurrent_field_and_bench_research() {
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
+        state.resources.funding = 1000.0; // enough for both projects
 
         // Start field research
         state = apply_action(&state, &Action::OpenResearch);
@@ -361,6 +373,26 @@ mod tests {
         // Both running simultaneously
         assert!(state.field_research.is_some());
         assert!(state.bench_research.is_some());
+    }
+
+    #[test]
+    fn research_requires_funding() {
+        let mut state = GameState::new_default(42);
+        // Identify costs $200; set funding to $100 so it fails
+        state.resources.funding = 100.0;
+
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select Identify
+        state = apply_action(&state, &Action::Confirm); // Try to confirm
+        assert!(state.field_research.is_none(), "should not start without funding");
+        assert!(state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"));
+
+        // Give enough funding, should succeed
+        state.resources.funding = 300.0;
+        state = apply_action(&state, &Action::Confirm); // Try again
+        assert!(state.field_research.is_some(), "should start with sufficient funding");
+        assert!(state.resources.funding < 300.0, "funding should be deducted");
     }
 
     #[test]
@@ -420,10 +452,11 @@ mod tests {
 
         let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
         let broad = ResearchKind::DevelopMedicine { medicine_idx: broad_idx };
-        let (narrow_pers, narrow_ticks) = narrow.costs(&state.medicines);
-        let (broad_pers, broad_ticks) = broad.costs(&state.medicines);
+        let (narrow_pers, narrow_ticks, narrow_funding) = narrow.costs(&state.medicines);
+        let (broad_pers, broad_ticks, broad_funding) = broad.costs(&state.medicines);
         assert!(narrow_pers <= broad_pers, "narrow should need fewer personnel");
         assert!(narrow_ticks < broad_ticks, "narrow should be faster");
+        assert!(narrow_funding < broad_funding, "narrow should cost less funding");
     }
 
     #[test]

@@ -203,8 +203,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             CommandResult { message: msg, success: nav_back }
         }
         GameCommand::StartResearch { bench, project_idx } => {
-            let ok = research::start_research(state, *bench, *project_idx);
-            CommandResult { message: None, success: ok }
+            let (ok, msg) = research::start_research(state, *bench, *project_idx);
+            CommandResult { message: msg, success: ok }
         }
         GameCommand::AddResearchPersonnel { bench } => {
             let msg = research::add_personnel(state, *bench);
