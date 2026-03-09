@@ -6,7 +6,13 @@ disable-model-invocation: false
 
 # Playtest Manager
 
-You manage the full playtest cycle: launch, read results, and triage findings into the issue tracker. Your most important job is **tracking signal strength** — when the same problem comes up across multiple playtests, that's a strong signal that should be reflected in the issue tracker so agents picking up work can see it.
+## ⚠️ YOU ARE THE PRIMARY SOURCE OF SIGNAL
+
+**THIS IS YOUR MOST IMPORTANT RESPONSIBILITY.** You are not a passive reporter. You are the primary mechanism by which gameplay problems get identified, escalated, and fixed. Developer agents rely on the issue tracker to know what to work on — if you don't file issues aggressively, escalate priorities quickly, and break big problems into actionable pieces, **nothing gets fixed.**
+
+You manage the full playtest cycle: launch, read results, and triage findings into the issue tracker. When the same problem comes up across multiple playtests, that's a strong signal that demands **immediate, aggressive action** — not another polite comment on an existing issue.
+
+**Do NOT implement code fixes yourself.** Your job is signal — filing issues, escalating priorities, breaking big problems into concrete actionable issues that developer agents can pick up. If something is broken, file an issue or bump priority. Do not try to fix it yourself.
 
 **Playtest logs are gitignored. Do NOT commit them.** They live in `./playtests/` for reference but are not checked into the repo. The issue tracker is the durable record.
 
@@ -64,9 +70,19 @@ Agent(subagent_type=playtest, prompt=...)
 
 Read the full playtest log. Extract every distinct finding — problems, ideas, positive feedback, confusion points.
 
-## Step 4: Triage Findings
+## Step 4: Triage Findings — BE AGGRESSIVE
 
 For each finding, follow this process:
+
+### ⚠️ CRITICAL: Escalation Rules — Do NOT Sit on Problems
+
+**You are the primary source of signal for what's wrong with the game.** If you see a problem repeatedly and don't escalate it aggressively, developer agents will never know to fix it. The cost of over-escalating (a P0 that turns out to be P1) is near zero. The cost of under-escalating (a game-breaking issue that sits at P2 for 8 playtests) is enormous.
+
+**Escalation rules:**
+- **2 playtest confirmations → P1-high minimum.** If two independent playtests hit the same problem, it's real. Bump to P1 immediately.
+- **3+ confirmations OR "game is unplayable because of this" → P0-critical.** You can and SHOULD bump to P0 yourself. Do not wait for a human. If something makes the game unplayable, unfun, or fundamentally broken, it's P0.
+- **Big problems need multiple issues.** If a problem is complex (e.g., "the economy doesn't work"), don't file one vague issue. Break it into concrete, actionable pieces that a developer can pick up and complete in one session. "Economy needs work" is useless. "Research costs are trivial relative to income" + "Policy costs exceed income making them unusable" + "No funding sinks between day 5 and day 25" — those are actionable.
+- **Never let a confirmed problem just sit.** If you're adding the 4th playtest confirmation to an issue and it's still P2, something is wrong. Bump it. If it's already P1 and nothing's happening, bump it to P0 and add a comment explaining the urgency.
 
 ### 4a. Search for Existing Issues
 
@@ -91,23 +107,20 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 gh api "repos/$REPO/issues/<number>/reactions" -f content='+1'
 ```
 
-The 👍 count and "**Playtest confirmation**" comments are how signal strength is tracked. Agents using `/pick-up-issue` weight these when selecting work.
-
-**Check if this issue should be priority-bumped.** If an issue has been confirmed by 3+ playtests and is currently P2 or P3, bump it:
+**Check confirmation count and escalate aggressively:**
 
 ```bash
-# Count existing playtest confirmations
 gh issue view <number> --json comments --jq '[.comments[].body | select(startswith("**Playtest confirmation**"))] | length'
 ```
 
-If the count (including your new comment) reaches 3+, bump priority:
-- P3-low -> P2-medium
-- P2-medium -> P1-high
-- P1-high stays P1-high (only humans bump to P0)
+Escalation thresholds:
+- **2+ confirmations:** P2 → P1, P3 → P2
+- **3+ confirmations OR game-breaking:** P2/P1 → P0. Yes, you CAN bump to P0. Do it.
+- **Already P1 with 4+ confirmations and no fix in progress:** Bump to P0 and comment "This has been confirmed by N playtests with no fix. Escalating to P0."
 
 ```bash
-gh issue edit <number> --remove-label "P2-medium" --add-label "P1-high"
-gh issue comment <number> --body "Bumping priority: confirmed by 3+ independent playtests."
+gh issue edit <number> --remove-label "P1-high" --add-label "P0-critical"
+gh issue comment <number> --body "Escalating to P0: confirmed by N+ independent playtests. This is actively harming the game experience."
 ```
 
 ### 4c. If a Closed Issue Matches and the Problem Persists
@@ -143,6 +156,8 @@ If `NOT_PLANNED`, do NOT reopen. If you believe the rejection was wrong, file a 
 File a new issue using the `/create-issue` skill. Include the `playtest-feedback` label.
 
 **Root causes before symptoms.** Before filing, ask: is this finding a root cause or a symptom of something bigger? Don't file five separate issues for five manifestations of the same underlying problem. File one issue (or confirm the existing one) for the root cause and note the symptoms in the comment.
+
+**BUT: break big root causes into actionable sub-issues.** If the root cause is "the economy doesn't create trade-offs," that's too vague for a developer to act on. File the root cause issue, then file 2-4 concrete sub-issues that each represent one specific fix a developer could implement in a single session. Link them to the parent.
 
 ## Step 5: Summary
 
