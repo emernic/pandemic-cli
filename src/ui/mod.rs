@@ -15,8 +15,10 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
+
+const EVENT_LOG_MAX: usize = 50;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
 /// portion when the game is over (Confirm is blocked post-game).
@@ -56,137 +58,135 @@ pub fn process_events(state: &mut GameState) {
         state.ui.speed_multiplier = 1;
     }
 
-    // Pick the most important event to display as status message.
-    let suspended: Vec<_> = state.events.iter()
-        .filter_map(|e| match e {
+    // Build log messages for each event, then pick the best for the status bar.
+    let day = state.tick as f64 / TICKS_PER_DAY;
+    let mut log_entries: Vec<String> = Vec::new();
+    let mut status_msg: Option<(u8, String)> = None; // (priority, message) — lower = more important
+
+    for event in &state.events {
+        let (priority, msg) = match event {
+            GameEvent::RegionCollapsed { region_idx } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
+                (0, format!("COLLAPSE: {} has fallen! {} regions remain.", region_name, remaining))
+            }
+            GameEvent::DiseaseDetected { disease_idx } => {
+                let affected: Vec<&str> = state.regions.iter()
+                    .filter(|r| r.disease_state(*disease_idx).is_some_and(|inf| inf.infected > 0.0))
+                    .map(|r| r.name.as_str()).collect();
+                let msg = if affected.len() > 1 {
+                    format!("NEW THREAT detected across {} regions", affected.len())
+                } else {
+                    format!("NEW THREAT detected in {}", affected.first().unwrap_or(&"unknown"))
+                };
+                (1, msg)
+            }
+            GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let deaths_str = format_number(*deaths);
+                let msg = if *has_medicine {
+                    format!("{name}: {deaths_str} dead — deploy medicine!")
+                } else {
+                    format!("{name}: {deaths_str} dead — no medicine available!")
+                };
+                (2, msg)
+            }
+            GameEvent::HumanTrialAdverseEvent { disease_idx, deaths } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                (3, format!("ADVERSE EVENT: {} trial killed {:.0} patients", name, deaths))
+            }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str())
-                    .unwrap_or("Unknown");
-                Some(format!("{} in {}", policy_name, region))
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                (4, format!("Funding crisis: suspended {} in {}", policy_name, region))
             }
-            _ => None,
-        })
-        .collect();
+            GameEvent::FundingWarning => {
+                (5, "LOW FUNDS: Policies at risk of suspension".to_string())
+            }
+            GameEvent::PersonnelAttrition { count } => {
+                (6, format!("{} personnel resigned — no funding", count))
+            }
+            GameEvent::DiseaseMutated { disease_idx, infectivity_factor, lethality_factor, .. } => {
+                if !state.has_outdated_medicine(*disease_idx) {
+                    continue;
+                }
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| format!("Pathogen #{}", disease_idx + 1));
+                let worst_eff = state.medicines.iter()
+                    .filter(|m| m.target_diseases.contains(disease_idx)
+                        && (m.tested_against.contains(disease_idx) || m.unlocked))
+                    .map(|m| m.strain_efficacy(*disease_idx, &state.diseases))
+                    .fold(1.0_f64, f64::min);
+                let detail = if state.unlocked_techs.contains(&crate::state::BasicTech::RapidSequencing) {
+                    let inf_pct = (infectivity_factor - 1.0) * 100.0;
+                    let leth_pct = (lethality_factor - 1.0) * 100.0;
+                    format!(" (spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
+                } else {
+                    String::new()
+                };
+                (7, format!("{} mutated{} — efficacy {:.0}%", name, detail, worst_eff * 100.0))
+            }
+            GameEvent::ResearchAutoStarted { track } => {
+                let track_name = match track {
+                    ResearchTrack::Field => "Field",
+                    ResearchTrack::Applied => "Applied",
+                    ResearchTrack::Basic => "Basic",
+                };
+                (8, format!("Auto-started {} research", track_name))
+            }
+            GameEvent::CrisisAutoResolved => {
+                // Don't log auto-resolves — they're noise
+                continue;
+            }
+            GameEvent::ResistanceTransferred { from_disease_idx, to_disease_idx } => {
+                let from_name = state.diseases.get(*from_disease_idx)
+                    .map(|d| d.display_name(*from_disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                let to_name = state.diseases.get(*to_disease_idx)
+                    .map(|d| d.display_name(*to_disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                (9, format!("Gene transfer: {} → {}", from_name, to_name))
+            }
+            GameEvent::DiseaseSpreadToRegion { region_idx, .. } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                (10, format!("Disease spreading to {}", region_name))
+            }
+            GameEvent::GameOver | GameEvent::CrisisStarted => continue,
+        };
 
-    // Priority: RegionCollapsed > DiseaseDetected > ThreatEscalation > PolicySuspended > FundingWarning > DiseaseMutated > ... > ResistanceTransferred > DiseaseSpread
-    let msg = if let Some(GameEvent::RegionCollapsed { region_idx }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::RegionCollapsed { .. }))
-    {
-        let region_name = state.regions.get(*region_idx)
-            .map(|r| r.name.as_str())
-            .unwrap_or("Unknown");
-        let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
-        format!("COLLAPSE: {region_name} has fallen! {remaining} regions remain. Personnel lost.")
-    } else if let Some(GameEvent::DiseaseDetected { disease_idx }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::DiseaseDetected { .. }))
-    {
-        // Find which regions have this disease
-        let affected: Vec<&str> = state.regions.iter()
-            .filter(|r| r.disease_state(*disease_idx).is_some_and(|inf| inf.infected > 0.0))
-            .map(|r| r.name.as_str())
-            .collect();
-        if affected.len() > 1 {
-            format!("NEW THREAT detected spreading across {} regions! Use [R] Research to identify it.", affected.len())
-        } else {
-            let region_name = affected.first().unwrap_or(&"unknown");
-            format!("NEW THREAT detected in {region_name}! Use [R] Research to identify it.")
+        log_entries.push(msg.clone());
+
+        // Track highest-priority message for status bar
+        if status_msg.as_ref().is_none_or(|(p, _)| priority < *p) {
+            status_msg = Some((priority, msg));
         }
-    } else if let Some(GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::ThreatEscalation { .. }))
-    {
-        let name = state.diseases.get(*disease_idx)
-            .map(|d| d.display_name(*disease_idx))
-            .unwrap_or_else(|| "Unknown".to_string());
-        let deaths_str = crate::format_number(*deaths);
-        if *has_medicine {
-            format!("THREAT: {name} has killed {deaths_str} — deploy medicine!")
-        } else {
-            format!("THREAT: {name} has killed {deaths_str} — NO MEDICINE AVAILABLE! Use [R] Research.")
-        }
-    } else if let Some(GameEvent::HumanTrialAdverseEvent { disease_idx, deaths }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::HumanTrialAdverseEvent { .. }))
-    {
-        let name = state.diseases.get(*disease_idx)
-            .map(|d| d.display_name(*disease_idx))
-            .unwrap_or_else(|| "?".to_string());
-        format!("ADVERSE EVENT: Human trial for {name} killed {:.0} patients!", deaths)
-    } else if !suspended.is_empty() {
-        format!("Funding crisis: suspended {}", suspended.join(", "))
-    } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {
-        "LOW FUNDS: Policies at risk of suspension!".to_string()
-    } else if let Some(GameEvent::PersonnelAttrition { count }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::PersonnelAttrition { .. }))
-    {
-        format!("{count} personnel resigned — no funding for wages")
-    } else if let Some(GameEvent::DiseaseMutated { disease_idx, infectivity_factor, lethality_factor, .. }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
-    {
-        // Only show mutation messages when the player has medicines affected by the drift.
-        // Without an outdated medicine, mutations are invisible to gameplay — showing
-        // "X has mutated" is noise the player can't act on.
-        if state.has_outdated_medicine(*disease_idx) {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
-            // Find the worst strain efficacy across affected medicines
-            let worst_eff = state.medicines.iter()
-                .filter(|m| m.target_diseases.contains(disease_idx)
-                    && (m.tested_against.contains(disease_idx) || m.unlocked))
-                .map(|m| m.strain_efficacy(*disease_idx, &state.diseases))
-                .fold(1.0_f64, f64::min);
-            // With Rapid Sequencing unlocked, show stat change details
-            let detail = if state.unlocked_techs.contains(&crate::state::BasicTech::RapidSequencing) {
-                let inf_pct = (infectivity_factor - 1.0) * 100.0;
-                let leth_pct = (lethality_factor - 1.0) * 100.0;
-                format!(" (spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
-            } else {
-                String::new()
-            };
-            format!("{name} mutated{detail} — efficacy {:.0}%! Re-trial in [R].",
-                worst_eff * 100.0)
-        } else {
-            return; // No actionable medicine — suppress noise
-        }
-    } else if state.events.iter().any(|e| matches!(e, GameEvent::ResearchAutoStarted { .. })) {
-        // Show what was auto-started — find the most recently started project
-        let track_name = state.events.iter().find_map(|e| match e {
-            GameEvent::ResearchAutoStarted { track } => Some(match track {
-                ResearchTrack::Field => "Field",
-                ResearchTrack::Applied => "Applied",
-                ResearchTrack::Basic => "Basic",
-            }),
-            _ => None,
-        }).unwrap_or("Research");
-        format!("Auto-started {} research", track_name)
-    } else if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
-        "Crisis auto-resolved (saved preference)".to_string()
-    } else if let Some(GameEvent::ResistanceTransferred { from_disease_idx, to_disease_idx }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::ResistanceTransferred { .. }))
-    {
-        let from_name = state.diseases.get(*from_disease_idx)
-            .map(|d| d.display_name(*from_disease_idx))
-            .unwrap_or_else(|| "?".to_string());
-        let to_name = state.diseases.get(*to_disease_idx)
-            .map(|d| d.display_name(*to_disease_idx))
-            .unwrap_or_else(|| "?".to_string());
-        format!("Gene transfer: {from_name} resistance spreading to {to_name}!")
-    } else if let Some(GameEvent::DiseaseSpreadToRegion { region_idx, .. }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::DiseaseSpreadToRegion { .. }))
-    {
-        let region_name = state.regions.get(*region_idx)
-            .map(|r| r.name.as_str())
-            .unwrap_or("Unknown");
-        let any_policy_active = state.policies.iter().any(|p| p.any_active());
-        if any_policy_active {
-            format!("Disease spreading to {region_name}.")
-        } else {
-            format!("Disease spreading to {region_name}! Use [P] Policy to contain.")
-        }
-    } else {
-        return;
-    };
-    state.ui.status_message = Some(msg);
+    }
+
+    // Append to persistent event log
+    for entry in log_entries {
+        state.event_log.push_back((day, entry));
+    }
+    while state.event_log.len() > EVENT_LOG_MAX {
+        state.event_log.pop_front();
+    }
+
+    // Set status bar message (add action hints for the status bar version)
+    if let Some((priority, msg)) = status_msg {
+        let status = match priority {
+            0 => format!("{}. Personnel lost.", msg),
+            1 => format!("{}! Use [R] Research to identify it.", msg),
+            2 => msg,
+            _ => msg,
+        };
+        state.ui.status_message = Some(status);
+    }
 }
 
 pub fn render(f: &mut Frame, state: &GameState) {

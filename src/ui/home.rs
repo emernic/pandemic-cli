@@ -459,6 +459,25 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
     }
 
+    // ── Event log ──
+    if !state.event_log.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("  ── RECENT EVENTS ──", cyan)));
+        lines.push(Line::from(""));
+
+        // Show as many recent events as will fit — estimate available space
+        let used_lines = lines.len();
+        let available = (area.height as usize).saturating_sub(used_lines + 2); // 2 for border
+        let show_count = available.min(state.event_log.len()).min(15);
+
+        for (day, msg) in state.event_log.iter().rev().take(show_count).collect::<Vec<_>>().into_iter().rev() {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  Day {:<5.1} ", day), dim),
+                Span::styled(msg.clone(), Style::default().fg(Color::White)),
+            ]));
+        }
+    }
+
     let block = Block::default()
         .title(" DASHBOARD ")
         .borders(Borders::ALL)

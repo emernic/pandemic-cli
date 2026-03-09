@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use rand::Rng;
 use rand::SeedableRng;
@@ -79,6 +79,10 @@ pub struct GameState {
     /// messages. Cleared at the start of each tick.
     #[serde(skip)]
     pub events: Vec<GameEvent>,
+    /// Persistent log of notable events with timestamps (day number, message).
+    /// Populated by the UI layer from transient `events`. Capped at 50 entries.
+    #[serde(default)]
+    pub event_log: VecDeque<(f64, String)>,
     /// Active crisis event requiring player decision. Game pauses while active.
     #[serde(default)]
     pub active_crisis: Option<CrisisEvent>,
@@ -3095,6 +3099,7 @@ impl GameState {
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
             events: vec![],
+            event_log: VecDeque::new(),
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
             pending_crises: vec![],
