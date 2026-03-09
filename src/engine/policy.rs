@@ -31,15 +31,13 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
         // Tracks (region_idx, policy_idx, cost) — no string matching.
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
-            for (idx, active, cost) in [
-                (0, p.travel_ban, TRAVEL_BAN_COST),
-                (1, p.quarantine, QUARANTINE_COST),
-                (2, p.hospital_surge, HOSPITAL_SURGE_COST),
-                (3, p.border_controls, BORDER_CONTROLS_COST),
-                (4, p.water_sanitation, WATER_SANITATION_COST),
-            ] {
-                if active && (best.is_none() || cost > best.unwrap().2) {
-                    best = Some((i, idx, cost));
+            let bool_costs = [
+                TRAVEL_BAN_COST, QUARANTINE_COST, HOSPITAL_SURGE_COST,
+                BORDER_CONTROLS_COST, WATER_SANITATION_COST,
+            ];
+            for (idx, cost) in bool_costs.iter().enumerate() {
+                if p.get_bool(idx) && (best.is_none() || *cost > best.unwrap().2) {
+                    best = Some((i, idx, *cost));
                 }
             }
             let scr_cost = p.screening.funding_cost();
@@ -48,14 +46,10 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
             }
         }
         if let Some((region_idx, policy_idx, _)) = best {
-            match policy_idx {
-                0 => state.policies[region_idx].travel_ban = false,
-                1 => state.policies[region_idx].quarantine = false,
-                2 => state.policies[region_idx].hospital_surge = false,
-                3 => state.policies[region_idx].border_controls = false,
-                4 => state.policies[region_idx].water_sanitation = false,
-                5 => state.policies[region_idx].screening = ScreeningLevel::None,
-                _ => unreachable!(),
+            if policy_idx <= 4 {
+                state.policies[region_idx].set_bool(policy_idx, false);
+            } else {
+                state.policies[region_idx].screening = ScreeningLevel::None;
             }
             state.events.push(GameEvent::PolicySuspended {
                 region_idx,
@@ -89,11 +83,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         .unwrap_or("Unknown");
     // Check POL requirement (only when enabling, not disabling)
     let is_currently_active = match policy_idx {
-        0 => state.policies[region_idx].travel_ban,
-        1 => state.policies[region_idx].quarantine,
-        2 => state.policies[region_idx].hospital_surge,
-        3 => state.policies[region_idx].border_controls,
-        4 => state.policies[region_idx].water_sanitation,
+        0..=4 => state.policies[region_idx].get_bool(policy_idx),
         5 => state.policies[region_idx].screening == ScreeningLevel::Low,
         6 => state.policies[region_idx].screening == ScreeningLevel::Medium,
         7 => state.policies[region_idx].screening == ScreeningLevel::High,
@@ -114,73 +104,26 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     }
     let available_personnel = state.personnel_available();
     match policy_idx {
-        0 => {
-            if state.policies[region_idx].travel_ban {
-                state.policies[region_idx].travel_ban = false;
-                (Some(format!("Travel Ban disabled in {region_name}")), true)
-            } else if available_personnel >= TRAVEL_BAN_PERSONNEL {
-                state.policies[region_idx].travel_ban = true;
-                (Some(format!("Travel Ban enabled in {region_name} — ${:.0}/day + {} personnel",
-                    TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL)), true)
+        // Boolean policies (0-4): identical toggle logic, different metadata.
+        0..=4 => {
+            let (name, cost, personnel) = match policy_idx {
+                0 => ("Travel Ban", TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL),
+                1 => ("Quarantine", QUARANTINE_COST, QUARANTINE_PERSONNEL),
+                2 => ("Hospital Surge", HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL),
+                3 => ("Border Controls", BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL),
+                4 => ("Water Sanitation", WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL),
+                _ => unreachable!(),
+            };
+            if state.policies[region_idx].get_bool(policy_idx) {
+                state.policies[region_idx].set_bool(policy_idx, false);
+                (Some(format!("{name} disabled in {region_name}")), true)
+            } else if available_personnel >= personnel {
+                state.policies[region_idx].set_bool(policy_idx, true);
+                (Some(format!("{name} enabled in {region_name} — ${:.0}/day + {personnel} personnel",
+                    cost * TICKS_PER_DAY)), true)
             } else {
                 (Some(format!(
-                    "Not enough personnel for travel ban (need {})", TRAVEL_BAN_PERSONNEL
-                )), false)
-            }
-        }
-        1 => {
-            if state.policies[region_idx].quarantine {
-                state.policies[region_idx].quarantine = false;
-                (Some(format!("Quarantine disabled in {region_name}")), true)
-            } else if available_personnel >= QUARANTINE_PERSONNEL {
-                state.policies[region_idx].quarantine = true;
-                (Some(format!("Quarantine enabled in {region_name} — ${:.0}/day + {} personnel",
-                    QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL)), true)
-            } else {
-                (Some(format!(
-                    "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
-                )), false)
-            }
-        }
-        2 => {
-            if state.policies[region_idx].hospital_surge {
-                state.policies[region_idx].hospital_surge = false;
-                (Some(format!("Hospital Surge disabled in {region_name}")), true)
-            } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
-                state.policies[region_idx].hospital_surge = true;
-                (Some(format!("Hospital Surge enabled in {region_name} — ${:.0}/day + {} personnel",
-                    HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL)), true)
-            } else {
-                (Some(format!(
-                    "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
-                )), false)
-            }
-        }
-        3 => {
-            if state.policies[region_idx].border_controls {
-                state.policies[region_idx].border_controls = false;
-                (Some(format!("Border Controls disabled in {region_name}")), true)
-            } else if available_personnel >= BORDER_CONTROLS_PERSONNEL {
-                state.policies[region_idx].border_controls = true;
-                (Some(format!("Border Controls enabled in {region_name} — ${:.0}/day + {} personnel",
-                    BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL)), true)
-            } else {
-                (Some(format!(
-                    "Not enough personnel for border controls (need {})", BORDER_CONTROLS_PERSONNEL
-                )), false)
-            }
-        }
-        4 => {
-            if state.policies[region_idx].water_sanitation {
-                state.policies[region_idx].water_sanitation = false;
-                (Some(format!("Water Sanitation disabled in {region_name}")), true)
-            } else if available_personnel >= WATER_SANITATION_PERSONNEL {
-                state.policies[region_idx].water_sanitation = true;
-                (Some(format!("Water Sanitation enabled in {region_name} — ${:.0}/day + {} personnel",
-                    WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL)), true)
-            } else {
-                (Some(format!(
-                    "Not enough personnel for water sanitation (need {})", WATER_SANITATION_PERSONNEL
+                    "Not enough personnel for {} (need {personnel})", name.to_lowercase()
                 )), false)
             }
         }
