@@ -172,11 +172,16 @@ fn push_mutation_indicator(
 
 fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: usize) {
     let hdr = Style::default().fg(Color::DarkGray);
+    // Check if any region has sub-100% visibility (screening not maxed)
+    let any_estimated = state.regions.iter().enumerate().any(|(i, _)| {
+        state.screening_visibility(i) < 1.0
+    });
+    let infected_label = if any_estimated { "Infected~" } else { "Infected" };
     lines.push(Line::from(vec![
         Span::raw("    "),
         Span::styled(format!("{:<16}", "Region"), hdr),
         Span::raw("  "),
-        Span::styled(format!("{:>8}", "Infected"), hdr),
+        Span::styled(format!("{:>8}", infected_label), hdr),
         Span::raw("  "),
         Span::styled(format!("{:>8}", "Immune"), hdr),
         Span::raw("  "),
@@ -194,7 +199,9 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
             if inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
                 continue;
             }
-            total_infected += inf.infected;
+            let visibility = state.screening_visibility(region_idx);
+            let screened = inf.infected * visibility;
+            total_infected += screened;
             total_immune += inf.immune;
             total_dead += inf.dead;
 
@@ -204,7 +211,7 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
                 Span::styled(name, Style::default().fg(Color::White)),
                 Span::raw("  "),
                 Span::styled(
-                    format!("{:>8}", format_number(inf.infected)),
+                    format!("{:>8}", format_number(screened)),
                     Style::default().fg(Color::LightRed),
                 ),
                 Span::raw("  "),
