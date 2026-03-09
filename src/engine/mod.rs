@@ -105,26 +105,22 @@ pub fn tick(state: &GameState) -> GameState {
         && rng.r#gen::<f64>() < 1.0 / CRISIS_INTERVAL as f64
     {
         if let Some(crisis) = crisis::generate_crisis(&new, &mut rng) {
-            // Check auto-resolve preference before pausing
-            let tag = crisis.kind.tag();
-            if let Some(&choice) = new.auto_resolve_crises.get(tag) {
-                // Auto-resolve: check affordability first
-                let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
-                let affordable = option.cost.as_ref().map_or(true, |c| c.affordable(&new));
-                if affordable {
-                    new.active_crisis = Some(crisis);
-                    crisis::resolve_crisis(&mut new, choice);
-                    new.events.push(GameEvent::CrisisAutoResolved);
-                } else {
-                    // Can't afford auto-resolve — show the popup as normal
-                    new.active_crisis = Some(crisis);
-                    new.sim_state = SimState::Event {
-                        was_running: new.sim_state.is_running(),
-                    };
-                    new.events.push(GameEvent::CrisisStarted);
+            // Check if we can auto-resolve via saved preference
+            let auto_choice = new.auto_resolve_crises.get(crisis.kind.tag()).copied();
+            let auto_resolved = match auto_choice {
+                Some(choice) => {
+                    let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
+                    option.cost.as_ref().map_or(true, |c| c.affordable(&new))
                 }
+                None => false,
+            };
+
+            new.active_crisis = Some(crisis);
+
+            if auto_resolved {
+                crisis::resolve_crisis(&mut new, auto_choice.unwrap());
+                new.events.push(GameEvent::CrisisAutoResolved);
             } else {
-                new.active_crisis = Some(crisis);
                 // Pause the game for the crisis — this is a game rule, not a UI concern.
                 new.sim_state = SimState::Event {
                     was_running: new.sim_state.is_running(),
