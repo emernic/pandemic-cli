@@ -852,6 +852,7 @@ impl Medicine {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchTrack {
     Field,
+    #[serde(alias = "Bench")]
     Applied,
     Basic,
 }
