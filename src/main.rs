@@ -71,9 +71,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state: GameState = if let Some(ref path) = save_file {
         if std::path::Path::new(path).exists() {
             let data = fs::read_to_string(path)?;
-            let mut s: GameState = serde_json::from_str(&data)?;
-            s.migrate();
-            s
+            if data.trim().is_empty() {
+                GameState::new_default(cli.seed)
+            } else {
+                let mut s: GameState = serde_json::from_str(&data)
+                    .map_err(|e| format!(
+                        "Failed to load save file '{}': {}\nThe file may be corrupted. Delete it to start a new game.",
+                        path, e
+                    ))?;
+                s.migrate();
+                s
+            }
         } else {
             GameState::new_default(cli.seed)
         }
