@@ -20,8 +20,6 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
 
     let mut segments: Vec<(String, Style)> = Vec::new();
 
-    // Block-letter "PANDEMIC" — fits in ~66 chars wide.
-    // If terminal is very narrow, we split as "PAN" / "DEMIC" per user request.
     let pandemic_full = [
         " ████  █████ █   █ ████  █████ █   █ █  ████ ",
         " █   █ █   █ ██  █ █   █ █     ██ ██ █ █     ",
@@ -30,7 +28,6 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
         " █     █   █ █   █ ████  █████ █   █ █  ████ ",
     ];
     segments.push(("\n".to_string(), red));
-    // Full "PANDEMIC" is 46 chars — fits in the ~96-char panel
     for line in &pandemic_full {
         segments.push((format!("{}\n", line), red));
     }
@@ -124,7 +121,6 @@ fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
         let chars_to_show = (state.tick as usize) * 2;
         let total_chars: usize = segments.iter().map(|(s, _)| s.len()).sum();
         if chars_to_show >= total_chars {
-            // Animation complete — render full but keep splash style
             let mut full_lines: Vec<Line> = Vec::new();
             let mut current_spans: Vec<Span> = Vec::new();
             for (text, style) in &segments {
@@ -154,10 +150,59 @@ fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-// ── Dashboard (subsequent visits) ─────────────────────────────────────
+// ── Sparkline rendering ───────────────────────────────────────────────
 
-/// Build a horizontal bar using block characters.
-/// `filled` is 0.0–1.0, `width` is the total bar width in chars.
+/// Braille-based sparkline characters. Each braille char is 2 columns × 4 rows
+/// of dots, giving us 4 vertical levels per character position.
+/// We use a simpler approach: map values to rows and use block characters.
+const SPARK_CHARS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+/// Render a sparkline from data points into a single Line.
+/// `width` is how many characters wide the sparkline should be.
+/// Data is resampled/binned to fit the width.
+fn sparkline(
+    data: &[f64],
+    width: usize,
+    color: Color,
+    label: &str,
+    current_value: &str,
+) -> Vec<Line<'static>> {
+    let dim = Style::default().fg(Color::DarkGray);
+    let spark_style = Style::default().fg(color);
+
+    if data.is_empty() || width == 0 {
+        return vec![Line::from(vec![
+            Span::styled(format!("  {:<12}", label), dim),
+            Span::styled("  (no data yet)", dim),
+        ])];
+    }
+
+    // Find the max value for scaling
+    let max_val = data.iter().cloned().fold(0.0_f64, f64::max);
+    let max_val = if max_val < 1.0 { 1.0 } else { max_val };
+
+    // Resample data to fit width
+    let mut chart = String::with_capacity(width);
+    for i in 0..width {
+        let data_idx = if width > 1 {
+            (i * (data.len() - 1)) / (width - 1)
+        } else {
+            data.len() - 1
+        };
+        let val = data.get(data_idx).copied().unwrap_or(0.0);
+        let normalized = (val / max_val * 8.0).round() as usize;
+        chart.push(SPARK_CHARS[normalized.min(8)]);
+    }
+
+    vec![Line::from(vec![
+        Span::styled(format!("  {:<12}", label), dim),
+        Span::styled(chart, spark_style),
+        Span::styled(format!(" {}", current_value), Style::default().fg(color)),
+    ])]
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────
+
 fn bar(filled: f64, width: usize, fill_color: Color) -> Vec<Span<'static>> {
     let fill_chars = (filled.clamp(0.0, 1.0) * width as f64).round() as usize;
     let empty_chars = width.saturating_sub(fill_chars);
@@ -176,7 +221,6 @@ fn threat_color(fraction: f64) -> Color {
 
 fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     let dim = Style::default().fg(Color::DarkGray);
-    let white = Style::default().fg(Color::White);
     let cyan = Style::default().fg(Color::Cyan);
     let yellow = Style::default().fg(Color::Yellow);
 
@@ -208,54 +252,31 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled(format!("  Deaths: {} / {}", format_number(state.total_dead()), format_number(initial_pop * LOSE_DEATH_FRACTION)), dim),
     ]));
 
-    // ── Region overview ──
+    // ── Infection & death sparklines ──
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("  ── REGIONS ──", cyan)));
+    lines.push(Line::from(Span::styled("  ── TRENDS ──", cyan)));
     lines.push(Line::from(""));
 
-    let region_bar_width = (area.width as usize).saturating_sub(22).min(20);
-    for (i, region) in state.regions.iter().enumerate() {
-        let pop = region.population as f64;
-        let inf = region.total_infected();
-        let dead = region.total_dead();
-        let immune = region.total_immune();
-        let healthy = (pop - inf - dead - immune).max(0.0);
+    let chart_width = (area.width as usize).saturating_sub(22).min(50);
+    let history = &state.history;
 
-        // Stacked mini-bar: green=healthy, cyan=immune, yellow=infected, red=dead
-        let h_frac = healthy / pop;
-        let im_frac = immune / pop;
-        let inf_frac = inf / pop;
-        let d_frac = dead / pop;
+    let inf_data: Vec<f64> = history.iter().map(|h| h.total_infected).collect();
+    let dead_data: Vec<f64> = history.iter().map(|h| h.total_dead).collect();
 
-        let h_chars = (h_frac * region_bar_width as f64).round() as usize;
-        let im_chars = (im_frac * region_bar_width as f64).round() as usize;
-        let inf_chars = (inf_frac * region_bar_width as f64).round().max(if inf > 0.0 { 1.0 } else { 0.0 }) as usize;
-        let d_chars = (d_frac * region_bar_width as f64).round().max(if dead > 0.0 { 1.0 } else { 0.0 }) as usize;
-        // Remaining goes to healthy
-        let total = h_chars + im_chars + inf_chars + d_chars;
-        let h_chars = if total > region_bar_width { h_chars.saturating_sub(total - region_bar_width) }
-            else { h_chars + (region_bar_width - total) };
-
-        let selected = state.ui.map_selection == i;
-        let name_style = if selected { white } else { dim };
-        let name = format!("{:<14}", region.name);
-
-        let mut spans = vec![
-            Span::styled(if selected { "▶ " } else { "  " }, if selected { white } else { dim }),
-            Span::styled(name, name_style),
-        ];
-        spans.push(Span::styled("█".repeat(h_chars), Style::default().fg(Color::Green)));
-        spans.push(Span::styled("█".repeat(im_chars), Style::default().fg(Color::Cyan)));
-        spans.push(Span::styled("█".repeat(inf_chars), Style::default().fg(Color::Yellow)));
-        spans.push(Span::styled("█".repeat(d_chars), Style::default().fg(Color::Red)));
-
-        // Compact stats
-        if inf > 0.0 {
-            spans.push(Span::styled(format!(" {}", format_number(inf)), Style::default().fg(Color::Yellow)));
-        }
-
-        lines.push(Line::from(spans));
-    }
+    lines.extend(sparkline(
+        &inf_data,
+        chart_width,
+        Color::Yellow,
+        "Infected",
+        &format_number(state.total_infected()),
+    ));
+    lines.extend(sparkline(
+        &dead_data,
+        chart_width,
+        Color::Red,
+        "Deaths",
+        &format_number(state.total_dead()),
+    ));
 
     // ── Active diseases ──
     lines.push(Line::from(""));
@@ -284,7 +305,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             Span::styled(format!("{:<24}", name), Style::default().fg(severity_color)),
         ];
 
-        // Knowledge bar
         spans.push(Span::styled("K:", dim));
         spans.push(Span::styled("█".repeat(knowledge_filled), Style::default().fg(Color::Cyan)));
         spans.push(Span::styled("░".repeat(knowledge_bar_w.saturating_sub(knowledge_filled)), dim));
@@ -328,13 +348,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             }
         }
     }
-
-    // ── Footer ──
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [T]hreats [R]esearch [M]eds [P]olicy",
-        dim,
-    )));
 
     let block = Block::default()
         .title(" DASHBOARD ")
