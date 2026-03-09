@@ -256,7 +256,7 @@ fn render_select_target(
                 };
 
                 lines.push(Line::from(Span::styled(
-                    format!("{}Vaccinate susceptible ({})", marker, disease_name),
+                    format!("{}Protect susceptible ({})", marker, disease_name),
                     style,
                 )));
                 lines.push(Line::from(vec![
@@ -371,7 +371,7 @@ fn render_confirm_deploy(
     let (action_desc, disease_name) = match &target {
         Some(DeployTarget::Vaccinate { disease_idx }) => {
             let name = state.diseases[*disease_idx].display_name(*disease_idx);
-            (format!("Vaccinate {} against {}", region.name, name), name)
+            (format!("Protect {} against {}", region.name, name), name)
         }
         Some(DeployTarget::Treat { disease_idx }) => {
             let name = state.diseases[*disease_idx].display_name(*disease_idx);

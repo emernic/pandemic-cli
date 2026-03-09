@@ -487,7 +487,7 @@ mod tests {
         ));
         // DeployResult should contain the feedback message
         if let Some(MedicineUiState::DeployResult { message, .. }) = &state.ui.medicine_ui {
-            assert!(message.contains("Vaccinated"), "message should mention vaccination: {message}");
+            assert!(message.contains("Protected"), "message should mention protection: {message}");
         }
     }
 

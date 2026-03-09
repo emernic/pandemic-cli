@@ -636,7 +636,7 @@ pub struct Medicine {
     pub strain_generations: Vec<u32>,
 }
 
-/// What a medicine deployment targets: vaccinate susceptible or treat infected.
+/// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeployTarget {
     Vaccinate { disease_idx: usize },
@@ -1809,7 +1809,7 @@ impl GameState {
         let deployed_any = self.medicines.iter().any(|m| m.unlocked && m.doses < m.max_doses);
         if unlocked_meds > 0 && !deployed_any {
             tips.push(
-                "You developed medicines but never deployed them. Use [M] Medicines to vaccinate or treat regions."
+                "You developed medicines but never deployed them. Use [M] Medicines to protect or treat regions."
                     .to_string(),
             );
         } else if unlocked_meds == 0 && unidentified < self.diseases.len() {
