@@ -76,28 +76,6 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 ),
             ]));
 
-            let disease_names: Vec<String> = med
-                .target_diseases
-                .iter()
-                .filter_map(|&idx| state.diseases.get(idx).map(|d| d.display_name(idx)))
-                .collect();
-
-            // Check tested status
-            let tested_count = med.target_diseases.iter()
-                .filter(|d| med.tested_against.contains(d))
-                .count();
-            let total_targets = med.target_diseases.len();
-            let tested_label = if tested_count == total_targets {
-                Span::styled(" [Tested]", Style::default().fg(Color::Green))
-            } else if tested_count > 0 {
-                Span::styled(
-                    format!(" [Tested: {}/{}]", tested_count, total_targets),
-                    Style::default().fg(Color::Yellow),
-                )
-            } else {
-                Span::styled(" [UNTESTED]", Style::default().fg(Color::Red))
-            };
-
             let dc = dose_color(med);
             let dose_text = if med.doses <= 0.0 {
                 "EMPTY".to_string()
@@ -107,7 +85,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 format!("{} doses", format_number(med.doses))
             };
 
-            lines.push(Line::from(vec![
+            let mut detail_spans = vec![
                 Span::raw("    "),
                 Span::styled(
                     format!("${:.0}+", med.cost),
@@ -119,12 +97,41 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                     Style::default().fg(dc),
                 ),
                 Span::raw("  "),
-                Span::styled(
-                    disease_names.join(", "),
-                    Style::default().fg(Color::Red),
-                ),
-                tested_label,
-            ]));
+            ];
+
+            // Per-disease name with strain efficacy
+            for (j, &d_idx) in med.target_diseases.iter().enumerate() {
+                if j > 0 {
+                    detail_spans.push(Span::raw(", "));
+                }
+                let name = state.diseases.get(d_idx)
+                    .map(|d| d.display_name(d_idx))
+                    .unwrap_or_else(|| format!("#{}", d_idx + 1));
+                detail_spans.push(Span::styled(name, Style::default().fg(Color::Red)));
+
+                if med.tested_against.contains(&d_idx) {
+                    let eff = med.strain_efficacy(d_idx, &state.diseases);
+                    let pct = (eff * 100.0).round() as u32;
+                    let color = if pct >= 85 {
+                        Color::Green
+                    } else if pct >= 50 {
+                        Color::Yellow
+                    } else {
+                        Color::Red
+                    };
+                    detail_spans.push(Span::styled(
+                        format!(" ({}%)", pct),
+                        Style::default().fg(color),
+                    ));
+                } else {
+                    detail_spans.push(Span::styled(
+                        " [UNTESTED]",
+                        Style::default().fg(Color::Red),
+                    ));
+                }
+            }
+
+            lines.push(Line::from(detail_spans));
             lines.push(Line::from(""));
         }
     }
