@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::format_number;
-use crate::state::{GameState, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameState, TICKS_PER_DAY, format_days};
 
 // ── Splash (first visit) ──────────────────────────────────────────────
 
@@ -418,14 +418,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
                 } else { 1.0 };
                 let remaining = proj.required_ticks - proj.progress;
                 let speed = proj.speed(&state.medicines);
-                let remaining_days = ticks_to_days(if speed > 0.0 { remaining / speed } else { remaining });
+                let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
 
                 let mut spans = vec![
                     Span::styled(format!("  {}: ", label), dim),
                 ];
                 spans.extend(bar(pct, research_bar_w, Color::Green));
                 spans.push(Span::styled(
-                    format!(" {:.0}% ({:.1}d left)", pct * 100.0, remaining_days),
+                    format!(" {:.0}% ({} left)", pct * 100.0, format_days(effective_remaining)),
                     yellow,
                 ));
                 lines.push(Line::from(spans));
