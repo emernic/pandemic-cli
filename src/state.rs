@@ -2696,7 +2696,9 @@ impl GameState {
         // Pick a pathogen type (weighted: prions rare).
         // Enforce diversity: no type appears more than twice among active diseases.
         let mut type_counts = HashMap::new();
-        for d in &self.diseases {
+        for (i, d) in self.diseases.iter().enumerate() {
+            // Skip the slot being recycled — it's about to be replaced
+            if recycle_idx == Some(i) { continue; }
             *type_counts.entry(d.pathogen_type).or_insert(0usize) += 1;
         }
         let mut types = vec![
