@@ -104,23 +104,66 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ]));
             }
 
-            // Show affected regions once the disease is identified
+            // Comparative triage data — CFR, region spread, medicine status
             if disease.knowledge >= KNOWLEDGE_NAME {
+                // Case fatality rate (resolved cases that died)
+                let total_dead: f64 = state.regions.iter()
+                    .filter_map(|r| r.disease_state(i))
+                    .map(|inf| inf.dead)
+                    .sum();
+                let total_immune: f64 = state.regions.iter()
+                    .filter_map(|r| r.disease_state(i))
+                    .map(|inf| inf.immune)
+                    .sum();
+                let resolved = total_dead + total_immune;
+                let cfr_span = if resolved > 0.0 {
+                    let cfr = (total_dead / resolved) * 100.0;
+                    let color = if cfr > 30.0 { Color::Red }
+                        else if cfr > 10.0 { Color::Yellow }
+                        else { Color::Green };
+                    Span::styled(format!("CFR: {cfr:.0}%"), Style::default().fg(color))
+                } else {
+                    Span::styled("CFR: —", Style::default().fg(Color::DarkGray))
+                };
+
+                // Region spread count
                 let order = grid_reading_order(state.regions.len());
-                let regions: Vec<&str> = order.iter()
+                let affected: Vec<&str> = order.iter()
                     .filter_map(|&idx| state.regions.get(idx))
                     .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
                     .map(|r| r.name.as_str())
                     .collect();
-                if !regions.is_empty() {
-                    lines.push(Line::from(vec![
-                        Span::styled("    Present in: ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(
-                            regions.join(", "),
-                            Style::default().fg(Color::White),
-                        ),
-                    ]));
-                }
+                let spread_color = if affected.len() >= 4 { Color::Red }
+                    else if affected.len() >= 2 { Color::Yellow }
+                    else { Color::White };
+
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    cfr_span,
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("Spread: {}/{}", affected.len(), state.regions.len()),
+                        Style::default().fg(spread_color),
+                    ),
+                    Span::styled(
+                        format!("  ({})", affected.join(", ")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+
+                // Medicine status
+                let med_status = medicine_status_for_disease(state, i);
+                let (med_text, med_color) = match med_status {
+                    MedStatus::Deployed => ("Medicine: deployed", Color::Green),
+                    MedStatus::Available => ("Medicine: available (not deployed)", Color::Cyan),
+                    MedStatus::Tested => ("Medicine: tested, needs doses", Color::Blue),
+                    MedStatus::InDevelopment => ("Medicine: in development", Color::Yellow),
+                    MedStatus::None => ("Medicine: none", Color::Red),
+                };
+                lines.push(Line::from(Span::styled(
+                    format!("    {med_text}"),
+                    Style::default().fg(med_color),
+                )));
             }
 
             // Show knowledge bar
@@ -168,6 +211,38 @@ fn push_mutation_indicator(
             Style::default().fg(Color::Red),
         ));
     }
+}
+
+enum MedStatus {
+    Deployed,   // has been deployed at least once
+    Available,  // unlocked, has doses, but never deployed
+    Tested,     // tested but no doses
+    InDevelopment, // research in progress
+    None,       // nothing
+}
+
+fn medicine_status_for_disease(state: &GameState, disease_idx: usize) -> MedStatus {
+    // Check medicines targeting this disease
+    for med in &state.medicines {
+        if med.target_diseases.contains(&disease_idx) && med.unlocked {
+            if med.deployed_count > 0 {
+                return MedStatus::Deployed;
+            }
+            if med.doses > 0.0 {
+                return MedStatus::Available;
+            }
+            if med.tested_against.contains(&disease_idx) {
+                return MedStatus::Tested;
+            }
+        }
+    }
+    // Check if research is targeting this disease
+    let researching = state.applied_research.as_ref().is_some_and(|r| r.references_disease(disease_idx))
+        || state.field_research.as_ref().is_some_and(|r| r.references_disease(disease_idx));
+    if researching {
+        return MedStatus::InDevelopment;
+    }
+    MedStatus::None
 }
 
 fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: usize) {
