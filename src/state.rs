@@ -2561,7 +2561,8 @@ impl GameState {
 
             // Remove old medicines targeting the recycled disease (excluding broad-spectrum).
             self.medicines.retain(|m| {
-                !(m.target_diseases.len() == 1 && m.target_diseases[0] == idx)
+                m.therapy_type == TherapyType::BroadSpectrum
+                    || !(m.target_diseases.len() == 1 && m.target_diseases[0] == idx)
             });
             // Add new medicines for the replacement disease.
             self.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
