@@ -480,7 +480,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 let dname = disease.display_name(inf.disease_idx);
                 let screened_inf = inf.infected * visibility;
                 let shown_immune = if shows_immune { inf.immune } else { 0.0 };
-                let susceptible = pop - screened_inf - region.dead - shown_immune;
+                let susceptible = pop - screened_inf - dead - shown_immune;
                 let mut spans = vec![
                     Span::styled(
                         format!("  {:<20}", dname),
