@@ -73,7 +73,7 @@ pub(super) fn deploy_medicine(
         // Look up existing infection state (don't create yet — avoid ghost entries)
         let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
         let infected = existing.map(|i| i.infected).unwrap_or(0.0);
-        let dead = existing.map(|i| i.dead).unwrap_or(0.0);
+        let dead = region.dead;
         let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
         let is_tested = state.medicines[medicine_idx]
@@ -89,22 +89,23 @@ pub(super) fn deploy_medicine(
                 let susceptible = (pop - infected - dead - immune).max(0.0);
                 let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy);
                 if actual > 0.0 {
-                    // Now create entry if needed
-                    let inf = get_or_create_infection(region, disease_idx);
                     let mut adverse = false;
+                    let mut adverse_deaths = 0.0;
                     if !is_tested {
                         let roll: f64 = state.rng.r#gen();
                         if roll < 0.25 {
                             adverse = true;
-                            let harmed = (actual * 0.2).min(susceptible);
-                            inf.dead += harmed;
-                            inf.immune += actual - harmed;
-                        } else {
-                            inf.immune += actual;
+                            adverse_deaths = (actual * 0.2).min(susceptible);
                         }
+                    }
+                    let inf = get_or_create_infection(region, disease_idx);
+                    if adverse_deaths > 0.0 {
+                        inf.dead += adverse_deaths;
+                        inf.immune += actual - adverse_deaths;
                     } else {
                         inf.immune += actual;
                     }
+                    region.dead += adverse_deaths;
                     state.resources.funding -= cost;
                     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
                     (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse, efficacy), adverse)
@@ -118,22 +119,24 @@ pub(super) fn deploy_medicine(
                 // outbreak size — always impactful regardless of infection count.
                 let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
                 if actual > 0.0 {
-                    let inf = get_or_create_infection(region, disease_idx);
-                    inf.infected -= actual;
                     let mut adverse = false;
+                    let mut adverse_deaths = 0.0;
                     if !is_tested {
                         let roll: f64 = state.rng.r#gen();
                         if roll < 0.25 {
                             adverse = true;
-                            let harmed = actual * 0.2;
-                            inf.dead += harmed;
-                            inf.immune += actual - harmed;
-                        } else {
-                            inf.immune += actual;
+                            adverse_deaths = actual * 0.2;
                         }
+                    }
+                    let inf = get_or_create_infection(region, disease_idx);
+                    inf.infected -= actual;
+                    if adverse_deaths > 0.0 {
+                        inf.dead += adverse_deaths;
+                        inf.immune += actual - adverse_deaths;
                     } else {
                         inf.immune += actual;
                     }
+                    region.dead += adverse_deaths;
                     state.resources.funding -= cost;
                     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
                     (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse, efficacy), adverse)

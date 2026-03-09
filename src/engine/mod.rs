@@ -360,16 +360,15 @@ mod tests {
         }
         for region in &s.regions {
             let pop = region.population as f64;
+            // Shared death counter must not exceed population.
+            assert!(
+                region.dead <= pop + 1.0,
+                "region {}: dead {} > population {}",
+                region.name,
+                region.dead,
+                pop
+            );
             for inf in &region.infections {
-                let accounted = inf.infected + inf.immune + inf.dead;
-                assert!(
-                    accounted <= pop + 1.0,
-                    "region {} disease {}: accounted {} > population {}",
-                    region.name,
-                    inf.disease_idx,
-                    accounted,
-                    pop
-                );
                 assert!(
                     inf.infected >= 0.0 && inf.immune >= 0.0 && inf.dead >= 0.0,
                     "region {} disease {}: negative values: infected={}, immune={}, dead={}",
@@ -529,9 +528,8 @@ mod tests {
         let region = &state.regions[0];
         let inf_state = region.infections.iter().find(|i| i.disease_idx == 0);
         let infected = inf_state.map(|i| i.infected).unwrap_or(0.0);
-        let dead = inf_state.map(|i| i.dead).unwrap_or(0.0);
         let immune = inf_state.map(|i| i.immune).unwrap_or(0.0);
-        let susceptible = (region.population as f64 - infected - dead - immune).max(0.0);
+        let susceptible = (region.population as f64 - infected - region.dead - immune).max(0.0);
         let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
         let expected_immune = target_vaccinated.min(state.medicines[0].doses);
         state = apply_action(&state, &Action::Confirm);
@@ -1145,12 +1143,15 @@ mod tests {
                 break;
             }
         }
-        // Raw sum of dead across diseases should not wildly exceed population.
-        // Small floating-point overshoot is OK; 10% over is not.
-        let raw_dead: f64 = state.regions[ri].infections.iter()
+        // Shared death counter should never exceed population.
+        assert!(state.regions[ri].dead <= pop + 1.0,
+            "shared dead ({:.0}) should not exceed population ({pop:.0})",
+            state.regions[ri].dead);
+        // Per-disease attribution totals should approximately match shared dead.
+        let attributed: f64 = state.regions[ri].infections.iter()
             .map(|i| i.dead).sum();
-        assert!(raw_dead < pop * 1.05,
-            "raw dead sum ({raw_dead:.0}) should not significantly exceed population ({pop:.0})");
+        assert!(attributed <= pop * 1.05,
+            "attributed dead sum ({attributed:.0}) should not wildly exceed population ({pop:.0})");
     }
 
     #[test]

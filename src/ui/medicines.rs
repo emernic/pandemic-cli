@@ -240,9 +240,8 @@ fn render_select_target(
         match &target {
             DeployTarget::Vaccinate { .. } => {
                 let infected = inf.map(|i| i.infected).unwrap_or(0.0);
-                let dead = inf.map(|i| i.dead).unwrap_or(0.0);
                 let immune = inf.map(|i| i.immune).unwrap_or(0.0);
-                let susceptible = (pop - infected - dead - immune).max(0.0);
+                let susceptible = (pop - infected - region.dead - immune).max(0.0);
                 let empty = susceptible == 0.0;
                 let will_vaccinate = med.estimate_vaccination(susceptible, efficacy);
 
