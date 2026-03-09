@@ -152,7 +152,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let y = inner.y + row * (region_height + gap_row);
         let rect = Rect::new(x, y, region_width, region_height);
         let selected = idx == state.ui.map_selection;
-        render_region_box(f, rect, region, selected, &state.diseases);
+        let visibility = state.screening_visibility(idx);
+        render_region_box(f, rect, region, selected, &state.diseases, visibility);
     }
 
     // Detail panel below the grid for the selected region
@@ -170,6 +171,7 @@ fn render_region_box(
     region: &Region,
     selected: bool,
     diseases: &[crate::state::Disease],
+    visibility: f64,
 ) {
     let border_color = if selected {
         Color::Yellow
@@ -193,7 +195,7 @@ fn render_region_box(
         return;
     }
 
-    let infected = region.detected_infected(diseases);
+    let infected = region.screened_infected(diseases, visibility);
     let immune = region.detected_immune(diseases);
     let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
@@ -363,7 +365,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     let pop = region.population as f64;
-    let infected = region.detected_infected(&state.diseases);
+    let visibility = state.screening_visibility(idx);
+    let infected = region.screened_infected(&state.diseases, visibility);
     let immune = region.detected_immune(&state.diseases);
     let dead = region.detected_dead(&state.diseases);
     let alive = pop - dead; // alive based on detected deaths only
@@ -406,7 +409,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     continue;
                 }
                 let dname = disease.display_name(inf.disease_idx);
-                let susceptible = pop - inf.infected - inf.dead - inf.immune;
+                let screened_inf = inf.infected * visibility;
+                let susceptible = pop - screened_inf - inf.dead - inf.immune;
                 let mut spans = vec![
                     Span::styled(
                         format!("  {:<20}", dname),
@@ -414,7 +418,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                     Span::styled("Inf ", label),
                     Span::styled(
-                        format!("{:<10}", format_number(inf.infected)),
+                        format!("{:<10}", format_number(screened_inf)),
                         Style::default().fg(Color::Red),
                     ),
                     Span::styled("Immune ", label),

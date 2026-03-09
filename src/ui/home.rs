@@ -261,7 +261,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         chart_width,
         Color::Yellow,
         "Infected",
-        &format_number(state.total_infected_detected()),
+        &format_number(state.total_infected_screened()),
     ));
     lines.extend(sparkline(
         &dead_data,
@@ -283,10 +283,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         let name = disease.display_name(i);
-        let total_inf: f64 = state.regions.iter()
-            .flat_map(|r| r.infections.iter())
-            .filter(|inf| inf.disease_idx == i)
-            .map(|inf| inf.infected)
+        let total_inf: f64 = state.regions.iter().enumerate()
+            .map(|(ri, r)| {
+                let vis = state.screening_visibility(ri);
+                r.infections.iter()
+                    .filter(|inf| inf.disease_idx == i)
+                    .map(|inf| inf.infected * vis)
+                    .sum::<f64>()
+            })
             .sum();
 
         let severity_color = if total_inf > 100_000.0 { Color::Red }

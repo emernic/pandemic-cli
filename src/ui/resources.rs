@@ -94,7 +94,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         Span::styled(
-            format!("Infected: {}", format_number(state.total_infected_detected())),
+            format!("Infected: {}", format_number(state.total_infected_screened())),
             Style::default().fg(Color::Red),
         ),
         Span::raw("  "),

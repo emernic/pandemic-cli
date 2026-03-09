@@ -83,7 +83,9 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Disease detection — undetected diseases are revealed when total infected
-    // crosses the detection threshold. This is a game rule, not UI logic.
+    // crosses the detection threshold. Better screening lowers the threshold.
+    let effective_threshold = crate::state::DETECTION_THRESHOLD
+        * new.best_screening_level().detection_multiplier();
     for disease_idx in 0..new.diseases.len() {
         if new.diseases[disease_idx].detected {
             continue;
@@ -93,7 +95,7 @@ pub fn tick(state: &GameState) -> GameState {
             .filter(|inf| inf.disease_idx == disease_idx)
             .map(|inf| inf.infected)
             .sum();
-        if total >= crate::state::DETECTION_THRESHOLD {
+        if total >= effective_threshold {
             new.diseases[disease_idx].detected = true;
             new.events.push(GameEvent::DiseaseDetected { disease_idx });
         }
