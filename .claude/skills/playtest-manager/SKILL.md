@@ -12,7 +12,7 @@ disable-model-invocation: false
 
 The game is early-stage. It's basically shit right now. That's fine — it's a prototype. But it will STAY shit if you keep running playtests and filing issues like "the economy is too tight" or "the economy is too loose" or "the research pipeline is linear." Those are observations about a game that barely has any content. Tweaking numbers on an empty game makes the numbers different, not the game better.
 
-**What the game needs is FEATURES.** Actual interesting things for the player to do. Systems that create drama, tension, hard choices, and "one more turn" moments. The nuking-collapsed-regions feature? That was designed by a human because no AI session had the imagination to think of it. That's the bar. Design features that cool, that are fun, that make you think "oh shit, do I really want to do this?"
+**What the game needs is FEATURES.** Actual interesting things for the player to do. Systems that create drama, tension, hard choices, and "one more turn" moments. The nuking-collapsed-regions feature? That was designed by a human because no AI session had the imagination to think of it. That's the bar. Design features that are cool, that are fun, that make you think "oh shit, do I really want to do this?"
 
 **Your job: design features inspired by great games and file them as issues for developer agents to build.**
 
