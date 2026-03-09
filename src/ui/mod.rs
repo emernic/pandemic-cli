@@ -291,6 +291,25 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
+    // Strategic tips (defeat only)
+    if !won {
+        let tips = state.defeat_tips();
+        if !tips.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  ── What to try next time ──",
+                Style::default().fg(Color::Yellow),
+            )));
+            lines.push(Line::from(""));
+            for tip in &tips {
+                lines.push(Line::from(Span::styled(
+                    format!("  • {tip}"),
+                    Style::default().fg(Color::White),
+                )));
+            }
+        }
+    }
+
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  [Q] Save & Quit  [T/R/M] Browse panels",
