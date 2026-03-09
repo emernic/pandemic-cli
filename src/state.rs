@@ -624,7 +624,7 @@ impl PathogenType {
                 cross_region: (0.002, 0.004),
             },
             // Fungi: slow-growing, moderate lethality, very low natural recovery.
-            // R0 ≈ 2.2, death fraction ≈ 67%. Hard to clear without antifungals.
+            // R0 ≈ 2.7, death fraction ≈ 68%. Hard to clear without antifungals.
             PathogenType::Fungus => DiseaseStatRanges {
                 infectivity: (0.004, 0.008),
                 lethality: (0.001, 0.002),
