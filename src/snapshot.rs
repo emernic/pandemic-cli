@@ -122,10 +122,10 @@ mod tests {
     #[test]
     fn snapshot_with_days() {
         let state = GameState::new_default(42);
-        // d1 = 1 day = 100 ticks
+        // d1 = 1 day = 120 ticks
         let result = run_snapshot(state, &["d1".to_string()]).unwrap();
         assert!(result.screen.contains("Day: 1.0"));
-        assert_eq!(result.state.tick, 100);
+        assert_eq!(result.state.tick, 120);
     }
 
     #[test]
@@ -165,13 +165,13 @@ mod tests {
     #[test]
     fn snapshot_interleaved_days_and_keys() {
         let state = GameState::new_default(42);
-        // Advance 0.5 days (50 ticks), open threats panel, advance 0.5 more days
+        // Advance 0.5 days (60 ticks), open threats panel, advance 0.5 more days
         let result = run_snapshot(
             state,
             &["d0.5".to_string(), "t".to_string(), "d0.5".to_string()],
         )
         .unwrap();
-        assert_eq!(result.state.tick, 100);
+        assert_eq!(result.state.tick, 120);
         assert!(result.screen.contains("Threats"));
         assert!(result.screen.contains("Day: 1.0"));
     }

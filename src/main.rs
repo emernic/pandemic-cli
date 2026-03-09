@@ -30,12 +30,12 @@ struct Cli {
     #[arg(long)]
     key: Vec<String>,
 
-    /// Advance this many days (snapshot mode). 1 day = 100 ticks.
+    /// Advance this many days (snapshot mode). 1 day = 120 ticks.
     #[arg(long)]
     days: Option<f64>,
 
     /// Ordered sequence of steps (snapshot mode, repeatable).
-    /// Use d<N> for days (e.g. d1 = 1 day = 100 ticks), anything else is a key action.
+    /// Use d<N> for days (e.g. d1 = 1 day = 120 ticks), anything else is a key action.
     /// Example: --do d1 --do r --do enter --do d2.5
     #[arg(long = "do")]
     steps: Vec<String>,
