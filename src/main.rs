@@ -137,12 +137,22 @@ fn run_interactive(
     Ok(())
 }
 
+/// Minimum time after a crisis popup before Enter is accepted,
+/// preventing accidental confirmation from keypresses meant for other UI.
+const EVENT_INPUT_LOCKOUT: Duration = Duration::from_millis(500);
+
 fn game_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut state: GameState,
 ) -> Result<GameState, Box<dyn std::error::Error>> {
     let tick_duration = Duration::from_millis(500);
     let mut last_tick = Instant::now();
+    // Track when a crisis event appeared so we can block Enter briefly
+    let mut event_appeared_at: Option<Instant> = if state.active_crisis.is_some() {
+        Some(Instant::now())
+    } else {
+        None
+    };
 
     loop {
         terminal.draw(|f| {
@@ -165,6 +175,15 @@ fn game_loop(
                         if action == Action::Quit {
                             return Ok(state);
                         }
+                        // Block Enter during crisis input lockout to prevent
+                        // accidental confirmation from keypresses aimed at other UI
+                        if action == Action::Confirm {
+                            if let Some(appeared) = event_appeared_at {
+                                if appeared.elapsed() < EVENT_INPUT_LOCKOUT {
+                                    continue;
+                                }
+                            }
+                        }
                         let was_stopped = !state.sim_state.is_running();
                         state = apply_action(&state, &action);
                         // Reset tick timer on unpause to avoid burst of catch-up ticks
@@ -178,9 +197,19 @@ fn game_loop(
 
         // Auto-tick when unpaused
         if state.sim_state.is_running() && last_tick.elapsed() >= tick_duration {
+            let had_crisis = state.active_crisis.is_some();
             state = tick(&state);
             ui::process_events(&mut state);
             last_tick += tick_duration;
+            // Detect when a new crisis appears and start the input lockout
+            if !had_crisis && state.active_crisis.is_some() {
+                event_appeared_at = Some(Instant::now());
+            }
+        }
+
+        // Clear lockout tracking when crisis is resolved
+        if state.active_crisis.is_none() {
+            event_appeared_at = None;
         }
     }
 }
