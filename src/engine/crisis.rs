@@ -836,6 +836,102 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+
+        // --- Follow-up crisis types ---
+
+        CrisisKind::CounterfeitEpidemic { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let crackdown_cost = scaled_cost(state, 0.20, 150.0, 800.0);
+            CrisisEvent {
+                title: "Counterfeit Medicine Deaths".into(),
+                description: format!(
+                    "The black market drugs you tolerated in {} have spawned a counterfeit industry. \
+                     Fake medicines are killing patients. The knockoffs look identical to real treatments.",
+                    region_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Accept the casualties".into(),
+                    description: format!("More deaths in {}, but save resources for the real fight", region_name),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Crackdown (${:.0}, 2 personnel)", crackdown_cost),
+                    description: "Raid supply chains and shut down counterfeiters".into(),
+                    cost: Some(CrisisCost { funding: crackdown_cost, personnel: 2 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::EmbezzlementRing { stolen_per_day } => {
+            let total_stolen = stolen_per_day * 4.0;
+            let purge_cost = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(3, 6);
+            let buyoff = scaled_cost(state, 0.25, 200.0, 1000.0);
+            CrisisEvent {
+                title: "Embezzlement Ring Uncovered".into(),
+                description: format!(
+                    "The corrupt official you ignored has recruited allies. A full embezzlement ring \
+                     has been draining ${:.0}/day from the pandemic fund. Total losses: ${:.0}.",
+                    stolen_per_day, total_stolen,
+                ),
+                option_a: CrisisOption {
+                    label: format!("Purge the department (−{} personnel)", purge_cost),
+                    description: "Fire everyone involved — stops the bleeding but guts your team".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Buy them off (${:.0})", buyoff),
+                    description: "Pay to make the problem go away — they keep what they stole".into(),
+                    cost: Some(CrisisCost { funding: buyoff, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::MilitaryOverreach => {
+            let resist_cost = scaled_cost(state, 0.25, 200.0, 800.0);
+            CrisisEvent {
+                title: "Military Seizes Research".into(),
+                description:
+                    "The military you cooperated with is now classifying your pathogen data. \
+                     Generals want to weaponize your findings. Civilian researchers are locked out. \
+                     You can go to the press or comply.".into(),
+                option_a: CrisisOption {
+                    label: "Go to the press (−10% POL)".into(),
+                    description: "Public scandal forces military to back down, but damages your credibility".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Legal challenge (${:.0})", resist_cost),
+                    description: "Fight it in court — expensive but preserves institutional trust".into(),
+                    cost: Some(CrisisCost { funding: resist_cost, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::PublicInquiry => {
+            CrisisEvent {
+                title: "Cover-Up Exposed".into(),
+                description:
+                    "The data leak you suppressed has been uncovered by investigative journalists. \
+                     \"PANDEMIC AGENCY HIDING RESEARCH FAILURES\" — the headlines are devastating. \
+                     A full public inquiry is now demanded.".into(),
+                option_a: CrisisOption {
+                    label: "Full transparency now".into(),
+                    description: "Lose 3 days research progress, gain +10% POL for honesty".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Stonewall".into(),
+                    description: "Refuse to cooperate — −20% POL, but keep research intact".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
     };
     // INVARIANT: option_a must always be free so the player is never softlocked.
     debug_assert!(event.option_a.cost.is_none(),
@@ -987,6 +1083,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::DataLeak, _) => {
             // Suppress — lose POL
             state.resources.political_power -= 0.10;
+            // Schedule follow-up: public inquiry in 5 days
+            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::PublicInquiry));
             "Leak suppressed — research intact but public confidence shaken".into()
         }
 
@@ -1008,6 +1107,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 }
                 region.dead += total_harmed;
             }
+            // Schedule follow-up: counterfeit epidemic in 5 days
+            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::CounterfeitEpidemic { region_idx: *region_idx }));
             format!("Black market drugs allowed in {} — some treated, some suffered adverse reactions", region_name)
         }
         (CrisisKind::BlackMarketMedicine { region_idx }, _) => {
@@ -1088,6 +1190,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::CorruptOfficial { stolen }, 0) => {
             // Ignore — lose the stolen money (amount locked at generation time)
             state.resources.funding -= stolen;
+            // Schedule follow-up: embezzlement ring in 4 days
+            let daily_drain = (state.resources.funding * 0.05).clamp(20.0, 200.0);
+            let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::EmbezzlementRing { stolen_per_day: daily_drain }));
             format!("Corruption ignored — ${:.0} lost from the pandemic fund", stolen)
         }
         (CrisisKind::CorruptOfficial { .. }, _) => {
@@ -1145,6 +1251,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Cooperate — lose personnel, gain POL
             state.resources.personnel = state.resources.personnel.saturating_sub(*cooperate_loss);
             state.resources.political_power += 0.15;
+            // Schedule follow-up: military overreach in 4 days
+            let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::MilitaryOverreach));
             format!("Ceded {} staff to military — agency retains civilian control with their backing", cooperate_loss)
         }
         (CrisisKind::MilitaryTakeover { .. }, _) => {
@@ -1215,6 +1324,71 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.funding += credit_gain;
             state.resources.political_power -= 0.15;
             format!("Picked a side — ${:.0} from the winner, furious allies of the loser", credit_gain)
+        }
+
+        // --- Follow-up crisis resolutions ---
+
+        (CrisisKind::CounterfeitEpidemic { region_idx }, 0) => {
+            // Accept casualties — more deaths in the region
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                let mut total_killed = 0.0;
+                for inf in &mut region.infections {
+                    if inf.infected > 100.0 {
+                        let killed = inf.infected * 0.10;
+                        inf.infected -= killed;
+                        inf.dead += killed;
+                        total_killed += killed;
+                    }
+                }
+                region.dead += total_killed;
+            }
+            format!("Counterfeit medicines killing patients in {} — no resources to stop it", region_name)
+        }
+        (CrisisKind::CounterfeitEpidemic { region_idx }, _) => {
+            // Crackdown — costs already deducted
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            format!("Counterfeit drug ring in {} dismantled", region_name)
+        }
+
+        (CrisisKind::EmbezzlementRing { .. }, 0) => {
+            // Purge department — lose personnel
+            let purge = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(3, 6);
+            state.resources.personnel = state.resources.personnel.saturating_sub(purge);
+            format!("Department purged — {} staff fired, embezzlement ring broken", purge)
+        }
+        (CrisisKind::EmbezzlementRing { .. }, _) => {
+            // Buy them off — costs already deducted
+            "Paid off the embezzlers — they'll stop... for now".into()
+        }
+
+        (CrisisKind::MilitaryOverreach, 0) => {
+            // Go to the press — lose POL, but research continues
+            state.resources.political_power -= 0.10;
+            "Went public — military forced to release research data. Your credibility took a hit.".into()
+        }
+        (CrisisKind::MilitaryOverreach, _) => {
+            // Legal challenge — costs already deducted
+            "Legal challenge successful — civilian control of research restored".into()
+        }
+
+        (CrisisKind::PublicInquiry, 0) => {
+            // Full transparency — lose research progress, gain POL
+            let loss = (3.0 * TICKS_PER_DAY) as f64;
+            if let Some(proj) = state.field_research.first_mut() {
+                proj.progress = (proj.progress - loss).max(0.0);
+            } else if let Some(proj) = &mut state.applied_research {
+                proj.progress = (proj.progress - loss).max(0.0);
+            }
+            state.resources.political_power += 0.10;
+            "Full transparency — lost research time but rebuilt public trust".into()
+        }
+        (CrisisKind::PublicInquiry, _) => {
+            // Stonewall — massive POL loss
+            state.resources.political_power -= 0.20;
+            "Stonewalled the inquiry — public outrage intensifies".into()
         }
     };
     // Clamp POL after crisis modifications

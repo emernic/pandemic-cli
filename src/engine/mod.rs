@@ -164,6 +164,33 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Fire scheduled follow-up crises (from previous crisis choices).
+    // These take priority over random crisis generation.
+    if new.active_crisis.is_none() {
+        if let Some(idx) = new.pending_crises.iter().position(|&(tick, _)| tick <= new.tick) {
+            let (_, kind) = new.pending_crises.remove(idx);
+            let crisis = crisis::build_crisis_event(&new, kind);
+            let auto_choice = new.auto_resolve_crises.get(crisis.kind.tag()).copied();
+            let auto_resolved = match auto_choice {
+                Some(choice) => {
+                    let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
+                    option.cost.as_ref().map_or(true, |c| c.affordable(&new))
+                }
+                None => false,
+            };
+            new.active_crisis = Some(crisis);
+            if auto_resolved {
+                crisis::resolve_crisis(&mut new, auto_choice.unwrap());
+                new.events.push(GameEvent::CrisisAutoResolved);
+            } else {
+                new.sim_state = SimState::Event {
+                    was_running: new.sim_state.is_running(),
+                };
+                new.events.push(GameEvent::CrisisStarted);
+            }
+        }
+    }
+
     // Crisis event generation (only when no crisis is active).
     // Frequency scales with game day: early game ~1/10 days, late game ~1/3 days.
     let crisis_interval = {
@@ -3698,5 +3725,85 @@ mod tests {
         // UI should return to BrowseRegions after successful sacrifice
         assert_eq!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions),
             "should return to BrowseRegions after enacting sacrifice");
+    }
+
+    // --- Crisis chain tests ---
+
+    #[test]
+    fn black_market_allow_schedules_counterfeit_followup() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        state.regions[0].infections = vec![RegionDiseaseState {
+            disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+        }];
+        setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.pending_crises.len(), 1, "should schedule one follow-up");
+        let (fire_tick, ref kind) = after.pending_crises[0];
+        assert!(matches!(kind, CrisisKind::CounterfeitEpidemic { region_idx: 0 }),
+            "follow-up should be CounterfeitEpidemic for region 0");
+        let expected_tick = 1000 + (5.0 * TICKS_PER_DAY) as u64;
+        assert_eq!(fire_tick, expected_tick, "should fire 5 days later");
+    }
+
+    #[test]
+    fn black_market_confiscate_no_followup() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.pending_crises.is_empty(), "confiscating should NOT schedule follow-up");
+    }
+
+    #[test]
+    fn corruption_ignore_schedules_embezzlement_followup() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        state.resources.funding = 2000.0;
+        setup_crisis(&mut state, CrisisKind::CorruptOfficial { stolen: 200.0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.pending_crises.len(), 1);
+        assert!(matches!(after.pending_crises[0].1, CrisisKind::EmbezzlementRing { .. }));
+    }
+
+    #[test]
+    fn data_leak_suppress_schedules_inquiry_followup() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        setup_crisis(&mut state, CrisisKind::DataLeak, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.pending_crises.len(), 1);
+        assert!(matches!(after.pending_crises[0].1, CrisisKind::PublicInquiry));
+    }
+
+    #[test]
+    fn military_cooperate_schedules_overreach_followup() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        setup_crisis(&mut state, CrisisKind::MilitaryTakeover { cooperate_loss: 3 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.pending_crises.len(), 1);
+        assert!(matches!(after.pending_crises[0].1, CrisisKind::MilitaryOverreach));
+    }
+
+    #[test]
+    fn pending_crisis_fires_when_due() {
+        let mut state = GameState::new_default(42);
+        state.tick = 100; // Pending check runs before tick increment
+        state.pending_crises.push((100, CrisisKind::PublicInquiry));
+        let after = tick(&state);
+        assert!(after.active_crisis.is_some(), "pending crisis should fire");
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Cover-Up Exposed");
+        assert!(after.pending_crises.is_empty(), "fired crisis should be removed from pending");
+    }
+
+    #[test]
+    fn pending_crisis_waits_if_not_due() {
+        let mut state = GameState::new_default(42);
+        state.tick = 50;
+        state.pending_crises.push((200, CrisisKind::PublicInquiry));
+        let after = tick(&state);
+        assert!(after.active_crisis.is_none(), "should not fire yet");
+        assert_eq!(after.pending_crises.len(), 1, "should still be pending");
     }
 }
