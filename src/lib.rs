@@ -142,7 +142,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
-                    new.ui.apply_command_result(&cmd, result.success, &result.message);
+                    new.ui.apply_command_result(&cmd, result.success, &result.message, result.adverse);
                     if new.ui.status_message.is_none() {
                         new.ui.status_message = result.message;
                     }
