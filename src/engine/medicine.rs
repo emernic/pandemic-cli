@@ -174,6 +174,8 @@ fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, region_idx: u
 /// Build resistance from deployment pressure. Treatment creates much more
 /// selection pressure than vaccination. Broad-spectrum drugs build resistance
 /// faster (2x) because broad selection pressure accelerates adaptation.
+/// Mechanism-specific multipliers further modify: cheap/fast mechanisms
+/// have high resistance rates, expensive/durable ones have low rates.
 /// CombinationTherapy tech halves all resistance buildup.
 fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
     let med = &state.medicines[medicine_idx];
@@ -183,8 +185,9 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
         crate::state::TherapyType::BroadSpectrum => 2.0,
         _ => 1.0,
     };
+    let mech_mult = mechanism.map(|m| m.resistance_rate_multiplier()).unwrap_or(1.0);
     let combo_mult = state.resistance_multiplier();
-    let gain = base * type_mult * combo_mult;
+    let gain = base * type_mult * mech_mult * combo_mult;
     // Resistance lives on the disease, keyed by mechanism — so deploying
     // any CellWallInhibitor drug builds resistance that affects ALL
     // CellWallInhibitor drugs against this disease.

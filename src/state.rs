@@ -1233,6 +1233,101 @@ impl MechanismOfAction {
             PathogenType::Prion => false,
         }
     }
+
+    /// Efficacy modifier for this mechanism (0.0–1.0). Multiplied with
+    /// therapy-type efficacy to determine how well this drug works.
+    /// Fast/cheap mechanisms are more potent initially; expensive ones less so.
+    pub fn efficacy_modifier(&self) -> f64 {
+        match self {
+            // Bacterial: CellWall is potent but fragile, Metabolic is weak but durable
+            MechanismOfAction::CellWallInhibitor => 0.95,
+            MechanismOfAction::RibosomeInhibitor => 0.85,
+            MechanismOfAction::DnaGyraseInhibitor => 0.80,
+            MechanismOfAction::MetabolicInhibitor => 0.75,
+            // Fungal: Ergosterol fast, Glucan durable
+            MechanismOfAction::ErgosterolInhibitor => 0.90,
+            MechanismOfAction::MembraneDisruptor => 0.85,
+            MechanismOfAction::GlucanSynthaseInhibitor => 0.80,
+            // Viral: Polymerase fast, Entry durable
+            MechanismOfAction::PolymeraseInhibitor => 0.90,
+            MechanismOfAction::ProteaseInhibitor => 0.85,
+            MechanismOfAction::EntryInhibitor => 0.80,
+        }
+    }
+
+    /// How fast resistance builds when deploying this mechanism.
+    /// Cheap/fast mechanisms have high multipliers (resistance emerges quickly).
+    /// Expensive/slow ones are harder for pathogens to adapt to.
+    pub fn resistance_rate_multiplier(&self) -> f64 {
+        match self {
+            MechanismOfAction::CellWallInhibitor => 1.8,
+            MechanismOfAction::RibosomeInhibitor => 1.0,
+            MechanismOfAction::DnaGyraseInhibitor => 0.5,
+            MechanismOfAction::MetabolicInhibitor => 0.3,
+
+            MechanismOfAction::ErgosterolInhibitor => 1.6,
+            MechanismOfAction::MembraneDisruptor => 1.0,
+            MechanismOfAction::GlucanSynthaseInhibitor => 0.3,
+
+            MechanismOfAction::PolymeraseInhibitor => 1.6,
+            MechanismOfAction::ProteaseInhibitor => 1.0,
+            MechanismOfAction::EntryInhibitor => 0.3,
+        }
+    }
+
+    /// Development cost/time/personnel multiplier relative to base (3 personnel, 200 ticks, $500).
+    /// Fast mechanisms are cheaper to develop; durable ones are expensive.
+    pub fn dev_cost_multiplier(&self) -> f64 {
+        match self {
+            MechanismOfAction::CellWallInhibitor => 0.6,
+            MechanismOfAction::RibosomeInhibitor => 1.0,
+            MechanismOfAction::DnaGyraseInhibitor => 1.4,
+            MechanismOfAction::MetabolicInhibitor => 1.8,
+
+            MechanismOfAction::ErgosterolInhibitor => 0.6,
+            MechanismOfAction::MembraneDisruptor => 1.0,
+            MechanismOfAction::GlucanSynthaseInhibitor => 1.6,
+
+            MechanismOfAction::PolymeraseInhibitor => 0.6,
+            MechanismOfAction::ProteaseInhibitor => 1.0,
+            MechanismOfAction::EntryInhibitor => 1.8,
+        }
+    }
+
+    /// Short description of the mechanism's tradeoff profile.
+    pub fn tradeoff_label(&self) -> &'static str {
+        match self {
+            MechanismOfAction::CellWallInhibitor
+            | MechanismOfAction::ErgosterolInhibitor
+            | MechanismOfAction::PolymeraseInhibitor => "Fast, resistance-prone",
+
+            MechanismOfAction::RibosomeInhibitor
+            | MechanismOfAction::MembraneDisruptor
+            | MechanismOfAction::ProteaseInhibitor => "Balanced",
+
+            MechanismOfAction::DnaGyraseInhibitor => "Slow, durable",
+
+            MechanismOfAction::MetabolicInhibitor
+            | MechanismOfAction::GlucanSynthaseInhibitor
+            | MechanismOfAction::EntryInhibitor => "Expensive, very durable",
+        }
+    }
+
+    /// Starting dose count for medicines using this mechanism.
+    /// Fast/cheap mechanisms have fewer doses (need more manufacturing).
+    pub fn base_doses(&self) -> f64 {
+        let mult = self.dev_cost_multiplier();
+        // Scale from 60M (cheapest) to 180M (most expensive)
+        (60_000_000.0 + 80_000_000.0 * (mult - 0.6) / 1.2).round()
+    }
+
+    /// Deploy cost per use for this mechanism.
+    /// Fast mechanisms cost more per deployment; expensive ones are cheaper per use.
+    pub fn deploy_cost(&self) -> f64 {
+        let mult = self.dev_cost_multiplier();
+        // Scale from $65 (cheapest dev) to $30 (most expensive dev)
+        (65.0 - 30.0 * (mult - 0.6) / 1.2).round()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1284,9 +1379,9 @@ impl Medicine {
     }
 
     /// Generate targeted medicines for a disease. For non-prion pathogens, produces
-    /// two variants with different mechanisms of action and development profiles:
-    /// - Rapid: faster/cheaper to develop, fewer doses (50M), higher deploy cost ($75)
-    /// - Standard: slower/more expensive to develop, more doses (150M), lower deploy cost ($35)
+    /// one medicine per mechanism of action (3-4 options depending on pathogen type).
+    /// Each mechanism has distinct tradeoffs: fast/cheap mechanisms are potent but
+    /// resistance-prone; expensive/slow ones are less potent but nearly resistance-proof.
     /// Prions produce a single medicine (no known molecular targets for mechanism branching).
     pub fn targeted_medicines(disease_idx: usize, pathogen_type: PathogenType) -> Vec<Medicine> {
         let therapy = pathogen_type.matched_therapy();
@@ -1315,41 +1410,23 @@ impl Medicine {
             }
         };
 
-        let mech_a = mechs[(disease_idx * 2) % mechs.len()];
-        let mech_b = mechs[(disease_idx * 2 + 1) % mechs.len()];
-
-        vec![
-            // Rapid variant: fast to develop, fewer doses, higher deploy cost
+        mechs.iter().map(|&mech| {
+            let doses = mech.base_doses();
             Medicine {
-                name: format!("{}-{}", mech_a.short_label(), letter),
+                name: format!("{}-{}", mech.short_label(), letter),
                 therapy_type: therapy,
-                mechanism: Some(mech_a),
+                mechanism: Some(mech),
                 target_diseases: vec![disease_idx],
-                cost: 75.0,
-                doses: 50_000_000.0,
-                max_doses: 50_000_000.0,
-                unlocked: false,
-                tested_against: vec![],
-                strain_generations: vec![],
-                deployed_count: 0,
-                rapid: true,
-            },
-            // Standard variant: slower to develop, more doses, lower deploy cost
-            Medicine {
-                name: format!("{}-{}", mech_b.short_label(), letter),
-                therapy_type: therapy,
-                mechanism: Some(mech_b),
-                target_diseases: vec![disease_idx],
-                cost: 35.0,
-                doses: 150_000_000.0,
-                max_doses: 150_000_000.0,
+                cost: mech.deploy_cost(),
+                doses,
+                max_doses: doses,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
                 deployed_count: 0,
                 rapid: false,
-            },
-        ]
+            }
+        }).collect()
     }
 
 
@@ -1426,11 +1503,14 @@ impl Medicine {
     }
 
     /// Combined efficacy when deploying this medicine against a disease.
-    /// Factors: therapy type × pathogen match × strain calibration × cross-reactivity × resistance.
+    /// Factors: therapy type × mechanism × strain calibration × cross-reactivity × resistance.
     pub fn effective_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
         let therapy_efficacy = diseases.get(disease_idx)
             .map(|d| self.therapy_type.efficacy(&d.pathogen_type))
             .unwrap_or(0.0);
+        let mechanism_eff = self.mechanism
+            .map(|m| m.efficacy_modifier())
+            .unwrap_or(1.0);
         let strain_eff = self.strain_efficacy(disease_idx, diseases);
         let cross_reactive = if self.is_cross_reactive(disease_idx) {
             CROSS_REACTIVE_PENALTY
@@ -1438,7 +1518,7 @@ impl Medicine {
             1.0
         };
         let resistance = self.resistance_factor(disease_idx, diseases);
-        therapy_efficacy * strain_eff * cross_reactive * resistance
+        therapy_efficacy * mechanism_eff * strain_eff * cross_reactive * resistance
     }
 
     /// Decode a UI selection index into a deploy target.
@@ -1648,8 +1728,9 @@ impl BasicTech {
 impl ResearchKind {
     /// Project costs: (personnel, duration_ticks, funding).
     ///
-    /// DevelopMedicine costs depend on variant: rapid (fast/cheap), standard (slow/expensive),
-    /// or broad (multi-target, most expensive).
+    /// DevelopMedicine costs depend on mechanism of action: each mechanism has
+    /// a dev_cost_multiplier that scales base costs (3 personnel, 200 ticks, $500).
+    /// Broad-spectrum (multi-target, no mechanism) uses fixed high costs.
     /// RapidSequencing tech halves GenomicSequencing duration.
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
@@ -1659,10 +1740,14 @@ impl ResearchKind {
                 let targets = med.map_or(1, |m| m.target_diseases.len());
                 if targets > 1 {
                     (10, 400.0, 700.0)  // broad: slow and expensive, covers all
-                } else if med.is_some_and(|m| m.rapid) {
-                    (2, 120.0, 300.0)   // rapid: fast crisis response
+                } else if let Some(mech) = med.and_then(|m| m.mechanism) {
+                    let mult = mech.dev_cost_multiplier();
+                    let personnel = ((3.0 * mult).round() as u32).max(1);
+                    let ticks = (200.0 * mult).round();
+                    let funding = (500.0 * mult).round();
+                    (personnel, ticks, funding)
                 } else {
-                    (4, 280.0, 700.0)   // standard: slower but more sustainable
+                    (4, 280.0, 700.0)   // fallback / prion
                 }
             }
             ResearchKind::ClinicalTrial { .. } => (2, 60.0, 200.0),
@@ -3728,6 +3813,67 @@ mod tests {
             _ => false,
         });
         assert!(has_targeted, "targeted medicine should be available at knowledge 1.0");
+    }
+
+    #[test]
+    fn mechanism_branching_shows_all_variants() {
+        let mut state = GameState::new_default(42);
+        // Full knowledge + TargetedDrugDesign unlocks all mechanism variants
+        for d in &mut state.diseases {
+            d.knowledge = KNOWLEDGE_FULL;
+        }
+        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+
+        let projects = state.available_applied_projects();
+        let develop_projects: Vec<_> = projects.iter()
+            .filter(|k| matches!(k, ResearchKind::DevelopMedicine { .. }))
+            .collect();
+        // Disease 0 (Bacterium in default seed) should have 4 targeted + 1 broad = 5
+        // Or 3 targeted + 1 broad = 4 if virus/fungus
+        // At minimum, we should see more than 2 develop options
+        assert!(develop_projects.len() >= 4,
+            "should have 4+ develop options (all mechanisms + broad), got {}: {:?}",
+            develop_projects.len(),
+            develop_projects.iter().map(|k| match k {
+                ResearchKind::DevelopMedicine { medicine_idx } =>
+                    state.medicines[*medicine_idx].name.clone(),
+                _ => "?".to_string(),
+            }).collect::<Vec<_>>());
+
+        // Each mechanism variant should have different cost multipliers
+        let costs: Vec<_> = develop_projects.iter()
+            .map(|k| match k {
+                ResearchKind::DevelopMedicine { medicine_idx } =>
+                    k.costs(&state.medicines),
+                _ => (0, 0.0, 0.0),
+            })
+            .collect();
+        // Should have different costs (not all the same)
+        let unique_costs: std::collections::HashSet<_> = costs.iter()
+            .map(|(p, _, _)| *p)
+            .collect();
+        assert!(unique_costs.len() >= 2,
+            "mechanism variants should have different development costs");
+    }
+
+    #[test]
+    fn mechanism_efficacy_affects_deployment() {
+        let mut state = GameState::new_default(42);
+        // Find a fast mechanism (CellWallInhibitor) and a slow one
+        let fast_idx = state.medicines.iter().position(|m|
+            m.mechanism == Some(MechanismOfAction::CellWallInhibitor)
+        );
+        let slow_idx = state.medicines.iter().position(|m|
+            m.mechanism == Some(MechanismOfAction::MetabolicInhibitor)
+        );
+        if let (Some(fi), Some(si)) = (fast_idx, slow_idx) {
+            let fast_eff = state.medicines[fi].effective_efficacy(0, &state.diseases);
+            let slow_eff = state.medicines[si].effective_efficacy(0, &state.diseases);
+            // Fast mechanism should have higher initial efficacy
+            assert!(fast_eff > slow_eff,
+                "fast mechanism should have higher efficacy: {} vs {}",
+                fast_eff, slow_eff);
+        }
     }
 
     #[test]
