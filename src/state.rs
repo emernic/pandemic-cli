@@ -1592,19 +1592,22 @@ impl GameState {
         let mut used_names: Vec<String> = Vec::new();
         for pathogen_type in &chosen_types {
             let mut disease = Disease::generate(&mut rng, *pathogen_type, &used_names, false);
-            disease.detected = false; // starts undetected — revealed when infections cross threshold
+            disease.detected = true; // starting disease is already detected — player needs something to act on
             used_names.push(disease.name.clone());
             diseases.push(disease);
         }
 
         // --- Place initial outbreak ---
-        // Small seed — disease grows silently until detection threshold is reached.
+        // The starting disease has already been detected by global health systems.
+        // We seed it well above the detection threshold so the player can immediately
+        // see infections on the map and begin field research to identify it.
         let region_idx = rng.r#gen::<usize>() % regions.len();
-        let infected = 500.0 + rng.r#gen::<f64>() * 2_000.0;
+        let infected = 15_000.0 + rng.r#gen::<f64>() * 10_000.0;
+        let dead = infected * 0.01; // ~1% already dead when the player takes over
         regions[region_idx].infections.push(RegionDiseaseState {
             disease_idx: 0,
             infected,
-            dead: 0.0,
+            dead,
             immune: 0.0,
         });
 
@@ -2043,7 +2046,8 @@ mod tests {
     fn default_state_has_initial_infection() {
         let state = GameState::new_default(1);
         assert!(state.total_infected() > 0.0);
-        assert_eq!(state.total_dead(), 0.0);
+        assert!(state.total_dead() > 0.0);
+        assert!(state.diseases[0].detected);
     }
 
     #[test]
