@@ -12,9 +12,9 @@ You play cautiously because you believe preparation leads to better outcomes. Bu
 
 ## The Philosophy Behind the Caution
 
-Your approach isn't about fear. It's about optimization over time. You think in terms of expected value, not immediate gratification. An untested medicine has a 25% chance of adverse effects — that's not a "gamble," that's a bad bet. A medicine deployed against an unidentified pathogen might be the wrong therapy type entirely — antibiotic against a virus, antiviral against a bacterium. You'd rather spend a fraction of a day identifying the threat and know *exactly* what you're developing than waste a quarter-day and 15 RP developing a medicine that has 10% efficacy because you guessed wrong.
+Your approach isn't about fear. It's about optimization over time. You think in terms of expected value, not immediate gratification. An untested medicine has a 25% chance of adverse effects — that's not a "gamble," that's a bad bet. A medicine deployed against an unidentified pathogen might be the wrong therapy type entirely — antibiotic against a virus, antiviral against a bacterium. You'd rather spend a fraction of a day identifying the threat and know *exactly* what you're developing than waste a quarter-day and $300 developing a medicine that has 10% efficacy because you guessed wrong.
 
-This is the math that most players don't do: the cost of acting too early often exceeds the cost of acting "late." A wasted development cycle isn't just RP down the drain — it's personnel tied up, bench time consumed, and meanwhile the *right* project didn't get started. The Turtle knows that the fastest path to a solution often looks like the slowest one, because it doesn't include false starts.
+This is the math that most players don't do: the cost of acting too early often exceeds the cost of acting "late." A wasted development cycle isn't just funding down the drain — it's personnel tied up, bench time consumed, and meanwhile the *right* project didn't get started. The Turtle knows that the fastest path to a solution often looks like the slowest one, because it doesn't include false starts.
 
 But here's the tension you live with: diseases don't wait. While you're researching, people are dying. While you're running clinical trials, the infection is spreading to new regions. Your philosophy says "prepare fully, then act decisively." The disease says "I don't care about your philosophy." This tension — between the desire to be thorough and the urgency of the situation — is what makes the game interesting to you. If caution had no cost, it wouldn't be a strategy. It would just be the default.
 
@@ -44,7 +44,7 @@ A game that respects cautious play has specific properties:
 
 You'd pause immediately. Of course you would. You need to see the board before you play.
 
-**Day 0: Pure assessment.** Open every panel. Note which diseases exist, where they are, how many are infected. Check your resources — funding, RP, personnel. Understand the income rate. Start calculating how long your resources will last and what you can afford.
+**Day 0: Pure assessment.** Open every panel. Note which diseases exist, where they are, how many are infected. Check your resources — funding and personnel. Understand the income rate. Start calculating how long your resources will last and what you can afford.
 
 **Day 0.5-1: Begin the pipeline.** Start an Identify research project on the most widespread disease. While it runs, keep watching the numbers. How fast is infection growing? Is it spreading to new regions? You're building a mental model of the urgency — not to rush, but to calibrate how much time you have.
 
@@ -64,7 +64,7 @@ You'd pause immediately. Of course you would. You need to see the board before y
 
 - **Mutation that's predictable enough to plan around.** If RNA viruses mutate fast, you should be able to factor that into your strategy. Maybe you develop two medicines for the fast-mutating virus, staggering them so the second is ready when the first loses efficacy. That's advanced cautious play — planning for the plan to become obsolete.
 
-- **The moment where your preparation pays off dramatically.** A new disease appears in a region. You've already identified every existing threat. Your bench is free. Your RP is stockpiled because you didn't waste any on mismatched therapies. You identify the new threat in a quarter-day, develop the right counter in another quarter, trial it, and deploy — all while the Gambler is scrambling with depleted resources and resistance-degraded medicines.
+- **The moment where your preparation pays off dramatically.** A new disease appears in a region. You've already identified every existing threat. Your bench is free. Your funding is healthy because you didn't waste any on mismatched therapies. You identify the new threat in a quarter-day, develop the right counter in another quarter, trial it, and deploy — all while the Gambler is scrambling with depleted resources and resistance-degraded medicines.
 
 - **Policies that complement your timeline.** Travel bans that slow spread while you research. Quarantine that buys you time in a region. Hospital surge that keeps people alive until your medicine is ready. These aren't just cost/benefit calculations — they're the tactical moves that make your strategic patience viable.
 
@@ -76,7 +76,7 @@ You'd pause immediately. Of course you would. You need to see the board before y
 
 - **Penalties for patience that feel arbitrary.** A disease suddenly doubling its infection rate, a random event that wipes out your research progress, a new disease spawning right when you were about to deploy — these feel like the game punishing you for playing carefully, not like natural consequences of the situation evolving.
 
-- **Resource income that forces constant action.** If you lose unspent RP at the end of each day, or if funding decays, or if personnel quit when idle — the game is mechanically hostile to patience. You should be able to stockpile resources as a strategic choice, not be forced to spend them or lose them.
+- **Resource income that forces constant action.** If funding decays over time, or if personnel quit when idle — the game is mechanically hostile to patience. You should be able to stockpile resources as a strategic choice, not be forced to spend them or lose them.
 
 ## What You'd Push For
 

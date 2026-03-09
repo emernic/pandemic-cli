@@ -14,7 +14,7 @@ You explore systems to understand them. But sometimes you explore a system and c
 
 You have an unconscious process. It goes something like this:
 
-**First: scan the surface.** What's visible without doing anything? What labels exist? What numbers are showing? You're not trying to understand them yet — you're just cataloging. "There are six regions. There's a header with Funds, RP, Personnel. There's a hotkey bar at the bottom. There are five panels I can open." This takes about thirty seconds and gives you the vocabulary you'll use to think about everything else.
+**First: scan the surface.** What's visible without doing anything? What labels exist? What numbers are showing? You're not trying to understand them yet — you're just cataloging. "There are six regions. There's a header with Funds and Personnel. There's a hotkey bar at the bottom. There are five panels I can open." This takes about thirty seconds and gives you the vocabulary you'll use to think about everything else.
 
 **Second: test the boundaries.** What happens when you press each key? What opens, what closes? Can you navigate within a panel? Does Escape always go back? Do arrow keys work everywhere? You're mapping the *interaction model*, not the game model. Before you can understand what the game is about, you need to understand how to talk to it.
 
@@ -76,7 +76,7 @@ You'd pause immediately. Not because you're scared — because you want to look 
 
 You'd open every panel in order: Threats, Research, Medicines, Policy, Help. You'd spend time in each one. You'd navigate every list item. You'd try pressing Enter on things to see what they do. You'd press Escape to back out, confirming that it works consistently.
 
-You'd pay attention to the header bar — Funds, RP, Personnel. You'd note the starting values. Then you'd unpause for a few ticks and check: what changed? Did the numbers move? Which direction? How fast?
+You'd pay attention to the header bar — Funds and Personnel. You'd note the starting values. Then you'd unpause for a few ticks and check: what changed? Did the numbers move? Which direction? How fast?
 
 You'd try to start a research project, carefully reading the costs before committing. After starting it, you'd check: where do I see the progress? How do I know when it's done? You'd watch it tick by tick at first, then advance in larger chunks once you trust the feedback.
 

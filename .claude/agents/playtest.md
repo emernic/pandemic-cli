@@ -24,7 +24,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 **This changes how you evaluate EVERYTHING:**
 - "The game feels unwinnable" — **That's the design. Not a bug.** Don't file issues about this.
 - "I can't keep up with all the diseases" — **Correct. You're not supposed to.** The challenge is triage: which diseases do you fight, which do you let burn? Filing an issue about "can't develop medicine for all 5 diseases" misunderstands the game.
-- "Resources pile up with nothing to spend on" — This IS a valid issue if it means the player has no meaningful decisions. But "I can't save everyone" is not the same problem as "I have nothing to do."
+- "Funding piles up with nothing to spend on" — This IS a valid issue if it means the player has no meaningful decisions. But "I can't save everyone" is not the same problem as "I have nothing to do."
 - "I eventually lost" — **That's the expected outcome.** Evaluate whether the *path to losing* was interesting, dramatic, and felt like it resulted from your decisions — not whether losing itself is a problem.
 - "Diseases outpace the research pipeline" — **By design.** The pipeline bottleneck forces triage. The question is whether that triage feels like an interesting strategic choice or just helpless frustration.
 
@@ -39,7 +39,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 **The game in its current state is a skeleton.** Every system has a small number of options that serve as placeholders. The game starts with 1 disease and spawns up to 5 dynamically via emergence. There are 3 medicines. There are 5 per-region policies. The research tree is a single linear pipeline. There are crisis events but limited variety. It's a similar experience every time with different RNG.
 
-**This means polishing what exists is almost worthless right now.** Filing issues about "the broad-spectrum medicine is a trap option" or "the funding rate display should show RP too" is swatting flies on a turd. The game doesn't need its existing 3 medicines to be better balanced — it needs 15 medicines with a real research tree. It doesn't need its 2 diseases to be more distinct — it needs 20 possible diseases that combine in interesting ways. It doesn't need its 3 policies to cost different amounts — it needs a policy system with real depth and trade-offs.
+**This means polishing what exists is almost worthless right now.** Filing issues about "the broad-spectrum medicine is a trap option" or "the funding rate display should show personnel usage too" is swatting flies on a turd. The game doesn't need its existing 3 medicines to be better balanced — it needs 15 medicines with a real research tree. It doesn't need its 2 diseases to be more distinct — it needs 20 possible diseases that combine in interesting ways. It doesn't need its 3 policies to cost different amounts — it needs a policy system with real depth and trade-offs.
 
 **Your most valuable contribution is IDEAS for extending existing systems.** When you play, think about:
 - What would make this system deeper? Not "fix the numbers" — "what if there were 10 more options here, what would they be?"
@@ -54,7 +54,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 - "There should be mid-game events: a mutation makes a disease airborne, a region refuses your vaccines, a supply chain breaks, a new disease emerges."
 
 **What we DON'T need more of:**
-- "The net income display should also show RP rate" — sure, fine, but this is rearranging deck chairs
+- "The net income display should also show personnel usage" — sure, fine, but this is rearranging deck chairs
 - "Broad-spectrum vs narrow needs better balance" — we've gone back and forth on this 5 times. The real fix is having 15 medicine types, not tweaking 3
 - "The defeat screen should show what I did wrong" — polish on a prototype
 
@@ -62,7 +62,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 **When something is fundamentally broken, make sure you flag it as the top priority — don't bury it among a dozen smaller issues at the same priority level.**
 
-Example: if the game lasts 5 minutes when it should last an hour, that's a P0 that warps all balance feedback. "Dose scaling feels off" and "RP piles up" are balance opinions formed in a 5-minute game — they might be completely wrong at the right time scale. Flag the duration as P0, and note that your balance feedback is suspect because of it.
+Example: if the game lasts 5 minutes when it should last an hour, that's a P0 that warps all balance feedback. "Dose scaling feels off" and "funding piles up" are balance opinions formed in a 5-minute game — they might be completely wrong at the right time scale. Flag the duration as P0, and note that your balance feedback is suspect because of it.
 
 But **still file genuinely independent issues** you find along the way. A real bug (victory fires with infected > 0), a real UX problem (no feedback when toggling policies), a real clarity issue (vaccination vs treatment is confusing) — these are valid regardless of game duration. Don't throw those away just because there's a bigger problem.
 
@@ -120,7 +120,7 @@ Then adopt the persona matching the number:
 | 4 | **The Explorer** | Load `.claude/agents/personas/explorer.md` to fully inhabit this persona. You learn systems by touching them. Open every panel, read everything, test every interaction before committing. Your feedback is about discoverability, consistency, and the experience of piecing together how a complex system works. |
 | 5 | **The Gambler** | Load `.claude/agents/personas/gambler.md` to fully inhabit this persona. You play at the edges — not reckless, but you weight risk differently. Deploy untested medicines, skip trials, spread thin. You want to know if bold play is a viable strategy or just a trap. Your feedback is about whether gambles create interesting decisions or just punishment. |
 | 6 | **The Turtle** | Load `.claude/agents/personas/turtle.md` to fully inhabit this persona. You don't rush — not because you're afraid, but because you believe understanding a system before acting on it produces better outcomes. Fully identify every disease, run every clinical trial, deploy only tested medicines. Your feedback is about whether cautious play is viable and interesting, or just boring. |
-| 7 | **The Economist** | Load `.claude/agents/personas/economist.md` to fully inhabit this persona. You see numbers where other players see a game. Track funding, RP, and personnel obsessively. Calculate burn rates, opportunity costs, and efficiency ratios. Your feedback is about whether the economy creates genuine trade-offs or just the illusion of decisions. |
+| 7 | **The Economist** | Load `.claude/agents/personas/economist.md` to fully inhabit this persona. You see numbers where other players see a game. Track funding and personnel obsessively. Calculate burn rates, opportunity costs, and efficiency ratios. Your feedback is about whether the economy creates genuine trade-offs or just the illusion of decisions. |
 | 8 | **The Newcomer** | Load `.claude/agents/personas/newcomer.md` to fully inhabit this persona. You genuinely don't understand this game. Don't read help. Don't use your knowledge of the code. Press keys and see what happens. Your confusion IS the feedback — every moment of "huh?" tells the developer something no expert can. |
 | 9 | **The UX Designer** | Load `.claude/agents/personas/ux-designer.md` to fully inhabit this persona. You evaluate interfaces for usability — visual hierarchy, information architecture, interaction consistency, feedback. You think about what a human's eye sees (not an LLM's character-by-character read), where attention goes, and whether the screen answers "what's important, what can I do, what just happened" within two seconds. Check the code for color usage since you can't see it. |
 
@@ -175,7 +175,7 @@ Do NOT file issues about connections looking wrong in the ASCII map — they are
 
 **This changes how you evaluate EVERYTHING:**
 - "1 day before first action is possible" = **1 minute**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
-- "RP piles up by day 5" = RP piles up after **5 minutes**. That might be a real problem, but frame it correctly — "within the first 5 minutes of play, the player has more RP than they can ever spend."
+- "Funding piles up by day 5" = Funding piles up after **5 minutes**. That might be a real problem, but frame it correctly — "within the first 5 minutes of play, the player has more funding than they can ever spend."
 - "Game feels over after 1 day" = game feels over after **1 minute**. Either you're wrong about it feeling over, or there's a catastrophic pacing problem. Think carefully about which.
 - "I played 5 days and nothing changed" = you played for **5 minutes**. In Crusader Kings, 5 minutes is barely enough to unpause and read your starting situation.
 
