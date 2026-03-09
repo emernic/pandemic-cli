@@ -1070,7 +1070,7 @@ pub enum MapDirection {
 
 impl GameState {
     pub fn new_default(seed: u64) -> Self {
-        use rand::Rng;
+
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
 
         let mut regions = vec![
@@ -1332,7 +1332,7 @@ impl GameState {
     /// Returns `(disease_idx, region_idx)` if successful, or `None` if at the cap.
     /// Uses `self.rng` — caller must have extracted rng if borrowing mutably.
     pub fn spawn_disease(&mut self, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
-        use rand::Rng;
+
 
         if self.diseases.len() >= MAX_DISEASES {
             return None;
