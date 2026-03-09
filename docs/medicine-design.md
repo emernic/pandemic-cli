@@ -13,14 +13,16 @@ Medicines start locked and must be developed through the research pipeline: Iden
 ```rust
 struct Medicine {
     name: String,
-    therapy_type: TherapyType,          // Antiviral, Antibiotic, or BroadSpectrum
-    target_diseases: Vec<usize>,        // which diseases this medicine works against
-    cost: f64,                          // funding per deployment
-    doses: f64,                         // remaining doses (depletes on deployment)
-    max_doses: f64,                     // maximum dose capacity (restored by manufacturing)
-    unlocked: bool,                     // false until developed via research
-    tested_against: Vec<usize>,         // diseases with completed clinical trials
-    strain_generations: Vec<u32>,       // strain calibration per target disease
+    therapy_type: TherapyType,                  // Antiviral, Antibiotic, or BroadSpectrum
+    mechanism: Option<MechanismOfAction>,        // molecular mechanism (None for broad-spectrum)
+    target_diseases: Vec<usize>,                 // which diseases this medicine works against
+    cost: f64,                                   // funding per deployment
+    doses: f64,                                  // remaining doses (depletes on deployment)
+    max_doses: f64,                              // maximum dose capacity (restored by manufacturing)
+    unlocked: bool,                              // false until developed via research
+    tested_against: Vec<usize>,                  // diseases with completed clinical trials
+    strain_generations: Vec<i32>,                // strain calibration per target disease (signed for fast-track penalty)
+    deployed_count: u32,                         // number of successful deployments
 }
 ```
 
@@ -36,7 +38,7 @@ Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete 
 
 ### Strain Drift
 
-When a disease mutates (increments `strain_generation`), medicines calibrated to older generations lose efficacy: `-25% per generation behind` (floor 10%). Re-running a Clinical Trial re-calibrates the medicine to the current strain.
+When a disease mutates (increments `strain_generation`), medicines calibrated to older generations lose efficacy: `-15% per generation behind` (floor 10%). Re-running a Clinical Trial re-calibrates the medicine to the current strain.
 
 ### Untested Medicine Risk
 
@@ -97,11 +99,10 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 
 ## Starting Medicines
 
-| Medicine | TherapyType | Targets | Cost | Doses |
-|---|---|---|---|---|
-| Antiviral-A | Antiviral | Disease 0 | $200 | 100K |
-| Antibiotic-B | Antibiotic | Disease 1 | $150 | 100K |
-| Broad-Spectrum | BroadSpectrum | Both | $400 | 200K |
+| Medicine | TherapyType | Mechanism | Targets | Cost | Doses |
+|---|---|---|---|---|---|
+| Antiviral-A | Antiviral | PolymeraseInhibitor | Disease 0 | $50 | 100M |
+| Broad-Spectrum | BroadSpectrum | None | All | $100 | 200M |
 
 All start locked. Research costs scale by target count:
 - **Narrow (1 target):** 3 personnel, 200 ticks
