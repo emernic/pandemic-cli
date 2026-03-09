@@ -60,6 +60,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             format!("RP: {:.0}", state.resources.research_points),
             Style::default().fg(Color::Magenta),
         ),
+        Span::styled(
+            format!(" (+{:.1}/t)", state.rp_income_rate()),
+            Style::default().fg(Color::DarkGray),
+        ),
         Span::raw("  "),
         Span::styled(
             {

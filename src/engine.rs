@@ -4,7 +4,7 @@ use crate::action::Action;
 use crate::state::{
     DeployTarget, GameCommand, GameEvent, GameOutcome, GameState,
     Panel, RegionDiseaseState, ResearchKind, ResearchProject,
-    BASE_RP_INCOME, BOOST_RP_COST, BOOST_TICKS, EMERGENCE_CHANCE_PER_TICK,
+    BOOST_RP_COST, BOOST_TICKS, EMERGENCE_CHANCE_PER_TICK,
     EMERGENCE_MIN_TICK, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, MAX_DISEASES,
     QUARANTINE_COST, QUARANTINE_PERSONNEL, TRAVEL_BAN_COST, WIN_INFECTED_THRESHOLD,
@@ -262,10 +262,11 @@ pub fn tick(state: &GameState) -> GameState {
         new.resources.funding -= policy_cost;
     }
 
-    // Passive resource generation
+    // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;
-    new.resources.research_points += BASE_RP_INCOME;
+    let rp_income = new.rp_income_rate();
+    new.resources.research_points += rp_income;
 
     // Low funding warning: warn when net burn rate will exhaust funds within ~5 ticks.
     // Only warn if policies actually cost more than income (net negative).
