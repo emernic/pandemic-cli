@@ -146,50 +146,53 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     ]));
     lines.push(Line::from(""));
 
-    // Policy toggles — costs derived from constants in state.rs
-    let policies: Vec<(&str, bool, String, &str, Option<u32>)> = vec![
-        ("Travel Ban", policy.travel_ban,
+    // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
+    // doc in state.rs for the index mapping). Display position != policy_idx in general,
+    // though currently they happen to match.
+    //                   (policy_idx, name, active, cost_str, desc, personnel_needed)
+    let policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
+        (0, "Travel Ban", policy.travel_ban,
          format!("${:.0}/day + {} pers.", TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL),
          "Reduces cross-region spread, halves income", Some(TRAVEL_BAN_PERSONNEL)),
-        ("Quarantine", policy.quarantine,
+        (1, "Quarantine", policy.quarantine,
          format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL),
          "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL)),
-        ("Hospital Surge", policy.hospital_surge,
+        (2, "Hospital Surge", policy.hospital_surge,
          format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
          "Halves lethality (may increase contact spread)", Some(HOSPITAL_SURGE_PERSONNEL)),
-        ("Border Controls", policy.border_controls,
+        (3, "Border Controls", policy.border_controls,
          format!("${:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL),
          "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL)),
-        ("Water Sanitation", policy.water_sanitation,
+        (4, "Water Sanitation", policy.water_sanitation,
          format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL),
          "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL)),
-        ("Low Screening", policy.screening == ScreeningLevel::Low,
+        (5, "Low Screening", policy.screening == ScreeningLevel::Low,
          format!("${:.0}/day + 1 pers.", SCREENING_LOW_COST * TICKS_PER_DAY),
          "40% infection visibility, faster detection", Some(1)),
-        ("Med Screening", policy.screening == ScreeningLevel::Medium,
+        (6, "Med Screening", policy.screening == ScreeningLevel::Medium,
          format!("${:.0}/day + 2 pers.", SCREENING_MEDIUM_COST * TICKS_PER_DAY),
          "70% infection visibility, faster detection", Some(2)),
-        ("High Screening", policy.screening == ScreeningLevel::High,
+        (7, "High Screening", policy.screening == ScreeningLevel::High,
          format!("${:.0}/day + 3 pers.", SCREENING_HIGH_COST * TICKS_PER_DAY),
          "90% infection visibility, fastest detection", Some(3)),
-        ("Martial Law", policy.martial_law,
+        (8, "Martial Law", policy.martial_law,
          format!("${:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL),
          "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL)),
-        ("☢ Nuclear Option", policy.nuclear_annihilation,
+        (9, "☢ Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ${:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population — stops all disease spread", None),
     ];
 
-    for (i, (name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
-        let selected = state.ui.panel_selection == i;
+    for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
+        let selected = state.ui.panel_selection == display_pos;
         let marker = if selected { "▶ " } else { "  " };
 
         // Collapsed regions: only nuclear annihilation (idx 9) is available
         // Non-collapsed regions: nuclear annihilation is not available
         let structurally_locked = if region.collapsed {
-            i != 9 && !*active  // only nuclear annihilation on collapsed regions
+            *policy_idx != 9 && !*active
         } else {
-            i == 9  // nuclear annihilation not available on non-collapsed
+            *policy_idx == 9
         };
 
         if structurally_locked {
@@ -212,7 +215,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             continue;
         }
 
-        let pol_unlocked = state.policy_unlocked(region_idx, i);
+        let pol_unlocked = state.policy_unlocked(region_idx, *policy_idx);
 
         let can_afford_personnel = personnel_needed
             .map(|need| {
@@ -220,7 +223,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 if *active {
                     // If already active, its personnel would be freed on disable
                     avail += need;
-                } else if i >= 5 && i <= 7 {
+                } else if *policy_idx >= 5 && *policy_idx <= 7 {
                     // Screening upgrade: personnel from current tier would be freed
                     avail += policy.screening.personnel_cost();
                 }
@@ -230,7 +233,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         if !*active && !pol_unlocked {
             // Locked by POL — show as unavailable
-            let threshold = POLICY_POL_THRESHOLDS[i];
+            let threshold = POLICY_POL_THRESHOLDS[*policy_idx];
             let name_style = if selected {
                 Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
@@ -275,7 +278,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             Span::styled(*desc, Style::default().fg(Color::DarkGray)),
         ]));
         // Effectiveness hints for transmission-sensitive policies
-        if let Some(hint) = effectiveness_hint(state, region_idx, i) {
+        if let Some(hint) = effectiveness_hint(state, region_idx, *policy_idx) {
             lines.push(hint);
         }
         lines.push(Line::from(vec![
