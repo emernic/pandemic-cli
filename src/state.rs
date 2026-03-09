@@ -477,7 +477,7 @@ impl PathogenType {
             },
             // Prions: slow but devastating (R0 ~1.5-4), high lethality, almost no recovery
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.008, 0.018),
+                infectivity: (0.012, 0.018),
                 lethality: (0.004, 0.008),
                 recovery: (0.001, 0.003),
                 cross_region: (0.003, 0.006),

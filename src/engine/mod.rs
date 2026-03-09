@@ -1034,6 +1034,32 @@ mod tests {
     }
 
     #[test]
+    fn no_collapse_before_day_8_without_intervention() {
+        // First collapse should not occur before day 8, giving players
+        // time for research, policies, and economic decisions.
+        // (Old balance: first collapse at day 1-3. New balance: day 9-12.)
+        for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
+            let mut state = GameState::new_default(seed);
+            let max_ticks = 8 * TICKS_PER_DAY as u64;
+            for t in 0..max_ticks {
+                state = tick(&state);
+                if state.active_crisis.is_some() {
+                    use crate::state::SimState;
+                    state.active_crisis = None;
+                    state.sim_state = SimState::Running;
+                }
+                let collapsed = state.regions.iter().find(|r| r.collapsed);
+                assert!(
+                    collapsed.is_none(),
+                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 8",
+                    collapsed.map(|r| r.name.as_str()).unwrap_or("?"),
+                    t as f64 / TICKS_PER_DAY
+                );
+            }
+        }
+    }
+
+    #[test]
     fn win_requires_identification_and_tested_medicines() {
         let mut state = GameState::new_default(42);
         // Clear all infections to simulate containment
