@@ -167,19 +167,9 @@ impl PathogenType {
         }
     }
 
-    /// All pathogen types for procedural generation.
-    pub fn all() -> &'static [PathogenType] {
-        &[
-            PathogenType::RnaVirus,
-            PathogenType::DnaVirus,
-            PathogenType::Bacterium,
-            PathogenType::Prion,
-        ]
-    }
-
     /// Biologically plausible stat ranges: (infectivity, lethality, recovery, cross_region).
     /// Each tuple is (min, max) for that stat.
-    pub fn stat_ranges(&self) -> DiseaseStatRanges {
+    fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: fast-spreading, variable lethality, quick recovery
             PathogenType::RnaVirus => DiseaseStatRanges {
@@ -247,11 +237,11 @@ impl PathogenType {
 }
 
 /// Stat ranges for procedural disease generation.
-pub struct DiseaseStatRanges {
-    pub infectivity: (f64, f64),
-    pub lethality: (f64, f64),
-    pub recovery: (f64, f64),
-    pub cross_region: (f64, f64),
+struct DiseaseStatRanges {
+    infectivity: (f64, f64),
+    lethality: (f64, f64),
+    recovery: (f64, f64),
+    cross_region: (f64, f64),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1028,7 +1018,7 @@ impl GameState {
         for pathogen_type in &chosen_types {
             let pool = pathogen_type.name_pool();
             // Pick a name not already used (with fallback to avoid infinite loop)
-            let mut available: Vec<_> = pool.iter()
+            let available: Vec<_> = pool.iter()
                 .filter(|n| !used_names.contains(&n.to_string()))
                 .collect();
             let name = if available.is_empty() {
@@ -1054,15 +1044,13 @@ impl GameState {
 
         // --- Place initial outbreaks in distinct regions ---
         let region_count = regions.len();
-        let mut used_regions = Vec::new();
+        let mut available_regions: Vec<usize> = (0..region_count).collect();
         for (disease_idx, _disease) in diseases.iter().enumerate() {
-            let region_idx = loop {
-                let r = rng.r#gen::<usize>() % region_count;
-                if !used_regions.contains(&r) {
-                    break r;
-                }
-            };
-            used_regions.push(region_idx);
+            if available_regions.is_empty() {
+                break;
+            }
+            let pick = rng.r#gen::<usize>() % available_regions.len();
+            let region_idx = available_regions.remove(pick);
 
             // First disease gets larger outbreak, subsequent ones get smaller
             let infected = if disease_idx == 0 {
