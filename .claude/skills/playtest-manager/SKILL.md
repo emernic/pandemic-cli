@@ -41,6 +41,8 @@ git checkout -b playtest-$(date +%Y%m%d-%H%M%S) origin/master
 
 Other agents are merging features constantly. Playtesting stale code generates noise, not signal.
 
+**⚠️ THIS ALSO APPLIES DURING TRIAGE (Step 4).** If you need to read source code to verify a finding, file a bug, or check current values — **re-fetch first**: `git fetch origin && git diff HEAD..origin/master -- <file>` to see if the file changed. If it did, check out the latest: `git checkout origin/master -- <file>` or just re-branch. **Never read code that might be stale. Never file issues about code that's already been changed.** This has caused real damage — issues filed about constants that were already rebalanced, bugs reported about code that was already fixed. Every time you read a source file during triage, ask yourself: "Is this still current on master?"
+
 ## Step 2: Launch Playtest
 
 ```
@@ -97,9 +99,11 @@ gh api "repos/$REPO/issues/<number>/reactions" -f content='+1'
 
 ### 4c. If a Closed Issue Matches: Check Before Reopening
 
-Check close reason (`gh issue view <N> --json stateReason`). Only reopen `COMPLETED` issues, never `NOT_PLANNED`. **Verify on fresh code** before claiming a fix didn't work — check the actual PR, don't grep stale code.
+Check close reason (`gh issue view <N> --json stateReason`). Only reopen `COMPLETED` issues, never `NOT_PLANNED`. **Verify on FRESH code** before claiming a fix didn't work — `git fetch origin` and check the actual file on `origin/master`, not your local branch. Your local code is stale the moment you check it out. This has caused real damage before.
 
 ### 4d. If No Issue Exists: DESIGN THE SOLUTION AND FILE IT
+
+**⚠️ Before filing any issue that references specific code, constants, or behavior: `git fetch origin` and verify against `origin/master`.** Do NOT read your local files — they are stale. Use `git show origin/master:<filepath>` to see current code. Filing issues about already-changed code wastes developer time and creates confusion.
 
 **This is the critical step that distinguishes you from a bug reporter.**
 
