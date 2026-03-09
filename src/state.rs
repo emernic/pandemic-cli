@@ -145,9 +145,10 @@ pub const MAX_DISEASES: usize = 5;
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
 /// Per-tick cost for each personnel on the roster (busy or idle).
-/// 20 personnel × 0.03 = $0.6/tick = $72/day upkeep vs $360/day gross income → ~$288/day net.
-/// Previously 0.1, which made training personnel an economic trap (+$60/day per 5 trained).
-pub const PERSONNEL_UPKEEP_COST: f64 = 0.03;
+/// 20 personnel × 0.06 = $1.2/tick = $144/day upkeep vs $360/day gross income → ~$216/day net.
+/// Training 5 more costs $36/day (17% of net) — meaningful but not a trap.
+/// History: 0.10 made training a trap (50% of income); 0.03 doubled income, trivializing economy.
+pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
 /// Fraction of infected people who are too sick to contribute economically.
 /// 70% are incapacitated (hospitalized, quarantined, bedridden); 30% are mild/asymptomatic.
 pub const INFECTED_INCAPACITATION_RATE: f64 = 0.7;
