@@ -451,6 +451,73 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
+    // Per-disease breakdown with pathogen reveal
+    if !state.diseases.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ── Pathogen Report ──",
+            Style::default().fg(Color::Cyan),
+        )));
+        lines.push(Line::from(""));
+
+        for (d_idx, disease) in state.diseases.iter().enumerate() {
+            // Sum deaths across all regions for this disease
+            let disease_dead: f64 = state.regions.iter()
+                .flat_map(|r| r.infections.iter())
+                .filter(|inf| inf.disease_idx == d_idx)
+                .map(|inf| inf.dead)
+                .sum();
+
+            // Always reveal the true name on defeat
+            let revealed = disease.name != disease.display_name(d_idx);
+            let name_str = if revealed {
+                format!("{} (was Unknown Pathogen #{})", disease.name, d_idx + 1)
+            } else {
+                disease.name.clone()
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {name_str}"), stat_value),
+                Span::styled(
+                    format!("  {} · {}", disease.pathogen_type.label(), disease.transmission.label()),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("      Deaths: ", stat_label),
+                Span::styled(
+                    format_number(disease_dead),
+                    Style::default().fg(if disease_dead > 0.0 { Color::Red } else { Color::DarkGray }),
+                ),
+                Span::styled(
+                    format!("  ({:.1}% of total)", if total_dead > 0.0 { disease_dead / total_dead * 100.0 } else { 0.0 }),
+                    stat_label,
+                ),
+            ]));
+        }
+    }
+
+    // Score — rewards surviving longer with more people alive
+    let days = ticks_to_days(state.tick as f64);
+    let score = (days * survival_pct).round() as u64;
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  ── Score ──",
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  Score:          ", stat_label),
+        Span::styled(
+            format!("{score}"),
+            Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("  (days × survival %)", ),
+            stat_label,
+        ),
+    ]));
+
     // Strategic tips
     let tips = state.defeat_tips();
     if !tips.is_empty() {
