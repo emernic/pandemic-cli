@@ -281,6 +281,12 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         if let Some(hint) = effectiveness_hint(state, region_idx, *policy_idx) {
             lines.push(hint);
         }
+        // Estimated daily impact for active policies
+        if *active {
+            if let Some(impact) = impact_estimate(state, region_idx, *policy_idx) {
+                lines.push(impact);
+            }
+        }
         lines.push(Line::from(vec![
             Span::raw("      "),
             Span::styled(
@@ -372,4 +378,85 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
     }
 
     Some(Line::from(spans))
+}
+
+/// Estimated daily impact for an active policy. Shows approximate infections
+/// or deaths prevented per day based on current disease parameters and counts.
+fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> Option<Line<'static>> {
+    let region = &state.regions[region_idx];
+    let pop = region.population as f64;
+    if pop <= 0.0 {
+        return None;
+    }
+
+    // Collect impact across all active detected diseases in this region
+    let mut total_impact: f64 = 0.0;
+    let mut impact_type = "";
+
+    for inf in &region.infections {
+        if inf.infected <= 0.0 {
+            continue;
+        }
+        let disease = state.diseases.get(inf.disease_idx)?;
+        if !disease.detected {
+            continue;
+        }
+
+        let alive = (pop - region.dead).max(0.0);
+        let susceptible = alive - inf.infected - inf.immune;
+
+        match policy_idx {
+            0 => {
+                // Travel Ban: can't easily estimate cross-region prevention
+                // Show income penalty instead (already shown elsewhere)
+                return None;
+            }
+            1 => {
+                // Quarantine: infections prevented = infected × infectivity × (1 - factor) × susceptible/pop
+                if susceptible > 0.0 {
+                    let factor = disease.transmission.quarantine_factor();
+                    let prevented = inf.infected * disease.infectivity * (1.0 - factor) * (susceptible / pop);
+                    total_impact += prevented;
+                }
+                impact_type = "infections";
+            }
+            2 => {
+                // Hospital Surge: deaths prevented = infected × lethality × 0.5
+                let prevented = inf.infected * disease.lethality * 0.5;
+                total_impact += prevented;
+                impact_type = "deaths";
+            }
+            3 => {
+                // Border Controls: cross-region spread prevention — hard to estimate
+                return None;
+            }
+            4 => {
+                // Water Sanitation: infections prevented for waterborne diseases
+                if susceptible > 0.0 {
+                    let factor = disease.transmission.water_sanitation_factor();
+                    if factor < 1.0 {
+                        let prevented = inf.infected * disease.infectivity * (1.0 - factor) * (susceptible / pop);
+                        total_impact += prevented;
+                    }
+                }
+                impact_type = "infections";
+            }
+            _ => return None,
+        }
+    }
+
+    if total_impact <= 0.0 {
+        return None;
+    }
+
+    let daily_impact = total_impact * TICKS_PER_DAY;
+    let formatted = format_number(daily_impact);
+
+    Some(Line::from(vec![
+        Span::raw("      "),
+        Span::styled(
+            format!("Est. ~{formatted} fewer {impact_type}/day"),
+            Style::default().fg(Color::Green),
+        ),
+    ]))
 }
