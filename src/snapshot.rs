@@ -6,16 +6,6 @@ use crate::engine::tick;
 use crate::state::{GameEvent, GameState, GameOutcome, SimState};
 use crate::ui;
 
-/// Actions that the crisis handler processes (not silently dropped).
-fn is_crisis_action(action: &Action) -> bool {
-    matches!(
-        action,
-        Action::SelectNext | Action::SelectPrev
-            | Action::SelectLeft | Action::SelectRight
-            | Action::Confirm | Action::ToggleExtra | Action::Quit
-    )
-}
-
 /// Result of running snapshot mode: the rendered screen and the updated state.
 #[derive(Debug)]
 pub struct SnapshotResult {
@@ -128,11 +118,13 @@ fn auto_resolve_crisis(state: &mut GameState) {
 /// Run snapshot mode: process an ordered sequence of steps, then render.
 /// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
 ///
-/// Crisis events interrupt tick advancement but do NOT drop remaining steps.
-/// Subsequent key steps can resolve the crisis, after which any remaining
-/// ticks from the interrupted step automatically resume. This mirrors the
-/// interactive experience: the player sees the crisis, responds, and time
-/// continues from where it left off.
+/// Crisis events that fire during tick advancement are handled automatically:
+/// between steps, any pending crisis is auto-resolved (picks cheapest affordable
+/// option) and interrupted ticks resume. This ensures key sequences never
+/// desynchronize due to random crises.
+///
+/// With `auto_crises`, crises are also auto-resolved *during* tick advancement
+/// (not just between steps), so a single `d60` runs uninterrupted.
 ///
 /// Game over always stops execution immediately.
 ///
@@ -151,24 +143,26 @@ pub fn run_snapshot(
             break;
         }
 
+        // Auto-resolve any pending crisis before processing the next step.
+        // This prevents key desynchronization: without this, a crisis from
+        // a prior tick step would eat the next key (e.g., 'p' to open policy).
+        if state.active_crisis.is_some() {
+            auto_resolve_crisis(&mut state);
+            // Resume any pending ticks from the interrupted tick step.
+            if pending_ticks > 0 {
+                pending_ticks = advance_ticks(&mut state, pending_ticks, auto_crises);
+            }
+        }
+
+        if state.outcome != GameOutcome::Playing {
+            break;
+        }
+
         match parse_step(step_str)? {
             SnapshotStep::Key(key_str) => {
                 match string_to_action(&key_str) {
                     Some(action) => {
-                        let had_crisis = state.active_crisis.is_some();
-                        // Warn when a non-crisis key is silently eaten
-                        if had_crisis && !is_crisis_action(&action) {
-                            eprintln!(
-                                "Key '{key_str}' ignored: crisis active (resolve with enter, or left/right to choose)"
-                            );
-                        }
                         state = apply_action(&state, &action);
-
-                        // If this key resolved a crisis, resume pending ticks.
-                        if had_crisis && state.active_crisis.is_none() && pending_ticks > 0 {
-                            let remaining = advance_ticks(&mut state, pending_ticks, auto_crises);
-                            pending_ticks = remaining;
-                        }
                     }
                     None => {
                         return Err(format!(
@@ -179,25 +173,20 @@ pub fn run_snapshot(
                 }
             }
             SnapshotStep::Ticks(n) => {
-                // Can't advance time during a crisis — skip tick steps.
-                if state.active_crisis.is_some() {
-                    let days = n as f64 / crate::state::TICKS_PER_DAY;
-                    eprintln!("Skipped d{:.1}: crisis active (resolve with enter first)", days);
-                    continue;
-                }
                 let total = n + pending_ticks;
                 pending_ticks = advance_ticks(&mut state, total, auto_crises);
             }
         }
     }
 
-    // Log any time that was ultimately lost (crisis not resolved by end of steps).
-    if pending_ticks > 0 {
-        let days = pending_ticks as f64 / crate::state::TICKS_PER_DAY;
-        if state.active_crisis.is_some() {
-            eprintln!("Crisis unresolved: {:.1} days pending (resolve with enter)", days);
+    // Auto-resolve any crisis from the final step and drain remaining ticks.
+    while state.active_crisis.is_some() && state.outcome == GameOutcome::Playing {
+        auto_resolve_crisis(&mut state);
+        if pending_ticks > 0 {
+            pending_ticks = advance_ticks(&mut state, pending_ticks, auto_crises);
+        } else {
+            break;
         }
-        // If game over, the remaining ticks are expected — no need to log.
     }
 
     let screen = render_to_string(&state);
@@ -305,44 +294,34 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_stops_on_crisis() {
+    fn snapshot_auto_resolves_crises_between_steps() {
         let state = GameState::new_default(42);
-        // Advance far enough that a crisis fires (crises start after tick 360,
-        // average interval ~840 ticks). 60 days gives P(crisis) > 99%.
+        // d60 will hit crises. They should be auto-resolved between steps
+        // (and after the final step), so all ticks complete.
         let result = run_snapshot(state, &["d60".to_string()], false).unwrap();
-        // Should have stopped early due to crisis
-        assert!(result.state.active_crisis.is_some(),
-            "should have hit a crisis during 60 days");
-        assert!(result.state.tick < 60 * 120,
-            "should have stopped before reaching 60 days (stopped at tick {})", result.state.tick);
-        assert!(result.screen.contains("CRISIS"),
-            "should show the crisis screen");
+        // No crisis should be pending — auto-resolved after final step.
+        assert!(result.state.active_crisis.is_none(),
+            "crises should be auto-resolved between steps");
+        // Should have advanced well past the first crisis point.
+        // (May not reach full 60 days if game over occurs.)
+        assert!(result.state.tick > 360,
+            "should advance past first crisis point (tick {})", result.state.tick);
     }
 
     #[test]
-    fn snapshot_crisis_resume_after_enter() {
+    fn snapshot_key_not_eaten_by_crisis() {
         let state = GameState::new_default(42);
-        // Request 60 days. A crisis will fire partway through.
-        // Then press enter to resolve it. Time should resume (and may hit
-        // another crisis during the resumed ticks — that's correct).
-        let crisis_only = run_snapshot(
-            state.clone(),
-            &["d60".to_string()],
-            false,
-        ).unwrap();
-        let tick_at_first_crisis = crisis_only.state.tick;
-        assert!(crisis_only.state.active_crisis.is_some(),
-            "should hit a crisis");
-
-        // Now resolve with enter — should advance beyond the first crisis point
-        let resumed = run_snapshot(
+        // Advance enough days to trigger a crisis, then open threats panel.
+        // Previously 't' would be eaten by the crisis. Now the crisis is
+        // auto-resolved before 't' is processed.
+        let result = run_snapshot(
             state,
-            &["d60".to_string(), "enter".to_string()],
+            &["d60".to_string(), "t".to_string()],
             false,
         ).unwrap();
-        assert!(resumed.state.tick > tick_at_first_crisis,
-            "should advance past first crisis (was {}, now {})",
-            tick_at_first_crisis, resumed.state.tick);
+        // Threats panel should be open (key was not eaten).
+        assert!(result.screen.contains("Threats"),
+            "threats panel should be open — key should not be eaten by crisis");
     }
 
     #[test]
@@ -359,21 +338,17 @@ mod tests {
     }
 
     #[test]
-    fn auto_crises_resolves_without_blocking() {
+    fn auto_crises_flag_resolves_during_tick_advancement() {
         let state = GameState::new_default(42);
-        // With auto_crises=false, d60 stops at the first crisis
-        let without = run_snapshot(state.clone(), &["d60".to_string()], false).unwrap();
-        assert!(without.state.active_crisis.is_some(),
-            "without auto_crises, should stop at crisis");
-
-        // With auto_crises=true, d60 runs further (crises are auto-resolved)
-        let with = run_snapshot(state, &["d60".to_string()], true).unwrap();
-        assert!(with.state.tick > without.state.tick,
-            "auto_crises should advance past first crisis (without: {}, with: {})",
-            without.state.tick, with.state.tick);
-        // No crisis should be pending at end (either all resolved, or game over)
-        assert!(with.state.active_crisis.is_none(),
-            "no crisis should be pending when auto_crises is on");
+        // With auto_crises=true, crises resolve *during* advance_ticks so
+        // the tick step never interrupts. Both modes ultimately complete,
+        // but auto_crises avoids the between-step resolution overhead.
+        let result = run_snapshot(state, &["d60".to_string()], true).unwrap();
+        assert!(result.state.active_crisis.is_none(),
+            "no crisis should be pending with auto_crises");
+        // Should reach close to 60 days (may end early only from game over)
+        assert!(result.state.tick > 360,
+            "should advance well past first crisis (tick {})", result.state.tick);
     }
 
     #[test]
