@@ -33,7 +33,7 @@ Before writing new test infrastructure, check what already exists:
 
 - **`GameState::new_default(seed)`** — deterministic initial state with seeded ChaCha8Rng. Use seed `42` by convention.
 - **`tick(&state) -> GameState`** and **`apply_action(&state, &Action) -> GameState`** — the two pure functions that drive everything. Clone-and-mutate, so you can chain them.
-- **`render_to_string(&state) -> String`** and **`run_snapshot(state, key, ticks) -> SnapshotResult`** — for integration-level visual regression tests using `insta::assert_snapshot!`.
+- **`render_to_string(&state) -> String`** and **`run_snapshot(state, steps) -> SnapshotResult`** — for rendering and integration smoke tests. Use structural assertions (`assert!(output.contains("..."))`), NOT exact-match snapshot libraries.
 - **Inline `#[cfg(test)] mod tests`** in each source file for unit tests.
 - **`tests/snapshots.rs`** for integration snapshot tests.
 
