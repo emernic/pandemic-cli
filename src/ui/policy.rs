@@ -11,7 +11,7 @@ use crate::state::{
     TRAVEL_BAN_COST, QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     BORDER_SCREENING_COST, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
-    grid_reading_order,
+    grid_reading_order, POLICY_POL_THRESHOLDS,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -152,12 +152,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     for (i, (name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
         let marker = if selected { "▶ " } else { "  " };
+        let pol_unlocked = state.policy_unlocked(region_idx, i);
 
         let can_afford_personnel = personnel_needed
             .map(|need| {
                 let avail = if *active {
-                    // If already active, those personnel are already counted as busy;
-                    // toggling off would free them, so show as affordable
                     state.personnel_available() + need
                 } else {
                     state.personnel_available()
@@ -165,6 +164,27 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 avail >= need
             })
             .unwrap_or(true);
+
+        if !*active && !pol_unlocked {
+            // Locked by POL — show as unavailable
+            let threshold = POLICY_POL_THRESHOLDS[i];
+            let name_style = if selected {
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}", marker), name_style),
+                Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", name), name_style),
+                Span::styled(
+                    format!("  (POL {:.0}%)", threshold * 100.0),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            lines.push(Line::from(""));
+            continue;
+        }
 
         let status_style = if *active {
             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)

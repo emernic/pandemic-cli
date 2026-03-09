@@ -121,6 +121,16 @@ pub struct RegionPolicy {
 /// Total number of policy types available per region.
 pub const POLICY_COUNT: usize = 5;
 
+/// Minimum Political Power (0.0–1.0) required to activate each policy.
+/// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_screening, water_sanitation.
+pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
+    0.40, // Travel Ban — major action, needs moderate political will
+    0.35, // Quarantine — strong measure but regionally justified
+    0.20, // Hospital Surge — relatively uncontroversial
+    0.10, // Border Screening — mild, early unlock
+    0.15, // Water Sanitation — basic public health
+];
+
 impl RegionPolicy {
     pub fn funding_cost(&self) -> f64 {
         let mut cost = 0.0;
@@ -159,6 +169,10 @@ pub struct Resources {
     pub funding: f64,
     pub research_points: f64,
     pub personnel: u32,
+    /// Political Power (0.0–1.0). Represents global willingness to act.
+    /// Increases based on disease severity and time. Gates policies.
+    #[serde(default)]
+    pub political_power: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1554,6 +1568,7 @@ impl GameState {
                 funding: 300.0,
                 research_points: 30.0,
                 personnel: 20,
+                political_power: 0.0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             regions,
@@ -1626,6 +1641,8 @@ impl GameState {
             };
             income += BASE_FUNDING_INCOME * region_share * healthy_frac * travel_ban_factor;
         }
+        // Political Power bonus: up to 50% more funding at full POL
+        income *= 1.0 + self.resources.political_power * 0.5;
         income
     }
 
@@ -1665,6 +1682,29 @@ impl GameState {
     /// Total initial population across all regions (before any deaths).
     pub fn initial_population(&self) -> f64 {
         self.regions.iter().map(|r| r.population as f64).sum()
+    }
+
+    /// Effective POL threshold for a policy in a specific region.
+    /// Regional severity (infection rate) reduces the threshold — a crisis
+    /// in a region justifies action even with low global political will.
+    pub fn effective_pol_threshold(&self, region_idx: usize, policy_idx: usize) -> f64 {
+        let base = POLICY_POL_THRESHOLDS.get(policy_idx).copied().unwrap_or(1.0);
+        let region = match self.regions.get(region_idx) {
+            Some(r) => r,
+            None => return base,
+        };
+        // severity = fraction of region population currently infected
+        let pop = region.population as f64;
+        if pop <= 0.0 { return base; }
+        let infected: f64 = region.infections.iter().map(|i| i.infected).sum();
+        let severity = (infected / pop).min(1.0);
+        // High severity reduces threshold by up to 50%
+        (base * (1.0 - severity * 0.5)).max(0.0)
+    }
+
+    /// Whether a policy can be activated given current POL and regional severity.
+    pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
+        self.resources.political_power >= self.effective_pol_threshold(region_idx, policy_idx)
     }
 
     /// Spawn a new disease mid-game: generates a random disease, places an initial
