@@ -41,7 +41,7 @@ The engine is a module directory. `mod.rs` is the orchestrator — it owns `tick
 ```
 engine/
   mod.rs       — tick() orchestrator, execute_command() dispatcher, win/lose/collapse checks
-  research.rs  — start_research(), boost_research(), tick_research()
+  research.rs  — start_research(), add/remove_personnel(), tick_research()
   medicine.rs  — deploy_medicine() and dose/efficacy calculations
   policy.rs    — toggle_policy(), tick_enforce_costs()
   crisis.rs    — generate_crisis(), resolve_crisis()
@@ -82,7 +82,7 @@ tick() in engine/mod.rs:
   2. Disease mutation
   3. research::tick_research()       — advance/complete research projects
   4. policy::tick_enforce_costs()    — suspend unaffordable policies, deduct costs
-  5. Resource income (funding, RP)
+  5. Resource income (funding)
   6. Disease emergence (mid-game new threats)
   7. crisis::generate_crisis()       — random crisis events
   8. Regional collapse checks

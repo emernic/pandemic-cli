@@ -6,7 +6,7 @@ pub mod ui;
 
 use action::Action;
 use engine::execute_command;
-use state::{GameCommand, GameOutcome, GameState, Panel, SimState};
+use state::{GameCommand, GameOutcome, GameState, Panel, ResearchUiState, SimState};
 
 /// Route a player action to the appropriate handler.
 ///
@@ -97,11 +97,26 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
         Action::ClosePanel => new.ui.close_panel(),
         Action::SelectNext => {
-            let max = new.ui.panel_selection_max(&new);
-            new.ui.select_next(new.regions.len(), max);
+            // In ViewActive, up/down adjusts personnel assignment
+            if let Some(ResearchUiState::ViewActive { bench }) = &new.ui.research_ui {
+                let bench = *bench;
+                let cmd = GameCommand::AddResearchPersonnel { bench };
+                let result = execute_command(&mut new, &cmd);
+                new.ui.status_message = result.message;
+            } else {
+                let max = new.ui.panel_selection_max(&new);
+                new.ui.select_next(new.regions.len(), max);
+            }
         }
         Action::SelectPrev => {
-            new.ui.select_prev(new.regions.len());
+            if let Some(ResearchUiState::ViewActive { bench }) = &new.ui.research_ui {
+                let bench = *bench;
+                let cmd = GameCommand::RemoveResearchPersonnel { bench };
+                let result = execute_command(&mut new, &cmd);
+                new.ui.status_message = result.message;
+            } else {
+                new.ui.select_prev(new.regions.len());
+            }
         }
         Action::SelectLeft => {
             new.ui.select_left(new.regions.len());

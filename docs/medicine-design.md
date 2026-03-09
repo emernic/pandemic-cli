@@ -26,7 +26,7 @@ struct Medicine {
 
 ### TherapyType × PathogenType Efficacy
 
-Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via a bench research project (ManufactureDoses: 10 RP, 3 personnel, 15 ticks).
+Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via a bench research project (ManufactureDoses: 3 personnel, 120 ticks).
 
 | TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Prion |
 |---|---|---|---|---|
@@ -104,9 +104,9 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 | Broad-Spectrum | BroadSpectrum | Both | $400 | 200K |
 
 All start locked. Research costs scale by target count:
-- **Narrow (1 target):** 15 RP, 5 personnel, 25 ticks
-- **Broad (2+ targets):** 40 RP, 10 personnel, 50 ticks
-- **Clinical Trial:** 15 RP, 5 personnel, 25 ticks (same for all)
+- **Narrow (1 target):** 3 personnel, 200 ticks
+- **Broad (2+ targets):** 10 personnel, 400 ticks
+- **Clinical Trial:** 5 personnel, 160 ticks (same for all)
 
 The trade-off: narrow medicines are faster and cheaper to develop (crisis response), while broad-spectrum takes longer but covers everything.
 

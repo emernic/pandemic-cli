@@ -1,6 +1,6 @@
 use crate::state::{
     GameOutcome, GameState, ResearchKind, ResearchProject,
-    BOOST_RP_COST, BOOST_TICKS, KNOWLEDGE_FULL,
+    KNOWLEDGE_FULL,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
@@ -22,19 +22,15 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (rp_cost, personnel, duration) = kind.costs(&state.medicines);
+        let (personnel, duration) = kind.costs(&state.medicines);
 
-        if state.resources.research_points >= rp_cost
-            && state.personnel_available() >= personnel
-        {
+        if state.personnel_available() >= personnel {
             let project = ResearchProject {
                 kind: kind.clone(),
                 progress: 0.0,
                 required_ticks: duration,
                 personnel_assigned: personnel,
-                rp_cost,
             };
-            state.resources.research_points -= rp_cost;
 
             if bench {
                 state.bench_research = Some(project);
@@ -47,33 +43,51 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
     false
 }
 
-/// Boost an active research project. Pure game logic — does NOT modify UI state.
+/// Add personnel to an active research project. More personnel = faster progress.
 ///
-/// Returns (message, success) where success indicates the boost was applied.
-pub(super) fn boost_research(state: &mut GameState, bench: bool) -> (Option<String>, bool) {
+/// Returns an optional status message.
+pub(super) fn add_personnel(state: &mut GameState, bench: bool) -> Option<String> {
+    let available = state.personnel_available();
     let project = if bench { &mut state.bench_research } else { &mut state.field_research };
     if let Some(project) = project {
-        if !project.is_complete() && state.resources.research_points >= BOOST_RP_COST {
-            state.resources.research_points -= BOOST_RP_COST;
-            project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
-            (Some(format!("Boosted research! (-{:.0} RP)", BOOST_RP_COST)), true)
-        } else if state.resources.research_points < BOOST_RP_COST {
-            (Some(format!(
-                "Need {:.0} RP to boost (have {:.0})",
-                BOOST_RP_COST, state.resources.research_points
-            )), false)
+        if project.is_complete() {
+            return None;
+        }
+        if available >= 1 {
+            project.personnel_assigned += 1;
+            Some(format!("Assigned +1 personnel ({} total on project)", project.personnel_assigned))
         } else {
-            (None, false)
+            Some("No available personnel to assign".to_string())
         }
     } else {
-        (None, false)
+        None
+    }
+}
+
+/// Remove personnel from an active research project.
+///
+/// Returns an optional status message.
+pub(super) fn remove_personnel(state: &mut GameState, bench: bool) -> Option<String> {
+    let project = if bench { &mut state.bench_research } else { &mut state.field_research };
+    if let Some(project) = project {
+        if project.personnel_assigned <= 1 {
+            Some("Cannot remove — at least 1 person required".to_string())
+        } else {
+            project.personnel_assigned -= 1;
+            Some(format!("Removed 1 personnel ({} remaining on project)", project.personnel_assigned))
+        }
+    } else {
+        None
     }
 }
 
 /// Advance research projects by one tick and handle completions.
+/// Progress scales linearly with personnel: base personnel = 1x speed,
+/// double personnel = 2x speed.
 pub(super) fn tick_research(state: &mut GameState) {
     if let Some(ref mut project) = state.field_research {
-        project.progress += 1.0;
+        let speed = project.speed(&state.medicines);
+        project.progress += speed;
         if project.is_complete() {
             match &project.kind {
                 ResearchKind::IdentifyThreat { disease_idx } => {
@@ -115,7 +129,8 @@ pub(super) fn tick_research(state: &mut GameState) {
         }
     }
     if let Some(ref mut project) = state.bench_research {
-        project.progress += 1.0;
+        let speed = project.speed(&state.medicines);
+        project.progress += speed;
         if project.is_complete() {
             match &project.kind {
                 ResearchKind::DevelopMedicine { medicine_idx } => {
@@ -152,13 +167,11 @@ mod tests {
     use crate::engine::tick;
     use crate::state::{
         GameOutcome, GameState, ResearchKind, ResearchProject, ResearchUiState,
-        BOOST_RP_COST, BOOST_TICKS,
     };
 
     #[test]
     fn research_identify_increases_knowledge() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 100.0;
         // Start identify project on disease 0
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
@@ -167,7 +180,7 @@ mod tests {
         assert!(state.field_research.is_some());
         assert_eq!(state.diseases[0].knowledge, 0.0);
 
-        // Advance to completion (160 ticks)
+        // Advance to completion (160 ticks at 1x speed)
         for _ in 0..160 {
             state = tick(&state);
         }
@@ -178,7 +191,6 @@ mod tests {
     #[test]
     fn research_develop_medicine_unlocks() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 200.0;
         state.diseases[0].knowledge = 1.0; // Fully identified
 
         assert!(!state.medicines[0].unlocked);
@@ -202,7 +214,6 @@ mod tests {
     #[test]
     fn research_clinical_trial_marks_tested() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 200.0;
         state.diseases[0].knowledge = 1.0;
         state.medicines[0].unlocked = true; // Pre-unlock for testing
 
@@ -211,9 +222,6 @@ mod tests {
         // Start field research: Clinical Trial
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
-        // Navigate to the clinical trial project.
-        // Field projects: identify (for each unidentified disease), genomic sequencing
-        // (for fully identified diseases), then clinical trials.
         let field_projects = state.available_field_projects();
         let trial_idx = field_projects.iter().position(|k| matches!(k,
             ResearchKind::ClinicalTrial { .. }
@@ -234,23 +242,22 @@ mod tests {
     }
 
     #[test]
-    fn research_insufficient_rp_blocks_start() {
+    fn research_insufficient_personnel_blocks_start() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 0.0; // No RP
+        state.resources.personnel = 0; // No personnel
 
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
         state = apply_action(&state, &Action::Confirm); // Select Identify
         state = apply_action(&state, &Action::Confirm); // Try to confirm
 
-        // Should not have started — still on confirm screen
+        // Should not have started
         assert!(state.field_research.is_none());
     }
 
     #[test]
-    fn research_boost_spends_rp_and_advances() {
+    fn add_personnel_speeds_up_research() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 100.0;
 
         // Start a field research project
         state = apply_action(&state, &Action::OpenResearch);
@@ -258,60 +265,82 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Select first project
         state = apply_action(&state, &Action::Confirm); // Confirm → starts project
 
-        // Should be back at BrowseProjects with an active field project
         assert!(state.field_research.is_some());
-        let progress_before = state.field_research.as_ref().unwrap().progress;
-        let rp_before = state.resources.research_points;
+        let initial_personnel = state.field_research.as_ref().unwrap().personnel_assigned;
 
-        // Navigate to ViewActive and boost
+        // Navigate to ViewActive and add personnel (SelectNext = add in ViewActive)
         state = apply_action(&state, &Action::Confirm); // → ViewActive
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ViewActive { bench: false })));
 
-        state = apply_action(&state, &Action::Confirm); // Boost!
+        state = apply_action(&state, &Action::SelectNext); // Add personnel
         assert_eq!(
-            state.resources.research_points,
-            rp_before - BOOST_RP_COST,
-            "should spend {} RP", BOOST_RP_COST
+            state.field_research.as_ref().unwrap().personnel_assigned,
+            initial_personnel + 1,
+            "should add 1 personnel"
         );
-        assert_eq!(
-            state.field_research.as_ref().unwrap().progress,
-            progress_before + BOOST_TICKS,
-            "should advance by {} ticks", BOOST_TICKS
-        );
-        assert!(state.ui.status_message.as_ref().unwrap().contains("Boosted"));
+        assert!(state.ui.status_message.as_ref().unwrap().contains("Assigned"));
     }
 
     #[test]
-    fn research_boost_insufficient_rp() {
+    fn remove_personnel_from_research() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 25.0; // Enough to start (20 RP) but not boost again (10 RP)
 
+        // Start a field research project (needs 5 personnel)
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
         state = apply_action(&state, &Action::Confirm); // Select first project
-        state = apply_action(&state, &Action::Confirm); // Confirm → starts (costs 20 RP, leaves 5)
+        state = apply_action(&state, &Action::Confirm); // Confirm → starts
 
         assert!(state.field_research.is_some());
-        assert_eq!(state.resources.research_points, 5.0); // 25 - 20 = 5
+        let initial_personnel = state.field_research.as_ref().unwrap().personnel_assigned;
+        assert!(initial_personnel > 1, "need >1 to test removal");
 
+        // Navigate to ViewActive and remove personnel
         state = apply_action(&state, &Action::Confirm); // → ViewActive
-        let rp_before = state.resources.research_points;
-        let progress_before = state.field_research.as_ref().unwrap().progress;
 
-        state = apply_action(&state, &Action::Confirm); // Try to boost — should fail
-        assert_eq!(state.resources.research_points, rp_before, "should not spend RP");
+        state = apply_action(&state, &Action::SelectPrev); // Remove personnel
         assert_eq!(
-            state.field_research.as_ref().unwrap().progress,
-            progress_before,
-            "should not advance"
+            state.field_research.as_ref().unwrap().personnel_assigned,
+            initial_personnel - 1,
+            "should remove 1 personnel"
         );
-        assert!(state.ui.status_message.as_ref().unwrap().contains("Need"));
+
+        // Remove down to 1 — should stop
+        for _ in 0..20 {
+            state = apply_action(&state, &Action::SelectPrev);
+        }
+        assert_eq!(
+            state.field_research.as_ref().unwrap().personnel_assigned,
+            1,
+            "should not go below 1"
+        );
+        assert!(state.ui.status_message.as_ref().unwrap().contains("at least 1"));
+    }
+
+    #[test]
+    fn more_personnel_means_faster_progress() {
+        let mut state = GameState::new_default(42);
+
+        // Create a project with base 5 personnel, assign 10 for 2x speed
+        state.field_research = Some(ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 10, // 2x base (5)
+        });
+
+        state = tick(&state);
+        // At 2x speed, 1 tick should yield 2.0 progress
+        assert!(
+            (state.field_research.as_ref().unwrap().progress - 2.0).abs() < 0.01,
+            "double personnel should give double speed, got {}",
+            state.field_research.as_ref().unwrap().progress
+        );
     }
 
     #[test]
     fn concurrent_field_and_bench_research() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 200.0;
         state.diseases[0].knowledge = 1.0;
 
         // Start field research
@@ -337,10 +366,8 @@ mod tests {
     #[test]
     fn develop_medicine_sets_strain_generation() {
         let mut state = GameState::new_default(42);
-        // Manually mutate disease 0 to gen 2
         state.diseases[0].strain_generation = 2;
         state.diseases[0].knowledge = 1.0;
-        state.resources.research_points = 100.0;
 
         // Start and complete DevelopMedicine for medicine 0 (targets disease 0)
         state.bench_research = Some(ResearchProject {
@@ -348,14 +375,13 @@ mod tests {
             progress: 24.0, // will complete on next tick
             required_ticks: 25.0,
             personnel_assigned: 5,
-            rp_cost: 15.0,
         });
 
         state = tick(&state);
         assert!(state.medicines[0].unlocked);
         assert_eq!(
             state.medicines[0].strain_generations,
-            vec![2], // should match disease gen at time of completion
+            vec![2],
             "medicine should be calibrated to disease generation at completion"
         );
     }
@@ -366,20 +392,16 @@ mod tests {
         state.diseases[0].strain_generation = 3;
         state.medicines[0].unlocked = true;
         state.medicines[0].strain_generations = vec![0]; // outdated
-        state.resources.research_points = 100.0;
 
         state.field_research = Some(ResearchProject {
             kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
-            progress: 24.0, // will complete on next tick
+            progress: 24.0,
             required_ticks: 25.0,
             personnel_assigned: 5,
-            rp_cost: 15.0,
         });
 
         state = tick(&state);
         assert!(state.medicines[0].tested_against.contains(&0));
-        // strain_generation should be updated to current disease gen
-        // Note: disease might have mutated during this tick too, so check >= 3
         assert!(
             state.medicines[0].strain_generations[0] >= 3,
             "clinical trial should update strain calibration"
@@ -389,20 +411,17 @@ mod tests {
     #[test]
     fn narrow_medicine_cheaper_to_develop_than_broad() {
         let mut state = GameState::new_default(1);
-        // Add a second disease so the broad-spectrum medicine has multiple targets
         let disease2 = crate::state::Disease::generate(
             &mut state.rng.clone(), crate::state::PathogenType::Bacterium, &[], true,
         );
         state.diseases.push(disease2);
-        // Update broad-spectrum to target both diseases
         let broad_idx = state.medicines.len() - 1;
         state.medicines[broad_idx].target_diseases.push(1);
-        // Medicine 0 = targeted (1 target), last medicine = Broad-Spectrum (2 targets)
+
         let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
         let broad = ResearchKind::DevelopMedicine { medicine_idx: broad_idx };
-        let (narrow_rp, narrow_pers, narrow_ticks) = narrow.costs(&state.medicines);
-        let (broad_rp, broad_pers, broad_ticks) = broad.costs(&state.medicines);
-        assert!(narrow_rp < broad_rp, "narrow should cost less RP");
+        let (narrow_pers, narrow_ticks) = narrow.costs(&state.medicines);
+        let (broad_pers, broad_ticks) = broad.costs(&state.medicines);
         assert!(narrow_pers <= broad_pers, "narrow should need fewer personnel");
         assert!(narrow_ticks < broad_ticks, "narrow should be faster");
     }
@@ -412,8 +431,8 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.diseases[0].strain_generation = 2;
         state.medicines[0].unlocked = true;
-        state.medicines[0].tested_against = vec![0]; // already tested
-        state.medicines[0].strain_generations = vec![0]; // but outdated
+        state.medicines[0].tested_against = vec![0];
+        state.medicines[0].strain_generations = vec![0]; // outdated
 
         let field_projects = state.available_field_projects();
         let has_retrial = field_projects.iter().any(|k| matches!(k,
@@ -425,28 +444,23 @@ mod tests {
     #[test]
     fn manufacture_doses_restores_supply() {
         let mut state = GameState::new_default(42);
-        // Unlock all medicines
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
         }
-        state.medicines[0].doses = 0.0; // Depleted
+        state.medicines[0].doses = 0.0;
 
-        // ManufactureDoses should appear in available bench projects
         let bench = state.available_bench_projects();
         assert!(
             bench.iter().any(|k| matches!(k, ResearchKind::ManufactureDoses { medicine_idx: 0 })),
             "manufacture should be available for depleted medicine"
         );
 
-        // Start and complete manufacture
-        state.resources.research_points = 100.0;
         state.bench_research = Some(ResearchProject {
             kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
             progress: 14.0,
             required_ticks: 15.0,
             personnel_assigned: 3,
-            rp_cost: 10.0,
         });
         state = tick(&state);
 
@@ -460,14 +474,11 @@ mod tests {
     #[test]
     fn genomic_sequencing_reduces_mutation_rate() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 200.0;
         state.diseases[0].knowledge = 1.0;
         let original_rate = state.diseases[0].pathogen_type.mutation_rate();
 
-        // Start genomic sequencing via field research
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
-        // Navigate past identify projects to genomic sequencing
         let field_projects = state.available_field_projects();
         let seq_idx = field_projects.iter().position(|k| matches!(k,
             ResearchKind::GenomicSequencing { .. }
@@ -479,14 +490,12 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm
         assert!(state.field_research.is_some());
 
-        // Complete the project (200 ticks)
         for _ in 0..200 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none());
         assert_eq!(state.diseases[0].sequencing_count, 1);
 
-        // Verify mutation rate is effectively halved
         let effective_rate = original_rate * 0.5_f64.powi(state.diseases[0].sequencing_count as i32);
         assert!((effective_rate - original_rate * 0.5).abs() < 0.0001);
     }
@@ -494,14 +503,11 @@ mod tests {
     #[test]
     fn train_personnel_increases_count() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 200.0;
         let initial_personnel = state.resources.personnel;
 
-        // Start personnel training via bench research
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::SelectNext); // Bench Research
         state = apply_action(&state, &Action::Confirm);     // Enter Bench
-        // Navigate to Train Personnel (last item in bench projects)
         let bench_projects = state.available_bench_projects();
         let train_idx = bench_projects.iter().position(|k| matches!(k,
             ResearchKind::TrainPersonnel
@@ -513,7 +519,6 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm
         assert!(state.bench_research.is_some());
 
-        // Complete the project (160 ticks)
         for _ in 0..160 {
             state = tick(&state);
         }
@@ -525,14 +530,11 @@ mod tests {
     fn no_research_after_game_over() {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;
-        state.resources.research_points = 100.0;
-        let rp_before = state.resources.research_points;
         // Try to start research
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
         state = apply_action(&state, &Action::Confirm); // Select project
         state = apply_action(&state, &Action::Confirm); // Try to confirm
         assert!(state.field_research.is_none(), "should not start research after game over");
-        assert_eq!(state.resources.research_points, rp_before, "should not spend RP after game over");
     }
 }

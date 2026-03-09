@@ -39,7 +39,7 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 2. Disease mutation
 3. `research::tick_research()` — advance/complete research projects
 4. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
-5. Resource income (funding, RP)
+5. Resource income (funding)
 6. Disease emergence (mid-game new threats)
 7. `crisis::generate_crisis()` — random crisis events
 8. Regional collapse
