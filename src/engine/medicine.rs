@@ -164,7 +164,7 @@ fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, cost: f64, ac
 
 /// Build resistance from deployment pressure. Treatment creates much more
 /// selection pressure than vaccination. Broad-spectrum drugs build resistance
-/// faster because they exert less targeted evolutionary pressure.
+/// faster (2x) because broad selection pressure accelerates adaptation.
 fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
     let med = &state.medicines[medicine_idx];
     let base = if is_treatment { 0.03 } else { 0.005 };
