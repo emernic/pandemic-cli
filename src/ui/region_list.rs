@@ -392,21 +392,24 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     // Population summary line
-    lines.push(Line::from(vec![
+    let mut summary_spans = vec![
         Span::styled("Pop ", label),
         Span::styled(format_number(pop), val),
         Span::styled("  Alive ", label),
         Span::styled(format_number(alive), Style::default().fg(Color::Green)),
         Span::styled("  Infected ", label),
         Span::styled(format_number(infected), Style::default().fg(Color::Red)),
-        Span::styled("  Immune ", label),
-        Span::styled(
-            if shows_immune { format_number(immune) } else { "?".to_string() },
-            Style::default().fg(if shows_immune { Color::Cyan } else { Color::DarkGray }),
-        ),
-        Span::styled("  Dead ", label),
-        Span::styled(format_number(dead), Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray })),
-    ]));
+    ];
+    if shows_immune {
+        summary_spans.push(Span::styled("  Immune ", label));
+        summary_spans.push(Span::styled(
+            format_number(immune),
+            Style::default().fg(Color::Cyan),
+        ));
+    }
+    summary_spans.push(Span::styled("  Dead ", label));
+    summary_spans.push(Span::styled(format_number(dead), Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray })));
+    lines.push(Line::from(summary_spans));
 
     // Collapse threshold line
     if !region.collapsed {
@@ -491,17 +494,21 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         format!("{:<10}", format_number(screened_inf)),
                         Style::default().fg(Color::Red),
                     ),
-                    Span::styled("Immune ", label),
-                    Span::styled(
-                        if shows_immune { format!("{:<10}", format_number(shown_immune)) } else { format!("{:<10}", "?") },
-                        Style::default().fg(if shows_immune { Color::Cyan } else { Color::DarkGray }),
-                    ),
+                ];
+                if shows_immune {
+                    spans.push(Span::styled("Immune ", label));
+                    spans.push(Span::styled(
+                        format!("{:<10}", format_number(shown_immune)),
+                        Style::default().fg(Color::Cyan),
+                    ));
+                }
+                spans.extend([
                     Span::styled("Dead ", label),
                     Span::styled(
                         format!("{:<10}", format_number(inf.dead)),
                         Style::default().fg(if inf.dead > 0.0 { Color::Red } else { Color::DarkGray }),
                     ),
-                ];
+                ]);
                 if susceptible > 0.0 {
                     spans.push(Span::styled("Susceptible ", label));
                     spans.push(Span::styled(
