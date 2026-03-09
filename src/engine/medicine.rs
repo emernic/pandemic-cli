@@ -108,6 +108,7 @@ pub(super) fn deploy_medicine(
                     region.dead += adverse_deaths;
                     state.resources.funding -= cost;
                     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
+                    state.medicines[medicine_idx].deployed_count += 1;
                     (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse, efficacy), adverse)
                 } else {
                     (format!("No susceptible population in {region_name}"), false)
@@ -139,6 +140,7 @@ pub(super) fn deploy_medicine(
                     region.dead += adverse_deaths;
                     state.resources.funding -= cost;
                     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
+                    state.medicines[medicine_idx].deployed_count += 1;
                     (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse, efficacy), adverse)
                 } else {
                     (format!("No infected population in {region_name}"), false)
