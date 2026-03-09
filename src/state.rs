@@ -56,6 +56,11 @@ pub struct GameState {
     pub ui: UiState,
 }
 
+// Medicine constants.
+/// Fraction of infected treated per deployment (before efficacy modifiers).
+/// Treatment is proportional — scales with infection size instead of fixed dose count.
+pub const TREATMENT_FRACTION: f64 = 0.5;
+
 // Disease emergence constants.
 /// First new disease can emerge after this many ticks (~day 3).
 pub const EMERGENCE_MIN_TICK: u64 = 360;
@@ -604,9 +609,9 @@ impl Medicine {
             name: format!("{}-{}", therapy.label(), letter),
             therapy_type: therapy,
             target_diseases: vec![disease_idx],
-            cost: 100.0,
-            doses: 100_000.0,
-            max_doses: 100_000.0,
+            cost: 150.0,
+            doses: 500_000.0,
+            max_doses: 500_000.0,
             unlocked: false,
             tested_against: vec![],
             strain_generations: vec![],
@@ -1443,9 +1448,9 @@ impl GameState {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
             target_diseases: all_disease_indices,
-            cost: 200.0,
-            doses: 100_000.0,
-            max_doses: 100_000.0,
+            cost: 300.0,
+            doses: 1_000_000.0,
+            max_doses: 1_000_000.0,
             unlocked: false,
             tested_against: vec![],
             strain_generations: vec![],
