@@ -68,8 +68,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 }
 
 /// Build a CrisisEvent with human-readable text for the given kind.
-/// Build a crisis event. INVARIANT: option_a must ALWAYS be free (cost: None)
-/// so the player is never softlocked. Paid options go in option_b.
+/// INVARIANT: option_a must ALWAYS be free (cost: None) so the player
+/// is never softlocked. Paid options go in option_b.
 fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
     let event = match &kind {
