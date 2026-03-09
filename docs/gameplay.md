@@ -4,6 +4,8 @@
 
 Inverse Plague Inc. You're the global health defense in a sci-fi future, not the disease. Real-time with pause strategy.
 
+**The game is designed to be unwinnable** — a survival/endurance challenge like a roguelike. Diseases will eventually overwhelm the player. The goal is to last as long as possible and save as many lives as you can. 20+ days is decent, 40+ is good, 100+ is exceptional. There is no win condition.
+
 ## Threats
 
 Multiple diseases run concurrently. Procedurally generated from:

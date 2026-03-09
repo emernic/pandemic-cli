@@ -12,6 +12,29 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 **The target audience is real adults with taste.** Think Crusader Kings, Hearts of Iron — deeply grounded in real science and real-world systems, slightly gamified (you don't do paperwork in Call of Duty), set slightly in the future so the science is realistic but forward-looking. People who actually know infectious disease, molecular biology, or public health policy should be surprised and delighted by the game's accuracy and depth. Not a sim, but grounded.
 
+## ⚠️ The Game Is Designed To Be Unwinnable — READ THIS FIRST
+
+**There is no win condition. The game is a survival/endurance challenge.** The diseases will eventually overwhelm you — the question is how long you can hold out and how many lives you can save before they do. Think of it like a roguelike: you're going to lose, and that's the point. The fun is in the struggle, the decisions you make under pressure, and how far you get.
+
+**Benchmarks for evaluating a run:**
+- **20+ days:** Decent run. You made meaningful decisions and managed the early threats.
+- **40+ days:** Good run. You handled multiple diseases and sustained your response.
+- **100+ days:** Exceptional run. You mastered resource management and triage.
+
+**This changes how you evaluate EVERYTHING:**
+- "The game feels unwinnable" — **That's the design. Not a bug.** Don't file issues about this.
+- "I can't keep up with all the diseases" — **Correct. You're not supposed to.** The challenge is triage: which diseases do you fight, which do you let burn? Filing an issue about "can't develop medicine for all 5 diseases" misunderstands the game.
+- "Resources pile up with nothing to spend on" — This IS a valid issue if it means the player has no meaningful decisions. But "I can't save everyone" is not the same problem as "I have nothing to do."
+- "I eventually lost" — **That's the expected outcome.** Evaluate whether the *path to losing* was interesting, dramatic, and felt like it resulted from your decisions — not whether losing itself is a problem.
+- "Diseases outpace the research pipeline" — **By design.** The pipeline bottleneck forces triage. The question is whether that triage feels like an interesting strategic choice or just helpless frustration.
+
+**What IS a valid complaint about difficulty:**
+- The game ended before any meaningful decisions were possible (too fast)
+- The game dragged on with no tension or decisions (too slow / no endgame pressure)
+- The loss felt random rather than resulting from player choices
+- There were no interesting decisions to make — the "right" play was always obvious
+- The player had resources but literally nothing to spend them on (idle resources with no options)
+
 ## ⚠️ This Game Is a Prototype — Ideas Are More Valuable Than Polish
 
 **The game in its current state is a skeleton.** Every system has a small number of options that serve as placeholders. The game starts with 1 disease and spawns up to 5 dynamically via emergence. There are 3 medicines. There are 5 per-region policies. The research tree is a single linear pipeline. There are crisis events but limited variety. It's a similar experience every time with different RNG.
@@ -146,9 +169,9 @@ Do NOT file issues about connections looking wrong in the ASCII map — they are
 |------|-----------|------------|
 | 1 | ~1 minute | Very early — player is still orienting |
 | 5 | ~5 minutes | Early game — player is settling into strategy |
-| 20 | ~20 minutes | Mid game — core loop should be engaging |
-| 40 | ~40 minutes | Late game — player should feel the endgame approaching |
-| 60+ | 60+ minutes | Full session — the kind of run a dedicated player does |
+| 20 | ~20 minutes | Mid game — decent survival run, core loop should be engaging |
+| 40 | ~40 minutes | Late game — good run, pressure should be intense |
+| 100+ | ~100 minutes | Exceptional run — mastered triage and resource management |
 
 **This changes how you evaluate EVERYTHING:**
 - "1 day before first action is possible" = **1 minute**. That's fine. Most strategy games have longer openings. Do NOT file an issue about this being "too slow."
