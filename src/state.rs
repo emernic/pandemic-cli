@@ -551,6 +551,8 @@ pub enum PathogenType {
     DnaVirus,
     /// Responds to antibiotics, can develop resistance
     Bacterium,
+    /// Slow-growing, hard to treat, limited drug options
+    Fungus,
     /// Extremely slow-spreading but nearly untreatable
     Prion,
 }
@@ -567,6 +569,7 @@ impl PathogenType {
             PathogenType::RnaVirus => "RNA Virus",
             PathogenType::DnaVirus => "DNA Virus",
             PathogenType::Bacterium => "Bacterium",
+            PathogenType::Fungus => "Fungus",
             PathogenType::Prion => "Prion",
         }
     }
@@ -581,6 +584,7 @@ impl PathogenType {
             PathogenType::RnaVirus => 0.001,     // ~1 mutation per 1000 ticks (~8 days)
             PathogenType::DnaVirus => 0.0002,    // ~1 per 5000 ticks (~42 days)
             PathogenType::Bacterium => 0.0004,   // ~1 per 2500 ticks (~21 days)
+            PathogenType::Fungus => 0.0001,      // ~1 per 10000 ticks (~83 days)
             PathogenType::Prion => 0.00003,      // ~1 per 33333 ticks (~278 days)
         }
     }
@@ -615,6 +619,14 @@ impl PathogenType {
                 recovery: (0.001, 0.002),
                 cross_region: (0.002, 0.004),
             },
+            // Fungi: slow-growing, moderate lethality, very low natural recovery.
+            // R0 ≈ 2.2, death fraction ≈ 67%. Hard to clear without antifungals.
+            PathogenType::Fungus => DiseaseStatRanges {
+                infectivity: (0.004, 0.008),
+                lethality: (0.001, 0.002),
+                recovery: (0.0004, 0.001),
+                cross_region: (0.001, 0.003),
+            },
             // Prions: slow but devastating, very high lethality, almost no recovery
             // R0 ≈ 1.7 (can dip below 1 at extremes), death fraction ≈ 87%.
             PathogenType::Prion => DiseaseStatRanges {
@@ -642,6 +654,11 @@ impl PathogenType {
                 "Yersinia-Omega", "Vibrio Fortis", "Mycobacterium Sigma",
                 "Burkholderia-X", "Clostridium Rex", "Rickettsia Tau",
                 "Streptococcus Phi", "Klebsiella Nova",
+            ],
+            PathogenType::Fungus => &[
+                "Candida Omega", "Aspergillus Rex", "Cryptococcus Sigma",
+                "Mucor-X", "Trichophyton Nova", "Coccidioides Tau",
+                "Histoplasma Delta",
             ],
             PathogenType::Prion => &[
                 "PrP-Sigma Fold", "TSE-7 Variant", "Kuru-X Prion",
@@ -672,6 +689,11 @@ impl PathogenType {
                 else if roll < 0.60 { TransmissionVector::Contact }
                 else { TransmissionVector::Waterborne }
             }
+            // Fungi: spores (airborne) and hospital contact, no waterborne
+            PathogenType::Fungus => {
+                if roll < 0.45 { TransmissionVector::Airborne }
+                else { TransmissionVector::Contact }
+            }
             // Prions: food/contact (mad cow), never truly airborne
             PathogenType::Prion => {
                 if roll < 0.7 { TransmissionVector::Contact }
@@ -685,6 +707,7 @@ impl PathogenType {
         match self {
             PathogenType::RnaVirus | PathogenType::DnaVirus => TherapyType::Antiviral,
             PathogenType::Bacterium => TherapyType::Antibiotic,
+            PathogenType::Fungus => TherapyType::Antifungal,
             PathogenType::Prion => TherapyType::BroadSpectrum,
         }
     }
@@ -915,6 +938,8 @@ pub enum TherapyType {
     Antiviral,
     /// Kills or inhibits bacteria; effective against bacterial pathogens.
     Antibiotic,
+    /// Targets fungal cell structures; effective against fungal pathogens.
+    Antifungal,
     /// Works across pathogen types but at reduced efficacy.
     BroadSpectrum,
 }
@@ -930,6 +955,7 @@ impl TherapyType {
         match self {
             TherapyType::Antiviral => "Antiviral",
             TherapyType::Antibiotic => "Antibiotic",
+            TherapyType::Antifungal => "Antifungal",
             TherapyType::BroadSpectrum => "Broad-Spectrum",
         }
     }
@@ -942,15 +968,14 @@ impl TherapyType {
             (TherapyType::Antiviral, PathogenType::RnaVirus) => 1.0,
             (TherapyType::Antiviral, PathogenType::DnaVirus) => 0.8,
             (TherapyType::Antibiotic, PathogenType::Bacterium) => 1.0,
+            (TherapyType::Antifungal, PathogenType::Fungus) => 1.0,
             // Broad-spectrum: partial efficacy against everything except prions
             (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.1,
             (TherapyType::BroadSpectrum, _) => 0.5,
-            // Mismatched: nearly useless
-            (TherapyType::Antiviral, PathogenType::Bacterium) => 0.1,
-            (TherapyType::Antibiotic, PathogenType::RnaVirus) => 0.1,
-            (TherapyType::Antibiotic, PathogenType::DnaVirus) => 0.1,
             // Prions resist everything
             (_, PathogenType::Prion) => 0.0,
+            // Mismatched: nearly useless
+            _ => 0.1,
         }
     }
 }
@@ -971,6 +996,14 @@ pub enum MechanismOfAction {
     /// Sulfonamides: block folate synthesis, starving bacteria of essential metabolites.
     MetabolicInhibitor,
 
+    // Fungal mechanisms
+    /// Azoles: block ergosterol synthesis, destabilizing fungal cell membranes.
+    ErgosterolInhibitor,
+    /// Polyenes (e.g., amphotericin B): bind ergosterol, punching holes in membranes.
+    MembraneDisruptor,
+    /// Echinocandins: block glucan synthesis, weakening the fungal cell wall.
+    GlucanSynthaseInhibitor,
+
     // Viral mechanisms
     /// Nucleoside analogs: mimic building blocks to halt viral genome replication.
     PolymeraseInhibitor,
@@ -988,6 +1021,9 @@ impl MechanismOfAction {
             MechanismOfAction::RibosomeInhibitor => "Ribosome Inhibitor",
             MechanismOfAction::DnaGyraseInhibitor => "DNA Gyrase Inhibitor",
             MechanismOfAction::MetabolicInhibitor => "Metabolic Inhibitor",
+            MechanismOfAction::ErgosterolInhibitor => "Ergosterol Inhibitor",
+            MechanismOfAction::MembraneDisruptor => "Membrane Disruptor",
+            MechanismOfAction::GlucanSynthaseInhibitor => "Glucan Synthase Inhibitor",
             MechanismOfAction::PolymeraseInhibitor => "Polymerase Inhibitor",
             MechanismOfAction::ProteaseInhibitor => "Protease Inhibitor",
             MechanismOfAction::EntryInhibitor => "Entry Inhibitor",
@@ -1001,6 +1037,9 @@ impl MechanismOfAction {
             MechanismOfAction::RibosomeInhibitor => "Ribosome",
             MechanismOfAction::DnaGyraseInhibitor => "Gyrase",
             MechanismOfAction::MetabolicInhibitor => "Metabolic",
+            MechanismOfAction::ErgosterolInhibitor => "Ergosterol",
+            MechanismOfAction::MembraneDisruptor => "Membrane",
+            MechanismOfAction::GlucanSynthaseInhibitor => "Glucan",
             MechanismOfAction::PolymeraseInhibitor => "Polymerase",
             MechanismOfAction::ProteaseInhibitor => "Protease",
             MechanismOfAction::EntryInhibitor => "Entry",
@@ -1017,6 +1056,15 @@ impl MechanismOfAction {
         ]
     }
 
+    /// Mechanisms applicable to fungal pathogens.
+    pub fn fungal_mechanisms() -> &'static [MechanismOfAction] {
+        &[
+            MechanismOfAction::ErgosterolInhibitor,
+            MechanismOfAction::MembraneDisruptor,
+            MechanismOfAction::GlucanSynthaseInhibitor,
+        ]
+    }
+
     /// Mechanisms applicable to viral pathogens.
     pub fn viral_mechanisms() -> &'static [MechanismOfAction] {
         &[
@@ -1030,6 +1078,7 @@ impl MechanismOfAction {
     pub fn targets_pathogen(&self, pathogen: &PathogenType) -> bool {
         match pathogen {
             PathogenType::Bacterium => Self::bacterial_mechanisms().contains(self),
+            PathogenType::Fungus => Self::fungal_mechanisms().contains(self),
             PathogenType::RnaVirus | PathogenType::DnaVirus => Self::viral_mechanisms().contains(self),
             PathogenType::Prion => false,
         }
@@ -1095,6 +1144,7 @@ impl Medicine {
 
         let mechs: &[MechanismOfAction] = match pathogen_type {
             PathogenType::Bacterium => MechanismOfAction::bacterial_mechanisms(),
+            PathogenType::Fungus => MechanismOfAction::fungal_mechanisms(),
             PathogenType::RnaVirus | PathogenType::DnaVirus => MechanismOfAction::viral_mechanisms(),
             PathogenType::Prion => {
                 // Prions: single medicine, no mechanism
@@ -2419,6 +2469,7 @@ impl GameState {
             PathogenType::DnaVirus,
             PathogenType::Bacterium,
             PathogenType::Bacterium,  // 2× weight
+            PathogenType::Fungus,
         ];
         let chosen_types = vec![available_types[rng.r#gen::<usize>() % available_types.len()]];
 
@@ -2722,6 +2773,7 @@ impl GameState {
             PathogenType::DnaVirus,
             PathogenType::Bacterium,
             PathogenType::Bacterium,
+            PathogenType::Fungus,
         ];
         if rng.r#gen::<f64>() < 0.15 {
             types.push(PathogenType::Prion);
@@ -2733,6 +2785,7 @@ impl GameState {
                 PathogenType::RnaVirus,
                 PathogenType::DnaVirus,
                 PathogenType::Bacterium,
+                PathogenType::Fungus,
                 PathogenType::Prion,
             ];
         }
