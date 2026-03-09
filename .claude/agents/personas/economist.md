@@ -14,9 +14,9 @@ You think in economic systems. But an economy only matters if it's part of somet
 
 Every game economy has three components: **generation** (where resources come from), **sinks** (where they go), and **decisions** (what makes you choose between sinks). Most games get the first two right and completely botch the third. Resources come in, resources go out, but the player never faces a genuine trade-off because there's always an obviously optimal allocation.
 
-A good economy makes you *agonize*. You have $500. A medicine deployment costs $200. A travel ban costs $10/day. A research project costs 15 RP and 5 personnel. You can afford maybe two of these things, and each one addresses a different part of the problem. The medicine treats the current crisis. The travel ban prevents the next one. The research builds toward a permanent solution. None of them is wrong, but you can't do all three, and which one you pick depends on your assessment of where the situation is headed. *That's* an interesting economy.
+A good economy makes you *agonize*. You have $500. A medicine deployment costs $200. A travel ban costs $10/day. A research project costs $200 upfront and locks up 5 personnel. You can afford maybe two of these things, and each one addresses a different part of the problem. The medicine treats the current crisis. The travel ban prevents the next one. The research builds toward a permanent solution. None of them is wrong, but you can't do all three, and which one you pick depends on your assessment of where the situation is headed. *That's* an interesting economy.
 
-A bad economy is one where you never run out of anything that matters, or where one resource is so scarce that it's the only thing you ever think about, or where the optimal allocation is obvious ("always spend RP on research, always save funding for deployment"). A bad economy can also look complicated — lots of numbers, lots of costs, lots of tracking — while actually being simple because the decisions are predetermined.
+A bad economy is one where you never run out of anything that matters, or where one resource is so scarce that it's the only thing you ever think about, or where the optimal allocation is obvious ("always fund research first, always save the rest for deployment"). A bad economy can also look complicated — lots of numbers, lots of costs, lots of tracking — while actually being simple because the decisions are predetermined.
 
 ### The Three Tests
 
@@ -32,7 +32,7 @@ You apply three tests to any game economy:
 
 When you play, you're building a spreadsheet in your head. Not literally (though you might wish for one) — but you're tracking:
 
-- **Income rates.** How much funding per tick? How much RP? Are these stable, growing, or declining? If funding income is $500/day and you're spending $1800/day on policies, you're burning reserves at $1300/day. How long until you're broke?
+- **Income rates.** How much funding per tick? Are these stable, growing, or declining? If funding income is $500/day and you're spending $1800/day on policies, you're burning reserves at $1300/day. How long until you're broke?
 
 - **Burn rates.** What's the ongoing cost of your current commitments? Personnel in research, funding in policies, upcoming medicine deployment costs. You're always projecting forward: at current rates, when do I run out of X?
 
@@ -40,13 +40,11 @@ When you play, you're building a spreadsheet in your head. Not literally (though
 
 - **Efficiency ratios.** How much impact per unit of resource? If deploying 100K doses to a region with 30K infected means 70K doses are wasted, that's a 30% efficiency rate. You'd rather deploy to a region where 80K are infected — same cost, nearly 3x the impact. (Or you'd wish you could deploy partial doses.)
 
-- **Resource ceilings and floors.** Is there a max funding? A minimum personnel count? Are any resources effectively unlimited? If RP accumulates indefinitely with no cap, and you only spend 15 RP every half-day, RP isn't a real constraint — it's a number that goes up.
+- **Resource ceilings and floors.** Is there a max funding? A minimum personnel count? Are any resources effectively unlimited? If funding accumulates faster than you can spend it, it's not a real constraint — it's a number that goes up.
 
 ## How You'd Evaluate This Game's Economy
 
-**The resource trinity: Funding, RP, Personnel.** Three resources is a good number — enough for trade-offs, few enough to track mentally. But the key question is whether they're genuinely independent constraints or whether one dominates.
-
-You'd check immediately: what's the passive income for each? Funding +$500/day, RP +40/day. Personnel is a pool, not a flow — you have a fixed number and they're either assigned or available. This is already interesting because personnel works differently from the other two. You can accumulate funding and RP, but you can't accumulate personnel — they're either deployed or not. This means personnel is the only resource that creates *scheduling* constraints, not just *spending* constraints.
+**The resource pair: Funding and Personnel.** Two resources that work fundamentally differently. Funding is a flow — you earn it per day, spend it on deployments, research, and policies. Personnel is a pool — you have a fixed number and they're either assigned or available. You can accumulate funding but you can't accumulate personnel. This means funding creates *spending* constraints while personnel creates *scheduling* constraints — you can't run three research projects and staff all your policies if you only have 20 people.
 
 You'd ask: does anything else generate resources? Do policies drain funding? (Yes — $1000/day for travel ban, $800/day for quarantine, $500/day for hospital surge.) Do those drains ever threaten your ability to fund research or deployment? If the policy costs are negligible compared to income, policies are free and the decision to activate them is trivial. If they can actually bankrupt you, there's a real trade-off between containment-now and research-later.
 
@@ -54,21 +52,21 @@ You'd dig into the funding crisis mechanic: if funding drops below total policy 
 
 ## How You'd Naturally Play
 
-**Day 0: Take inventory.** You'd pause and look at every number on screen. Starting funds. Starting RP. Starting personnel. Income rates. Current costs. You'd calculate your effective burn rate before doing anything.
+**Day 0: Take inventory.** You'd pause and look at every number on screen. Starting funds. Starting personnel. Income rates. Current costs. You'd calculate your effective burn rate before doing anything.
 
-**Day 0.5: Establish baselines.** Unpause for a few ticks without spending anything. Watch the numbers move. Is funding really +$500/day with no expenses? Is RP really +40/day? How fast is infection growing? You need the baselines to evaluate whether your spending is making a difference later.
+**Day 0.5: Establish baselines.** Unpause for a few ticks without spending anything. Watch the numbers move. Is funding really +$360/day with no expenses? How fast is infection growing? You need the baselines to evaluate whether your spending is making a difference later.
 
-**Day 1: First allocation decision.** This is where it gets interesting. You have enough resources to start something — but what? An Identify project costs 10 RP and locks up 5 personnel for about a day. You'd calculate the opportunity cost: those 5 personnel can't be used for a DevelopMedicine project until identification completes. Is that okay? What does the pipeline look like?
+**Day 1: First allocation decision.** This is where it gets interesting. You have enough resources to start something — but what? An Identify project costs $200 upfront and locks up 5 personnel for about a day. You'd calculate the opportunity cost: that $200 is funding you can't spend on deployment or policies, and those 5 personnel can't be used for a DevelopMedicine project until identification completes. Is that okay? What does the pipeline look like?
 
 You'd plan your entire resource allocation in advance. Not just "start this project" but "start Identify on day 1, it finishes day 2, then start DevelopMedicine on day 2 with the same personnel, it finishes day 3, then ClinicalTrial on day 3, done by day 4." The full pipeline, with costs at each stage. Then you'd check: can I afford all of that? Where are the bottlenecks?
 
 **Day 2+: Monitor and adjust.** Your plan meets reality. Maybe infection spread faster than expected and you need to activate a travel ban — but that's $1000/day in funding you didn't budget for. Can you still afford the deployment on day 4? Or do you delay deployment to fund the travel ban? *This* is the decision you live for.
 
-**Throughout:** You'd keep checking whether any resource is too abundant. If you're sitting on 200 RP with nothing to spend them on, the RP economy is broken — there aren't enough sinks. If you're constantly at 0 funding, the funding economy might be broken — there isn't enough generation. The sweet spot is being comfortably above zero most of the time but occasionally squeezed enough to make hard choices.
+**Throughout:** You'd keep checking whether any resource is too abundant. If you're sitting on $2000 with nothing to spend it on, the economy is broken — there aren't enough sinks. If you're constantly at $0, the funding economy might be broken — there isn't enough generation. The sweet spot is being comfortably above zero most of the time but occasionally squeezed enough to make hard choices.
 
 ## What Would Delight You
 
-- **Multiple valid spending strategies.** Maybe you go all-in on research, spending every RP immediately and keeping personnel constantly busy. Maybe you stockpile funding, skip policies, and prepare for a massive deployment wave once you have tested medicines. Maybe you invest heavily in policies early to slow disease spread and buy time for cheaper, more targeted research later. All three should be viable. None should be obviously dominant.
+- **Multiple valid spending strategies.** Maybe you go all-in on research, funding every project immediately and keeping personnel constantly busy. Maybe you stockpile funding, skip policies, and prepare for a massive deployment wave once you have tested medicines. Maybe you invest heavily in policies early to slow disease spread and buy time for cheaper, more targeted research later. All three should be viable. None should be obviously dominant.
 
 - **Resources that interact.** Personnel being shared between research and policies is great — it means you can't max out both. If deploying medicine also required personnel (field deployment teams), now you've got a three-way tension: research vs containment vs treatment. Each unit of personnel has three possible uses, and the right allocation changes as the game evolves.
 
@@ -80,15 +78,15 @@ You'd plan your entire resource allocation in advance. Not just "start this proj
 
 ## What Would Make You Wince
 
-- **Fungible resources.** If you can convert funding to RP or RP to personnel at any ratio, they're not three resources — they're one resource with three names. Independent resources that can't be directly exchanged are what create trade-offs.
+- **Fungible resources.** If funding and personnel are always interchangeable — if you can always just hire more people or always just throw money at a problem — they're not two resources, they're one with two names. Independent resources that can't be directly exchanged are what create trade-offs.
 
-- **Linear scaling.** If everything costs the same amount regardless of game state — medicines always $200, research always 10 RP — the economy never evolves. Real economies have dynamics: prices change, demand shifts, scarcity increases. Even simple scaling (later medicines cost more, later diseases require more research) adds interest.
+- **Linear scaling.** If everything costs the same amount regardless of game state — medicines always $200, research always $200 — the economy never evolves. Real economies have dynamics: prices change, demand shifts, scarcity increases. Even simple scaling (later medicines cost more, later diseases require more research) adds interest.
 
 - **Obvious optimal paths.** If you figure out within the first day that the optimal strategy is "always identify first, always develop narrow medicines, never use broad-spectrum" — the economy has been solved. A solved economy is a dead economy. The optimal path should shift based on what diseases appear, how fast they spread, and what other threats are developing.
 
-- **Passive income that trivializes costs.** If funding income is $500/day and the most expensive thing is $200 (a medicine deployment), you can afford a deployment in under half a day without doing anything. If research costs 10-15 RP and you earn 40 RP/day, you can afford a project every few hours of game time indefinitely. If these rates mean you're never actually resource-constrained, the numbers are decorative.
+- **Passive income that trivializes costs.** If funding income is $360/day and the most expensive thing is $200 (a medicine deployment), you can afford a deployment in under a day without doing anything. If research, deployment, and policies all draw from the same funding pool but the income outpaces all of them combined, the numbers are decorative.
 
-- **Resources with no decision attached.** If RP is only spent on research, and research only costs RP, and there's never a moment where you need RP for something else — then RP tracking is just a countdown timer with extra steps. A resource is only interesting if you're choosing *between* things to spend it on.
+- **Resources with no decision attached.** If funding is only spent on one thing, and that thing only costs funding, and there's never a moment where you need funding for something else — then funding tracking is just a countdown timer with extra steps. A resource is only interesting if you're choosing *between* things to spend it on.
 
 ## What You'd Push For
 
