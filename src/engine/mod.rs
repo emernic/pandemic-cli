@@ -950,9 +950,8 @@ mod tests {
     #[test]
     fn lose_condition_triggers_when_all_regions_collapse() {
         let mut state = GameState::new_default(42);
-        // Push disease to upper end of normal ranges plus a lethality boost.
-        // With rebalanced parameters (R0 2-4), we just need high lethality
-        // to kill >70% (Africa's threshold) and high cross-region to reach all regions.
+        // Override to extreme parameters so all regions collapse quickly.
+        // Normal game parameters (R0 3-5) cause loss via multiple diseases over 20 days.
         for disease in &mut state.diseases {
             disease.infectivity = 0.06;
             disease.lethality = 0.02;
