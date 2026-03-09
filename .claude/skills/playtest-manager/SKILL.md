@@ -8,6 +8,8 @@ disable-model-invocation: false
 
 You manage the full playtest cycle: launch, read results, and triage findings into the issue tracker. Your most important job is **tracking signal strength** — when the same problem comes up across multiple playtests, that's a strong signal that should be reflected in the issue tracker so agents picking up work can see it.
 
+**Playtest logs are gitignored. Do NOT commit them.** They live in `./playtests/` for reference but are not checked into the repo. The issue tracker is the durable record.
+
 ## Setup: Recurring Playtests
 
 To run playtests on a recurring schedule, use the `/loop` skill:
@@ -40,7 +42,8 @@ Agent(subagent_type=playtest, prompt=...)
 - What to focus on (vary this across sessions — don't test the same thing every time)
 - Remind it to write the log to `./playtests/`
 
-**Vary the focus area.** Rotate through these across sessions:
+**Vary the focus area.** To avoid testing the same thing every time, check which focus area was tested most recently by looking at existing playtest logs in `./playtests/` or the git log for recent playtest branches. Then pick a different one:
+
 1. Early game pacing and onboarding
 2. Full research pipeline end-to-end
 3. Policy system depth and trade-offs
@@ -76,7 +79,9 @@ gh issue comment <number> --body "$(cat <<'EOF'
 EOF
 )"
 
-gh api repos/{owner}/{repo}/issues/<number>/reactions -f content='+1'
+# Get repo from git remote (don't hardcode)
+REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+gh api "repos/$REPO/issues/<number>/reactions" -f content='+1'
 ```
 
 **Check if this issue should be priority-bumped.** If an issue has been confirmed by 3+ playtests and is currently P2 or P3, bump it:
@@ -98,7 +103,13 @@ gh issue comment <number> --body "Bumping priority: confirmed by 3+ independent 
 
 ### 4c. If a Closed Issue Matches and the Problem Persists
 
-Reopen it with a playtest confirmation comment explaining that the problem was observed again despite the fix:
+**First check the close reason.** Don't reopen issues closed as "not planned" — those were deliberately rejected. Only reopen issues that were closed as "completed" (i.e., someone thought they fixed it but the problem persists):
+
+```bash
+gh issue view <number> --json stateReason --jq '.stateReason'
+```
+
+If `COMPLETED` and the problem persists, reopen with a confirmation comment:
 
 ```bash
 gh issue reopen <number> --comment "$(cat <<'EOF'
@@ -109,6 +120,8 @@ Reopening — this problem persists after the previous fix.
 EOF
 )"
 ```
+
+If `NOT_PLANNED`, do NOT reopen. If you believe the rejection was wrong, file a new issue explaining why.
 
 ### 4d. If No Existing Issue Matches
 
@@ -143,9 +156,24 @@ After triaging all findings, output a summary:
 <2-3 sentences on the strongest signals from this playtest>
 ```
 
+## Step 6: Update This Catalog
+
+**This is mandatory. Do not skip it.**
+
+After each playtest, update the "Known Recurring Themes" section below:
+- **Promote** issues that moved from single observation to multiple confirmations
+- **Add** new themes that emerged from this playtest
+- **Mark resolved** any themes whose issues have been closed and genuinely fixed (confirmed by this playtest not reproducing the problem)
+- **Update issue numbers** if issues were consolidated or replaced
+- Commit the updated skill file to your branch (or create a quick PR if on a detached playtest branch)
+
+The catalog is only useful if it stays current. If you skip this step, the next agent starts from stale information.
+
 ## Known Recurring Themes
 
-These are the problems that have come up in every or nearly every playtest session as of 2026-03-08. When you see these in a new playtest, don't be surprised — confirm the existing issue and move on. Don't file duplicates.
+These are the problems that have come up across multiple playtest sessions. When you see these in a new playtest, confirm the existing issue and move on — don't file duplicates.
+
+*Last updated: 2026-03-08 (sessions 3, 4, 5)*
 
 ### Confirmed Repeatedly (strong signal)
 
@@ -171,10 +199,12 @@ These are the problems that have come up in every or nearly every playtest sessi
 
 10. **No feedback on policy-disease matching** (#376) — Water Sanitation says "halves waterborne spread" but player can't tell which diseases are waterborne.
 
+11. **"CONTAINED 0%" misleading** (#393) — threat status says "CONTAINED" while thousands are dying because the threshold is based on fraction of 3B total population.
+
 ### Early/Single Observations (weak signal — watch for repeats)
 
-11. **Region differentiation** (#324) — six identical regions waste the map's strategic potential.
-12. **Knowledge/discovery system** (#325) — progressive revelation could be deeper.
+12. **Region differentiation** (#324) — six identical regions waste the map's strategic potential.
+13. **Knowledge/discovery system** (#325) — progressive revelation could be deeper.
 
 ## Guidance for Issue Pickers
 
