@@ -511,7 +511,8 @@ pub const KNOWLEDGE_NAME: f64 = 0.33;
 pub const KNOWLEDGE_PARTIAL_STATS: f64 = 0.66;
 pub const KNOWLEDGE_FULL: f64 = 1.0;
 /// Minimum knowledge required to develop a medicine targeting this disease.
-pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.75;
+/// One identification (0.50 knowledge) is enough to start development.
+pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.50;
 
 /// Cost in RP to boost an active research project.
 pub const BOOST_RP_COST: f64 = 10.0;
