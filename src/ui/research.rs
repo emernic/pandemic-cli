@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS, format_days};
+use crate::state::{GameState, ResearchKind, ResearchUiState, BOOST_RP_COST, BOOST_TICKS, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -310,10 +310,16 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
 fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
     match kind {
         ResearchKind::IdentifyThreat { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
+            let disease = state.diseases.get(*disease_idx);
+            let name = disease
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "Unknown".to_string());
-            format!("Identify: {}", name)
+            let verb = if disease.is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME) {
+                "Study"
+            } else {
+                "Identify"
+            };
+            format!("{}: {}", verb, name)
         }
         ResearchKind::DevelopMedicine { medicine_idx } => {
             let name = state.medicines.get(*medicine_idx)
@@ -374,7 +380,17 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         }
         ResearchKind::IdentifyThreat { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
-            if disease.knowledge > 0.0 {
+            if disease.knowledge >= KNOWLEDGE_NAME {
+                // Already identified — explain what further study unlocks
+                let next = if disease.knowledge < KNOWLEDGE_FOR_MEDICINE {
+                    "Unlocks medicine development"
+                } else if disease.knowledge < KNOWLEDGE_FULL {
+                    "Reveals full pathogen stats"
+                } else {
+                    "Fully studied"
+                };
+                Some(format!("Knowledge: {:.0}% — {}", disease.knowledge * 100.0, next))
+            } else if disease.knowledge > 0.0 {
                 Some(format!("Knowledge: {:.0}%", disease.knowledge * 100.0))
             } else {
                 None
