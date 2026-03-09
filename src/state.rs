@@ -1823,7 +1823,7 @@ impl GameState {
                 population: 500_000_000,
                 connections: vec![1, 2],
                 infections: vec![],
-                collapse_threshold: 0.75, // Fragile — collapses at 25% dead
+                collapse_threshold: 0.55, // Fragile — collapses at 45% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1832,7 +1832,7 @@ impl GameState {
                 population: 430_000_000,
                 connections: vec![0],
                 infections: vec![],
-                collapse_threshold: 0.65, // Single-connection refugium — 35% dead
+                collapse_threshold: 0.55, // Single-connection refugium — 45% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1841,7 +1841,7 @@ impl GameState {
                 population: 750_000_000,
                 connections: vec![0, 3, 4],
                 infections: vec![],
-                collapse_threshold: 0.70, // Fragile — 30% dead
+                collapse_threshold: 0.50, // Developed infrastructure — collapses at 50% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1850,7 +1850,7 @@ impl GameState {
                 population: 1_400_000_000,
                 connections: vec![2, 4],
                 infections: vec![],
-                collapse_threshold: 0.60, // Most resilient — 40% dead
+                collapse_threshold: 0.30, // Most resilient — 70% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1859,7 +1859,7 @@ impl GameState {
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
                 infections: vec![],
-                collapse_threshold: 0.60, // Moderate — 40% dead
+                collapse_threshold: 0.40, // Huge population buffer — 60% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1868,7 +1868,7 @@ impl GameState {
                 population: 45_000_000,
                 connections: vec![4],
                 infections: vec![],
-                collapse_threshold: 0.65, // Moderate — 35% dead
+                collapse_threshold: 0.50, // Small but developed — 50% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1900,7 +1900,7 @@ impl GameState {
         // We seed it well above the detection threshold so the player can immediately
         // see infections on the map and begin field research to identify it.
         let region_idx = rng.r#gen::<usize>() % regions.len();
-        let infected = 15_000.0 + rng.r#gen::<f64>() * 10_000.0;
+        let infected = 1_000.0 + rng.r#gen::<f64>() * 2_000.0;
         let dead = infected * 0.01; // ~1% already dead when the player takes over
         regions[region_idx].infections.push(RegionDiseaseState {
             disease_idx: 0,
