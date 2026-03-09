@@ -433,7 +433,11 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                         .map(|d| d.display_name(d_idx))
                 })
                 .collect();
-            Some(format!("Targets: {}", names.join(", ")))
+            let variant = if med.rapid { "Rapid" } else { "Standard" };
+            let mech_info = med.mechanism
+                .map(|m| format!(" ({})", m.label()))
+                .unwrap_or_default();
+            Some(format!("{} variant{} — Targets: {}", variant, mech_info, names.join(", ")))
         }
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;

@@ -991,6 +991,10 @@ pub struct Medicine {
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
+    /// Rapid-development variant: faster/cheaper to develop, fewer doses, higher deploy cost.
+    /// Standard variants are slower to develop but have more doses and lower deploy cost.
+    #[serde(default)]
+    pub rapid: bool,
 }
 
 /// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
@@ -1006,36 +1010,72 @@ impl Medicine {
         self.cost + region_population as f64 / 1_000_000_000.0 * 50.0
     }
 
-    /// Create a targeted medicine for a disease. Name format: "TherapyType-A", "TherapyType-B", etc.
-    /// Assigns a mechanism of action deterministically based on disease index and pathogen type.
-    pub fn new_targeted(disease_idx: usize, pathogen_type: PathogenType) -> Medicine {
+    /// Generate targeted medicines for a disease. For non-prion pathogens, produces
+    /// two variants with different mechanisms of action and development profiles:
+    /// - Rapid: faster/cheaper to develop, fewer doses (50M), higher deploy cost ($75)
+    /// - Standard: slower/more expensive to develop, more doses (150M), lower deploy cost ($35)
+    /// Prions produce a single medicine (no known molecular targets for mechanism branching).
+    pub fn targeted_medicines(disease_idx: usize, pathogen_type: PathogenType) -> Vec<Medicine> {
         let therapy = pathogen_type.matched_therapy();
         let letter = (b'A' + disease_idx as u8) as char;
-        // Pick mechanism deterministically: rotate through available mechanisms for this pathogen type.
-        let mechanism = match pathogen_type {
-            PathogenType::Bacterium => {
-                let mechs = MechanismOfAction::bacterial_mechanisms();
-                Some(mechs[disease_idx % mechs.len()])
+
+        let mechs: &[MechanismOfAction] = match pathogen_type {
+            PathogenType::Bacterium => MechanismOfAction::bacterial_mechanisms(),
+            PathogenType::RnaVirus | PathogenType::DnaVirus => MechanismOfAction::viral_mechanisms(),
+            PathogenType::Prion => {
+                // Prions: single medicine, no mechanism
+                return vec![Medicine {
+                    name: format!("{}-{}", therapy.label(), letter),
+                    therapy_type: therapy,
+                    mechanism: None,
+                    target_diseases: vec![disease_idx],
+                    cost: 50.0,
+                    doses: 100_000_000.0,
+                    max_doses: 100_000_000.0,
+                    unlocked: false,
+                    tested_against: vec![],
+                    strain_generations: vec![],
+                    deployed_count: 0,
+                    rapid: false,
+                }];
             }
-            PathogenType::RnaVirus | PathogenType::DnaVirus => {
-                let mechs = MechanismOfAction::viral_mechanisms();
-                Some(mechs[disease_idx % mechs.len()])
-            }
-            PathogenType::Prion => None, // Prions have no known molecular target
         };
-        Medicine {
-            name: format!("{}-{}", therapy.label(), letter),
-            therapy_type: therapy,
-            mechanism,
-            target_diseases: vec![disease_idx],
-            cost: 50.0,
-            doses: 100_000_000.0,
-            max_doses: 100_000_000.0,
-            unlocked: false,
-            tested_against: vec![],
-            strain_generations: vec![],
-            deployed_count: 0,
-        }
+
+        let mech_a = mechs[(disease_idx * 2) % mechs.len()];
+        let mech_b = mechs[(disease_idx * 2 + 1) % mechs.len()];
+
+        vec![
+            // Rapid variant: fast to develop, fewer doses, higher deploy cost
+            Medicine {
+                name: format!("{}-{}", mech_a.short_label(), letter),
+                therapy_type: therapy,
+                mechanism: Some(mech_a),
+                target_diseases: vec![disease_idx],
+                cost: 75.0,
+                doses: 50_000_000.0,
+                max_doses: 50_000_000.0,
+                unlocked: false,
+                tested_against: vec![],
+                strain_generations: vec![],
+                deployed_count: 0,
+                rapid: true,
+            },
+            // Standard variant: slower to develop, more doses, lower deploy cost
+            Medicine {
+                name: format!("{}-{}", mech_b.short_label(), letter),
+                therapy_type: therapy,
+                mechanism: Some(mech_b),
+                target_diseases: vec![disease_idx],
+                cost: 35.0,
+                doses: 150_000_000.0,
+                max_doses: 150_000_000.0,
+                unlocked: false,
+                tested_against: vec![],
+                strain_generations: vec![],
+                deployed_count: 0,
+                rapid: false,
+            },
+        ]
     }
 
 
@@ -1226,12 +1266,14 @@ impl ResearchKind {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
-                let targets = medicines.get(*medicine_idx)
-                    .map_or(1, |m| m.target_diseases.len());
-                if targets <= 1 {
-                    (3, 200.0, 500.0)  // narrow: fast and cheap, single-target
-                } else {
+                let med = medicines.get(*medicine_idx);
+                let targets = med.map_or(1, |m| m.target_diseases.len());
+                if targets > 1 {
                     (10, 400.0, 1000.0) // broad: slow and expensive, covers all
+                } else if med.is_some_and(|m| m.rapid) {
+                    (2, 120.0, 300.0)   // rapid: fast crisis response
+                } else {
+                    (4, 280.0, 700.0)   // standard: slower but more sustainable
                 }
             }
             ResearchKind::ClinicalTrial { .. } => (2, 60.0, 200.0),
@@ -2226,8 +2268,10 @@ impl GameState {
         regions[region_idx].dead = dead;
 
         // --- Generate medicines to match diseases ---
+        // Two targeted medicines per non-prion disease (different mechanisms),
+        // one for prion diseases.
         let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
-            .map(|(i, d)| Medicine::new_targeted(i, d.pathogen_type))
+            .flat_map(|(i, d)| Medicine::targeted_medicines(i, d.pathogen_type))
             .collect();
 
         // One broad-spectrum medicine targeting all diseases
@@ -2244,6 +2288,7 @@ impl GameState {
             tested_against: vec![],
             strain_generations: vec![],
             deployed_count: 0,
+            rapid: false,
         });
 
         Self {
@@ -2514,12 +2559,12 @@ impl GameState {
                 self.applied_research = None;
             }
 
-            // Replace the corresponding medicine.
-            if let Some(med) = self.medicines.iter_mut().find(|m| {
-                m.target_diseases.len() == 1 && m.target_diseases[0] == idx
-            }) {
-                *med = Medicine::new_targeted(idx, pathogen_type);
-            }
+            // Remove old medicines targeting the recycled disease (excluding broad-spectrum).
+            self.medicines.retain(|m| {
+                !(m.target_diseases.len() == 1 && m.target_diseases[0] == idx)
+            });
+            // Add new medicines for the replacement disease.
+            self.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
 
             idx
         } else {
@@ -2528,7 +2573,7 @@ impl GameState {
             let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
             disease.detected = false;
             self.diseases.push(disease);
-            self.medicines.push(Medicine::new_targeted(idx, pathogen_type));
+            self.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
 
             // Update broad-spectrum medicine to also target new disease
             for med in &mut self.medicines {
@@ -2891,16 +2936,19 @@ mod tests {
         let state = GameState::new_default(1);
         let disease_count = state.diseases.len();
         assert_eq!(disease_count, 1, "expected 1 starting disease, got {}", disease_count);
-        // One targeted medicine per disease + one broad-spectrum
-        assert_eq!(state.medicines.len(), disease_count + 1);
+        // Two targeted medicines per non-prion disease + one broad-spectrum
+        let targeted_count: usize = state.medicines.iter()
+            .filter(|m| m.target_diseases.len() == 1)
+            .count();
+        assert!(targeted_count >= disease_count * 2,
+            "expected at least 2 targeted medicines per disease, got {targeted_count}");
+        assert_eq!(state.medicines.last().unwrap().therapy_type, TherapyType::BroadSpectrum);
         // Medicines start locked — must be developed via research
         assert!(state.medicines.iter().all(|m| !m.unlocked));
-        // Last medicine is always broad-spectrum
-        assert_eq!(state.medicines.last().unwrap().therapy_type, TherapyType::BroadSpectrum);
-        // Each targeted medicine has exactly one target disease
+        // Each disease should have at least one targeted medicine
         for i in 0..disease_count {
-            assert_eq!(state.medicines[i].target_diseases.len(), 1);
-            assert_eq!(state.medicines[i].target_diseases[0], i);
+            assert!(state.medicines.iter().any(|m| m.target_diseases == vec![i]),
+                "disease {i} should have a targeted medicine");
         }
         // Broad-spectrum targets all diseases
         let broad = state.medicines.last().unwrap();

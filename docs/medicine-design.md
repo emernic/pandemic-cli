@@ -99,17 +99,23 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 
 ## Starting Medicines
 
-| Medicine | TherapyType | Mechanism | Targets | Cost | Doses |
-|---|---|---|---|---|---|
-| Antiviral-A | Antiviral | PolymeraseInhibitor | Disease 0 | $50 | 100M |
-| Broad-Spectrum | BroadSpectrum | None | All | $100 | 200M |
+Two targeted medicines per non-prion disease (different mechanisms of action) + one broad-spectrum:
 
-All start locked. Research costs scale by target count:
-- **Narrow (1 target):** 3 personnel, 200 ticks
-- **Broad (2+ targets):** 10 personnel, 400 ticks
-- **Clinical Trial:** 5 personnel, 160 ticks (same for all)
+| Medicine | TherapyType | Mechanism | Variant | Targets | Deploy Cost | Doses |
+|---|---|---|---|---|---|---|
+| Polymerase-A | Antiviral | PolymeraseInhibitor | Rapid | Disease 0 | $75 | 50M |
+| Protease-A | Antiviral | ProteaseInhibitor | Standard | Disease 0 | $35 | 150M |
+| Broad-Spectrum | BroadSpectrum | None | — | All | $100 | 200M |
 
-The trade-off: narrow medicines are faster and cheaper to develop (crisis response), while broad-spectrum takes longer but covers everything.
+(Example for a starting RNA virus. Bacteria get bacterial mechanisms like CellWall/Ribosome instead.)
+
+All start locked. Research costs depend on variant:
+- **Rapid (single target):** 2 personnel, 120 ticks, $300 — fast crisis response, fewer doses
+- **Standard (single target):** 4 personnel, 280 ticks, $700 — slower but more doses, cheaper deployment
+- **Broad (2+ targets):** 10 personnel, 400 ticks, $1000 — covers all diseases
+- **Clinical Trial:** 2 personnel, 60 ticks, $200 (same for all)
+
+The key trade-off: rapid medicines are available sooner for emergencies but run out quickly. Standard medicines take longer to develop but sustain deployment across more of the population. Players must choose which to develop first based on the current threat.
 
 ## Selection Bounds
 
