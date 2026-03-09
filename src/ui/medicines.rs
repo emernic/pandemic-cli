@@ -113,7 +113,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
 
                 if med.tested_against.contains(&d_idx) {
                     let strain_eff = med.strain_efficacy(d_idx, &state.diseases);
-                    let res_factor = med.resistance_factor(d_idx);
+                    let res_factor = med.resistance_factor(d_idx, &state.diseases);
                     let combined = strain_eff * res_factor;
                     let pct = (combined * 100.0).round() as u32;
                     let color = if pct >= 85 {
@@ -300,7 +300,7 @@ fn render_select_target(
     let efficacy = med.effective_efficacy(disease_idx, &state.diseases);
     // Individual factors for display hints
     let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
-    let resistance = med.resistance_factor(disease_idx);
+    let resistance = med.resistance_factor(disease_idx, &state.diseases);
     let eff_color = if efficacy >= 0.8 {
         Color::Green
     } else if efficacy >= 0.5 {
