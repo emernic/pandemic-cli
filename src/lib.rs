@@ -6,7 +6,7 @@ pub mod ui;
 
 use action::Action;
 use engine::execute_command;
-use state::{GameCommand, GameOutcome, GameState, Panel, ResearchUiState, SimState};
+use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, ResearchUiState, SimState};
 
 /// Route a player action to the appropriate handler.
 ///
@@ -148,7 +148,23 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
-                    new.ui.apply_command_result(&cmd, result.success, &result.message, result.adverse);
+                    // Map engine result to UI navigation (coordination logic)
+                    match &cmd {
+                        GameCommand::DeployMedicine { medicine_idx, .. } if result.success => {
+                            let msg = result.message.clone().unwrap_or_default();
+                            new.ui.medicine_ui = Some(MedicineUiState::DeployResult {
+                                medicine_idx: *medicine_idx,
+                                message: msg,
+                                adverse: result.adverse,
+                            });
+                            new.ui.panel_selection = 0;
+                        }
+                        GameCommand::StartResearch { track, .. } if result.success => {
+                            new.ui.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
+                            new.ui.panel_selection = 0;
+                        }
+                        _ => {}
+                    }
                     if new.ui.status_message.is_none() {
                         new.ui.status_message = result.message;
                     }

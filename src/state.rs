@@ -1598,38 +1598,6 @@ impl UiState {
         }
     }
 
-    /// Update UI navigation after a game command completes.
-    /// Called by the action handler after execute_command returns.
-    pub fn apply_command_result(&mut self, cmd: &GameCommand, success: bool, message: &Option<String>, adverse: bool) {
-        match cmd {
-            GameCommand::DeployMedicine { medicine_idx, .. } => {
-                if success {
-                    let msg = message.clone().unwrap_or_default();
-                    self.medicine_ui =
-                        Some(MedicineUiState::DeployResult {
-                            medicine_idx: *medicine_idx,
-                            message: msg,
-                            adverse,
-                        });
-                    self.panel_selection = 0;
-                }
-            }
-            GameCommand::StartResearch { track, .. } => {
-                if success {
-                    self.research_ui =
-                        Some(ResearchUiState::BrowseProjects { track: *track });
-                    self.panel_selection = 0;
-                }
-            }
-            GameCommand::AddResearchPersonnel { .. }
-            | GameCommand::RemoveResearchPersonnel { .. }
-            | GameCommand::TogglePolicy { .. }
-            | GameCommand::ResolveCrisis { .. } => {
-                // No UI navigation change needed
-            }
-        }
-    }
-
     fn handle_policy_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
         match self.policy_ui.clone() {
             Some(PolicyUiState::BrowseRegions) => {

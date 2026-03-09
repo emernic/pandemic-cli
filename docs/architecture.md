@@ -71,7 +71,7 @@ keypress
       UI actions (navigate, open panel) → UiState methods
       Confirm → UiState::handle_confirm() → Option<GameCommand>
         → engine::execute_command() → CommandResult { message, success }
-        → UiState::apply_command_result()
+        → apply_action maps result to UI navigation (inline)
 ```
 
 ### Tick flow
