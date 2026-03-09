@@ -49,10 +49,11 @@ pub fn process_events(state: &mut GameState) {
         state.ui.crisis_selection = 0;
         state.ui.crisis_auto_resolve = false;
     }
-    // Auto-pause when a region collapses — creates a dramatic "stop" moment
-    // so the player notices and processes each collapse instead of watching
-    // them fly by during fast-forward.
-    if state.events.iter().any(|e| matches!(e, GameEvent::RegionCollapsed { .. })) {
+    // Auto-pause on critical events — creates a dramatic "stop" moment
+    // so the player notices and can react before things spiral.
+    if state.events.iter().any(|e| matches!(e,
+        GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }))
+    {
         state.sim_state = crate::state::SimState::Paused;
         state.ui.speed_multiplier = 1;
     }
