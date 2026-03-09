@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, RegionDiseaseState,
+    Disease, GameEvent, GameState, PathogenType, RegionDiseaseState, TICKS_PER_DAY,
 };
 
 /// Per-disease outflows computed in phase 1, applied in phase 2.
@@ -228,6 +228,71 @@ pub(super) fn tick_spread_cross_region(
                     }
                 }
             }
+        }
+    }
+}
+
+/// Bacterial horizontal gene transfer: broad-spectrum resistance (mechanism=None)
+/// can spread between co-located Bacterium diseases. This makes bacteria
+/// fundamentally scarier — one resistance event cascades across all bacterial
+/// threats. Targeted antibiotic resistance does NOT transfer.
+///
+/// Rate: ~2% of the resistance gap per day. A donor at 0.5 resistance gives
+/// recipients ~0.01/day initially, becoming noticeable within 5-10 days.
+/// Only fires when both diseases have active infections in at least one
+/// shared region (conjugation requires physical proximity).
+pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
+    // Collect indices of all Bacterium diseases
+    let bacteria: Vec<usize> = new.diseases.iter().enumerate()
+        .filter(|(_, d)| d.pathogen_type == PathogenType::Bacterium)
+        .map(|(i, _)| i)
+        .collect();
+    if bacteria.len() < 2 {
+        return;
+    }
+
+    // For each pair, check if they co-exist in any region
+    let transfer_rate = 0.02 / TICKS_PER_DAY;
+    let mut transfers: Vec<(usize, usize, f64)> = Vec::new(); // (from, to, amount)
+
+    for i in 0..bacteria.len() {
+        for j in (i + 1)..bacteria.len() {
+            let di = bacteria[i];
+            let dj = bacteria[j];
+
+            // Check co-location: both must have infected > 0 in at least one region
+            let coexist = new.regions.iter().any(|r| {
+                r.disease_state(di).is_some_and(|inf| inf.infected > 0.0)
+                    && r.disease_state(dj).is_some_and(|inf| inf.infected > 0.0)
+            });
+            if !coexist {
+                continue;
+            }
+
+            // Transfer mechanism=None resistance from higher to lower
+            let ri = new.diseases[di].get_resistance(None);
+            let rj = new.diseases[dj].get_resistance(None);
+            let gap = ri - rj;
+            if gap > 0.01 {
+                let amount = gap * transfer_rate;
+                transfers.push((di, dj, amount));
+            } else if gap < -0.01 {
+                let amount = (-gap) * transfer_rate;
+                transfers.push((dj, di, amount));
+            }
+        }
+    }
+
+    // Apply transfers and emit events for significant ones
+    for (from, to, amount) in transfers {
+        new.diseases[to].add_resistance(None, amount);
+        // Emit event when resistance crosses 0.05 threshold (first noticeable)
+        let new_level = new.diseases[to].get_resistance(None);
+        if new_level >= 0.05 && new_level - amount < 0.05 {
+            new.events.push(GameEvent::ResistanceTransferred {
+                from_disease_idx: from,
+                to_disease_idx: to,
+            });
         }
     }
 }

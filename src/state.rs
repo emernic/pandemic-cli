@@ -1664,6 +1664,12 @@ pub enum GameEvent {
     ResearchAutoStarted { track: ResearchTrack },
     /// Personnel left due to unpaid wages (funding at $0).
     PersonnelAttrition { count: u32 },
+    /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
+    /// from one bacterium to another.
+    ResistanceTransferred {
+        from_disease_idx: usize,
+        to_disease_idx: usize,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
