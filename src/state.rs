@@ -440,47 +440,47 @@ impl PathogenType {
     /// pipeline before the first mutation hits.
     pub fn mutation_rate(&self) -> f64 {
         match self {
-            PathogenType::RnaVirus => 0.001,    // ~1 mutation per 1000 ticks (~8.3 days)
-            PathogenType::DnaVirus => 0.0004,   // ~1 per 2500 ticks (~20.8 days)
-            PathogenType::Bacterium => 0.0006,  // ~1 per 1667 ticks (~13.9 days)
-            PathogenType::Prion => 0.00005,     // ~1 per 20000 ticks (~167 days)
+            PathogenType::RnaVirus => 0.0002,    // ~1 mutation per 5000 ticks (~42 days)
+            PathogenType::DnaVirus => 0.00008,   // ~1 per 12500 ticks (~104 days)
+            PathogenType::Bacterium => 0.00012,  // ~1 per 8333 ticks (~69 days)
+            PathogenType::Prion => 0.00001,      // ~1 per 100000 ticks (~833 days)
         }
     }
 
-    /// Stat ranges tuned for playable lethality.
+    /// Stat ranges tuned for a 20-30 day game arc.
     /// R0 = infectivity / (lethality + recovery) targets 3-5 for most types.
-    /// A single disease kills ~30-50% of a region without intervention.
-    /// Multiple diseases stacking over 20 days causes total collapse.
-    /// Policies meaningfully slow spread, buying time for research.
+    /// Daily growth ≈ 2-3× with 120 ticks/day — regions collapse at ~day 15-20
+    /// without intervention. This gives players time to research, deploy policies,
+    /// and develop medicines before the situation becomes critical.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: fast spreader (R0 ~3-5), moderate lethality, decent recovery
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.04, 0.07),
-                lethality: (0.004, 0.010),
-                recovery: (0.006, 0.010),
-                cross_region: (0.015, 0.025),
+                infectivity: (0.008, 0.014),
+                lethality: (0.0008, 0.002),
+                recovery: (0.0012, 0.002),
+                cross_region: (0.003, 0.005),
             },
             // DNA viruses: moderate spread (R0 ~2.5-4.5), high lethality, slow recovery
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.03, 0.06),
-                lethality: (0.006, 0.012),
-                recovery: (0.004, 0.008),
-                cross_region: (0.010, 0.020),
+                infectivity: (0.006, 0.012),
+                lethality: (0.0012, 0.0024),
+                recovery: (0.0008, 0.0016),
+                cross_region: (0.002, 0.004),
             },
             // Bacteria: moderate spread (R0 ~3-5), moderate lethality
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.03, 0.05),
-                lethality: (0.003, 0.007),
-                recovery: (0.003, 0.007),
-                cross_region: (0.010, 0.020),
+                infectivity: (0.006, 0.010),
+                lethality: (0.0006, 0.0014),
+                recovery: (0.0006, 0.0014),
+                cross_region: (0.002, 0.004),
             },
             // Prions: slow but devastating (R0 ~1.5-3), very high lethality, almost no recovery
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.015, 0.035),
-                lethality: (0.008, 0.015),
-                recovery: (0.001, 0.003),
-                cross_region: (0.005, 0.012),
+                infectivity: (0.003, 0.007),
+                lethality: (0.0016, 0.003),
+                recovery: (0.0002, 0.0006),
+                cross_region: (0.001, 0.0024),
             },
         }
     }
@@ -2295,7 +2295,7 @@ impl GameState {
         // Genomic Sequencing: fully identified diseases that still mutate
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
-                && disease.pathogen_type.mutation_rate() > 0.0001
+                && disease.pathogen_type.mutation_rate() > 0.00002
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
                 if active_kind != Some(&kind) {
