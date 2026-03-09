@@ -1630,8 +1630,8 @@ mod tests {
         assert!(state.field_research.is_some());
         assert_eq!(state.diseases[0].knowledge, 0.0);
 
-        // Advance to completion (80 ticks)
-        for _ in 0..80 {
+        // Advance to completion (160 ticks)
+        for _ in 0..160 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none()); // Project completed
@@ -1655,7 +1655,7 @@ mod tests {
 
         assert!(state.bench_research.is_some());
 
-        for _ in 0..150 {
+        for _ in 0..200 {
             state = tick(&state);
         }
         assert!(state.bench_research.is_none());
@@ -1689,7 +1689,7 @@ mod tests {
 
         assert!(state.field_research.is_some());
 
-        for _ in 0..80 {
+        for _ in 0..160 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none());
@@ -1816,15 +1816,15 @@ mod tests {
     #[test]
     fn research_boost_insufficient_rp() {
         let mut state = GameState::new_default(42);
-        state.resources.research_points = 20.0; // Enough to start (15 RP) but not boost again (10 RP)
+        state.resources.research_points = 25.0; // Enough to start (20 RP) but not boost again (10 RP)
 
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
         state = apply_action(&state, &Action::Confirm); // Select first project
-        state = apply_action(&state, &Action::Confirm); // Confirm → starts (costs 10 RP, leaves 5)
+        state = apply_action(&state, &Action::Confirm); // Confirm → starts (costs 20 RP, leaves 5)
 
         assert!(state.field_research.is_some());
-        assert_eq!(state.resources.research_points, 5.0); // 20 - 15 = 5
+        assert_eq!(state.resources.research_points, 5.0); // 25 - 20 = 5
 
         state = apply_action(&state, &Action::Confirm); // → ViewActive
         let rp_before = state.resources.research_points;
@@ -2055,7 +2055,7 @@ mod tests {
         // Tick with travel ban on Asia (largest region, ~60% of world pop)
         state.policies[4].travel_ban = true;
         let with_ban = tick(&state);
-        let income_with_ban = with_ban.resources.funding - 1000.0 + 10.0; // add back $10 policy cost to isolate income effect
+        let income_with_ban = with_ban.resources.funding - 1000.0 + TRAVEL_BAN_COST; // add back policy cost to isolate income effect
 
         assert!(
             income_with_ban < income_no_ban,
@@ -2126,27 +2126,27 @@ mod tests {
 
         // Now tick with travel ban
         let funding_before = state.resources.funding;
-        state.policies[0].travel_ban = true; // $10/tick, also halves region 0 income
+        state.policies[0].travel_ban = true; // $6/tick, also halves region 0 income
         state = tick(&state);
         let net_change = state.resources.funding - funding_before;
 
-        // Should have deducted $10 and added income (less than without ban)
+        // Should have deducted $6 and added income (less than without ban)
         assert!(
             net_change < income_no_policy,
             "travel ban should reduce net income: net {net_change:.1} vs no-policy {income_no_policy:.1}"
         );
         assert!(
             net_change < 0.0,
-            "travel ban cost ($10) should exceed income (~$5): net change {net_change:.1}"
+            "travel ban cost ($6) should exceed income (~$3): net change {net_change:.1}"
         );
     }
 
     #[test]
     fn policy_funding_crisis_suspends_most_expensive_first() {
         let mut state = GameState::new_default(42);
-        state.resources.funding = 15.0; // Enough for quarantine ($8) but not both
-        state.policies[0].travel_ban = true; // $10/tick — most expensive
-        state.policies[0].quarantine = true; // $8/tick
+        state.resources.funding = 8.0; // Enough for quarantine ($5) but not both ($11)
+        state.policies[0].travel_ban = true; // $6/tick — most expensive
+        state.policies[0].quarantine = true; // $5/tick
         state = tick(&state);
         // Should have suspended travel ban (most expensive) but kept quarantine
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended");
@@ -2160,14 +2160,14 @@ mod tests {
     #[test]
     fn policy_gradual_suspension_across_ticks() {
         let mut state = GameState::new_default(42);
-        // Set up 3 policies: $10 + $8 + $5 = $23/tick total
+        // Set up 3 policies: $6 + $5 + $3 = $14/tick total
         state.policies[0].travel_ban = true;
         state.policies[0].quarantine = true;
         state.policies[0].hospital_surge = true;
-        // Enough for only $13/tick (quarantine + hospital surge)
-        state.resources.funding = 20.0;
+        // Enough for only $8/tick (quarantine + hospital surge)
+        state.resources.funding = 12.0;
         state = tick(&state);
-        // Travel ban ($10, most expensive) should be suspended
+        // Travel ban ($6, most expensive) should be suspended
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended first");
         assert!(state.policies[0].quarantine, "quarantine should survive tick 1");
         assert!(state.policies[0].hospital_surge, "hospital surge should survive tick 1");
@@ -2176,10 +2176,10 @@ mod tests {
     #[test]
     fn funding_warning_when_runway_low() {
         let mut state = GameState::new_default(42);
-        state.policies[0].travel_ban = true; // $10/tick, income ~$5/tick → net burn ~$5/tick
-        // After deducting $10 and adding ~$5 income, funding ≈ $15.
-        // Net burn ~$5/tick, threshold = 5 × $5 = $25 → $15 < $25 → warning
-        state.resources.funding = 20.0;
+        state.policies[0].travel_ban = true; // $6/tick, income ~$3/tick → net burn ~$3/tick
+        // After deducting $6 and adding ~$3 income, funding ≈ $7.
+        // Net burn ~$3/tick, threshold = 5 × $3 = $15 → $7 < $15 → warning
+        state.resources.funding = 10.0;
         state = tick(&state);
         assert!(
             state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
@@ -2466,8 +2466,8 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm
         assert!(state.field_research.is_some());
 
-        // Complete the project
-        for _ in 0..120 {
+        // Complete the project (200 ticks)
+        for _ in 0..200 {
             state = tick(&state);
         }
         assert!(state.field_research.is_none());
@@ -2500,8 +2500,8 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Confirm
         assert!(state.bench_research.is_some());
 
-        // Complete the project
-        for _ in 0..100 {
+        // Complete the project (160 ticks)
+        for _ in 0..160 {
             state = tick(&state);
         }
         assert!(state.bench_research.is_none());
