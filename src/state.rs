@@ -1721,13 +1721,17 @@ impl GameState {
     pub fn available_field_projects(&self) -> Vec<ResearchKind> {
         let active_kind = self.field_research.as_ref().map(|p| &p.kind);
         let mut projects = Vec::new();
-        // Identify Threat: diseases not fully known
-        for (i, disease) in self.diseases.iter().enumerate() {
-            if disease.knowledge < KNOWLEDGE_FULL {
-                let kind = ResearchKind::IdentifyThreat { disease_idx: i };
-                if active_kind != Some(&kind) {
-                    projects.push(kind);
-                }
+        // Identify Threat: diseases not fully known, sorted by knowledge ascending
+        // (unknown diseases first, then partially identified)
+        let mut identify_targets: Vec<(usize, f64)> = self.diseases.iter().enumerate()
+            .filter(|(_, d)| d.knowledge < KNOWLEDGE_FULL)
+            .map(|(i, d)| (i, d.knowledge))
+            .collect();
+        identify_targets.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        for (i, _knowledge) in identify_targets {
+            let kind = ResearchKind::IdentifyThreat { disease_idx: i };
+            if active_kind != Some(&kind) {
+                projects.push(kind);
             }
         }
         // Genomic Sequencing: fully identified diseases that still mutate
