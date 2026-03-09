@@ -223,14 +223,14 @@ mod tests {
     #[test]
     fn snapshot_stops_on_crisis() {
         let state = GameState::new_default(42);
-        // Advance far enough that a crisis fires (crises start after tick 360).
-        // With seed 42, this should hit a crisis well before day 30.
-        let result = run_snapshot(state, &["d30".to_string()]).unwrap();
+        // Advance far enough that a crisis fires (crises start after tick 360,
+        // average interval ~840 ticks). 60 days gives P(crisis) > 99%.
+        let result = run_snapshot(state, &["d60".to_string()]).unwrap();
         // Should have stopped early due to crisis
         assert!(result.state.active_crisis.is_some(),
-            "should have hit a crisis during 30 days");
-        assert!(result.state.tick < 30 * 120,
-            "should have stopped before reaching 30 days (stopped at tick {})", result.state.tick);
+            "should have hit a crisis during 60 days");
+        assert!(result.state.tick < 60 * 120,
+            "should have stopped before reaching 60 days (stopped at tick {})", result.state.tick);
         assert!(result.screen.contains("CRISIS"),
             "should show the crisis screen");
     }

@@ -61,9 +61,10 @@ pub struct GameState {
     /// Active crisis event requiring player decision. Game pauses while active.
     #[serde(default)]
     pub active_crisis: Option<CrisisEvent>,
-    /// Tag of the most recently resolved crisis, used to prevent back-to-back repeats.
+    /// Per-type cooldowns: crisis tag → tick when it last fired.
+    /// Used to prevent the same crisis type repeating within CRISIS_TYPE_COOLDOWN ticks.
     #[serde(default)]
-    pub last_crisis_tag: Option<String>,
+    pub crisis_cooldowns: HashMap<String, u64>,
     /// Auto-resolve preferences: crisis tag → choice index (0 = A, 1 = B).
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
@@ -1165,10 +1166,12 @@ impl CrisisKind {
     }
 }
 
-/// Crisis events start appearing after this many ticks.
-pub const CRISIS_MIN_TICK: u64 = 200;
-/// Average ticks between crises (~2 days).
-pub const CRISIS_INTERVAL: u64 = 200;
+/// Crisis events start appearing after this many ticks (~3 days).
+pub const CRISIS_MIN_TICK: u64 = 360;
+/// Average ticks between crises (~7 days).
+pub const CRISIS_INTERVAL: u64 = 840;
+/// Minimum ticks before the same crisis type can repeat (~15 days).
+pub const CRISIS_TYPE_COOLDOWN: u64 = 1800;
 
 /// Win when total infected drops below this threshold (with other conditions met).
 /// Individual region infections snap to 0.0 at < 1.0, so this means "truly eradicated."
@@ -1843,7 +1846,7 @@ impl GameState {
             outcome: GameOutcome::Playing,
             events: vec![],
             active_crisis: None,
-            last_crisis_tag: None,
+            crisis_cooldowns: HashMap::new(),
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             ui: UiState {
