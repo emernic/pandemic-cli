@@ -1307,6 +1307,22 @@ impl Medicine {
         !self.target_diseases.contains(&disease_idx)
     }
 
+    /// Combined efficacy when deploying this medicine against a disease.
+    /// Factors: therapy type × pathogen match × strain calibration × cross-reactivity × resistance.
+    pub fn effective_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
+        let therapy_efficacy = diseases.get(disease_idx)
+            .map(|d| self.therapy_type.efficacy(&d.pathogen_type))
+            .unwrap_or(0.0);
+        let strain_eff = self.strain_efficacy(disease_idx, diseases);
+        let cross_reactive = if self.is_cross_reactive(disease_idx) {
+            CROSS_REACTIVE_PENALTY
+        } else {
+            1.0
+        };
+        let resistance = self.resistance_factor(disease_idx);
+        therapy_efficacy * strain_eff * cross_reactive * resistance
+    }
+
     /// Decode a UI selection index into a deploy target.
     /// Indices 0..n are vaccinate options, n..2n are treat options.
     /// Uses deployable_diseases (primary + cross-reactive) for the full target list.

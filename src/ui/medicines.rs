@@ -294,18 +294,11 @@ fn render_select_target(
 
     let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
 
-    // Compute efficacy
-    let therapy_efficacy = state.diseases.get(disease_idx)
-        .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
-        .unwrap_or(0.0);
+    // Compute efficacy (shared formula in Medicine::effective_efficacy)
+    let efficacy = med.effective_efficacy(disease_idx, &state.diseases);
+    // Individual factors for display hints
     let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
     let resistance = med.resistance_factor(disease_idx);
-    let cross_reactive = if med.is_cross_reactive(disease_idx) {
-        crate::state::CROSS_REACTIVE_PENALTY
-    } else {
-        1.0
-    };
-    let efficacy = therapy_efficacy * strain_eff * cross_reactive * resistance;
     let eff_color = if efficacy >= 0.8 {
         Color::Green
     } else if efficacy >= 0.5 {
