@@ -337,6 +337,13 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or("Unknown");
             format!("Manufacture: {}", name)
         }
+        ResearchKind::GenomicSequencing { disease_idx } => {
+            let name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| "Unknown".to_string());
+            format!("Sequence: {}", name)
+        }
+        ResearchKind::TrainPersonnel => "Train Personnel (+5)".to_string(),
     }
 }
 
@@ -356,6 +363,15 @@ fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
             Some(format!("Restores to {} doses", crate::format_number(med.max_doses)))
+        }
+        ResearchKind::GenomicSequencing { disease_idx } => {
+            let disease = state.diseases.get(*disease_idx)?;
+            let current_rate = disease.effective_mutation_rate();
+            let new_rate = current_rate * 0.5;
+            Some(format!("Mutation rate: {:.4} → {:.4}", current_rate, new_rate))
+        }
+        ResearchKind::TrainPersonnel => {
+            Some(format!("Current: {} personnel", state.resources.personnel))
         }
         _ => None,
     }

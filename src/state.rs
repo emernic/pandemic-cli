@@ -268,6 +268,10 @@ pub struct Disease {
     /// earlier generations become less effective.
     #[serde(default)]
     pub strain_generation: u32,
+    /// Number of times genomic sequencing has been completed on this disease.
+    /// Each sequencing halves the effective mutation rate.
+    #[serde(default)]
+    pub sequencing_count: u32,
 }
 
 impl Disease {
@@ -279,6 +283,12 @@ impl Disease {
         } else {
             format!("Unknown Pathogen #{}", idx + 1)
         }
+    }
+
+    /// Effective mutation rate after genomic sequencing reductions.
+    /// Each sequencing halves the rate: base_rate * 0.5^sequencing_count.
+    pub fn effective_mutation_rate(&self) -> f64 {
+        self.pathogen_type.mutation_rate() * 0.5_f64.powi(self.sequencing_count as i32)
     }
 }
 
@@ -431,6 +441,10 @@ pub enum ResearchKind {
     DevelopMedicine { medicine_idx: usize },
     ClinicalTrial { medicine_idx: usize, disease_idx: usize },
     ManufactureDoses { medicine_idx: usize },
+    /// Sequence a disease's genome to slow its mutation rate permanently.
+    GenomicSequencing { disease_idx: usize },
+    /// Train new personnel to expand the available workforce.
+    TrainPersonnel,
 }
 
 impl ResearchKind {
@@ -452,6 +466,8 @@ impl ResearchKind {
             }
             ResearchKind::ClinicalTrial { .. } => (20.0, 5, 80.0),
             ResearchKind::ManufactureDoses { .. } => (15.0, 3, 60.0),
+            ResearchKind::GenomicSequencing { .. } => (25.0, 5, 120.0),
+            ResearchKind::TrainPersonnel => (20.0, 0, 100.0),
         }
     }
 }
@@ -1052,6 +1068,7 @@ impl GameState {
                 recovery_rate: range_val(&mut rng, ranges.recovery),
                 knowledge: 0.0,
                 strain_generation: 0,
+                sequencing_count: 0,
             });
         }
 
@@ -1251,6 +1268,7 @@ impl GameState {
             recovery_rate: range_val(rng, ranges.recovery),
             knowledge: 0.0,
             strain_generation: 0,
+            sequencing_count: 0,
         });
 
         // Place initial outbreak in a random region
@@ -1383,6 +1401,17 @@ impl GameState {
                 }
             }
         }
+        // Genomic Sequencing: fully identified diseases that still mutate
+        for (i, disease) in self.diseases.iter().enumerate() {
+            if disease.knowledge >= KNOWLEDGE_FULL
+                && disease.pathogen_type.mutation_rate() > 0.0001
+            {
+                let kind = ResearchKind::GenomicSequencing { disease_idx: i };
+                if active_kind != Some(&kind) {
+                    projects.push(kind);
+                }
+            }
+        }
         // Clinical Trial: unlocked medicines not yet tested, OR tested but strain-outdated
         for (i, med) in self.medicines.iter().enumerate() {
             if !med.unlocked {
@@ -1436,6 +1465,11 @@ impl GameState {
                     projects.push(kind);
                 }
             }
+        }
+        // Train Personnel: always available as a bench project
+        let kind = ResearchKind::TrainPersonnel;
+        if active_kind != Some(&kind) {
+            projects.push(kind);
         }
         projects
     }

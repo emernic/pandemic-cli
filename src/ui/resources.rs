@@ -147,5 +147,13 @@ fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or("Unknown");
             format!("Mfg: {}", name)
         }
+        ResearchKind::GenomicSequencing { disease_idx } => {
+            let name = state.diseases.get(*disease_idx)
+                .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
+                .map(|d| d.name.as_str())
+                .unwrap_or("Unknown");
+            format!("Sequencing {}", name)
+        }
+        ResearchKind::TrainPersonnel => "Training".to_string(),
     }
 }
