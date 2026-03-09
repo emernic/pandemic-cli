@@ -274,14 +274,14 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
         if !project.is_complete() {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
-                Span::styled("  [↓/j] ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  [↑/k] ", Style::default().fg(Color::DarkGray)),
                 Span::styled("Add personnel", Style::default().fg(
                     if state.personnel_available() >= 1 { Color::Green } else { Color::Red }
                 )),
                 Span::styled(format!("  ({} available)", state.personnel_available()), Style::default().fg(Color::DarkGray)),
             ]));
             lines.push(Line::from(vec![
-                Span::styled("  [↑/k] ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  [↓/j] ", Style::default().fg(Color::DarkGray)),
                 Span::styled("Remove personnel", Style::default().fg(
                     if project.personnel_assigned > 1 { Color::Yellow } else { Color::Red }
                 )),

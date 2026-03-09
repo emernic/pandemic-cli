@@ -98,9 +98,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::ClosePanel => new.ui.close_panel(),
         Action::SelectNext => {
             // In ViewActive, up/down adjusts personnel assignment
+            // Down = remove (fewer), Up = add (more)
             if let Some(ResearchUiState::ViewActive { bench }) = &new.ui.research_ui {
                 let bench = *bench;
-                let cmd = GameCommand::AddResearchPersonnel { bench };
+                let cmd = GameCommand::RemoveResearchPersonnel { bench };
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;
             } else {
@@ -111,7 +112,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::SelectPrev => {
             if let Some(ResearchUiState::ViewActive { bench }) = &new.ui.research_ui {
                 let bench = *bench;
-                let cmd = GameCommand::RemoveResearchPersonnel { bench };
+                let cmd = GameCommand::AddResearchPersonnel { bench };
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;
             } else {

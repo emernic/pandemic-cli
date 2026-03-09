@@ -268,11 +268,11 @@ mod tests {
         assert!(state.field_research.is_some());
         let initial_personnel = state.field_research.as_ref().unwrap().personnel_assigned;
 
-        // Navigate to ViewActive and add personnel (SelectNext = add in ViewActive)
+        // Navigate to ViewActive and add personnel (SelectPrev/up = add in ViewActive)
         state = apply_action(&state, &Action::Confirm); // → ViewActive
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ViewActive { bench: false })));
 
-        state = apply_action(&state, &Action::SelectNext); // Add personnel
+        state = apply_action(&state, &Action::SelectPrev); // Add personnel
         assert_eq!(
             state.field_research.as_ref().unwrap().personnel_assigned,
             initial_personnel + 1,
@@ -295,10 +295,10 @@ mod tests {
         let initial_personnel = state.field_research.as_ref().unwrap().personnel_assigned;
         assert!(initial_personnel > 1, "need >1 to test removal");
 
-        // Navigate to ViewActive and remove personnel
+        // Navigate to ViewActive and remove personnel (SelectNext/down = remove in ViewActive)
         state = apply_action(&state, &Action::Confirm); // → ViewActive
 
-        state = apply_action(&state, &Action::SelectPrev); // Remove personnel
+        state = apply_action(&state, &Action::SelectNext); // Remove personnel
         assert_eq!(
             state.field_research.as_ref().unwrap().personnel_assigned,
             initial_personnel - 1,
@@ -307,7 +307,7 @@ mod tests {
 
         // Remove down to 1 — should stop
         for _ in 0..20 {
-            state = apply_action(&state, &Action::SelectPrev);
+            state = apply_action(&state, &Action::SelectNext);
         }
         assert_eq!(
             state.field_research.as_ref().unwrap().personnel_assigned,
