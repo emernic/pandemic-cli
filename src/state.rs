@@ -1506,10 +1506,25 @@ impl UiState {
         if let Some(PolicyUiState::ManagePolicies { region_idx }) = &mut self.policy_ui {
             *region_idx = self.map_selection;
         }
-        match &mut self.medicine_ui {
-            Some(MedicineUiState::SelectTarget { region_idx, .. })
-            | Some(MedicineUiState::ConfirmDeploy { region_idx, .. }) => {
-                *region_idx = self.map_selection;
+        match &self.medicine_ui {
+            Some(MedicineUiState::SelectTarget { region_idx, medicine_idx }) => {
+                if *region_idx != self.map_selection {
+                    let med = *medicine_idx;
+                    self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                        medicine_idx: med,
+                        region_idx: self.map_selection,
+                    });
+                    self.panel_selection = 0;
+                }
+            }
+            Some(MedicineUiState::ConfirmDeploy { medicine_idx, .. }) => {
+                // Regress to target selection — don't silently change region on confirm screen
+                let med = *medicine_idx;
+                self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                    medicine_idx: med,
+                    region_idx: self.map_selection,
+                });
+                self.panel_selection = 0;
             }
             _ => {}
         }
