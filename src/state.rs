@@ -477,8 +477,9 @@ impl PathogenType {
                 cross_region: (0.002, 0.004),
             },
             // Prions: slow but devastating (R0 ~1.5-3), very high lethality, almost no recovery
+            // Infectivity floor must exceed max outflow (0.003+0.0006=0.0036) to ensure R0 > 1.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.003, 0.007),
+                infectivity: (0.004, 0.007),
                 lethality: (0.0016, 0.003),
                 recovery: (0.0002, 0.0006),
                 cross_region: (0.001, 0.0024),
