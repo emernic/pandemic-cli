@@ -228,7 +228,6 @@ fn render_select_target(
             .unwrap_or(0.0);
         let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
         let efficacy = therapy_efficacy * strain_eff;
-        let effective_doses = med.doses * efficacy;
         let eff_color = if efficacy >= 0.8 {
             Color::Green
         } else if efficacy >= 0.5 {
@@ -245,6 +244,8 @@ fn render_select_target(
                 let immune = inf.map(|i| i.immune).unwrap_or(0.0);
                 let susceptible = (pop - infected - dead - immune).max(0.0);
                 let empty = susceptible == 0.0;
+                let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
+                let will_vaccinate = target_vaccinated.min(med.doses);
 
                 let marker = if selected { "▶ " } else { "  " };
                 let style = if empty {
@@ -267,7 +268,7 @@ fn render_select_target(
                     ),
                     Span::raw(" | "),
                     Span::styled(
-                        format!("{} eff. doses", format_number(effective_doses)),
+                        format!("will protect {}", format_number(will_vaccinate)),
                         Style::default().fg(eff_color),
                     ),
                     Span::styled(
@@ -299,6 +300,8 @@ fn render_select_target(
                     format!("{}Treat infected ({})", marker, disease_name),
                     style,
                 )));
+                let target_treated = infected * crate::state::TREATMENT_FRACTION * efficacy;
+                let will_treat = target_treated.min(med.doses);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
@@ -307,7 +310,7 @@ fn render_select_target(
                     ),
                     Span::raw(" | "),
                     Span::styled(
-                        format!("{} eff. doses", format_number(effective_doses)),
+                        format!("will treat {}", format_number(will_treat)),
                         Style::default().fg(eff_color),
                     ),
                     Span::styled(

@@ -92,6 +92,10 @@ pub const HISTORY_MAX: usize = 100;
 /// Fraction of infected treated per deployment (before efficacy modifiers).
 /// Treatment is proportional — scales with infection size instead of fixed dose count.
 pub const TREATMENT_FRACTION: f64 = 0.5;
+/// Fraction of susceptible population vaccinated per deployment (before efficacy).
+/// Vaccination is proportional like treatment — each deploy protects a meaningful
+/// fraction, making repeated deployments build toward herd immunity.
+pub const VACCINATION_FRACTION: f64 = 0.02;
 
 // Disease emergence constants.
 /// First new disease can emerge after this many ticks (~day 3).

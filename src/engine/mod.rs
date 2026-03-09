@@ -518,9 +518,16 @@ mod tests {
         ));
         let funding_before = state.resources.funding;
         let efficacy = state.medicines[0].therapy_type.efficacy(&state.diseases[0].pathogen_type);
-        let expected_immune = state.medicines[0].doses * efficacy;
+        let region = &state.regions[0];
+        let inf_state = region.infections.iter().find(|i| i.disease_idx == 0);
+        let infected = inf_state.map(|i| i.infected).unwrap_or(0.0);
+        let dead = inf_state.map(|i| i.dead).unwrap_or(0.0);
+        let immune = inf_state.map(|i| i.immune).unwrap_or(0.0);
+        let susceptible = (region.population as f64 - infected - dead - immune).max(0.0);
+        let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
+        let expected_immune = target_vaccinated.min(state.medicines[0].doses);
         state = apply_action(&state, &Action::Confirm);
-        // Computed outputs: cost deducted, immunity applied based on efficacy
+        // Computed outputs: cost deducted, immunity applied proportionally
         assert_eq!(state.resources.funding, funding_before - state.medicines[0].cost);
         let na_inf = state.regions[0]
             .infections
@@ -528,6 +535,9 @@ mod tests {
             .find(|i| i.disease_idx == 0)
             .unwrap();
         assert_eq!(na_inf.immune, expected_immune);
+        // With 500M pop and 2% fraction, target = 10M > 5M doses, so all doses used
+        // But with a smaller population, proportional vaccination would preserve doses
+        assert!(expected_immune <= 5_000_000.0, "vaccination should be capped by dose supply");
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::DeployResult { medicine_idx: 0, adverse: false, .. })
