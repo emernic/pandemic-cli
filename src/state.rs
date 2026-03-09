@@ -332,6 +332,11 @@ pub struct Resources {
     /// Increases based on disease severity and time. Gates policies.
     #[serde(default)]
     pub political_power: f64,
+    /// Crisis-driven POL modifier (0.0–1.0 scale, can be negative).
+    /// Accumulated from crisis resolutions, decays toward 0 over time.
+    /// Added to the base severity+time formula each tick.
+    #[serde(default)]
+    pub pol_crisis_modifier: f64,
     /// Fractional accumulator for POL-based personnel gains.
     #[serde(default)]
     pub personnel_accum: f64,
@@ -2046,6 +2051,7 @@ impl GameState {
                 funding: 300.0,
                 personnel: 20,
                 political_power: 0.0,
+                pol_crisis_modifier: 0.0,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
             },

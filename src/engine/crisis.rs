@@ -165,7 +165,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Military takeover: requires POL < 40% and day > 8
-    if state.resources.political_power < 40.0 && day > 8.0 {
+    if state.resources.political_power < 0.40 && day > 8.0 {
         candidates.push(CrisisKind::MilitaryTakeover);
     }
 
@@ -880,7 +880,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::RefugeeWave { .. }, _) => {
             // Close borders — lose POL
-            state.resources.political_power = (state.resources.political_power - 10.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.10;
             "Borders closed — refugees turned away. Public outrage.".into()
         }
 
@@ -893,12 +893,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 let loss = (2.0 * TICKS_PER_DAY) as f64;
                 proj.progress = (proj.progress - loss).max(0.0);
             }
-            state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.05;
             "Went transparent — lost research time but gained public trust".into()
         }
         (CrisisKind::DataLeak, _) => {
             // Suppress — lose POL
-            state.resources.political_power = (state.resources.political_power - 10.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.10;
             "Leak suppressed — research intact but public confidence shaken".into()
         }
 
@@ -939,29 +939,29 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::QuarantineRiot { .. }, _) => {
             // Deploy military — lose POL (personnel already deducted)
-            state.resources.political_power = (state.resources.political_power - 15.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.15;
             "Military deployed — quarantine maintained by force. International condemnation.".into()
         }
 
         (CrisisKind::MediaPanic, 0) => {
             // Ignore media — lose POL
-            state.resources.political_power = (state.resources.political_power - 8.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.08;
             "Media panic continues unchecked — public confidence dropping".into()
         }
         (CrisisKind::MediaPanic, _) => {
             // Press conference — gain POL (costs already deducted)
-            state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.05;
             "Press conference calmed the panic — confidence restored".into()
         }
 
         (CrisisKind::TrialShortcut { .. }, 0) => {
             // Maintain standards — lose POL
-            state.resources.political_power = (state.resources.political_power - 5.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.05;
             "Maintained trial standards — public frustrated by the delay".into()
         }
         (CrisisKind::TrialShortcut { disease_idx }, _) => {
             // Fast-track — gain POL, but medicine stays untested
-            state.resources.political_power = (state.resources.political_power + 10.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.10;
             let name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "the pathogen".into());
@@ -970,14 +970,14 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::VaccineHesitancy { .. }, 0) => {
             // Mandate — lose POL
-            state.resources.political_power = (state.resources.political_power - 10.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.10;
             "Vaccine mandate imposed — effective but deeply unpopular".into()
         }
         (CrisisKind::VaccineHesitancy { region_idx }, _) => {
             // Education campaign — costs already deducted, gain POL
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.05;
             format!("Education campaign in {} — vaccine acceptance improving", region_name)
         }
 
@@ -1025,7 +1025,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(med) = state.medicines.get_mut(*medicine_idx) {
                 let destroyed = (med.doses * 0.3).round();
                 med.doses = (med.doses - destroyed).max(0.0);
-                state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
+                state.resources.pol_crisis_modifier += 0.05;
                 format!("Halted deployment of {} — {} doses destroyed. Public trusts your caution.",
                     med.name, crate::format_number(destroyed))
             } else {
@@ -1034,14 +1034,14 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::WhistleblowerReport { .. }, _) => {
             // Continue deployment — lose POL
-            state.resources.political_power = (state.resources.political_power - 8.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.08;
             "Continuing deployment despite concerns — public confidence shaken".into()
         }
 
         (CrisisKind::MilitaryTakeover, 0) => {
             // Cooperate — lose personnel, gain POL
             state.resources.personnel = state.resources.personnel.saturating_sub(5);
-            state.resources.political_power = (state.resources.political_power + 15.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.15;
             "Ceded 5 staff to military — agency retains civilian control with their backing".into()
         }
         (CrisisKind::MilitaryTakeover, _) => {
@@ -1053,7 +1053,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::CultBlockade { .. }, 0) => {
             // Negotiate — give them airtime, lose POL
-            state.resources.political_power = (state.resources.political_power - 8.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.08;
             "Cult got their broadcast — deliveries resume, but public is spooked".into()
         }
         (CrisisKind::CultBlockade { .. }, _) => {
@@ -1075,12 +1075,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::WHOEvacuation, 0) => {
             // Let regions go independent — lose funding and POL
             state.resources.funding = (state.resources.funding - 300.0).max(0.0);
-            state.resources.political_power = (state.resources.political_power - 5.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.05;
             "WHO collapsed — regions fending for themselves. Global coordination lost.".into()
         }
         (CrisisKind::WHOEvacuation, _) => {
             // Take over — costs already deducted, gain POL
-            state.resources.political_power = (state.resources.political_power + 10.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.10;
             "Your agency is now coordinating the global response. Heavy responsibility.".into()
         }
 
@@ -1088,7 +1088,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Refuse — gain POL, region stays collapsed
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
+            state.resources.pol_crisis_modifier += 0.05;
             format!("Refused the warlord — {} remains sealed off, but your principles are intact", region_name)
         }
         (CrisisKind::WarlordDemand { region_idx }, _) => {
@@ -1109,7 +1109,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::VaccineDispute, _) => {
             // Credit one side — gain funding, lose POL
             state.resources.funding += 600.0;
-            state.resources.political_power = (state.resources.political_power - 15.0).max(0.0);
+            state.resources.pol_crisis_modifier -= 0.15;
             "Picked a side — generous funding from the winner, furious allies of the loser".into()
         }
     }
