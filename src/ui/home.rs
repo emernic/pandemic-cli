@@ -259,11 +259,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     let inf_data: Vec<f64> = history.iter().map(|h| h.total_infected).collect();
     let dead_data: Vec<f64> = history.iter().map(|h| h.total_dead).collect();
 
+    let any_estimated = state.regions.iter().enumerate()
+        .any(|(i, _)| state.screening_visibility(i) < 1.0);
+    let inf_label = if any_estimated { "Infected~" } else { "Infected" };
     lines.extend(sparkline(
         &inf_data,
         chart_width,
         Color::Yellow,
-        "Infected",
+        inf_label,
         &format_number(state.total_infected_screened()),
     ));
     lines.extend(sparkline(

@@ -160,8 +160,9 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
             Style::default().fg(Color::White)
         };
 
-        // Show region stats: population, total infected, total dead (detected only)
-        let infected = region.detected_infected(&state.diseases);
+        // Show region stats: population, screened infected, total dead (detected only)
+        let visibility = state.screening_visibility(region_idx);
+        let infected = region.screened_infected(&state.diseases, visibility);
         let dead = region.detected_dead(&state.diseases);
 
         let mut spans = vec![
