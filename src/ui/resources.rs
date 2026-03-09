@@ -40,23 +40,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             format!("Funds: ${:.0}", state.resources.funding),
             Style::default().fg(Color::Green),
         ),
+        Span::styled(
+            format!(" (+${:.0}/t)", state.funding_income_rate()),
+            Style::default().fg(Color::DarkGray),
+        ),
         {
-            let income = state.funding_income_rate();
             let cost = state.total_policy_funding_cost();
-            let net = income - cost;
             if cost > 0.0 {
-                let color = if net >= 0.0 { Color::Green } else { Color::Red };
-                let label = if net >= 0.0 {
-                    format!(" (+${:.0}/t)", net)
-                } else {
-                    format!(" (-${:.0}/t)", -net)
-                };
-                Span::styled(label, Style::default().fg(color))
-            } else {
                 Span::styled(
-                    format!(" (+${:.0}/t)", income),
-                    Style::default().fg(Color::DarkGray),
+                    format!(" −${:.0} policy", cost),
+                    Style::default().fg(Color::Yellow),
                 )
+            } else {
+                Span::raw("")
             }
         },
         Span::raw("  "),
