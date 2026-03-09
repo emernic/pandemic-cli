@@ -26,7 +26,7 @@ Previously, `engine.rs` handled both game logic and UI state transitions in one 
 │  game commands.                     │
 ├─────────────────────────────────────┤
 │  engine.rs                          │  Game logic only
-│  tick(), apply_command()            │
+│  tick(), execute_command()          │
 │  Knows about diseases, regions,     │
 │  resources, research. Does NOT      │
 │  know about panels, selections,     │
@@ -38,33 +38,21 @@ Previously, `engine.rs` handled both game logic and UI state transitions in one 
 └─────────────────────────────────────┘
 ```
 
-**Key change: split `Action` into UI actions and game commands.**
+**Key design: `Action` (UI) vs `GameCommand` (engine) split.**
 
-Currently one `Action` enum handles everything from "move cursor down" to "deploy medicine." These are fundamentally different:
-
-- **UI actions** (navigate, open panel, advance wizard step, close panel) — only touch `UiState`, don't affect simulation
-- **Game commands** (deploy medicine, start research, toggle pause) — affect simulation state, don't touch UI navigation
+`Action` handles UI input (navigate, open panel, select). `GameCommand` handles game logic (deploy medicine, start research, resolve crisis). These are connected by `apply_action()` in `lib.rs`:
 
 ```
 KeyPress
-  → key_to_action()
-  → if UI action: update UiState directly (thin, no engine call)
-  → if game command: engine::apply_command() (pure game logic)
+  → key_to_action() → Action
+  → apply_action():
+      UI actions → UiState methods directly
+      Confirm → UiState::handle_confirm() → Option<GameCommand>
+        → if command → engine::execute_command() → CommandResult
+        → UiState::apply_command_result()
 ```
 
-This means `engine.rs` would export something like:
-```rust
-enum Command {
-    TogglePause,
-    DeployMedicine { medicine_idx, region_idx, target },
-    StartResearch { kind: ResearchKind },
-    // ...
-}
-
-fn apply_command(state: &GameState, cmd: &Command) -> GameState
-```
-
-And `apply_command` never touches `UiState` at all.
+`execute_command()` never touches `UiState`. It returns `CommandResult { message, success }` and the caller handles UI updates.
 
 ## Specific Migrations
 
@@ -98,15 +86,11 @@ keypress → action
 
 `execute_command()` returns `CommandResult { message, success }`. The caller (apply_action) reads the message and puts it in `status_message`. The engine's `execute_command` never touches `UiState`.
 
-## Migration Strategy
+## Migration Status
 
-These changes are too large for one PR. Instead, migrate incrementally as we touch each area:
+This migration is complete. `engine.rs` contains only `tick()` + `execute_command()` with pure game logic. `apply_action()` lives in `lib.rs` as coordination logic. UI state machines live in `UiState` methods. UI modules do not import from engine.
 
-1. When modifying a UI panel, check if its state machine transitions can be pulled out of `engine.rs`
-2. When adding new game commands, add them as `Command` variants rather than `Action` variants
-3. When you notice a layering violation (UI importing engine, engine touching UiState), fix it locally
-
-This migration is now complete. `engine.rs` contains only `tick()` + `execute_command()` with pure game logic. `apply_action()` lives in `lib.rs` as coordination logic. UI state machines live in `UiState` methods.
+**Ongoing discipline:** When adding new features, keep this layering intact. New game actions get `GameCommand` variants. New UI flows get `UiState` methods. `engine.rs` should never touch `UiState`.
 
 ## What NOT to Change
 
