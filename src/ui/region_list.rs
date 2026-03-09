@@ -271,7 +271,7 @@ fn render_region_box(
         }
     }
 
-    // Line 3: Health bar
+    // Line 3: Health bar with collapse threshold marker
     if inner.height >= 3 && pop > 0.0 {
         let bar_w = iw;
         let mut inf_w = if infected > 0.0 {
@@ -304,37 +304,34 @@ fn render_region_box(
         }
         let sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
 
-        let mut spans = Vec::new();
-        if sus_w > 0 {
-            spans.push(Span::styled(
-                "█".repeat(sus_w),
-                Style::default().fg(Color::Cyan),
-            ));
+        // Collapse threshold position: deaths beyond (1 - threshold) fraction cause collapse.
+        // The bar goes: [susceptible/healthy][infected][immune][dead] left-to-right.
+        // Dead is on the right. The threshold marker shows where "dead" would reach collapse.
+        // Position from right: at (1 - threshold) * bar_w chars from the right end.
+        let death_fraction_at_collapse = 1.0 - region.collapse_threshold;
+        let collapse_pos = bar_w.saturating_sub(
+            (death_fraction_at_collapse * bar_w as f64).round() as usize
+        );
+
+        // Build bar character by character to insert the collapse marker
+        let mut bar_chars: Vec<(char, Color)> = Vec::with_capacity(bar_w);
+        let mut pos = 0;
+        for _ in 0..sus_w { bar_chars.push(('█', Color::Cyan)); pos += 1; }
+        for _ in 0..inf_w { bar_chars.push(('█', Color::Red)); pos += 1; }
+        for _ in 0..imm_w { bar_chars.push(('█', Color::Green)); pos += 1; }
+        for _ in 0..dead_w { bar_chars.push(('█', Color::DarkGray)); pos += 1; }
+        // Fill remaining with healthy
+        while pos < bar_w { bar_chars.push(('█', Color::Cyan)); pos += 1; }
+
+        // Place collapse marker (overwrite the char at that position)
+        if !region.collapsed && collapse_pos > 0 && collapse_pos < bar_w {
+            bar_chars[collapse_pos] = ('▼', Color::Red);
         }
-        if inf_w > 0 {
-            spans.push(Span::styled(
-                "█".repeat(inf_w),
-                Style::default().fg(Color::Red),
-            ));
-        }
-        if imm_w > 0 {
-            spans.push(Span::styled(
-                "█".repeat(imm_w),
-                Style::default().fg(Color::Green),
-            ));
-        }
-        if dead_w > 0 {
-            spans.push(Span::styled(
-                "█".repeat(dead_w),
-                Style::default().fg(Color::DarkGray),
-            ));
-        }
-        if spans.is_empty() {
-            spans.push(Span::styled(
-                "█".repeat(bar_w),
-                Style::default().fg(Color::Cyan),
-            ));
-        }
+
+        let spans: Vec<Span> = bar_chars.iter().map(|(ch, color)| {
+            Span::styled(ch.to_string(), Style::default().fg(*color))
+        }).collect();
+
         lines.push(Line::from(spans));
     }
 
@@ -397,6 +394,33 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled("  Dead ", label),
         Span::styled(format_number(dead), Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray })),
     ]));
+
+    // Collapse threshold line
+    if !region.collapsed {
+        let death_pct = if pop > 0.0 { (dead / pop * 100.0).max(0.0) } else { 0.0 };
+        let collapse_death_pct = (1.0 - region.collapse_threshold) * 100.0;
+        let proximity = if collapse_death_pct > 0.0 { death_pct / collapse_death_pct } else { 1.0 };
+        let threshold_color = if proximity >= 0.75 {
+            Color::Red
+        } else if proximity >= 0.40 {
+            Color::Yellow
+        } else {
+            Color::DarkGray
+        };
+        lines.push(Line::from(vec![
+            Span::styled("Collapse at ", label),
+            Span::styled(
+                format!("{:.0}% deaths", collapse_death_pct),
+                Style::default().fg(threshold_color),
+            ),
+            Span::styled("  (currently ", label),
+            Span::styled(
+                format!("{:.1}%", death_pct),
+                Style::default().fg(threshold_color),
+            ),
+            Span::styled(")", label),
+        ]));
+    }
 
     // Per-disease breakdown (detected diseases only)
     if !region.infections.is_empty() {
