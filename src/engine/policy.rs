@@ -7,49 +7,59 @@ use crate::state::{
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
 };
 
+/// Display name for a policy by index. Shared between enforcement and toggle
+/// so the name is defined in exactly one place.
+fn policy_display_name(policy_idx: usize) -> &'static str {
+    match policy_idx {
+        0 => "Travel Ban",
+        1 => "Quarantine",
+        2 => "Hospital Surge",
+        3 => "Border Controls",
+        4 => "Water Sanitation",
+        5 => "Disease Screening",
+        _ => "Unknown Policy",
+    }
+}
+
 /// Enforce policy costs: suspend most expensive policies one at a time
 /// until affordable, then deduct the total cost. Returns the total
 /// policy cost (needed by the caller for funding warning calculations).
 pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     let mut policy_cost = state.total_policy_funding_cost();
     while policy_cost > 0.0 && state.resources.funding < policy_cost {
-        // Find the most expensive active individual policy across all regions
-        let mut best: Option<(usize, &str, f64)> = None;
+        // Find the most expensive active individual policy across all regions.
+        // Tracks (region_idx, policy_idx, cost) — no string matching.
+        let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
-            for (name, active, cost) in [
-                ("Travel Ban", p.travel_ban, TRAVEL_BAN_COST),
-                ("Quarantine", p.quarantine, QUARANTINE_COST),
-                ("Hospital Surge", p.hospital_surge, HOSPITAL_SURGE_COST),
-                ("Water Sanitation", p.water_sanitation, WATER_SANITATION_COST),
-                ("Border Controls", p.border_controls, BORDER_CONTROLS_COST),
+            for (idx, active, cost) in [
+                (0, p.travel_ban, TRAVEL_BAN_COST),
+                (1, p.quarantine, QUARANTINE_COST),
+                (2, p.hospital_surge, HOSPITAL_SURGE_COST),
+                (3, p.border_controls, BORDER_CONTROLS_COST),
+                (4, p.water_sanitation, WATER_SANITATION_COST),
             ] {
-                if active {
-                    if best.is_none() || cost > best.unwrap().2 {
-                        best = Some((i, name, cost));
-                    }
+                if active && (best.is_none() || cost > best.unwrap().2) {
+                    best = Some((i, idx, cost));
                 }
             }
-            // Screening as a single suspendable entry
             let scr_cost = p.screening.funding_cost();
-            if scr_cost > 0.0 {
-                if best.is_none() || scr_cost > best.unwrap().2 {
-                    best = Some((i, "Disease Screening", scr_cost));
-                }
+            if scr_cost > 0.0 && (best.is_none() || scr_cost > best.unwrap().2) {
+                best = Some((i, 5, scr_cost));
             }
         }
-        if let Some((region_idx, policy_name, _)) = best {
-            match policy_name {
-                "Travel Ban" => state.policies[region_idx].travel_ban = false,
-                "Quarantine" => state.policies[region_idx].quarantine = false,
-                "Hospital Surge" => state.policies[region_idx].hospital_surge = false,
-                "Border Controls" => state.policies[region_idx].border_controls = false,
-                "Water Sanitation" => state.policies[region_idx].water_sanitation = false,
-                "Disease Screening" => state.policies[region_idx].screening = ScreeningLevel::None,
+        if let Some((region_idx, policy_idx, _)) = best {
+            match policy_idx {
+                0 => state.policies[region_idx].travel_ban = false,
+                1 => state.policies[region_idx].quarantine = false,
+                2 => state.policies[region_idx].hospital_surge = false,
+                3 => state.policies[region_idx].border_controls = false,
+                4 => state.policies[region_idx].water_sanitation = false,
+                5 => state.policies[region_idx].screening = ScreeningLevel::None,
                 _ => unreachable!(),
             }
             state.events.push(GameEvent::PolicySuspended {
                 region_idx,
-                policy_name: policy_name.to_string(),
+                policy_name: policy_display_name(policy_idx).to_string(),
             });
             policy_cost = state.total_policy_funding_cost();
         } else {
@@ -92,15 +102,10 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
         let threshold = state.effective_pol_threshold(region_idx, policy_idx);
         let policy_name = match policy_idx {
-            0 => "Travel Ban",
-            1 => "Quarantine",
-            2 => "Hospital Surge",
-            3 => "Border Controls",
-            4 => "Water Sanitation",
             5 => "Low Disease Screening",
             6 => "Medium Disease Screening",
             7 => "High Disease Screening",
-            _ => "Policy",
+            _ => policy_display_name(policy_idx),
         };
         return (Some(format!(
             "{} requires {:.0}% Political Power (current: {:.0}%)",
