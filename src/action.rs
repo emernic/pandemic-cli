@@ -14,8 +14,8 @@ pub enum Action {
     SelectLeft,
     SelectRight,
     Confirm,
+    ToggleExtra,
     SpeedUp,
-    ToggleAutoResolve,
     Quit,
 }
 
@@ -34,8 +34,8 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Left | KeyCode::Char('h') => Some(Action::SelectLeft),
         KeyCode::Right | KeyCode::Char('l') => Some(Action::SelectRight),
         KeyCode::Enter => Some(Action::Confirm),
+        KeyCode::Char('x') | KeyCode::Char('X') => Some(Action::ToggleExtra),
         KeyCode::Char('z') | KeyCode::Char('Z') => Some(Action::SpeedUp),
-        KeyCode::Char('x') | KeyCode::Char('X') => Some(Action::ToggleAutoResolve),
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(Action::Quit),
         _ => None,
     }
@@ -58,8 +58,8 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "left" | "h" => Some(Action::SelectLeft),
         "right" | "l" => Some(Action::SelectRight),
         "enter" => Some(Action::Confirm),
+        "x" => Some(Action::ToggleExtra),
         "z" => Some(Action::SpeedUp),
-        "x" => Some(Action::ToggleAutoResolve),
         "q" => Some(Action::Quit),
         _ => None,
     }

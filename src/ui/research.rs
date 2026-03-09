@@ -6,15 +6,15 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, ResearchKind, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days};
+use crate::state::{GameState, ResearchKind, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines) = match &state.ui.research_ui {
         Some(ResearchUiState::BrowseCategories) => render_categories(state),
         Some(ResearchUiState::BrowseProjects { bench }) => render_projects(state, *bench),
-        Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
-            render_confirm(state, *bench, *project_idx)
+        Some(ResearchUiState::ConfirmProject { bench, project_idx, double_personnel }) => {
+            render_confirm(state, *bench, *project_idx, *double_personnel)
         }
         Some(ResearchUiState::ViewActive { bench }) => render_active(state, *bench),
         None => (" Research ".to_string(), vec![]),
@@ -173,7 +173,7 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
     (title.to_string(), lines)
 }
 
-fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String, Vec<Line<'static>>) {
+fn render_confirm(state: &GameState, bench: bool, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let projects = if bench {
         state.available_bench_projects()
@@ -182,7 +182,8 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (personnel, ticks, funding) = kind.costs(&state.medicines);
+        let (base_personnel, ticks, funding) = kind.costs(&state.medicines);
+        let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
         let has_personnel = state.personnel_available() >= personnel;
         let has_funding = state.resources.funding >= funding;
 
@@ -217,9 +218,26 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
+
+        // Toggle checkbox for 2x personnel
+        let checkbox = if double_personnel { "[X]" } else { "[ ]" };
+        lines.push(Line::from(vec![
+            Span::raw(format!("  {} ", checkbox)),
+            Span::styled("Assign 2x personnel", Style::default().fg(
+                if double_personnel { Color::Yellow } else { Color::DarkGray }
+            )),
+            Span::styled("  [X] toggle", Style::default().fg(Color::DarkGray)),
+        ]));
+
+        // Show effective speed based on personnel ratio
+        let speed = personnel_speed(personnel, base_personnel);
+        let effective_ticks = ticks / speed;
         lines.push(Line::from(vec![
             Span::raw("  Duration: "),
-            Span::styled(format_days(ticks), Style::default().fg(Color::White)),
+            Span::styled(format_days(effective_ticks), Style::default().fg(Color::White)),
+            Span::styled(format!("  ({:.1}x speed)", speed), Style::default().fg(
+                if speed > 1.0 { Color::Green } else { Color::DarkGray }
+            )),
         ]));
 
         let can_afford = has_personnel && has_funding;
@@ -279,10 +297,17 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
             format!("  {} remaining", format_days(effective_remaining)),
             Style::default().fg(Color::White),
         )));
-        lines.push(Line::from(Span::styled(
-            format!("  {} personnel assigned ({}x speed)", project.personnel_assigned, format!("{:.1}", speed)),
-            Style::default().fg(Color::Cyan),
-        )));
+        let speed_color = if speed >= 1.4 { Color::Green } else if speed >= 1.0 { Color::Cyan } else { Color::Red };
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {} personnel assigned", project.personnel_assigned),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::styled(
+                format!("  ({:.1}x speed)", speed),
+                Style::default().fg(speed_color),
+            ),
+        ]));
 
         // Personnel adjustment controls
         if !project.is_complete() {

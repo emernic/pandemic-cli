@@ -892,11 +892,25 @@ impl ResearchProject {
         self.progress >= self.required_ticks
     }
 
-    /// Speed multiplier based on personnel assigned vs. base requirement.
-    /// More personnel = proportionally faster. E.g. 10 assigned / 5 base = 2.0x.
+    /// Speed multiplier with diminishing returns on personnel.
     pub fn speed(&self, medicines: &[Medicine]) -> f64 {
         let (base, _, _) = self.kind.costs(medicines);
-        self.personnel_assigned as f64 / base.max(1) as f64
+        personnel_speed(self.personnel_assigned, base)
+    }
+}
+
+/// Diminishing returns speed curve for research personnel.
+///
+/// Below base: linear (understaffed = proportionally slower).
+/// 1x-2x base: diminishing gains, peaks at ~1.5x speed with 2x personnel.
+/// Beyond 2x: negative returns — too many cooks in the kitchen.
+/// Minimum speed is 0.5x to prevent absurd slowdowns.
+pub fn personnel_speed(assigned: u32, base: u32) -> f64 {
+    let ratio = assigned as f64 / base.max(1) as f64;
+    if ratio <= 1.0 {
+        ratio
+    } else {
+        (1.0 + (ratio - 1.0) * (3.0 - ratio) / 2.0).max(0.5)
     }
 }
 
@@ -964,6 +978,7 @@ pub enum GameCommand {
     StartResearch {
         bench: bool,
         project_idx: usize,
+        double_personnel: bool,
     },
     AddResearchPersonnel {
         bench: bool,
@@ -1100,7 +1115,7 @@ pub enum ResearchUiState {
     /// Browsing available projects in the selected category.
     BrowseProjects { bench: bool },
     /// Confirming a project before starting it.
-    ConfirmProject { bench: bool, project_idx: usize },
+    ConfirmProject { bench: bool, project_idx: usize, double_personnel: bool },
     /// Viewing the active project in a category.
     ViewActive { bench: bool },
 }
@@ -1478,14 +1493,15 @@ impl UiState {
                         self.research_ui = Some(ResearchUiState::ConfirmProject {
                             bench,
                             project_idx: self.panel_selection,
+                            double_personnel: false,
                         });
                         self.panel_selection = 0;
                     }
                 }
                 None
             }
-            Some(ResearchUiState::ConfirmProject { bench, project_idx }) => {
-                Some(GameCommand::StartResearch { bench, project_idx })
+            Some(ResearchUiState::ConfirmProject { bench, project_idx, double_personnel }) => {
+                Some(GameCommand::StartResearch { bench, project_idx, double_personnel })
             }
             Some(ResearchUiState::ViewActive { bench }) => {
                 // ViewActive uses up/down for personnel, Confirm goes back

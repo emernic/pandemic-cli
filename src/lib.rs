@@ -28,7 +28,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             Action::SelectPrev | Action::SelectLeft => {
                 new.ui.crisis_selection = 0;
             }
-            Action::ToggleAutoResolve => {
+            Action::ToggleExtra => {
                 new.ui.crisis_auto_resolve = !new.ui.crisis_auto_resolve;
             }
             Action::Confirm => {
@@ -137,6 +137,12 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::SelectRight => {
             new.ui.select_right(new.regions.len());
         }
+        Action::ToggleExtra => {
+            // Toggle "Assign 2x personnel" on research confirm screen
+            if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
+                *double_personnel = !*double_personnel;
+            }
+        }
         Action::Confirm => {
             if new.outcome == GameOutcome::Playing {
                 let state_snapshot = new.clone();
@@ -149,7 +155,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
             }
         }
-        Action::ToggleAutoResolve => {} // Only meaningful during crisis (handled above)
         Action::Quit => {} // Handled by the caller
     }
 
@@ -231,11 +236,11 @@ mod tests {
         });
 
         // Toggle auto-resolve on
-        let state = apply_action(&state, &Action::ToggleAutoResolve);
+        let state = apply_action(&state, &Action::ToggleExtra);
         assert!(state.ui.crisis_auto_resolve);
 
         // Toggle it off
-        let state = apply_action(&state, &Action::ToggleAutoResolve);
+        let state = apply_action(&state, &Action::ToggleExtra);
         assert!(!state.ui.crisis_auto_resolve);
     }
 
@@ -255,7 +260,7 @@ mod tests {
         });
 
         // Toggle auto-resolve, select option B, confirm
-        let state = apply_action(&state, &Action::ToggleAutoResolve);
+        let state = apply_action(&state, &Action::ToggleExtra);
         let state = apply_action(&state, &Action::SelectNext); // select B
         let state = apply_action(&state, &Action::Confirm);
 
