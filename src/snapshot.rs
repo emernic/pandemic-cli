@@ -1,6 +1,6 @@
 use ratatui::{backend::TestBackend, Terminal};
 
-use crate::action::string_to_action;
+use crate::action::{string_to_action, Action};
 use crate::apply_action;
 use crate::engine::tick;
 use crate::state::{GameState, GameOutcome, SimState};
@@ -47,16 +47,46 @@ enum SnapshotStep {
 /// Stops early on:
 /// - Crisis event → returns remaining ticks (caller can resume after resolution)
 /// - Game over → returns remaining ticks (game is done)
-fn advance_ticks(state: &mut GameState, n: u64) -> u64 {
+///
+/// With `auto_crises`, crisis events are resolved immediately (picks the
+/// affordable option, preferring option A) and simulation continues.
+fn advance_ticks(state: &mut GameState, n: u64, auto_crises: bool) -> u64 {
     state.sim_state = SimState::Running;
     for tick_i in 0..n {
         *state = tick(state);
         ui::process_events(state);
-        if state.active_crisis.is_some() || state.outcome != GameOutcome::Playing {
+        if state.active_crisis.is_some() {
+            if auto_crises {
+                auto_resolve_crisis(state);
+            } else {
+                return n - tick_i - 1;
+            }
+        }
+        if state.outcome != GameOutcome::Playing {
             return n - tick_i - 1;
         }
     }
     0
+}
+
+/// Auto-resolve a crisis by picking the cheapest affordable option.
+/// Tries option A first, then option B if A is unaffordable.
+fn auto_resolve_crisis(state: &mut GameState) {
+    // Try option A (index 0) first, fall back to option B (index 1)
+    let choice = if let Some(crisis) = &state.active_crisis {
+        if crisis.option_a.cost.as_ref().map_or(true, |c| c.affordable(state)) {
+            0
+        } else {
+            1
+        }
+    } else {
+        return;
+    };
+
+    // Use apply_action(Confirm) which handles affordability checks,
+    // sim state restoration, and all crisis resolution logic.
+    state.ui.crisis_selection = choice;
+    *state = apply_action(state, &Action::Confirm);
 }
 
 /// Run snapshot mode: process an ordered sequence of steps, then render.
@@ -74,6 +104,7 @@ fn advance_ticks(state: &mut GameState, n: u64) -> u64 {
 pub fn run_snapshot(
     mut state: GameState,
     steps: &[String],
+    auto_crises: bool,
 ) -> Result<SnapshotResult, String> {
     // Ticks remaining from an interrupted days step (saved across crisis resolution).
     let mut pending_ticks: u64 = 0;
@@ -93,7 +124,7 @@ pub fn run_snapshot(
 
                         // If this key resolved a crisis, resume pending ticks.
                         if had_crisis && state.active_crisis.is_none() && pending_ticks > 0 {
-                            let remaining = advance_ticks(&mut state, pending_ticks);
+                            let remaining = advance_ticks(&mut state, pending_ticks, auto_crises);
                             pending_ticks = remaining;
                         }
                     }
@@ -113,7 +144,7 @@ pub fn run_snapshot(
                     continue;
                 }
                 let total = n + pending_ticks;
-                pending_ticks = advance_ticks(&mut state, total);
+                pending_ticks = advance_ticks(&mut state, total, auto_crises);
             }
         }
     }
@@ -177,7 +208,7 @@ mod tests {
     fn snapshot_with_days() {
         let state = GameState::new_default(42);
         // d1 = 1 day = 120 ticks
-        let result = run_snapshot(state, &["d1".to_string()]).unwrap();
+        let result = run_snapshot(state, &["d1".to_string()], false).unwrap();
         assert!(result.screen.contains("Day: 1.0"));
         assert_eq!(result.state.tick, 120);
     }
@@ -186,7 +217,7 @@ mod tests {
     fn snapshot_with_raw_ticks() {
         let state = GameState::new_default(42);
         // Legacy: t10 = 10 raw ticks
-        let result = run_snapshot(state, &["t10".to_string()]).unwrap();
+        let result = run_snapshot(state, &["t10".to_string()], false).unwrap();
         assert!(result.screen.contains("Day: 0.1"));
         assert_eq!(result.state.tick, 10);
     }
@@ -194,7 +225,7 @@ mod tests {
     #[test]
     fn snapshot_with_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["t".to_string()]).unwrap();
+        let result = run_snapshot(state, &["t".to_string()], false).unwrap();
         assert!(result.screen.contains("Threats"));
         // Diseases start undetected — shown as "?" until detection threshold is reached
         assert!(result.screen.contains("?"));
@@ -204,14 +235,14 @@ mod tests {
     fn snapshot_with_multiple_keys() {
         let state = GameState::new_default(42);
         // Navigate to Threats then press down to select second item
-        let result = run_snapshot(state, &["t".to_string(), "down".to_string()]).unwrap();
+        let result = run_snapshot(state, &["t".to_string(), "down".to_string()], false).unwrap();
         assert!(result.screen.contains("Threats"));
     }
 
     #[test]
     fn snapshot_invalid_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["!".to_string()]);
+        let result = run_snapshot(state, &["!".to_string()], false);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown key"));
     }
@@ -223,6 +254,7 @@ mod tests {
         let result = run_snapshot(
             state,
             &["d0.5".to_string(), "t".to_string(), "d0.5".to_string()],
+            false,
         )
         .unwrap();
         assert_eq!(result.state.tick, 120);
@@ -235,7 +267,7 @@ mod tests {
         let state = GameState::new_default(42);
         // Advance far enough that a crisis fires (crises start after tick 360,
         // average interval ~840 ticks). 60 days gives P(crisis) > 99%.
-        let result = run_snapshot(state, &["d60".to_string()]).unwrap();
+        let result = run_snapshot(state, &["d60".to_string()], false).unwrap();
         // Should have stopped early due to crisis
         assert!(result.state.active_crisis.is_some(),
             "should have hit a crisis during 60 days");
@@ -254,6 +286,7 @@ mod tests {
         let crisis_only = run_snapshot(
             state.clone(),
             &["d60".to_string()],
+            false,
         ).unwrap();
         let tick_at_first_crisis = crisis_only.state.tick;
         assert!(crisis_only.state.active_crisis.is_some(),
@@ -263,6 +296,7 @@ mod tests {
         let resumed = run_snapshot(
             state,
             &["d60".to_string(), "enter".to_string()],
+            false,
         ).unwrap();
         assert!(resumed.state.tick > tick_at_first_crisis,
             "should advance past first crisis (was {}, now {})",
@@ -275,11 +309,29 @@ mod tests {
         // Force game over state
         state.outcome = GameOutcome::Lost;
         let tick_before = state.tick;
-        let result = run_snapshot(state, &["d10".to_string()]).unwrap();
+        let result = run_snapshot(state, &["d10".to_string()], false).unwrap();
         // tick() returns early when not Playing, so tick shouldn't advance
         assert_eq!(result.state.outcome, GameOutcome::Lost);
         assert_eq!(result.state.tick, tick_before,
             "tick should not advance after game over");
+    }
+
+    #[test]
+    fn auto_crises_resolves_without_blocking() {
+        let state = GameState::new_default(42);
+        // With auto_crises=false, d60 stops at the first crisis
+        let without = run_snapshot(state.clone(), &["d60".to_string()], false).unwrap();
+        assert!(without.state.active_crisis.is_some(),
+            "without auto_crises, should stop at crisis");
+
+        // With auto_crises=true, d60 runs further (crises are auto-resolved)
+        let with = run_snapshot(state, &["d60".to_string()], true).unwrap();
+        assert!(with.state.tick > without.state.tick,
+            "auto_crises should advance past first crisis (without: {}, with: {})",
+            without.state.tick, with.state.tick);
+        // No crisis should be pending at end (either all resolved, or game over)
+        assert!(with.state.active_crisis.is_none(),
+            "no crisis should be pending when auto_crises is on");
     }
 
     #[test]
