@@ -123,11 +123,11 @@ pub const POLICY_COUNT: usize = 5;
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_screening, water_sanitation.
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
-    0.40, // Travel Ban — major action, needs moderate political will
-    0.35, // Quarantine — strong measure but regionally justified
-    0.20, // Hospital Surge — relatively uncontroversial
-    0.10, // Border Screening — mild, early unlock
-    0.15, // Water Sanitation — basic public health
+    0.30, // Travel Ban — major action, needs moderate political will
+    0.25, // Quarantine — strong measure but regionally justified
+    0.15, // Hospital Surge — relatively uncontroversial
+    0.05, // Border Screening — mild, early unlock
+    0.10, // Water Sanitation — basic public health
 ];
 
 impl RegionPolicy {
