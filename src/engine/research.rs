@@ -1,25 +1,20 @@
 use crate::state::{
     GameOutcome, GameState, ResearchKind, ResearchProject,
-    KNOWLEDGE_FULL,
+    ResearchTrack, KNOWLEDGE_FULL,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
 ///
 /// Returns (success, message).
-pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
+pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
-    let occupied = if bench { state.bench_research.is_some() } else { state.field_research.is_some() };
-    if occupied {
+    if state.research_slot(track).is_some() {
         return (false, None);
     }
 
-    let projects = if bench {
-        state.available_bench_projects()
-    } else {
-        state.available_field_projects()
-    };
+    let projects = state.available_projects(track);
 
     if let Some(kind) = projects.get(project_idx) {
         let (base_personnel, duration, funding_cost) = kind.costs(&state.medicines);
@@ -42,22 +37,31 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
             personnel_assigned: personnel,
         };
 
-        if bench {
-            state.bench_research = Some(project);
-        } else {
-            state.field_research = Some(project);
+        match track {
+            ResearchTrack::Field => state.field_research = Some(project),
+            ResearchTrack::Bench => state.bench_research = Some(project),
+            ResearchTrack::Basic => state.basic_research = Some(project),
         }
         return (true, None);
     }
     (false, None)
 }
 
+/// Get mutable reference to the research slot for a given track.
+fn research_slot_mut(state: &mut GameState, track: ResearchTrack) -> &mut Option<ResearchProject> {
+    match track {
+        ResearchTrack::Field => &mut state.field_research,
+        ResearchTrack::Bench => &mut state.bench_research,
+        ResearchTrack::Basic => &mut state.basic_research,
+    }
+}
+
 /// Add personnel to an active research project. More personnel = faster progress.
 ///
 /// Returns an optional status message.
-pub(super) fn add_personnel(state: &mut GameState, bench: bool) -> Option<String> {
+pub(super) fn add_personnel(state: &mut GameState, track: ResearchTrack) -> Option<String> {
     let available = state.personnel_available();
-    let project = if bench { &mut state.bench_research } else { &mut state.field_research };
+    let project = research_slot_mut(state, track);
     if let Some(project) = project {
         if project.is_complete() {
             return None;
@@ -76,8 +80,8 @@ pub(super) fn add_personnel(state: &mut GameState, bench: bool) -> Option<String
 /// Remove personnel from an active research project.
 ///
 /// Returns an optional status message.
-pub(super) fn remove_personnel(state: &mut GameState, bench: bool) -> Option<String> {
-    let project = if bench { &mut state.bench_research } else { &mut state.field_research };
+pub(super) fn remove_personnel(state: &mut GameState, track: ResearchTrack) -> Option<String> {
+    let project = research_slot_mut(state, track);
     if let Some(project) = project {
         if project.personnel_assigned <= 1 {
             Some("Cannot remove — at least 1 person required".to_string())
@@ -132,7 +136,8 @@ pub(super) fn tick_research(state: &mut GameState) {
                 }
                 ResearchKind::DevelopMedicine { .. }
                 | ResearchKind::ManufactureDoses { .. }
-                | ResearchKind::TrainPersonnel => {}
+                | ResearchKind::TrainPersonnel
+                | ResearchKind::BasicResearch { .. } => {}
             }
             state.field_research = None;
         }
@@ -167,6 +172,19 @@ pub(super) fn tick_research(state: &mut GameState) {
             state.bench_research = None;
         }
     }
+    if let Some(ref mut project) = state.basic_research {
+        let speed = project.speed(&state.medicines);
+        project.progress += speed;
+        if project.is_complete() {
+            if let ResearchKind::BasicResearch { tech } = &project.kind {
+                let tech = *tech;
+                if !state.unlocked_techs.contains(&tech) {
+                    state.unlocked_techs.push(tech);
+                }
+            }
+            state.basic_research = None;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -175,7 +193,7 @@ mod tests {
     use crate::apply_action;
     use crate::engine::tick;
     use crate::state::{
-        GameOutcome, GameState, ResearchKind, ResearchProject, ResearchUiState,
+        GameOutcome, GameState, ResearchKind, ResearchProject, ResearchTrack, ResearchUiState,
     };
 
     #[test]
@@ -279,7 +297,7 @@ mod tests {
 
         // Navigate to ViewActive and add personnel (SelectPrev/up = add in ViewActive)
         state = apply_action(&state, &Action::Confirm); // → ViewActive
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ViewActive { bench: false })));
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ViewActive { track: ResearchTrack::Field })));
 
         state = apply_action(&state, &Action::SelectPrev); // Add personnel
         assert_eq!(
@@ -576,6 +594,71 @@ mod tests {
         }
         assert!(state.bench_research.is_none());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
+    }
+
+    #[test]
+    fn basic_research_unlocks_tech() {
+        let mut state = GameState::new_default(42);
+        // Prereq for TargetedDrugDesign: identify any pathogen
+        state.diseases[0].knowledge = 0.5;
+        state.resources.funding = 1000.0;
+        assert!(state.unlocked_techs.is_empty());
+
+        // Navigate: Research → Basic → first project → Confirm
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Basic
+        state = apply_action(&state, &Action::Confirm);     // Enter Basic
+        state = apply_action(&state, &Action::Confirm);     // Select TargetedDrugDesign
+        state = apply_action(&state, &Action::Confirm);     // Confirm start
+        assert!(state.basic_research.is_some(), "basic research should have started");
+
+        // Advance to completion (240 ticks at 1x speed)
+        for _ in 0..240 {
+            state = tick(&state);
+        }
+        assert!(state.basic_research.is_none(), "project should be complete");
+        assert!(
+            state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign),
+            "TargetedDrugDesign should be unlocked"
+        );
+    }
+
+    #[test]
+    fn three_concurrent_research_tracks() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = 1.0;
+        state.resources.funding = 2000.0;
+        state.resources.personnel = 30;
+
+        // Start field research directly
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field
+        state = apply_action(&state, &Action::Confirm); // Select first
+        state = apply_action(&state, &Action::Confirm); // Confirm
+        assert!(state.field_research.is_some());
+
+        // Start bench research
+        state = apply_action(&state, &Action::ClosePanel);
+        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.bench_research.is_some());
+
+        // Start basic research
+        state = apply_action(&state, &Action::ClosePanel);
+        state = apply_action(&state, &Action::SelectNext); // Bench
+        state = apply_action(&state, &Action::SelectNext); // Basic
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.basic_research.is_some());
+
+        // All three running simultaneously
+        assert!(state.field_research.is_some());
+        assert!(state.bench_research.is_some());
+        assert!(state.basic_research.is_some());
     }
 
     #[test]

@@ -222,16 +222,16 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, *target_selection);
             CommandResult { message: msg, success: nav_back, adverse }
         }
-        GameCommand::StartResearch { bench, project_idx, double_personnel } => {
-            let (ok, msg) = research::start_research(state, *bench, *project_idx, *double_personnel);
+        GameCommand::StartResearch { track, project_idx, double_personnel } => {
+            let (ok, msg) = research::start_research(state, *track, *project_idx, *double_personnel);
             CommandResult { message: msg, success: ok, adverse: false }
         }
-        GameCommand::AddResearchPersonnel { bench } => {
-            let msg = research::add_personnel(state, *bench);
+        GameCommand::AddResearchPersonnel { track } => {
+            let msg = research::add_personnel(state, *track);
             CommandResult { message: msg, success: true, adverse: false }
         }
-        GameCommand::RemoveResearchPersonnel { bench } => {
-            let msg = research::remove_personnel(state, *bench);
+        GameCommand::RemoveResearchPersonnel { track } => {
+            let msg = research::remove_personnel(state, *track);
             CommandResult { message: msg, success: true, adverse: false }
         }
         GameCommand::TogglePolicy {
@@ -253,7 +253,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{GameState, MedicineUiState, Panel, PolicyUiState, RegionDiseaseState, ResearchUiState};
+    use crate::state::{GameState, MedicineUiState, Panel, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -860,9 +860,12 @@ mod tests {
         state = apply_action(&state, &Action::SelectNext);
         assert_eq!(state.ui.panel_selection, 1);
 
+        state = apply_action(&state, &Action::SelectNext);
+        assert_eq!(state.ui.panel_selection, 2); // Basic Research
+
         // Can't go past last
         state = apply_action(&state, &Action::SelectNext);
-        assert_eq!(state.ui.panel_selection, 1);
+        assert_eq!(state.ui.panel_selection, 2);
 
         // Esc closes
         state = apply_action(&state, &Action::ClosePanel);
@@ -876,7 +879,7 @@ mod tests {
 
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { bench: false })));
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { track: ResearchTrack::Field })));
 
         state = apply_action(&state, &Action::Confirm); // Select project
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
@@ -907,14 +910,14 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Enter Field Research
         assert!(matches!(
             state.ui.research_ui,
-            Some(ResearchUiState::BrowseProjects { bench: false })
+            Some(ResearchUiState::BrowseProjects { track: ResearchTrack::Field })
         ));
 
         // Pressing Enter on empty list should stay on BrowseProjects
         state = apply_action(&state, &Action::Confirm);
         assert!(matches!(
             state.ui.research_ui,
-            Some(ResearchUiState::BrowseProjects { bench: false })
+            Some(ResearchUiState::BrowseProjects { track: ResearchTrack::Field })
         ));
     }
 

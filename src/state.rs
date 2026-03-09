@@ -43,6 +43,12 @@ pub struct GameState {
     /// Active bench research project (Develop Medicine).
     #[serde(default)]
     pub bench_research: Option<ResearchProject>,
+    /// Active basic research project (tech tree unlocks).
+    #[serde(default)]
+    pub basic_research: Option<ResearchProject>,
+    /// Technologies unlocked via basic research.
+    #[serde(default)]
+    pub unlocked_techs: Vec<BasicTech>,
     /// Per-region active policies.
     #[serde(default)]
     pub policies: Vec<RegionPolicy>,
@@ -841,6 +847,14 @@ impl Medicine {
     }
 }
 
+/// Which research track a project belongs to.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ResearchTrack {
+    Field,
+    Bench,
+    Basic,
+}
+
 /// An active research project.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ResearchProject {
@@ -860,6 +874,86 @@ pub enum ResearchKind {
     GenomicSequencing { disease_idx: usize },
     /// Train new personnel to expand the available workforce.
     TrainPersonnel,
+    /// Basic research — unlocks a technology in the tech tree.
+    BasicResearch { tech: BasicTech },
+}
+
+/// Technology nodes in the Basic Research tech tree.
+/// Each unlocks new capabilities in Applied (Bench) Research.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BasicTech {
+    /// Unlocks targeted drug development (Antiviral / Antibiotic).
+    /// Prereq: identify any pathogen.
+    TargetedDrugDesign,
+    /// Unlocks monoclonal antibody development for viruses.
+    /// Prereq: TargetedDrugDesign + fully studied any virus (knowledge >= 1.0).
+    MonoclonalAntibodies,
+    /// Unlocks phage therapy development for bacteria.
+    /// Prereq: TargetedDrugDesign + fully studied any bacterium (knowledge >= 1.0).
+    PhageTherapy,
+}
+
+impl BasicTech {
+    /// Human-readable name for display.
+    pub fn name(&self) -> &'static str {
+        match self {
+            BasicTech::TargetedDrugDesign => "Targeted Drug Design",
+            BasicTech::MonoclonalAntibodies => "Monoclonal Antibodies",
+            BasicTech::PhageTherapy => "Phage Therapy",
+        }
+    }
+
+    /// Short description for the research panel.
+    pub fn description(&self) -> &'static str {
+        match self {
+            BasicTech::TargetedDrugDesign => "Unlocks targeted Antiviral/Antibiotic development",
+            BasicTech::MonoclonalAntibodies => "Unlocks high-efficacy mAb drugs for viruses",
+            BasicTech::PhageTherapy => "Unlocks phage therapy drugs for bacteria",
+        }
+    }
+
+    /// Prerequisites: returns list of (tech prereqs, description of other prereqs).
+    pub fn prerequisites_met(&self, state: &GameState) -> bool {
+        match self {
+            BasicTech::TargetedDrugDesign => {
+                // Prereq: identified any pathogen (any disease with knowledge > 0)
+                state.diseases.iter().any(|d| d.knowledge > 0.0)
+            }
+            BasicTech::MonoclonalAntibodies => {
+                // Prereq: TargetedDrugDesign + fully studied any virus
+                state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
+                    && state.diseases.iter().any(|d| {
+                        d.knowledge >= 1.0
+                            && matches!(d.pathogen_type, PathogenType::RnaVirus | PathogenType::DnaVirus)
+                    })
+            }
+            BasicTech::PhageTherapy => {
+                // Prereq: TargetedDrugDesign + fully studied any bacterium
+                state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
+                    && state.diseases.iter().any(|d| {
+                        d.knowledge >= 1.0 && d.pathogen_type == PathogenType::Bacterium
+                    })
+            }
+        }
+    }
+
+    /// What prerequisites are needed (for display when locked).
+    pub fn prereq_description(&self) -> &'static str {
+        match self {
+            BasicTech::TargetedDrugDesign => "Identify any pathogen",
+            BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
+            BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
+        }
+    }
+
+    /// All techs in display order.
+    pub fn all() -> &'static [BasicTech] {
+        &[
+            BasicTech::TargetedDrugDesign,
+            BasicTech::MonoclonalAntibodies,
+            BasicTech::PhageTherapy,
+        ]
+    }
 }
 
 impl ResearchKind {
@@ -883,6 +977,11 @@ impl ResearchKind {
             ResearchKind::ManufactureDoses { .. } => (3, 120.0, 150.0),
             ResearchKind::GenomicSequencing { .. } => (5, 200.0, 300.0),
             ResearchKind::TrainPersonnel => (1, 160.0, 100.0),
+            ResearchKind::BasicResearch { tech } => match tech {
+                BasicTech::TargetedDrugDesign => (3, 240.0, 400.0),
+                BasicTech::MonoclonalAntibodies => (5, 360.0, 600.0),
+                BasicTech::PhageTherapy => (5, 360.0, 600.0),
+            },
         }
     }
 }
@@ -976,15 +1075,15 @@ pub enum GameCommand {
         target_selection: usize,
     },
     StartResearch {
-        bench: bool,
+        track: ResearchTrack,
         project_idx: usize,
         double_personnel: bool,
     },
     AddResearchPersonnel {
-        bench: bool,
+        track: ResearchTrack,
     },
     RemoveResearchPersonnel {
-        bench: bool,
+        track: ResearchTrack,
     },
     TogglePolicy {
         region_idx: usize,
@@ -1110,14 +1209,14 @@ pub enum PolicyUiState {
 /// Research panel UI state machine, following the medicines panel pattern.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchUiState {
-    /// Top level: choose Field Research or Bench Research category.
+    /// Top level: choose Field, Bench, or Basic Research category.
     BrowseCategories,
     /// Browsing available projects in the selected category.
-    BrowseProjects { bench: bool },
+    BrowseProjects { track: ResearchTrack },
     /// Confirming a project before starting it.
-    ConfirmProject { bench: bool, project_idx: usize, double_personnel: bool },
+    ConfirmProject { track: ResearchTrack, project_idx: usize, double_personnel: bool },
     /// Viewing the active project in a category.
-    ViewActive { bench: bool },
+    ViewActive { track: ResearchTrack },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1226,12 +1325,12 @@ impl UiState {
             }
             Panel::Research => {
                 match &self.research_ui {
-                    Some(ResearchUiState::ConfirmProject { bench, .. }) => {
-                        self.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
+                    Some(ResearchUiState::ConfirmProject { track, .. }) => {
+                        self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
                         self.panel_selection = 0;
                     }
-                    Some(ResearchUiState::ViewActive { bench }) => {
-                        self.research_ui = Some(ResearchUiState::BrowseProjects { bench: *bench });
+                    Some(ResearchUiState::ViewActive { track }) => {
+                        self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
                         self.panel_selection = 0;
                     }
                     Some(ResearchUiState::BrowseProjects { .. }) => {
@@ -1282,22 +1381,13 @@ impl UiState {
                 | None => 0,
             },
             Panel::Research => match &self.research_ui {
-                Some(ResearchUiState::BrowseCategories) => 1,
-                Some(ResearchUiState::BrowseProjects { bench }) => {
-                    let active = if *bench {
-                        state.bench_research.is_some()
-                    } else {
-                        state.field_research.is_some()
-                    };
+                Some(ResearchUiState::BrowseCategories) => 2, // Field, Bench, Basic
+                Some(ResearchUiState::BrowseProjects { track }) => {
+                    let active = state.research_slot(*track).is_some();
                     if active {
                         0
                     } else {
-                        let count = if *bench {
-                            state.available_bench_projects().len()
-                        } else {
-                            state.available_field_projects().len()
-                        };
-                        count.saturating_sub(1)
+                        state.available_projects(*track).len().saturating_sub(1)
                     }
                 }
                 Some(ResearchUiState::ConfirmProject { .. }) => 0,
@@ -1469,29 +1559,24 @@ impl UiState {
     fn handle_research_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
         match self.research_ui.clone() {
             Some(ResearchUiState::BrowseCategories) => {
-                let bench = self.panel_selection == 1;
-                self.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+                let track = match self.panel_selection {
+                    0 => ResearchTrack::Field,
+                    1 => ResearchTrack::Bench,
+                    _ => ResearchTrack::Basic,
+                };
+                self.research_ui = Some(ResearchUiState::BrowseProjects { track });
                 self.panel_selection = 0;
                 None
             }
-            Some(ResearchUiState::BrowseProjects { bench }) => {
-                let active = if bench {
-                    &state.bench_research
-                } else {
-                    &state.field_research
-                };
-                if active.is_some() {
-                    self.research_ui = Some(ResearchUiState::ViewActive { bench });
+            Some(ResearchUiState::BrowseProjects { track }) => {
+                if state.research_slot(track).is_some() {
+                    self.research_ui = Some(ResearchUiState::ViewActive { track });
                     self.panel_selection = 0;
                 } else {
-                    let count = if bench {
-                        state.available_bench_projects().len()
-                    } else {
-                        state.available_field_projects().len()
-                    };
+                    let count = state.available_projects(track).len();
                     if count > 0 {
                         self.research_ui = Some(ResearchUiState::ConfirmProject {
-                            bench,
+                            track,
                             project_idx: self.panel_selection,
                             double_personnel: false,
                         });
@@ -1500,12 +1585,12 @@ impl UiState {
                 }
                 None
             }
-            Some(ResearchUiState::ConfirmProject { bench, project_idx, double_personnel }) => {
-                Some(GameCommand::StartResearch { bench, project_idx, double_personnel })
+            Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
+                Some(GameCommand::StartResearch { track, project_idx, double_personnel })
             }
-            Some(ResearchUiState::ViewActive { bench }) => {
+            Some(ResearchUiState::ViewActive { track }) => {
                 // ViewActive uses up/down for personnel, Confirm goes back
-                self.research_ui = Some(ResearchUiState::BrowseProjects { bench });
+                self.research_ui = Some(ResearchUiState::BrowseProjects { track });
                 self.panel_selection = 0;
                 None
             }
@@ -1529,10 +1614,10 @@ impl UiState {
                     self.panel_selection = 0;
                 }
             }
-            GameCommand::StartResearch { bench, .. } => {
+            GameCommand::StartResearch { track, .. } => {
                 if success {
                     self.research_ui =
-                        Some(ResearchUiState::BrowseProjects { bench: *bench });
+                        Some(ResearchUiState::BrowseProjects { track: *track });
                     self.panel_selection = 0;
                 }
             }
@@ -1785,6 +1870,8 @@ impl GameState {
             medicines,
             field_research: None,
             bench_research: None,
+            basic_research: None,
+            unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
             events: vec![],
             active_crisis: None,
@@ -1871,8 +1958,9 @@ impl GameState {
     pub fn personnel_busy(&self) -> u32 {
         let field = self.field_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let bench = self.bench_research.as_ref().map_or(0, |p| p.personnel_assigned);
+        let basic = self.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let policy: u32 = self.policies.iter().map(|p| p.personnel_cost()).sum();
-        field + bench + policy
+        field + bench + basic + policy
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -2155,6 +2243,38 @@ impl GameState {
             }
         }
         projects
+    }
+
+    /// Get the active research project for a given track.
+    pub fn research_slot(&self, track: ResearchTrack) -> Option<&ResearchProject> {
+        match track {
+            ResearchTrack::Field => self.field_research.as_ref(),
+            ResearchTrack::Bench => self.bench_research.as_ref(),
+            ResearchTrack::Basic => self.basic_research.as_ref(),
+        }
+    }
+
+    /// Available research projects for a given track (excludes currently active).
+    pub fn available_projects(&self, track: ResearchTrack) -> Vec<ResearchKind> {
+        match track {
+            ResearchTrack::Field => self.available_field_projects(),
+            ResearchTrack::Bench => self.available_bench_projects(),
+            ResearchTrack::Basic => self.available_basic_projects(),
+        }
+    }
+
+    /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
+    pub fn available_basic_projects(&self) -> Vec<ResearchKind> {
+        let active_kind = self.basic_research.as_ref().map(|p| &p.kind);
+        BasicTech::all()
+            .iter()
+            .filter(|tech| {
+                !self.unlocked_techs.contains(tech)
+                    && tech.prerequisites_met(self)
+            })
+            .map(|&tech| ResearchKind::BasicResearch { tech })
+            .filter(|kind| active_kind != Some(kind))
+            .collect()
     }
 
     /// Available bench research projects (excludes currently active).

@@ -324,7 +324,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     // ── Research status ──
-    if state.field_research.is_some() || state.bench_research.is_some() {
+    if state.field_research.is_some() || state.bench_research.is_some() || state.basic_research.is_some() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── RESEARCH ──", cyan)));
         lines.push(Line::from(""));
@@ -333,6 +333,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         for (label, project) in [
             ("Field", &state.field_research),
             ("Bench", &state.bench_research),
+            ("Basic", &state.basic_research),
         ] {
             if let Some(proj) = project {
                 let pct = if proj.required_ticks > 0.0 {
