@@ -6,17 +6,17 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, ResearchKind, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days, personnel_speed};
+use crate::state::{GameState, ResearchKind, ResearchTrack, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines) = match &state.ui.research_ui {
         Some(ResearchUiState::BrowseCategories) => render_categories(state),
-        Some(ResearchUiState::BrowseProjects { bench }) => render_projects(state, *bench),
-        Some(ResearchUiState::ConfirmProject { bench, project_idx, double_personnel }) => {
-            render_confirm(state, *bench, *project_idx, *double_personnel)
+        Some(ResearchUiState::BrowseProjects { track }) => render_projects(state, *track),
+        Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
+            render_confirm(state, *track, *project_idx, *double_personnel)
         }
-        Some(ResearchUiState::ViewActive { bench }) => render_active(state, *bench),
+        Some(ResearchUiState::ViewActive { track }) => render_active(state, *track),
         None => (" Research ".to_string(), vec![]),
     };
 
@@ -32,8 +32,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
 
-    let categories = ["Field Research", "Bench Research"];
-    for (i, name) in categories.iter().enumerate() {
+    let categories = [
+        ("Field Research", "Identify threats, run clinical trials", ResearchTrack::Field),
+        ("Bench Research", "Develop medicines, manufacture doses", ResearchTrack::Bench),
+        ("Basic Research", "Unlock new therapeutic technologies", ResearchTrack::Basic),
+    ];
+    for (i, (name, desc, track)) in categories.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
@@ -47,26 +51,18 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
             style,
         )));
 
-        let (desc_text, status, status_color) = match i {
-            0 => {
-                let (s, c) = if state.field_research.is_some() {
-                    (" [ACTIVE]", Color::Cyan)
-                } else {
-                    (" [NONE]", Color::DarkGray)
-                };
-                ("    Identify threats, run clinical trials", s, c)
-            }
-            _ => {
-                let (s, c) = if state.bench_research.is_some() {
-                    (" [ACTIVE]", Color::Magenta)
-                } else {
-                    (" [NONE]", Color::DarkGray)
-                };
-                ("    Develop medicines, manufacture doses", s, c)
-            }
+        let active = state.research_slot(*track).is_some();
+        let (status, status_color) = if active {
+            (" [ACTIVE]", match track {
+                ResearchTrack::Field => Color::Cyan,
+                ResearchTrack::Bench => Color::Magenta,
+                ResearchTrack::Basic => Color::Green,
+            })
+        } else {
+            (" [NONE]", Color::DarkGray)
         };
         lines.push(Line::from(vec![
-            Span::styled(desc_text, Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("    {}", desc), Style::default().fg(Color::DarkGray)),
             Span::styled(status, Style::default().fg(status_color)),
         ]));
         lines.push(Line::from(""));
@@ -78,12 +74,16 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
     (" Research ".to_string(), lines)
 }
 
-fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>) {
+fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let title = if bench { " Bench Research " } else { " Field Research " };
+    let title = match track {
+        ResearchTrack::Field => " Field Research ",
+        ResearchTrack::Bench => " Bench Research ",
+        ResearchTrack::Basic => " Basic Research ",
+    };
     let mut has_selectable_items = false;
 
-    let active = if bench { &state.bench_research } else { &state.field_research };
+    let active = state.research_slot(track);
 
     // When a project is active, only show it — no starting new projects until it completes
     if let Some(project) = active {
@@ -106,20 +106,21 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
             Style::default().fg(Color::Green),
         )));
     } else {
-        let projects = if bench {
-            state.available_bench_projects()
-        } else {
-            state.available_field_projects()
-        };
+        let projects = state.available_projects(track);
 
         if projects.is_empty() {
             lines.push(Line::from(Span::styled(
                 "  No projects available.",
                 Style::default().fg(Color::DarkGray),
             )));
-            if bench {
+            let hint = match track {
+                ResearchTrack::Bench => Some("(Identify diseases to unlock medicine development)"),
+                ResearchTrack::Basic => Some("(Identify a pathogen to unlock basic research)"),
+                ResearchTrack::Field => None,
+            };
+            if let Some(hint_text) = hint {
                 lines.push(Line::from(Span::styled(
-                    "  (Identify diseases to unlock medicine development)",
+                    format!("  {}", hint_text),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
@@ -173,13 +174,9 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
     (title.to_string(), lines)
 }
 
-fn render_confirm(state: &GameState, bench: bool, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
+fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let projects = if bench {
-        state.available_bench_projects()
-    } else {
-        state.available_field_projects()
-    };
+    let projects = state.available_projects(track);
 
     if let Some(kind) = projects.get(project_idx) {
         let (base_personnel, ticks, funding) = kind.costs(&state.medicines);
@@ -260,9 +257,9 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize, double_per
     (" Confirm Research ".to_string(), lines)
 }
 
-fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>) {
+fn render_active(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let project = if bench { &state.bench_research } else { &state.field_research };
+    let project = state.research_slot(track);
 
     if let Some(project) = project {
         let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
@@ -339,7 +336,11 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
         Style::default().fg(Color::DarkGray),
     )));
 
-    let title = if bench { " Active: Bench " } else { " Active: Field " };
+    let title = match track {
+        ResearchTrack::Field => " Active: Field ",
+        ResearchTrack::Bench => " Active: Bench ",
+        ResearchTrack::Basic => " Active: Basic ",
+    };
     (title.to_string(), lines)
 }
 
@@ -385,6 +386,7 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
             format!("Sequence: {}", name)
         }
         ResearchKind::TrainPersonnel => "Train Personnel (+5)".to_string(),
+        ResearchKind::BasicResearch { tech } => tech.name().to_string(),
     }
 }
 
@@ -431,6 +433,9 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             } else {
                 None
             }
+        }
+        ResearchKind::BasicResearch { tech } => {
+            Some(tech.description().to_string())
         }
         _ => None,
     }

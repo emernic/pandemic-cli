@@ -121,17 +121,21 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
         }
 
-        spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-
-        spans.push(Span::styled("Bench: ", Style::default().fg(Color::DarkGray)));
-        if let Some(ref project) = state.bench_research {
-            let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
-            spans.push(Span::styled(
-                format!("{} {}%", compact_research_label(&project.kind, state), pct),
-                Style::default().fg(Color::Magenta),
-            ));
-        } else {
-            spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+        for (label, project, color) in [
+            ("Bench", &state.bench_research, Color::Magenta),
+            ("Basic", &state.basic_research, Color::Green),
+        ] {
+            spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled(format!("{}: ", label), Style::default().fg(Color::DarkGray)));
+            if let Some(project) = project {
+                let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
+                spans.push(Span::styled(
+                    format!("{} {}%", compact_research_label(&project.kind, state), pct),
+                    Style::default().fg(color),
+                ));
+            } else {
+                spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+            }
         }
 
         lines.push(Line::from(spans));
@@ -183,5 +187,6 @@ fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
             format!("Sequencing {}", name)
         }
         ResearchKind::TrainPersonnel => "Training".to_string(),
+        ResearchKind::BasicResearch { tech } => tech.name().to_string(),
     }
 }
