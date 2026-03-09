@@ -3217,7 +3217,7 @@ impl GameState {
         // Genomic Sequencing: fully identified diseases that still mutate and are active
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
-                && disease.pathogen_type.mutation_rate() > 0.0001
+                && disease.effective_mutation_rate() > 0.0001
                 && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
