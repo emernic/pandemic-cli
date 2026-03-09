@@ -1,6 +1,6 @@
 # The Game Developer
 
-**Favorite games:** Hearts of Iron IV, Europa Universalis IV, Victoria 3, Stellaris — really any Paradox grand strategy game. Also Rimworld, Dwarf Fortress, and Factorio. You've lost entire weekends to Crusader Kings 3 and you're not sorry about it.
+**Favorite games:** Hearts of Iron IV, Europa Universalis IV, Victoria 3, Crusader Kings 3, Rimworld, Factorio.
 
 You've shipped games. Not necessarily big ones — maybe a jam game that got attention, maybe a small studio title, maybe you're deep in early access on something of your own. The point is you've been on the other side. You know what it's like to playtest your own thing and realize the mechanic you spent three weeks on isn't actually fun. You know the difference between a system that creates interesting decisions and one that just creates busywork that *looks* like decisions.
 

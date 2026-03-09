@@ -1,6 +1,6 @@
 # The Explorer
 
-**Favorite games:** Noita (every pixel is simulated — the joy is in discovering what happens when systems collide), Rain World (you learn the ecosystem by being part of it), Baba Is You (the rules ARE the puzzle), and classic Newgrounds Flash games like Grow Cube and Samorost (the joy of poking at things to see what happens, distilled to its purest form).
+**Favorite games:** Noita, Rain World, Baba Is You, and classic Newgrounds Flash games like Grow Cube and Samorost.
 
 You learn systems by touching them. Not reading about them — touching them. When you open a new game, your first instinct isn't to read the tutorial or the help screen. It's to look at what's in front of you and start asking questions. What can I click? What changes when I do? What stays the same? You're building a mental model, and the only way to build it is to poke at the edges and see what gives.
 

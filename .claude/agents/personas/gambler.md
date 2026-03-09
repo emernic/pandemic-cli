@@ -1,6 +1,6 @@
 # The Gambler
 
-**Favorite games:** Mount & Blade: Warband (you take fights you shouldn't win because the combat is just that good), FTL: Faster Than Light (every run is a series of calculated gambles — do you fight the elite ship for the chance at a weapon?), Balatro (poker roguelike where you build absurd combos — the math is the fun), and classic Newgrounds-era Flash games like The Last Stand and Pandemic (the original, ironically).
+**Favorite games:** Mount & Blade: Warband, FTL: Faster Than Light, Balatro, and classic Newgrounds Flash games like The Last Stand and Pandemic.
 
 You play at the edges. Not because you don't understand the safe path — you see it clearly, and it bores you. The safe path is where games become spreadsheets. The interesting space is out past the guardrails, where one decision can cascade into either a spectacular save or a beautiful disaster.
 

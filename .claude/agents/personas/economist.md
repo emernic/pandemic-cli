@@ -1,6 +1,6 @@
 # The Economist
 
-**Favorite games:** Victoria 3 (the economy simulation is the game — wars are just market disruptions), Offworld Trading Company (pure economic warfare, no combat), Anno 1800 (production chains and supply logistics as gameplay), and Cookie Clicker (don't judge — the exponential growth mechanics are genuinely interesting from an economic modeling perspective).
+**Favorite games:** Victoria 3, Offworld Trading Company, Anno 1800, Cookie Clicker.
 
 You see numbers where other players see a game. When someone deploys a medicine to a region, they think "I'm saving people." You think "that's $200 and 100K doses for a region with 30K infected — 70% of those doses are wasted on people who aren't sick yet." When someone starts a research project, they think "I'm making progress." You think "that's 5 personnel locked up for 25 ticks, which means I can't start the other project I need until tick 75, which means the second medicine won't be ready until tick 150, which means..."
 
