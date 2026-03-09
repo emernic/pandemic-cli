@@ -1080,6 +1080,72 @@ impl GameState {
         self.regions.iter().map(|r| r.population as f64).sum()
     }
 
+    /// Generate strategic tips based on what the player did (or didn't do) before defeat.
+    /// Returns up to 2 actionable tips, most impactful first.
+    pub fn defeat_tips(&self) -> Vec<String> {
+        let mut tips = Vec::new();
+
+        // Check if any diseases were never identified
+        let unidentified = self.diseases.iter()
+            .filter(|d| d.knowledge < KNOWLEDGE_NAME)
+            .count();
+        if unidentified == self.diseases.len() {
+            tips.push(
+                "You never identified any threats. Use [R] Research → Field Research → Identify to learn about diseases."
+                    .to_string(),
+            );
+        } else if unidentified > 0 {
+            tips.push(format!(
+                "{} of {} threats were never identified. Identifying threats unlocks medicine development.",
+                unidentified,
+                self.diseases.len()
+            ));
+        }
+
+        // Check if medicines were developed but never deployed
+        let unlocked_meds = self.medicines.iter().filter(|m| m.unlocked).count();
+        let deployed_any = self.medicines.iter().any(|m| m.unlocked && m.doses < m.max_doses);
+        if unlocked_meds > 0 && !deployed_any {
+            tips.push(
+                "You developed medicines but never deployed them. Use [M] Medicines to vaccinate or treat regions."
+                    .to_string(),
+            );
+        } else if unlocked_meds == 0 && unidentified < self.diseases.len() {
+            // Identified threats but never developed medicine
+            tips.push(
+                "You identified threats but never developed a medicine. Use Bench Research to develop treatments."
+                    .to_string(),
+            );
+        }
+
+        // Check if policies were ever used
+        let any_policy_active = self.policies.iter().any(|p| p.travel_ban || p.quarantine || p.hospital_surge);
+        if !any_policy_active && tips.len() < 2 {
+            // Find the worst-hit region
+            let worst_region = self.regions.iter()
+                .max_by(|a, b| a.total_dead().partial_cmp(&b.total_dead()).unwrap());
+            if let Some(region) = worst_region {
+                if region.total_dead() > 0.0 {
+                    tips.push(format!(
+                        "{} lost the most lives. Travel bans [P] can slow spread between regions.",
+                        region.name
+                    ));
+                }
+            }
+        }
+
+        // If no specific tips, give a general one
+        if tips.is_empty() {
+            tips.push(
+                "Try acting faster — research, develop, and deploy medicines before infections spread."
+                    .to_string(),
+            );
+        }
+
+        tips.truncate(2);
+        tips
+    }
+
     /// Run all save-migration fixups. Call once after deserializing a save file.
     pub fn migrate(&mut self) {
         // Ensure policies vec matches regions (for saves before the policy system).
@@ -1283,5 +1349,24 @@ mod tests {
         assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Prion), 0.0);
         assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::Prion), 0.0);
         assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Prion), 0.1);
+    }
+
+    #[test]
+    fn defeat_tips_no_research() {
+        let state = GameState::new_default(42);
+        let tips = state.defeat_tips();
+        assert!(!tips.is_empty());
+        assert!(tips[0].contains("identified"), "should suggest identifying threats: {:?}", tips);
+    }
+
+    #[test]
+    fn defeat_tips_with_identified_but_no_medicine() {
+        let mut state = GameState::new_default(42);
+        for d in &mut state.diseases {
+            d.knowledge = KNOWLEDGE_NAME;
+        }
+        let tips = state.defeat_tips();
+        assert!(tips.iter().any(|t| t.contains("develop") || t.contains("Bench")),
+            "should suggest developing medicine: {:?}", tips);
     }
 }
