@@ -1,110 +1,112 @@
 # Target Architecture
 
-Where we want the codebase to go, incrementally.
+Current state and ongoing discipline for the codebase structure.
 
-## The Core Problem (Largely Resolved)
+## Layering
 
-Previously, `engine.rs` handled both game logic and UI state transitions in one massive `apply_action()` function. This has been fixed:
-
-- **`apply_action()` moved to `lib.rs`** — It's coordination/routing logic, not game simulation. It delegates UI actions to `UiState` methods and game commands to `engine::execute_command()`.
-- **UI state machines extracted** — Panel navigation, wizard steps, selection indices all live in `UiState` methods (`handle_confirm()`, `toggle_panel()`, `select_next()`, etc.).
-- **UI modules no longer import from engine** — `project_costs()` moved to `ResearchKind::costs()`, query functions moved to `GameState` methods.
-- **`engine.rs` now only contains game logic** — `tick()`, `execute_command()`, and their helpers (crisis generation, disease emergence, research completion, etc.).
-
-## Target Layers
+The codebase has four layers. Dependencies flow downward only.
 
 ```
-┌─────────────────────────────────────┐
-│  main.rs / snapshot.rs              │  I/O boundary
-│  Terminal, files, CLI args          │
-├─────────────────────────────────────┤
-│  ui/                                │  Rendering + UI state machines
-│  Reads state, renders it.           │
-│  Owns panel navigation, wizards,    │
-│  selection indices, open/close.     │
-│  Translates user intent into        │
-│  game commands.                     │
-├─────────────────────────────────────┤
-│  engine.rs                          │  Game logic only
-│  tick(), execute_command()          │
-│  Knows about diseases, regions,     │
-│  resources, research. Does NOT      │
-│  know about panels, selections,     │
-│  or wizard steps.                   │
-├─────────────────────────────────────┤
-│  state.rs                           │  Pure data
-│  GameState, all structs/enums       │
-│  No logic, no imports               │
-└─────────────────────────────────────┘
+main.rs / snapshot.rs     I/O boundary (terminal, files, CLI)
+        ↓
+lib.rs                    Coordination (apply_action routes input)
+        ↓
+ui/  |  engine/           Rendering + UI state  |  Game logic
+        ↓                         ↓
+state.rs                  Pure data (structs, enums, constants, queries)
 ```
 
-**Key design: `Action` (UI) vs `GameCommand` (engine) split.**
+**UI and engine are peers — neither imports from the other.** Both depend on state.rs. The coordination layer in lib.rs connects them: UI state machines translate user intent into `GameCommand`s, and `apply_action()` passes those to `engine::execute_command()`.
 
-`Action` handles UI input (navigate, open panel, select). `GameCommand` handles game logic (deploy medicine, start research, resolve crisis). These are connected by `apply_action()` in `lib.rs`:
+### How input flows
 
 ```
-KeyPress
-  → key_to_action() → Action
-  → apply_action():
-      UI actions → UiState methods directly
-      Confirm → UiState::handle_confirm() → Option<GameCommand>
-        → if command → engine::execute_command() → CommandResult
-        → UiState::apply_command_result()
+keypress → action.rs: key_to_action() → Action
+         → lib.rs: apply_action()
+             UI actions (navigate, select) → UiState methods
+             Confirm → UiState::handle_confirm() → Option<GameCommand>
+               → engine::execute_command() → CommandResult { message, success }
+               → UiState::apply_command_result()
 ```
 
-`execute_command()` never touches `UiState`. It returns `CommandResult { message, success }` and the caller handles UI updates.
+`execute_command()` never touches `UiState`. It returns a result and the caller handles UI updates.
 
-## Specific Migrations
+### How simulation flows
 
-### 1. ~~Extract `disease_display_name()` from `research.rs`~~ — DONE
+Each tick, `engine::tick()` orchestrates subsystems in order:
 
-Moved to `Disease::display_name()` in `state.rs`.
+1. Disease spread (within-region, cross-region)
+2. Disease mutation
+3. `research::tick_research()` — advance/complete research projects
+4. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
+5. Resource income (funding, RP)
+6. Disease emergence (mid-game new threats)
+7. `crisis::generate_crisis()` — random crisis events
+8. Regional collapse
+9. Win/lose conditions
+10. History recording
 
-### 2. ~~Move `project_costs()` and research query functions to `state.rs`~~ — DONE
+After each tick, the game loop calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
-`project_costs()` → `ResearchKind::costs()` method. `available_field_projects()` and `available_bench_projects()` → `GameState` methods. UI no longer imports from `engine.rs`.
+## Engine Module Structure
 
-### 3. ~~Pull UI state machine transitions out of `engine.rs`~~ — DONE
+The engine is organized as an orchestrator + subsystem modules:
 
-`apply_action()` moved from `engine.rs` to `lib.rs`. UI state machine methods extracted to `UiState`. Engine only exports `tick()` and `execute_command()`.
-
-**Approach (completed):** Added methods to `UiState` that handle:
-- ~~Panel open/close/toggle~~ — DONE (`UiState::toggle_panel()`, `UiState::close_panel()`)
-- ~~Selection navigation (next/prev with bounds)~~ — DONE (`UiState::select_next()`, `select_prev()`, `select_left()`, `select_right()`)
-- ~~Wizard step forward/back (Confirm handler for medicines, research, policy)~~ — DONE (`UiState::handle_confirm()`)
-- ~~Translating a Confirm press into a game command (or nothing, if mid-wizard)~~ — DONE (returns `Option<GameCommand>`)
-
-The Confirm flow now works as intended:
 ```
-keypress → action
-  → UiState::handle_confirm() (wizard transitions, returns Option<GameCommand>)
-  → if command → engine::execute_command() (pure game logic, returns CommandResult)
-  → UiState::apply_command_result() (post-command UI navigation)
+engine/
+  mod.rs       — tick() and execute_command(): orchestration and dispatch only
+  research.rs  — Research project commands + per-tick completion logic
+  medicine.rs  — Medicine deployment (dose calculation, efficacy, region effects)
+  policy.rs    — Policy toggle commands + per-tick cost enforcement
+  crisis.rs    — Crisis event generation + resolution
 ```
 
-### 4. ~~Give `apply_command` a result type~~ — DONE
+### Subsystem conventions
 
-`execute_command()` returns `CommandResult { message, success }`. The caller (apply_action) reads the message and puts it in `status_message`. The engine's `execute_command` never touches `UiState`.
+Each subsystem module follows the same pattern:
 
-## Migration Status
+- **Visibility:** `pub(super)` — only `mod.rs` calls into subsystems
+- **Dependencies:** Only `crate::state`. Never other subsystem modules, never UI
+- **Two function types:**
+  - **Tick helpers** (called from `tick()`) — advance ongoing processes. Named `tick_*()`. Examples: `tick_research()`, `tick_enforce_costs()`
+  - **Command handlers** (called from `execute_command()`) — handle player actions. Examples: `start_research()`, `deploy_medicine()`, `toggle_policy()`
+- **No cross-subsystem calls.** If research completion needs to modify medicines (e.g., unlocking one), it does so through `GameState` directly — not by calling into the medicine module. Subsystems share data through state, not through each other.
+- **Tests live with the code they test.** Each subsystem module has its own `#[cfg(test)] mod tests`. Integration tests that exercise multiple subsystems through `tick()` or `apply_action()` stay in `engine/mod.rs`.
 
-This migration is complete. `engine.rs` contains only `tick()` + `execute_command()` with pure game logic. `apply_action()` lives in `lib.rs` as coordination logic. UI state machines live in `UiState` methods. UI modules do not import from engine.
+### Adding a new game system
 
-**Ongoing discipline:** When adding new features, keep this layering intact. New game actions get `GameCommand` variants. New UI flows get `UiState` methods. `engine.rs` should never touch `UiState`.
+1. Create `engine/newsystem.rs` with `pub(super)` functions
+2. Add `mod newsystem;` in `engine/mod.rs`
+3. If it has per-tick behavior: add a `tick_*()` function, call it from `tick()`
+4. If the player interacts with it: add a `GameCommand` variant in `state.rs`, add a handler function, dispatch in `execute_command()`
+5. If tick events need UI feedback: add a `GameEvent` variant, handle in `ui::process_events()`
 
-### Event System
+### What stays in mod.rs
+
+`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. So does logic that spans multiple subsystems or doesn't belong to any single one: disease spread, mutation, win/lose checks, regional collapse, disease emergence, history recording. If any of these grow large enough to warrant extraction, they follow the same subsystem pattern.
+
+## Event System
 
 `tick()` produces `GameEvent` variants (stored in `state.events`, cleared each tick). These are ephemeral signals — `#[serde(skip)]`, not persisted.
 
-**Game-rule transitions live in `tick()`:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `tick()` sets `active_crisis` and `sim_state = Event { was_running }`. These are game rules — the engine decides *when* to pause, not the UI.
+**Game-rule transitions live in `tick()`:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `tick()` sets `active_crisis` and `sim_state = Event { was_running }`. The engine decides *when* to pause, not the UI.
 
-**UI responses + message formatting live in `ui::process_events()`:** After each tick, the game loop calls `process_events()` to: (1) handle UI-specific responses to events (close panels on game-over, reset crisis selection), and (2) format events into human-readable `status_message` strings. It does not mutate `sim_state`, `outcome`, or other game state — only `UiState` fields and `status_message`.
+**UI responses live in `ui::process_events()`:** After each tick, the game loop calls `process_events()` to handle UI-specific reactions (close panels on game-over, reset crisis selection) and format events into status messages. It does not mutate `sim_state`, `outcome`, or other game-rule state.
 
-When adding new event types: if the event triggers a game-rule state transition (pause, mode change), put that in `tick()`. If it needs a UI response (panel changes, selection resets) or a player-visible message, add it to `process_events()`.
+When adding new event types: game-rule transitions go in `tick()`. Presentation responses go in `process_events()`.
 
 ## What NOT to Change
 
-- **Single `GameState` struct** — This is good. One serializable blob = trivial save/load.
-- **`UiState` inside `GameState`** — This is fine. The UI state is part of the save. The issue isn't where it lives in the struct, it's which code touches it.
-- **Clone-and-mutate** — Fine at current scale. Don't optimize prematurely.
+- **Single `GameState` struct** — One serializable blob = trivial save/load.
+- **`UiState` inside `GameState`** — The UI state is part of the save. The issue isn't where it lives in the struct, it's which code touches it.
+- **Clone-and-mutate in `tick()`** — Fine at current scale. Don't optimize prematurely.
 - **Snapshot mode** — Keep this exactly as-is. It's one of the best things about the codebase.
+
+## Completed Migrations
+
+These are done. Listed for historical context only.
+
+1. **UI state machines extracted from engine** — `apply_action()` moved to `lib.rs`. Panel navigation, wizard steps, selection indices all live in `UiState` methods. Engine only exports `tick()` and `execute_command()`.
+2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_bench_projects()` → `GameState` methods. UI no longer imports from engine.
+3. **`CommandResult` type** — `execute_command()` returns `CommandResult { message, success }` instead of directly modifying UI state.
+4. **Engine god file broken up** — Research, medicine, policy, and crisis logic extracted into subsystem modules.
