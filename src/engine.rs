@@ -9,7 +9,7 @@ use crate::state::{
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, MAX_DISEASES,
     QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
-    WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
+    TREATMENT_FRACTION, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     WIN_INFECTED_THRESHOLD,
 };
 
@@ -455,7 +455,11 @@ fn deploy_medicine(
                 }
             }
             DeployTarget::Treat { .. } => {
-                let actual = effective_doses.min(infected);
+                // Treatment is proportional: treats a fraction of infected,
+                // capped by available doses. This scales naturally with
+                // outbreak size — always impactful regardless of infection count.
+                let target_treated = infected * TREATMENT_FRACTION * efficacy;
+                let actual = target_treated.min(state.medicines[medicine_idx].doses);
                 if actual > 0.0 {
                     let inf = get_or_create_infection(region, disease_idx);
                     inf.infected -= actual;
@@ -1269,7 +1273,7 @@ mod tests {
         let expected_immune = state.medicines[0].doses * efficacy;
         state = apply_action(&state, &Action::Confirm);
         // Computed outputs: cost deducted, immunity applied based on efficacy
-        assert_eq!(state.resources.funding, funding_before - 100.0);
+        assert_eq!(state.resources.funding, funding_before - state.medicines[0].cost);
         let na_inf = state.regions[0]
             .infections
             .iter()
@@ -1315,16 +1319,22 @@ mod tests {
             infected_before,
             infected_after
         );
-        assert_eq!(state.resources.funding, funding_before - 100.0);
-        // Doses should have been depleted
+        assert_eq!(state.resources.funding, funding_before - state.medicines[0].cost);
+        // Treatment is proportional — treats TREATMENT_FRACTION * efficacy of infected
         let treated = infected_before - infected_after;
+        assert!(
+            treated > 0.0,
+            "should have treated some people"
+        );
         assert!(
             state.medicines[0].doses < state.medicines[0].max_doses,
             "doses should have been depleted after deployment"
         );
+        // Doses consumed = people treated
         assert!(
             (state.medicines[0].max_doses - state.medicines[0].doses - treated).abs() < 1.0,
-            "doses depleted should equal people treated"
+            "doses depleted ({}) should equal people treated ({})",
+            state.medicines[0].max_doses - state.medicines[0].doses, treated
         );
     }
 
