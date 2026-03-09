@@ -26,7 +26,7 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
     let projects = state.available_projects(track);
 
     if let Some(kind) = projects.get(project_idx) {
-        let (base_personnel, duration, funding_cost) = kind.costs(&state.medicines);
+        let (base_personnel, duration, funding_cost) = kind.costs(&state.medicines, &state.unlocked_techs);
         let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
 
         if state.resources.funding < funding_cost {
@@ -502,8 +502,8 @@ mod tests {
 
         let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
         let broad = ResearchKind::DevelopMedicine { medicine_idx: broad_idx };
-        let (narrow_pers, narrow_ticks, narrow_funding) = narrow.costs(&state.medicines);
-        let (broad_pers, broad_ticks, broad_funding) = broad.costs(&state.medicines);
+        let (narrow_pers, narrow_ticks, narrow_funding) = narrow.costs(&state.medicines, &state.unlocked_techs);
+        let (broad_pers, broad_ticks, broad_funding) = broad.costs(&state.medicines, &state.unlocked_techs);
         assert!(narrow_pers <= broad_pers, "narrow should need fewer personnel");
         assert!(narrow_ticks < broad_ticks, "narrow should be faster");
         assert!(narrow_funding < broad_funding, "narrow should cost less funding");
@@ -673,6 +673,40 @@ mod tests {
         assert!(!state.field_research.is_empty());
         assert!(state.applied_research.is_some());
         assert!(state.basic_research.is_some());
+    }
+
+    #[test]
+    fn rapid_sequencing_halves_sequencing_duration() {
+        use crate::state::{BasicTech, ResearchKind};
+        let state = GameState::new_default(42);
+
+        // Without RapidSequencing
+        let seq = ResearchKind::GenomicSequencing { disease_idx: 0 };
+        let (_, base_duration, _) = seq.costs(&state.medicines, &state.unlocked_techs);
+        assert_eq!(base_duration, 200.0);
+
+        // With RapidSequencing
+        let mut state2 = state.clone();
+        state2.unlocked_techs.push(BasicTech::RapidSequencing);
+        let (_, rapid_duration, _) = seq.costs(&state2.medicines, &state2.unlocked_techs);
+        assert_eq!(rapid_duration, 100.0, "RapidSequencing should halve sequencing time");
+    }
+
+    #[test]
+    fn rapid_sequencing_prereq_requires_sequencing() {
+        use crate::state::BasicTech;
+        let state = GameState::new_default(42);
+        assert!(
+            !BasicTech::RapidSequencing.prerequisites_met(&state),
+            "should not be available without sequencing"
+        );
+
+        let mut state2 = state.clone();
+        state2.diseases[0].sequencing_count = 1;
+        assert!(
+            BasicTech::RapidSequencing.prerequisites_met(&state2),
+            "should be available after sequencing"
+        );
     }
 
     #[test]

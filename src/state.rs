@@ -1272,6 +1272,9 @@ pub enum BasicTech {
     /// Unlocks phage therapy development for bacteria.
     /// Prereq: TargetedDrugDesign + fully studied any bacterium (knowledge >= 1.0).
     PhageTherapy,
+    /// Halves genomic sequencing time for all pathogens.
+    /// Prereq: have sequenced any pathogen (sequencing_count > 0).
+    RapidSequencing,
 }
 
 impl BasicTech {
@@ -1281,6 +1284,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Targeted Drug Design",
             BasicTech::MonoclonalAntibodies => "Monoclonal Antibodies",
             BasicTech::PhageTherapy => "Phage Therapy",
+            BasicTech::RapidSequencing => "Rapid Sequencing",
         }
     }
 
@@ -1290,6 +1294,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Unlocks targeted Antiviral/Antibiotic development",
             BasicTech::MonoclonalAntibodies => "Unlocks high-efficacy mAb drugs for viruses",
             BasicTech::PhageTherapy => "Unlocks phage therapy drugs for bacteria",
+            BasicTech::RapidSequencing => "Halves genomic sequencing time",
         }
     }
 
@@ -1315,6 +1320,10 @@ impl BasicTech {
                         d.knowledge >= 1.0 && d.pathogen_type == PathogenType::Bacterium
                     })
             }
+            BasicTech::RapidSequencing => {
+                // Prereq: have sequenced any pathogen
+                state.diseases.iter().any(|d| d.sequencing_count > 0)
+            }
         }
     }
 
@@ -1324,6 +1333,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
             BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
+            BasicTech::RapidSequencing => "Sequence any pathogen genome",
         }
     }
 
@@ -1333,6 +1343,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
+            BasicTech::RapidSequencing,
         ]
     }
 }
@@ -1342,7 +1353,8 @@ impl ResearchKind {
     ///
     /// DevelopMedicine costs depend on variant: rapid (fast/cheap), standard (slow/expensive),
     /// or broad (multi-target, most expensive).
-    pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
+    /// GenomicSequencing duration is halved if RapidSequencing tech is unlocked.
+    pub fn costs(&self, medicines: &[Medicine], techs: &[BasicTech]) -> (u32, f64, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
@@ -1358,12 +1370,20 @@ impl ResearchKind {
             }
             ResearchKind::ClinicalTrial { .. } => (2, 60.0, 200.0),
             ResearchKind::ManufactureDoses { .. } => (3, 120.0, 250.0),
-            ResearchKind::GenomicSequencing { .. } => (5, 200.0, 500.0),
+            ResearchKind::GenomicSequencing { .. } => {
+                let duration = if techs.contains(&BasicTech::RapidSequencing) {
+                    100.0
+                } else {
+                    200.0
+                };
+                (5, duration, 500.0)
+            }
             ResearchKind::TrainPersonnel => (1, 160.0, 150.0),
             ResearchKind::BasicResearch { tech } => match tech {
                 BasicTech::TargetedDrugDesign => (3, 240.0, 600.0),
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
+                BasicTech::RapidSequencing => (3, 200.0, 400.0),
             },
         }
     }
@@ -1375,8 +1395,9 @@ impl ResearchProject {
     }
 
     /// Speed multiplier with diminishing returns on personnel.
+    /// Techs don't affect base personnel count, so we pass &[] for the tech parameter.
     pub fn speed(&self, medicines: &[Medicine]) -> f64 {
-        let (base, _, _) = self.kind.costs(medicines);
+        let (base, _, _) = self.kind.costs(medicines, &[]);
         personnel_speed(self.personnel_assigned, base)
     }
 }

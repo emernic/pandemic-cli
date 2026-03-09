@@ -167,7 +167,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                         )));
                     }
 
-                    let (personnel, ticks, funding) = kind.costs(&state.medicines);
+                    let (personnel, ticks, funding) = kind.costs(&state.medicines, &state.unlocked_techs);
                     lines.push(Line::from(vec![
                         Span::raw("    "),
                         Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
@@ -258,7 +258,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                         )));
                     }
 
-                    let (personnel, ticks, funding) = kind.costs(&state.medicines);
+                    let (personnel, ticks, funding) = kind.costs(&state.medicines, &state.unlocked_techs);
                     lines.push(Line::from(vec![
                         Span::raw("    "),
                         Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
@@ -291,7 +291,7 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
     let projects = state.available_projects(track);
 
     if let Some(kind) = projects.get(project_idx) {
-        let (base_personnel, ticks, funding) = kind.costs(&state.medicines);
+        let (base_personnel, ticks, funding) = kind.costs(&state.medicines, &state.unlocked_techs);
         let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
         let has_personnel = state.personnel_available() >= personnel;
         let has_funding = state.resources.funding >= funding;
