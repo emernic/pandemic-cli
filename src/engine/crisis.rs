@@ -227,6 +227,42 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::VaccineDispute { neutral_loss, credit_gain });
     }
 
+    // --- Dark comedy events ---
+
+    // Performance review: day 12+ (the board doesn't care about your little pandemic)
+    if day > 12.0 {
+        candidates.push(CrisisKind::PerformanceReview);
+    }
+
+    // Naming rights: day 8+, requires identified disease
+    if day > 8.0 {
+        let nameable: Vec<usize> = state.diseases.iter().enumerate()
+            .filter(|(_, d)| d.detected && d.knowledge > 0.5)
+            .map(|(i, _)| i)
+            .collect();
+        if !nameable.is_empty() {
+            let idx = nameable[rng.r#gen::<usize>() % nameable.len()];
+            let payout = scaled_cost(state, 0.40, 300.0, 2000.0);
+            candidates.push(CrisisKind::NamingRights { disease_idx: idx, payout });
+        }
+    }
+
+    // Intern's discovery: day 5+
+    if day > 5.0 {
+        let cost = scaled_cost(state, 0.10, 100.0, 400.0);
+        candidates.push(CrisisKind::InternDiscovery { cost });
+    }
+
+    // Congressional hearing: day 20+, requires 2+ regions in critical state
+    if day > 20.0 {
+        let crit_regions = state.regions.iter()
+            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > 100_000.0))
+            .count();
+        if crit_regions >= 2 {
+            candidates.push(CrisisKind::CongressionalHearing);
+        }
+    }
+
     // Filter out crisis types that are still on cooldown
     candidates.retain(|k| {
         match state.crisis_cooldowns.get(k.tag()) {
@@ -837,6 +873,128 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
         }
 
+        // --- Dark comedy events ---
+
+        CrisisKind::PerformanceReview => {
+            let total_dead: f64 = state.regions.iter().map(|r| r.dead).sum();
+            let dead_str = crate::format_number(total_dead);
+            CrisisEvent {
+                title: "Quarterly Performance Review".into(),
+                description: format!(
+                    "The N.W.H.O. Board of Directors requires your attendance at the quarterly \
+                     performance review. Current global mortality: {}. Agenda items include \
+                     KPI alignment, travel reimbursement policy, and the break room coffee situation.",
+                    dead_str,
+                ),
+                option_a: CrisisOption {
+                    label: "Attend the review".into(),
+                    description: "Lose 1 day of research progress. +5% POL.".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "\"I'm busy.\"".into(),
+                    description: "Research continues. −5% POL.".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::NamingRights { disease_idx, payout } => {
+            let disease_name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| "the pathogen".into());
+            CrisisEvent {
+                title: "Naming Rights Offer".into(),
+                description: format!(
+                    "PharmaCorp Global offers ${:.0} for the naming rights to {}. Their proposal: \
+                     rename it after the CEO's ex-wife. Their legal team assures you this is \
+                     \"standard brand integration practice.\"",
+                    payout, disease_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Decline".into(),
+                    description: "+3% POL.".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Accept (${:.0})", payout),
+                    description: "Disease renamed. −5% POL.".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::InternDiscovery { cost } => {
+            CrisisEvent {
+                title: "The Intern Has a Theory".into(),
+                description: format!(
+                    "One of your unpaid interns has submitted a 47-page research proposal. \
+                     They found it while reorganizing your filing cabinet. \
+                     Your lead researcher calls it \"possibly brilliant, probably nonsense.\" \
+                     Verification would cost ${:.0}.",
+                    cost,
+                ),
+                option_a: CrisisOption {
+                    label: "File it".into(),
+                    description: "No effect.".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Investigate (${:.0})", cost),
+                    description: "50% chance of a 2-day research breakthrough.".into(),
+                    cost: Some(CrisisCost { funding: *cost, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::CongressionalHearing => {
+            CrisisEvent {
+                title: "Congressional Subpoena".into(),
+                description:
+                    "You have been subpoenaed to appear before the Senate Committee on Pandemic \
+                     Preparedness and Catering Oversight. Your testimony is expected to take \
+                     several days. Attendance is technically mandatory.".into(),
+                option_a: CrisisOption {
+                    label: "Testify in person".into(),
+                    description: "Lose 2 days of all research. +10% POL.".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Send a deputy".into(),
+                    description: "+2% POL. 40% chance of contempt charges.".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::ContemptOfCongress => {
+            let fine = scaled_cost(state, 0.15, 200.0, 600.0);
+            CrisisEvent {
+                title: "Contempt of Congress".into(),
+                description: format!(
+                    "The Senate committee was not satisfied with your deputy's testimony. \
+                     You have been held in contempt. Fine: ${:.0}.",
+                    fine,
+                ),
+                option_a: CrisisOption {
+                    label: format!("Pay the fine (${:.0})", fine),
+                    description: "−8% POL.".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Appeal".into(),
+                    description: "Same cost, less political damage. −3% POL.".into(),
+                    cost: Some(CrisisCost { funding: fine, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+
         // --- Follow-up crisis types ---
 
         CrisisKind::CounterfeitEpidemic { region_idx } => {
@@ -1324,6 +1482,111 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.funding += credit_gain;
             state.resources.political_power -= 0.15;
             format!("Picked a side — ${:.0} from the winner, furious allies of the loser", credit_gain)
+        }
+
+        // --- Dark comedy event resolutions ---
+
+        (CrisisKind::PerformanceReview, 0) => {
+            // Attend — lose 1 day research progress, gain POL
+            let loss = TICKS_PER_DAY as f64;
+            if let Some(proj) = state.field_research.first_mut() {
+                proj.progress = (proj.progress - loss).max(0.0);
+            } else if let Some(proj) = &mut state.applied_research {
+                proj.progress = (proj.progress - loss).max(0.0);
+            } else if let Some(proj) = &mut state.basic_research {
+                proj.progress = (proj.progress - loss).max(0.0);
+            }
+            state.resources.political_power += 0.05;
+            "Review complete. Rating: \"Meets Expectations.\"".into()
+        }
+        (CrisisKind::PerformanceReview, _) => {
+            // Skip — lose POL
+            state.resources.political_power -= 0.05;
+            "Board notes your absence. A memo has been circulated.".into()
+        }
+
+        (CrisisKind::NamingRights { disease_idx, payout }, 0) => {
+            // Decline — gain POL
+            let _ = (disease_idx, payout);
+            state.resources.political_power += 0.03;
+            "Offer declined.".into()
+        }
+        (CrisisKind::NamingRights { disease_idx, payout }, _) => {
+            // Accept — gain money, lose POL, rename the disease
+            state.resources.funding += payout;
+            state.resources.political_power -= 0.05;
+            let old_name = state.diseases.get(*disease_idx)
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| "Unknown".into());
+            let names = ["Karen-7", "BrandSynergy-X", "Profit Margin Syndrome", "CEO's Regret"];
+            let name_idx = (state.tick as usize) % names.len();
+            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
+                disease.name = names[name_idx].to_string();
+            }
+            format!("{} has been officially redesignated as \"{}\". ${:.0} deposited.",
+                old_name, names[name_idx], payout)
+        }
+
+        (CrisisKind::InternDiscovery { .. }, 0) => {
+            // Ignore — nothing happens
+            "Proposal filed.".into()
+        }
+        (CrisisKind::InternDiscovery { .. }, _) => {
+            // Pursue — 50/50 gamble (costs already deducted)
+            let lucky = state.rng.r#gen::<bool>();
+            if lucky {
+                let boost = 2.0 * TICKS_PER_DAY as f64;
+                if let Some(proj) = &mut state.applied_research {
+                    proj.progress += boost;
+                } else if let Some(proj) = state.field_research.first_mut() {
+                    proj.progress += boost;
+                } else if let Some(proj) = &mut state.basic_research {
+                    proj.progress += boost;
+                }
+                "The intern was right. Research accelerated by 2 days.".into()
+            } else {
+                "The intern was not right.".into()
+            }
+        }
+
+        (CrisisKind::CongressionalHearing, 0) => {
+            // Testify honestly — lose 2 days research, gain POL
+            let loss = 2.0 * TICKS_PER_DAY as f64;
+            if let Some(proj) = state.field_research.first_mut() {
+                proj.progress = (proj.progress - loss).max(0.0);
+            }
+            if let Some(proj) = &mut state.applied_research {
+                proj.progress = (proj.progress - loss).max(0.0);
+            }
+            if let Some(proj) = &mut state.basic_research {
+                proj.progress = (proj.progress - loss).max(0.0);
+            }
+            state.resources.political_power += 0.10;
+            "Testimony concluded. Committee thanks you for your cooperation.".into()
+        }
+        (CrisisKind::CongressionalHearing, _) => {
+            // Send deputy — small POL gain, 40% chance of contempt follow-up
+            state.resources.political_power += 0.02;
+            if state.rng.r#gen::<f64>() < 0.40 {
+                let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
+                state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress));
+                "Deputy testified. The committee has requested a follow-up session.".into()
+            } else {
+                "Deputy testified. Committee satisfied.".into()
+            }
+        }
+
+        (CrisisKind::ContemptOfCongress, 0) => {
+            // Pay fine — lose money and POL
+            let fine = scaled_cost(state, 0.15, 200.0, 600.0);
+            state.resources.funding = (state.resources.funding - fine).max(0.0);
+            state.resources.political_power -= 0.08;
+            format!("Fine paid. ${:.0} deducted.", fine)
+        }
+        (CrisisKind::ContemptOfCongress, _) => {
+            // Fight charges — pay same fine but less POL loss
+            state.resources.political_power -= 0.03;
+            "Appeal filed. Legal fees applied.".into()
         }
 
         // --- Follow-up crisis resolutions ---
