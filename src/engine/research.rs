@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn research_requires_funding() {
         let mut state = GameState::new_default(42);
-        // Identify costs $200; set funding to $100 so it fails
+        // Identify costs $350; set funding to $100 so it fails
         state.resources.funding = 100.0;
 
         state = apply_action(&state, &Action::OpenResearch);
@@ -428,10 +428,10 @@ mod tests {
         assert!(state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"));
 
         // Give enough funding, should succeed
-        state.resources.funding = 300.0;
+        state.resources.funding = 500.0;
         state = apply_action(&state, &Action::Confirm); // Try again
         assert!(state.field_research.is_some(), "should start with sufficient funding");
-        assert!(state.resources.funding < 300.0, "funding should be deducted");
+        assert!(state.resources.funding < 500.0, "funding should be deducted");
     }
 
     #[test]

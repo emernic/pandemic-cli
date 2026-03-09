@@ -888,6 +888,11 @@ pub enum DeployTarget {
 }
 
 impl Medicine {
+    /// Deployment cost: base cost + $50 per billion population in the target region.
+    pub fn deploy_cost(&self, region_population: u64) -> f64 {
+        self.cost + region_population as f64 / 1_000_000_000.0 * 50.0
+    }
+
     /// Create a targeted medicine for a disease. Name format: "TherapyType-A", "TherapyType-B", etc.
     pub fn new_targeted(disease_idx: usize, pathogen_type: PathogenType) -> Medicine {
         let therapy = pathogen_type.matched_therapy();
@@ -896,7 +901,7 @@ impl Medicine {
             name: format!("{}-{}", therapy.label(), letter),
             therapy_type: therapy,
             target_diseases: vec![disease_idx],
-            cost: 150.0,
+            cost: 50.0,
             doses: 100_000_000.0,
             max_doses: 100_000_000.0,
             unlocked: false,
@@ -1096,24 +1101,24 @@ impl ResearchKind {
     /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
-            ResearchKind::IdentifyThreat { .. } => (5, 160.0, 200.0),
+            ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (3, 200.0, 300.0)  // narrow: fast and cheap, single-target
+                    (3, 200.0, 500.0)  // narrow: fast and cheap, single-target
                 } else {
-                    (10, 400.0, 600.0) // broad: slow and expensive, covers all
+                    (10, 400.0, 1000.0) // broad: slow and expensive, covers all
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (2, 60.0, 100.0),
-            ResearchKind::ManufactureDoses { .. } => (3, 120.0, 150.0),
-            ResearchKind::GenomicSequencing { .. } => (5, 200.0, 300.0),
-            ResearchKind::TrainPersonnel => (1, 160.0, 100.0),
+            ResearchKind::ClinicalTrial { .. } => (2, 60.0, 200.0),
+            ResearchKind::ManufactureDoses { .. } => (3, 120.0, 250.0),
+            ResearchKind::GenomicSequencing { .. } => (5, 200.0, 500.0),
+            ResearchKind::TrainPersonnel => (1, 160.0, 150.0),
             ResearchKind::BasicResearch { tech } => match tech {
-                BasicTech::TargetedDrugDesign => (3, 240.0, 400.0),
-                BasicTech::MonoclonalAntibodies => (5, 360.0, 600.0),
-                BasicTech::PhageTherapy => (5, 360.0, 600.0),
+                BasicTech::TargetedDrugDesign => (3, 240.0, 600.0),
+                BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
+                BasicTech::PhageTherapy => (5, 360.0, 900.0),
             },
         }
     }
@@ -1726,10 +1731,11 @@ impl UiState {
                 let target_selection = self.panel_selection;
                 let med = &state.medicines[medicine_idx];
                 if let Some(target) = med.decode_deploy_target(target_selection) {
-                    if state.resources.funding < med.cost {
+                    let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
+                    if state.resources.funding < deploy_cost {
                         self.status_message = Some(
                             format!("Insufficient funds! Need ${:.0}, have ${:.0}",
-                                med.cost, state.resources.funding),
+                                deploy_cost, state.resources.funding),
                         );
                         None
                     } else {
@@ -2049,7 +2055,7 @@ impl GameState {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
             target_diseases: all_disease_indices,
-            cost: 300.0,
+            cost: 100.0,
             doses: 200_000_000.0,
             max_doses: 200_000_000.0,
             unlocked: false,
@@ -2063,7 +2069,7 @@ impl GameState {
             sim_state: SimState::Running,
             rng,
             resources: Resources {
-                funding: 300.0,
+                funding: 500.0,
                 personnel: 20,
                 political_power: 0.0,
                 pol_crisis_modifier: 0.0,
@@ -2204,8 +2210,6 @@ impl GameState {
             };
             income += BASE_FUNDING_INCOME * region_share * healthy_frac * travel_ban_factor;
         }
-        // Political Power bonus: up to 50% more funding at full POL
-        income *= 1.0 + self.resources.political_power * 0.5;
         income
     }
 

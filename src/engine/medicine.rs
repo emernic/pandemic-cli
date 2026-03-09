@@ -43,7 +43,7 @@ pub(super) fn deploy_medicine(
         return (false, Some(format!("{region_name} has collapsed — deployment impossible")), false);
     }
     let med = &state.medicines[medicine_idx];
-    let cost = med.cost;
+    let cost = med.deploy_cost(state.regions[region_idx].population);
     let med_name = med.name.clone();
     let therapy_type = med.therapy_type;
     let target = med.decode_deploy_target(target_selection);
