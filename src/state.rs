@@ -918,6 +918,8 @@ pub enum MedicineUiState {
     SelectRegion { medicine_idx: usize },
     SelectTarget { medicine_idx: usize, region_idx: usize },
     ConfirmDeploy { medicine_idx: usize, region_idx: usize, target_selection: usize },
+    /// Shown after a deployment completes, displaying the result prominently.
+    DeployResult { medicine_idx: usize, message: String, adverse: bool },
 }
 
 /// Policy panel UI state machine.
@@ -1004,6 +1006,10 @@ impl UiState {
         match self.open_panel {
             Panel::Medicines => {
                 match self.medicine_ui.clone() {
+                    Some(MedicineUiState::DeployResult { medicine_idx, .. }) => {
+                        self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                        self.panel_selection = 0;
+                    }
                     Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
                         self.medicine_ui = Some(MedicineUiState::SelectTarget {
                             medicine_idx,
@@ -1092,7 +1098,9 @@ impl UiState {
                         .num_deploy_targets()
                         .saturating_sub(1)
                 }
-                Some(MedicineUiState::ConfirmDeploy { .. }) | None => 0,
+                Some(MedicineUiState::ConfirmDeploy { .. })
+                | Some(MedicineUiState::DeployResult { .. })
+                | None => 0,
             },
             Panel::Research => match &self.research_ui {
                 Some(ResearchUiState::BrowseCategories) => 1,
@@ -1270,6 +1278,11 @@ impl UiState {
                     target_selection,
                 })
             }
+            Some(MedicineUiState::DeployResult { medicine_idx, .. }) => {
+                self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                self.panel_selection = 0;
+                None
+            }
             None => None,
         }
     }
@@ -1322,12 +1335,18 @@ impl UiState {
 
     /// Update UI navigation after a game command completes.
     /// Called by the action handler after execute_command returns.
-    pub fn apply_command_result(&mut self, cmd: &GameCommand, success: bool) {
+    pub fn apply_command_result(&mut self, cmd: &GameCommand, success: bool, message: &Option<String>) {
         match cmd {
             GameCommand::DeployMedicine { medicine_idx, .. } => {
                 if success {
+                    let msg = message.clone().unwrap_or_default();
+                    let adverse = msg.contains("ADVERSE");
                     self.medicine_ui =
-                        Some(MedicineUiState::SelectRegion { medicine_idx: *medicine_idx });
+                        Some(MedicineUiState::DeployResult {
+                            medicine_idx: *medicine_idx,
+                            message: msg,
+                            adverse,
+                        });
                     self.panel_selection = 0;
                 }
             }
