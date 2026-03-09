@@ -63,16 +63,21 @@ pub fn tick(state: &GameState) -> GameState {
         new.resources.attrition_accum = 0.0;
     }
 
-    // Political Power: ramps based on severity + time.
+    // Political Power: ramps based on severity + time + crisis modifier.
     // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
     // Time = linear ramp reaching 0.4 at day 30 (baseline even if player contains well).
+    // Crisis modifier = accumulated POL changes from crisis resolutions, decays over time.
     {
         let initial_pop = new.initial_population();
         let death_frac = if initial_pop > 0.0 { new.total_dead() / initial_pop } else { 0.0 };
         let infected_frac = if initial_pop > 0.0 { new.total_infected() / initial_pop } else { 0.0 };
         let time_frac = new.tick as f64 / (30.0 * TICKS_PER_DAY);
         let severity = death_frac.sqrt() * 3.0 + infected_frac.sqrt() * 1.5;
-        new.resources.political_power = (severity + time_frac * 0.4).clamp(0.0, 1.0);
+        // Decay crisis modifier toward 0 (half-life ~5 days)
+        let decay = 0.5_f64.powf(1.0 / (5.0 * TICKS_PER_DAY));
+        new.resources.pol_crisis_modifier *= decay;
+        new.resources.political_power =
+            (severity + time_frac * 0.4 + new.resources.pol_crisis_modifier).clamp(0.0, 1.0);
     }
 
     // POL-based personnel: ~1 person per 15 days at max POL
