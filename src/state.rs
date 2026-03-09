@@ -121,11 +121,16 @@ pub struct GameState {
 }
 
 /// A point-in-time snapshot for dashboard sparkline charts.
+/// Values are player-visible estimates (screened/detected), not ground truth.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HistorySnapshot {
     pub tick: u64,
-    pub total_infected: f64,
-    pub total_dead: f64,
+    /// Screened infected count (visibility depends on screening policy level).
+    #[serde(alias = "total_infected")]
+    pub screened_infected: f64,
+    /// Dead from detected diseases only (unidentified diseases not counted).
+    #[serde(alias = "total_dead")]
+    pub detected_dead: f64,
 }
 
 /// Record a history snapshot every this many ticks (~1 hour of game time).
@@ -3137,8 +3142,10 @@ impl GameState {
         self.regions.iter().map(|r| r.total_immune()).sum()
     }
 
-    /// Infection trend: ratio of current infected to infected ~1 day ago.
+    /// Infection trend: ratio of current screened infected to ~1 day ago.
     /// Returns None if not enough history. > 1.0 means growing, < 1.0 shrinking.
+    /// Uses screened values consistently (both current and historical are
+    /// player-visible estimates, not ground truth).
     pub fn infection_trend(&self) -> Option<f64> {
         // Look back ~1 day (120 ticks / HISTORY_INTERVAL = 24 entries)
         let lookback = (TICKS_PER_DAY as usize) / (HISTORY_INTERVAL as usize);
@@ -3146,11 +3153,11 @@ impl GameState {
             return None;
         }
         let past = &self.history[self.history.len() - lookback];
-        if past.total_infected < 100.0 {
+        if past.screened_infected < 100.0 {
             return None; // too few infections to show a meaningful trend
         }
-        let current = self.total_infected();
-        Some(current / past.total_infected)
+        let current = self.total_infected_screened();
+        Some(current / past.screened_infected)
     }
 
     /// Whether a specific disease has any active infections globally.
