@@ -1637,7 +1637,7 @@ mod tests {
         state.diseases[0].lethality = 0.0001;
         state.diseases[0].recovery_rate = 0.003;
         let original_infectivity = state.diseases[0].infectivity;
-        // Run enough ticks for mutation to be likely (~5 expected at 0.0002/tick × 25000).
+        // Run enough ticks for mutation to be very likely (~25 expected at 0.001/tick × 25000).
         // Manually reset any new diseases that spawn to prevent stacking deaths.
         for _ in 0..25000 {
             if state.outcome != GameOutcome::Playing {
@@ -1659,7 +1659,7 @@ mod tests {
         }
         assert!(
             state.diseases[0].strain_generation > 0,
-            "RNA virus should have mutated at least once (ran {} ticks, rate=0.0002/tick)",
+            "RNA virus should have mutated at least once (ran {} ticks, rate=0.001/tick)",
             state.tick,
         );
         assert_ne!(
