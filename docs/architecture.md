@@ -101,12 +101,13 @@ One JSON file = one complete save. Includes simulation state (outbreaks, researc
 The game can be run non-interactively for testing:
 
 ```
-pandemic-cli --snapshot save.json              # dump what the screen looks like
-pandemic-cli --snapshot save.json --key "r"    # apply a keypress, dump result
-pandemic-cli --snapshot save.json --days 1     # advance 1 day, dump result
+pandemic-cli --snapshot                        # dump the screen and auto-create a resumable save under ./saves/
+pandemic-cli saves/playtest.json --snapshot    # load/save an explicit snapshot playthrough file
+pandemic-cli saves/playtest.json --snapshot --key "r"
+pandemic-cli saves/playtest.json --snapshot --days 1
 ```
 
-Each invocation: load state → apply inputs → output new state as text. Stateless. This is how Claude and automated tests interact with the game.
+Each invocation: load state → apply inputs → output new state as text → write updated state back to the snapshot save file. If no save path is passed, the CLI auto-creates one under `./saves/` and prints the resume command before the rendered screen. This is how Claude and manual playtesting interact with the game.
 
 ## Determinism
 
