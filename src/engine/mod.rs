@@ -88,10 +88,10 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Low funding warning: warn when net burn rate will exhaust funds within ~5 ticks.
-    // Only warn if total costs exceed income (net negative).
+    // Only warn if there are active policies that could actually be suspended.
     let total_costs = policy_cost + upkeep;
     let net_burn = total_costs - funding_income;
-    if total_costs > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 5.0 {
+    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 5.0 {
         new.events.push(GameEvent::FundingWarning);
     }
 
@@ -1345,6 +1345,20 @@ mod tests {
         assert!(
             !state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should not warn when funding is high"
+        );
+    }
+
+    #[test]
+    fn no_funding_warning_without_active_policies() {
+        let mut state = GameState::new_default(42);
+        // No policies active — only personnel upkeep creates costs.
+        // Even with zero funding, warning shouldn't fire because there's
+        // nothing to suspend.
+        state.resources.funding = 0.0;
+        state = tick(&state);
+        assert!(
+            !state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
+            "should not warn about policy suspension when no policies are active"
         );
     }
 
