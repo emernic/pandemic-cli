@@ -1301,8 +1301,8 @@ pub enum CrisisKind {
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
     /// Public refusing vaccines — education campaign or mandate.
     VaccineHesitancy { region_idx: usize },
-    /// Corrupt official siphoning funds — investigate or ignore.
-    CorruptOfficial,
+    /// Corrupt official siphoning funds — amount locked at generation time.
+    CorruptOfficial { stolen: f64 },
     /// Powerful nation wants your research data — share or refuse.
     ResourceDiversion { disease_idx: usize },
     /// Hospital workers collapsing — reduce shifts or push through.
@@ -1341,7 +1341,7 @@ impl CrisisKind {
             CrisisKind::MediaPanic => "media",
             CrisisKind::TrialShortcut { .. } => "trial",
             CrisisKind::VaccineHesitancy { .. } => "hesitancy",
-            CrisisKind::CorruptOfficial => "corrupt",
+            CrisisKind::CorruptOfficial { .. } => "corrupt",
             CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::WhistleblowerReport { .. } => "whistleblower",
