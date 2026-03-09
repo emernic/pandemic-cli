@@ -792,13 +792,11 @@ impl TransmissionVector {
     }
 
     /// Infectivity multiplier when hospital surge is active.
-    /// Contact diseases spread faster in hospitals (healthcare workers exposed).
+    /// Concentrating patients in hospitals increases exposure for staff and
+    /// visitors regardless of transmission vector — a real trade-off against
+    /// the halved lethality.
     pub fn hospital_infectivity_factor(&self) -> f64 {
-        match self {
-            TransmissionVector::Airborne => 1.0,
-            TransmissionVector::Waterborne => 1.0,
-            TransmissionVector::Contact => 1.15,    // 15% increase
-        }
+        1.25 // 25% increase for all transmission types
     }
 
     /// Infectivity multiplier when water sanitation is active.

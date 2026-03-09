@@ -161,7 +161,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL)),
         (2, "Hospital Surge", policy.hospital_surge,
          format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
-         "Halves lethality (may increase contact spread)", Some(HOSPITAL_SURGE_PERSONNEL)),
+         "Halves lethality, +25% spread (hospital exposure)", Some(HOSPITAL_SURGE_PERSONNEL)),
         (3, "Border Controls", policy.border_controls,
          format!("${:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL),
          "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL)),
