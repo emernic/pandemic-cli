@@ -53,6 +53,9 @@ pub struct GameState {
     /// Active crisis event requiring player decision. Game pauses while active.
     #[serde(default)]
     pub active_crisis: Option<CrisisEvent>,
+    /// Tag of the most recently resolved crisis, used to prevent back-to-back repeats.
+    #[serde(default)]
+    pub last_crisis_tag: Option<String>,
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -930,6 +933,21 @@ pub enum CrisisKind {
     MutationSurge { disease_idx: usize },
 }
 
+impl CrisisKind {
+    /// Short tag identifying the crisis type (ignoring variant data).
+    /// Used for cooldown tracking to prevent back-to-back repeats.
+    pub fn tag(&self) -> &'static str {
+        match self {
+            CrisisKind::SupplyDisruption { .. } => "supply",
+            CrisisKind::LabAccident => "lab",
+            CrisisKind::PoliticalPressure { .. } => "political",
+            CrisisKind::PersonnelCrisis { .. } => "personnel",
+            CrisisKind::InternationalAid { .. } => "aid",
+            CrisisKind::MutationSurge { .. } => "mutation",
+        }
+    }
+}
+
 /// Crisis events start appearing after this many ticks.
 pub const CRISIS_MIN_TICK: u64 = 200;
 /// Average ticks between crises (~2 days).
@@ -1649,6 +1667,7 @@ impl GameState {
             outcome: GameOutcome::Playing,
             events: vec![],
             active_crisis: None,
+            last_crisis_tag: None,
             history: vec![],
             ui: UiState {
                 open_panel: Panel::None,
