@@ -396,17 +396,28 @@ impl RegionPolicy {
     /// Funding cost adjusted for regional traits.
     /// TradeDependent: travel ban costs 2x.
     /// Always pass the region's traits — use `&[]` only when no region context exists.
-    pub fn funding_cost(&self, traits: &[RegionTrait]) -> f64 {
+    /// Per-tick funding cost of a single boolean policy, accounting for regional traits.
+    /// Does NOT include screening (which has its own `ScreeningLevel::funding_cost()`).
+    pub fn bool_policy_cost(policy_idx: usize, traits: &[RegionTrait]) -> f64 {
         let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
-        let mut cost = 0.0;
-        if self.travel_ban {
-            cost += if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
+        match policy_idx {
+            0 => if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST },
+            1 => QUARANTINE_COST,
+            2 => HOSPITAL_SURGE_COST,
+            3 => BORDER_CONTROLS_COST,
+            4 => WATER_SANITATION_COST,
+            8 => MARTIAL_LAW_COST,
+            _ => 0.0,
         }
-        if self.quarantine { cost += QUARANTINE_COST; }
-        if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
-        if self.border_controls { cost += BORDER_CONTROLS_COST; }
-        if self.water_sanitation { cost += WATER_SANITATION_COST; }
-        if self.martial_law { cost += MARTIAL_LAW_COST; }
+    }
+
+    pub fn funding_cost(&self, traits: &[RegionTrait]) -> f64 {
+        let mut cost = 0.0;
+        for idx in [0, 1, 2, 3, 4, 8] {
+            if self.get_bool(idx) {
+                cost += Self::bool_policy_cost(idx, traits);
+            }
+        }
         cost += self.screening.funding_cost();
         cost
     }
@@ -2233,6 +2244,10 @@ pub enum ResearchUiState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
+    /// Generic list index — "which item is selected in the current view."
+    /// Meaning depends on the active panel and wizard step (e.g., medicine index,
+    /// region index, policy index). Always bounded by `panel_selection_max()` and
+    /// reset to 0 on every wizard step transition.
     pub panel_selection: usize,
     #[serde(default)]
     pub medicine_ui: Option<MedicineUiState>,

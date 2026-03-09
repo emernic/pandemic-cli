@@ -379,9 +379,9 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             region_idx,
             target_selection,
         } => {
-            let (nav_back, msg, adverse) =
+            let (success, msg, adverse) =
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, *target_selection);
-            CommandResult { message: msg, success: nav_back, adverse }
+            CommandResult { message: msg, success, adverse }
         }
         GameCommand::StartResearch { track, project_idx, double_personnel } => {
             let (ok, msg) = research::start_research(state, *track, *project_idx, *double_personnel);

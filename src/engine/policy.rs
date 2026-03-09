@@ -1,13 +1,13 @@
 use crate::state::{
-    GameEvent, GameState, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, policy_display_name,
-    BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
+    GameEvent, GameState, RegionPolicy, RegionTrait, ScreeningLevel, policy_display_name,
+    BORDER_CONTROLS_PERSONNEL,
     HEALTHCARE_INVESTMENT_COST,
-    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
+    HOSPITAL_SURGE_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
-    QUARANTINE_COST, QUARANTINE_PERSONNEL,
-    TICKS_PER_DAY, TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
-    WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
+    QUARANTINE_PERSONNEL,
+    TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL,
+    WATER_SANITATION_PERSONNEL,
 };
 
 /// Enforce policy costs: suspend most expensive policies one at a time
@@ -20,16 +20,13 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
         // Tracks (region_idx, policy_idx, cost) — no string matching.
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
-            let trade_dep = state.regions.get(i).is_some_and(|r| r.has_trait(RegionTrait::TradeDependent));
-            let travel_ban_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
-            let bool_costs: &[(usize, f64)] = &[
-                (0, travel_ban_cost), (1, QUARANTINE_COST), (2, HOSPITAL_SURGE_COST),
-                (3, BORDER_CONTROLS_COST), (4, WATER_SANITATION_COST),
-                (8, MARTIAL_LAW_COST),
-            ];
-            for &(idx, cost) in bool_costs {
-                if p.get_bool(idx) && (best.is_none() || cost > best.unwrap().2) {
-                    best = Some((i, idx, cost));
+            let traits = state.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
+            for idx in [0, 1, 2, 3, 4, 8] {
+                if p.get_bool(idx) {
+                    let cost = RegionPolicy::bool_policy_cost(idx, traits);
+                    if best.is_none() || cost > best.unwrap().2 {
+                        best = Some((i, idx, cost));
+                    }
                 }
             }
             let scr_cost = p.screening.funding_cost();
@@ -103,24 +100,18 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     let available_personnel = state.personnel_available();
     let region_traits = state.regions.get(region_idx).map(|r| r.traits.as_slice()).unwrap_or(&[]);
     let low_infra = region_traits.contains(&RegionTrait::LowInfrastructure);
-    let trade_dep = region_traits.contains(&RegionTrait::TradeDependent);
     match policy_idx {
         // Boolean policies (0-4): identical toggle logic, different metadata.
         0..=4 => {
-            let (name, cost, personnel) = match policy_idx {
-                0 => ("Travel Ban",
-                    if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST },
-                    TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 }),
-                1 => ("Quarantine", QUARANTINE_COST,
-                    QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 }),
-                2 => ("Hospital Surge", HOSPITAL_SURGE_COST,
-                    HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 }),
-                3 => ("Border Controls", BORDER_CONTROLS_COST,
-                    BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 }),
-                4 => ("Water Sanitation", WATER_SANITATION_COST,
-                    WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 }),
+            let (name, personnel) = match policy_idx {
+                0 => ("Travel Ban", TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 }),
+                1 => ("Quarantine", QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 }),
+                2 => ("Hospital Surge", HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 }),
+                3 => ("Border Controls", BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 }),
+                4 => ("Water Sanitation", WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 }),
                 _ => unreachable!(),
             };
+            let cost = RegionPolicy::bool_policy_cost(policy_idx, region_traits);
             if state.policies[region_idx].get_bool(policy_idx) {
                 state.policies[region_idx].set_bool(policy_idx, false);
                 (Some(format!("{name} disabled in {region_name}")), true)
