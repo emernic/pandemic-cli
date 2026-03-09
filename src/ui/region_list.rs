@@ -153,9 +153,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let rect = Rect::new(x, y, region_width, region_height);
         let selected = idx == state.ui.map_selection;
         let visibility = state.screening_visibility(idx);
-        let shows_immune = state.policies.get(idx)
-            .map(|p| p.screening.shows_immune())
-            .unwrap_or(false);
+        let shows_immune = state.screening_shows_immune(idx);
         render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune);
     }
 
@@ -375,9 +373,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     let pop = region.population as f64;
     let visibility = state.screening_visibility(idx);
     let infected = region.screened_infected(&state.diseases, visibility);
-    let shows_immune = state.policies.get(idx)
-        .map(|p| p.screening.shows_immune())
-        .unwrap_or(false);
+    let shows_immune = state.screening_shows_immune(idx);
     let immune = if shows_immune { region.detected_immune(&state.diseases) } else { 0.0 };
     let dead = region.detected_dead(&state.diseases);
     let alive = pop - dead; // alive based on detected deaths only
