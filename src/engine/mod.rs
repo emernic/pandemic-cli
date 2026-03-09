@@ -1462,6 +1462,57 @@ mod tests {
     }
 
     #[test]
+    fn pol_based_personnel_accumulation() {
+        let mut state = GameState::new_default(42);
+        // Pre-load the accumulator so even modest POL pushes it over 1.0.
+        // This tests the mechanism (POL → accum → personnel) without
+        // needing thousands of ticks for POL to build up naturally.
+        state.resources.personnel_accum = 0.99;
+        state.resources.political_power = 0.50;
+        let initial_personnel = state.resources.personnel;
+
+        // rate = 0.50 / (3.0 * 120) = 0.00139/tick. Starting at 0.99,
+        // we need ~8 ticks to cross 1.0. Run 20 to be safe.
+        let mut s = state;
+        for _ in 0..20 {
+            s = tick(&s);
+        }
+
+        let gained = s.resources.personnel - initial_personnel;
+        assert!(
+            gained >= 1,
+            "accumulator should convert to personnel: was {initial_personnel}, \
+             now {}, accum {:.3}",
+            s.resources.personnel, s.resources.personnel_accum
+        );
+    }
+
+    #[test]
+    fn pol_based_personnel_zero_pol_no_gain() {
+        let mut state = GameState::new_default(42);
+        // Clear infections so POL target stays near 0
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+        state.resources.political_power = 0.0;
+        state.resources.personnel_accum = 0.0;
+        let initial_personnel = state.resources.personnel;
+
+        let mut s = state;
+        for _ in 0..500 {
+            s = tick(&s);
+        }
+
+        // With no infections, POL target is near 0 (only time_frac contributes).
+        // Personnel gain should be minimal.
+        let gained = s.resources.personnel - initial_personnel;
+        assert!(
+            gained <= 1,
+            "with zero POL and no infections, personnel should barely increase, gained {gained}"
+        );
+    }
+
+    #[test]
     fn policy_quarantine_reduces_infections() {
         let mut state = GameState::new_default(42);
         let ri = primary_outbreak_region(&state);
