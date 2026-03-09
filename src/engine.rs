@@ -1222,7 +1222,11 @@ mod tests {
     #[test]
     fn disease_can_spread_into_vaccinated_region() {
         let mut state = GameState::new_default(42);
-        state.regions[0].infections.push(RegionDiseaseState {
+        // Find a region WITHOUT disease 0 and pre-vaccinate it
+        let clean_region = (0..state.regions.len())
+            .find(|&i| !state.regions[i].infections.iter().any(|inf| inf.disease_idx == 0))
+            .expect("should have an uninfected region");
+        state.regions[clean_region].infections.push(RegionDiseaseState {
             disease_idx: 0,
             infected: 0.0,
             dead: 0.0,
@@ -1232,14 +1236,14 @@ mod tests {
         for _ in 0..200 {
             s = tick(&s);
         }
-        let na_imm = s.regions[0]
+        let imm = s.regions[clean_region]
             .infections
             .iter()
             .find(|i| i.disease_idx == 0)
             .map(|i| i.immune)
             .unwrap_or(0.0);
         assert!(
-            na_imm >= 100_000_000.0,
+            imm >= 100_000_000.0,
             "immune count should be preserved"
         );
     }
@@ -1261,14 +1265,17 @@ mod tests {
             Some(MedicineUiState::SelectTarget { .. })
         ));
         let funding_before = state.resources.funding;
+        let efficacy = state.medicines[0].therapy_type.efficacy(&state.diseases[0].pathogen_type);
+        let expected_immune = state.medicines[0].doses * efficacy;
         state = apply_action(&state, &Action::Confirm);
+        // Computed outputs: cost deducted, immunity applied based on efficacy
         assert_eq!(state.resources.funding, funding_before - 100.0);
         let na_inf = state.regions[0]
             .infections
             .iter()
             .find(|i| i.disease_idx == 0)
             .unwrap();
-        assert_eq!(na_inf.immune, 100_000.0);
+        assert_eq!(na_inf.immune, expected_immune);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
@@ -1453,7 +1460,8 @@ mod tests {
     fn medicine_zero_targets_refused() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
-        // Deploy to North America (region 0) which has no infections for disease 0
+        // Clear region 0 infections so we can test treating with zero targets
+        state.regions[0].infections.clear();
         let infections_before = state.regions[0].infections.len();
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm); // select medicine 0
@@ -1603,7 +1611,11 @@ mod tests {
 
     #[test]
     fn map_navigation_with_panel_open() {
-        let state = GameState::new_default(42);
+        let mut state = GameState::new_default(42);
+        // Need at least 2 diseases so the panel has items to navigate
+        state.diseases.push(crate::state::Disease::generate(
+            &mut state.rng.clone(), crate::state::PathogenType::Bacterium, &[], true,
+        ));
         // Open threats panel — up/down should navigate panel, not map
         let s = apply_action(&state, &Action::OpenThreats);
         assert_eq!(s.ui.map_selection, 0);
@@ -2351,10 +2363,17 @@ mod tests {
 
     #[test]
     fn narrow_medicine_cheaper_to_develop_than_broad() {
-        let state = GameState::new_default(1);
-        // Medicine 0 = targeted (1 target), last medicine = Broad-Spectrum (all targets)
-        let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
+        let mut state = GameState::new_default(1);
+        // Add a second disease so the broad-spectrum medicine has multiple targets
+        let disease2 = crate::state::Disease::generate(
+            &mut state.rng.clone(), crate::state::PathogenType::Bacterium, &[], true,
+        );
+        state.diseases.push(disease2);
+        // Update broad-spectrum to target both diseases
         let broad_idx = state.medicines.len() - 1;
+        state.medicines[broad_idx].target_diseases.push(1);
+        // Medicine 0 = targeted (1 target), last medicine = Broad-Spectrum (2 targets)
+        let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
         let broad = ResearchKind::DevelopMedicine { medicine_idx: broad_idx };
         let (narrow_rp, narrow_pers, narrow_ticks) = narrow.costs(&state.medicines);
         let (broad_rp, broad_pers, broad_ticks) = broad.costs(&state.medicines);
