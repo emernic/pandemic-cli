@@ -105,7 +105,7 @@ pub(super) fn deploy_medicine(
                     }
                     state.resources.funding -= cost;
                     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
-                    deploy_feedback(&med_name, &region_name, "Vaccinated", actual, cost, adverse, efficacy)
+                    deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse, efficacy)
                 } else {
                     format!("No susceptible population in {region_name}")
                 }
