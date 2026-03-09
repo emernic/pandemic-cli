@@ -1308,6 +1308,16 @@ impl GameState {
         Some((disease_idx, region_idx))
     }
 
+    /// Whether any tested/unlocked medicines targeting this disease have fallen behind
+    /// the current strain generation (i.e., mutation has reduced their efficacy).
+    pub fn has_outdated_medicine(&self, disease_idx: usize) -> bool {
+        self.medicines.iter().any(|m| {
+            m.target_diseases.contains(&disease_idx)
+                && (m.tested_against.contains(&disease_idx) || m.unlocked)
+                && m.strain_efficacy(disease_idx, &self.diseases) < 1.0
+        })
+    }
+
     /// Generate strategic tips based on what the player did (or didn't do) before defeat.
     /// Returns up to 2 actionable tips, most impactful first.
     pub fn defeat_tips(&self) -> Vec<String> {

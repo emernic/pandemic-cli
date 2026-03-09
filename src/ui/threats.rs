@@ -150,12 +150,7 @@ fn push_mutation_indicator(
     if disease.strain_generation == 0 {
         return;
     }
-    let any_outdated = state.medicines.iter().any(|m| {
-        m.target_diseases.contains(&disease_idx)
-            && (m.tested_against.contains(&disease_idx) || m.unlocked)
-            && m.strain_efficacy(disease_idx, &state.diseases) < 1.0
-    });
-    if any_outdated {
+    if state.has_outdated_medicine(disease_idx) {
         spans.push(Span::styled(
             "  Medicines outdated!".to_string(),
             Style::default().fg(Color::Red),
