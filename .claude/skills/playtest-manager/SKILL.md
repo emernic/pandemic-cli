@@ -66,7 +66,7 @@ For each finding, follow this process:
 gh issue list --state all --search "<keywords>"
 ```
 
-Search broadly — the same problem may be described differently across playtests.
+Search broadly — the same problem may be described differently across playtests. The issue tracker is the source of truth for what's been reported before — you don't need to memorize past findings, just search effectively.
 
 ### 4b. If an Existing Open Issue Matches
 
@@ -79,10 +79,11 @@ gh issue comment <number> --body "$(cat <<'EOF'
 EOF
 )"
 
-# Get repo from git remote (don't hardcode)
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 gh api "repos/$REPO/issues/<number>/reactions" -f content='+1'
 ```
+
+The 👍 count and "**Playtest confirmation**" comments are how signal strength is tracked. Agents using `/pick-up-issue` weight these when selecting work.
 
 **Check if this issue should be priority-bumped.** If an issue has been confirmed by 3+ playtests and is currently P2 or P3, bump it:
 
@@ -127,7 +128,7 @@ If `NOT_PLANNED`, do NOT reopen. If you believe the rejection was wrong, file a 
 
 File a new issue using the `/create-issue` skill. Include the `playtest-feedback` label.
 
-**Root causes before symptoms.** Before filing, ask: is this finding a root cause or a symptom of something bigger? If the dose scaling is broken (#46), don't file separate issues for "medicine feels pointless," "can't tell if deployment worked," and "no reason to manufacture more" — those are all symptoms of the dose scaling problem. File one issue (or confirm the existing one) and note the symptoms in the comment.
+**Root causes before symptoms.** Before filing, ask: is this finding a root cause or a symptom of something bigger? Don't file five separate issues for five manifestations of the same underlying problem. File one issue (or confirm the existing one) for the root cause and note the symptoms in the comment.
 
 ## Step 5: Summary
 
@@ -155,57 +156,3 @@ After triaging all findings, output a summary:
 ### Key Themes
 <2-3 sentences on the strongest signals from this playtest>
 ```
-
-## Step 6: Update This Catalog
-
-**This is mandatory. Do not skip it.**
-
-After each playtest, update the "Known Recurring Themes" section below:
-- **Promote** issues that moved from single observation to multiple confirmations
-- **Add** new themes that emerged from this playtest
-- **Mark resolved** any themes whose issues have been closed and genuinely fixed (confirmed by this playtest not reproducing the problem)
-- **Update issue numbers** if issues were consolidated or replaced
-- Commit the updated skill file to your branch (or create a quick PR if on a detached playtest branch)
-
-The catalog is only useful if it stays current. If you skip this step, the next agent starts from stale information.
-
-## Known Recurring Themes
-
-These are the problems that have come up across multiple playtest sessions. When you see these in a new playtest, confirm the existing issue and move on — don't file duplicates.
-
-*Last updated: 2026-03-08 (sessions 3, 4, 5)*
-
-### Confirmed Repeatedly (strong signal)
-
-1. **Medicine dose scaling** (#46) — 100K doses vs millions of infections makes the medicine system feel pointless. Every playtest persona has flagged this. THE root cause of most "player agency" complaints.
-
-2. **Resources pile up with nothing to spend them on** (#47) — RP and personnel accumulate mid-game with no meaningful sink. Downstream of limited research options per disease.
-
-3. **No deployment feedback** (#358) — after deploying medicine, player can't tell if it worked. No visible impact on infection numbers, no adverse effect notification for untested medicines.
-
-4. **Mutation events are noise** (#287) — "Unknown Pathogen #X has mutated" means nothing to the player. No visible consequence, no actionable information.
-
-5. **Crisis events repeat identically** (#359) — same Staff Burnout / International Aid with same text after a few days. Becomes a chore to click through.
-
-### Confirmed Multiple Times (moderate signal)
-
-6. **One medicine per class is too limiting** (#313) — two bacteria but only one antibiotic available. Forces Broad-Spectrum as only option for second bacterium.
-
-7. **Mutations outpace the pipeline** (#377) — medicine is outdated before first deployment. Mutation interval shorter than research pipeline.
-
-8. **Win/loss conditions never communicated** (#378) — player doesn't know what winning looks like or how close they are to losing.
-
-9. **"Vaccinate susceptible" offered for antibiotics** (#375) — biologically nonsensical terminology.
-
-10. **No feedback on policy-disease matching** (#376) — Water Sanitation says "halves waterborne spread" but player can't tell which diseases are waterborne.
-
-11. **"CONTAINED 0%" misleading** (#393) — threat status says "CONTAINED" while thousands are dying because the threshold is based on fraction of 3B total population.
-
-### Early/Single Observations (weak signal — watch for repeats)
-
-12. **Region differentiation** (#324) — six identical regions waste the map's strategic potential.
-13. **Knowledge/discovery system** (#325) — progressive revelation could be deeper.
-
-## Guidance for Issue Pickers
-
-When the `pick-up-issue` skill selects work from the backlog, issues with multiple playtest confirmations (visible as 👍 reactions and "Playtest confirmation" comments) should be weighted more heavily. The thumbs-up count is a proxy for "how many independent sessions flagged this as a problem."
