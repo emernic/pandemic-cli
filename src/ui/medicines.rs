@@ -302,7 +302,7 @@ fn render_select_target(
         };
 
         lines.push(Line::from(Span::styled(
-            format!("{}Protect susceptible", marker),
+            format!("{}Protect susceptible (preventive)", marker),
             style,
         )));
         lines.push(Line::from(vec![
@@ -317,6 +317,13 @@ fn render_select_target(
                 Style::default().fg(eff_color),
             ),
         ]));
+        if !empty {
+            let pct = if susceptible > 0.0 { will_vaccinate / susceptible * 100.0 } else { 0.0 };
+            lines.push(Line::from(Span::styled(
+                format!("    {:.1}% of susceptible — deploy repeatedly to build herd immunity", pct),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
     }
 
     // Option 1: Treat
@@ -336,7 +343,7 @@ fn render_select_target(
         };
 
         lines.push(Line::from(Span::styled(
-            format!("{}Treat infected", marker),
+            format!("{}Treat infected (therapeutic)", marker),
             style,
         )));
         lines.push(Line::from(vec![
@@ -351,6 +358,13 @@ fn render_select_target(
                 Style::default().fg(eff_color),
             ),
         ]));
+        if !empty {
+            let pct = if infected > 0.0 { will_treat / infected * 100.0 } else { 0.0 };
+            lines.push(Line::from(Span::styled(
+                format!("    {:.0}% of infected — immediate relief, reduces deaths and spread", pct),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
     }
 
     // Efficacy info
