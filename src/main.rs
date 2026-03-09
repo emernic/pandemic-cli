@@ -159,10 +159,11 @@ fn game_loop(
             ui::render(f, &state);
         })?;
 
+        let effective_tick = tick_duration / state.ui.speed_multiplier.max(1) as u32;
         let timeout = if !state.sim_state.is_running() {
             Duration::from_millis(100)
         } else {
-            tick_duration
+            effective_tick
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or(Duration::ZERO)
         };
@@ -196,11 +197,11 @@ fn game_loop(
         }
 
         // Auto-tick when unpaused
-        if state.sim_state.is_running() && last_tick.elapsed() >= tick_duration {
+        if state.sim_state.is_running() && last_tick.elapsed() >= effective_tick {
             let had_crisis = state.active_crisis.is_some();
             state = tick(&state);
             ui::process_events(&mut state);
-            last_tick += tick_duration;
+            last_tick += effective_tick;
             // Detect when a new crisis appears and start the input lockout
             if !had_crisis && state.active_crisis.is_some() {
                 event_appeared_at = Some(Instant::now());

@@ -946,6 +946,13 @@ pub struct UiState {
     /// Once true, the home panel renders fully without animation.
     #[serde(default)]
     pub home_splash_done: bool,
+    /// Game speed multiplier (1, 2, 4, 6). Affects real-time tick rate only.
+    #[serde(default = "default_speed")]
+    pub speed_multiplier: u8,
+}
+
+fn default_speed() -> u8 {
+    1
 }
 
 impl UiState {
@@ -1566,6 +1573,7 @@ impl GameState {
                 status_message: None,
                 crisis_selection: 0,
                 home_splash_done: false,
+                speed_multiplier: 1,
             },
         }
     }

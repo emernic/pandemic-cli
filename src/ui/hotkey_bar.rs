@@ -46,6 +46,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             if state.sim_state.is_running() { " Pause" } else { " Resume" },
             Style::default().fg(Color::White),
         ));
+        if state.sim_state.is_running() {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                "[Z]",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(" Speed", Style::default().fg(Color::White)));
+        }
     }
 
     spans.push(Span::raw("  "));
