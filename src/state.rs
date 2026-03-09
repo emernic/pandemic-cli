@@ -1286,7 +1286,7 @@ fn default_speed() -> u8 {
 
 impl UiState {
     /// Toggle a panel open/closed. Resets selection and initializes panel-specific UI state.
-    pub fn toggle_panel(&mut self, panel: Panel) {
+    pub fn toggle_panel(&mut self, panel: Panel, num_regions: usize) {
         if self.open_panel == panel {
             self.open_panel = Panel::None;
             self.panel_selection = 0;
@@ -1304,7 +1304,14 @@ impl UiState {
             match panel {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                 Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
-                Panel::Policy => self.policy_ui = Some(PolicyUiState::BrowseRegions),
+                Panel::Policy => {
+                    self.policy_ui = Some(PolicyUiState::BrowseRegions);
+                    // Pre-select the region matching the current map selection
+                    let order = grid_reading_order(num_regions);
+                    if let Some(pos) = order.iter().position(|&idx| idx == self.map_selection) {
+                        self.panel_selection = pos;
+                    }
+                }
                 _ => {}
             }
         }
