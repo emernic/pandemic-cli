@@ -172,6 +172,7 @@ mod tests {
     #[test]
     fn research_identify_increases_knowledge() {
         let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
         // Start identify project on disease 0
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
@@ -258,6 +259,7 @@ mod tests {
     #[test]
     fn add_personnel_speeds_up_research() {
         let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
 
         // Start a field research project
         state = apply_action(&state, &Action::OpenResearch);
@@ -284,6 +286,7 @@ mod tests {
     #[test]
     fn remove_personnel_from_research() {
         let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
 
         // Start a field research project (needs 5 personnel)
         state = apply_action(&state, &Action::OpenResearch);

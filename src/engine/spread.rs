@@ -146,10 +146,13 @@ pub(super) fn tick_spread_cross_region(
                             immune: 0.0,
                         });
                     }
-                    new.events.push(GameEvent::DiseaseSpreadToRegion {
-                        disease_idx: d_idx,
-                        region_idx: i,
-                    });
+                    // Only notify the player about detected diseases spreading
+                    if new.diseases[d_idx].detected {
+                        new.events.push(GameEvent::DiseaseSpreadToRegion {
+                            disease_idx: d_idx,
+                            region_idx: i,
+                        });
+                    }
                 }
             }
         }

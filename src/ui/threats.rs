@@ -27,6 +27,16 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
+            // Undetected diseases: show only a subtle "?" indicator
+            if !disease.detected {
+                lines.push(Line::from(Span::styled(
+                    format!("{}?", marker),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(""));
+                continue;
+            }
+
             let display_name = disease.display_name(i);
             lines.push(Line::from(Span::styled(
                 format!("{}{}", marker, display_name),

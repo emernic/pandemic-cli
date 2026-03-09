@@ -218,6 +218,30 @@ impl Region {
     pub fn disease_state(&self, disease_idx: usize) -> Option<&RegionDiseaseState> {
         self.infections.iter().find(|i| i.disease_idx == disease_idx)
     }
+
+    /// Total infected from detected diseases only (for UI display).
+    pub fn detected_infected(&self, diseases: &[Disease]) -> f64 {
+        self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.infected)
+            .sum()
+    }
+
+    /// Total dead from detected diseases only (for UI display).
+    pub fn detected_dead(&self, diseases: &[Disease]) -> f64 {
+        self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.dead)
+            .sum()
+    }
+
+    /// Total immune from detected diseases only (for UI display).
+    pub fn detected_immune(&self, diseases: &[Disease]) -> f64 {
+        self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.immune)
+            .sum()
+    }
 }
 
 /// Per-disease state within a region: infection, deaths, and immunity.
@@ -468,6 +492,14 @@ pub struct Disease {
     /// Each sequencing halves the effective mutation rate.
     #[serde(default)]
     pub sequencing_count: u32,
+    /// Whether this disease has been detected by global health systems.
+    /// Undetected diseases spread silently — the player sees only "?" in the threats panel.
+    #[serde(default = "default_true")]
+    pub detected: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Disease {
@@ -532,6 +564,7 @@ impl Disease {
             knowledge: 0.0,
             strain_generation: 0,
             sequencing_count: 0,
+            detected: true, // callers override to false for new diseases
         }
     }
 }
@@ -784,6 +817,10 @@ pub enum GameEvent {
         disease_idx: usize,
         region_idx: usize,
     },
+    /// A previously undetected disease has been detected by health systems.
+    DiseaseDetected {
+        disease_idx: usize,
+    },
     /// A disease spread to a new region via cross-region transmission.
     DiseaseSpreadToRegion {
         disease_idx: usize,
@@ -901,6 +938,9 @@ pub const CRISIS_INTERVAL: u64 = 200;
 /// Win when total infected drops below this threshold (with other conditions met).
 /// Individual region infections snap to 0.0 at < 1.0, so this means "truly eradicated."
 pub const WIN_INFECTED_THRESHOLD: f64 = 1.0;
+/// Total infected across all regions at which a disease is detected by health systems.
+/// Below this, the disease spreads silently and is invisible to the player.
+pub const DETECTION_THRESHOLD: f64 = 10_000.0;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Panel {
@@ -1551,14 +1591,16 @@ impl GameState {
         let mut diseases = Vec::new();
         let mut used_names: Vec<String> = Vec::new();
         for pathogen_type in &chosen_types {
-            let disease = Disease::generate(&mut rng, *pathogen_type, &used_names, false);
+            let mut disease = Disease::generate(&mut rng, *pathogen_type, &used_names, false);
+            disease.detected = false; // starts undetected — revealed when infections cross threshold
             used_names.push(disease.name.clone());
             diseases.push(disease);
         }
 
         // --- Place initial outbreak ---
+        // Small seed — disease grows silently until detection threshold is reached.
         let region_idx = rng.r#gen::<usize>() % regions.len();
-        let infected = 5_000.0 + rng.r#gen::<f64>() * 15_000.0;
+        let infected = 500.0 + rng.r#gen::<f64>() * 2_000.0;
         regions[region_idx].infections.push(RegionDiseaseState {
             disease_idx: 0,
             infected,
@@ -1630,6 +1672,24 @@ impl GameState {
 
     pub fn total_immune(&self) -> f64 {
         self.regions.iter().map(|r| r.total_immune()).sum()
+    }
+
+    /// Total infected from detected diseases only (for UI display).
+    pub fn total_infected_detected(&self) -> f64 {
+        self.regions.iter()
+            .flat_map(|r| &r.infections)
+            .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.infected)
+            .sum()
+    }
+
+    /// Total dead from detected diseases only (for UI display).
+    pub fn total_dead_detected(&self) -> f64 {
+        self.regions.iter()
+            .flat_map(|r| &r.infections)
+            .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.dead)
+            .sum()
     }
 
     pub fn personnel_busy(&self) -> u32 {
@@ -1746,7 +1806,9 @@ impl GameState {
 
         let used_names: Vec<String> = self.diseases.iter().map(|d| d.name.clone()).collect();
         let disease_idx = self.diseases.len();
-        self.diseases.push(Disease::generate(rng, pathogen_type, &used_names, true));
+        let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
+        disease.detected = false; // starts undetected
+        self.diseases.push(disease);
 
         // Place initial outbreak in a random region
         let region_idx = rng.r#gen::<usize>() % self.regions.len();
@@ -1869,7 +1931,7 @@ impl GameState {
         // Identify Threat: diseases not fully known, sorted by knowledge ascending
         // (unknown diseases first, then partially identified)
         let mut identify_targets: Vec<(usize, f64)> = self.diseases.iter().enumerate()
-            .filter(|(_, d)| d.knowledge < KNOWLEDGE_FULL)
+            .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_FULL)
             .map(|(i, d)| (i, d.knowledge))
             .collect();
         identify_targets.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));

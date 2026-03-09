@@ -97,8 +97,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let (ca, ra) = map_grid_pos(conn.a).unwrap();
             let (_cb, rb) = map_grid_pos(conn.b).unwrap();
 
-            let has_spread = state.regions[conn.a].total_infected() > 0.0
-                || state.regions[conn.b].total_infected() > 0.0;
+            let has_spread = state.regions[conn.a].detected_infected(&state.diseases) > 0.0
+                || state.regions[conn.b].detected_infected(&state.diseases) > 0.0;
             let color = if has_spread {
                 Color::Red
             } else {
@@ -152,7 +152,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let y = inner.y + row * (region_height + gap_row);
         let rect = Rect::new(x, y, region_width, region_height);
         let selected = idx == state.ui.map_selection;
-        render_region_box(f, rect, region, selected);
+        render_region_box(f, rect, region, selected, &state.diseases);
     }
 
     // Detail panel below the grid for the selected region
@@ -169,6 +169,7 @@ fn render_region_box(
     area: Rect,
     region: &Region,
     selected: bool,
+    diseases: &[crate::state::Disease],
 ) {
     let border_color = if selected {
         Color::Yellow
@@ -192,9 +193,9 @@ fn render_region_box(
         return;
     }
 
-    let infected = region.total_infected();
-    let immune = region.total_immune();
-    let dead = region.total_dead();
+    let infected = region.detected_infected(diseases);
+    let immune = region.detected_immune(diseases);
+    let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
 
     let threat = if region.collapsed {
@@ -362,10 +363,10 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     let pop = region.population as f64;
-    let infected = region.total_infected();
-    let immune = region.total_immune();
-    let dead = region.total_dead();
-    let alive = region.alive();
+    let infected = region.detected_infected(&state.diseases);
+    let immune = region.detected_immune(&state.diseases);
+    let dead = region.detected_dead(&state.diseases);
+    let alive = pop - dead; // alive based on detected deaths only
 
     let label = Style::default().fg(Color::DarkGray);
     let val = Style::default().fg(Color::White);
@@ -394,13 +395,16 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled(format_number(dead), Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray })),
     ]));
 
-    // Per-disease breakdown
+    // Per-disease breakdown (detected diseases only)
     if !region.infections.is_empty() {
         for inf in &region.infections {
             if lines.len() >= inner.height as usize {
                 break;
             }
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
+                if !disease.detected {
+                    continue;
+                }
                 let dname = disease.display_name(inf.disease_idx);
                 let susceptible = pop - inf.infected - inf.dead - inf.immune;
                 let mut spans = vec![
