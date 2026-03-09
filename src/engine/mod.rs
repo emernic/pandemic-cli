@@ -1334,8 +1334,8 @@ mod tests {
         state = apply_action(&state, &Action::OpenPolicy);
         assert_eq!(state.ui.open_panel, Panel::Policy);
 
-        // Select Asia (index 4)
-        for _ in 0..4 {
+        // Select Asia (reading order position 2: NA, Europe, Asia, ...)
+        for _ in 0..2 {
             state = apply_action(&state, &Action::SelectNext);
         }
         state = apply_action(&state, &Action::Confirm);

@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ticks_to_days, grid_reading_order};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -413,7 +413,9 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     )));
     lines.push(Line::from(""));
 
-    for region in &state.regions {
+    let order = grid_reading_order(state.regions.len());
+    for &region_idx in &order {
+        let region = &state.regions[region_idx];
         let dead = region.total_dead();
         let alive = region.alive();
         let pop = region.population as f64;

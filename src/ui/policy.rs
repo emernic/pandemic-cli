@@ -11,6 +11,7 @@ use crate::state::{
     TRAVEL_BAN_COST, QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     BORDER_SCREENING_COST, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
+    grid_reading_order,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -47,8 +48,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         lines.push(Line::from(""));
     }
 
-    for (i, region) in state.regions.iter().enumerate() {
-        let selected = state.ui.panel_selection == i;
+    let order = grid_reading_order(state.regions.len());
+    for (display_pos, &region_idx) in order.iter().enumerate() {
+        let region = &state.regions[region_idx];
+        let selected = state.ui.panel_selection == display_pos;
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -56,7 +59,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             Style::default().fg(Color::White)
         };
 
-        let policy = state.policies.get(i);
+        let policy = state.policies.get(region_idx);
         let has_active = policy.is_some_and(|p| p.any_active());
 
         let mut spans = vec![
