@@ -79,20 +79,23 @@ pub(super) fn tick_spread_within(
         }
 
         // Phase 2: apply outflows and accumulate total deaths.
-        let mut total_new_deaths = 0.0;
+        // Cap total deaths at alive population, then scale per-disease attribution
+        // proportionally so sum(inf.dead) stays consistent with region.dead.
+        let raw_total_deaths: f64 = outflows.iter().map(|o| o.new_deaths).sum();
+        let total_new_deaths = raw_total_deaths.min(alive);
+        let death_scale = if raw_total_deaths > 0.0 { total_new_deaths / raw_total_deaths } else { 1.0 };
+
         for (i, outflow) in outflows.iter().enumerate() {
+            let scaled_deaths = outflow.new_deaths * death_scale;
+            let scaled_recoveries = outflow.new_recoveries;
             let inf = &mut region.infections[i];
             inf.infected = inf.infected + outflow.new_infections - outflow.new_deaths - outflow.new_recoveries;
             if inf.infected < 1.0 {
                 inf.infected = 0.0;
             }
-            inf.immune += outflow.new_recoveries;
-            inf.dead += outflow.new_deaths; // attribution counter for display
-            total_new_deaths += outflow.new_deaths;
+            inf.immune += scaled_recoveries;
+            inf.dead += scaled_deaths; // attribution counter for display
         }
-
-        // Cap deaths at alive population to prevent floating-point drift.
-        total_new_deaths = total_new_deaths.min(alive);
         region.dead += total_new_deaths;
 
         // Phase 3: cross-disease culling. Dead people are removed from ALL
@@ -105,7 +108,7 @@ pub(super) fn tick_spread_within(
                 let inf = &mut region.infections[i];
                 // This disease's own deaths already reduced inf.infected above.
                 // Only cull for OTHER diseases' deaths.
-                let other_deaths = total_new_deaths - outflow.new_deaths;
+                let other_deaths = total_new_deaths - outflow.new_deaths * death_scale;
                 if other_deaths > 0.0 {
                     let other_survive = 1.0 - (other_deaths / alive);
                     inf.infected *= other_survive;

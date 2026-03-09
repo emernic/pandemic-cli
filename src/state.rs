@@ -2310,6 +2310,15 @@ impl GameState {
                 med.max_doses = med.doses;
             }
         }
+        // Migrate shared death counter from per-disease attribution (pre-shared-death saves).
+        for region in &mut self.regions {
+            if region.dead == 0.0 {
+                let attributed: f64 = region.infections.iter().map(|i| i.dead).sum();
+                if attributed > 0.0 {
+                    region.dead = attributed.min(region.population as f64);
+                }
+            }
+        }
     }
 
     /// Available field research projects (excludes currently active).
