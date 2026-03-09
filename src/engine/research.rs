@@ -25,10 +25,7 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
         let (personnel, duration, funding_cost) = kind.costs(&state.medicines);
 
         if state.resources.funding < funding_cost {
-            return (false, Some(format!(
-                "Insufficient funds! Need ${:.0}, have ${:.0}",
-                funding_cost, state.resources.funding,
-            )));
+            return (false, Some(super::medicine::insufficient_funds_message(funding_cost, state.resources.funding)));
         }
         if state.personnel_available() < personnel {
             return (false, Some(format!(
