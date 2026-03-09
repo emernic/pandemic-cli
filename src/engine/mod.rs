@@ -1829,13 +1829,13 @@ mod tests {
         let initial_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
         assert!((initial_res - 1.0).abs() < 0.001, "should start with no resistance");
 
-        // Deploy treatment multiple times
+        // Deploy treatment multiple times (clear cooldown between deploys)
         for _ in 0..10 {
-            // Replenish infection for each deployment
             if let Some(inf) = state.regions[0].infections.iter_mut().find(|i| i.disease_idx == disease_idx) {
                 inf.infected = 100_000.0;
             }
             state.resources.funding = 1_000_000.0;
+            state.regions[0].last_deploy_tick = None;
             let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1); // target_selection 1 = Treat
         }
 
@@ -1857,6 +1857,7 @@ mod tests {
                 inf.infected = 100_000.0;
             }
             state.resources.funding = 1_000_000.0;
+            state.regions[0].last_deploy_tick = None;
             let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, 1);
         }
 
@@ -3470,5 +3471,60 @@ mod tests {
             initial_personnel - 2,
             "should lose 2 personnel on collapse"
         );
+    }
+
+    #[test]
+    fn deploy_cooldown_blocks_repeat_deployment() {
+        let mut state = GameState::new_default(42);
+        // Setup: unlock a medicine, seed infection, give funds
+        let disease_idx = 0;
+        let med_idx = 0;
+        state.medicines[med_idx].unlocked = true;
+        state.medicines[med_idx].tested_against.push(disease_idx);
+        state.medicines[med_idx].doses = 1_000_000.0;
+        state.medicines[med_idx].max_doses = 1_000_000.0;
+        state.resources.funding = 1_000_000.0;
+        state.regions[0].infections.push(crate::state::RegionDiseaseState {
+            disease_idx,
+            infected: 50_000.0,
+            dead: 0.0,
+            immune: 0.0,
+        });
+
+        // First deploy should succeed
+        let (nav, msg, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
+        assert!(nav, "first deploy should succeed");
+        assert!(msg.unwrap().contains("Treated"), "should show treatment message");
+
+        // Region should now have a cooldown set
+        assert!(state.regions[0].last_deploy_tick.is_some());
+
+        // Second deploy at same tick should be blocked
+        state.resources.funding = 1_000_000.0;
+        state.regions[0].infections[0].infected = 50_000.0;
+        let (nav2, msg2, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
+        assert!(!nav2, "second deploy should be blocked by cooldown");
+        assert!(msg2.unwrap().contains("cooldown"), "should mention cooldown");
+
+        // After cooldown expires, deploy should work again
+        state.tick = crate::state::DEPLOY_COOLDOWN_TICKS + 1;
+        state.resources.funding = 1_000_000.0;
+        state.regions[0].infections[0].infected = 50_000.0;
+        let (nav3, msg3, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
+        assert!(nav3, "deploy after cooldown should succeed");
+        assert!(msg3.unwrap().contains("Treated"));
+
+        // Different region should still be deployable (cooldown is per-region)
+        state.tick = 0;
+        state.regions[0].last_deploy_tick = Some(0);
+        state.regions[1].infections.push(crate::state::RegionDiseaseState {
+            disease_idx,
+            infected: 50_000.0,
+            dead: 0.0,
+            immune: 0.0,
+        });
+        state.resources.funding = 1_000_000.0;
+        let (nav4, _, _) = medicine::deploy_medicine(&mut state, med_idx, 1, 1);
+        assert!(nav4, "deploying to different region should work during cooldown");
     }
 }
