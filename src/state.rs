@@ -447,11 +447,11 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned for a 20-30 day game arc.
+    /// Stat ranges tuned for a ~45-50 day game arc.
     /// R0 = infectivity / (lethality + recovery) targets 3-5 for most types.
-    /// Daily growth ≈ 2-3× with 120 ticks/day — regions collapse at ~day 15-20
-    /// without intervention. This gives players time to research, deploy policies,
-    /// and develop medicines before the situation becomes critical.
+    /// Daily growth ≈ 2-3× with 120 ticks/day — first region collapse at ~day 14,
+    /// total defeat at ~day 47 without intervention. This gives players time to
+    /// research, deploy policies, and develop medicines before collapse cascades.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: fast spreader (R0 ~3-5), moderate lethality, decent recovery
