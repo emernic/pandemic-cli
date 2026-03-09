@@ -447,40 +447,40 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned for playable lethality.
-    /// R0 = infectivity / (lethality + recovery) targets 3-5 for most types.
-    /// A single disease kills ~30-50% of a region without intervention.
-    /// Multiple diseases stacking over 20 days causes total collapse.
-    /// Policies meaningfully slow spread, buying time for research.
+    /// Stat ranges tuned for slow-burn lethality.
+    /// R0 = infectivity / (lethality + recovery) targets 2-3 for most types.
+    /// A single disease kills ~20-30% of a region without intervention.
+    /// Multiple diseases stacking over 20+ days causes total collapse.
+    /// Players get 10-15 days of meaningful decisions before the first collapse.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast spreader (R0 ~3-5), moderate lethality, decent recovery
+            // RNA viruses: fast spreader (R0 ~2-3), moderate lethality, decent recovery
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.04, 0.07),
-                lethality: (0.004, 0.010),
+                infectivity: (0.020, 0.035),
+                lethality: (0.002, 0.005),
                 recovery: (0.006, 0.010),
-                cross_region: (0.015, 0.025),
+                cross_region: (0.008, 0.012),
             },
-            // DNA viruses: moderate spread (R0 ~2.5-4.5), high lethality, slow recovery
+            // DNA viruses: moderate spread (R0 ~1.5-2.5), higher lethality, slow recovery
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.03, 0.06),
-                lethality: (0.006, 0.012),
+                infectivity: (0.015, 0.030),
+                lethality: (0.003, 0.006),
                 recovery: (0.004, 0.008),
-                cross_region: (0.010, 0.020),
+                cross_region: (0.005, 0.010),
             },
-            // Bacteria: moderate spread (R0 ~3-5), moderate lethality
+            // Bacteria: moderate spread (R0 ~1.5-2.5), moderate lethality
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.03, 0.05),
-                lethality: (0.003, 0.007),
+                infectivity: (0.015, 0.025),
+                lethality: (0.0015, 0.0035),
                 recovery: (0.003, 0.007),
-                cross_region: (0.010, 0.020),
+                cross_region: (0.005, 0.010),
             },
-            // Prions: slow but devastating (R0 ~1.5-3), very high lethality, almost no recovery
+            // Prions: slow but devastating (R0 ~1.5-4), high lethality, almost no recovery
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.015, 0.035),
-                lethality: (0.008, 0.015),
+                infectivity: (0.008, 0.018),
+                lethality: (0.004, 0.008),
                 recovery: (0.001, 0.003),
-                cross_region: (0.005, 0.012),
+                cross_region: (0.003, 0.006),
             },
         }
     }
@@ -1823,16 +1823,16 @@ impl GameState {
                 population: 500_000_000,
                 connections: vec![1, 2],
                 infections: vec![],
-                collapse_threshold: 0.55, // Fragile — collapses at 45% dead
+                collapse_threshold: 0.65, // Fragile developed — collapses at 35% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
             Region {
                 name: "South America".into(),
                 population: 430_000_000,
-                connections: vec![0],
+                connections: vec![0, 3],
                 infections: vec![],
-                collapse_threshold: 0.55, // Same as NA — 45% dead
+                collapse_threshold: 0.55, // Moderate resilience — 45% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1841,16 +1841,16 @@ impl GameState {
                 population: 750_000_000,
                 connections: vec![0, 3, 4],
                 infections: vec![],
-                collapse_threshold: 0.50, // Developed infrastructure — collapses at 50% dead
+                collapse_threshold: 0.60, // Developed — 40% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
             Region {
                 name: "Africa".into(),
                 population: 1_400_000_000,
-                connections: vec![2, 4],
+                connections: vec![1, 2, 4],
                 infections: vec![],
-                collapse_threshold: 0.30, // Most resilient — 70% dead
+                collapse_threshold: 0.50, // Most resilient — 50% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1859,7 +1859,7 @@ impl GameState {
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
                 infections: vec![],
-                collapse_threshold: 0.40, // Huge population buffer — 60% dead
+                collapse_threshold: 0.55, // Large population — 45% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1868,7 +1868,7 @@ impl GameState {
                 population: 45_000_000,
                 connections: vec![4],
                 infections: vec![],
-                collapse_threshold: 0.50, // Small but developed — 50% dead
+                collapse_threshold: 0.60, // Small but developed — 40% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },

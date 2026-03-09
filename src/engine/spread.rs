@@ -170,9 +170,9 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
             // Small random parameter changes (±10% of current value), clamped to
             // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.08);
+            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.04);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality = (disease.lethality * leth_factor).clamp(0.0002, 0.02);
+            disease.lethality = (disease.lethality * leth_factor).clamp(0.0002, 0.01);
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,

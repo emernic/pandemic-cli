@@ -1002,13 +1002,14 @@ mod tests {
     }
 
     #[test]
-    fn game_is_lost_within_30_days_without_intervention() {
-        // The game must be lost within 30 days with zero player intervention,
+    fn game_is_lost_within_60_days_without_intervention() {
+        // The game must be lost within 60 days with zero player intervention,
         // regardless of seed. If this test fails, disease parameters are too weak.
-        // Worst-case seed (99) takes ~27 days; 30 gives a small margin.
+        // With the slow-burn balance, single diseases kill ~20-30% while
+        // multiple stacking diseases cause total collapse around day 30-50.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 30 * TICKS_PER_DAY as u64;
+            let max_ticks = 60 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
                 // Auto-resolve any crisis that pauses the sim
@@ -1023,7 +1024,7 @@ mod tests {
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
             assert_eq!(state.outcome, GameOutcome::Lost,
-                "Seed {seed}: game should be lost within 30 days (reached day {day:.1}). \
+                "Seed {seed}: game should be lost within 60 days (reached day {day:.1}). \
                  Regions: {:?}",
                 state.regions.iter().map(|r| {
                     let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
