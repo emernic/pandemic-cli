@@ -476,7 +476,7 @@ pub struct Region {
     #[serde(default)]
     pub dead: f64,
     /// Whether this region has collapsed. Collapsed regions lose all policies,
-    /// cannot conduct field research, and are cut off from flight connections.
+    /// block medicine deployment, and have reduced cross-region spread (0.3x).
     #[serde(default)]
     pub collapsed: bool,
     /// Tick when this region collapsed (None if still standing).
