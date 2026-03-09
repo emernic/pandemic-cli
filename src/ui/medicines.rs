@@ -123,8 +123,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                     } else {
                         Color::Red
                     };
-                    // Show efficacy with trend arrow when declining
-                    let trend = if pct < 85 { "\u{25bc}" } else { "" }; // ▼ when degraded
+                    // Show ▼ when efficacy has degraded below 85%
+                    let trend = if pct < 85 { "\u{25bc}" } else { "" };
                     detail_spans.push(Span::styled(
                         format!(" ({}%{})", pct, trend),
                         Style::default().fg(color),
