@@ -411,8 +411,9 @@ impl Region {
         (self.population as f64 - self.total_dead()).max(0.0)
     }
 
-    /// Total infected across all diseases, capped at population (same
-    /// double-counting caveat as `total_dead`).
+    /// Total infected across all diseases, capped at population.
+    /// May double-count people infected with multiple diseases simultaneously,
+    /// but the cap prevents displaying more infected than the population.
     pub fn total_infected(&self) -> f64 {
         let raw: f64 = self.infections.iter().map(|i| i.infected).sum();
         raw.min(self.population as f64)
@@ -424,8 +425,9 @@ impl Region {
         self.dead
     }
 
-    /// Total immune across all diseases, capped at population (same
-    /// double-counting caveat as `total_dead`).
+    /// Total immune across all diseases, capped at population.
+    /// May double-count people immune to multiple diseases simultaneously,
+    /// but the cap prevents displaying more immune than the population.
     pub fn total_immune(&self) -> f64 {
         let raw: f64 = self.infections.iter().map(|i| i.immune).sum();
         raw.min(self.population as f64)
