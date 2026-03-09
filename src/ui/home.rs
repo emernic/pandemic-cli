@@ -256,8 +256,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     let chart_width = (area.width as usize).saturating_sub(22).min(50);
     let history = &state.history;
 
-    let inf_data: Vec<f64> = history.iter().map(|h| h.total_infected).collect();
-    let dead_data: Vec<f64> = history.iter().map(|h| h.total_dead).collect();
+    let inf_data: Vec<f64> = history.iter().map(|h| h.screened_infected).collect();
+    let dead_data: Vec<f64> = history.iter().map(|h| h.detected_dead).collect();
 
     let any_estimated = state.regions.iter().enumerate()
         .any(|(i, _)| state.screening_visibility(i) < 1.0);
