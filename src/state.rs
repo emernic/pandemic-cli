@@ -1181,11 +1181,6 @@ pub enum GameEvent {
         disease_idx: usize,
         new_generation: u32,
     },
-    /// A new disease emerged mid-game. UI should notify the player.
-    NewDiseaseEmerged {
-        disease_idx: usize,
-        region_idx: usize,
-    },
     /// A previously undetected disease has been detected by health systems.
     DiseaseDetected {
         disease_idx: usize,
