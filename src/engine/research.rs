@@ -784,4 +784,39 @@ mod tests {
         let (_, rapid_dur, _) = state.effective_costs(&kind);
         assert_eq!(rapid_dur, 100.0, "with RapidSequencing, should be 100 ticks");
     }
+
+    #[test]
+    fn vaccine_platform_prereqs() {
+        let mut state = GameState::new_default(42);
+        // No advanced drug tech → not available
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::VaccinePlatform }
+        )), "VaccinePlatform should not be available without mAb or Phage");
+
+        // Unlock MonoclonalAntibodies → available
+        state.unlocked_techs.push(crate::state::BasicTech::MonoclonalAntibodies);
+        let basic = state.available_basic_projects();
+        assert!(basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::VaccinePlatform }
+        )), "VaccinePlatform should be available after MonoclonalAntibodies");
+    }
+
+    #[test]
+    fn vaccine_platform_triples_vaccination() {
+        let mut state = GameState::new_default(42);
+        assert_eq!(state.vaccination_multiplier(), 1.0);
+
+        state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
+        assert_eq!(state.vaccination_multiplier(), 3.0);
+
+        // Verify estimate_vaccination uses the multiplier
+        let med = &state.medicines[0];
+        let base = med.estimate_vaccination(1_000_000.0, 1.0, 1.0);
+        let boosted = med.estimate_vaccination(1_000_000.0, 1.0, 3.0);
+        assert!(
+            (boosted - base * 3.0).abs() < 1.0,
+            "VaccinePlatform should triple vaccination: base={base}, boosted={boosted}"
+        );
+    }
 }

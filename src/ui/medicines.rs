@@ -312,7 +312,7 @@ fn render_select_target(
         let immune = if shows_immune { inf.map(|i| i.immune).unwrap_or(0.0) } else { 0.0 };
         let susceptible = (pop - infected - region.dead - immune).max(0.0);
         let empty = susceptible == 0.0;
-        let will_vaccinate = med.estimate_vaccination(susceptible, efficacy);
+        let will_vaccinate = med.estimate_vaccination(susceptible, efficacy, state.vaccination_multiplier());
         let selected = state.ui.panel_selection == 0;
 
         let marker = if selected { "▶ " } else { "  " };
