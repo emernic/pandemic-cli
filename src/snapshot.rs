@@ -93,17 +93,21 @@ fn advance_ticks(state: &mut GameState, n: u64, auto_crises: bool) -> u64 {
 
 /// Auto-resolve a crisis by picking the cheapest affordable option.
 /// Tries option A first, then option B if A is unaffordable.
+/// Prints a summary line to stderr so playtesters can see what happened.
 fn auto_resolve_crisis(state: &mut GameState) {
     // Try option A (index 0) first, fall back to option B (index 1)
-    let choice = if let Some(crisis) = &state.active_crisis {
+    let (choice, title, option_label) = if let Some(crisis) = &state.active_crisis {
         if crisis.option_a.cost.as_ref().map_or(true, |c| c.affordable(state)) {
-            0
+            (0, crisis.title.clone(), crisis.option_a.label.clone())
         } else {
-            1
+            (1, crisis.title.clone(), crisis.option_b.label.clone())
         }
     } else {
         return;
     };
+
+    let day = state.tick as f64 / crate::state::TICKS_PER_DAY;
+    eprintln!("[Day {day:.1}] Crisis auto-resolved: {title} → {option_label}");
 
     // Use apply_action(Confirm) which handles affordability checks,
     // sim state restoration, and all crisis resolution logic.
