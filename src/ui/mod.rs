@@ -97,6 +97,10 @@ pub fn process_events(state: &mut GameState) {
         format!("Funding crisis: suspended {}", suspended.join(", "))
     } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {
         "LOW FUNDS: Policies at risk of suspension!".to_string()
+    } else if let Some(GameEvent::PersonnelAttrition { count }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::PersonnelAttrition { .. }))
+    {
+        format!("{count} personnel resigned — no funding for wages")
     } else if let Some(GameEvent::DiseaseMutated { disease_idx, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
     {

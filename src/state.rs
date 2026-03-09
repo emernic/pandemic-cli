@@ -308,6 +308,9 @@ pub struct Resources {
     /// Fractional accumulator for POL-based personnel gains.
     #[serde(default)]
     pub personnel_accum: f64,
+    /// Fractional accumulator for personnel attrition (when funding is $0).
+    #[serde(default)]
+    pub attrition_accum: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1108,6 +1111,8 @@ pub enum GameEvent {
     CrisisStarted,
     /// A crisis was auto-resolved based on player's saved preference.
     CrisisAutoResolved,
+    /// Personnel left due to unpaid wages (funding at $0).
+    PersonnelAttrition { count: u32 },
 }
 
 /// Game outcome — checked each tick after simulation.
@@ -1931,6 +1936,7 @@ impl GameState {
                 personnel: 20,
                 political_power: 0.0,
                 personnel_accum: 0.0,
+                attrition_accum: 0.0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             regions,
