@@ -347,12 +347,12 @@ pub struct Resources {
     pub funding: f64,
     pub personnel: u32,
     /// Political Power (0.0–1.0). Represents global willingness to act.
-    /// Drifts toward a severity-based target (~10%/day). Crisis choices modify
+    /// Drifts toward a severity-based target (~30%/day). Crisis choices modify
     /// this directly, so POL hits take real time to recover from.
     #[serde(default)]
     pub political_power: f64,
-    /// Legacy field — kept for save file compatibility. No longer used in game logic.
-    #[serde(default)]
+    /// Legacy: old saves may include this field. Not used in game logic.
+    #[serde(default, skip_serializing)]
     pub pol_crisis_modifier: f64,
     /// Fractional accumulator for POL-based personnel gains.
     #[serde(default)]

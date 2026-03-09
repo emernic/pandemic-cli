@@ -2960,4 +2960,47 @@ mod tests {
             "maintain standards should not mark medicine as tested");
         assert!(after.active_crisis.is_none());
     }
+
+    #[test]
+    fn pol_drifts_toward_severity_target() {
+        let mut state = GameState::new_default(42);
+        // Start with zero POL and some infections to create a severity target > 0
+        state.resources.political_power = 0.0;
+        state.regions[0].infections[0].infected = 1_000_000.0;
+
+        // Run several ticks — POL should drift upward toward the severity target
+        let mut s = state.clone();
+        for _ in 0..(TICKS_PER_DAY as u64 * 5) {
+            s = tick(&s);
+        }
+        assert!(s.resources.political_power > 0.10,
+            "POL should drift up significantly after 5 days with infections, got {}",
+            s.resources.political_power);
+    }
+
+    #[test]
+    fn pol_recovers_after_crisis_hit() {
+        let mut state = GameState::new_default(42);
+        // Give some infections so the severity target is above zero
+        state.regions[0].infections[0].infected = 500_000.0;
+
+        // Let POL reach a steady state over 10 days
+        let mut s = state.clone();
+        for _ in 0..(TICKS_PER_DAY as u64 * 10) {
+            s = tick(&s);
+        }
+        let steady = s.resources.political_power;
+
+        // Simulate a crisis hit: drop POL by 0.15
+        s.resources.political_power = (steady - 0.15).max(0.0);
+        let after_hit = s.resources.political_power;
+
+        // Run 3 more days — POL should recover toward the target
+        for _ in 0..(TICKS_PER_DAY as u64 * 3) {
+            s = tick(&s);
+        }
+        assert!(s.resources.political_power > after_hit + 0.05,
+            "POL should recover after crisis hit: was {}, now {}",
+            after_hit, s.resources.political_power);
+    }
 }
