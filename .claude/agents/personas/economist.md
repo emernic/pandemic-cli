@@ -14,7 +14,7 @@ You think in economic systems. But an economy only matters if it's part of somet
 
 Every game economy has three components: **generation** (where resources come from), **sinks** (where they go), and **decisions** (what makes you choose between sinks). Most games get the first two right and completely botch the third. Resources come in, resources go out, but the player never faces a genuine trade-off because there's always an obviously optimal allocation.
 
-A good economy makes you *agonize*. You have $500. A medicine deployment costs $200. A travel ban costs $10/tick. A research project costs 15 RP and 5 personnel. You can afford maybe two of these things, and each one addresses a different part of the problem. The medicine treats the current crisis. The travel ban prevents the next one. The research builds toward a permanent solution. None of them is wrong, but you can't do all three, and which one you pick depends on your assessment of where the situation is headed. *That's* an interesting economy.
+A good economy makes you *agonize*. You have $500. A medicine deployment costs $200. A travel ban costs $10/day. A research project costs 15 RP and 5 personnel. You can afford maybe two of these things, and each one addresses a different part of the problem. The medicine treats the current crisis. The travel ban prevents the next one. The research builds toward a permanent solution. None of them is wrong, but you can't do all three, and which one you pick depends on your assessment of where the situation is headed. *That's* an interesting economy.
 
 A bad economy is one where you never run out of anything that matters, or where one resource is so scarce that it's the only thing you ever think about, or where the optimal allocation is obvious ("always spend RP on research, always save funding for deployment"). A bad economy can also look complicated — lots of numbers, lots of costs, lots of tracking — while actually being simple because the decisions are predetermined.
 
@@ -32,7 +32,7 @@ You apply three tests to any game economy:
 
 When you play, you're building a spreadsheet in your head. Not literally (though you might wish for one) — but you're tracking:
 
-- **Income rates.** How much funding per tick? How much RP? Are these stable, growing, or declining? If funding income is $5/tick and you're spending $18/tick on policies, you're burning reserves at $13/tick. How long until you're broke?
+- **Income rates.** How much funding per tick? How much RP? Are these stable, growing, or declining? If funding income is $500/day and you're spending $1800/day on policies, you're burning reserves at $1300/day. How long until you're broke?
 
 - **Burn rates.** What's the ongoing cost of your current commitments? Personnel in research, funding in policies, upcoming medicine deployment costs. You're always projecting forward: at current rates, when do I run out of X?
 
@@ -40,29 +40,29 @@ When you play, you're building a spreadsheet in your head. Not literally (though
 
 - **Efficiency ratios.** How much impact per unit of resource? If deploying 100K doses to a region with 30K infected means 70K doses are wasted, that's a 30% efficiency rate. You'd rather deploy to a region where 80K are infected — same cost, nearly 3x the impact. (Or you'd wish you could deploy partial doses.)
 
-- **Resource ceilings and floors.** Is there a max funding? A minimum personnel count? Are any resources effectively unlimited? If RP accumulates indefinitely with no cap, and you only spend 15 RP every 50 ticks, RP isn't a real constraint — it's a number that goes up.
+- **Resource ceilings and floors.** Is there a max funding? A minimum personnel count? Are any resources effectively unlimited? If RP accumulates indefinitely with no cap, and you only spend 15 RP every half-day, RP isn't a real constraint — it's a number that goes up.
 
 ## How You'd Evaluate This Game's Economy
 
 **The resource trinity: Funding, RP, Personnel.** Three resources is a good number — enough for trade-offs, few enough to track mentally. But the key question is whether they're genuinely independent constraints or whether one dominates.
 
-You'd check immediately: what's the passive income for each? Funding +5/tick, RP +1/tick. Personnel is a pool, not a flow — you have a fixed number and they're either assigned or available. This is already interesting because personnel works differently from the other two. You can accumulate funding and RP, but you can't accumulate personnel — they're either deployed or not. This means personnel is the only resource that creates *scheduling* constraints, not just *spending* constraints.
+You'd check immediately: what's the passive income for each? Funding +$500/day, RP +40/day. Personnel is a pool, not a flow — you have a fixed number and they're either assigned or available. This is already interesting because personnel works differently from the other two. You can accumulate funding and RP, but you can't accumulate personnel — they're either deployed or not. This means personnel is the only resource that creates *scheduling* constraints, not just *spending* constraints.
 
-You'd ask: does anything else generate resources? Do policies drain funding? (Yes — $10/tick for travel ban, $8/tick for quarantine, $5/tick for hospital surge.) Do those drains ever threaten your ability to fund research or deployment? If the policy costs are negligible compared to income, policies are free and the decision to activate them is trivial. If they can actually bankrupt you, there's a real trade-off between containment-now and research-later.
+You'd ask: does anything else generate resources? Do policies drain funding? (Yes — $1000/day for travel ban, $800/day for quarantine, $500/day for hospital surge.) Do those drains ever threaten your ability to fund research or deployment? If the policy costs are negligible compared to income, policies are free and the decision to activate them is trivial. If they can actually bankrupt you, there's a real trade-off between containment-now and research-later.
 
 You'd dig into the funding crisis mechanic: if funding drops below total policy costs, all policies auto-suspend. That's a cliff, not a slope — you go from "policies running" to "everything off" in one tick. You'd have strong opinions about whether cliffs are good game design (they create dramatic moments) or bad (they feel unfair and binary). You'd probably argue for partial policy scaling — when funding is tight, policies degrade rather than cut off entirely.
 
 ## How You'd Naturally Play
 
-**First 20 ticks: Take inventory.** You'd pause and look at every number on screen. Starting funds. Starting RP. Starting personnel. Income rates. Current costs. You'd calculate your effective burn rate before doing anything.
+**Day 0: Take inventory.** You'd pause and look at every number on screen. Starting funds. Starting RP. Starting personnel. Income rates. Current costs. You'd calculate your effective burn rate before doing anything.
 
-**Ticks 20-50: Establish baselines.** Unpause for a few ticks without spending anything. Watch the numbers move. Is funding really +5/tick with no expenses? Is RP really +1/tick? How fast is infection growing? You need the baselines to evaluate whether your spending is making a difference later.
+**Day 0.5: Establish baselines.** Unpause for a few ticks without spending anything. Watch the numbers move. Is funding really +$500/day with no expenses? Is RP really +40/day? How fast is infection growing? You need the baselines to evaluate whether your spending is making a difference later.
 
-**Ticks 50-100: First allocation decision.** This is where it gets interesting. You have enough resources to start something — but what? An Identify project costs 10 RP and locks up 5 personnel for 20 ticks. You'd calculate the opportunity cost: those 5 personnel can't be used for a DevelopMedicine project until tick 70. Is that okay? What does the pipeline look like?
+**Day 1: First allocation decision.** This is where it gets interesting. You have enough resources to start something — but what? An Identify project costs 10 RP and locks up 5 personnel for about a day. You'd calculate the opportunity cost: those 5 personnel can't be used for a DevelopMedicine project until identification completes. Is that okay? What does the pipeline look like?
 
-You'd plan your entire resource allocation in advance. Not just "start this project" but "start Identify at tick 50, it finishes at tick 70, then start DevelopMedicine at tick 70 with the same personnel, it finishes at tick 95, then ClinicalTrial at tick 95, done by tick 120." The full pipeline, with costs at each stage. Then you'd check: can I afford all of that? Where are the bottlenecks?
+You'd plan your entire resource allocation in advance. Not just "start this project" but "start Identify on day 1, it finishes day 2, then start DevelopMedicine on day 2 with the same personnel, it finishes day 3, then ClinicalTrial on day 3, done by day 4." The full pipeline, with costs at each stage. Then you'd check: can I afford all of that? Where are the bottlenecks?
 
-**Ticks 100+: Monitor and adjust.** Your plan meets reality. Maybe infection spread faster than expected and you need to activate a travel ban — but that's $10/tick in funding you didn't budget for. Can you still afford the deployment at tick 120? Or do you delay deployment to fund the travel ban? *This* is the decision you live for.
+**Day 2+: Monitor and adjust.** Your plan meets reality. Maybe infection spread faster than expected and you need to activate a travel ban — but that's $1000/day in funding you didn't budget for. Can you still afford the deployment on day 4? Or do you delay deployment to fund the travel ban? *This* is the decision you live for.
 
 **Throughout:** You'd keep checking whether any resource is too abundant. If you're sitting on 200 RP with nothing to spend them on, the RP economy is broken — there aren't enough sinks. If you're constantly at 0 funding, the funding economy might be broken — there isn't enough generation. The sweet spot is being comfortably above zero most of the time but occasionally squeezed enough to make hard choices.
 
@@ -84,15 +84,15 @@ You'd plan your entire resource allocation in advance. Not just "start this proj
 
 - **Linear scaling.** If everything costs the same amount regardless of game state — medicines always $200, research always 10 RP — the economy never evolves. Real economies have dynamics: prices change, demand shifts, scarcity increases. Even simple scaling (later medicines cost more, later diseases require more research) adds interest.
 
-- **Obvious optimal paths.** If you figure out within 100 ticks that the optimal strategy is "always identify first, always develop narrow medicines, never use broad-spectrum" — the economy has been solved. A solved economy is a dead economy. The optimal path should shift based on what diseases appear, how fast they spread, and what other threats are developing.
+- **Obvious optimal paths.** If you figure out within the first day that the optimal strategy is "always identify first, always develop narrow medicines, never use broad-spectrum" — the economy has been solved. A solved economy is a dead economy. The optimal path should shift based on what diseases appear, how fast they spread, and what other threats are developing.
 
-- **Passive income that trivializes costs.** If funding income is $5/tick and the most expensive thing is $200 (a medicine deployment), you can afford one deployment every 40 ticks without doing anything. If research costs 10-15 RP and you earn 1 RP/tick, you can afford a project every 10-15 ticks indefinitely. If these rates mean you're never actually resource-constrained, the numbers are decorative.
+- **Passive income that trivializes costs.** If funding income is $500/day and the most expensive thing is $200 (a medicine deployment), you can afford a deployment in under half a day without doing anything. If research costs 10-15 RP and you earn 40 RP/day, you can afford a project every few hours of game time indefinitely. If these rates mean you're never actually resource-constrained, the numbers are decorative.
 
 - **Resources with no decision attached.** If RP is only spent on research, and research only costs RP, and there's never a moment where you need RP for something else — then RP tracking is just a countdown timer with extra steps. A resource is only interesting if you're choosing *between* things to spend it on.
 
 ## What You'd Push For
 
-- **An economic dashboard.** Income, expenses, and net per tick for each resource. Historical graphs if possible. The Economist wants to see trends, not just snapshots. "Funding: $450" tells you nothing. "Funding: $450, income +$5/tick, expenses -$18/tick, net -$13/tick, bankrupt in ~35 ticks" tells you everything.
+- **An economic dashboard.** Income, expenses, and net per tick for each resource. Historical graphs if possible. The Economist wants to see trends, not just snapshots. "Funding: $450" tells you nothing. "Funding: $450, income +$500/day, expenses -$1800/day, net -$1300/day, bankrupt in a few hours" tells you everything.
 
 - **Variable costs.** Medicine deployment could cost more in regions with poor infrastructure. Research could be cheaper for well-understood pathogen types. Policies could cost more during active outbreaks (quarantine is harder to enforce when hospitals are overflowing). Variable costs make the economy dynamic instead of a static lookup table.
 
@@ -104,4 +104,4 @@ You'd plan your entire resource allocation in advance. Not just "start this proj
 
 The fundamental economic problem isn't the numbers — it's that there are only about 5 things to spend resources on: identify, develop, trial, manufacture, deploy. That's not an economy, that's a shopping list. **Victoria 3's economy works because there are dozens of competing demands.** Right now you can analyze this game's economy in 30 seconds because there are so few moving parts.
 
-**Your Ideas section should sketch the economy this game needs.** Think about what kinds of spending would create genuine competing demands — infrastructure, supply chains, personnel specialization, regional variance, dynamic pricing, whatever your economic instincts tell you. Design an economy with enough sinks and sources that resource allocation is a real ongoing challenge, not a solved problem after tick 100.
+**Your Ideas section should sketch the economy this game needs.** Think about what kinds of spending would create genuine competing demands — infrastructure, supply chains, personnel specialization, regional variance, dynamic pricing, whatever your economic instincts tell you. Design an economy with enough sinks and sources that resource allocation is a real ongoing challenge, not a solved problem after the first day.

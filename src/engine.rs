@@ -7,7 +7,8 @@ use crate::state::{
     BOOST_RP_COST, BOOST_TICKS, EMERGENCE_CHANCE_PER_TICK,
     EMERGENCE_MIN_TICK, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, MAX_DISEASES,
-    QUARANTINE_COST, QUARANTINE_PERSONNEL, TRAVEL_BAN_COST, WIN_INFECTED_THRESHOLD,
+    QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
+    WIN_INFECTED_THRESHOLD, format_days,
 };
 
 /// Advance the simulation by one tick.
@@ -585,7 +586,7 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
             let new_state = !state.policies[region_idx].travel_ban;
             state.policies[region_idx].travel_ban = new_state;
             let verb = if new_state { "enabled" } else { "disabled" };
-            Some(format!("Travel Ban {verb} in {region_name} — ${:.0}/tick", TRAVEL_BAN_COST))
+            Some(format!("Travel Ban {verb} in {region_name} — ${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY))
         }
         1 => {
             if state.policies[region_idx].quarantine {
@@ -593,8 +594,8 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
                 Some(format!("Quarantine disabled in {region_name}"))
             } else if available_personnel >= QUARANTINE_PERSONNEL {
                 state.policies[region_idx].quarantine = true;
-                Some(format!("Quarantine enabled in {region_name} — ${:.0}/tick + {} personnel",
-                    QUARANTINE_COST, QUARANTINE_PERSONNEL))
+                Some(format!("Quarantine enabled in {region_name} — ${:.0}/day + {} personnel",
+                    QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL))
             } else {
                 Some(format!(
                     "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
@@ -607,8 +608,8 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
                 Some(format!("Hospital Surge disabled in {region_name}"))
             } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
                 state.policies[region_idx].hospital_surge = true;
-                Some(format!("Hospital Surge enabled in {region_name} — ${:.0}/tick + {} personnel",
-                    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL))
+                Some(format!("Hospital Surge enabled in {region_name} — ${:.0}/day + {} personnel",
+                    HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL))
             } else {
                 Some(format!(
                     "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
@@ -675,8 +676,8 @@ fn boost_research(state: &mut GameState, bench: bool) -> Option<String> {
             state.resources.research_points -= BOOST_RP_COST;
             project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
             Some(format!(
-                "Boosted research! (-{:.0} RP, +{:.0} ticks)",
-                BOOST_RP_COST, BOOST_TICKS
+                "Boosted research! (-{:.0} RP, +{})",
+                BOOST_RP_COST, format_days(BOOST_TICKS)
             ))
         } else if state.resources.research_points < BOOST_RP_COST {
             Some(format!(

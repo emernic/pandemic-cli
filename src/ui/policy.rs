@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState,
+    GameState, PolicyUiState, TICKS_PER_DAY,
     TRAVEL_BAN_COST, QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
 };
@@ -39,7 +39,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         lines.push(Line::from(vec![
             Span::styled("  Policy cost: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("${:.0}/tick", total_cost),
+                format!("${:.0}/day", total_cost * TICKS_PER_DAY),
                 Style::default().fg(Color::Yellow),
             ),
         ]));
@@ -75,7 +75,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 Style::default().fg(Color::Cyan),
             ));
             spans.push(Span::styled(
-                format!("  ${:.0}/tick", cost),
+                format!("  ${:.0}/day", cost * TICKS_PER_DAY),
                 Style::default().fg(Color::Yellow),
             ));
         } else {
@@ -127,13 +127,13 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     // Policy toggles — costs derived from constants in state.rs
     let policies: [(&str, bool, String, &str, Option<u32>); 3] = [
         ("Travel Ban", policy.travel_ban,
-         format!("${:.0}/tick", TRAVEL_BAN_COST),
+         format!("${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY),
          "Blocks 90% spread, halves region income", None),
         ("Quarantine", policy.quarantine,
-         format!("${:.0}/tick + {} pers.", QUARANTINE_COST, QUARANTINE_PERSONNEL),
+         format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL),
          "Halves infection rate", Some(QUARANTINE_PERSONNEL)),
         ("Hospital Surge", policy.hospital_surge,
-         format!("${:.0}/tick + {} pers.", HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL),
+         format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
          "Halves lethality", Some(HOSPITAL_SURGE_PERSONNEL)),
     ];
 
