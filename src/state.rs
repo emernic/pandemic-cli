@@ -870,6 +870,20 @@ impl Medicine {
         }
     }
 
+    /// Estimate how many people a vaccination deployment would protect.
+    /// Returns the number of doses that would be consumed (capped by available doses).
+    pub fn estimate_vaccination(&self, susceptible: f64, efficacy: f64) -> f64 {
+        let target = susceptible * VACCINATION_FRACTION * efficacy;
+        target.min(self.doses)
+    }
+
+    /// Estimate how many people a treatment deployment would treat.
+    /// Returns the number of doses that would be consumed (capped by available doses).
+    pub fn estimate_treatment(&self, infected: f64, efficacy: f64) -> f64 {
+        let target = infected * TREATMENT_FRACTION * efficacy;
+        target.min(self.doses)
+    }
+
     /// Decode a UI selection index into a deploy target.
     /// Indices 0..n are vaccinate options, n..2n are treat options.
     pub fn decode_deploy_target(&self, selection: usize) -> Option<DeployTarget> {
