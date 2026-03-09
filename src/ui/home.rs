@@ -470,7 +470,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let available = (area.height as usize).saturating_sub(used_lines + 2); // 2 for border
         let show_count = available.min(state.event_log.len()).min(15);
 
-        for (day, msg) in state.event_log.iter().rev().take(show_count).collect::<Vec<_>>().into_iter().rev() {
+        let skip = state.event_log.len().saturating_sub(show_count);
+        for (day, msg) in state.event_log.iter().skip(skip) {
             lines.push(Line::from(vec![
                 Span::styled(format!("  Day {:<5.1} ", day), dim),
                 Span::styled(msg.clone(), Style::default().fg(Color::White)),
