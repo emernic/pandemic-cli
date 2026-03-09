@@ -67,13 +67,23 @@ pub fn process_events(state: &mut GameState) {
         format!("Funding crisis: suspended {}", suspended.join(", "))
     } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {
         "LOW FUNDS: Policies at risk of suspension!".to_string()
-    } else if let Some(GameEvent::DiseaseMutated { disease_idx, new_generation }) =
+    } else if let Some(GameEvent::DiseaseMutated { disease_idx, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
     {
         let name = state.diseases.get(*disease_idx)
             .map(|d| d.display_name(*disease_idx))
             .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
-        format!("{name} has mutated! (Gen {new_generation})")
+        // Check if any deployed/tested medicines are now outdated
+        let has_affected_medicine = state.medicines.iter().any(|m| {
+            m.target_diseases.contains(disease_idx)
+                && (m.tested_against.contains(disease_idx) || m.unlocked)
+                && m.strain_efficacy(*disease_idx, &state.diseases) < 1.0
+        });
+        if has_affected_medicine {
+            format!("{name} mutated — medicines less effective! Re-trial in [R] to recalibrate.")
+        } else {
+            format!("{name} has mutated.")
+        }
     } else {
         return;
     };
