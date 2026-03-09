@@ -1832,7 +1832,7 @@ impl GameState {
                 population: 430_000_000,
                 connections: vec![0],
                 infections: vec![],
-                collapse_threshold: 0.55, // Single-connection refugium — 45% dead
+                collapse_threshold: 0.55, // Same as NA — 45% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
