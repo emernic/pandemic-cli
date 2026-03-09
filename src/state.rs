@@ -461,12 +461,12 @@ pub fn ticks_to_days(ticks: f64) -> f64 {
 }
 
 /// Convert ticks to a formatted day string for the UI.
+/// Uses hours for sub-day values so "5 ticks" reads as "1h" not "0.05 days".
 pub fn format_days(ticks: f64) -> String {
     let days = ticks_to_days(ticks);
-    if days < 0.1 {
-        format!("{:.2} days", days)
-    } else if days < 1.0 {
-        format!("{:.1} days", days)
+    if days < 1.0 {
+        let hours = days * 24.0;
+        format!("{:.0}h", hours)
     } else {
         format!("{:.1} days", days)
     }
