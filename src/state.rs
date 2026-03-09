@@ -2644,7 +2644,14 @@ impl UiState {
                     state.regions.len() + 1 + DECREE_COUNT - 1
                 }
                 // Policies (0..POLICY_COUNT-1) + Appease Governor (POLICY_COUNT)
-                Some(PolicyUiState::ManagePolicies { .. }) => POLICY_COUNT,
+                // Appease is hidden for collapsed regions, so max is one less.
+                Some(PolicyUiState::ManagePolicies { region_idx }) => {
+                    if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
+                        POLICY_COUNT - 1
+                    } else {
+                        POLICY_COUNT
+                    }
+                }
                 Some(PolicyUiState::SelectSacrificeRegion) => {
                     // Only non-collapsed regions are selectable
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
