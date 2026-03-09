@@ -1105,7 +1105,7 @@ mod tests {
         state.diseases[0].knowledge = 1.0;
         state.diseases[0].pathogen_type = PathogenType::RnaVirus; // base rate 0.001
         // Ensure disease has infected population so sequencing can be considered
-        state.regions[0].infections[0].infected = 1000.0;
+        state.regions[0].get_or_create_infection(0).infected = 1000.0;
         state.field_research.clear();
 
         // After 4 sequencings: 0.001 * 0.5^4 = 0.0000625 < 0.0001 threshold

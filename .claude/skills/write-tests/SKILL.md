@@ -60,16 +60,16 @@ Two tests that verify different emergent behaviors of the disease spread engine:
 fn immune_reduces_susceptible_pool() {
     let mut state = GameState::new_default(42);
     // Set immunity to near-total in Asia to shrink the susceptible pool
-    state.regions[4].infections[0].immune = 4_000_000_000.0;
-    let before = state.regions[4].infections[0].infected;
+    state.regions[4].get_or_create_infection(0).immune = 4_000_000_000.0;
+    let before = state.regions[4].disease_state(0).unwrap().infected;
     let after = tick(&state);
-    let growth = after.regions[4].infections[0].infected - before;
+    let growth = after.regions[4].disease_state(0).unwrap().infected - before;
 
     // Compare against a baseline with no immunity
     let state2 = GameState::new_default(42);
     let after2 = tick(&state2);
-    let growth2 = after2.regions[4].infections[0].infected
-        - state2.regions[4].infections[0].infected;
+    let growth2 = after2.regions[4].disease_state(0).unwrap().infected
+        - state2.regions[4].disease_state(0).unwrap().infected;
 
     assert!(
         growth < growth2,

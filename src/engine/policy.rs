@@ -446,7 +446,7 @@ mod tests {
         state.policies[0].screening = ScreeningLevel::MassRapid;
         state.resources.funding = 10_000.0;
         // Set infections to 2,500 (above 2,000 threshold but below 10,000 default)
-        state.regions[0].infections[0].infected = 2_500.0;
+        state.regions[0].get_or_create_infection(0).infected = 2_500.0;
         // Clear other regions so total is just 2,500
         for r in &mut state.regions[1..] { r.infections.clear(); }
 
@@ -466,7 +466,7 @@ mod tests {
     fn screening_visibility_scales_reported_infections() {
         let mut state = screening_test_state();
         // Set a known infection level
-        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
 
         // Without screening: visibility = 15%
         let screened_none = state.total_infected_screened();
@@ -501,7 +501,7 @@ mod tests {
     fn healthcare_investment_reduces_lethality() {
         let mut state = screening_test_state();
         // Set up a region with significant infections for measurable deaths
-        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.diseases[0].lethality = 0.01;
 
         // Run without healthcare investment
