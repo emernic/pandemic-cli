@@ -172,6 +172,14 @@ cargo run -- --snapshot --do d0.5 --do p --do enter --do enter --do d1     # adv
 
 This eliminates the need for save files in simple multi-step tests. For longer sessions, save files are still useful.
 
+### ⚠️ Snapshot mode must mirror interactive mode
+
+**Snapshot mode is NOT a simplified version of the game.** It must behave identically to interactive mode so that AI playtest feedback is meaningful. If snapshot mode silently skips game events, auto-dismisses popups, or otherwise diverges from what a real player experiences, then playtest feedback is about a different game than what humans play.
+
+Concretely: **crisis events and game over interrupt `--days` advancement**, just like they pause the game in interactive mode. If you request `--days 10` and a crisis fires at day 3, execution stops at day 3 and remaining steps are dropped. The stderr log tells you what was dropped. To continue, dismiss the crisis (e.g., `--do enter`) and issue another `--days` command.
+
+**Never add code that auto-dismisses, auto-resolves, or silently skips game events in snapshot mode.** If an event blocks the player in interactive mode, it must also block in snapshot mode. The inconvenience is the point — it forces playtest agents to learn to handle crises, which produces better feedback.
+
 ### ⚠️ Save files are REQUIRED for real playtesting
 
 **Without a save file, every `cargo run --snapshot` starts a brand new game from day 0.** This means you can never test multi-step flows that span multiple invocations. To actually play the game across invocations:

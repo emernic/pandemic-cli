@@ -3,7 +3,7 @@ use ratatui::{backend::TestBackend, Terminal};
 use crate::action::string_to_action;
 use crate::apply_action;
 use crate::engine::tick;
-use crate::state::{GameState, SimState};
+use crate::state::{GameState, GameOutcome, SimState};
 use crate::ui;
 
 /// Result of running snapshot mode: the rendered screen and the updated state.
@@ -43,12 +43,18 @@ enum SnapshotStep {
 
 /// Run snapshot mode: process an ordered sequence of steps, then render.
 /// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
+///
+/// Mirrors interactive mode behavior: if a crisis event or game over occurs
+/// during tick advancement, execution stops immediately and remaining steps
+/// are dropped — just like a real player would be interrupted. This keeps
+/// snapshot mode faithful to the actual gameplay experience.
+///
 /// Returns both the rendered screen and the updated state.
 pub fn run_snapshot(
     mut state: GameState,
     steps: &[String],
 ) -> Result<SnapshotResult, String> {
-    for step_str in steps {
+    for (step_idx, step_str) in steps.iter().enumerate() {
         match parse_step(step_str)? {
             SnapshotStep::Key(key_str) => {
                 match string_to_action(&key_str) {
@@ -65,9 +71,47 @@ pub fn run_snapshot(
             }
             SnapshotStep::Ticks(n) => {
                 state.sim_state = SimState::Running;
-                for _ in 0..n {
+                for tick_i in 0..n {
                     state = tick(&state);
                     ui::process_events(&mut state);
+
+                    // Stop on crisis or game over — just like interactive mode.
+                    if state.active_crisis.is_some() || state.outcome != GameOutcome::Playing {
+                        let remaining_ticks = n - tick_i - 1;
+                        let remaining_steps: Vec<&str> = steps[step_idx + 1..].iter()
+                            .map(|s| s.as_str()).collect();
+
+                        let reason = if state.active_crisis.is_some() {
+                            "crisis event"
+                        } else {
+                            "game over"
+                        };
+
+                        // Log what was dropped so the caller knows
+                        let mut dropped = Vec::new();
+                        if remaining_ticks > 0 {
+                            let remaining_days = remaining_ticks as f64
+                                / crate::state::TICKS_PER_DAY;
+                            dropped.push(format!("{:.1} days", remaining_days));
+                        }
+                        if !remaining_steps.is_empty() {
+                            dropped.push(format!(
+                                "steps: {}",
+                                remaining_steps.join(", ")
+                            ));
+                        }
+
+                        if !dropped.is_empty() {
+                            eprintln!(
+                                "Interrupted by {}: dropped {}",
+                                reason,
+                                dropped.join("; ")
+                            );
+                        }
+
+                        let screen = render_to_string(&state);
+                        return Ok(SnapshotResult { screen, state });
+                    }
                 }
             }
         }
@@ -174,5 +218,33 @@ mod tests {
         assert_eq!(result.state.tick, 120);
         assert!(result.screen.contains("Threats"));
         assert!(result.screen.contains("Day: 1.0"));
+    }
+
+    #[test]
+    fn snapshot_stops_on_crisis() {
+        let state = GameState::new_default(42);
+        // Advance far enough that a crisis fires (crises start after tick 360).
+        // With seed 42, this should hit a crisis well before day 30.
+        let result = run_snapshot(state, &["d30".to_string()]).unwrap();
+        // Should have stopped early due to crisis
+        assert!(result.state.active_crisis.is_some(),
+            "should have hit a crisis during 30 days");
+        assert!(result.state.tick < 30 * 120,
+            "should have stopped before reaching 30 days (stopped at tick {})", result.state.tick);
+        assert!(result.screen.contains("CRISIS"),
+            "should show the crisis screen");
+    }
+
+    #[test]
+    fn snapshot_stops_on_game_over() {
+        let mut state = GameState::new_default(42);
+        // Force game over state
+        state.outcome = GameOutcome::Lost;
+        let tick_before = state.tick;
+        let result = run_snapshot(state, &["d10".to_string()]).unwrap();
+        // tick() returns early when not Playing, so tick shouldn't advance
+        assert_eq!(result.state.outcome, GameOutcome::Lost);
+        assert_eq!(result.state.tick, tick_before,
+            "tick should not advance after game over");
     }
 }
