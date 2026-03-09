@@ -30,8 +30,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     };
 
     let line1 = Line::from(vec![
-        Span::styled("PANDEMIC DEFENSE", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw("  "),
         pause_indicator,
         Span::raw("  "),
         Span::styled(
