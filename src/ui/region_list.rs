@@ -371,7 +371,10 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     let pop = region.population as f64;
     let visibility = state.screening_visibility(idx);
     let infected = region.screened_infected(&state.diseases, visibility);
-    let immune = region.detected_immune(&state.diseases);
+    let shows_immune = state.policies.get(idx)
+        .map(|p| p.screening.shows_immune())
+        .unwrap_or(false);
+    let immune = if shows_immune { region.detected_immune(&state.diseases) } else { 0.0 };
     let dead = region.detected_dead(&state.diseases);
     let alive = pop - dead; // alive based on detected deaths only
 
@@ -397,7 +400,10 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled("  Infected ", label),
         Span::styled(format_number(infected), Style::default().fg(Color::Red)),
         Span::styled("  Immune ", label),
-        Span::styled(format_number(immune), Style::default().fg(Color::Cyan)),
+        Span::styled(
+            if shows_immune { format_number(immune) } else { "?".to_string() },
+            Style::default().fg(if shows_immune { Color::Cyan } else { Color::DarkGray }),
+        ),
         Span::styled("  Dead ", label),
         Span::styled(format_number(dead), Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray })),
     ]));
@@ -441,7 +447,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 }
                 let dname = disease.display_name(inf.disease_idx);
                 let screened_inf = inf.infected * visibility;
-                let susceptible = pop - screened_inf - region.dead - inf.immune;
+                let shown_immune = if shows_immune { inf.immune } else { 0.0 };
+                let susceptible = pop - screened_inf - region.dead - shown_immune;
                 let mut spans = vec![
                     Span::styled(
                         format!("  {:<20}", dname),
@@ -454,8 +461,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                     Span::styled("Immune ", label),
                     Span::styled(
-                        format!("{:<10}", format_number(inf.immune)),
-                        Style::default().fg(Color::Cyan),
+                        if shows_immune { format!("{:<10}", format_number(shown_immune)) } else { format!("{:<10}", "?") },
+                        Style::default().fg(if shows_immune { Color::Cyan } else { Color::DarkGray }),
                     ),
                     Span::styled("Dead ", label),
                     Span::styled(
@@ -504,14 +511,14 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
             }
             match policy.screening {
                 crate::state::ScreeningLevel::None => {}
-                crate::state::ScreeningLevel::Low => {
-                    policy_parts.push(Span::styled("Screening:Low ", policy_style));
+                crate::state::ScreeningLevel::Basic => {
+                    policy_parts.push(Span::styled("Screen:Basic ", policy_style));
                 }
-                crate::state::ScreeningLevel::Medium => {
-                    policy_parts.push(Span::styled("Screening:Med ", policy_style));
+                crate::state::ScreeningLevel::Antigen => {
+                    policy_parts.push(Span::styled("Screen:Antigen ", policy_style));
                 }
-                crate::state::ScreeningLevel::High => {
-                    policy_parts.push(Span::styled("Screening:High ", policy_style));
+                crate::state::ScreeningLevel::MassRapid => {
+                    policy_parts.push(Span::styled("Screen:Rapid ", policy_style));
                 }
             }
             lines.push(Line::from(policy_parts));

@@ -16,7 +16,7 @@ use crate::state::{
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
     HEALTHCARE_INVESTMENT_COST,
-    SCREENING_LOW_COST, SCREENING_MEDIUM_COST, SCREENING_HIGH_COST,
+    SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
 };
 use crate::ui::hint_line;
@@ -86,9 +86,9 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             ].into_iter().flatten().collect();
             if let Some(p) = policy {
                 match p.screening {
-                    ScreeningLevel::Low => labels.push("Screen:Lo"),
-                    ScreeningLevel::Medium => labels.push("Screen:Med"),
-                    ScreeningLevel::High => labels.push("Screen:Hi"),
+                    ScreeningLevel::Basic => labels.push("Screen:Basic"),
+                    ScreeningLevel::Antigen => labels.push("Screen:Ag"),
+                    ScreeningLevel::MassRapid => labels.push("Screen:Rapid"),
                     ScreeningLevel::None => {}
                 }
             }
@@ -168,15 +168,15 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         (4, "Water Sanitation", policy.water_sanitation,
          format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL),
          "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL)),
-        (5, "Low Screening", policy.screening == ScreeningLevel::Low,
-         format!("${:.0}/day + 1 pers.", SCREENING_LOW_COST * TICKS_PER_DAY),
-         "40% infection visibility, faster detection", Some(1)),
-        (6, "Med Screening", policy.screening == ScreeningLevel::Medium,
-         format!("${:.0}/day + 2 pers.", SCREENING_MEDIUM_COST * TICKS_PER_DAY),
-         "70% infection visibility, faster detection", Some(2)),
-        (7, "High Screening", policy.screening == ScreeningLevel::High,
-         format!("${:.0}/day + 3 pers.", SCREENING_HIGH_COST * TICKS_PER_DAY),
-         "90% infection visibility, fastest detection", Some(3)),
+        (5, "Basic Screening", policy.screening == ScreeningLevel::Basic,
+         format!("${:.0}/day + 1 pers.", SCREENING_BASIC_COST * TICKS_PER_DAY),
+         "Rough infected estimates, faster detection", Some(1)),
+        (6, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
+         format!("${:.0}/day + 2 pers.", SCREENING_ANTIGEN_COST * TICKS_PER_DAY),
+         "Shows infected + immune counts, good accuracy", Some(2)),
+        (7, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
+         format!("${:.0}/day + 4 pers.", SCREENING_MASS_RAPID_COST * TICKS_PER_DAY),
+         "Near-complete data, reduces spread by 25%", Some(4)),
         (8, "Martial Law", policy.martial_law,
          format!("${:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL),
          "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL)),

@@ -54,6 +54,11 @@ pub(super) fn tick_spread_within(
                 if sanitation_active {
                     infectivity *= disease.transmission.water_sanitation_factor();
                 }
+                // Mass Rapid screening identifies and isolates cases, reducing spread
+                let screening_factor = policy
+                    .map(|p| p.screening.spread_factor())
+                    .unwrap_or(1.0);
+                infectivity *= screening_factor;
                 let new_infections =
                     (infectivity * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
@@ -137,7 +142,10 @@ pub(super) fn tick_spread_cross_region(
             continue;
         }
         let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
-        let dest_has_screening = new.policies.get(i).is_some_and(|p| p.border_controls);
+        let dest_has_border_controls = new.policies.get(i).is_some_and(|p| p.border_controls);
+        let dest_screening_factor = new.policies.get(i)
+            .map(|p| p.screening.spread_factor())
+            .unwrap_or(1.0);
 
         for (d_idx, disease) in diseases.iter().enumerate() {
             let connected_infected: f64 = regions_snapshot[i]
@@ -157,19 +165,24 @@ pub(super) fn tick_spread_cross_region(
                     };
                     let source_has_travel_ban =
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
-                    let source_has_screening =
+                    let source_has_border_controls =
                         new.policies.get(conn_idx).is_some_and(|p| p.border_controls);
+                    let source_screening_factor = new.policies.get(conn_idx)
+                        .map(|p| p.screening.spread_factor())
+                        .unwrap_or(1.0);
                     // Travel ban supersedes border controls
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
                         disease.transmission.travel_ban_factor()
-                    } else if source_has_screening || dest_has_screening {
+                    } else if source_has_border_controls || dest_has_border_controls {
                         0.5
                     } else {
                         1.0
                     };
+                    // Mass Rapid screening reduces cross-region spread at both ends
+                    let screening = dest_screening_factor.min(source_screening_factor);
                     regions_snapshot[conn_idx]
                         .disease_state(d_idx)
-                        .map(|inf| inf.infected * ban_factor * collapse_factor)
+                        .map(|inf| inf.infected * ban_factor * collapse_factor * screening)
                 })
                 .sum();
 
