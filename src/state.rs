@@ -1339,7 +1339,7 @@ impl MechanismOfAction {
     /// Fast/cheap mechanisms have fewer doses (need more manufacturing).
     pub fn base_doses(&self) -> f64 {
         let mult = self.dev_cost_multiplier();
-        // Scale from 60M (cheapest) to 180M (most expensive)
+        // Scale from 60M (mult=0.6) to 140M (mult=1.8)
         (60_000_000.0 + 80_000_000.0 * (mult - 0.6) / 1.2).round()
     }
 
@@ -1347,7 +1347,7 @@ impl MechanismOfAction {
     /// Fast mechanisms cost more per deployment; expensive ones are cheaper per use.
     pub fn deploy_cost(&self) -> f64 {
         let mult = self.dev_cost_multiplier();
-        // Scale from $65 (cheapest dev) to $30 (most expensive dev)
+        // Scale from $65 (mult=0.6) to $35 (mult=1.8)
         (65.0 - 30.0 * (mult - 0.6) / 1.2).round()
     }
 }
@@ -3896,22 +3896,20 @@ mod tests {
 
     #[test]
     fn mechanism_efficacy_affects_deployment() {
-        let mut state = GameState::new_default(42);
-        // Find a fast mechanism (CellWallInhibitor) and a slow one
+        let state = GameState::new_default(42);
+        // Disease 0 is always a Bacterium in seed 42 — both mechanisms must exist
         let fast_idx = state.medicines.iter().position(|m|
             m.mechanism == Some(MechanismOfAction::CellWallInhibitor)
-        );
+        ).expect("CellWallInhibitor medicine should exist for Bacterium");
         let slow_idx = state.medicines.iter().position(|m|
             m.mechanism == Some(MechanismOfAction::MetabolicInhibitor)
-        );
-        if let (Some(fi), Some(si)) = (fast_idx, slow_idx) {
-            let fast_eff = state.medicines[fi].effective_efficacy(0, &state.diseases);
-            let slow_eff = state.medicines[si].effective_efficacy(0, &state.diseases);
-            // Fast mechanism should have higher initial efficacy
-            assert!(fast_eff > slow_eff,
-                "fast mechanism should have higher efficacy: {} vs {}",
-                fast_eff, slow_eff);
-        }
+        ).expect("MetabolicInhibitor medicine should exist for Bacterium");
+        let fast_eff = state.medicines[fast_idx].effective_efficacy(0, &state.diseases);
+        let slow_eff = state.medicines[slow_idx].effective_efficacy(0, &state.diseases);
+        // Fast mechanism should have higher initial efficacy
+        assert!(fast_eff > slow_eff,
+            "fast mechanism should have higher efficacy: {} vs {}",
+            fast_eff, slow_eff);
     }
 
     #[test]
