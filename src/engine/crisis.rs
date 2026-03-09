@@ -2,6 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameState,
+    CRISIS_TYPE_COOLDOWN,
 };
 
 /// Generate a crisis event based on current game state. Returns None if no
@@ -64,10 +65,13 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::MutationSurge { disease_idx: idx });
     }
 
-    // Filter out the most recently resolved crisis type to prevent back-to-back repeats
-    if let Some(ref last_tag) = state.last_crisis_tag {
-        candidates.retain(|k| k.tag() != last_tag.as_str());
-    }
+    // Filter out crisis types that are still on cooldown
+    candidates.retain(|k| {
+        match state.crisis_cooldowns.get(k.tag()) {
+            Some(&last_tick) => state.tick.saturating_sub(last_tick) >= CRISIS_TYPE_COOLDOWN,
+            None => true,
+        }
+    });
 
     if candidates.is_empty() {
         return None;
@@ -235,8 +239,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         None => return "No active crisis".into(),
     };
 
-    // Record this crisis type to prevent back-to-back repeats
-    state.last_crisis_tag = Some(crisis.kind.tag().to_string());
+    // Record cooldown for this crisis type
+    state.crisis_cooldowns.insert(crisis.kind.tag().to_string(), state.tick);
 
     // Deduct costs generically from the chosen option (affordability was
     // already checked in apply_action before we get here).

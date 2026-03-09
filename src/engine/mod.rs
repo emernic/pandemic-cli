@@ -1626,13 +1626,18 @@ mod tests {
     #[test]
     fn crisis_generates_after_min_tick() {
         let mut state = GameState::new_default(42);
-        // Run past CRISIS_MIN_TICK — a crisis should eventually appear
-        for _ in 0..1000 {
+        // Run past CRISIS_MIN_TICK — a crisis should eventually appear.
+        // With CRISIS_INTERVAL=840, we need ~5000 ticks for P(no crisis) < 1%.
+        let mut found_crisis = false;
+        for _ in 0..5000 {
             state = tick(&state);
+            if state.active_crisis.is_some() {
+                found_crisis = true;
+                break;
+            }
         }
-        // With 1/200 chance per tick over 800 eligible ticks, P(no crisis) ≈ 0.018
-        assert!(state.active_crisis.is_some(),
-            "expected a crisis to generate within 1000 ticks");
+        assert!(found_crisis,
+            "expected a crisis to generate within 5000 ticks");
     }
 
     #[test]
@@ -1846,7 +1851,7 @@ mod tests {
         // Run until a crisis would generate
         state.sim_state = SimState::Running;
         let mut auto_resolved = false;
-        for _ in 0..2000 {
+        for _ in 0..5000 {
             state = tick(&state);
             // If a personnel crisis auto-resolved, the game stays running (not Event state)
             if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
@@ -1869,7 +1874,7 @@ mod tests {
                 break;
             }
         }
-        // We may not get a personnel crisis in 2000 ticks — that's OK.
+        // We may not get a personnel crisis in 5000 ticks — that's OK.
         // The test verifies correctness IF it fires, not that it fires.
         if auto_resolved {
             // Good — verified auto-resolve works
