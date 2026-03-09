@@ -36,48 +36,26 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
     segments.push(("              C . L . I .\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
 
-    segments.push(("  ── Getting Started ──\n".to_string(), cyan));
+    // Find the initial outbreak region
+    let outbreak_region = state.regions.iter()
+        .find(|r| r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0))
+        .map(|r| r.name.as_str())
+        .unwrap_or("an unknown region");
+
+    segments.push(("  ── BRIEFING ──\n".to_string(), cyan));
     segments.push(("\n".to_string(), dim));
-
-    let has_unknown = state.diseases.iter().enumerate().any(|(i, d)| {
-        d.display_name(i).starts_with("Unknown")
-    });
-    let has_identified = state.diseases.iter().any(|d| d.knowledge >= 0.33);
-    let has_unlocked_medicine = state.medicines.iter().any(|m| m.unlocked);
-    let any_policy = state.policies.iter().any(|p| p.any_active());
-
-    if has_unknown && state.field_research.is_none() {
-        segments.push(("  → Press [R] to start Research\n".to_string(), yellow));
-        segments.push(("    Identify unknown threats first!\n".to_string(), dim));
-    } else if state.field_research.is_some() || state.bench_research.is_some() {
-        segments.push(("  → Research in progress...\n".to_string(), dim));
-        segments.push(("    Press [R] to check status or boost\n".to_string(), dim));
-    }
-
-    if has_identified && !has_unlocked_medicine {
-        segments.push(("  → Develop medicines in [R] Research\n".to_string(), yellow));
-        segments.push(("    Bench research → Develop Medicine\n".to_string(), dim));
-    }
-
-    if has_unlocked_medicine {
-        segments.push(("  → Deploy medicines with [M]\n".to_string(), yellow));
-    }
-
-    if !any_policy {
-        segments.push(("  → Set policies with [P]\n".to_string(), yellow));
-        segments.push(("    Quarantine, travel bans, and more\n".to_string(), dim));
-    }
-
+    segments.push((format!("  A novel pathogen has been detected in {}.\n", outbreak_region), white));
+    segments.push(("  As director of the N.W.H.O., you must coordinate\n".to_string(), dim));
+    segments.push(("  the global response before it spirals out of control.\n".to_string(), dim));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  ── Panels ──\n".to_string(), cyan));
+    segments.push(("  Your first priority: send a research team to\n".to_string(), dim));
+    segments.push(("  identify the threat.\n".to_string(), dim));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  [T] Threats   — view diseases\n".to_string(), dim));
-    segments.push(("  [R] Research  — identify & develop\n".to_string(), dim));
-    segments.push(("  [M] Medicines — deploy treatments\n".to_string(), dim));
-    segments.push(("  [P] Policy    — contain outbreaks\n".to_string(), dim));
-    segments.push(("  [?] Help      — full controls\n".to_string(), dim));
+    segments.push(("  → Press [R] to open Research and begin\n".to_string(), yellow));
+    segments.push(("    identification.\n".to_string(), yellow));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  [Space] Pause  [←/→] Regions\n".to_string(), dim));
+    segments.push(("  [T] Threats   [R] Research   [M] Medicines\n".to_string(), dim));
+    segments.push(("  [P] Policy    [?] Help       [Space] Pause\n".to_string(), dim));
 
     segments
 }
