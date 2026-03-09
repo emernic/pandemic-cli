@@ -92,7 +92,7 @@ Concrete examples of what to watch for:
 
 Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rust + ratatui TUI.
 
-**The game is designed to be unwinnable.** There is no win condition — it's a survival/endurance challenge. The player will eventually be overwhelmed by diseases; the goal is to last as long as possible and save as many lives as you can. 20+ days is a decent run, 40+ is good, 100+ is exceptional. This is intentional — do not add win conditions or file issues about the game being "too hard" or "unwinnable."
+**Win condition:** Contain all diseases (total infected below threshold), identify all threats, and have tested medicines for each. This requires completing the full research→develop→trial pipeline for every disease while keeping infections under control. The game is designed to be very hard — most runs will end in loss. Don't make balance changes that trivialize the challenge.
 
 ## Quick Start
 
