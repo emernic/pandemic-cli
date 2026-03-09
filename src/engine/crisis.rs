@@ -37,8 +37,9 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Personnel crisis: requires at least 5 personnel
+    // Amount scales with workforce size so it remains a meaningful threat
     if state.resources.personnel >= 5 {
-        let amount = 3.min(state.resources.personnel);
+        let amount = 3.max(state.resources.personnel / 5);
         candidates.push(CrisisKind::PersonnelCrisis { amount });
     }
 
@@ -158,6 +159,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
             }
         }
         CrisisKind::PersonnelCrisis { amount } => {
+            let retention_cost = *amount as f64 * 100.0;
             CrisisEvent {
                 title: "Staff Burnout".into(),
                 description: format!(
@@ -171,9 +173,9 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Retention bonus ($400)".into(),
-                    description: "Pay $400 to retain staff".into(),
-                    cost: Some(CrisisCost { funding: 400.0, personnel: 0 }),
+                    label: format!("Retention bonus (${:.0})", retention_cost),
+                    description: format!("Pay ${:.0} to retain staff", retention_cost),
+                    cost: Some(CrisisCost { funding: retention_cost, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
