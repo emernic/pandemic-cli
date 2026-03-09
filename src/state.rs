@@ -343,8 +343,11 @@ impl Region {
         (self.population as f64 - self.total_dead()).max(0.0)
     }
 
+    /// Total infected across all diseases, capped at population (same
+    /// double-counting caveat as `total_dead`).
     pub fn total_infected(&self) -> f64 {
-        self.infections.iter().map(|i| i.infected).sum()
+        let raw: f64 = self.infections.iter().map(|i| i.infected).sum();
+        raw.min(self.population as f64)
     }
 
     /// Total dead across all diseases, capped at population.
@@ -355,8 +358,11 @@ impl Region {
         raw.min(self.population as f64)
     }
 
+    /// Total immune across all diseases, capped at population (same
+    /// double-counting caveat as `total_dead`).
     pub fn total_immune(&self) -> f64 {
-        self.infections.iter().map(|i| i.immune).sum()
+        let raw: f64 = self.infections.iter().map(|i| i.immune).sum();
+        raw.min(self.population as f64)
     }
 
     pub fn disease_state(&self, disease_idx: usize) -> Option<&RegionDiseaseState> {
