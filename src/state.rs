@@ -57,12 +57,13 @@ pub struct GameState {
 }
 
 // Disease emergence constants.
-/// First new disease can emerge after this many ticks.
-pub const EMERGENCE_MIN_TICK: u64 = 100;
+/// First new disease can emerge after this many ticks (~day 3).
+pub const EMERGENCE_MIN_TICK: u64 = 360;
 /// Per-tick probability of a new disease emerging (after min tick).
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.01; // ~1 every 100 ticks
+/// ~1 new disease every 5 days (600 ticks).
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0017;
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 8;
+pub const MAX_DISEASES: usize = 5;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
@@ -1401,31 +1402,17 @@ impl GameState {
             },
         ];
 
-        // --- Procedural disease generation ---
-        // Generate 2-3 diseases with different pathogen types
-        let disease_count = 2 + (rng.r#gen::<usize>() % 2); // 2 or 3
-
-        // Pick distinct pathogen types (weighted: prions are rare)
-        let mut available_types = vec![
+        // --- Initial disease ---
+        // Start with a single disease so the player can learn the ropes.
+        // Additional diseases emerge mid-game via spawn_disease().
+        let available_types = vec![
             PathogenType::RnaVirus,
             PathogenType::RnaVirus,   // 2× weight
             PathogenType::DnaVirus,
             PathogenType::Bacterium,
             PathogenType::Bacterium,  // 2× weight
         ];
-        // Only add prion with 20% chance per game
-        if rng.r#gen::<f64>() < 0.2 {
-            available_types.push(PathogenType::Prion);
-        }
-
-        let mut chosen_types = Vec::new();
-        for _ in 0..disease_count {
-            if available_types.is_empty() {
-                break;
-            }
-            let idx = rng.r#gen::<usize>() % available_types.len();
-            chosen_types.push(available_types.remove(idx));
-        }
+        let chosen_types = vec![available_types[rng.r#gen::<usize>() % available_types.len()]];
 
         let mut diseases = Vec::new();
         let mut used_names: Vec<String> = Vec::new();
@@ -1435,30 +1422,15 @@ impl GameState {
             diseases.push(disease);
         }
 
-        // --- Place initial outbreaks in distinct regions ---
-        let region_count = regions.len();
-        let mut available_regions: Vec<usize> = (0..region_count).collect();
-        for (disease_idx, _disease) in diseases.iter().enumerate() {
-            if available_regions.is_empty() {
-                break;
-            }
-            let pick = rng.r#gen::<usize>() % available_regions.len();
-            let region_idx = available_regions.remove(pick);
-
-            // First disease gets larger outbreak, subsequent ones get smaller
-            let infected = if disease_idx == 0 {
-                5_000.0 + rng.r#gen::<f64>() * 15_000.0
-            } else {
-                1_000.0 + rng.r#gen::<f64>() * 4_000.0
-            };
-
-            regions[region_idx].infections.push(RegionDiseaseState {
-                disease_idx,
-                infected,
-                dead: 0.0,
-                immune: 0.0,
-            });
-        }
+        // --- Place initial outbreak ---
+        let region_idx = rng.r#gen::<usize>() % regions.len();
+        let infected = 5_000.0 + rng.r#gen::<f64>() * 15_000.0;
+        regions[region_idx].infections.push(RegionDiseaseState {
+            disease_idx: 0,
+            infected,
+            dead: 0.0,
+            immune: 0.0,
+        });
 
         // --- Generate medicines to match diseases ---
         let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
@@ -1862,7 +1834,7 @@ mod tests {
     fn default_state_has_medicines() {
         let state = GameState::new_default(1);
         let disease_count = state.diseases.len();
-        assert!(disease_count >= 2 && disease_count <= 3, "expected 2-3 diseases, got {}", disease_count);
+        assert_eq!(disease_count, 1, "expected 1 starting disease, got {}", disease_count);
         // One targeted medicine per disease + one broad-spectrum
         assert_eq!(state.medicines.len(), disease_count + 1);
         // Medicines start locked — must be developed via research
