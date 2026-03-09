@@ -116,16 +116,19 @@ pub(super) fn tick_research(state: &mut GameState) {
                         if !medicine.tested_against.contains(&d_idx) {
                             medicine.tested_against.push(d_idx);
                         }
-                        // Update strain calibration to current disease generation
-                        if let Some(pos) = medicine.target_diseases.iter().position(|&d| d == d_idx) {
-                            let current_gen = state.diseases.get(d_idx)
-                                .map_or(0, |d| d.strain_generation) as i32;
-                            // Extend strain_generations if needed
-                            while medicine.strain_generations.len() <= pos {
-                                medicine.strain_generations.push(0);
-                            }
-                            medicine.strain_generations[pos] = current_gen;
+                        // Promote cross-reactive targets to primary targets.
+                        // A successful trial proves the medicine works against this disease.
+                        if !medicine.target_diseases.contains(&d_idx) {
+                            medicine.target_diseases.push(d_idx);
                         }
+                        // Update strain calibration to current disease generation
+                        let pos = medicine.target_diseases.iter().position(|&d| d == d_idx).unwrap();
+                        let current_gen = state.diseases.get(d_idx)
+                            .map_or(0, |d| d.strain_generation) as i32;
+                        while medicine.strain_generations.len() <= pos {
+                            medicine.strain_generations.push(0);
+                        }
+                        medicine.strain_generations[pos] = current_gen;
                     }
                 }
                 ResearchKind::GenomicSequencing { disease_idx } => {

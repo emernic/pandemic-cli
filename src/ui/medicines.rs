@@ -220,12 +220,14 @@ fn render_select_disease(
     )));
     lines.push(Line::from(""));
 
-    for (i, &disease_idx) in med.target_diseases.iter().enumerate() {
+    let deployable = med.deployable_diseases(&state.diseases);
+    for (i, &disease_idx) in deployable.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
         let marker = if selected { "▶ " } else { "  " };
         let disease_name = state.diseases.get(disease_idx)
             .map(|d| d.display_name(disease_idx))
             .unwrap_or_else(|| "Unknown".to_string());
+        let cross_reactive = med.is_cross_reactive(disease_idx);
 
         let inf = region.infections.iter().find(|inf| inf.disease_idx == disease_idx);
         let infected = inf.map(|i| i.infected).unwrap_or(0.0);
@@ -236,10 +238,14 @@ fn render_select_disease(
             Style::default().fg(Color::White)
         };
 
-        lines.push(Line::from(Span::styled(
-            format!("{}{}", marker, disease_name),
-            style,
-        )));
+        let mut spans = vec![Span::styled(format!("{}{}", marker, disease_name), style)];
+        if cross_reactive {
+            spans.push(Span::styled(
+                " (cross-reactive, 50% eff)",
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+        lines.push(Line::from(spans));
         lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled(
@@ -282,7 +288,12 @@ fn render_select_target(
         .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
         .unwrap_or(0.0);
     let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
-    let efficacy = therapy_efficacy * strain_eff;
+    let cross_reactive = if med.is_cross_reactive(disease_idx) {
+        crate::state::CROSS_REACTIVE_PENALTY
+    } else {
+        1.0
+    };
+    let efficacy = therapy_efficacy * strain_eff * cross_reactive;
     let eff_color = if efficacy >= 0.8 {
         Color::Green
     } else if efficacy >= 0.5 {
@@ -433,7 +444,7 @@ fn render_confirm_deploy(
     let mut lines: Vec<Line> = Vec::new();
     let med = &state.medicines[medicine_idx];
     let region = &state.regions[region_idx];
-    let target = med.decode_deploy_target(target_selection);
+    let target = med.decode_deploy_target(target_selection, &state.diseases);
 
     let (action_desc, disease_name) = match &target {
         Some(DeployTarget::Vaccinate { disease_idx }) => {

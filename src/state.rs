@@ -105,6 +105,11 @@ pub const TREATMENT_FRACTION: f64 = 0.5;
 /// fraction, making repeated deployments build toward herd immunity.
 pub const VACCINATION_FRACTION: f64 = 0.02;
 
+/// Efficacy multiplier when deploying a medicine against a disease it wasn't
+/// specifically developed for, but whose mechanism matches the pathogen type
+/// (e.g., a CellWall inhibitor developed for Bacterium-A used against Bacterium-B).
+pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
+
 // Disease emergence constants.
 /// First new disease can emerge after this many ticks (~day 7).
 /// Gives the player time to identify disease 0 and start the research pipeline.
@@ -964,6 +969,15 @@ impl MechanismOfAction {
             MechanismOfAction::EntryInhibitor,
         ]
     }
+
+    /// Which pathogen types this mechanism works against.
+    pub fn targets_pathogen(&self, pathogen: &PathogenType) -> bool {
+        match pathogen {
+            PathogenType::Bacterium => Self::bacterial_mechanisms().contains(self),
+            PathogenType::RnaVirus | PathogenType::DnaVirus => Self::viral_mechanisms().contains(self),
+            PathogenType::Prion => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1121,14 +1135,41 @@ impl Medicine {
         target.min(self.doses)
     }
 
+    /// All diseases this medicine can be deployed against: primary targets first,
+    /// then cross-reactive targets (same mechanism category, different disease).
+    /// Cross-reactive targets get a 50% efficacy penalty during deployment.
+    /// Only includes diseases whose pathogen type is known (identified to KNOWLEDGE_NAME).
+    pub fn deployable_diseases(&self, diseases: &[Disease]) -> Vec<usize> {
+        let mut result: Vec<usize> = self.target_diseases.clone();
+        if let Some(mech) = self.mechanism {
+            for (i, disease) in diseases.iter().enumerate() {
+                if !result.contains(&i)
+                    && disease.detected
+                    && disease.knowledge >= KNOWLEDGE_NAME
+                    && mech.targets_pathogen(&disease.pathogen_type)
+                {
+                    result.push(i);
+                }
+            }
+        }
+        result
+    }
+
+    /// Whether a disease is a cross-reactive target (not a primary target).
+    pub fn is_cross_reactive(&self, disease_idx: usize) -> bool {
+        !self.target_diseases.contains(&disease_idx)
+    }
+
     /// Decode a UI selection index into a deploy target.
     /// Indices 0..n are vaccinate options, n..2n are treat options.
-    pub fn decode_deploy_target(&self, selection: usize) -> Option<DeployTarget> {
-        let n = self.target_diseases.len();
+    /// Uses deployable_diseases (primary + cross-reactive) for the full target list.
+    pub fn decode_deploy_target(&self, selection: usize, diseases: &[Disease]) -> Option<DeployTarget> {
+        let targets = self.deployable_diseases(diseases);
+        let n = targets.len();
         if selection < n {
-            Some(DeployTarget::Vaccinate { disease_idx: self.target_diseases[selection] })
+            Some(DeployTarget::Vaccinate { disease_idx: targets[selection] })
         } else if selection < 2 * n {
-            Some(DeployTarget::Treat { disease_idx: self.target_diseases[selection - n] })
+            Some(DeployTarget::Treat { disease_idx: targets[selection - n] })
         } else {
             None
         }
@@ -1643,7 +1684,7 @@ impl UiState {
     }
 
     /// Handle Escape — go back one step in the current panel's wizard, or close the panel.
-    pub fn close_panel(&mut self, medicines: &[Medicine]) {
+    pub fn close_panel(&mut self, medicines: &[Medicine], diseases: &[Disease]) {
         match self.open_panel {
             Panel::Medicines => {
                 match self.medicine_ui.clone() {
@@ -1654,11 +1695,12 @@ impl UiState {
                     Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
                         let med = &medicines[medicine_idx];
                         // Reconstruct disease_idx and action from target_selection
-                        let n = med.target_diseases.len();
+                        let deployable = med.deployable_diseases(diseases);
+                        let n = deployable.len();
                         let (disease_idx, action) = if target_selection < n {
-                            (med.target_diseases[target_selection], 0)
+                            (deployable[target_selection], 0)
                         } else {
-                            (med.target_diseases[target_selection - n], 1)
+                            (deployable[target_selection - n], 1)
                         };
                         self.medicine_ui = Some(MedicineUiState::SelectTarget {
                             medicine_idx,
@@ -1669,7 +1711,7 @@ impl UiState {
                     }
                     Some(MedicineUiState::SelectTarget { medicine_idx, region_idx, .. }) => {
                         let med = &medicines[medicine_idx];
-                        if med.target_diseases.len() == 1 {
+                        if med.deployable_diseases(diseases).len() == 1 {
                             self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
                         } else {
                             self.medicine_ui = Some(MedicineUiState::SelectDisease {
@@ -1757,7 +1799,7 @@ impl UiState {
                 }
                 Some(MedicineUiState::SelectDisease { medicine_idx, .. }) => {
                     state.medicines[*medicine_idx]
-                        .target_diseases.len()
+                        .deployable_diseases(&state.diseases).len()
                         .saturating_sub(1)
                 }
                 Some(MedicineUiState::SelectTarget { .. }) => {
@@ -1918,12 +1960,13 @@ impl UiState {
                 let region_idx = order.get(self.panel_selection).copied().unwrap_or(0);
                 if region_idx < state.regions.len() {
                     let med = &state.medicines[medicine_idx];
-                    if med.target_diseases.len() == 1 {
+                    let deployable = med.deployable_diseases(&state.diseases);
+                    if deployable.len() == 1 {
                         // Single-target: skip disease selection
                         self.medicine_ui = Some(MedicineUiState::SelectTarget {
                             medicine_idx,
                             region_idx,
-                            disease_idx: med.target_diseases[0],
+                            disease_idx: deployable[0],
                         });
                     } else {
                         self.medicine_ui = Some(MedicineUiState::SelectDisease {
@@ -1937,7 +1980,8 @@ impl UiState {
             }
             Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
                 let med = &state.medicines[medicine_idx];
-                if let Some(&disease_idx) = med.target_diseases.get(self.panel_selection) {
+                let deployable = med.deployable_diseases(&state.diseases);
+                if let Some(&disease_idx) = deployable.get(self.panel_selection) {
                     self.medicine_ui = Some(MedicineUiState::SelectTarget {
                         medicine_idx,
                         region_idx,
@@ -1954,12 +1998,13 @@ impl UiState {
             }) => {
                 let med = &state.medicines[medicine_idx];
                 // panel_selection: 0 = vaccinate, 1 = treat
-                let pos = med.target_diseases.iter().position(|&d| d == disease_idx);
+                let deployable = med.deployable_diseases(&state.diseases);
+                let pos = deployable.iter().position(|&d| d == disease_idx);
                 let target_selection = match pos {
-                    Some(p) => p + self.panel_selection * med.target_diseases.len(),
+                    Some(p) => p + self.panel_selection * deployable.len(),
                     None => return None,
                 };
-                if med.decode_deploy_target(target_selection).is_some() {
+                if med.decode_deploy_target(target_selection, &state.diseases).is_some() {
                     let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
                     if state.resources.funding < deploy_cost {
                         self.status_message = Some(
