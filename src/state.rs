@@ -53,8 +53,24 @@ pub struct GameState {
     /// Active crisis event requiring player decision. Game pauses while active.
     #[serde(default)]
     pub active_crisis: Option<CrisisEvent>,
+    /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
+    #[serde(default)]
+    pub history: Vec<HistorySnapshot>,
     pub ui: UiState,
 }
+
+/// A point-in-time snapshot for dashboard sparkline charts.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HistorySnapshot {
+    pub tick: u64,
+    pub total_infected: f64,
+    pub total_dead: f64,
+}
+
+/// Record a history snapshot every this many ticks (~1 hour of game time).
+pub const HISTORY_INTERVAL: u64 = 5;
+/// Maximum history entries to retain (covers ~4 days at 5-tick intervals).
+pub const HISTORY_MAX: usize = 100;
 
 // Medicine constants.
 /// Fraction of infected treated per deployment (before efficacy modifiers).
@@ -1474,6 +1490,7 @@ impl GameState {
             outcome: GameOutcome::Playing,
             events: vec![],
             active_crisis: None,
+            history: vec![],
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
