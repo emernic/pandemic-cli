@@ -135,8 +135,7 @@ pub fn tick(state: &GameState) -> GameState {
 
     // Disease mutation (sequencing reduces mutation rate by half per level)
     for (d_idx, disease) in new.diseases.iter_mut().enumerate() {
-        let base_rate = disease.pathogen_type.mutation_rate();
-        let mutation_chance = base_rate * 0.5_f64.powi(disease.sequencing_count as i32);
+        let mutation_chance = disease.effective_mutation_rate();
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
             // Small random parameter changes (±10% of current value), clamped to

@@ -284,6 +284,12 @@ impl Disease {
             format!("Unknown Pathogen #{}", idx + 1)
         }
     }
+
+    /// Effective mutation rate after genomic sequencing reductions.
+    /// Each sequencing halves the rate: base_rate * 0.5^sequencing_count.
+    pub fn effective_mutation_rate(&self) -> f64 {
+        self.pathogen_type.mutation_rate() * 0.5_f64.powi(self.sequencing_count as i32)
+    }
 }
 
 /// Knowledge thresholds for progressive disease revelation.

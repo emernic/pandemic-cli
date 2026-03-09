@@ -366,8 +366,7 @@ fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
         }
         ResearchKind::GenomicSequencing { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
-            let current_rate = disease.pathogen_type.mutation_rate()
-                * 0.5_f64.powi(disease.sequencing_count as i32);
+            let current_rate = disease.effective_mutation_rate();
             let new_rate = current_rate * 0.5;
             Some(format!("Mutation rate: {:.4} → {:.4}", current_rate, new_rate))
         }
