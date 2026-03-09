@@ -244,8 +244,7 @@ fn render_select_target(
                 let immune = inf.map(|i| i.immune).unwrap_or(0.0);
                 let susceptible = (pop - infected - dead - immune).max(0.0);
                 let empty = susceptible == 0.0;
-                let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
-                let will_vaccinate = target_vaccinated.min(med.doses);
+                let will_vaccinate = med.estimate_vaccination(susceptible, efficacy);
 
                 let marker = if selected { "▶ " } else { "  " };
                 let style = if empty {
@@ -300,8 +299,7 @@ fn render_select_target(
                     format!("{}Treat infected ({})", marker, disease_name),
                     style,
                 )));
-                let target_treated = infected * crate::state::TREATMENT_FRACTION * efficacy;
-                let will_treat = target_treated.min(med.doses);
+                let will_treat = med.estimate_treatment(infected, efficacy);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(

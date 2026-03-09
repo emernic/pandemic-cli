@@ -2,7 +2,6 @@ use rand::Rng;
 
 use crate::state::{
     DeployTarget, GameOutcome, GameState, RegionDiseaseState,
-    TREATMENT_FRACTION, VACCINATION_FRACTION,
 };
 
 /// Find or create a RegionDiseaseState entry for the given disease in a region.
@@ -88,8 +87,7 @@ pub(super) fn deploy_medicine(
                 // This mirrors treatment's scaling — each deploy is
                 // meaningful, and repeated deploys build herd immunity.
                 let susceptible = (pop - infected - dead - immune).max(0.0);
-                let target_vaccinated = susceptible * VACCINATION_FRACTION * efficacy;
-                let actual = target_vaccinated.min(state.medicines[medicine_idx].doses);
+                let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy);
                 if actual > 0.0 {
                     // Now create entry if needed
                     let inf = get_or_create_infection(region, disease_idx);
@@ -118,8 +116,7 @@ pub(super) fn deploy_medicine(
                 // Treatment is proportional: treats a fraction of infected,
                 // capped by available doses. This scales naturally with
                 // outbreak size — always impactful regardless of infection count.
-                let target_treated = infected * TREATMENT_FRACTION * efficacy;
-                let actual = target_treated.min(state.medicines[medicine_idx].doses);
+                let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
                 if actual > 0.0 {
                     let inf = get_or_create_infection(region, disease_idx);
                     inf.infected -= actual;
