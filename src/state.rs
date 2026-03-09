@@ -462,34 +462,36 @@ impl PathogenType {
     /// research, deploy policies, and develop medicines before collapse cascades.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast spreader (R0 ~3-5), moderate lethality, decent recovery
+            // RNA viruses: fast spreader, lethality dominates recovery
+            // Death fraction = lethality/(lethality+recovery) must exceed collapse
+            // thresholds (50-55%) to ensure game loss within 20 days.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.008, 0.014),
-                lethality: (0.0008, 0.002),
-                recovery: (0.0012, 0.002),
-                cross_region: (0.003, 0.005),
+                infectivity: (0.035, 0.055),
+                lethality: (0.006, 0.010),
+                recovery: (0.003, 0.005),
+                cross_region: (0.020, 0.035),
             },
-            // DNA viruses: moderate spread (R0 ~2.5-4.5), high lethality, slow recovery
+            // DNA viruses: moderate spread, high lethality, slow recovery
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.006, 0.012),
-                lethality: (0.0012, 0.0024),
-                recovery: (0.0008, 0.0016),
-                cross_region: (0.002, 0.004),
+                infectivity: (0.028, 0.045),
+                lethality: (0.008, 0.012),
+                recovery: (0.002, 0.004),
+                cross_region: (0.018, 0.030),
             },
-            // Bacteria: moderate spread (R0 ~3-5), moderate lethality
+            // Bacteria: moderate spread, moderate lethality
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.006, 0.010),
-                lethality: (0.0006, 0.0014),
-                recovery: (0.0006, 0.0014),
-                cross_region: (0.002, 0.004),
+                infectivity: (0.025, 0.040),
+                lethality: (0.005, 0.008),
+                recovery: (0.002, 0.004),
+                cross_region: (0.015, 0.025),
             },
-            // Prions: slow but devastating (R0 ~1.5-3), very high lethality, almost no recovery
-            // Infectivity floor must exceed max outflow (0.003+0.0006=0.0036) to ensure R0 > 1.
+            // Prions: slow but devastating, very high lethality, almost no recovery
+            // Infectivity floor must exceed max outflow to ensure R0 > 1.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.004, 0.007),
-                lethality: (0.0016, 0.003),
-                recovery: (0.0002, 0.0006),
-                cross_region: (0.001, 0.0024),
+                infectivity: (0.018, 0.030),
+                lethality: (0.010, 0.015),
+                recovery: (0.001, 0.002),
+                cross_region: (0.010, 0.020),
             },
         }
     }
