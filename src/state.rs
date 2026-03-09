@@ -180,32 +180,33 @@ impl PathogenType {
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: fast-spreading, variable lethality, quick recovery
+            // Ranges tightened to ~60% of original width to reduce seed difficulty variance
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.012, 0.030),
-                lethality: (0.001, 0.008),
-                recovery: (0.010, 0.020),
-                cross_region: (0.005, 0.015),
+                infectivity: (0.015, 0.027),
+                lethality: (0.002, 0.006),
+                recovery: (0.012, 0.018),
+                cross_region: (0.007, 0.013),
             },
             // DNA viruses: moderate spread, higher lethality, slower recovery
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.008, 0.020),
-                lethality: (0.002, 0.010),
-                recovery: (0.006, 0.014),
-                cross_region: (0.003, 0.010),
+                infectivity: (0.011, 0.018),
+                lethality: (0.004, 0.008),
+                recovery: (0.008, 0.012),
+                cross_region: (0.005, 0.009),
             },
             // Bacteria: moderate spread, low lethality, moderate recovery
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.008, 0.022),
-                lethality: (0.001, 0.005),
-                recovery: (0.005, 0.012),
-                cross_region: (0.004, 0.012),
+                infectivity: (0.011, 0.019),
+                lethality: (0.002, 0.004),
+                recovery: (0.006, 0.011),
+                cross_region: (0.006, 0.010),
             },
             // Prions: very slow but devastating, almost no recovery
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.002, 0.008),
-                lethality: (0.005, 0.015),
+                infectivity: (0.003, 0.007),
+                lethality: (0.007, 0.013),
                 recovery: (0.001, 0.003),
-                cross_region: (0.001, 0.004),
+                cross_region: (0.002, 0.004),
             },
         }
     }
