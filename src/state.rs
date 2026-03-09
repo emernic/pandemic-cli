@@ -865,6 +865,9 @@ pub struct Medicine {
     /// the medicine becomes less effective. Re-running a clinical trial updates this.
     #[serde(default)]
     pub strain_generations: Vec<u32>,
+    /// Number of times this medicine has been successfully deployed.
+    #[serde(default)]
+    pub deployed_count: u32,
 }
 
 /// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
@@ -889,6 +892,7 @@ impl Medicine {
             unlocked: false,
             tested_against: vec![],
             strain_generations: vec![],
+            deployed_count: 0,
         }
     }
 
@@ -2041,6 +2045,7 @@ impl GameState {
             unlocked: false,
             tested_against: vec![],
             strain_generations: vec![],
+            deployed_count: 0,
         });
 
         Self {
@@ -2414,7 +2419,7 @@ impl GameState {
 
         // Check if medicines were developed but never deployed
         let unlocked_meds = self.medicines.iter().filter(|m| m.unlocked).count();
-        let deployed_any = self.medicines.iter().any(|m| m.unlocked && m.doses < m.max_doses);
+        let deployed_any = self.medicines.iter().any(|m| m.unlocked && m.deployed_count > 0);
         if unlocked_meds > 0 && !deployed_any {
             tips.push(
                 "You developed medicines but never deployed them. Use [M] Medicines to protect or treat regions."
@@ -2747,5 +2752,17 @@ mod tests {
         let tips = state.defeat_tips();
         assert!(tips.iter().any(|t| t.contains("develop") || t.contains("Applied")),
             "should suggest developing medicine: {:?}", tips);
+    }
+
+    #[test]
+    fn defeat_tips_no_false_never_deployed_after_deploy() {
+        let mut state = GameState::new_default(42);
+        state.medicines[0].unlocked = true;
+        state.medicines[0].deployed_count = 3;
+        // Even if doses are back at max (re-manufactured), deployed_count tracks it
+        state.medicines[0].doses = state.medicines[0].max_doses;
+        let tips = state.defeat_tips();
+        assert!(!tips.iter().any(|t| t.contains("never deployed")),
+            "should not claim 'never deployed' when deployed_count > 0: {:?}", tips);
     }
 }

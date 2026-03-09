@@ -1584,6 +1584,7 @@ mod tests {
             unlocked: true,
             tested_against: vec![0],
             strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
+            deployed_count: 0,
         };
 
         // 3 generations behind = 1.0 - 3*0.15 = 0.55
