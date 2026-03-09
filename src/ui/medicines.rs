@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState};
+use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, grid_reading_order};
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -146,8 +146,10 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     )));
     lines.push(Line::from(""));
 
-    for (i, region) in state.regions.iter().enumerate() {
-        let selected = state.ui.panel_selection == i;
+    let order = grid_reading_order(state.regions.len());
+    for (display_pos, &region_idx) in order.iter().enumerate() {
+        let region = &state.regions[region_idx];
+        let selected = state.ui.panel_selection == display_pos;
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)

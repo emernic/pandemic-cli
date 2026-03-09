@@ -1180,7 +1180,8 @@ impl UiState {
                 None
             }
             Some(MedicineUiState::SelectRegion { medicine_idx }) => {
-                let region_idx = self.panel_selection;
+                let order = grid_reading_order(state.regions.len());
+                let region_idx = order.get(self.panel_selection).copied().unwrap_or(0);
                 if region_idx < state.regions.len() {
                     self.medicine_ui = Some(MedicineUiState::SelectTarget {
                         medicine_idx,
@@ -1316,7 +1317,8 @@ impl UiState {
     fn handle_policy_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
         match self.policy_ui.clone() {
             Some(PolicyUiState::BrowseRegions) => {
-                let region_idx = self.panel_selection;
+                let order = grid_reading_order(state.regions.len());
+                let region_idx = order.get(self.panel_selection).copied().unwrap_or(0);
                 if region_idx < state.regions.len() {
                     self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
                     self.panel_selection = 0;
@@ -1357,8 +1359,8 @@ pub fn region_at_grid(col: u16, row: u16) -> Option<usize> {
 }
 
 /// Reading order of regions: left-to-right, top-to-bottom through the grid.
-/// Used for left/right wrap-around navigation.
-fn grid_reading_order(num_regions: usize) -> Vec<usize> {
+/// Used for left/right wrap-around navigation and canonical display order.
+pub fn grid_reading_order(num_regions: usize) -> Vec<usize> {
     let max_row = MAP_GRID.iter().take(num_regions).map(|&(_, r)| r).max().unwrap_or(0);
     let max_col = MAP_GRID.iter().take(num_regions).map(|&(c, _)| c).max().unwrap_or(0);
     let mut order = Vec::new();

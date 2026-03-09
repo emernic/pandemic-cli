@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{Disease, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS};
+use crate::state::{Disease, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
 use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -96,7 +96,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
             // Show affected regions once the disease is identified
             if disease.knowledge >= KNOWLEDGE_NAME {
-                let regions: Vec<&str> = state.regions.iter()
+                let order = grid_reading_order(state.regions.len());
+                let regions: Vec<&str> = order.iter()
+                    .filter_map(|&idx| state.regions.get(idx))
                     .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
                     .map(|r| r.name.as_str())
                     .collect();
@@ -184,7 +186,9 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
     let mut total_immune = 0.0;
     let mut total_dead = 0.0;
 
-    for region in &state.regions {
+    let order = grid_reading_order(state.regions.len());
+    for &region_idx in &order {
+        let region = &state.regions[region_idx];
         if let Some(inf) = region.disease_state(disease_idx) {
             if inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
                 continue;
