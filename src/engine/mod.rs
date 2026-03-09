@@ -1258,7 +1258,7 @@ mod tests {
         let state = GameState::new_default(42);
         let mut a = state.clone();
         let mut b = state;
-        for _ in 0..300 {
+        for _ in 0..1000 {
             a = tick(&a);
             b = tick(&b);
         }
