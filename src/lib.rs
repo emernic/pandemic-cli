@@ -366,4 +366,32 @@ mod tests {
         let state = apply_action(&state, &Action::OpenResearch);
         assert_eq!(state.ui.open_panel, Panel::None);
     }
+
+    #[test]
+    fn select_region_syncs_with_map_navigation() {
+        use crate::state::MedicineUiState;
+
+        let mut state = GameState::new_default(42);
+        // Unlock a medicine so we can enter the deploy wizard
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 100.0;
+
+        // Open medicines panel, select first medicine, enter SelectRegion
+        let state = apply_action(&state, &Action::OpenMedicines);
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })));
+
+        // Press right — map and list cursor should both move
+        let state = apply_action(&state, &Action::SelectRight);
+        assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })),
+            "should stay in SelectRegion after left/right");
+        // The map moved, so panel_selection should update to match
+        assert_ne!(state.ui.map_selection, 0,
+            "map should have moved from initial position");
+        // Verify the list cursor tracks the map
+        let order = crate::state::grid_reading_order(state.regions.len());
+        let expected = order.iter().position(|&r| r == state.ui.map_selection).unwrap_or(0);
+        assert_eq!(state.ui.panel_selection, expected,
+            "list cursor should follow map selection");
+    }
 }

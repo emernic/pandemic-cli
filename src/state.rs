@@ -2544,7 +2544,7 @@ impl UiState {
             MapDirection::Left,
             num_regions,
         );
-        self.sync_panel_region();
+        self.sync_panel_region(num_regions);
     }
 
     /// Navigate right on the map (always, regardless of open panel).
@@ -2555,11 +2555,11 @@ impl UiState {
             MapDirection::Right,
             num_regions,
         );
-        self.sync_panel_region();
+        self.sync_panel_region(num_regions);
     }
 
     /// Keep region-specific panel views in sync with the map selection.
-    fn sync_panel_region(&mut self) {
+    fn sync_panel_region(&mut self, num_regions: usize) {
         if let Some(PolicyUiState::ManagePolicies { region_idx }) = &mut self.policy_ui {
             *region_idx = self.map_selection;
         }
@@ -2584,6 +2584,14 @@ impl UiState {
                     });
                     self.panel_selection = 0;
                 }
+            }
+            Some(MedicineUiState::SelectRegion { .. }) => {
+                // Keep list cursor in sync with map — left/right should move the
+                // deploy target, consistent with how deeper wizard steps work.
+                let order = grid_reading_order(num_regions);
+                self.panel_selection = order.iter()
+                    .position(|&r| r == self.map_selection)
+                    .unwrap_or(0);
             }
             Some(MedicineUiState::ConfirmDeploy { medicine_idx, .. }) => {
                 // Regress to region selection — don't silently change region on confirm screen
