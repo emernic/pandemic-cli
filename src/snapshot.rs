@@ -3,7 +3,7 @@ use ratatui::{backend::TestBackend, Terminal};
 use crate::action::{string_to_action, Action};
 use crate::apply_action;
 use crate::engine::tick;
-use crate::state::{GameState, GameOutcome, SimState};
+use crate::state::{GameEvent, GameState, GameOutcome, SimState};
 use crate::ui;
 
 /// Result of running snapshot mode: the rendered screen and the updated state.
@@ -64,6 +64,28 @@ fn advance_ticks(state: &mut GameState, n: u64, auto_crises: bool) -> u64 {
         }
         if state.outcome != GameOutcome::Playing {
             return n - tick_i - 1;
+        }
+        // Auto-pause events (DiseaseDetected, RegionCollapsed) set SimState::Paused.
+        // In snapshot mode, log the event and auto-resume rather than blocking.
+        if state.sim_state == SimState::Paused {
+            for event in &state.events {
+                match event {
+                    GameEvent::DiseaseDetected { disease_idx } => {
+                        let name = state.diseases.get(*disease_idx)
+                            .map(|d| d.display_name(*disease_idx))
+                            .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
+                        eprintln!("⚠ NEW THREAT detected: {}", name);
+                    }
+                    GameEvent::RegionCollapsed { region_idx } => {
+                        let name = state.regions.get(*region_idx)
+                            .map(|r| r.name.as_str())
+                            .unwrap_or("Unknown");
+                        eprintln!("⚠ REGION COLLAPSED: {}", name);
+                    }
+                    _ => {}
+                }
+            }
+            state.sim_state = SimState::Running;
         }
     }
     0
@@ -332,6 +354,27 @@ mod tests {
         // No crisis should be pending at end (either all resolved, or game over)
         assert!(with.state.active_crisis.is_none(),
             "no crisis should be pending when auto_crises is on");
+    }
+
+    #[test]
+    fn snapshot_auto_resumes_on_disease_detection_pause() {
+        let mut state = GameState::new_default(42);
+        // Set first disease just below detection threshold so it triggers during ticks.
+        // Detection threshold is 10,000 total infected across all regions.
+        state.diseases[0].detected = false;
+        let near_threshold = 9_900.0;
+        state.regions[0].infections[0].infected = near_threshold;
+
+        // Advance 1 day with auto_crises so crises don't interfere.
+        // With the disease growing, detection should trigger during these ticks.
+        let result = run_snapshot(state, &["d1".to_string()], true).unwrap();
+
+        // The disease should now be detected
+        assert!(result.state.diseases[0].detected,
+            "disease should be detected after crossing threshold");
+        // All ticks should have completed (pause was auto-resumed, not blocking)
+        assert_eq!(result.state.tick, 120,
+            "all 120 ticks should complete — pause should auto-resume (got {})", result.state.tick);
     }
 
     #[test]
