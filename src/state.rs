@@ -2041,8 +2041,21 @@ pub enum CrisisKind {
     /// Two nations claim credit for your vaccine, threaten war.
     VaccineDispute { neutral_loss: f64, credit_gain: f64 },
 
+    // --- Dark comedy events (personality and flavor) ---
+
+    /// Quarterly performance review during the apocalypse.
+    PerformanceReview,
+    /// Pharmaceutical corp offers money to rename a disease.
+    NamingRights { disease_idx: usize, payout: f64 },
+    /// Unpaid intern claims a breakthrough. 50/50 gamble.
+    InternDiscovery { cost: f64 },
+    /// Congressional hearing about your handling of the crisis.
+    CongressionalHearing,
+
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
+    /// Follow-up to CongressionalHearing (Send deputy): contempt charges.
+    ContemptOfCongress,
     /// Follow-up to BlackMarketMedicine (Allow): counterfeit drugs killing people.
     CounterfeitEpidemic { region_idx: usize },
     /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
@@ -2081,6 +2094,11 @@ impl CrisisKind {
             CrisisKind::WHOEvacuation { .. } => "who_evac",
             CrisisKind::WarlordDemand { .. } => "warlord",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
+            CrisisKind::PerformanceReview => "performance_review",
+            CrisisKind::NamingRights { .. } => "naming_rights",
+            CrisisKind::InternDiscovery { .. } => "intern",
+            CrisisKind::CongressionalHearing => "congress",
+            CrisisKind::ContemptOfCongress => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::MilitaryOverreach => "military_overreach",
