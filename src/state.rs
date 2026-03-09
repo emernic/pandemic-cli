@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SimState {
@@ -26,6 +26,23 @@ impl SimState {
     }
 }
 
+/// Deserialize field_research: accepts both old `Option<ResearchProject>` (single)
+/// and new `Vec<ResearchProject>` (parallel) save formats.
+fn deserialize_field_research<'de, D>(deserializer: D) -> Result<Vec<ResearchProject>, D::Error>
+where D: Deserializer<'de> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum FieldResearch {
+        Vec(Vec<ResearchProject>),
+        Option(Option<ResearchProject>),
+    }
+    match FieldResearch::deserialize(deserializer)? {
+        FieldResearch::Vec(v) => Ok(v),
+        FieldResearch::Option(Some(p)) => Ok(vec![p]),
+        FieldResearch::Option(None) => Ok(vec![]),
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameState {
     pub tick: u64,
@@ -37,9 +54,10 @@ pub struct GameState {
     pub diseases: Vec<Disease>,
     #[serde(default)]
     pub medicines: Vec<Medicine>,
-    /// Active field research project (Identify Threat or Clinical Trial).
-    #[serde(default)]
-    pub field_research: Option<ResearchProject>,
+    /// Active field research projects (Identify Threat, Clinical Trial, Genomic Sequencing).
+    /// Multiple projects can run simultaneously, gated by personnel.
+    #[serde(default, deserialize_with = "deserialize_field_research")]
+    pub field_research: Vec<ResearchProject>,
     /// Active applied research project (Develop Medicine).
     #[serde(default, alias = "applied_research")]
     pub applied_research: Option<ResearchProject>,
@@ -95,6 +113,10 @@ pub struct HistorySnapshot {
 pub const HISTORY_INTERVAL: u64 = 5;
 /// Maximum history entries to retain (covers ~4 days at 5-tick intervals).
 pub const HISTORY_MAX: usize = 100;
+
+/// Maximum concurrent field research projects. Personnel-gated: each project
+/// requires dedicated staff, so the real limit is usually personnel, not slots.
+pub const MAX_FIELD_RESEARCH: usize = 3;
 
 // Medicine constants.
 /// Fraction of infected treated per deployment (before efficacy modifiers).
@@ -1425,9 +1447,11 @@ pub enum GameCommand {
     },
     AddResearchPersonnel {
         track: ResearchTrack,
+        slot_idx: usize,
     },
     RemoveResearchPersonnel {
         track: ResearchTrack,
+        slot_idx: usize,
     },
     TogglePolicy {
         region_idx: usize,
@@ -1612,8 +1636,8 @@ pub enum ResearchUiState {
     BrowseProjects { track: ResearchTrack },
     /// Confirming a project before starting it.
     ConfirmProject { track: ResearchTrack, project_idx: usize, double_personnel: bool },
-    /// Viewing the active project in a category.
-    ViewActive { track: ResearchTrack },
+    /// Viewing an active project. `slot_idx` selects which field project (0 for Applied/Basic).
+    ViewActive { track: ResearchTrack, slot_idx: usize },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1755,7 +1779,7 @@ impl UiState {
                         self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
                         self.panel_selection = 0;
                     }
-                    Some(ResearchUiState::ViewActive { track }) => {
+                    Some(ResearchUiState::ViewActive { track, .. }) => {
                         self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
                         self.panel_selection = 0;
                     }
@@ -1812,11 +1836,22 @@ impl UiState {
             Panel::Research => match &self.research_ui {
                 Some(ResearchUiState::BrowseCategories) => 2, // Field, Applied, Basic
                 Some(ResearchUiState::BrowseProjects { track }) => {
-                    let active = state.research_slot(*track).is_some();
-                    if active {
-                        0
+                    if *track == ResearchTrack::Field {
+                        // Active projects + available projects (if capacity remains)
+                        let n_active = state.field_research.len();
+                        let n_available = if state.field_research_has_capacity() {
+                            state.available_projects(*track).len()
+                        } else {
+                            0
+                        };
+                        (n_active + n_available).saturating_sub(1)
                     } else {
-                        state.available_projects(*track).len().saturating_sub(1)
+                        let active = state.research_slot(*track).is_some();
+                        if active {
+                            0
+                        } else {
+                            state.available_projects(*track).len().saturating_sub(1)
+                        }
                     }
                 }
                 Some(ResearchUiState::ConfirmProject { .. }) => 0,
@@ -2067,18 +2102,41 @@ impl UiState {
                 None
             }
             Some(ResearchUiState::BrowseProjects { track }) => {
-                if state.research_slot(track).is_some() {
-                    self.research_ui = Some(ResearchUiState::ViewActive { track });
-                    self.panel_selection = 0;
-                } else {
-                    let count = state.available_projects(track).len();
-                    if count > 0 {
-                        self.research_ui = Some(ResearchUiState::ConfirmProject {
-                            track,
-                            project_idx: self.panel_selection,
-                            double_personnel: false,
-                        });
+                if track == ResearchTrack::Field {
+                    // Field track: list shows active projects first, then available.
+                    let n_active = state.field_research.len();
+                    if self.panel_selection < n_active {
+                        // Selected an active project → view it
+                        self.research_ui = Some(ResearchUiState::ViewActive { track, slot_idx: self.panel_selection });
                         self.panel_selection = 0;
+                    } else {
+                        // Selected an available project
+                        let project_idx = self.panel_selection - n_active;
+                        let count = state.available_projects(track).len();
+                        if project_idx < count && state.field_research_has_capacity() {
+                            self.research_ui = Some(ResearchUiState::ConfirmProject {
+                                track,
+                                project_idx,
+                                double_personnel: false,
+                            });
+                            self.panel_selection = 0;
+                        }
+                    }
+                } else {
+                    // Applied/Basic: single-slot behavior
+                    if state.research_slot(track).is_some() {
+                        self.research_ui = Some(ResearchUiState::ViewActive { track, slot_idx: 0 });
+                        self.panel_selection = 0;
+                    } else {
+                        let count = state.available_projects(track).len();
+                        if count > 0 {
+                            self.research_ui = Some(ResearchUiState::ConfirmProject {
+                                track,
+                                project_idx: self.panel_selection,
+                                double_personnel: false,
+                            });
+                            self.panel_selection = 0;
+                        }
                     }
                 }
                 None
@@ -2086,7 +2144,7 @@ impl UiState {
             Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
                 Some(GameCommand::StartResearch { track, project_idx, double_personnel })
             }
-            Some(ResearchUiState::ViewActive { track }) => {
+            Some(ResearchUiState::ViewActive { track, .. }) => {
                 // ViewActive uses up/down for personnel, Confirm goes back
                 self.research_ui = Some(ResearchUiState::BrowseProjects { track });
                 self.panel_selection = 0;
@@ -2356,7 +2414,7 @@ impl GameState {
             regions,
             diseases,
             medicines,
-            field_research: None,
+            field_research: vec![],
             applied_research: None,
             basic_research: None,
             unlocked_techs: vec![],
@@ -2469,7 +2527,7 @@ impl GameState {
     }
 
     pub fn personnel_busy(&self) -> u32 {
-        let field = self.field_research.as_ref().map_or(0, |p| p.personnel_assigned);
+        let field: u32 = self.field_research.iter().map(|p| p.personnel_assigned).sum();
         let applied = self.applied_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let basic = self.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let policy: u32 = self.policies.iter().map(|p| p.personnel_cost()).sum();
@@ -2600,10 +2658,8 @@ impl GameState {
                 region.infections.retain(|inf| inf.disease_idx != idx);
             }
 
-            // Cancel any active research targeting the recycled disease.
-            if self.field_research.as_ref().is_some_and(|r| r.references_disease(idx)) {
-                self.field_research = None;
-            }
+            // Cancel any active field research targeting the recycled disease.
+            self.field_research.retain(|r| !r.references_disease(idx));
             if self.applied_research.as_ref().is_some_and(|r| r.references_disease(idx)) {
                 self.applied_research = None;
             }
@@ -2712,7 +2768,7 @@ impl GameState {
         // Must have very low funds AND negative/zero income (can't recover)
         let broke = self.resources.funding < 100.0 && net_income <= 0.0;
         // No active research of any kind
-        let no_research = self.field_research.is_none()
+        let no_research = self.field_research.is_empty()
             && self.applied_research.is_none()
             && self.basic_research.is_none();
         // No medicine doses to deploy
@@ -2819,7 +2875,7 @@ impl GameState {
 
     /// Available field research projects (excludes currently active).
     pub fn available_field_projects(&self) -> Vec<ResearchKind> {
-        let active_kind = self.field_research.as_ref().map(|p| &p.kind);
+        let active_kinds: Vec<&ResearchKind> = self.field_research.iter().map(|p| &p.kind).collect();
         let mut projects = Vec::new();
         // Identify Threat: diseases not fully known, sorted by knowledge ascending
         // (unknown diseases first, then partially identified)
@@ -2830,7 +2886,7 @@ impl GameState {
         identify_targets.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         for (i, _knowledge) in identify_targets {
             let kind = ResearchKind::IdentifyThreat { disease_idx: i };
-            if active_kind != Some(&kind) {
+            if !active_kinds.contains(&&kind) {
                 projects.push(kind);
             }
         }
@@ -2841,7 +2897,7 @@ impl GameState {
                 && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
-                if active_kind != Some(&kind) {
+                if !active_kinds.contains(&&kind) {
                     projects.push(kind);
                 }
             }
@@ -2869,7 +2925,7 @@ impl GameState {
                         medicine_idx: i,
                         disease_idx: d_idx,
                     };
-                    if active_kind != Some(&kind) {
+                    if !active_kinds.contains(&&kind) {
                         projects.push(kind);
                     }
                 }
@@ -2879,12 +2935,18 @@ impl GameState {
     }
 
     /// Get the active research project for a given track.
+    /// For Field track (which supports multiple projects), returns the first.
     pub fn research_slot(&self, track: ResearchTrack) -> Option<&ResearchProject> {
         match track {
-            ResearchTrack::Field => self.field_research.as_ref(),
+            ResearchTrack::Field => self.field_research.first(),
             ResearchTrack::Applied => self.applied_research.as_ref(),
             ResearchTrack::Basic => self.basic_research.as_ref(),
         }
+    }
+
+    /// Whether field research has capacity for another project.
+    pub fn field_research_has_capacity(&self) -> bool {
+        self.field_research.len() < MAX_FIELD_RESEARCH
     }
 
     /// Available research projects for a given track (excludes currently active).

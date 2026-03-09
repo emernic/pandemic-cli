@@ -238,7 +238,7 @@ fn medicine_status_for_disease(state: &GameState, disease_idx: usize) -> MedStat
     }
     // Check if research is targeting this disease
     let researching = state.applied_research.as_ref().is_some_and(|r| r.references_disease(disease_idx))
-        || state.field_research.as_ref().is_some_and(|r| r.references_disease(disease_idx));
+        || state.field_research.iter().any(|r| r.references_disease(disease_idx));
     if researching {
         return MedStatus::InDevelopment;
     }

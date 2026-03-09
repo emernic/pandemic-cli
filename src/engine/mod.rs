@@ -287,12 +287,12 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (ok, msg) = research::start_research(state, *track, *project_idx, *double_personnel);
             CommandResult { message: msg, success: ok, adverse: false }
         }
-        GameCommand::AddResearchPersonnel { track } => {
-            let msg = research::add_personnel(state, *track);
+        GameCommand::AddResearchPersonnel { track, slot_idx } => {
+            let msg = research::add_personnel(state, *track, *slot_idx);
             CommandResult { message: msg, success: true, adverse: false }
         }
-        GameCommand::RemoveResearchPersonnel { track } => {
-            let msg = research::remove_personnel(state, *track);
+        GameCommand::RemoveResearchPersonnel { track, slot_idx } => {
+            let msg = research::remove_personnel(state, *track, *slot_idx);
             CommandResult { message: msg, success: true, adverse: false }
         }
         GameCommand::TogglePolicy {
@@ -1227,7 +1227,7 @@ mod tests {
         // High personnel count = high upkeep that exceeds income
         state.resources.personnel = 150;
         state.medicines.iter_mut().for_each(|m| m.doses = 0.0);
-        state.field_research = None;
+        state.field_research.clear();
         state.applied_research = None;
         state.basic_research = None;
         state.policies.iter_mut().for_each(|p| p.clear_all());
@@ -2614,17 +2614,17 @@ mod tests {
     fn data_leak_option_a_loses_research_gains_pol() {
         use crate::state::{ResearchProject, ResearchKind, TICKS_PER_DAY};
         let mut state = GameState::new_default(42);
-        state.field_research = Some(ResearchProject {
+        state.field_research = vec![ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
             progress: 500.0,
             required_ticks: 1000.0,
             personnel_assigned: 3,
-        });
+        }];
         let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::DataLeak, 0);
         let after = apply_action(&state, &Action::Confirm);
         let expected_progress = (500.0 - 2.0 * TICKS_PER_DAY as f64).max(0.0);
-        assert!((after.field_research.as_ref().unwrap().progress - expected_progress).abs() < 0.01,
+        assert!((after.field_research.first().unwrap().progress - expected_progress).abs() < 0.01,
             "option A should lose 2 days of field research progress");
         assert!((after.resources.political_power - (before_pol + 0.05)).abs() < 0.001,
             "option A should gain 0.05 POL modifier");

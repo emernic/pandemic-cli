@@ -97,7 +97,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Data leak: requires any active research (field or applied)
-    if state.field_research.is_some() || state.applied_research.is_some() {
+    if !state.field_research.is_empty() || state.applied_research.is_some() {
         candidates.push(CrisisKind::DataLeak);
     }
 
@@ -960,7 +960,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::DataLeak, 0) => {
             // Go transparent — lose research progress, gain POL
-            if let Some(proj) = &mut state.field_research {
+            if let Some(proj) = state.field_research.first_mut() {
                 let loss = (2.0 * TICKS_PER_DAY) as f64;
                 proj.progress = (proj.progress - loss).max(0.0);
             } else if let Some(proj) = &mut state.applied_research {
