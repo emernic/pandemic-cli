@@ -11,7 +11,7 @@ use crate::state::{GameState, ticks_to_days};
 
 // ── Splash (first visit) ──────────────────────────────────────────────
 
-fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
+fn build_splash_content() -> Vec<(String, Style)> {
     let red = Style::default().fg(Color::Red);
     let white = Style::default().fg(Color::White);
     let dim = Style::default().fg(Color::DarkGray);
@@ -36,30 +36,20 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
     segments.push(("              C . L . I .\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
 
-    // Find the initial outbreak region (only from detected diseases)
-    let outbreak_region = state.regions.iter()
-        .find(|r| r.infections.iter().any(|inf| {
-            inf.disease_idx == 0
-                && inf.infected > 0.0
-                && state.diseases.get(0).is_some_and(|d| d.detected)
-        }))
-        .map(|r| r.name.as_str())
-        .unwrap_or("an unknown region");
-
     segments.push(("  ── BRIEFING ──\n".to_string(), cyan));
     segments.push(("\n".to_string(), dim));
-    segments.push((format!("  A novel pathogen has been detected in {}.\n", outbreak_region), white));
-    segments.push(("  As director of the N.W.H.O., you must coordinate\n".to_string(), dim));
-    segments.push(("  the global response before it spirals out of control.\n".to_string(), dim));
+    segments.push(("  Unusual disease activity has been reported.\n".to_string(), white));
+    segments.push(("  As director of the N.W.H.O., you must monitor\n".to_string(), dim));
+    segments.push(("  the situation and respond as threats emerge.\n".to_string(), dim));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  Your first priority: send a research team to\n".to_string(), dim));
-    segments.push(("  identify the threat.\n".to_string(), dim));
+    segments.push(("  Watch for confirmed outbreaks, then identify\n".to_string(), dim));
+    segments.push(("  and contain each threat.\n".to_string(), dim));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  → Press [R] to open Research and begin\n".to_string(), yellow));
-    segments.push(("    identification.\n".to_string(), yellow));
+    segments.push(("  → [T] Threats — monitor for new outbreaks\n".to_string(), yellow));
+    segments.push(("  → [R] Research — identify & develop cures\n".to_string(), yellow));
+    segments.push(("  → [P] Policy — contain the spread\n".to_string(), yellow));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  [T] Threats   [R] Research   [M] Medicines\n".to_string(), dim));
-    segments.push(("  [P] Policy    [?] Help       [Space] Pause\n".to_string(), dim));
+    segments.push(("  [M] Medicines  [?] Help  [Space] Pause\n".to_string(), dim));
 
     segments
 }
@@ -95,7 +85,7 @@ fn render_truncated(segments: &[(String, Style)], max_lines: usize) -> Vec<Line<
 }
 
 fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
-    let segments = build_splash_content(state);
+    let segments = build_splash_content();
 
     // One full line per tick for a snappy typewriter effect.
     // usize::MAX means "show everything" (typewriter done).
