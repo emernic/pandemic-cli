@@ -511,8 +511,8 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 title: "Pressure to Skip Trials".into(),
                 description: format!(
                     "Politicians are demanding you skip clinical trials for {} ({} treatment). \
-                     Fast-tracking deploys the medicine immediately but with reduced efficacy. \
-                     Maintaining standards delays deployment but ensures full potency.",
+                     Fast-tracking clears the medicine for use immediately but at reduced efficacy. \
+                     Maintaining standards delays availability but ensures full potency.",
                     disease_name, med_name,
                 ),
                 option_a: CrisisOption {
@@ -522,7 +522,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Fast-track (+10% POL)".into(),
-                    description: "Deploy now at reduced efficacy — public approves the speed".into(),
+                    description: "Clear for use at reduced efficacy — public approves the speed".into(),
                     cost: None,
                 },
                 kind,
