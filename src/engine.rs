@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisEvent, CrisisKind, CrisisOption,
+    CrisisCost, CrisisEvent, CrisisKind, CrisisOption,
     DeployTarget, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     RegionDiseaseState, ResearchKind, ResearchProject, TransmissionVector,
     BORDER_SCREENING_COST, BOOST_RP_COST, BOOST_TICKS, CRISIS_INTERVAL, CRISIS_MIN_TICK,
@@ -648,9 +648,11 @@ fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<CrisisEvent>
 }
 
 /// Build a CrisisEvent with human-readable text for the given kind.
+/// Build a crisis event. INVARIANT: option_a must ALWAYS be free (cost: None)
+/// so the player is never softlocked. Paid options go in option_b.
 fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
-    match &kind {
+    let event = match &kind {
         CrisisKind::SupplyDisruption { medicine_idx } => {
             let med_name = state.medicines.get(*medicine_idx)
                 .map(|m| m.name.as_str()).unwrap_or("Unknown");
@@ -667,10 +669,12 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_a: CrisisOption {
                     label: "Accept losses".into(),
                     description: format!("Lose {} doses", crate::format_number(loss)),
+                    cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Emergency reroute ($300)".into(),
                     description: "Pay $300 to save the supply".into(),
+                    cost: Some(CrisisCost { funding: 300.0, rp: 0.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -684,10 +688,12 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_a: CrisisOption {
                     label: "Evacuate lab".into(),
                     description: "Lose current bench research progress".into(),
+                    cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Emergency containment (50 RP, 3 personnel)".into(),
                     description: "Spend resources to save the project".into(),
+                    cost: Some(CrisisCost { funding: 0.0, rp: 50.0, personnel: 3 }),
                 },
                 kind,
                 tick_created: tick,
@@ -706,10 +712,12 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_a: CrisisOption {
                     label: "Comply — lift quarantine".into(),
                     description: format!("Remove quarantine in {}", region_name),
+                    cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Resist ($500)".into(),
                     description: "Pay $500 in political capital to maintain quarantine".into(),
+                    cost: Some(CrisisCost { funding: 500.0, rp: 0.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -726,16 +734,19 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_a: CrisisOption {
                     label: format!("Accept resignations (−{} personnel)", amount),
                     description: format!("Lose {} personnel permanently", amount),
+                    cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Retention bonus ($400)".into(),
                     description: "Pay $400 to retain staff".into(),
+                    cost: Some(CrisisCost { funding: 400.0, rp: 0.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
             }
         }
         CrisisKind::InternationalAid { funding, rp } => {
+            // Both options are free (they give resources, not cost them)
             CrisisEvent {
                 title: "International Aid Package".into(),
                 description: "The WHO is offering an emergency aid package. \
@@ -743,10 +754,12 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_a: CrisisOption {
                     label: format!("Emergency funding (+${:.0})", funding),
                     description: "Direct financial support".into(),
+                    cost: None,
                 },
                 option_b: CrisisOption {
                     label: format!("Research support (+{:.0} RP)", rp),
                     description: "Scientific collaboration and equipment".into(),
+                    cost: None,
                 },
                 kind,
                 tick_created: tick,
@@ -766,16 +779,23 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 option_a: CrisisOption {
                     label: "Ignore — focus resources elsewhere".into(),
                     description: "No cost, but mutation continues unchecked".into(),
+                    cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Emergency analysis (75 RP)".into(),
                     description: "Gain +0.15 knowledge of this pathogen".into(),
+                    cost: Some(CrisisCost { funding: 0.0, rp: 75.0, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
             }
         }
-    }
+    };
+    // INVARIANT: option_a must always be free so the player is never softlocked.
+    debug_assert!(event.option_a.cost.is_none(),
+        "Crisis '{}' has a cost on option_a — every crisis must have at least one free option",
+        event.title);
+    event
 }
 
 /// Apply the chosen crisis resolution. Returns a status message.
@@ -797,21 +817,10 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 "Supply disruption resolved".into()
             }
         }
-        (CrisisKind::SupplyDisruption { medicine_idx }, _) => {
-            // Pay to save
-            if state.resources.funding >= 300.0 {
-                state.resources.funding -= 300.0;
-                "Emergency reroute successful — supply chain restored (-$300)".into()
-            } else {
-                // Can't afford it — still lose some doses
-                if let Some(med) = state.medicines.get_mut(*medicine_idx) {
-                    let lost = (med.doses * 0.5).round();
-                    med.doses = (med.doses - lost).max(0.0);
-                    format!("Insufficient funds for reroute — lost {} doses", crate::format_number(lost))
-                } else {
-                    "Insufficient funds for emergency reroute".into()
-                }
-            }
+        (CrisisKind::SupplyDisruption { .. }, _) => {
+            // Pay to save (affordability checked before confirmation)
+            state.resources.funding -= 300.0;
+            "Emergency reroute successful — supply chain restored (-$300)".into()
         }
         (CrisisKind::LabAccident, 0) => {
             // Evacuate — lose bench research
@@ -819,17 +828,9 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Lab evacuated — bench research project lost".into()
         }
         (CrisisKind::LabAccident, _) => {
-            // Contain — spend resources
-            if state.resources.research_points >= 50.0 && state.personnel_available() >= 3 {
-                state.resources.research_points -= 50.0;
-                "Containment successful — research project saved (-50 RP)".into()
-            } else if state.resources.research_points < 50.0 {
-                state.bench_research = None;
-                "Insufficient RP for containment — research lost".into()
-            } else {
-                state.bench_research = None;
-                "Insufficient personnel for containment — research lost".into()
-            }
+            // Contain (affordability checked before confirmation)
+            state.resources.research_points -= 50.0;
+            "Containment successful — research project saved (-50 RP)".into()
         }
         (CrisisKind::PoliticalPressure { region_idx }, 0) => {
             // Comply — lift quarantine
@@ -840,35 +841,20 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
             format!("Quarantine lifted in {} due to political pressure", region_name)
         }
-        (CrisisKind::PoliticalPressure { region_idx }, _) => {
-            // Resist — pay $500
-            if state.resources.funding >= 500.0 {
-                state.resources.funding -= 500.0;
-                "Political pressure resisted — quarantine maintained (-$500)".into()
-            } else {
-                // Can't afford — quarantine lifted anyway
-                let region_name = state.regions.get(*region_idx)
-                    .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-                if let Some(policy) = state.policies.get_mut(*region_idx) {
-                    policy.quarantine = false;
-                }
-                format!("Cannot afford resistance — quarantine lifted in {}", region_name)
-            }
+        (CrisisKind::PoliticalPressure { .. }, _) => {
+            // Resist (affordability checked before confirmation)
+            state.resources.funding -= 500.0;
+            "Political pressure resisted — quarantine maintained (-$500)".into()
         }
         (CrisisKind::PersonnelCrisis { amount }, 0) => {
             // Accept resignations
             state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
             format!("Lost {} personnel to burnout", amount)
         }
-        (CrisisKind::PersonnelCrisis { amount }, _) => {
-            // Pay retention bonus
-            if state.resources.funding >= 400.0 {
-                state.resources.funding -= 400.0;
-                "Retention bonuses paid — staff morale restored (-$400)".into()
-            } else {
-                state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
-                format!("Cannot afford retention bonuses — lost {} personnel", amount)
-            }
+        (CrisisKind::PersonnelCrisis { .. }, _) => {
+            // Pay retention bonus (affordability checked before confirmation)
+            state.resources.funding -= 400.0;
+            "Retention bonuses paid — staff morale restored (-$400)".into()
         }
         (CrisisKind::InternationalAid { funding, .. }, 0) => {
             // Take funding
@@ -885,18 +871,14 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Mutation surge ignored — focusing resources elsewhere".into()
         }
         (CrisisKind::MutationSurge { disease_idx }, _) => {
-            // Emergency analysis
-            if state.resources.research_points >= 75.0 {
-                state.resources.research_points -= 75.0;
-                if let Some(disease) = state.diseases.get_mut(*disease_idx) {
-                    disease.knowledge = (disease.knowledge + 0.15).min(1.0);
-                    let name = disease.display_name(*disease_idx);
-                    format!("Emergency analysis complete — gained knowledge of {} (-75 RP)", name)
-                } else {
-                    "Emergency analysis complete (-75 RP)".into()
-                }
+            // Emergency analysis (affordability checked before confirmation)
+            state.resources.research_points -= 75.0;
+            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
+                disease.knowledge = (disease.knowledge + 0.15).min(1.0);
+                let name = disease.display_name(*disease_idx);
+                format!("Emergency analysis complete — gained knowledge of {} (-75 RP)", name)
             } else {
-                "Insufficient RP for emergency analysis — mutation continues".into()
+                "Emergency analysis complete (-75 RP)".into()
             }
         }
     }
@@ -2779,8 +2761,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 300.0, rp: 50.0 },
             title: "Test Crisis".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "A".into() },
-            option_b: CrisisOption { label: "B".into(), description: "B".into() },
+            option_a: CrisisOption { label: "A".into(), description: "A".into(), cost: None },
+            option_b: CrisisOption { label: "B".into(), description: "B".into(), cost: None },
             tick_created: 0,
         });
 
@@ -2805,8 +2787,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, rp: 100.0 },
             title: "Aid".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "Funding".into(), description: "".into() },
-            option_b: CrisisOption { label: "RP".into(), description: "".into() },
+            option_a: CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "RP".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
 
@@ -2822,8 +2804,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, rp: 100.0 },
             title: "Aid".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "Funding".into(), description: "".into() },
-            option_b: CrisisOption { label: "RP".into(), description: "".into() },
+            option_a: CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "RP".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::SelectNext); // select option B
@@ -2834,27 +2816,31 @@ mod tests {
     }
 
     #[test]
-    fn crisis_personnel_loss_when_cant_afford() {
-        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+    fn crisis_unaffordable_option_blocked() {
+        use crate::state::{CrisisCost, CrisisEvent, CrisisKind, CrisisOption};
 
         let mut state = GameState::new_default(42);
         state.resources.funding = 0.0; // broke
-        let initial_personnel = state.resources.personnel;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Burnout".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "Accept".into(), description: "".into() },
-            option_b: CrisisOption { label: "Pay $400".into(), description: "".into() },
+            option_a: CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "Pay $400".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 400.0, rp: 0.0, personnel: 0 }) },
             tick_created: 0,
         });
 
-        // Try to pay (option B) but can't afford — should still lose personnel
+        // Try to pay (option B) but can't afford — confirm should be blocked
         let after = apply_action(&state, &Action::SelectNext);
         let after = apply_action(&after, &Action::Confirm);
-        assert!(after.active_crisis.is_none());
-        assert_eq!(after.resources.personnel, initial_personnel - 3,
-            "should lose personnel when can't afford retention");
+        assert!(after.active_crisis.is_some(), "crisis should still be active");
+        assert!(after.ui.status_message.as_ref().unwrap().contains("Not enough"),
+            "should show affordability message");
+
+        // Free option (A) should still work
+        let after = apply_action(&state, &Action::Confirm); // option A (default)
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
@@ -2868,8 +2854,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into() },
-            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
 
@@ -2890,8 +2876,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into() },
-            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
 
@@ -2911,8 +2897,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into() },
-            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
 
@@ -2937,8 +2923,8 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into() },
-            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
             tick_created: 0,
         });
         state.sim_state = SimState::Event { was_running: true };

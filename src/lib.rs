@@ -30,6 +30,18 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             }
             Action::Confirm => {
                 let choice = new.ui.crisis_selection;
+                // Check if the selected option is affordable
+                let option = if choice == 0 {
+                    &new.active_crisis.as_ref().unwrap().option_a
+                } else {
+                    &new.active_crisis.as_ref().unwrap().option_b
+                };
+                if let Some(cost) = &option.cost {
+                    if !cost.affordable(&new) {
+                        new.ui.status_message = Some("Not enough resources".into());
+                        return new;
+                    }
+                }
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;

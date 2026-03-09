@@ -126,7 +126,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(chunks[1]);
         region_list::render(f, split[0], state);
-        render_crisis(f, split[1], crisis, state.ui.crisis_selection);
+        render_crisis(f, split[1], crisis, state.ui.crisis_selection, state);
         return;
     }
 
@@ -191,7 +191,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
     }
 }
 
-fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize) {
+fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
@@ -214,40 +214,32 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
     )));
     lines.push(Line::from(""));
 
-    // Option A
-    let a_marker = if selection == 0 { "▶ " } else { "  " };
-    let a_style = if selection == 0 {
-        Style::default().fg(Color::White)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    lines.push(Line::from(Span::styled(
-        format!("  {}A: {}", a_marker, crisis.option_a.label),
-        a_style,
-    )));
-    lines.push(Line::from(Span::styled(
-        format!("      {}", crisis.option_a.description),
-        Style::default().fg(Color::DarkGray),
-    )));
-    lines.push(Line::from(""));
+    let options = [&crisis.option_a, &crisis.option_b];
+    let labels = ["A", "B"];
+    for (i, (option, label)) in options.iter().zip(labels.iter()).enumerate() {
+        let affordable = option.cost.as_ref().map_or(true, |c| c.affordable(state));
+        let marker = if selection == i { "▶ " } else { "  " };
 
-    // Option B
-    let b_marker = if selection == 1 { "▶ " } else { "  " };
-    let b_style = if selection == 1 {
-        Style::default().fg(Color::White)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    lines.push(Line::from(Span::styled(
-        format!("  {}B: {}", b_marker, crisis.option_b.label),
-        b_style,
-    )));
-    lines.push(Line::from(Span::styled(
-        format!("      {}", crisis.option_b.description),
-        Style::default().fg(Color::DarkGray),
-    )));
+        let style = if !affordable {
+            Style::default().fg(Color::Red)
+        } else if selection == i {
+            Style::default().fg(Color::White)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
 
-    lines.push(Line::from(""));
+        let suffix = if !affordable { " (not enough resources)" } else { "" };
+        lines.push(Line::from(Span::styled(
+            format!("  {}{}: {}{}", marker, label, option.label, suffix),
+            style,
+        )));
+        lines.push(Line::from(Span::styled(
+            format!("      {}", option.description),
+            if !affordable { Style::default().fg(Color::Red) } else { Style::default().fg(Color::DarkGray) },
+        )));
+        lines.push(Line::from(""));
+    }
+
     lines.push(Line::from(Span::styled(
         "  [↑/↓] Select  [Enter] Confirm",
         Style::default().fg(Color::DarkGray),
