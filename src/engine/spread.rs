@@ -2,6 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     Disease, GameEvent, GameState, PathogenType, RegionTrait,
+    COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
     HOSPITAL_SURGE_SPREAD_FACTOR, TICKS_PER_DAY,
 };
 
@@ -32,6 +33,14 @@ pub(super) fn tick_spread_within(
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
         let alive = (pop - region.dead).max(0.0);
+
+        // Co-infection: count diseases with significant active infections.
+        // Each additional disease increases lethality for all diseases in this region.
+        let coinfection_count = region.infections.iter()
+            .filter(|inf| inf.infected >= COINFECTION_THRESHOLD)
+            .count();
+        let coinfection_factor = 1.0
+            + COINFECTION_LETHALITY_PER_DISEASE * (coinfection_count as f64 - 1.0).max(0.0);
 
         // Phase 1: compute outflows for each disease without mutating yet.
         let mut outflows: Vec<DiseaseOutflows> = Vec::with_capacity(region.infections.len());
@@ -81,6 +90,8 @@ pub(super) fn tick_spread_within(
                 if region.healthcare_invested {
                     lethality *= 0.75;
                 }
+                // Co-infection amplifies lethality (overwhelmed hospitals, immune suppression)
+                lethality *= coinfection_factor;
                 let mut new_deaths = (lethality * inf.infected * noise).max(0.0);
                 let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
                 let total_outflow = new_deaths + new_recoveries;

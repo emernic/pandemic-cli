@@ -6,7 +6,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN};
+use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
+    COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD};
 
 use crate::format_number;
 
@@ -496,6 +497,23 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled(
                     trait_labels.join(", "),
                     Style::default().fg(Color::Yellow),
+                ),
+            ]));
+        }
+    }
+
+    // Co-infection warning
+    {
+        let coinfection_count = region.infections.iter()
+            .filter(|inf| inf.infected >= COINFECTION_THRESHOLD)
+            .count();
+        if coinfection_count >= 2 {
+            let pct = (COINFECTION_LETHALITY_PER_DISEASE * (coinfection_count as f64 - 1.0) * 100.0) as u32;
+            lines.push(Line::from(vec![
+                Span::styled("Co-infection: ", label),
+                Span::styled(
+                    format!("+{}% lethality ({} diseases)", pct, coinfection_count),
+                    Style::default().fg(Color::Red),
                 ),
             ]));
         }
