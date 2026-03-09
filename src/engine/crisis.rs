@@ -666,8 +666,8 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 title: "Doomsday Cult Blockade".into(),
                 description: format!(
                     "A doomsday cult in {} has blockaded supply routes, claiming the pandemic \
-                     is divine punishment. Medicine deliveries are halted. You can negotiate \
-                     (they want airtime) or send in the police.",
+                     is divine punishment. They want a global broadcast to spread their message. \
+                     You can give them airtime or send in the police.",
                     region_name,
                 ),
                 option_a: CrisisOption {
