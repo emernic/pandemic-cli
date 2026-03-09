@@ -42,6 +42,10 @@ struct Cli {
     #[arg(long = "do")]
     steps: Vec<String>,
 
+    /// Auto-resolve crisis events during snapshot mode (picks cheapest option)
+    #[arg(long)]
+    auto_crises: bool,
+
     /// RNG seed for new games
     #[arg(long, default_value = "42")]
     seed: u64,
@@ -89,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             s
         };
-        let result = snapshot::run_snapshot(state, &steps)
+        let result = snapshot::run_snapshot(state, &steps, cli.auto_crises)
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
         // Write save file BEFORE printing to stdout — if output is piped
         // through `head` or similar, SIGPIPE kills the process on print,
