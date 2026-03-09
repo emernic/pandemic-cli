@@ -41,25 +41,61 @@ enum SnapshotStep {
     Key(String),
 }
 
+/// Advance simulation by up to `n` ticks. Returns the number of ticks NOT
+/// executed (remaining after an interruption). Returns 0 if all ticks ran.
+///
+/// Stops early on:
+/// - Crisis event → returns remaining ticks (caller can resume after resolution)
+/// - Game over → returns remaining ticks (game is done)
+fn advance_ticks(state: &mut GameState, n: u64) -> u64 {
+    state.sim_state = SimState::Running;
+    for tick_i in 0..n {
+        *state = tick(state);
+        ui::process_events(state);
+        if state.active_crisis.is_some() || state.outcome != GameOutcome::Playing {
+            return n - tick_i - 1;
+        }
+    }
+    0
+}
+
 /// Run snapshot mode: process an ordered sequence of steps, then render.
 /// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
 ///
-/// Mirrors interactive mode behavior: if a crisis event or game over occurs
-/// during tick advancement, execution stops immediately and remaining steps
-/// are dropped — just like a real player would be interrupted. This keeps
-/// snapshot mode faithful to the actual gameplay experience.
+/// Crisis events interrupt tick advancement but do NOT drop remaining steps.
+/// Subsequent key steps can resolve the crisis, after which any remaining
+/// ticks from the interrupted step automatically resume. This mirrors the
+/// interactive experience: the player sees the crisis, responds, and time
+/// continues from where it left off.
+///
+/// Game over always stops execution immediately.
 ///
 /// Returns both the rendered screen and the updated state.
 pub fn run_snapshot(
     mut state: GameState,
     steps: &[String],
 ) -> Result<SnapshotResult, String> {
-    for (step_idx, step_str) in steps.iter().enumerate() {
+    // Ticks remaining from an interrupted days step (saved across crisis resolution).
+    let mut pending_ticks: u64 = 0;
+
+    for step_str in steps.iter() {
+        // Game over stops everything.
+        if state.outcome != GameOutcome::Playing {
+            break;
+        }
+
         match parse_step(step_str)? {
             SnapshotStep::Key(key_str) => {
                 match string_to_action(&key_str) {
                     Some(action) => {
+                        let had_crisis = state.active_crisis.is_some();
                         state = apply_action(&state, &action);
+
+                        // If this key resolved a crisis, resume pending ticks.
+                        if had_crisis && state.active_crisis.is_none() && pending_ticks > 0 {
+                            let remaining = advance_ticks(&mut state, pending_ticks);
+                            pending_ticks = remaining;
+                        }
                     }
                     None => {
                         return Err(format!(
@@ -70,51 +106,25 @@ pub fn run_snapshot(
                 }
             }
             SnapshotStep::Ticks(n) => {
-                state.sim_state = SimState::Running;
-                for tick_i in 0..n {
-                    state = tick(&state);
-                    ui::process_events(&mut state);
-
-                    // Stop on crisis or game over — just like interactive mode.
-                    if state.active_crisis.is_some() || state.outcome != GameOutcome::Playing {
-                        let remaining_ticks = n - tick_i - 1;
-                        let remaining_steps: Vec<&str> = steps[step_idx + 1..].iter()
-                            .map(|s| s.as_str()).collect();
-
-                        let reason = if state.active_crisis.is_some() {
-                            "crisis event"
-                        } else {
-                            "game over"
-                        };
-
-                        // Log what was dropped so the caller knows
-                        let mut dropped = Vec::new();
-                        if remaining_ticks > 0 {
-                            let remaining_days = remaining_ticks as f64
-                                / crate::state::TICKS_PER_DAY;
-                            dropped.push(format!("{:.1} days", remaining_days));
-                        }
-                        if !remaining_steps.is_empty() {
-                            dropped.push(format!(
-                                "steps: {}",
-                                remaining_steps.join(", ")
-                            ));
-                        }
-
-                        if !dropped.is_empty() {
-                            eprintln!(
-                                "Interrupted by {}: dropped {}",
-                                reason,
-                                dropped.join("; ")
-                            );
-                        }
-
-                        let screen = render_to_string(&state);
-                        return Ok(SnapshotResult { screen, state });
-                    }
+                // Can't advance time during a crisis — skip tick steps.
+                if state.active_crisis.is_some() {
+                    let days = n as f64 / crate::state::TICKS_PER_DAY;
+                    eprintln!("Skipped d{:.1}: crisis active (resolve with enter first)", days);
+                    continue;
                 }
+                let total = n + pending_ticks;
+                pending_ticks = advance_ticks(&mut state, total);
             }
         }
+    }
+
+    // Log any time that was ultimately lost (crisis not resolved by end of steps).
+    if pending_ticks > 0 {
+        let days = pending_ticks as f64 / crate::state::TICKS_PER_DAY;
+        if state.active_crisis.is_some() {
+            eprintln!("Crisis unresolved: {:.1} days pending (resolve with enter)", days);
+        }
+        // If game over, the remaining ticks are expected — no need to log.
     }
 
     let screen = render_to_string(&state);
@@ -233,6 +243,30 @@ mod tests {
             "should have stopped before reaching 60 days (stopped at tick {})", result.state.tick);
         assert!(result.screen.contains("CRISIS"),
             "should show the crisis screen");
+    }
+
+    #[test]
+    fn snapshot_crisis_resume_after_enter() {
+        let state = GameState::new_default(42);
+        // Request 60 days. A crisis will fire partway through.
+        // Then press enter to resolve it. Time should resume (and may hit
+        // another crisis during the resumed ticks — that's correct).
+        let crisis_only = run_snapshot(
+            state.clone(),
+            &["d60".to_string()],
+        ).unwrap();
+        let tick_at_first_crisis = crisis_only.state.tick;
+        assert!(crisis_only.state.active_crisis.is_some(),
+            "should hit a crisis");
+
+        // Now resolve with enter — should advance beyond the first crisis point
+        let resumed = run_snapshot(
+            state,
+            &["d60".to_string(), "enter".to_string()],
+        ).unwrap();
+        assert!(resumed.state.tick > tick_at_first_crisis,
+            "should advance past first crisis (was {}, now {})",
+            tick_at_first_crisis, resumed.state.tick);
     }
 
     #[test]
