@@ -133,9 +133,10 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Disease mutation
+    // Disease mutation (sequencing reduces mutation rate by half per level)
     for (d_idx, disease) in new.diseases.iter_mut().enumerate() {
-        let mutation_chance = disease.pathogen_type.mutation_rate();
+        let base_rate = disease.pathogen_type.mutation_rate();
+        let mutation_chance = base_rate * 0.5_f64.powi(disease.sequencing_count as i32);
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
             // Small random parameter changes (±10% of current value), clamped to
@@ -181,7 +182,15 @@ pub fn tick(state: &GameState) -> GameState {
                         }
                     }
                 }
-                ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } => {}
+                ResearchKind::GenomicSequencing { disease_idx } => {
+                    let d_idx = *disease_idx;
+                    if let Some(disease) = new.diseases.get_mut(d_idx) {
+                        disease.sequencing_count += 1;
+                    }
+                }
+                ResearchKind::DevelopMedicine { .. }
+                | ResearchKind::ManufactureDoses { .. }
+                | ResearchKind::TrainPersonnel => {}
             }
             new.field_research = None;
         }
@@ -206,6 +215,9 @@ pub fn tick(state: &GameState) -> GameState {
                     if let Some(medicine) = new.medicines.get_mut(m_idx) {
                         medicine.doses = medicine.max_doses;
                     }
+                }
+                ResearchKind::TrainPersonnel => {
+                    new.resources.personnel += 5;
                 }
                 _ => {}
             }
@@ -1320,9 +1332,16 @@ mod tests {
         // Start field research: Clinical Trial
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
-        // First two items are identify projects, then clinical trials
-        state = apply_action(&state, &Action::SelectNext); // Skip identify #2
-        state = apply_action(&state, &Action::SelectNext); // Clinical trial
+        // Navigate to the clinical trial project.
+        // Field projects: identify (for each unidentified disease), genomic sequencing
+        // (for fully identified diseases), then clinical trials.
+        let field_projects = state.available_field_projects();
+        let trial_idx = field_projects.iter().position(|k| matches!(k,
+            ResearchKind::ClinicalTrial { .. }
+        )).expect("should have a clinical trial available");
+        for _ in 0..trial_idx {
+            state = apply_action(&state, &Action::SelectNext);
+        }
         state = apply_action(&state, &Action::Confirm);    // Select
         state = apply_action(&state, &Action::Confirm);    // Confirm
 
@@ -1394,9 +1413,11 @@ mod tests {
     #[test]
     fn research_confirm_noop_on_empty_list() {
         let mut state = GameState::new_default(42);
-        // Make all diseases fully known so no identify projects are available
+        // Make all diseases fully known AND prion type (mutation_rate too low
+        // for genomic sequencing) so no field projects are available
         for disease in &mut state.diseases {
             disease.knowledge = 1.0;
+            disease.pathogen_type = crate::state::PathogenType::Prion;
         }
         // No medicines are unlocked, so no clinical trials either
         // => available_field_projects returns empty
@@ -1907,6 +1928,7 @@ mod tests {
             recovery_rate: 0.03,
             knowledge: 1.0,
             strain_generation: 3,
+            sequencing_count: 0,
         }];
 
         let med = Medicine {
@@ -2077,5 +2099,69 @@ mod tests {
         use rand::SeedableRng;
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(99);
         assert!(state.spawn_disease(&mut rng).is_none());
+    }
+
+    #[test]
+    fn genomic_sequencing_reduces_mutation_rate() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 200.0;
+        state.diseases[0].knowledge = 1.0;
+        let original_rate = state.diseases[0].pathogen_type.mutation_rate();
+
+        // Start genomic sequencing via field research
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        // Navigate past identify projects to genomic sequencing
+        let field_projects = state.available_field_projects();
+        let seq_idx = field_projects.iter().position(|k| matches!(k,
+            ResearchKind::GenomicSequencing { .. }
+        )).expect("should have genomic sequencing available");
+        for _ in 0..seq_idx {
+            state = apply_action(&state, &Action::SelectNext);
+        }
+        state = apply_action(&state, &Action::Confirm); // Select
+        state = apply_action(&state, &Action::Confirm); // Confirm
+        assert!(state.field_research.is_some());
+
+        // Complete the project
+        for _ in 0..120 {
+            state = tick(&state);
+        }
+        assert!(state.field_research.is_none());
+        assert_eq!(state.diseases[0].sequencing_count, 1);
+
+        // Verify mutation rate is effectively halved
+        let effective_rate = original_rate * 0.5_f64.powi(state.diseases[0].sequencing_count as i32);
+        assert!((effective_rate - original_rate * 0.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn train_personnel_increases_count() {
+        let mut state = GameState::new_default(42);
+        state.resources.research_points = 200.0;
+        let initial_personnel = state.resources.personnel;
+
+        // Start personnel training via bench research
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::SelectNext); // Bench Research
+        state = apply_action(&state, &Action::Confirm);     // Enter Bench
+        // Navigate to Train Personnel (last item in bench projects)
+        let bench_projects = state.available_bench_projects();
+        let train_idx = bench_projects.iter().position(|k| matches!(k,
+            ResearchKind::TrainPersonnel
+        )).expect("should have train personnel available");
+        for _ in 0..train_idx {
+            state = apply_action(&state, &Action::SelectNext);
+        }
+        state = apply_action(&state, &Action::Confirm); // Select
+        state = apply_action(&state, &Action::Confirm); // Confirm
+        assert!(state.bench_research.is_some());
+
+        // Complete the project
+        for _ in 0..100 {
+            state = tick(&state);
+        }
+        assert!(state.bench_research.is_none());
+        assert_eq!(state.resources.personnel, initial_personnel + 5);
     }
 }
