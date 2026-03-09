@@ -166,6 +166,92 @@ impl PathogenType {
             PathogenType::Prion => 0.0001,     // ~1 per 10000 ticks
         }
     }
+
+    /// All pathogen types for procedural generation.
+    pub fn all() -> &'static [PathogenType] {
+        &[
+            PathogenType::RnaVirus,
+            PathogenType::DnaVirus,
+            PathogenType::Bacterium,
+            PathogenType::Prion,
+        ]
+    }
+
+    /// Biologically plausible stat ranges: (infectivity, lethality, recovery, cross_region).
+    /// Each tuple is (min, max) for that stat.
+    pub fn stat_ranges(&self) -> DiseaseStatRanges {
+        match self {
+            // RNA viruses: fast-spreading, variable lethality, quick recovery
+            PathogenType::RnaVirus => DiseaseStatRanges {
+                infectivity: (0.012, 0.030),
+                lethality: (0.001, 0.008),
+                recovery: (0.010, 0.020),
+                cross_region: (0.005, 0.015),
+            },
+            // DNA viruses: moderate spread, higher lethality, slower recovery
+            PathogenType::DnaVirus => DiseaseStatRanges {
+                infectivity: (0.008, 0.020),
+                lethality: (0.002, 0.010),
+                recovery: (0.006, 0.014),
+                cross_region: (0.003, 0.010),
+            },
+            // Bacteria: moderate spread, low lethality, moderate recovery
+            PathogenType::Bacterium => DiseaseStatRanges {
+                infectivity: (0.008, 0.022),
+                lethality: (0.001, 0.005),
+                recovery: (0.005, 0.012),
+                cross_region: (0.004, 0.012),
+            },
+            // Prions: very slow but devastating, almost no recovery
+            PathogenType::Prion => DiseaseStatRanges {
+                infectivity: (0.002, 0.008),
+                lethality: (0.005, 0.015),
+                recovery: (0.001, 0.003),
+                cross_region: (0.001, 0.004),
+            },
+        }
+    }
+
+    /// Name pools for procedural disease name generation.
+    pub fn name_pool(&self) -> &'static [&'static str] {
+        match self {
+            PathogenType::RnaVirus => &[
+                "CORVID", "H7N3 Avian Flu", "Marburg-X", "Nipah-7",
+                "Zika Variant C", "RSV-Delta", "MERS-CoV-3", "Hantavirus Sigma",
+                "Rift Valley Fever X", "Lassa-9", "Dengue-Phi",
+            ],
+            PathogenType::DnaVirus => &[
+                "Variola Nova", "Monkeypox-Zeta", "Adeno-X47", "Herpes-Omega",
+                "Papilloma-R3", "Mimivirus Delta", "Baculovirus-H",
+            ],
+            PathogenType::Bacterium => &[
+                "Yersinia-Omega", "Vibrio Fortis", "Mycobacterium Sigma",
+                "Burkholderia-X", "Clostridium Rex", "Rickettsia Tau",
+                "Streptococcus Phi", "Klebsiella Nova",
+            ],
+            PathogenType::Prion => &[
+                "PrP-Sigma Fold", "TSE-7 Variant", "Kuru-X Prion",
+                "CJD-Delta", "Fatal Insomnia Tau", "BSE-Omega",
+            ],
+        }
+    }
+
+    /// The therapy type that's most effective against this pathogen.
+    pub fn matched_therapy(&self) -> TherapyType {
+        match self {
+            PathogenType::RnaVirus | PathogenType::DnaVirus => TherapyType::Antiviral,
+            PathogenType::Bacterium => TherapyType::Antibiotic,
+            PathogenType::Prion => TherapyType::BroadSpectrum,
+        }
+    }
+}
+
+/// Stat ranges for procedural disease generation.
+pub struct DiseaseStatRanges {
+    pub infectivity: (f64, f64),
+    pub lethality: (f64, f64),
+    pub recovery: (f64, f64),
+    pub cross_region: (f64, f64),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -907,95 +993,125 @@ impl GameState {
             },
         ];
 
-        // Vary disease parameters ±30% from base values
-        let vary = |rng: &mut ChaCha8Rng, base: f64| -> f64 {
-            base * (0.7 + rng.r#gen::<f64>() * 0.6)
-        };
+        // --- Procedural disease generation ---
+        // Generate 2-3 diseases with different pathogen types
+        let disease_count = 2 + (rng.r#gen::<usize>() % 2); // 2 or 3
 
-        let diseases = vec![
-            Disease {
-                name: "Strain Alpha".into(),
-                pathogen_type: PathogenType::RnaVirus,
-                infectivity: vary(&mut rng, 0.018),
-                lethality: vary(&mut rng, 0.002),
-                cross_region_spread: vary(&mut rng, 0.005),
-                recovery_rate: vary(&mut rng, 0.012),
-                knowledge: 0.0,
-                strain_generation: 0,
-            },
-            Disease {
-                name: "Strain Beta".into(),
-                pathogen_type: PathogenType::Bacterium,
-                infectivity: vary(&mut rng, 0.012),
-                lethality: vary(&mut rng, 0.001),
-                cross_region_spread: vary(&mut rng, 0.008),
-                recovery_rate: vary(&mut rng, 0.008),
-                knowledge: 0.0,
-                strain_generation: 0,
-            },
+        // Pick distinct pathogen types (weighted: prions are rare)
+        let mut available_types = vec![
+            PathogenType::RnaVirus,
+            PathogenType::RnaVirus,   // 2× weight
+            PathogenType::DnaVirus,
+            PathogenType::Bacterium,
+            PathogenType::Bacterium,  // 2× weight
         ];
-
-        // Pick 2 different regions for initial infections
-        let region_count = regions.len();
-        let region_a = rng.r#gen::<usize>() % region_count;
-        let mut region_b = rng.r#gen::<usize>() % (region_count - 1);
-        if region_b >= region_a {
-            region_b += 1;
+        // Only add prion with 20% chance per game
+        if rng.r#gen::<f64>() < 0.2 {
+            available_types.push(PathogenType::Prion);
         }
 
-        // Primary outbreak: 5K-20K infected
-        let infected_a = 5_000.0 + rng.r#gen::<f64>() * 15_000.0;
-        regions[region_a].infections.push(RegionDiseaseState {
-            disease_idx: 0,
-            infected: infected_a,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        let mut chosen_types = Vec::new();
+        for _ in 0..disease_count {
+            if available_types.is_empty() {
+                break;
+            }
+            let idx = rng.r#gen::<usize>() % available_types.len();
+            chosen_types.push(available_types.remove(idx));
+        }
 
-        // Secondary outbreak: 1K-5K infected
-        let infected_b = 1_000.0 + rng.r#gen::<f64>() * 4_000.0;
-        regions[region_b].infections.push(RegionDiseaseState {
-            disease_idx: 1,
-            infected: infected_b,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        let range_val = |rng: &mut ChaCha8Rng, range: (f64, f64)| -> f64 {
+            range.0 + rng.r#gen::<f64>() * (range.1 - range.0)
+        };
 
-        let medicines = vec![
-            Medicine {
-                name: "Antiviral-A".into(),
-                therapy_type: TherapyType::Antiviral,
-                target_diseases: vec![0],
+        let mut diseases = Vec::new();
+        let mut used_names: Vec<String> = Vec::new();
+        for pathogen_type in &chosen_types {
+            let pool = pathogen_type.name_pool();
+            // Pick a name not already used (with fallback to avoid infinite loop)
+            let mut available: Vec<_> = pool.iter()
+                .filter(|n| !used_names.contains(&n.to_string()))
+                .collect();
+            let name = if available.is_empty() {
+                format!("Pathogen-{}", used_names.len() + 1)
+            } else {
+                let idx = rng.r#gen::<usize>() % available.len();
+                available[idx].to_string()
+            };
+            used_names.push(name.clone());
+
+            let ranges = pathogen_type.stat_ranges();
+            diseases.push(Disease {
+                name,
+                pathogen_type: *pathogen_type,
+                infectivity: range_val(&mut rng, ranges.infectivity),
+                lethality: range_val(&mut rng, ranges.lethality),
+                cross_region_spread: range_val(&mut rng, ranges.cross_region),
+                recovery_rate: range_val(&mut rng, ranges.recovery),
+                knowledge: 0.0,
+                strain_generation: 0,
+            });
+        }
+
+        // --- Place initial outbreaks in distinct regions ---
+        let region_count = regions.len();
+        let mut used_regions = Vec::new();
+        for (disease_idx, _disease) in diseases.iter().enumerate() {
+            let region_idx = loop {
+                let r = rng.r#gen::<usize>() % region_count;
+                if !used_regions.contains(&r) {
+                    break r;
+                }
+            };
+            used_regions.push(region_idx);
+
+            // First disease gets larger outbreak, subsequent ones get smaller
+            let infected = if disease_idx == 0 {
+                5_000.0 + rng.r#gen::<f64>() * 15_000.0
+            } else {
+                1_000.0 + rng.r#gen::<f64>() * 4_000.0
+            };
+
+            regions[region_idx].infections.push(RegionDiseaseState {
+                disease_idx,
+                infected,
+                dead: 0.0,
+                immune: 0.0,
+            });
+        }
+
+        // --- Generate medicines to match diseases ---
+        let mut medicines = Vec::new();
+
+        // One targeted medicine per disease (matched therapy type)
+        for (i, disease) in diseases.iter().enumerate() {
+            let therapy = disease.pathogen_type.matched_therapy();
+            let name = format!("{}-{}", therapy.label(), (b'A' + i as u8) as char);
+            medicines.push(Medicine {
+                name,
+                therapy_type: therapy,
+                target_diseases: vec![i],
                 cost: 100.0,
                 doses: 100_000.0,
                 max_doses: 100_000.0,
                 unlocked: false,
                 tested_against: vec![],
                 strain_generations: vec![],
-            },
-            Medicine {
-                name: "Antibiotic-B".into(),
-                therapy_type: TherapyType::Antibiotic,
-                target_diseases: vec![1],
-                cost: 75.0,
-                doses: 100_000.0,
-                max_doses: 100_000.0,
-                unlocked: false,
-                tested_against: vec![],
-                strain_generations: vec![],
-            },
-            Medicine {
-                name: "Broad-Spectrum".into(),
-                therapy_type: TherapyType::BroadSpectrum,
-                target_diseases: vec![0, 1],
-                cost: 200.0,
-                doses: 150_000.0,
-                max_doses: 150_000.0,
-                unlocked: false,
-                tested_against: vec![],
-                strain_generations: vec![],
-            },
-        ];
+            });
+        }
+
+        // One broad-spectrum medicine targeting all diseases
+        let all_disease_indices: Vec<usize> = (0..diseases.len()).collect();
+        medicines.push(Medicine {
+            name: "Broad-Spectrum".into(),
+            therapy_type: TherapyType::BroadSpectrum,
+            target_diseases: all_disease_indices,
+            cost: 200.0,
+            doses: 150_000.0,
+            max_doses: 150_000.0,
+            unlocked: false,
+            tested_against: vec![],
+            strain_generations: vec![],
+        });
 
         Self {
             tick: 0,
@@ -1321,13 +1437,60 @@ mod tests {
     #[test]
     fn default_state_has_medicines() {
         let state = GameState::new_default(1);
-        assert_eq!(state.medicines.len(), 3);
+        let disease_count = state.diseases.len();
+        assert!(disease_count >= 2 && disease_count <= 3, "expected 2-3 diseases, got {}", disease_count);
+        // One targeted medicine per disease + one broad-spectrum
+        assert_eq!(state.medicines.len(), disease_count + 1);
         // Medicines start locked — must be developed via research
         assert!(state.medicines.iter().all(|m| !m.unlocked));
-        // Verify therapy types
-        assert_eq!(state.medicines[0].therapy_type, TherapyType::Antiviral);
-        assert_eq!(state.medicines[1].therapy_type, TherapyType::Antibiotic);
-        assert_eq!(state.medicines[2].therapy_type, TherapyType::BroadSpectrum);
+        // Last medicine is always broad-spectrum
+        assert_eq!(state.medicines.last().unwrap().therapy_type, TherapyType::BroadSpectrum);
+        // Each targeted medicine has exactly one target disease
+        for i in 0..disease_count {
+            assert_eq!(state.medicines[i].target_diseases.len(), 1);
+            assert_eq!(state.medicines[i].target_diseases[0], i);
+        }
+        // Broad-spectrum targets all diseases
+        let broad = state.medicines.last().unwrap();
+        assert_eq!(broad.target_diseases.len(), disease_count);
+    }
+
+    #[test]
+    fn procedural_generation_varies_by_seed() {
+        let state1 = GameState::new_default(1);
+        let state2 = GameState::new_default(999);
+        // Different seeds should produce different disease names (with very high probability)
+        let names1: Vec<_> = state1.diseases.iter().map(|d| d.name.clone()).collect();
+        let names2: Vec<_> = state2.diseases.iter().map(|d| d.name.clone()).collect();
+        assert_ne!(names1, names2, "different seeds should produce different diseases");
+    }
+
+    #[test]
+    fn procedural_generation_is_deterministic() {
+        let state1 = GameState::new_default(42);
+        let state2 = GameState::new_default(42);
+        let names1: Vec<_> = state1.diseases.iter().map(|d| d.name.clone()).collect();
+        let names2: Vec<_> = state2.diseases.iter().map(|d| d.name.clone()).collect();
+        assert_eq!(names1, names2, "same seed should produce same diseases");
+        assert_eq!(state1.diseases.len(), state2.diseases.len());
+    }
+
+    #[test]
+    fn each_disease_starts_in_different_region() {
+        // Test across several seeds
+        for seed in 0..20 {
+            let state = GameState::new_default(seed);
+            let mut infected_regions: Vec<usize> = Vec::new();
+            for (ri, region) in state.regions.iter().enumerate() {
+                if !region.infections.is_empty() {
+                    infected_regions.push(ri);
+                }
+            }
+            // Each disease should be in a unique region
+            let unique: std::collections::HashSet<_> = infected_regions.iter().collect();
+            assert_eq!(unique.len(), infected_regions.len(),
+                "seed {}: diseases placed in overlapping regions", seed);
+        }
     }
 
     #[test]
