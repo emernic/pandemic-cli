@@ -271,9 +271,13 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let worst_region = state.regions.iter()
             .filter(|r| !r.collapsed)
             .max_by(|a, b| {
-                let a_prox = a.total_dead() / a.population as f64;
-                let b_prox = b.total_dead() / b.population as f64;
-                a_prox.partial_cmp(&b_prox).unwrap_or(std::cmp::Ordering::Equal)
+                let proximity = |r: &crate::state::Region| {
+                    let pop = r.population as f64;
+                    let death_frac = if pop > 0.0 { r.total_dead() / pop } else { 0.0 };
+                    let collapse_death_frac = 1.0 - r.collapse_threshold;
+                    if collapse_death_frac > 0.0 { death_frac / collapse_death_frac } else { 1.0 }
+                };
+                proximity(a).partial_cmp(&proximity(b)).unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|r| r.name.as_str())
             .unwrap_or("Unknown");
