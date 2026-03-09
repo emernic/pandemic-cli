@@ -41,26 +41,17 @@ enum SnapshotStep {
     Key(String),
 }
 
-/// Advance simulation by up to `n` ticks. Returns the number of ticks NOT
-/// executed (remaining after an interruption). Returns 0 if all ticks ran.
+/// Advance simulation by `n` ticks. Returns 0 on success.
 ///
-/// Stops early on:
-/// - Crisis event → returns remaining ticks (caller can resume after resolution)
-/// - Game over → returns remaining ticks (game is done)
-///
-/// With `auto_crises`, crisis events are resolved immediately (picks the
-/// affordable option, preferring option A) and simulation continues.
-fn advance_ticks(state: &mut GameState, n: u64, auto_crises: bool) -> u64 {
+/// Crises are auto-resolved inline (picks cheapest affordable option).
+/// Stops early on game over (returns remaining ticks).
+fn advance_ticks(state: &mut GameState, n: u64) -> u64 {
     state.sim_state = SimState::Running;
     for tick_i in 0..n {
         *state = tick(state);
         ui::process_events(state);
         if state.active_crisis.is_some() {
-            if auto_crises {
-                auto_resolve_crisis(state);
-            } else {
-                return n - tick_i - 1;
-            }
+            auto_resolve_crisis(state);
         }
         if state.outcome != GameOutcome::Playing {
             return n - tick_i - 1;
@@ -118,42 +109,15 @@ fn auto_resolve_crisis(state: &mut GameState) {
 /// Run snapshot mode: process an ordered sequence of steps, then render.
 /// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
 ///
-/// Crisis events that fire during tick advancement are handled automatically:
-/// between steps, any pending crisis is auto-resolved (picks cheapest affordable
-/// option) and interrupted ticks resume. This ensures key sequences never
-/// desynchronize due to random crises.
-///
-/// With `auto_crises`, crises are also auto-resolved *during* tick advancement
-/// (not just between steps), so a single `d60` runs uninterrupted.
-///
-/// Game over always stops execution immediately.
+/// Crisis events are always auto-resolved during tick advancement (picks
+/// cheapest affordable option). Game over stops execution immediately.
 ///
 /// Returns both the rendered screen and the updated state.
 pub fn run_snapshot(
     mut state: GameState,
     steps: &[String],
-    auto_crises: bool,
 ) -> Result<SnapshotResult, String> {
-    // Ticks remaining from an interrupted days step (saved across crisis resolution).
-    let mut pending_ticks: u64 = 0;
-
     for step_str in steps.iter() {
-        // Game over stops everything.
-        if state.outcome != GameOutcome::Playing {
-            break;
-        }
-
-        // Auto-resolve any pending crisis before processing the next step.
-        // This prevents key desynchronization: without this, a crisis from
-        // a prior tick step would eat the next key (e.g., 'p' to open policy).
-        if state.active_crisis.is_some() {
-            auto_resolve_crisis(&mut state);
-            // Resume any pending ticks from the interrupted tick step.
-            if pending_ticks > 0 {
-                pending_ticks = advance_ticks(&mut state, pending_ticks, auto_crises);
-            }
-        }
-
         if state.outcome != GameOutcome::Playing {
             break;
         }
@@ -173,19 +137,8 @@ pub fn run_snapshot(
                 }
             }
             SnapshotStep::Ticks(n) => {
-                let total = n + pending_ticks;
-                pending_ticks = advance_ticks(&mut state, total, auto_crises);
+                advance_ticks(&mut state, n);
             }
-        }
-    }
-
-    // Auto-resolve any crisis from the final step and drain remaining ticks.
-    while state.active_crisis.is_some() && state.outcome == GameOutcome::Playing {
-        auto_resolve_crisis(&mut state);
-        if pending_ticks > 0 {
-            pending_ticks = advance_ticks(&mut state, pending_ticks, auto_crises);
-        } else {
-            break;
         }
     }
 
@@ -239,7 +192,7 @@ mod tests {
     fn snapshot_with_days() {
         let state = GameState::new_default(42);
         // d1 = 1 day = 120 ticks
-        let result = run_snapshot(state, &["d1".to_string()], false).unwrap();
+        let result = run_snapshot(state, &["d1".to_string()]).unwrap();
         assert!(result.screen.contains("Day: 1.0"));
         assert_eq!(result.state.tick, 120);
     }
@@ -248,7 +201,7 @@ mod tests {
     fn snapshot_with_raw_ticks() {
         let state = GameState::new_default(42);
         // Legacy: t10 = 10 raw ticks
-        let result = run_snapshot(state, &["t10".to_string()], false).unwrap();
+        let result = run_snapshot(state, &["t10".to_string()]).unwrap();
         assert!(result.screen.contains("Day: 0.1"));
         assert_eq!(result.state.tick, 10);
     }
@@ -256,7 +209,7 @@ mod tests {
     #[test]
     fn snapshot_with_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["t".to_string()], false).unwrap();
+        let result = run_snapshot(state, &["t".to_string()]).unwrap();
         assert!(result.screen.contains("Threats"));
         // Diseases start undetected — shown as "?" until detection threshold is reached
         assert!(result.screen.contains("?"));
@@ -266,14 +219,14 @@ mod tests {
     fn snapshot_with_multiple_keys() {
         let state = GameState::new_default(42);
         // Navigate to Threats then press down to select second item
-        let result = run_snapshot(state, &["t".to_string(), "down".to_string()], false).unwrap();
+        let result = run_snapshot(state, &["t".to_string(), "down".to_string()]).unwrap();
         assert!(result.screen.contains("Threats"));
     }
 
     #[test]
     fn snapshot_invalid_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["!".to_string()], false);
+        let result = run_snapshot(state, &["!".to_string()]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown key"));
     }
@@ -285,23 +238,19 @@ mod tests {
         let result = run_snapshot(
             state,
             &["d0.5".to_string(), "t".to_string(), "d0.5".to_string()],
-            false,
-        )
-        .unwrap();
+        ).unwrap();
         assert_eq!(result.state.tick, 120);
         assert!(result.screen.contains("Threats"));
         assert!(result.screen.contains("Day: 1.0"));
     }
 
     #[test]
-    fn snapshot_auto_resolves_crises_between_steps() {
+    fn snapshot_auto_resolves_crises() {
         let state = GameState::new_default(42);
-        // d60 will hit crises. They should be auto-resolved between steps
-        // (and after the final step), so all ticks complete.
-        let result = run_snapshot(state, &["d60".to_string()], false).unwrap();
-        // No crisis should be pending — auto-resolved after final step.
+        // d60 will hit crises. They should be auto-resolved inline.
+        let result = run_snapshot(state, &["d60".to_string()]).unwrap();
         assert!(result.state.active_crisis.is_none(),
-            "crises should be auto-resolved between steps");
+            "crises should be auto-resolved during tick advancement");
         // Should have advanced well past the first crisis point.
         // (May not reach full 60 days if game over occurs.)
         assert!(result.state.tick > 360,
@@ -317,7 +266,6 @@ mod tests {
         let result = run_snapshot(
             state,
             &["d60".to_string(), "t".to_string()],
-            false,
         ).unwrap();
         // Threats panel should be open (key was not eaten).
         assert!(result.screen.contains("Threats"),
@@ -330,25 +278,11 @@ mod tests {
         // Force game over state
         state.outcome = GameOutcome::Lost;
         let tick_before = state.tick;
-        let result = run_snapshot(state, &["d10".to_string()], false).unwrap();
+        let result = run_snapshot(state, &["d10".to_string()]).unwrap();
         // tick() returns early when not Playing, so tick shouldn't advance
         assert_eq!(result.state.outcome, GameOutcome::Lost);
         assert_eq!(result.state.tick, tick_before,
             "tick should not advance after game over");
-    }
-
-    #[test]
-    fn auto_crises_flag_resolves_during_tick_advancement() {
-        let state = GameState::new_default(42);
-        // With auto_crises=true, crises resolve *during* advance_ticks so
-        // the tick step never interrupts. Both modes ultimately complete,
-        // but auto_crises avoids the between-step resolution overhead.
-        let result = run_snapshot(state, &["d60".to_string()], true).unwrap();
-        assert!(result.state.active_crisis.is_none(),
-            "no crisis should be pending with auto_crises");
-        // Should reach close to 60 days (may end early only from game over)
-        assert!(result.state.tick > 360,
-            "should advance well past first crisis (tick {})", result.state.tick);
     }
 
     #[test]
@@ -360,9 +294,8 @@ mod tests {
         let near_threshold = 9_900.0;
         state.regions[0].infections[0].infected = near_threshold;
 
-        // Advance 1 day with auto_crises so crises don't interfere.
         // With the disease growing, detection should trigger during these ticks.
-        let result = run_snapshot(state, &["d1".to_string()], true).unwrap();
+        let result = run_snapshot(state, &["d1".to_string()]).unwrap();
 
         // The disease should now be detected
         assert!(result.state.diseases[0].detected,
