@@ -3908,7 +3908,7 @@ mod tests {
         // Each mechanism variant should have different cost multipliers
         let costs: Vec<_> = develop_projects.iter()
             .map(|k| match k {
-                ResearchKind::DevelopMedicine { medicine_idx } =>
+                ResearchKind::DevelopMedicine { .. } =>
                     k.costs(&state.medicines),
                 _ => (0, 0.0, 0.0),
             })

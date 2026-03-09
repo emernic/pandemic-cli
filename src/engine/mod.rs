@@ -1945,7 +1945,7 @@ mod tests {
 
     #[test]
     fn targeted_medicines_have_mechanism_of_action() {
-        use crate::state::{TherapyType, MechanismOfAction};
+        use crate::state::TherapyType;
 
         let state = GameState::new_default(42);
         // Disease 0 is never a prion — should have one medicine per mechanism
