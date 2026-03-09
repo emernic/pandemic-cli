@@ -513,7 +513,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
         ),
         Span::styled(
-            format!("  (days × survival %)", ),
+            "  (days × survival %)".to_string(),
             stat_label,
         ),
     ]));
