@@ -327,7 +327,7 @@ We run multiple agents in parallel, so we do NOT use GitHub's assignee feature (
 
 This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-assignee` or check assignees to determine ownership. Always check for the `in-progress` label.
 
-When picking up an issue from the backlog, always use the `/pick-up-issue` skill.
+**When picking up an issue from the backlog, ALWAYS use the `/pick-up-issue` skill.** Do not manually replicate its steps — invoke the skill. It ensures you read all comments (including critical user feedback), follow the correct claiming process, and don't skip steps. This is not optional.
 
 ### Root Causes Before Symptoms
 

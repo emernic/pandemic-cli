@@ -119,16 +119,21 @@ AI playtest agents (Claude Code) **cannot see console colors**. They receive raw
 
 ## Step 4: Read and Understand the Issue
 
-Read the full issue body:
+Read the full issue body **AND all comments**:
 
 ```bash
-gh issue view <number>
+gh issue view <number> --comments
 ```
+
+**⚠️ You MUST read all comments.** Comments often contain critical context, corrections, or direct instructions from the user that override or refine the issue description. The `--comments` flag shows everything — do not skip it.
+
+**Pay special attention to comments from the user (the repo owner).** These are direct instructions. If the user says "this approach is wrong" or "do it this way instead," that takes absolute priority over anything in the issue description. The issue was filed by an AI agent; the user comment is from a human who knows what they want.
 
 Make sure you understand:
 - What the problem or request is
 - What the acceptance criteria are (if provided)
 - Which files/code are referenced
+- **What the comments say** — especially any from the user
 
 If the issue has a "Possible Solution" section, read it for context but do NOT follow it blindly — form your own approach.
 
