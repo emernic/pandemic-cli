@@ -509,15 +509,16 @@ impl PathogenType {
     }
 
     /// Per-tick probability that this pathogen type mutates.
-    /// RNA virus averages ~42 days between mutations; slower types take
-    /// much longer. This gives the player time to complete the research
-    /// pipeline before drift becomes a problem.
+    /// Rates tuned so mutations are a real mid-game mechanic: RNA viruses
+    /// mutate 3-4 times in a typical 30-day game, creating ongoing pressure
+    /// to re-trial medicines. Slower types mutate less, making sequencing
+    /// research most valuable against RNA threats.
     pub fn mutation_rate(&self) -> f64 {
         match self {
-            PathogenType::RnaVirus => 0.0002,    // ~1 mutation per 5000 ticks (~42 days)
-            PathogenType::DnaVirus => 0.00008,   // ~1 per 12500 ticks (~104 days)
-            PathogenType::Bacterium => 0.00012,  // ~1 per 8333 ticks (~69 days)
-            PathogenType::Prion => 0.00001,      // ~1 per 100000 ticks (~833 days)
+            PathogenType::RnaVirus => 0.001,     // ~1 mutation per 1000 ticks (~8 days)
+            PathogenType::DnaVirus => 0.0002,    // ~1 per 5000 ticks (~42 days)
+            PathogenType::Bacterium => 0.0004,   // ~1 per 2500 ticks (~21 days)
+            PathogenType::Prion => 0.00003,      // ~1 per 33333 ticks (~278 days)
         }
     }
 
@@ -2632,7 +2633,7 @@ impl GameState {
         // Genomic Sequencing: fully identified diseases that still mutate and are active
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
-                && disease.pathogen_type.mutation_rate() > 0.00002
+                && disease.pathogen_type.mutation_rate() > 0.0001
                 && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
