@@ -263,12 +263,15 @@ impl PathogenType {
     }
 
     /// Per-tick probability that this pathogen type mutates.
+    /// Tuned so the fastest mutator (RNA virus) averages ~8 days between
+    /// mutations, giving the player time to complete the ~5-day research
+    /// pipeline before the first mutation hits.
     pub fn mutation_rate(&self) -> f64 {
         match self {
-            PathogenType::RnaVirus => 0.008,   // ~1 mutation per 125 ticks
-            PathogenType::DnaVirus => 0.002,   // ~1 per 500 ticks
-            PathogenType::Bacterium => 0.003,  // ~1 per 333 ticks
-            PathogenType::Prion => 0.0001,     // ~1 per 10000 ticks
+            PathogenType::RnaVirus => 0.001,    // ~1 mutation per 1000 ticks (~8.3 days)
+            PathogenType::DnaVirus => 0.0004,   // ~1 per 2500 ticks (~20.8 days)
+            PathogenType::Bacterium => 0.0006,  // ~1 per 1667 ticks (~13.9 days)
+            PathogenType::Prion => 0.00005,     // ~1 per 20000 ticks (~167 days)
         }
     }
 
