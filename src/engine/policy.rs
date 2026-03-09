@@ -218,6 +218,82 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     }
 }
 
+/// Enact an emergency decree. Permanent, irreversible.
+/// Returns (message, success).
+pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
+    use crate::state::{
+        decree_display_name, DECREE_POL_THRESHOLDS,
+        CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY, TICKS_PER_DAY,
+        SACRIFICE_INCOME_BONUS,
+    };
+
+    if decree_idx >= crate::state::DECREE_COUNT {
+        return (None, false);
+    }
+
+    // Already enacted?
+    if state.enacted_decrees.is_enacted(decree_idx) {
+        return (Some(format!("{} has already been enacted", decree_display_name(decree_idx))), false);
+    }
+
+    // POL check
+    let pol = state.resources.political_power;
+    let threshold = DECREE_POL_THRESHOLDS[decree_idx];
+    if pol < threshold {
+        return (Some(format!(
+            "{} requires {:.0}% Political Power (current: {:.0}%)",
+            decree_display_name(decree_idx), threshold * 100.0, pol * 100.0
+        )), false);
+    }
+
+    match decree_idx {
+        0 => {
+            // Conscript Researchers: +personnel, permanent income penalty
+            state.enacted_decrees.conscript_researchers = true;
+            state.resources.personnel += CONSCRIPT_PERSONNEL_GAIN;
+            let penalty_per_day = CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY;
+            (Some(format!(
+                "⚠ DECREE: Conscript Researchers — +{} personnel, -${:.0}/day income permanently",
+                CONSCRIPT_PERSONNEL_GAIN, penalty_per_day
+            )), true)
+        }
+        1 => {
+            // Authorize Human Trials: faster clinical trials, risk of adverse events
+            state.enacted_decrees.authorize_human_trials = true;
+            (Some(
+                "⚠ DECREE: Authorize Human Trials — clinical trials 50% faster, risk of adverse events".to_string()
+            ), true)
+        }
+        2 => {
+            // Sacrifice Region: voluntarily collapse a region for income bonus
+            let Some(r_idx) = region_idx else {
+                return (Some("Select a region to sacrifice".to_string()), false);
+            };
+            if r_idx >= state.regions.len() {
+                return (None, false);
+            }
+            if state.regions[r_idx].collapsed {
+                return (Some(format!("{} is already collapsed", state.regions[r_idx].name)), false);
+            }
+            let region_name = state.regions[r_idx].name.clone();
+            state.enacted_decrees.sacrificed_region = Some(r_idx);
+            // Collapse the region
+            state.regions[r_idx].collapsed = true;
+            state.regions[r_idx].collapsed_at_tick = Some(state.tick);
+            // Clear policies
+            if let Some(p) = state.policies.get_mut(r_idx) {
+                p.clear_all();
+            }
+            let bonus_pct = (SACRIFICE_INCOME_BONUS - 1.0) * 100.0;
+            (Some(format!(
+                "⚠ DECREE: {} sacrificed — +{:.0}% income from remaining regions",
+                region_name, bonus_pct
+            )), true)
+        }
+        _ => (None, false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,6 +523,83 @@ mod tests {
 
         let (msg, ok) = toggle_policy(&mut state, 0, 10);
         assert!(!ok, "should not invest in collapsed region");
+        assert!(msg.unwrap().contains("collapsed"));
+    }
+
+    #[test]
+    fn conscript_researchers_grants_personnel_and_penalizes_income() {
+        let mut state = screening_test_state();
+        let personnel_before = state.resources.personnel;
+        let income_before = state.funding_income_rate();
+
+        let (msg, ok) = enact_decree(&mut state, 0, None);
+        assert!(ok, "should succeed with sufficient POL");
+        assert!(msg.unwrap().contains("Conscript"));
+        assert!(state.enacted_decrees.conscript_researchers);
+        assert_eq!(state.resources.personnel, personnel_before + crate::state::CONSCRIPT_PERSONNEL_GAIN);
+
+        // Income should be reduced by the penalty
+        let income_after = state.funding_income_rate();
+        let expected_penalty = crate::state::CONSCRIPT_INCOME_PENALTY;
+        assert!((income_before - income_after - expected_penalty).abs() < 0.01,
+            "income should drop by {expected_penalty:.3}/tick: before={income_before:.3}, after={income_after:.3}");
+
+        // Cannot enact again
+        let (_, ok) = enact_decree(&mut state, 0, None);
+        assert!(!ok, "should not enact twice");
+    }
+
+    #[test]
+    fn decree_blocked_by_insufficient_pol() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.resources.political_power = 0.10; // Below all decree thresholds
+
+        for i in 0..crate::state::DECREE_COUNT {
+            let (msg, ok) = enact_decree(&mut state, i, None);
+            assert!(!ok, "decree {i} should be blocked at low POL");
+            assert!(msg.unwrap().contains("Political Power"));
+        }
+    }
+
+    #[test]
+    fn sacrifice_region_collapses_and_boosts_income() {
+        let mut state = screening_test_state();
+        let income_before = state.funding_income_rate();
+        assert!(!state.regions[0].collapsed);
+
+        let (msg, ok) = enact_decree(&mut state, 2, Some(0));
+        assert!(ok, "should succeed");
+        assert!(msg.unwrap().contains("sacrificed"));
+        assert!(state.regions[0].collapsed);
+        assert_eq!(state.enacted_decrees.sacrificed_region, Some(0));
+
+        // Income should be boosted (even though one region lost)
+        let income_after = state.funding_income_rate();
+        // The region's contribution is removed but remaining gets +20%
+        assert!(income_after > 0.0, "should still have income");
+
+        // Cannot sacrifice again
+        let (_, ok) = enact_decree(&mut state, 2, Some(1));
+        assert!(!ok, "should not sacrifice twice");
+    }
+
+    #[test]
+    fn sacrifice_region_requires_region_idx() {
+        let mut state = screening_test_state();
+
+        let (msg, ok) = enact_decree(&mut state, 2, None);
+        assert!(!ok, "should require region selection");
+        assert!(msg.unwrap().contains("Select"));
+    }
+
+    #[test]
+    fn sacrifice_region_rejects_already_collapsed() {
+        let mut state = screening_test_state();
+        state.regions[0].collapsed = true;
+
+        let (msg, ok) = enact_decree(&mut state, 2, Some(0));
+        assert!(!ok, "should not sacrifice already collapsed region");
         assert!(msg.unwrap().contains("collapsed"));
     }
 }

@@ -6,7 +6,7 @@ pub mod ui;
 
 use action::Action;
 use engine::execute_command;
-use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, ResearchTrack, ResearchUiState, SimState};
+use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, PolicyUiState, ResearchTrack, ResearchUiState, SimState};
 
 /// Route a player action to the appropriate handler.
 ///
@@ -174,6 +174,11 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         }
                         GameCommand::StartResearch { track, .. } if result.success => {
                             new.ui.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
+                            new.ui.panel_selection = 0;
+                        }
+                        GameCommand::EnactDecree { .. } if result.success => {
+                            // Return to BrowseRegions after enacting (especially from SelectSacrificeRegion)
+                            new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
                             new.ui.panel_selection = 0;
                         }
                         _ => {}

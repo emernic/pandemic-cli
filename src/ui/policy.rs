@@ -18,6 +18,10 @@ use crate::state::{
     HEALTHCARE_INVESTMENT_COST,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
+    DECREE_COUNT, DECREE_POL_THRESHOLDS,
+    decree_display_name,
+    CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
+    SACRIFICE_INCOME_BONUS,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -26,6 +30,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines) = match &state.ui.policy_ui {
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             render_manage(state, *region_idx)
+        }
+        Some(PolicyUiState::SelectSacrificeRegion) => {
+            render_sacrifice_select(state)
         }
         _ => render_browse(state),
     };
@@ -109,6 +116,89 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         }
 
         lines.push(Line::from(spans));
+    }
+
+    // Emergency Decrees section
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  ─── EMERGENCY DECREES ───",
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    )));
+
+    let num_regions = state.regions.len();
+    let decree_descs: [String; DECREE_COUNT] = [
+        format!("+{} personnel, -${:.0}/day income (permanent)",
+            CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
+        "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
+        format!("Abandon a region, +{:.0}% income from the rest (permanent)",
+            (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
+    ];
+
+    for decree_idx in 0..DECREE_COUNT {
+        let display_pos = num_regions + decree_idx;
+        let selected = state.ui.panel_selection == display_pos;
+        let marker = if selected { "▶ " } else { "  " };
+        let enacted = state.enacted_decrees.is_enacted(decree_idx);
+        let name = decree_display_name(decree_idx);
+
+        if enacted {
+            let name_style = if selected {
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let mut spans = vec![
+                Span::styled(format!("{}", marker), name_style),
+                Span::styled("[ENACTED] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(name.to_string(), name_style),
+            ];
+            // Show sacrifice target
+            if decree_idx == 2 {
+                if let Some(r_idx) = state.enacted_decrees.sacrificed_region {
+                    let r_name = state.regions.get(r_idx)
+                        .map(|r| r.name.as_str())
+                        .unwrap_or("?");
+                    spans.push(Span::styled(
+                        format!(" ({})", r_name),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+            }
+            lines.push(Line::from(spans));
+        } else {
+            let pol_unlocked = state.resources.political_power >= DECREE_POL_THRESHOLDS[decree_idx];
+            if !pol_unlocked {
+                let name_style = if selected {
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{}", marker), name_style),
+                    Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(name.to_string(), name_style),
+                    Span::styled(
+                        format!("  (POL {:.0}%)", DECREE_POL_THRESHOLDS[decree_idx] * 100.0),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            } else {
+                let name_style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Red)
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{}", marker), name_style),
+                    Span::styled("⚠ ", Style::default().fg(Color::Red)),
+                    Span::styled(name.to_string(), name_style),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled(decree_descs[decree_idx].clone(), Style::default().fg(Color::DarkGray)),
+                ]));
+            }
+        }
     }
 
     lines.push(Line::from(""));
@@ -306,6 +396,55 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     lines.push(hint_line(state, "Toggle", "Back"));
 
     (format!(" Policy: {} ", region.name), lines)
+}
+
+fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    lines.push(Line::from(Span::styled(
+        "  ⚠ SACRIFICE REGION — THIS CANNOT BE UNDONE ⚠",
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  The chosen region will be abandoned. Remaining regions",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(Span::styled(
+        format!("  gain +{:.0}% income. Select a region to sacrifice:",
+            (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+
+    let non_collapsed: Vec<(usize, &crate::state::Region)> = state.regions.iter()
+        .enumerate()
+        .filter(|(_, r)| !r.collapsed)
+        .collect();
+
+    for (display_pos, (_, region)) in non_collapsed.iter().enumerate() {
+        let selected = state.ui.panel_selection == display_pos;
+        let marker = if selected { "▶ " } else { "  " };
+        let style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let pop_str = format_number(region.population as f64);
+        lines.push(Line::from(vec![
+            Span::styled(format!("{}{:<16}", marker, region.name), style),
+            Span::styled(
+                format!("Pop: {}", pop_str),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(hint_line(state, "Sacrifice", "Cancel"));
+
+    (" ⚠ Sacrifice Region ".to_string(), lines)
 }
 
 /// Generate an effectiveness hint line for transmission-sensitive policies.

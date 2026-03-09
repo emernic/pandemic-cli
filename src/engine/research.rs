@@ -39,10 +39,18 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
             )));
         }
         state.resources.funding -= funding_cost;
+        // Human Trials decree: clinical trials complete faster
+        let effective_duration = if matches!(kind, ResearchKind::ClinicalTrial { .. })
+            && state.enacted_decrees.authorize_human_trials
+        {
+            duration * crate::state::HUMAN_TRIALS_SPEED
+        } else {
+            duration
+        };
         let project = ResearchProject {
             kind: kind.clone(),
             progress: 0.0,
-            required_ticks: duration,
+            required_ticks: effective_duration,
             personnel_assigned: personnel,
         };
 
@@ -98,7 +106,7 @@ pub(super) fn remove_personnel(state: &mut GameState, track: ResearchTrack, slot
 /// Advance research projects by one tick and handle completions.
 /// Progress scales with diminishing returns: 2x personnel = 1.5x speed (peak),
 /// beyond 2x personnel = negative returns (too many cooks).
-pub(super) fn tick_research(state: &mut GameState) {
+pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     // Proactively auto-start research on idle tracks (e.g., new unknown pathogen
     // detected while auto-research is enabled and a field slot is free).
     for track in [ResearchTrack::Field, ResearchTrack::Applied, ResearchTrack::Basic] {
@@ -148,6 +156,32 @@ pub(super) fn tick_research(state: &mut GameState) {
                         medicine.strain_generations.push(0);
                     }
                     medicine.strain_generations[pos] = current_gen;
+                }
+                // Human Trials decree: chance of adverse event killing infected
+                if state.enacted_decrees.authorize_human_trials {
+                    let roll: f64 = rng.r#gen();
+                    if roll < crate::state::HUMAN_TRIALS_ADVERSE_CHANCE {
+                        let kill_frac = crate::state::HUMAN_TRIALS_KILL_FRACTION;
+                        // Kill fraction of infected across all regions for this disease
+                        let mut total_killed = 0.0;
+                        for region in &mut state.regions {
+                            if let Some(inf) = region.infections.iter_mut()
+                                .find(|i| i.disease_idx == d_idx)
+                            {
+                                let killed = inf.infected * kill_frac;
+                                inf.infected -= killed;
+                                inf.dead += killed;
+                                region.dead += killed;
+                                total_killed += killed;
+                            }
+                        }
+                        if total_killed > 0.0 {
+                            state.events.push(GameEvent::HumanTrialAdverseEvent {
+                                disease_idx: d_idx,
+                                deaths: total_killed,
+                            });
+                        }
+                    }
                 }
             }
             ResearchKind::GenomicSequencing { disease_idx } => {
@@ -1094,6 +1128,41 @@ mod tests {
             )),
             "sequencing should still be available when effective rate ({}) is above threshold",
             state.diseases[0].effective_mutation_rate()
+        );
+    }
+
+    #[test]
+    fn human_trials_halves_clinical_trial_duration() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = 1.0;
+        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
+        state.resources.funding = 10_000.0;
+        state.resources.political_power = 1.0;
+        // Develop a medicine first
+        state.medicines[0].unlocked = true;
+        state.medicines[0].tested_against = vec![];
+
+        // Start a clinical trial WITHOUT human trials decree
+        let projects = state.available_projects(ResearchTrack::Field);
+        let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
+        assert!(trial_idx.is_some(), "clinical trial should be available");
+        let (ok, _) = super::start_research(&mut state, ResearchTrack::Field, trial_idx.unwrap(), false);
+        assert!(ok);
+        let normal_duration = state.field_research.last().unwrap().required_ticks;
+        state.field_research.clear();
+
+        // Now enact human trials and start the same trial
+        state.enacted_decrees.authorize_human_trials = true;
+        let projects = state.available_projects(ResearchTrack::Field);
+        let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
+        let (ok, _) = super::start_research(&mut state, ResearchTrack::Field, trial_idx.unwrap(), false);
+        assert!(ok);
+        let fast_duration = state.field_research.last().unwrap().required_ticks;
+
+        // Duration should be halved
+        assert!(
+            (fast_duration - normal_duration * crate::state::HUMAN_TRIALS_SPEED).abs() < 1.0,
+            "human trials should halve duration: normal={normal_duration}, fast={fast_duration}"
         );
     }
 }

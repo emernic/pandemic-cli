@@ -35,7 +35,7 @@ pub fn tick(state: &GameState) -> GameState {
     spread::tick_horizontal_gene_transfer(&mut new);
 
     // Research progress
-    research::tick_research(&mut new);
+    research::tick_research(&mut new, &mut rng);
 
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
@@ -377,6 +377,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         GameCommand::ResolveCrisis { choice } => {
             let msg = crisis::resolve_crisis(state, *choice);
             CommandResult { message: Some(msg), success: true, adverse: false }
+        }
+        GameCommand::EnactDecree { decree_idx, region_idx } => {
+            let (msg, success) = policy::enact_decree(state, *decree_idx, *region_idx);
+            CommandResult { message: msg, success, adverse: false }
         }
     }
 }
@@ -3682,5 +3686,55 @@ mod tests {
             matches!(e, GameEvent::ThreatEscalation { .. })
         );
         assert!(escalation.is_none(), "should not fire for undetected disease");
+    }
+
+    #[test]
+    fn decree_enact_via_policy_panel_ui_flow() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.resources.funding = 10_000.0;
+
+        // Open policy panel, navigate past 6 regions to first decree
+        state = apply_action(&state, &Action::OpenPolicy);
+        assert_eq!(state.ui.open_panel, Panel::Policy);
+        for _ in 0..6 {
+            state = apply_action(&state, &Action::SelectNext);
+        }
+        // panel_selection should be 6 (first decree: Conscript Researchers)
+        assert_eq!(state.ui.panel_selection, 6);
+
+        let personnel_before = state.resources.personnel;
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.enacted_decrees.conscript_researchers);
+        assert_eq!(state.resources.personnel, personnel_before + crate::state::CONSCRIPT_PERSONNEL_GAIN);
+        assert!(state.ui.status_message.as_ref().unwrap().contains("Conscript"));
+    }
+
+    #[test]
+    fn decree_sacrifice_region_ui_flow() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.resources.funding = 10_000.0;
+
+        // Open policy panel, navigate to Sacrifice Region (index 8 = 6 regions + 2)
+        state = apply_action(&state, &Action::OpenPolicy);
+        for _ in 0..8 {
+            state = apply_action(&state, &Action::SelectNext);
+        }
+        assert_eq!(state.ui.panel_selection, 8);
+        state = apply_action(&state, &Action::Confirm);
+
+        // Should be in SelectSacrificeRegion state
+        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::SelectSacrificeRegion));
+
+        // Select first non-collapsed region and confirm
+        state = apply_action(&state, &Action::Confirm);
+        assert!(state.enacted_decrees.sacrificed_region.is_some());
+        let sacrificed_idx = state.enacted_decrees.sacrificed_region.unwrap();
+        assert!(state.regions[sacrificed_idx].collapsed);
+
+        // UI should return to BrowseRegions after successful sacrifice
+        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions),
+            "should return to BrowseRegions after enacting sacrifice");
     }
 }
