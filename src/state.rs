@@ -447,39 +447,40 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned so diseases are genuinely threatening.
-    /// R0 = infectivity / (lethality + recovery) should be 5-10 for most types.
-    /// Minimum IFR ~35-50% ensures every seed produces lethal diseases.
-    /// Without player intervention, the game is lost within ~20 days.
+    /// Stat ranges tuned for playable lethality.
+    /// R0 = infectivity / (lethality + recovery) targets 3-5 for most types.
+    /// A single disease kills ~30-50% of a region without intervention.
+    /// Multiple diseases stacking over 20 days causes total collapse.
+    /// Policies meaningfully slow spread, buying time for research.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: explosive spreader (R0 ~5-9), high lethality
+            // RNA viruses: fast spreader (R0 ~3-5), moderate lethality, decent recovery
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.08, 0.14),
-                lethality: (0.006, 0.014),
+                infectivity: (0.04, 0.07),
+                lethality: (0.004, 0.010),
                 recovery: (0.006, 0.010),
-                cross_region: (0.02, 0.04),
+                cross_region: (0.015, 0.025),
             },
-            // DNA viruses: fast spread (R0 ~4-8), very high lethality
+            // DNA viruses: moderate spread (R0 ~2.5-4.5), high lethality, slow recovery
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.06, 0.11),
-                lethality: (0.008, 0.016),
-                recovery: (0.004, 0.008),
-                cross_region: (0.015, 0.03),
-            },
-            // Bacteria: fast spread (R0 ~5-8), high lethality
-            PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.05, 0.09),
-                lethality: (0.005, 0.010),
-                recovery: (0.003, 0.007),
-                cross_region: (0.015, 0.03),
-            },
-            // Prions: moderate spread (R0 ~3-5), devastating lethality, almost no recovery
-            PathogenType::Prion => DiseaseStatRanges {
                 infectivity: (0.03, 0.06),
-                lethality: (0.010, 0.018),
+                lethality: (0.006, 0.012),
+                recovery: (0.004, 0.008),
+                cross_region: (0.010, 0.020),
+            },
+            // Bacteria: moderate spread (R0 ~3-5), moderate lethality
+            PathogenType::Bacterium => DiseaseStatRanges {
+                infectivity: (0.03, 0.05),
+                lethality: (0.003, 0.007),
+                recovery: (0.003, 0.007),
+                cross_region: (0.010, 0.020),
+            },
+            // Prions: slow but devastating (R0 ~1.5-3), very high lethality, almost no recovery
+            PathogenType::Prion => DiseaseStatRanges {
+                infectivity: (0.015, 0.035),
+                lethality: (0.008, 0.015),
                 recovery: (0.001, 0.003),
-                cross_region: (0.008, 0.015),
+                cross_region: (0.005, 0.012),
             },
         }
     }
@@ -1831,7 +1832,7 @@ impl GameState {
                 population: 430_000_000,
                 connections: vec![0],
                 infections: vec![],
-                collapse_threshold: 0.55, // Moderate resilience — 45% dead
+                collapse_threshold: 0.65, // Single-connection refugium — 35% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
