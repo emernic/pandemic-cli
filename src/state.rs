@@ -390,6 +390,54 @@ impl Disease {
     pub fn effective_mutation_rate(&self) -> f64 {
         self.pathogen_type.mutation_rate() * 0.5_f64.powi(self.sequencing_count as i32)
     }
+
+    /// Generate a random disease of the given pathogen type.
+    ///
+    /// If `toughness_bias` is true, infectivity and lethality are biased toward
+    /// the upper end of their ranges (used for mid-game emergent diseases).
+    pub fn generate(
+        rng: &mut ChaCha8Rng,
+        pathogen_type: PathogenType,
+        used_names: &[String],
+        toughness_bias: bool,
+    ) -> Disease {
+        let pool = pathogen_type.name_pool();
+        let available: Vec<_> = pool.iter()
+            .filter(|n| !used_names.contains(&n.to_string()))
+            .collect();
+        let name = if available.is_empty() {
+            format!("Pathogen-{}", used_names.len() + 1)
+        } else {
+            let idx = rng.r#gen::<usize>() % available.len();
+            available[idx].to_string()
+        };
+
+        let ranges = pathogen_type.stat_ranges();
+        let range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
+            lo + rng.r#gen::<f64>() * (hi - lo)
+        };
+        let biased_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
+            let base = lo + rng.r#gen::<f64>() * (hi - lo);
+            (base + (hi - lo) * 0.2).min(hi)
+        };
+
+        let stat = |rng: &mut ChaCha8Rng, range: (f64, f64), bias: bool| -> f64 {
+            if bias { biased_val(rng, range) } else { range_val(rng, range) }
+        };
+
+        Disease {
+            name,
+            pathogen_type,
+            transmission: pathogen_type.random_transmission(rng),
+            infectivity: stat(rng, ranges.infectivity, toughness_bias),
+            lethality: stat(rng, ranges.lethality, toughness_bias),
+            cross_region_spread: range_val(rng, ranges.cross_region),
+            recovery_rate: range_val(rng, ranges.recovery),
+            knowledge: 0.0,
+            strain_generation: 0,
+            sequencing_count: 0,
+        }
+    }
 }
 
 /// Knowledge thresholds for progressive disease revelation.
@@ -482,6 +530,23 @@ pub enum DeployTarget {
 }
 
 impl Medicine {
+    /// Create a targeted medicine for a disease. Name format: "TherapyType-A", "TherapyType-B", etc.
+    pub fn new_targeted(disease_idx: usize, pathogen_type: PathogenType) -> Medicine {
+        let therapy = pathogen_type.matched_therapy();
+        let letter = (b'A' + disease_idx as u8) as char;
+        Medicine {
+            name: format!("{}-{}", therapy.label(), letter),
+            therapy_type: therapy,
+            target_diseases: vec![disease_idx],
+            cost: 100.0,
+            doses: 100_000.0,
+            max_doses: 100_000.0,
+            unlocked: false,
+            tested_against: vec![],
+            strain_generations: vec![],
+        }
+    }
+
     /// Number of target options in the UI (vaccinate + treat per target disease).
     pub fn num_deploy_targets(&self) -> usize {
         2 * self.target_diseases.len()
@@ -1138,39 +1203,12 @@ impl GameState {
             chosen_types.push(available_types.remove(idx));
         }
 
-        let range_val = |rng: &mut ChaCha8Rng, range: (f64, f64)| -> f64 {
-            range.0 + rng.r#gen::<f64>() * (range.1 - range.0)
-        };
-
         let mut diseases = Vec::new();
         let mut used_names: Vec<String> = Vec::new();
         for pathogen_type in &chosen_types {
-            let pool = pathogen_type.name_pool();
-            // Pick a name not already used (with fallback to avoid infinite loop)
-            let available: Vec<_> = pool.iter()
-                .filter(|n| !used_names.contains(&n.to_string()))
-                .collect();
-            let name = if available.is_empty() {
-                format!("Pathogen-{}", used_names.len() + 1)
-            } else {
-                let idx = rng.r#gen::<usize>() % available.len();
-                available[idx].to_string()
-            };
-            used_names.push(name.clone());
-
-            let ranges = pathogen_type.stat_ranges();
-            diseases.push(Disease {
-                name,
-                pathogen_type: *pathogen_type,
-                transmission: pathogen_type.random_transmission(&mut rng),
-                infectivity: range_val(&mut rng, ranges.infectivity),
-                lethality: range_val(&mut rng, ranges.lethality),
-                cross_region_spread: range_val(&mut rng, ranges.cross_region),
-                recovery_rate: range_val(&mut rng, ranges.recovery),
-                knowledge: 0.0,
-                strain_generation: 0,
-                sequencing_count: 0,
-            });
+            let disease = Disease::generate(&mut rng, *pathogen_type, &used_names, false);
+            used_names.push(disease.name.clone());
+            diseases.push(disease);
         }
 
         // --- Place initial outbreaks in distinct regions ---
@@ -1199,24 +1237,9 @@ impl GameState {
         }
 
         // --- Generate medicines to match diseases ---
-        let mut medicines = Vec::new();
-
-        // One targeted medicine per disease (matched therapy type)
-        for (i, disease) in diseases.iter().enumerate() {
-            let therapy = disease.pathogen_type.matched_therapy();
-            let name = format!("{}-{}", therapy.label(), (b'A' + i as u8) as char);
-            medicines.push(Medicine {
-                name,
-                therapy_type: therapy,
-                target_diseases: vec![i],
-                cost: 100.0,
-                doses: 100_000.0,
-                max_doses: 100_000.0,
-                unlocked: false,
-                tested_against: vec![],
-                strain_generations: vec![],
-            });
-        }
+        let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
+            .map(|(i, d)| Medicine::new_targeted(i, d.pathogen_type))
+            .collect();
 
         // One broad-spectrum medicine targeting all diseases
         let all_disease_indices: Vec<usize> = (0..diseases.len()).collect();
@@ -1351,39 +1374,9 @@ impl GameState {
         }
         let pathogen_type = types[rng.r#gen::<usize>() % types.len()];
 
-        // Pick a unique name
-        let used_names: Vec<&str> = self.diseases.iter().map(|d| d.name.as_str()).collect();
-        let pool = pathogen_type.name_pool();
-        let available: Vec<&&str> = pool.iter().filter(|n| !used_names.contains(*n)).collect();
-        let name = if available.is_empty() {
-            format!("Pathogen-{}", self.diseases.len() + 1)
-        } else {
-            available[rng.r#gen::<usize>() % available.len()].to_string()
-        };
-
-        // Generate stats — mid-game threats are biased toward the upper end
-        let ranges = pathogen_type.stat_ranges();
-        let range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
-            lo + rng.r#gen::<f64>() * (hi - lo)
-        };
-        let biased_range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
-            let base = lo + rng.r#gen::<f64>() * (hi - lo);
-            (base + (hi - lo) * 0.2).min(hi)
-        };
-
+        let used_names: Vec<String> = self.diseases.iter().map(|d| d.name.clone()).collect();
         let disease_idx = self.diseases.len();
-        self.diseases.push(Disease {
-            name,
-            pathogen_type,
-            transmission: pathogen_type.random_transmission(rng),
-            infectivity: biased_range_val(rng, ranges.infectivity),
-            lethality: biased_range_val(rng, ranges.lethality),
-            cross_region_spread: range_val(rng, ranges.cross_region),
-            recovery_rate: range_val(rng, ranges.recovery),
-            knowledge: 0.0,
-            strain_generation: 0,
-            sequencing_count: 0,
-        });
+        self.diseases.push(Disease::generate(rng, pathogen_type, &used_names, true));
 
         // Place initial outbreak in a random region
         let region_idx = rng.r#gen::<usize>() % self.regions.len();
@@ -1395,20 +1388,7 @@ impl GameState {
             immune: 0.0,
         });
 
-        // Generate a matching targeted medicine
-        let therapy = pathogen_type.matched_therapy();
-        let letter = (b'A' + disease_idx as u8) as char;
-        self.medicines.push(Medicine {
-            name: format!("{}-{}", therapy.label(), letter),
-            therapy_type: therapy,
-            target_diseases: vec![disease_idx],
-            cost: 100.0,
-            doses: 100_000.0,
-            max_doses: 100_000.0,
-            unlocked: false,
-            tested_against: vec![],
-            strain_generations: vec![],
-        });
+        self.medicines.push(Medicine::new_targeted(disease_idx, pathogen_type));
 
         // Update broad-spectrum medicine to also target new disease
         for med in &mut self.medicines {
