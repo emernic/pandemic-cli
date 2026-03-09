@@ -2565,7 +2565,7 @@ mod tests {
     fn trial_shortcut_option_a_loses_pol() {
         let mut state = GameState::new_default(42);
         let before = state.resources.pol_crisis_modifier;
-        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0 }, 0);
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.pol_crisis_modifier - (before - 0.05)).abs() < 0.001,
             "option A should decrease pol_crisis_modifier by 0.05");
@@ -2574,8 +2574,9 @@ mod tests {
     #[test]
     fn trial_shortcut_option_b_gains_pol() {
         let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
         let before = state.resources.pol_crisis_modifier;
-        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0 }, 1);
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.pol_crisis_modifier - (before + 0.10)).abs() < 0.001,
             "option B should increase pol_crisis_modifier by 0.10");
@@ -2845,5 +2846,50 @@ mod tests {
             "option B should gain $600");
         assert!((after.resources.pol_crisis_modifier - (before_pol - 0.15)).abs() < 0.001,
             "option B should lose 0.15 POL modifier");
+    }
+
+    #[test]
+    fn trial_shortcut_fast_track_marks_tested_with_penalty() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].tested_against.clear();
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
+
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.medicines[0].tested_against.contains(&0),
+            "fast-track should mark medicine as tested");
+        assert!(!after.medicines[0].strain_generations.is_empty(),
+            "strain_generations should be populated");
+        assert!(after.active_crisis.is_none());
+    }
+
+    #[test]
+    fn trial_shortcut_fast_track_with_mutated_disease_has_drift() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].tested_against.clear();
+        state.diseases[0].strain_generation = 5;
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
+
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.medicines[0].tested_against.contains(&0));
+        assert_eq!(after.medicines[0].strain_generations[0], 3,
+            "should be calibrated 2 generations behind current");
+        let efficacy = after.medicines[0].strain_efficacy(0, &after.diseases);
+        assert!((efficacy - 0.70).abs() < 0.01,
+            "efficacy should be ~0.70 due to 2-gen drift, got {}", efficacy);
+    }
+
+    #[test]
+    fn trial_shortcut_maintain_standards_no_medicine_change() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].tested_against.clear();
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 0);
+
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.medicines[0].tested_against.is_empty(),
+            "maintain standards should not mark medicine as tested");
+        assert!(after.active_crisis.is_none());
     }
 }
