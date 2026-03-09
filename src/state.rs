@@ -880,6 +880,10 @@ pub struct UiState {
     /// Which crisis option is selected (0 = A, 1 = B).
     #[serde(default)]
     pub crisis_selection: usize,
+    /// Whether the home splash animation has completed (or been skipped).
+    /// Once true, the home panel renders fully without animation.
+    #[serde(default)]
+    pub home_splash_done: bool,
 }
 
 impl UiState {
@@ -897,6 +901,8 @@ impl UiState {
         } else {
             self.open_panel = panel;
             self.panel_selection = 0;
+            // Once the player opens any panel, the home splash animation is done.
+            self.home_splash_done = true;
             match panel {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                 Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
@@ -1500,6 +1506,7 @@ impl GameState {
                 policy_ui: None,
                 status_message: None,
                 crisis_selection: 0,
+                home_splash_done: false,
             },
         }
     }
