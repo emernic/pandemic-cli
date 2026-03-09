@@ -112,8 +112,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 detail_spans.push(Span::styled(name, Style::default().fg(Color::Red)));
 
                 if med.tested_against.contains(&d_idx) {
-                    let eff = med.strain_efficacy(d_idx, &state.diseases);
-                    let pct = (eff * 100.0).round() as u32;
+                    let strain_eff = med.strain_efficacy(d_idx, &state.diseases);
+                    let res_factor = med.resistance_factor(d_idx);
+                    let combined = strain_eff * res_factor;
+                    let pct = (combined * 100.0).round() as u32;
                     let color = if pct >= 85 {
                         Color::Green
                     } else if pct >= 50 {
@@ -125,6 +127,15 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                         format!(" ({}%)", pct),
                         Style::default().fg(color),
                     ));
+                    // Show resistance level if non-zero
+                    let res_pct = ((1.0 - res_factor) * 100.0).round() as u32;
+                    if res_pct > 0 {
+                        let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
+                        detail_spans.push(Span::styled(
+                            format!(" Res:{}%", res_pct),
+                            Style::default().fg(res_color),
+                        ));
+                    }
                 } else {
                     detail_spans.push(Span::styled(
                         " [UNTESTED]",
@@ -288,12 +299,13 @@ fn render_select_target(
         .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
         .unwrap_or(0.0);
     let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
+    let resistance = med.resistance_factor(disease_idx);
     let cross_reactive = if med.is_cross_reactive(disease_idx) {
         crate::state::CROSS_REACTIVE_PENALTY
     } else {
         1.0
     };
-    let efficacy = therapy_efficacy * strain_eff * cross_reactive;
+    let efficacy = therapy_efficacy * strain_eff * cross_reactive * resistance;
     let eff_color = if efficacy >= 0.8 {
         Color::Green
     } else if efficacy >= 0.5 {
@@ -302,6 +314,7 @@ fn render_select_target(
         Color::Red
     };
     let strain_outdated = strain_eff < 1.0;
+    let res_pct = ((1.0 - resistance) * 100.0).round() as u32;
 
     // Option 0: Vaccinate
     {
@@ -403,6 +416,14 @@ fn render_select_target(
         lines.push(Line::from(Span::styled(
             format!("  Strain outdated ({:.0}% match — re-trial to update)", strain_eff * 100.0),
             Style::default().fg(Color::Yellow),
+        )));
+    }
+    if res_pct > 0 {
+        let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
+        let warning = if res_pct >= 50 { " — consider switching drugs" } else { "" };
+        lines.push(Line::from(Span::styled(
+            format!("  Resistance: {}%{}", res_pct, warning),
+            Style::default().fg(res_color),
         )));
     }
 

@@ -70,7 +70,8 @@ pub(super) fn deploy_medicine(
         } else {
             1.0
         };
-        let efficacy = therapy_efficacy * strain_eff * cross_reactive;
+        let resistance = state.medicines[medicine_idx].resistance_factor(disease_idx);
+        let efficacy = therapy_efficacy * strain_eff * cross_reactive * resistance;
         let vax_mult = state.vaccination_multiplier();
         let region = &mut state.regions[region_idx];
         let region_name = region.name.clone();
@@ -96,6 +97,7 @@ pub(super) fn deploy_medicine(
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
                     deduct_deploy_costs(state, medicine_idx, cost, actual);
+                    build_resistance(state, medicine_idx, disease_idx, false);
                     (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse_deaths, efficacy), adverse)
                 } else {
                     (format!("No susceptible population in {region_name}"), false)
@@ -110,6 +112,7 @@ pub(super) fn deploy_medicine(
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
                     deduct_deploy_costs(state, medicine_idx, cost, actual);
+                    build_resistance(state, medicine_idx, disease_idx, true);
                     (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse_deaths, efficacy), adverse)
                 } else {
                     (format!("No infected population in {region_name}"), false)
@@ -157,6 +160,27 @@ fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, cost: f64, ac
     state.resources.funding -= cost;
     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
     state.medicines[medicine_idx].deployed_count += 1;
+}
+
+/// Build resistance from deployment pressure. Treatment creates much more
+/// selection pressure than vaccination. Broad-spectrum drugs build resistance
+/// faster because they exert less targeted evolutionary pressure.
+fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
+    let med = &state.medicines[medicine_idx];
+    let base = if is_treatment { 0.03 } else { 0.005 };
+    let type_mult = match med.therapy_type {
+        crate::state::TherapyType::BroadSpectrum => 2.0,
+        _ => 1.0,
+    };
+    let gain = base * type_mult;
+    // Ensure resistance vec is populated (parallel to target_diseases)
+    let med = &mut state.medicines[medicine_idx];
+    while med.resistance.len() < med.target_diseases.len() {
+        med.resistance.push(0.0);
+    }
+    if let Some(pos) = med.target_diseases.iter().position(|&d| d == disease_idx) {
+        med.resistance[pos] = (med.resistance[pos] + gain).min(1.0);
+    }
 }
 
 pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
