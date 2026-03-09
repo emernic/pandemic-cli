@@ -1933,11 +1933,13 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Ensure a highly lethal, fast-spreading disease so all regions collapse.
         // Lethality must be high enough to overcome recovery and kill >70% (Africa's threshold).
+        // cross_region_spread must be high enough to reach refugia (S.America, Oceania)
+        // through the sparser connection graph.
         for disease in &mut state.diseases {
             disease.infectivity = 0.08;
             disease.lethality = 0.06;
             disease.recovery_rate = 0.005;
-            disease.cross_region_spread = 0.08;
+            disease.cross_region_spread = 0.15;
         }
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..10000 {
@@ -2310,10 +2312,10 @@ mod tests {
     #[test]
     fn disease_mutates_over_time() {
         let mut state = GameState::new_default(42);
-        // RNA virus (Strain Alpha) has mutation_rate 0.008, so over 500 ticks
-        // we expect ~4 mutations. Run enough ticks to virtually guarantee at least one.
+        // RNA virus has mutation_rate 0.008, so over 1000 ticks
+        // we expect ~8 mutations. Run enough ticks to virtually guarantee at least one.
         let original_infectivity = state.diseases[0].infectivity;
-        for _ in 0..500 {
+        for _ in 0..1000 {
             state = tick(&state);
         }
         assert!(
@@ -2964,12 +2966,13 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
         let mut state = GameState::new_default(42);
-        // Set up a lethal disease to trigger collapse of all regions
+        // Set up a highly lethal disease to trigger game over (collapse all regions).
+        // High cross_region_spread needed to reach refugia through sparser graph.
         for disease in &mut state.diseases {
-            disease.infectivity = 0.08;
-            disease.lethality = 0.06;
-            disease.recovery_rate = 0.005;
-            disease.cross_region_spread = 0.08;
+            disease.infectivity = 0.12;
+            disease.lethality = 0.08;
+            disease.recovery_rate = 0.002;
+            disease.cross_region_spread = 0.20;
         }
 
         // Inject an active crisis

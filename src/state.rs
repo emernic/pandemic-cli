@@ -1401,11 +1401,18 @@ impl GameState {
 
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
 
+        // Canonical region connections (indices match vec order):
+        //   0: N.America ↔ S.America(1), Europe(2)
+        //   1: S.America ↔ N.America(0)               ← refugium
+        //   2: Europe    ↔ N.America(0), Africa(3), Asia(4)  ← central hub
+        //   3: Africa    ↔ Europe(2), Asia(4)
+        //   4: Asia      ↔ Europe(2), Africa(3), Oceania(5)
+        //   5: Oceania   ↔ Asia(4)                     ← refugium
         let mut regions = vec![
             Region {
                 name: "North America".into(),
                 population: 500_000_000,
-                connections: vec![1, 2, 5],
+                connections: vec![1, 2],
                 infections: vec![],
                 collapse_threshold: 0.75, // Fragile — collapses at 25% dead
                 collapsed: false,
@@ -1413,7 +1420,7 @@ impl GameState {
             Region {
                 name: "South America".into(),
                 population: 430_000_000,
-                connections: vec![0, 2],
+                connections: vec![0],
                 infections: vec![],
                 collapse_threshold: 0.50, // Moderate resilience — 50% dead
                 collapsed: false,
@@ -1421,7 +1428,7 @@ impl GameState {
             Region {
                 name: "Europe".into(),
                 population: 750_000_000,
-                connections: vec![0, 1, 3, 4],
+                connections: vec![0, 3, 4],
                 infections: vec![],
                 collapse_threshold: 0.70, // Fragile — 30% dead
                 collapsed: false,
@@ -1445,7 +1452,7 @@ impl GameState {
             Region {
                 name: "Oceania".into(),
                 population: 45_000_000,
-                connections: vec![0, 4],
+                connections: vec![4],
                 infections: vec![],
                 collapse_threshold: 0.65, // Moderate — 35% dead
                 collapsed: false,
