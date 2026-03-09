@@ -455,9 +455,9 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             if disease.knowledge >= KNOWLEDGE_NAME {
                 // Already identified — explain what further study unlocks
                 let next = if disease.knowledge < KNOWLEDGE_FOR_MEDICINE {
-                    "Unlocks medicine development"
+                    "Unlocks broad-spectrum medicine development"
                 } else if disease.knowledge < KNOWLEDGE_FULL {
-                    "Reveals full pathogen stats"
+                    "Unlocks targeted medicine development"
                 } else {
                     "Fully studied"
                 };
