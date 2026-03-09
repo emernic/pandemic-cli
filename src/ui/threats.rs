@@ -40,7 +40,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Style::default().fg(Color::DarkGray),
                 )));
             } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
-                // Name known, partial stats + pathogen type
+                // Name known, partial stats + pathogen type (vector not yet known)
                 let mut type_spans = vec![
                     Span::styled(
                         format!("    Type: {}", disease.pathogen_type.label()),
@@ -61,11 +61,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Span::styled("Recov: ?", Style::default().fg(Color::DarkGray)),
                 ]));
             } else {
-                // Full stats visible + pathogen type
+                // Full stats visible + pathogen type + transmission vector
                 let mut type_spans = vec![
                     Span::styled(
                         format!("    Type: {}", disease.pathogen_type.label()),
                         Style::default().fg(Color::Cyan),
+                    ),
+                    Span::styled(
+                        format!("  Vector: {}", disease.transmission.label()),
+                        Style::default().fg(Color::Yellow),
                     ),
                 ];
                 push_mutation_indicator(&mut type_spans, state, i, disease);
