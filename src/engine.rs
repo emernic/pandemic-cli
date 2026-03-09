@@ -839,19 +839,14 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 "Supply disruption resolved".into()
             }
         }
-        (CrisisKind::SupplyDisruption { .. }, _) => {
+        (CrisisKind::SupplyDisruption { medicine_idx }, _) => {
             // Pay to save
             if state.resources.funding >= 300.0 {
                 state.resources.funding -= 300.0;
                 "Emergency reroute successful — supply chain restored (-$300)".into()
             } else {
                 // Can't afford it — still lose some doses
-                if let Some(med) = state.medicines.get_mut(
-                    match &crisis.kind {
-                        CrisisKind::SupplyDisruption { medicine_idx } => *medicine_idx,
-                        _ => unreachable!(),
-                    }
-                ) {
+                if let Some(med) = state.medicines.get_mut(*medicine_idx) {
                     let lost = (med.doses * 0.5).round();
                     med.doses = (med.doses - lost).max(0.0);
                     format!("Insufficient funds for reroute — lost {} doses", crate::format_number(lost))
@@ -887,20 +882,16 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
             format!("Quarantine lifted in {} due to political pressure", region_name)
         }
-        (CrisisKind::PoliticalPressure { .. }, _) => {
+        (CrisisKind::PoliticalPressure { region_idx }, _) => {
             // Resist — pay $500
             if state.resources.funding >= 500.0 {
                 state.resources.funding -= 500.0;
                 "Political pressure resisted — quarantine maintained (-$500)".into()
             } else {
                 // Can't afford — quarantine lifted anyway
-                let region_idx = match &crisis.kind {
-                    CrisisKind::PoliticalPressure { region_idx } => *region_idx,
-                    _ => unreachable!(),
-                };
-                let region_name = state.regions.get(region_idx)
+                let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-                if let Some(policy) = state.policies.get_mut(region_idx) {
+                if let Some(policy) = state.policies.get_mut(*region_idx) {
                     policy.quarantine = false;
                 }
                 format!("Cannot afford resistance — quarantine lifted in {}", region_name)
@@ -911,17 +902,13 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
             format!("Lost {} personnel to burnout", amount)
         }
-        (CrisisKind::PersonnelCrisis { .. }, _) => {
+        (CrisisKind::PersonnelCrisis { amount }, _) => {
             // Pay retention bonus
             if state.resources.funding >= 400.0 {
                 state.resources.funding -= 400.0;
                 "Retention bonuses paid — staff morale restored (-$400)".into()
             } else {
-                let amount = match &crisis.kind {
-                    CrisisKind::PersonnelCrisis { amount } => *amount,
-                    _ => unreachable!(),
-                };
-                state.resources.personnel = state.resources.personnel.saturating_sub(amount);
+                state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
                 format!("Cannot afford retention bonuses — lost {} personnel", amount)
             }
         }
