@@ -2779,6 +2779,13 @@ impl GameState {
             .unwrap_or(ScreeningLevel::None.visibility_rate())
     }
 
+    /// Whether the screening level in a region reveals immune data.
+    pub fn screening_shows_immune(&self, region_idx: usize) -> bool {
+        self.policies.get(region_idx)
+            .map(|p| p.screening.shows_immune())
+            .unwrap_or(false)
+    }
+
     /// Best screening level across all regions — used for detection threshold.
     pub fn best_screening_level(&self) -> ScreeningLevel {
         self.policies.iter()
