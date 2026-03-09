@@ -187,6 +187,9 @@ pub fn tick(state: &GameState) -> GameState {
             if let Some(policy) = new.policies.get_mut(i) {
                 policy.clear_all();
             }
+            // Personnel loss: staff in the collapsed region are lost
+            let lost_personnel = 2u32.min(new.resources.personnel);
+            new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
             // Auto-pause so the player sees the collapse and can react
             new.sim_state = SimState::Paused;
@@ -3412,6 +3415,38 @@ mod tests {
         assert_eq!(
             virus_resistance, 0.0,
             "HGT should not affect non-bacteria: got {virus_resistance}"
+        );
+    }
+
+    #[test]
+    fn collapse_kills_income_and_loses_personnel() {
+        let mut state = GameState::new_default(42);
+        detect_all_diseases(&mut state);
+        let initial_income = state.funding_income_rate();
+        let initial_personnel = state.resources.personnel;
+        assert!(initial_income > 0.0);
+
+        // Force a region to collapse
+        let region_idx = primary_outbreak_region(&state);
+        let pop = state.regions[region_idx].population as f64;
+        state.regions[region_idx].dead = pop * 0.6; // above collapse threshold
+
+        // Tick to trigger collapse detection
+        state = tick(&state);
+        assert!(state.regions[region_idx].collapsed, "region should have collapsed");
+
+        // Income should drop (collapsed region contributes nothing)
+        let post_collapse_income = state.funding_income_rate();
+        assert!(
+            post_collapse_income < initial_income,
+            "income should drop after collapse: was {initial_income}, now {post_collapse_income}"
+        );
+
+        // Personnel should be reduced by 2
+        assert_eq!(
+            state.resources.personnel,
+            initial_personnel - 2,
+            "should lose 2 personnel on collapse"
         );
     }
 }

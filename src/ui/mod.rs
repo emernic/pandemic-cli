@@ -77,7 +77,7 @@ pub fn process_events(state: &mut GameState) {
             .map(|r| r.name.as_str())
             .unwrap_or("Unknown");
         let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
-        format!("COLLAPSE: {region_name} has fallen! {remaining} regions remain.")
+        format!("COLLAPSE: {region_name} has fallen! {remaining} regions remain. 2 personnel lost.")
     } else if let Some(GameEvent::DiseaseDetected { disease_idx }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseDetected { .. }))
     {
