@@ -1221,6 +1221,30 @@ pub enum CrisisKind {
     InternationalAid { funding: f64, personnel: u32 },
     /// Mutation surge — pay to gain knowledge or let it drift.
     MutationSurge { disease_idx: usize },
+    /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
+    RefugeeWave { from_region: usize, to_region: usize },
+    /// Research data leaked — go transparent or suppress.
+    DataLeak,
+    /// Untested drugs on the black market — confiscate or allow.
+    BlackMarketMedicine { region_idx: usize },
+    /// Riots in quarantined region — use force or negotiate.
+    QuarantineRiot { region_idx: usize },
+    /// Media causing panic — address it or ignore.
+    MediaPanic,
+    /// Pressure to skip clinical trials.
+    TrialShortcut { disease_idx: usize },
+    /// Public refusing vaccines — education campaign or mandate.
+    VaccineHesitancy { region_idx: usize },
+    /// Corrupt official siphoning funds — investigate or ignore.
+    CorruptOfficial,
+    /// Powerful nation wants your research data — share or refuse.
+    ResourceDiversion { disease_idx: usize },
+    /// Hospital workers collapsing — reduce shifts or push through.
+    ExhaustionEpidemic { region_idx: usize },
+    /// Whistleblower reports medicine side effects — halt or continue.
+    WhistleblowerReport { medicine_idx: usize },
+    /// Military threatens takeover of health agency.
+    MilitaryTakeover,
 }
 
 impl CrisisKind {
@@ -1234,6 +1258,18 @@ impl CrisisKind {
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::InternationalAid { .. } => "aid",
             CrisisKind::MutationSurge { .. } => "mutation",
+            CrisisKind::RefugeeWave { .. } => "refugee",
+            CrisisKind::DataLeak => "dataleak",
+            CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
+            CrisisKind::QuarantineRiot { .. } => "riot",
+            CrisisKind::MediaPanic => "media",
+            CrisisKind::TrialShortcut { .. } => "trial",
+            CrisisKind::VaccineHesitancy { .. } => "hesitancy",
+            CrisisKind::CorruptOfficial => "corrupt",
+            CrisisKind::ResourceDiversion { .. } => "diversion",
+            CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
+            CrisisKind::WhistleblowerReport { .. } => "whistleblower",
+            CrisisKind::MilitaryTakeover => "military",
         }
     }
 }
