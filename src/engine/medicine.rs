@@ -46,7 +46,7 @@ pub(super) fn deploy_medicine(
     let cost = med.deploy_cost(state.regions[region_idx].population);
     let med_name = med.name.clone();
     let therapy_type = med.therapy_type;
-    let target = med.decode_deploy_target(target_selection);
+    let target = med.decode_deploy_target(target_selection, &state.diseases);
 
     if let Some(target) = target {
         if state.resources.funding < cost {
@@ -61,11 +61,16 @@ pub(super) fn deploy_medicine(
             DeployTarget::Treat { disease_idx } => *disease_idx,
         };
 
-        // Efficacy: therapy type × pathogen type × strain match
+        // Efficacy: therapy type × pathogen type × strain match × cross-reactivity
         let pathogen = &state.diseases[disease_idx].pathogen_type;
         let therapy_efficacy = therapy_type.efficacy(pathogen);
         let strain_eff = state.medicines[medicine_idx].strain_efficacy(disease_idx, &state.diseases);
-        let efficacy = therapy_efficacy * strain_eff;
+        let cross_reactive = if state.medicines[medicine_idx].is_cross_reactive(disease_idx) {
+            crate::state::CROSS_REACTIVE_PENALTY
+        } else {
+            1.0
+        };
+        let efficacy = therapy_efficacy * strain_eff * cross_reactive;
         let region = &mut state.regions[region_idx];
         let region_name = region.name.clone();
         let pop = region.population as f64;

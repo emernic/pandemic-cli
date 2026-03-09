@@ -28,7 +28,7 @@ struct Medicine {
 
 ### TherapyType × PathogenType Efficacy
 
-Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via an applied research project (ManufactureDoses: 3 personnel, 120 ticks).
+Effective doses = `doses × therapy_efficacy × strain_efficacy × cross_reactive_penalty`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via an applied research project (ManufactureDoses: 3 personnel, 120 ticks).
 
 | TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Prion |
 |---|---|---|---|---|
@@ -39,6 +39,14 @@ Effective doses = `doses × therapy_efficacy × strain_efficacy`. Doses deplete 
 ### Strain Drift
 
 When a disease mutates (increments `strain_generation`), medicines calibrated to older generations lose efficacy: `-15% per generation behind` (floor 10%). Re-running a Clinical Trial re-calibrates the medicine to the current strain.
+
+### Cross-Reactivity
+
+Medicines with a mechanism of action can be deployed against ANY disease whose pathogen type matches the mechanism's category — not just their primary target diseases. A CellWall inhibitor developed for Bacterium-A can also treat Bacterium-B, because all bacteria have cell walls.
+
+Cross-reactive deployments suffer a **50% efficacy penalty** (`CROSS_REACTIVE_PENALTY = 0.5`). This stacks with therapy type efficacy and strain drift. Running a clinical trial against the cross-reactive target does NOT remove the penalty — it only calibrates strain drift.
+
+This creates strategic depth: when a second bacterium emerges, you can immediately deploy your existing antibiotic at reduced efficacy while developing a dedicated medicine. Mechanism choice matters because broader mechanisms (like CellWall inhibitors, which work on all bacteria) provide more cross-reactive coverage than narrow ones.
 
 ### Untested Medicine Risk
 
