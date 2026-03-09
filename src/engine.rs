@@ -805,6 +805,14 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         None => return "No active crisis".into(),
     };
 
+    // Deduct costs generically from the chosen option (affordability was
+    // already checked in apply_action before we get here).
+    let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
+    if let Some(cost) = &option.cost {
+        state.resources.funding -= cost.funding;
+        state.resources.research_points -= cost.rp;
+    }
+
     match (&crisis.kind, choice) {
         (CrisisKind::SupplyDisruption { medicine_idx }, 0) => {
             // Accept losses: lose 50% of doses
@@ -818,9 +826,7 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
         }
         (CrisisKind::SupplyDisruption { .. }, _) => {
-            // Pay to save (affordability checked before confirmation)
-            state.resources.funding -= 300.0;
-            "Emergency reroute successful — supply chain restored (-$300)".into()
+            "Emergency reroute successful — supply chain restored".into()
         }
         (CrisisKind::LabAccident, 0) => {
             // Evacuate — lose bench research
@@ -828,9 +834,7 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Lab evacuated — bench research project lost".into()
         }
         (CrisisKind::LabAccident, _) => {
-            // Contain (affordability checked before confirmation)
-            state.resources.research_points -= 50.0;
-            "Containment successful — research project saved (-50 RP)".into()
+            "Containment successful — research project saved".into()
         }
         (CrisisKind::PoliticalPressure { region_idx }, 0) => {
             // Comply — lift quarantine
@@ -842,9 +846,7 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Quarantine lifted in {} due to political pressure", region_name)
         }
         (CrisisKind::PoliticalPressure { .. }, _) => {
-            // Resist (affordability checked before confirmation)
-            state.resources.funding -= 500.0;
-            "Political pressure resisted — quarantine maintained (-$500)".into()
+            "Political pressure resisted — quarantine maintained".into()
         }
         (CrisisKind::PersonnelCrisis { amount }, 0) => {
             // Accept resignations
@@ -852,33 +854,26 @@ fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Lost {} personnel to burnout", amount)
         }
         (CrisisKind::PersonnelCrisis { .. }, _) => {
-            // Pay retention bonus (affordability checked before confirmation)
-            state.resources.funding -= 400.0;
-            "Retention bonuses paid — staff morale restored (-$400)".into()
+            "Retention bonuses paid — staff morale restored".into()
         }
         (CrisisKind::InternationalAid { funding, .. }, 0) => {
-            // Take funding
             state.resources.funding += funding;
             format!("Received ${:.0} in emergency funding", funding)
         }
         (CrisisKind::InternationalAid { rp, .. }, _) => {
-            // Take RP
             state.resources.research_points += rp;
             format!("Received {:.0} research points from international collaboration", rp)
         }
         (CrisisKind::MutationSurge { .. }, 0) => {
-            // Ignore
             "Mutation surge ignored — focusing resources elsewhere".into()
         }
         (CrisisKind::MutationSurge { disease_idx }, _) => {
-            // Emergency analysis (affordability checked before confirmation)
-            state.resources.research_points -= 75.0;
             if let Some(disease) = state.diseases.get_mut(*disease_idx) {
                 disease.knowledge = (disease.knowledge + 0.15).min(1.0);
                 let name = disease.display_name(*disease_idx);
-                format!("Emergency analysis complete — gained knowledge of {} (-75 RP)", name)
+                format!("Emergency analysis complete — gained knowledge of {}", name)
             } else {
-                "Emergency analysis complete (-75 RP)".into()
+                "Emergency analysis complete".into()
             }
         }
     }
