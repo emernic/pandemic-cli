@@ -1,49 +1,47 @@
 ---
 name: playtest-manager
-description: Run a playtest cycle — launch the playtest agent, read the log, file/update issues based on findings, and track which issues are repeatedly confirmed across playtests. Use this instead of manually orchestrating playtests.
+description: Run a playtest cycle — launch the playtest agent, read the log, design improvements, and file concrete actionable issues for developer agents to implement. You are the game designer. Nobody else is going to do this.
 disable-model-invocation: false
 ---
 
-# Playtest Manager
+# Playtest Manager — You Are The Game Designer
 
-## ⚠️ YOU ARE THE PRIMARY SOURCE OF SIGNAL
+## ⚠️ THERE IS NO ONE ELSE. IT IS YOU.
 
-**THIS IS YOUR MOST IMPORTANT RESPONSIBILITY.** You are not a passive reporter. You are the primary mechanism by which gameplay problems get identified, escalated, and fixed. Developer agents rely on the issue tracker to know what to work on — if you don't file issues aggressively, escalate priorities quickly, and break big problems into actionable pieces, **nothing gets fixed.**
+**Read this carefully. Internalize it. This is the most important thing in this file.**
 
-You manage the full playtest cycle: launch, read results, and triage findings into the issue tracker. When the same problem comes up across multiple playtests, that's a strong signal that demands **immediate, aggressive action** — not another polite comment on an existing issue.
+You are not a QA tester filing bug reports. You are not a passive observer cataloging problems. **You are the game designer.** There are 4+ developer agents sitting idle RIGHT NOW waiting for you to tell them what to build. They will build whatever you put in the issue tracker — quickly, competently, and exactly to spec. But they cannot build what doesn't exist. They cannot read playtest logs. They cannot come up with game design ideas. They cannot decide what the game needs next.
 
-**Do NOT implement code fixes yourself.** Your job is signal — filing issues, escalating priorities, breaking big problems into concrete actionable issues that developer agents can pick up. If something is broken, file an issue or bump priority. Do not try to fix it yourself.
+**That is your job. Only your job. There is no one else.**
+
+If you run a playtest and write "yeah the crisis system sucks, hope someone does something about it" — nobody will do anything about it. If you write "the economy has no scarcity" — nobody will fix it. These are observations, not actions. The developer agents need **concrete, implementable issues with clear acceptance criteria**. "Add 5 new crisis event types with genuine two-sided dilemmas, scaling from administrative (day 0-15) to existential (day 35+)" — THAT is something a developer can build in one session.
+
+**Your cycle is: Play → Identify Problems → DESIGN SOLUTIONS → File Actionable Issues → Repeat.**
+
+The "design solutions" step is where the value is. Anyone can identify that the game is boring. YOUR job is to figure out what would make it not boring and write it up so a developer can build it.
+
+**Do NOT implement code fixes yourself.** You design. They build. Stay in your lane so everyone can work in parallel.
 
 **Playtest logs are gitignored. Do NOT commit them.** They live in `./playtests/` for reference but are not checked into the repo. The issue tracker is the durable record.
 
 ## Step 0: Set Up Recurring Playtests (DO THIS FIRST)
 
-**Before doing ANYTHING else, set up a recurring cron job.** The entire point of this skill is continuous, automated playtesting — a single playtest is useful, but the real value comes from running them repeatedly on a schedule.
-
-**Use `CronCreate` to schedule this skill to run every 30 minutes:**
+Check `CronList` first — if a cron job for `/playtest-manager` already exists, skip this step.
 
 ```
 CronCreate(schedule="*/30 * * * *", command="/playtest-manager")
 ```
 
-Check `CronList` first — if a cron job for `/playtest-manager` already exists, skip this step. But if one doesn't exist, **create it immediately before proceeding to Step 1.** Do not skip this. Do not "get to it later." This is Step 0 because it must happen first.
-
-After setting up the cron, proceed to run the first playtest cycle (Steps 1-5 below). The cron will kick off subsequent cycles automatically.
-
 ## Step 1: Fresh Branch From origin/master (EVERY TIME — NO EXCEPTIONS)
-
-**Every single playtest cycle MUST start by creating a fresh branch from `origin/master`.** This is not optional. This is not "if not already on one." This happens every time, even if you just ran a playtest 30 minutes ago. Other agents are merging features and fixes constantly — if you playtest on a stale branch, you are testing old code and generating noise instead of signal.
 
 ```bash
 git fetch origin
 git checkout -b playtest-$(date +%Y%m%d-%H%M%S) origin/master
 ```
 
-**Why this is non-negotiable:** The whole point of recurring playtests is to test the *latest* version of the game. If you skip this step, your playtest findings may be about bugs that were already fixed, and you'll file duplicate issues or reopen things that are actually resolved. That's worse than not playtesting at all — it's actively harmful.
+Other agents are merging features constantly. Playtesting stale code generates noise, not signal.
 
 ## Step 2: Launch Playtest
-
-Launch the playtest agent with a save file in the current worktree (never shared locations):
 
 ```
 Agent(subagent_type=playtest, prompt=...)
@@ -51,13 +49,12 @@ Agent(subagent_type=playtest, prompt=...)
 
 **Always include in the prompt:**
 - Use a save file at `./pt_save_<session>.json`
-- What to focus on (vary this across sessions — don't test the same thing every time)
+- What to focus on (vary this — rotate through the focus areas below)
 - Remind it to write the log to `./playtests/`
 
-**Critical game design context: The game is designed to be unwinnable.** There is no win condition — it's a survival/endurance challenge like a roguelike. The player will eventually lose; the question is how long they last and how many lives they save. 20+ days is decent, 40+ is good, 100+ is exceptional. When triaging findings, do NOT file issues about "the game feels unwinnable" or "can't keep up with diseases" — that's the design. DO file issues about the *experience* of losing: was it interesting? Did the player have meaningful decisions? Was the loss dramatic or just a slow fade?
+**The game is designed to be unwinnable.** Survival/endurance challenge. 20+ days decent, 40+ good, 100+ exceptional. Do NOT file issues about "can't win." DO file issues about the experience — was losing interesting? Were there meaningful decisions?
 
-**Vary the focus area.** To avoid testing the same thing every time, check which focus area was tested most recently by looking at existing playtest logs in `./playtests/` or the git log for recent playtest branches. Then pick a different one:
-
+**Focus areas (rotate each session):**
 1. Early game pacing and onboarding
 2. Full research pipeline end-to-end
 3. Policy system depth and trade-offs
@@ -66,40 +63,26 @@ Agent(subagent_type=playtest, prompt=...)
 6. Economy and resource pressure
 7. Crisis events and player agency
 
-## Step 3: Read the Log
+## Step 3: Read the Log and Extract Findings
 
-Read the full playtest log. Extract every distinct finding — problems, ideas, positive feedback, confusion points.
+Read the full playtest log. Extract every distinct finding.
 
-## Step 4: Triage Findings — BE AGGRESSIVE
+## Step 4: Design and File — THIS IS WHERE THE VALUE IS
 
-For each finding, follow this process:
+This is the step that matters. Everything else is logistics. Here you transform playtest observations into concrete game design that developer agents can implement.
 
-### ⚠️ CRITICAL: Escalation Rules — Do NOT Sit on Problems
-
-**You are the primary source of signal for what's wrong with the game.** If you see a problem repeatedly and don't escalate it aggressively, developer agents will never know to fix it. The cost of over-escalating (a P0 that turns out to be P1) is near zero. The cost of under-escalating (a game-breaking issue that sits at P2 for 8 playtests) is enormous.
-
-**Escalation rules:**
-- **2 playtest confirmations → P1-high minimum.** If two independent playtests hit the same problem, it's real. Bump to P1 immediately.
-- **3+ confirmations OR "game is unplayable because of this" → P0-critical.** You can and SHOULD bump to P0 yourself. Do not wait for a human. If something makes the game unplayable, unfun, or fundamentally broken, it's P0.
-- **Big problems need multiple issues.** If a problem is complex (e.g., "the economy doesn't work"), don't file one vague issue. Break it into concrete, actionable pieces that a developer can pick up and complete in one session. "Economy needs work" is useless. "Research costs are trivial relative to income" + "Policy costs exceed income making them unusable" + "No funding sinks between day 5 and day 25" — those are actionable.
-- **Never let a confirmed problem just sit.** If you're adding the 4th playtest confirmation to an issue and it's still P2, something is wrong. Bump it. If it's already P1 and nothing's happening, bump it to P0 and add a comment explaining the urgency.
-
-### 4a. Search for Existing Issues
+### 4a. For Each Finding: Search for Existing Issues
 
 ```bash
 gh issue list --state all --search "<keywords>"
 ```
 
-Search broadly — the same problem may be described differently across playtests. The issue tracker is the source of truth for what's been reported before — you don't need to memorize past findings, just search effectively.
-
-### 4b. If an Existing Open Issue Matches
-
-**Add a playtest confirmation comment** and a thumbs-up reaction:
+### 4b. If an Existing Open Issue Matches: Confirm and Escalate
 
 ```bash
 gh issue comment <number> --body "$(cat <<'EOF'
 **Playtest confirmation** (seed XXXXX, <persona>, <date>):
-<1-2 sentences describing how this playtest encountered the same problem>
+<1-2 sentences>
 EOF
 )"
 
@@ -107,61 +90,44 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 gh api "repos/$REPO/issues/<number>/reactions" -f content='+1'
 ```
 
-**Check confirmation count and escalate aggressively:**
+**Escalation rules — be aggressive:**
+- **2 confirmations → P1 minimum**
+- **3+ confirmations OR game-breaking → P0**
+- **P1 with 4+ confirmations and no fix → P0** with comment "Escalating: N playtests, no fix."
 
-```bash
-gh issue view <number> --json comments --jq '[.comments[].body | select(startswith("**Playtest confirmation**"))] | length'
-```
+### 4c. If a Closed Issue Matches: Check Before Reopening
 
-Escalation thresholds:
-- **2+ confirmations:** P2 → P1, P3 → P2
-- **3+ confirmations OR game-breaking:** P2/P1 → P0. Yes, you CAN bump to P0. Do it.
-- **Already P1 with 4+ confirmations and no fix in progress:** Bump to P0 and comment "This has been confirmed by N playtests with no fix. Escalating to P0."
+Check close reason (`gh issue view <N> --json stateReason`). Only reopen `COMPLETED` issues, never `NOT_PLANNED`. **Verify on fresh code** before claiming a fix didn't work — check the actual PR, don't grep stale code.
 
-```bash
-gh issue edit <number> --remove-label "P1-high" --add-label "P0-critical"
-gh issue comment <number> --body "Escalating to P0: confirmed by N+ independent playtests. This is actively harming the game experience."
-```
+### 4d. If No Issue Exists: DESIGN THE SOLUTION AND FILE IT
 
-### 4c. If a Closed Issue Matches and the Problem Persists
+**This is the critical step that distinguishes you from a bug reporter.**
 
-**First check the close reason.** Don't reopen issues closed as "not planned" — those were deliberately rejected. Only reopen issues that were closed as "completed" (i.e., someone thought they fixed it but the problem persists):
+Do NOT file "the game needs more crisis events." File:
+- "Add Hospital Collapse crisis: fires when region infections > 100K, choice between diverting 5 researchers to field hospitals (research pauses 3 days) or accepting doubled lethality for 5 days. Requires: new CrisisKind variant, generation logic gated on infection count, resolve logic for both branches."
 
-```bash
-gh issue view <number> --json stateReason --jq '.stateReason'
-```
+Do NOT file "the economy has no scarcity." File:
+- "Add field hospital funding sink: $500/day + 3 personnel per region, halves lethality. Creates personnel tension (hospitals vs research) and funding tension (hospitals vs policies)."
+- "Increase research costs 3x: Identify $600, Develop $900-1500, Trial $600, Manufacture $450. Forces real tradeoffs between research and policy spending."
 
-**⚠️ Before reopening: verify on FRESH code.** Master changes constantly — other agents are merging features every few minutes. Your local code is stale the moment you check it out. If you think a completed issue's fix isn't working, do NOT just grep your local code. Either:
-1. Check the actual PR that closed the issue (`gh pr view <number>`) to see what was implemented
-2. Or `git fetch origin && git checkout origin/master` and verify there before claiming it's not fixed
+**Every issue you file should be completable by a developer in a single session.** If an issue requires designing a whole new system, break it into pieces:
+1. A parent issue describing the system and why it matters
+2. 2-5 child issues, each a concrete implementable piece
 
-**This has caused real damage before:** a playtest manager grepped a stale branch, didn't find the expected code, incorrectly reopened a completed issue, and created confusion. Don't repeat this mistake.
+**Use the `/create-issue` skill** for well-structured issues with proper templates.
 
-If `COMPLETED` and the problem genuinely persists on latest master, reopen with a confirmation comment:
+**Think like a game designer, not a tester.** The playtest told you what's wrong. Now YOU figure out what would be fun, interesting, and dramatic. What would create tension? What would force hard choices? What would make the player think "one more turn"? Design that, write it up, file it.
 
-```bash
-gh issue reopen <number> --comment "$(cat <<'EOF'
-**Playtest confirmation** (seed XXXXX, <persona>, <date>):
-<description of how the problem was observed again>
+### Design Principles to Apply
 
-Reopening — this problem persists after the previous fix.
-EOF
-)"
-```
-
-If `NOT_PLANNED`, do NOT reopen. If you believe the rejection was wrong, file a new issue explaining why.
-
-### 4d. If No Existing Issue Matches
-
-File a new issue using the `/create-issue` skill. Include the `playtest-feedback` label.
-
-**Root causes before symptoms.** Before filing, ask: is this finding a root cause or a symptom of something bigger? Don't file five separate issues for five manifestations of the same underlying problem. File one issue (or confirm the existing one) for the root cause and note the symptoms in the comment.
-
-**BUT: break big root causes into actionable sub-issues.** If the root cause is "the economy doesn't create trade-offs," that's too vague for a developer to act on. File the root cause issue, then file 2-4 concrete sub-issues that each represent one specific fix a developer could implement in a single session. Link them to the parent.
+When designing solutions, think about:
+- **Tension**: Does this create a choice where both options cost something?
+- **Feedback**: Will the player see the effect of their decision?
+- **Escalation**: Does the game get more intense, not just more of the same?
+- **Tone**: Late-game events should have CK2/Red Alert dark comedy energy — the world is ending and the bureaucracy is still bureaucracying
+- **Specificity**: Can a developer read this issue and know exactly what to build?
 
 ## Step 5: Summary
-
-After triaging all findings, output a summary:
 
 ```
 ## Playtest Summary — <date>
