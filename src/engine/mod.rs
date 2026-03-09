@@ -58,6 +58,17 @@ pub fn tick(state: &GameState) -> GameState {
         new.resources.political_power = (severity + time_frac * 0.4).clamp(0.0, 1.0);
     }
 
+    // POL-based personnel: ~1 person per 15 days at max POL
+    {
+        let rate = new.resources.political_power / (15.0 * TICKS_PER_DAY);
+        new.resources.personnel_accum += rate;
+        if new.resources.personnel_accum >= 1.0 {
+            let gained = new.resources.personnel_accum as u32;
+            new.resources.personnel += gained;
+            new.resources.personnel_accum -= gained as f64;
+        }
+    }
+
     // Low funding warning: warn when net burn rate will exhaust funds within ~5 ticks.
     // Only warn if policies actually cost more than income (net negative).
     let net_burn = policy_cost - funding_income;
@@ -186,16 +197,14 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             CommandResult { message: None, success: ok }
         }
         GameCommand::BoostResearch { bench } => {
-            let msg = research::boost_research(state, *bench);
-            let success = msg.is_some();
+            let (msg, success) = research::boost_research(state, *bench);
             CommandResult { message: msg, success }
         }
         GameCommand::TogglePolicy {
             region_idx,
             policy_idx,
         } => {
-            let msg = policy::toggle_policy(state, *region_idx, *policy_idx);
-            let success = msg.is_some();
+            let (msg, success) = policy::toggle_policy(state, *region_idx, *policy_idx);
             CommandResult { message: msg, success }
         }
         GameCommand::ResolveCrisis { choice } => {

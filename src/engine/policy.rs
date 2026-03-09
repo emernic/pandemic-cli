@@ -52,16 +52,17 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     policy_cost
 }
 
-/// Toggle a policy for a region. Returns a status message describing what happened.
+/// Toggle a policy for a region. Returns (message, success) where success
+/// indicates the toggle actually happened (vs being rejected).
 /// Does not touch UI state.
-pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) -> Option<String> {
+pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) -> (Option<String>, bool) {
     if region_idx >= state.policies.len() {
-        return None;
+        return (None, false);
     }
     // Collapsed regions cannot have policies toggled
     if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
         let region_name = state.regions[region_idx].name.as_str();
-        return Some(format!("{region_name} has collapsed — policies unavailable"));
+        return (Some(format!("{region_name} has collapsed — policies unavailable")), false);
     }
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.as_str())
@@ -85,10 +86,10 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             4 => "Water Sanitation",
             _ => "Policy",
         };
-        return Some(format!(
+        return (Some(format!(
             "{} requires {:.0}% Political Power (current: {:.0}%)",
             policy_name, threshold * 100.0, state.resources.political_power * 100.0
-        ));
+        )), false);
     }
     let available_personnel = state.personnel_available();
     match policy_idx {
@@ -96,63 +97,63 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             let new_state = !state.policies[region_idx].travel_ban;
             state.policies[region_idx].travel_ban = new_state;
             if new_state {
-                Some(format!("Travel Ban enabled in {region_name} — ${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY))
+                (Some(format!("Travel Ban enabled in {region_name} — ${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY)), true)
             } else {
-                Some(format!("Travel Ban disabled in {region_name}"))
+                (Some(format!("Travel Ban disabled in {region_name}")), true)
             }
         }
         1 => {
             if state.policies[region_idx].quarantine {
                 state.policies[region_idx].quarantine = false;
-                Some(format!("Quarantine disabled in {region_name}"))
+                (Some(format!("Quarantine disabled in {region_name}")), true)
             } else if available_personnel >= QUARANTINE_PERSONNEL {
                 state.policies[region_idx].quarantine = true;
-                Some(format!("Quarantine enabled in {region_name} — ${:.0}/day + {} personnel",
-                    QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL))
+                (Some(format!("Quarantine enabled in {region_name} — ${:.0}/day + {} personnel",
+                    QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL)), true)
             } else {
-                Some(format!(
+                (Some(format!(
                     "Not enough personnel for quarantine (need {})", QUARANTINE_PERSONNEL
-                ))
+                )), false)
             }
         }
         2 => {
             if state.policies[region_idx].hospital_surge {
                 state.policies[region_idx].hospital_surge = false;
-                Some(format!("Hospital Surge disabled in {region_name}"))
+                (Some(format!("Hospital Surge disabled in {region_name}")), true)
             } else if available_personnel >= HOSPITAL_SURGE_PERSONNEL {
                 state.policies[region_idx].hospital_surge = true;
-                Some(format!("Hospital Surge enabled in {region_name} — ${:.0}/day + {} personnel",
-                    HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL))
+                (Some(format!("Hospital Surge enabled in {region_name} — ${:.0}/day + {} personnel",
+                    HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL)), true)
             } else {
-                Some(format!(
+                (Some(format!(
                     "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
-                ))
+                )), false)
             }
         }
         3 => {
             let new_state = !state.policies[region_idx].border_screening;
             state.policies[region_idx].border_screening = new_state;
             if new_state {
-                Some(format!("Border Screening enabled in {region_name} — ${:.0}/day",
-                    BORDER_SCREENING_COST * TICKS_PER_DAY))
+                (Some(format!("Border Screening enabled in {region_name} — ${:.0}/day",
+                    BORDER_SCREENING_COST * TICKS_PER_DAY)), true)
             } else {
-                Some(format!("Border Screening disabled in {region_name}"))
+                (Some(format!("Border Screening disabled in {region_name}")), true)
             }
         }
         4 => {
             if state.policies[region_idx].water_sanitation {
                 state.policies[region_idx].water_sanitation = false;
-                Some(format!("Water Sanitation disabled in {region_name}"))
+                (Some(format!("Water Sanitation disabled in {region_name}")), true)
             } else if available_personnel >= WATER_SANITATION_PERSONNEL {
                 state.policies[region_idx].water_sanitation = true;
-                Some(format!("Water Sanitation enabled in {region_name} — ${:.0}/day + {} personnel",
-                    WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL))
+                (Some(format!("Water Sanitation enabled in {region_name} — ${:.0}/day + {} personnel",
+                    WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL)), true)
             } else {
-                Some(format!(
+                (Some(format!(
                     "Not enough personnel for water sanitation (need {})", WATER_SANITATION_PERSONNEL
-                ))
+                )), false)
             }
         }
-        _ => None,
+        _ => (None, false),
     }
 }
