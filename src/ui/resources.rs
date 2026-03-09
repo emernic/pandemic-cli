@@ -91,6 +91,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::Red),
             )
         },
+        // Infection trend arrow (compared to ~1 day ago)
+        match state.infection_trend() {
+            Some(ratio) if ratio > 1.05 => Span::styled(" \u{25b2}", Style::default().fg(Color::Red)),
+            Some(ratio) if ratio < 0.95 => Span::styled(" \u{25bc}", Style::default().fg(Color::Green)),
+            Some(_) => Span::styled(" \u{2014}", Style::default().fg(Color::DarkGray)),
+            None => Span::raw(""),
+        },
         Span::raw("  "),
         Span::styled(
             format!("Dead: {}", format_number(state.total_dead_detected())),

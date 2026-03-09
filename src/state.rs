@@ -2300,6 +2300,22 @@ impl GameState {
         self.regions.iter().map(|r| r.total_immune()).sum()
     }
 
+    /// Infection trend: ratio of current infected to infected ~1 day ago.
+    /// Returns None if not enough history. > 1.0 means growing, < 1.0 shrinking.
+    pub fn infection_trend(&self) -> Option<f64> {
+        // Look back ~1 day (120 ticks / HISTORY_INTERVAL = 24 entries)
+        let lookback = (TICKS_PER_DAY as usize) / (HISTORY_INTERVAL as usize);
+        if self.history.len() < lookback {
+            return None;
+        }
+        let past = &self.history[self.history.len() - lookback];
+        if past.total_infected < 100.0 {
+            return None; // too few infections to show a meaningful trend
+        }
+        let current = self.total_infected();
+        Some(current / past.total_infected)
+    }
+
     /// Whether a specific disease has any active infections globally.
     pub fn disease_has_infected(&self, disease_idx: usize) -> bool {
         self.regions.iter().any(|r| {
