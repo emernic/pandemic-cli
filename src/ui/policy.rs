@@ -80,7 +80,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         ];
 
         if has_active {
-            let cost = policy.map(|p| p.funding_cost()).unwrap_or(0.0);
+            let traits = region.traits.as_slice();
+            let cost = policy.map(|p| p.funding_cost_with_traits(traits)).unwrap_or(0.0);
             let mut labels: Vec<&str> = [
                 policy.is_some_and(|p| p.travel_ban).then_some("Travel Ban"),
                 policy.is_some_and(|p| p.quarantine).then_some("Quarantine"),

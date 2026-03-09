@@ -2960,7 +2960,7 @@ impl GameState {
                 population: 1_400_000_000,
                 connections: vec![1, 2, 4],
                 infections: vec![],
-                traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
+                traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
                 collapse_threshold: 0.50, // Resilient — 50% dead
                 dead: 0.0,
                 collapsed: false,
