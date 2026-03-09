@@ -211,6 +211,9 @@ pub(super) fn tick_research(state: &mut GameState) {
 }
 
 /// Try to auto-start the next research project on a track (if auto-research is enabled).
+///
+/// To avoid starving other tracks of funding, auto-start will skip if the project
+/// cost would leave less than the cheapest available project on any other track.
 fn try_auto_start(state: &mut GameState, track: ResearchTrack) {
     if !state.auto_research[track.index()] {
         return;
@@ -232,11 +235,53 @@ fn try_auto_start(state: &mut GameState, track: ResearchTrack) {
     if projects.is_empty() {
         return;
     }
+    // Check if we can afford this project without starving other tracks
+    let (_, _, cost) = state.effective_costs(&projects[0]);
+    let reserve = min_progression_cost(state, track);
+    if state.resources.funding - cost < reserve {
+        return;
+    }
     // Try to start the first (highest-priority) project with default personnel
     let (ok, _msg) = start_research(state, track, 0, false);
     if ok {
         state.events.push(GameEvent::ResearchAutoStarted { track });
     }
+}
+
+/// Minimum funding needed across other tracks for strategic progression.
+/// Checks available DevelopMedicine and BasicResearch projects on other tracks.
+/// Returns 0.0 if no progression projects are available.
+fn min_progression_cost(state: &GameState, exclude: ResearchTrack) -> f64 {
+    let mut min_cost = f64::MAX;
+    for track in [ResearchTrack::Field, ResearchTrack::Applied, ResearchTrack::Basic] {
+        if track == exclude {
+            continue;
+        }
+        let has_capacity = match track {
+            ResearchTrack::Field => state.field_research_has_capacity(),
+            _ => state.research_slot(track).is_none(),
+        };
+        if !has_capacity {
+            continue;
+        }
+        for kind in state.available_projects(track) {
+            // Only reserve for progression projects, not routine utility
+            let is_progression = matches!(
+                kind,
+                ResearchKind::DevelopMedicine { .. }
+                    | ResearchKind::BasicResearch { .. }
+                    | ResearchKind::ClinicalTrial { .. }
+            );
+            if !is_progression {
+                continue;
+            }
+            let (_, _, cost) = state.effective_costs(&kind);
+            if cost < min_cost {
+                min_cost = cost;
+            }
+        }
+    }
+    if min_cost == f64::MAX { 0.0 } else { min_cost }
 }
 
 #[cfg(test)]
@@ -978,5 +1023,43 @@ mod tests {
             &state.field_research[0].kind,
             ResearchKind::IdentifyThreat { disease_idx: 0 }
         ));
+    }
+
+    #[test]
+    fn auto_research_reserves_funds_for_other_tracks() {
+        let mut state = GameState::new_default(42);
+        state.resources.personnel = 30;
+
+        // Set up: disease identified (knowledge 0.5), broad-spectrum available ($700)
+        // No basic techs unlocked, so TargetedDrugDesign ($600) is also available
+        state.diseases[0].knowledge = 0.5;
+
+        // Enable auto-research for field track
+        state.auto_research[ResearchTrack::Field.index()] = true;
+
+        // Put a study project that's about to complete (costs $350)
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 159.0,
+            required_ticks: 160.0,
+            personnel_assigned: 5,
+        }];
+
+        // $900 funds. After study completes, the next field project would be
+        // sequencing ($500). Reserve = min($700 broad-spectrum, $600 TargetedDrugDesign) = $600.
+        // $900 - $500 = $400 < $600 → sequencing should be BLOCKED.
+        state.resources.funding = 900.0;
+
+        // Tick to complete the study
+        for _ in 0..5 {
+            state = tick(&state);
+        }
+
+        // Funds should be preserved (no expensive auto-start ate them)
+        assert!(
+            state.resources.funding >= 600.0,
+            "auto-research should reserve at least $600 for progression, got ${:.0}",
+            state.resources.funding
+        );
     }
 }
