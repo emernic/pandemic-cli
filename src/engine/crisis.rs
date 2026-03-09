@@ -169,6 +169,46 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::MilitaryTakeover);
     }
 
+    // --- Late-game crisis types (day-gated) ---
+
+    // Cult blockade: requires day > 12, deployed medicine exists
+    if day > 12.0 && state.medicines.iter().any(|m| m.unlocked && m.doses > 0.0) {
+        let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+            .filter(|(_, r)| !r.collapsed)
+            .map(|(i, _)| i)
+            .collect();
+        if !non_collapsed.is_empty() {
+            let idx = non_collapsed[rng.r#gen::<usize>() % non_collapsed.len()];
+            candidates.push(CrisisKind::CultBlockade { region_idx: idx });
+        }
+    }
+
+    // Billionaire offer: requires day > 8
+    if day > 8.0 {
+        candidates.push(CrisisKind::BillionaireOffer);
+    }
+
+    // WHO evacuation: requires day > 10, Europe not collapsed
+    let europe_ok = state.regions.iter().any(|r| r.name == "Europe" && !r.collapsed);
+    if day > 10.0 && europe_ok {
+        candidates.push(CrisisKind::WHOEvacuation);
+    }
+
+    // Warlord demand: requires collapsed region
+    let collapsed: Vec<usize> = state.regions.iter().enumerate()
+        .filter(|(_, r)| r.collapsed)
+        .map(|(i, _)| i)
+        .collect();
+    if !collapsed.is_empty() {
+        let idx = collapsed[rng.r#gen::<usize>() % collapsed.len()];
+        candidates.push(CrisisKind::WarlordDemand { region_idx: idx });
+    }
+
+    // Vaccine dispute: requires day > 15, at least one unlocked medicine
+    if day > 15.0 && state.medicines.iter().any(|m| m.unlocked) {
+        candidates.push(CrisisKind::VaccineDispute);
+    }
+
     // Filter out crisis types that are still on cooldown
     candidates.retain(|k| {
         match state.crisis_cooldowns.get(k.tag()) {
@@ -616,6 +656,119 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
+
+        // --- Late-game crisis types ---
+
+        CrisisKind::CultBlockade { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            CrisisEvent {
+                title: "Doomsday Cult Blockade".into(),
+                description: format!(
+                    "A doomsday cult in {} has blockaded supply routes, claiming the pandemic \
+                     is divine punishment. Medicine deliveries are halted. You can negotiate \
+                     (they want airtime) or send in the police.",
+                    region_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Negotiate — give them airtime".into(),
+                    description: "Deliveries resume, but −8% POL from the broadcast".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Police raid ($400, 2 personnel)".into(),
+                    description: "Clear the blockade by force".into(),
+                    cost: Some(CrisisCost { funding: 400.0, personnel: 2 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::BillionaireOffer => {
+            CrisisEvent {
+                title: "Billionaire's Generous Offer".into(),
+                description: "A tech billionaire offers $2000 in emergency funding — but wants \
+                    naming rights to every medicine you develop. Your scientists are furious. \
+                    The money would save lives. The morale cost might lose them.".into(),
+                option_a: CrisisOption {
+                    label: "Decline politely".into(),
+                    description: "Keep team morale, no funding".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Accept the deal".into(),
+                    description: "+$2000 funding, −3 personnel quit in protest".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::WHOEvacuation => {
+            CrisisEvent {
+                title: "WHO Headquarters Evacuated".into(),
+                description: "A disease outbreak has forced WHO headquarters in Geneva to evacuate. \
+                    Global coordination is collapsing. You can take over coordination (expensive) \
+                    or let each region fend for itself.".into(),
+                option_a: CrisisOption {
+                    label: "Let regions go independent".into(),
+                    description: "Lose $300 in aid income, −5% POL".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Take over coordination ($800, 3 personnel)".into(),
+                    description: "Expensive, but gain +10% POL and maintain global response".into(),
+                    cost: Some(CrisisCost { funding: 800.0, personnel: 3 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::WarlordDemand { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            CrisisEvent {
+                title: "Warlord Seizes Control".into(),
+                description: format!(
+                    "A general has declared himself ruler of collapsed {}. He demands official \
+                     recognition and $500 in tribute. In exchange, he'll allow medical teams \
+                     back in. Refusing means the region stays sealed off.",
+                    region_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Refuse — maintain principles".into(),
+                    description: format!("{} remains sealed, +5% POL", region_name),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Pay tribute ($500)".into(),
+                    description: format!("Un-collapse {} — medical access restored", region_name),
+                    cost: Some(CrisisCost { funding: 500.0, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::VaccineDispute => {
+            CrisisEvent {
+                title: "Vaccine Credit War".into(),
+                description: "Two superpowers both claim credit for your vaccine breakthrough. \
+                    They're threatening sanctions against each other — and your agency is caught \
+                    in the middle. Credit one, or stay neutral and lose both.".into(),
+                option_a: CrisisOption {
+                    label: "Stay neutral".into(),
+                    description: "Both sides angry — −$400 in combined aid cuts".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Credit one side".into(),
+                    description: "+$600 from the winner, −15% POL from the loser's allies".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
     };
     // INVARIANT: option_a must always be free so the player is never softlocked.
     debug_assert!(event.option_a.cost.is_none(),
@@ -754,6 +907,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             if let Some(region) = state.regions.get_mut(*region_idx) {
+                let mut total_harmed = 0.0;
                 for inf in &mut region.infections {
                     if inf.infected > 100.0 {
                         let treated = inf.infected * 0.05;
@@ -761,8 +915,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                         inf.infected -= treated;
                         inf.immune += treated - harmed;
                         inf.dead += harmed;
+                        total_harmed += harmed;
                     }
                 }
+                region.dead += total_harmed;
             }
             format!("Black market drugs allowed in {} — some treated, some suffered adverse reactions", region_name)
         }
@@ -891,6 +1047,70 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::MilitaryTakeover, _) => {
             // Resist — costs already deducted
             "Fought off military takeover — independence maintained at great cost".into()
+        }
+
+        // --- Late-game crisis resolutions ---
+
+        (CrisisKind::CultBlockade { .. }, 0) => {
+            // Negotiate — give them airtime, lose POL
+            state.resources.political_power = (state.resources.political_power - 8.0).max(0.0);
+            "Cult got their broadcast — deliveries resume, but public is spooked".into()
+        }
+        (CrisisKind::CultBlockade { .. }, _) => {
+            // Police raid — costs already deducted
+            "Police cleared the blockade — supply routes restored".into()
+        }
+
+        (CrisisKind::BillionaireOffer, 0) => {
+            // Decline
+            "Declined the billionaire's offer — team morale intact".into()
+        }
+        (CrisisKind::BillionaireOffer, _) => {
+            // Accept — gain funding, lose personnel
+            state.resources.funding += 2000.0;
+            state.resources.personnel = state.resources.personnel.saturating_sub(3);
+            "Accepted the deal — $2000 received, but 3 researchers quit in protest".into()
+        }
+
+        (CrisisKind::WHOEvacuation, 0) => {
+            // Let regions go independent — lose funding and POL
+            state.resources.funding = (state.resources.funding - 300.0).max(0.0);
+            state.resources.political_power = (state.resources.political_power - 5.0).max(0.0);
+            "WHO collapsed — regions fending for themselves. Global coordination lost.".into()
+        }
+        (CrisisKind::WHOEvacuation, _) => {
+            // Take over — costs already deducted, gain POL
+            state.resources.political_power = (state.resources.political_power + 10.0).min(100.0);
+            "Your agency is now coordinating the global response. Heavy responsibility.".into()
+        }
+
+        (CrisisKind::WarlordDemand { region_idx }, 0) => {
+            // Refuse — gain POL, region stays collapsed
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
+            format!("Refused the warlord — {} remains sealed off, but your principles are intact", region_name)
+        }
+        (CrisisKind::WarlordDemand { region_idx }, _) => {
+            // Pay tribute — costs already deducted, un-collapse the region
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.collapsed = false;
+            }
+            format!("Paid the warlord — medical teams re-enter {}", region_name)
+        }
+
+        (CrisisKind::VaccineDispute, 0) => {
+            // Stay neutral — lose funding from both
+            state.resources.funding = (state.resources.funding - 400.0).max(0.0);
+            "Stayed neutral — both superpowers cut aid in retaliation".into()
+        }
+        (CrisisKind::VaccineDispute, _) => {
+            // Credit one side — gain funding, lose POL
+            state.resources.funding += 600.0;
+            state.resources.political_power = (state.resources.political_power - 15.0).max(0.0);
+            "Picked a side — generous funding from the winner, furious allies of the loser".into()
         }
     }
 }

@@ -1261,6 +1261,16 @@ pub enum CrisisKind {
     WhistleblowerReport { medicine_idx: usize },
     /// Military threatens takeover of health agency.
     MilitaryTakeover,
+    /// Cult blocks vaccination teams in a region.
+    CultBlockade { region_idx: usize },
+    /// Billionaire offers to fund everything — for a price.
+    BillionaireOffer,
+    /// WHO headquarters loses power — relocate or improvise.
+    WHOEvacuation,
+    /// Warlord declares himself ruler of collapsed region, demands recognition.
+    WarlordDemand { region_idx: usize },
+    /// Two nations claim credit for your vaccine, threaten war.
+    VaccineDispute,
 }
 
 impl CrisisKind {
@@ -1286,6 +1296,11 @@ impl CrisisKind {
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::WhistleblowerReport { .. } => "whistleblower",
             CrisisKind::MilitaryTakeover => "military",
+            CrisisKind::CultBlockade { .. } => "cult",
+            CrisisKind::BillionaireOffer => "billionaire",
+            CrisisKind::WHOEvacuation => "who_evac",
+            CrisisKind::WarlordDemand { .. } => "warlord",
+            CrisisKind::VaccineDispute => "vaccine_dispute",
         }
     }
 }
