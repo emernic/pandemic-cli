@@ -2,12 +2,12 @@ mod crisis;
 mod medicine;
 mod policy;
 mod research;
+mod spread;
 
 use rand::Rng;
 
 use crate::state::{
     GameCommand, GameEvent, GameOutcome, GameState, SimState,
-    RegionDiseaseState, TransmissionVector,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     KNOWLEDGE_NAME, MAX_DISEASES,
@@ -29,160 +29,10 @@ pub fn tick(state: &GameState) -> GameState {
     // WARNING: Do not use `new.rng` between here and the write-back line.
     let mut rng = new.rng.clone();
 
-    // Disease spread within each region
-    for (region_idx, region) in new.regions.iter_mut().enumerate() {
-        let pop = region.population as f64;
-        let policy = new.policies.get(region_idx);
-        let quarantine_active = policy.is_some_and(|p| p.quarantine);
-        let hospital_active = policy.is_some_and(|p| p.hospital_surge);
-        let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
-
-        for inf in &mut region.infections {
-            if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                let susceptible = pop - inf.infected - inf.dead - inf.immune;
-                if susceptible <= 0.0 {
-                    continue;
-                }
-
-                let noise: f64 = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.1;
-                let mut infectivity = if quarantine_active {
-                    disease.infectivity * disease.transmission.quarantine_factor()
-                } else {
-                    disease.infectivity
-                };
-                // Contact diseases spread faster when hospital surge is active
-                // (healthcare workers in close contact with patients)
-                if hospital_active {
-                    infectivity *= disease.transmission.hospital_infectivity_factor();
-                }
-                // Water sanitation halves waterborne disease infectivity
-                if sanitation_active && disease.transmission == TransmissionVector::Waterborne {
-                    infectivity *= 0.5;
-                }
-                let new_infections =
-                    infectivity * inf.infected * (susceptible / pop) * noise;
-                let new_infections = new_infections.max(0.0).min(susceptible);
-
-                // Deaths and recoveries are concurrent outflows from the infected pool.
-                // Compute both, then scale proportionally if they exceed infected.
-                let lethality = if hospital_active {
-                    disease.lethality * 0.5
-                } else {
-                    disease.lethality
-                };
-                let mut new_deaths = (lethality * inf.infected * noise).max(0.0);
-                let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
-                let total_outflow = new_deaths + new_recoveries;
-                if total_outflow > inf.infected {
-                    let scale = inf.infected / total_outflow;
-                    new_deaths *= scale;
-                    new_recoveries *= scale;
-                }
-
-                inf.infected = inf.infected + new_infections - new_deaths - new_recoveries;
-                // Snap to zero when below 1 person — aligns with WIN_INFECTED_THRESHOLD
-                if inf.infected < 1.0 {
-                    inf.infected = 0.0;
-                }
-                inf.immune += new_recoveries;
-                inf.dead += new_deaths;
-            }
-        }
-    }
-
-    // Cross-region spread
-    let regions_snapshot: Vec<_> = new.regions.clone();
-    for (i, region) in new.regions.iter_mut().enumerate() {
-        // No spread into collapsed regions
-        if regions_snapshot[i].collapsed {
-            continue;
-        }
-        let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
-        let dest_has_screening = new.policies.get(i).is_some_and(|p| p.border_screening);
-
-        for (d_idx, disease) in state.diseases.iter().enumerate() {
-            let connected_infected: f64 = regions_snapshot[i]
-                .connections
-                .iter()
-                .filter_map(|&conn_idx| {
-                    // No spread from collapsed regions
-                    if regions_snapshot[conn_idx].collapsed {
-                        return None;
-                    }
-                    let source_has_travel_ban =
-                        new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
-                    let source_has_screening =
-                        new.policies.get(conn_idx).is_some_and(|p| p.border_screening);
-                    // Travel ban supersedes border screening
-                    let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
-                        disease.transmission.travel_ban_factor()
-                    } else if source_has_screening || dest_has_screening {
-                        0.5
-                    } else {
-                        1.0
-                    };
-                    regions_snapshot[conn_idx]
-                        .disease_state(d_idx)
-                        .map(|inf| inf.infected * ban_factor)
-                })
-                .sum();
-
-            if connected_infected <= 0.0 {
-                continue;
-            }
-
-            let has_active_infection = region
-                .infections
-                .iter()
-                .any(|inf| inf.disease_idx == d_idx && inf.infected > 0.0);
-
-            if !has_active_infection {
-                let roll: f64 = rng.r#gen();
-                let chance = disease.cross_region_spread
-                    * disease.transmission.cross_region_modifier()
-                    * (connected_infected / 10_000.0);
-                if roll < chance.min(0.5) {
-                    // Check if there's an existing entry (e.g., from vaccination)
-                    if let Some(existing) = region
-                        .infections
-                        .iter_mut()
-                        .find(|inf| inf.disease_idx == d_idx)
-                    {
-                        existing.infected = 1.0;
-                    } else {
-                        region.infections.push(RegionDiseaseState {
-                            disease_idx: d_idx,
-                            infected: 1.0,
-                            dead: 0.0,
-                            immune: 0.0,
-                        });
-                    }
-                    new.events.push(GameEvent::DiseaseSpreadToRegion {
-                        disease_idx: d_idx,
-                        region_idx: i,
-                    });
-                }
-            }
-        }
-    }
-
-    // Disease mutation (sequencing reduces mutation rate by half per level)
-    for (d_idx, disease) in new.diseases.iter_mut().enumerate() {
-        let mutation_chance = disease.effective_mutation_rate();
-        if rng.r#gen::<f64>() < mutation_chance {
-            disease.strain_generation += 1;
-            // Small random parameter changes (±10% of current value), clamped to
-            // prevent runaway drift over many mutations.
-            let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.06);
-            let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality = (disease.lethality * leth_factor).clamp(0.0002, 0.01);
-            new.events.push(GameEvent::DiseaseMutated {
-                disease_idx: d_idx,
-                new_generation: disease.strain_generation,
-            });
-        }
-    }
+    // Disease spread and mutation
+    spread::tick_spread_within(&mut new, &state.diseases, &mut rng);
+    spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng);
+    spread::tick_mutation(&mut new, &mut rng);
 
     // Research progress
     research::tick_research(&mut new);
@@ -348,7 +198,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{GameState, MedicineUiState, Panel, PolicyUiState, ResearchUiState};
+    use crate::state::{GameState, MedicineUiState, Panel, PolicyUiState, RegionDiseaseState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -1613,6 +1463,7 @@ mod tests {
 
     #[test]
     fn border_screening_reduces_cross_region_spread() {
+        use crate::state::TransmissionVector;
         use rand::SeedableRng;
 
         let mut screening_spreads = 0u32;
@@ -1655,6 +1506,7 @@ mod tests {
 
     #[test]
     fn water_sanitation_reduces_waterborne_infectivity() {
+        use crate::state::TransmissionVector;
         let mut state = GameState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
