@@ -2121,4 +2121,123 @@ mod tests {
             // Good — verified auto-resolve works
         }
     }
+
+    #[test]
+    fn lab_accident_evacuate_destroys_applied_research() {
+        use crate::state::{
+            CrisisEvent, CrisisKind, CrisisOption, ResearchProject, ResearchKind,
+        };
+
+        let mut state = GameState::new_default(42);
+        state.applied_research = Some(ResearchProject {
+            kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
+            progress: 50.0,
+            required_ticks: 200.0,
+            personnel_assigned: 3,
+        });
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::LabAccident { targets_basic: false },
+            title: "Lab Accident".into(),
+            description: "Test".into(),
+            option_a: CrisisOption {
+                label: "Evacuate".into(),
+                description: "Lose research".into(),
+                cost: None,
+            },
+            option_b: CrisisOption {
+                label: "Contain".into(),
+                description: "Save research".into(),
+                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
+            },
+            tick_created: 0,
+        });
+
+        // Choose option A (evacuate) — should destroy applied research
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.applied_research.is_none(),
+            "applied research should be destroyed on evacuation");
+        assert!(after.active_crisis.is_none(),
+            "crisis should be resolved");
+    }
+
+    #[test]
+    fn lab_accident_evacuate_destroys_basic_research() {
+        use crate::state::{
+            BasicTech, CrisisEvent, CrisisKind, CrisisOption,
+            ResearchProject, ResearchKind,
+        };
+
+        let mut state = GameState::new_default(42);
+        state.basic_research = Some(ResearchProject {
+            kind: ResearchKind::BasicResearch { tech: BasicTech::TargetedDrugDesign },
+            progress: 100.0,
+            required_ticks: 240.0,
+            personnel_assigned: 3,
+        });
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::LabAccident { targets_basic: true },
+            title: "Lab Accident".into(),
+            description: "Test".into(),
+            option_a: CrisisOption {
+                label: "Evacuate".into(),
+                description: "Lose research".into(),
+                cost: None,
+            },
+            option_b: CrisisOption {
+                label: "Contain".into(),
+                description: "Save research".into(),
+                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
+            },
+            tick_created: 0,
+        });
+
+        // Choose option A (evacuate) — should destroy basic research
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.basic_research.is_none(),
+            "basic research should be destroyed on evacuation");
+        assert!(after.active_crisis.is_none(),
+            "crisis should be resolved");
+    }
+
+    #[test]
+    fn lab_accident_containment_preserves_research() {
+        use crate::state::{
+            CrisisEvent, CrisisKind, CrisisOption, ResearchProject, ResearchKind,
+        };
+
+        let mut state = GameState::new_default(42);
+        state.applied_research = Some(ResearchProject {
+            kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
+            progress: 50.0,
+            required_ticks: 200.0,
+            personnel_assigned: 3,
+        });
+        state.sim_state = SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1; // Select option B
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::LabAccident { targets_basic: false },
+            title: "Lab Accident".into(),
+            description: "Test".into(),
+            option_a: CrisisOption {
+                label: "Evacuate".into(),
+                description: "Lose research".into(),
+                cost: None,
+            },
+            option_b: CrisisOption {
+                label: "Contain".into(),
+                description: "Save research".into(),
+                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
+            },
+            tick_created: 0,
+        });
+
+        // Choose option B (contain) — should preserve research
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.applied_research.is_some(),
+            "applied research should be preserved on containment");
+        assert!(after.active_crisis.is_none(),
+            "crisis should be resolved");
+    }
 }
