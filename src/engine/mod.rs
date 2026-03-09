@@ -1499,8 +1499,8 @@ mod tests {
             state = tick(&state);
         }
 
-        // With 0.07% chance per tick over ~2660 eligible ticks, emergence
-        // is virtually guaranteed (1 - 0.9993^2660 ≈ 84%)
+        // With 0.07% chance per tick over ~2660 eligible ticks,
+        // P(at least one emergence) = 1 - 0.9993^2660 ≈ 84%
         if state.diseases.len() > initial_diseases {
             // New disease appeared — verify it's properly set up
             let new_idx = initial_diseases;
