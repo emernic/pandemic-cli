@@ -173,6 +173,9 @@ pub struct Resources {
     /// Increases based on disease severity and time. Gates policies.
     #[serde(default)]
     pub political_power: f64,
+    /// Fractional accumulator for POL-based personnel gains.
+    #[serde(default)]
+    pub personnel_accum: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1569,6 +1572,7 @@ impl GameState {
                 research_points: 30.0,
                 personnel: 20,
                 political_power: 0.0,
+                personnel_accum: 0.0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             regions,

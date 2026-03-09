@@ -49,24 +49,24 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
 
 /// Boost an active research project. Pure game logic — does NOT modify UI state.
 ///
-/// Returns an optional status message.
-pub(super) fn boost_research(state: &mut GameState, bench: bool) -> Option<String> {
+/// Returns (message, success) where success indicates the boost was applied.
+pub(super) fn boost_research(state: &mut GameState, bench: bool) -> (Option<String>, bool) {
     let project = if bench { &mut state.bench_research } else { &mut state.field_research };
     if let Some(project) = project {
         if !project.is_complete() && state.resources.research_points >= BOOST_RP_COST {
             state.resources.research_points -= BOOST_RP_COST;
             project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
-            Some(format!("Boosted research! (-{:.0} RP)", BOOST_RP_COST))
+            (Some(format!("Boosted research! (-{:.0} RP)", BOOST_RP_COST)), true)
         } else if state.resources.research_points < BOOST_RP_COST {
-            Some(format!(
+            (Some(format!(
                 "Need {:.0} RP to boost (have {:.0})",
                 BOOST_RP_COST, state.resources.research_points
-            ))
+            )), false)
         } else {
-            None
+            (None, false)
         }
     } else {
-        None
+        (None, false)
     }
 }
 
