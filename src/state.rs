@@ -1988,6 +1988,13 @@ impl GameState {
         self.regions.iter().map(|r| r.total_immune()).sum()
     }
 
+    /// Whether a specific disease has any active infections globally.
+    pub fn disease_has_infected(&self, disease_idx: usize) -> bool {
+        self.regions.iter().any(|r| {
+            r.disease_state(disease_idx).is_some_and(|inf| inf.infected > 0.0)
+        })
+    }
+
     /// Total infected from detected diseases only (for UI display).
     pub fn total_infected_detected(&self) -> f64 {
         self.regions.iter()
@@ -2309,7 +2316,7 @@ impl GameState {
         // Identify Threat: diseases not fully known, sorted by knowledge ascending
         // (unknown diseases first, then partially identified)
         let mut identify_targets: Vec<(usize, f64)> = self.diseases.iter().enumerate()
-            .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_FULL)
+            .filter(|(i, d)| d.detected && d.knowledge < KNOWLEDGE_FULL && self.disease_has_infected(*i))
             .map(|(i, d)| (i, d.knowledge))
             .collect();
         identify_targets.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -2319,10 +2326,11 @@ impl GameState {
                 projects.push(kind);
             }
         }
-        // Genomic Sequencing: fully identified diseases that still mutate
+        // Genomic Sequencing: fully identified diseases that still mutate and are active
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
                 && disease.pathogen_type.mutation_rate() > 0.00002
+                && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
                 if active_kind != Some(&kind) {
@@ -2336,6 +2344,9 @@ impl GameState {
                 continue;
             }
             for (target_pos, &d_idx) in med.target_diseases.iter().enumerate() {
+                if !self.disease_has_infected(d_idx) {
+                    continue;
+                }
                 let needs_trial = if !med.tested_against.contains(&d_idx) {
                     true // Never tested
                 } else {
