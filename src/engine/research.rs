@@ -856,6 +856,39 @@ mod tests {
     }
 
     #[test]
+    fn combination_therapy_prereqs() {
+        let mut state = GameState::new_default(42);
+        // No deployed medicines → not available
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CombinationTherapy }
+        )), "CombinationTherapy should not be available without 2+ deployed medicines");
+
+        // Deploy only 1 medicine → still not available
+        state.medicines[0].deployed_count = 1;
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CombinationTherapy }
+        )), "CombinationTherapy should not be available with only 1 deployed medicine");
+
+        // Deploy a second medicine → available
+        state.medicines[1].deployed_count = 1;
+        let basic = state.available_basic_projects();
+        assert!(basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CombinationTherapy }
+        )), "CombinationTherapy should be available after deploying 2+ different medicines");
+    }
+
+    #[test]
+    fn combination_therapy_halves_resistance() {
+        let mut state = GameState::new_default(42);
+        assert_eq!(state.resistance_multiplier(), 1.0);
+
+        state.unlocked_techs.push(crate::state::BasicTech::CombinationTherapy);
+        assert_eq!(state.resistance_multiplier(), 0.5);
+    }
+
+    #[test]
     fn auto_research_starts_next_project_on_completion() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 5000.0;

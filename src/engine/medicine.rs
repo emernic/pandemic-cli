@@ -154,6 +154,7 @@ fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, cost: f64, ac
 /// Build resistance from deployment pressure. Treatment creates much more
 /// selection pressure than vaccination. Broad-spectrum drugs build resistance
 /// faster (2x) because broad selection pressure accelerates adaptation.
+/// CombinationTherapy tech halves all resistance buildup.
 fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
     let med = &state.medicines[medicine_idx];
     let base = if is_treatment { 0.03 } else { 0.005 };
@@ -161,7 +162,8 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
         crate::state::TherapyType::BroadSpectrum => 2.0,
         _ => 1.0,
     };
-    let gain = base * type_mult;
+    let combo_mult = state.resistance_multiplier();
+    let gain = base * type_mult * combo_mult;
     // Ensure resistance vec is populated (parallel to target_diseases)
     let med = &mut state.medicines[medicine_idx];
     while med.resistance.len() < med.target_diseases.len() {

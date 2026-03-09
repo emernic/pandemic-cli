@@ -1422,6 +1422,10 @@ pub enum BasicTech {
     /// strain drift (fixable by re-trial) or resistance (need new drug).
     /// Prereq: RapidSequencing.
     ResistanceSurveillance,
+    /// Halves resistance buildup from all drug deployments. Multi-drug
+    /// protocols make it harder for pathogens to evolve resistance.
+    /// Prereq: deploy 2+ different medicines.
+    CombinationTherapy,
 }
 
 impl BasicTech {
@@ -1434,6 +1438,7 @@ impl BasicTech {
             BasicTech::RapidSequencing => "Rapid Sequencing",
             BasicTech::VaccinePlatform => "Vaccine Platform",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
+            BasicTech::CombinationTherapy => "Combination Therapy",
         }
     }
 
@@ -1446,6 +1451,7 @@ impl BasicTech {
             BasicTech::RapidSequencing => "Halves sequencing time, reveals mutation details",
             BasicTech::VaccinePlatform => "3x preventive vaccination effectiveness",
             BasicTech::ResistanceSurveillance => "Reveals drug resistance levels and trends",
+            BasicTech::CombinationTherapy => "Halves resistance buildup from deployments",
         }
     }
 
@@ -1484,6 +1490,13 @@ impl BasicTech {
                 // Prereq: RapidSequencing (need sequencing infrastructure to monitor resistance)
                 state.unlocked_techs.contains(&BasicTech::RapidSequencing)
             }
+            BasicTech::CombinationTherapy => {
+                // Prereq: deployed 2+ different medicines (any region/disease)
+                let distinct_deployed = state.medicines.iter()
+                    .filter(|m| m.deployed_count > 0)
+                    .count();
+                distinct_deployed >= 2
+            }
         }
     }
 
@@ -1496,6 +1509,7 @@ impl BasicTech {
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
+            BasicTech::CombinationTherapy => "Deploy 2+ different medicines",
         }
     }
 
@@ -1508,6 +1522,7 @@ impl BasicTech {
             BasicTech::RapidSequencing,
             BasicTech::VaccinePlatform,
             BasicTech::ResistanceSurveillance,
+            BasicTech::CombinationTherapy,
         ]
     }
 }
@@ -1543,6 +1558,7 @@ impl ResearchKind {
                 BasicTech::RapidSequencing => (4, 300.0, 750.0),
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
+                BasicTech::CombinationTherapy => (4, 300.0, 800.0),
             },
         }
     }
@@ -3256,6 +3272,15 @@ impl GameState {
     /// True if the player has unlocked Resistance Surveillance (can see resistance levels).
     pub fn has_resistance_surveillance(&self) -> bool {
         self.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
+    }
+
+    /// Resistance buildup multiplier. CombinationTherapy tech halves it.
+    pub fn resistance_multiplier(&self) -> f64 {
+        if self.unlocked_techs.contains(&BasicTech::CombinationTherapy) {
+            0.5
+        } else {
+            1.0
+        }
     }
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
