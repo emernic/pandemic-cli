@@ -64,20 +64,10 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Political Power: drifts toward a severity-based target.
-    // Target = f(severity, time, active policies).
-    // Severity (deaths + infections) drives POL up — the public grants mandate.
-    // Active policies drain the target — exercising power costs political capital.
+    // Target = f(severity, time, active policies). See GameState::pol_target().
     // POL moves toward target at ~30%/day, so crisis hits take 3-5 days to recover.
     {
-        let initial_pop = new.initial_population();
-        let death_frac = if initial_pop > 0.0 { new.total_dead() / initial_pop } else { 0.0 };
-        let infected_frac = if initial_pop > 0.0 { new.total_infected() / initial_pop } else { 0.0 };
-        let time_frac = new.tick as f64 / (30.0 * TICKS_PER_DAY);
-        let severity = death_frac.sqrt() * 1.0 + infected_frac.sqrt() * 0.4;
-        let active_policies: u32 = new.policies.iter().map(|p| p.active_count()).sum();
-        let policy_drain = active_policies as f64 * 0.02;
-        let target = (severity + time_frac * 0.1 - policy_drain).clamp(0.0, 0.90);
-        // Drift toward target at 30% of the gap per day
+        let target = new.pol_target();
         let drift_rate = 0.30 / TICKS_PER_DAY;
         let delta = (target - new.resources.political_power) * drift_rate;
         new.resources.political_power = (new.resources.political_power + delta).clamp(0.0, 1.0);
