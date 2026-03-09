@@ -69,7 +69,7 @@ pub fn process_events(state: &mut GameState) {
         })
         .collect();
 
-    // Priority: RegionCollapsed > DiseaseDetected > PolicySuspended > FundingWarning > DiseaseMutated
+    // Priority: RegionCollapsed > DiseaseDetected > PolicySuspended > FundingWarning > DiseaseMutated > ... > ResistanceTransferred > DiseaseSpread
     let msg = if let Some(GameEvent::RegionCollapsed { region_idx }) =
         state.events.iter().find(|e| matches!(e, GameEvent::RegionCollapsed { .. }))
     {
