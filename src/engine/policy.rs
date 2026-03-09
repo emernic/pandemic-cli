@@ -1,6 +1,6 @@
 use crate::state::{
     GameEvent, GameState, ScreeningLevel,
-    BORDER_SCREENING_COST, BORDER_SCREENING_PERSONNEL,
+    BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     TICKS_PER_DAY, TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
@@ -21,7 +21,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
                 ("Quarantine", p.quarantine, QUARANTINE_COST),
                 ("Hospital Surge", p.hospital_surge, HOSPITAL_SURGE_COST),
                 ("Water Sanitation", p.water_sanitation, WATER_SANITATION_COST),
-                ("Border Screening", p.border_screening, BORDER_SCREENING_COST),
+                ("Border Controls", p.border_controls, BORDER_CONTROLS_COST),
             ] {
                 if active {
                     if best.is_none() || cost > best.unwrap().2 {
@@ -42,7 +42,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
                 "Travel Ban" => state.policies[region_idx].travel_ban = false,
                 "Quarantine" => state.policies[region_idx].quarantine = false,
                 "Hospital Surge" => state.policies[region_idx].hospital_surge = false,
-                "Border Screening" => state.policies[region_idx].border_screening = false,
+                "Border Controls" => state.policies[region_idx].border_controls = false,
                 "Water Sanitation" => state.policies[region_idx].water_sanitation = false,
                 "Disease Screening" => state.policies[region_idx].screening = ScreeningLevel::None,
                 _ => unreachable!(),
@@ -82,7 +82,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         0 => state.policies[region_idx].travel_ban,
         1 => state.policies[region_idx].quarantine,
         2 => state.policies[region_idx].hospital_surge,
-        3 => state.policies[region_idx].border_screening,
+        3 => state.policies[region_idx].border_controls,
         4 => state.policies[region_idx].water_sanitation,
         5 => state.policies[region_idx].screening == ScreeningLevel::Low,
         6 => state.policies[region_idx].screening == ScreeningLevel::Medium,
@@ -95,7 +95,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             0 => "Travel Ban",
             1 => "Quarantine",
             2 => "Hospital Surge",
-            3 => "Border Screening",
+            3 => "Border Controls",
             4 => "Water Sanitation",
             5 => "Low Disease Screening",
             6 => "Medium Disease Screening",
@@ -152,16 +152,16 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             }
         }
         3 => {
-            if state.policies[region_idx].border_screening {
-                state.policies[region_idx].border_screening = false;
-                (Some(format!("Border Screening disabled in {region_name}")), true)
-            } else if available_personnel >= BORDER_SCREENING_PERSONNEL {
-                state.policies[region_idx].border_screening = true;
-                (Some(format!("Border Screening enabled in {region_name} — ${:.0}/day + {} personnel",
-                    BORDER_SCREENING_COST * TICKS_PER_DAY, BORDER_SCREENING_PERSONNEL)), true)
+            if state.policies[region_idx].border_controls {
+                state.policies[region_idx].border_controls = false;
+                (Some(format!("Border Controls disabled in {region_name}")), true)
+            } else if available_personnel >= BORDER_CONTROLS_PERSONNEL {
+                state.policies[region_idx].border_controls = true;
+                (Some(format!("Border Controls enabled in {region_name} — ${:.0}/day + {} personnel",
+                    BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL)), true)
             } else {
                 (Some(format!(
-                    "Not enough personnel for border screening (need {})", BORDER_SCREENING_PERSONNEL
+                    "Not enough personnel for border controls (need {})", BORDER_CONTROLS_PERSONNEL
                 )), false)
             }
         }

@@ -465,8 +465,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
             if policy.hospital_surge {
                 policy_parts.push(Span::styled("Hospital Surge ", policy_style));
             }
-            if policy.border_screening {
-                policy_parts.push(Span::styled("Border Screen ", policy_style));
+            if policy.border_controls {
+                policy_parts.push(Span::styled("Border Ctrl ", policy_style));
             }
             if policy.water_sanitation {
                 policy_parts.push(Span::styled("Water Sanit. ", policy_style));

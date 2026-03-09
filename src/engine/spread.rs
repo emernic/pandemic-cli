@@ -87,7 +87,7 @@ pub(super) fn tick_spread_cross_region(
             continue;
         }
         let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
-        let dest_has_screening = new.policies.get(i).is_some_and(|p| p.border_screening);
+        let dest_has_screening = new.policies.get(i).is_some_and(|p| p.border_controls);
 
         for (d_idx, disease) in diseases.iter().enumerate() {
             let connected_infected: f64 = regions_snapshot[i]
@@ -101,8 +101,8 @@ pub(super) fn tick_spread_cross_region(
                     let source_has_travel_ban =
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
                     let source_has_screening =
-                        new.policies.get(conn_idx).is_some_and(|p| p.border_screening);
-                    // Travel ban supersedes border screening
+                        new.policies.get(conn_idx).is_some_and(|p| p.border_controls);
+                    // Travel ban supersedes border controls
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
                         disease.transmission.travel_ban_factor()
                     } else if source_has_screening || dest_has_screening {
