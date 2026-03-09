@@ -137,74 +137,28 @@ pub fn render(f: &mut Frame, state: &GameState) {
     resources::render(f, chunks[0], state);
     hotkey_bar::render(f, chunks[2], state);
 
-    // Crisis overlay takes priority over everything else
-    if let Some(crisis) = &state.active_crisis {
-        let split = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(chunks[1]);
-        region_list::render(f, split[0], state);
-        render_crisis(f, split[1], crisis, state.ui.crisis_selection, state);
-        return;
-    }
+    // All views share the same 50/50 horizontal split: region list left, panel right.
+    let split = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(chunks[1]);
 
-    // Main area: region list, optionally split with a panel
-    match &state.ui.open_panel {
-        Panel::None if state.outcome != GameOutcome::Playing => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            render_game_over(f, split[1], state);
-        }
-        Panel::None => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            home::render(f, split[1], state);
-        }
-        Panel::Threats => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            threats::render(f, split[1], state);
-        }
-        Panel::Medicines => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            medicines::render(f, split[1], state);
-        }
-        Panel::Research => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            research::render(f, split[1], state);
-        }
-        Panel::Policy => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            policy::render(f, split[1], state);
-        }
-        panel => {
-            let split = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(chunks[1]);
-            region_list::render(f, split[0], state);
-            render_placeholder_panel(f, split[1], panel);
+    region_list::render(f, split[0], state);
+
+    // Right panel: crisis overlay takes priority, then panel or default view.
+    if let Some(crisis) = &state.active_crisis {
+        render_crisis(f, split[1], crisis, state.ui.crisis_selection, state);
+    } else {
+        match &state.ui.open_panel {
+            Panel::None if state.outcome != GameOutcome::Playing => {
+                render_game_over(f, split[1], state);
+            }
+            Panel::None => home::render(f, split[1], state),
+            Panel::Threats => threats::render(f, split[1], state),
+            Panel::Medicines => medicines::render(f, split[1], state),
+            Panel::Research => research::render(f, split[1], state),
+            Panel::Policy => policy::render(f, split[1], state),
+            panel => render_placeholder_panel(f, split[1], panel),
         }
     }
 }
