@@ -41,20 +41,20 @@ enum SnapshotStep {
     Key(String),
 }
 
-/// Advance simulation by `n` ticks. Returns 0 on success.
+/// Advance simulation by `n` ticks.
 ///
 /// Crises are auto-resolved inline (picks cheapest affordable option).
-/// Stops early on game over (returns remaining ticks).
-fn advance_ticks(state: &mut GameState, n: u64) -> u64 {
+/// Stops early on game over.
+fn advance_ticks(state: &mut GameState, n: u64) {
     state.sim_state = SimState::Running;
-    for tick_i in 0..n {
+    for _ in 0..n {
         *state = tick(state);
         ui::process_events(state);
         if state.active_crisis.is_some() {
             auto_resolve_crisis(state);
         }
         if state.outcome != GameOutcome::Playing {
-            return n - tick_i - 1;
+            return;
         }
         // Auto-pause events (DiseaseDetected, RegionCollapsed) set SimState::Paused.
         // In snapshot mode, log the event and auto-resume rather than blocking.
@@ -79,7 +79,6 @@ fn advance_ticks(state: &mut GameState, n: u64) -> u64 {
             state.sim_state = SimState::Running;
         }
     }
-    0
 }
 
 /// Auto-resolve a crisis by picking the cheapest affordable option.
