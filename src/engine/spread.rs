@@ -142,10 +142,13 @@ pub(super) fn tick_spread_cross_region(
                 .connections
                 .iter()
                 .filter_map(|&conn_idx| {
-                    // No spread from collapsed regions
-                    if regions_snapshot[conn_idx].collapsed {
-                        return None;
-                    }
+                    // Collapsed regions still emit spread, but at reduced rate
+                    // (broken infrastructure, but no containment either)
+                    let collapse_factor = if regions_snapshot[conn_idx].collapsed {
+                        0.3
+                    } else {
+                        1.0
+                    };
                     let source_has_travel_ban =
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
                     let source_has_screening =
@@ -160,7 +163,7 @@ pub(super) fn tick_spread_cross_region(
                     };
                     regions_snapshot[conn_idx]
                         .disease_state(d_idx)
-                        .map(|inf| inf.infected * ban_factor)
+                        .map(|inf| inf.infected * ban_factor * collapse_factor)
                 })
                 .sum();
 

@@ -2278,8 +2278,16 @@ impl GameState {
             idx
         };
 
-        // Place initial outbreak in a random region
-        let region_idx = rng.r#gen::<usize>() % self.regions.len();
+        // Place initial outbreak in a random non-collapsed region (prefer viable targets)
+        let viable: Vec<usize> = self.regions.iter().enumerate()
+            .filter(|(_, r)| !r.collapsed)
+            .map(|(i, _)| i)
+            .collect();
+        let region_idx = if viable.is_empty() {
+            rng.r#gen::<usize>() % self.regions.len()
+        } else {
+            viable[rng.r#gen::<usize>() % viable.len()]
+        };
         let initial_infected = 500.0 + rng.r#gen::<f64>() * 2_000.0;
         self.regions[region_idx].infections.push(RegionDiseaseState {
             disease_idx,
