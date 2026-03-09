@@ -336,8 +336,10 @@ fn default_collapse_threshold() -> f64 {
 
 impl Region {
     /// Current living population: starting population minus total deaths.
+    /// Clamped to 0 because independent per-disease SIR pools can
+    /// double-count deaths (same person dies in multiple disease pools).
     pub fn alive(&self) -> f64 {
-        self.population as f64 - self.total_dead()
+        (self.population as f64 - self.total_dead()).max(0.0)
     }
 
     pub fn total_infected(&self) -> f64 {

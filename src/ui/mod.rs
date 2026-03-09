@@ -339,7 +339,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     let total_dead = state.total_dead();
     let total_immune = state.total_immune();
     let initial_pop = state.initial_population();
-    let survivors = initial_pop - total_dead;
+    let survivors = (initial_pop - total_dead).max(0.0);
     let survival_pct = if initial_pop > 0.0 { (survivors / initial_pop) * 100.0 } else { 0.0 };
 
     let mut lines: Vec<Line> = Vec::new();
@@ -425,7 +425,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
             let region = &state.regions[*region_idx];
             let dead = region.total_dead();
             let pop = region.population as f64;
-            let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 } else { 0.0 };
+            let dead_pct = if pop > 0.0 { ((dead / pop) * 100.0).min(100.0) } else { 0.0 };
             let timing = if let Some(tick) = collapsed_tick {
                 format!("Day {:>5.1}", ticks_to_days(*tick as f64))
             } else {
@@ -460,7 +460,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
             let dead = region.total_dead();
             let alive = region.alive();
             let pop = region.population as f64;
-            let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 } else { 0.0 };
+            let dead_pct = if pop > 0.0 { ((dead / pop) * 100.0).min(100.0) } else { 0.0 };
             lines.push(Line::from(vec![
                 Span::styled(format!("  {:<16}", region.name), stat_value),
                 Span::styled(format!("{:>8} alive", format_number(alive)), Style::default().fg(Color::Green)),

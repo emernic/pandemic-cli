@@ -191,7 +191,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         .filter(|r| !r.collapsed)
         .map(|r| {
             let pop = r.population as f64;
-            let death_frac = if pop > 0.0 { r.total_dead() / pop } else { 0.0 };
+            let death_frac = if pop > 0.0 { (r.total_dead() / pop).min(1.0) } else { 0.0 };
             let collapse_death_frac = 1.0 - r.collapse_threshold;
             if collapse_death_frac > 0.0 { (death_frac / collapse_death_frac).min(1.0) } else { 1.0 }
         })
@@ -232,7 +232,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             .max_by(|a, b| {
                 let proximity = |r: &crate::state::Region| {
                     let pop = r.population as f64;
-                    let death_frac = if pop > 0.0 { r.total_dead() / pop } else { 0.0 };
+                    let death_frac = if pop > 0.0 { (r.total_dead() / pop).min(1.0) } else { 0.0 };
                     let collapse_death_frac = 1.0 - r.collapse_threshold;
                     if collapse_death_frac > 0.0 { death_frac / collapse_death_frac } else { 1.0 }
                 };
