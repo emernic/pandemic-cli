@@ -568,10 +568,15 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let disease = state.diseases.get(*disease_idx)?;
             if disease.knowledge >= KNOWLEDGE_NAME {
                 // Already identified — explain what further study unlocks
+                let has_targeted_tech = state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign);
                 let next = if disease.knowledge < KNOWLEDGE_FOR_MEDICINE {
                     "Unlocks broad-spectrum medicine development"
                 } else if disease.knowledge < KNOWLEDGE_FULL {
-                    "Unlocks targeted medicine development"
+                    if has_targeted_tech {
+                        "Unlocks targeted medicine development"
+                    } else {
+                        "Targeted medicines also need Basic Research: Targeted Drug Design"
+                    }
                 } else {
                     "Fully studied"
                 };
