@@ -88,65 +88,28 @@ pub(super) fn deploy_medicine(
 
         let (msg, adverse) = match target {
             DeployTarget::Vaccinate { .. } => {
-                // Vaccination is proportional: protects a fraction of
-                // susceptible population, capped by available doses.
-                // This mirrors treatment's scaling — each deploy is
-                // meaningful, and repeated deploys build herd immunity.
                 let susceptible = (pop - infected - dead - immune).max(0.0);
                 let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
                 if actual > 0.0 {
-                    let mut adverse = false;
-                    let mut adverse_deaths = 0.0;
-                    if !is_tested {
-                        let roll: f64 = state.rng.r#gen();
-                        if roll < 0.25 {
-                            adverse = true;
-                            adverse_deaths = (actual * 0.2).min(susceptible);
-                        }
-                    }
+                    let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
                     let inf = get_or_create_infection(region, disease_idx);
-                    if adverse_deaths > 0.0 {
-                        inf.dead += adverse_deaths;
-                        inf.immune += actual - adverse_deaths;
-                    } else {
-                        inf.immune += actual;
-                    }
+                    apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
-                    state.resources.funding -= cost;
-                    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
-                    state.medicines[medicine_idx].deployed_count += 1;
+                    deduct_deploy_costs(state, medicine_idx, cost, actual);
                     (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse, efficacy), adverse)
                 } else {
                     (format!("No susceptible population in {region_name}"), false)
                 }
             }
             DeployTarget::Treat { .. } => {
-                // Treatment is proportional: treats a fraction of infected,
-                // capped by available doses. This scales naturally with
-                // outbreak size — always impactful regardless of infection count.
                 let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
                 if actual > 0.0 {
-                    let mut adverse = false;
-                    let mut adverse_deaths = 0.0;
-                    if !is_tested {
-                        let roll: f64 = state.rng.r#gen();
-                        if roll < 0.25 {
-                            adverse = true;
-                            adverse_deaths = actual * 0.2;
-                        }
-                    }
+                    let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
                     let inf = get_or_create_infection(region, disease_idx);
                     inf.infected -= actual;
-                    if adverse_deaths > 0.0 {
-                        inf.dead += adverse_deaths;
-                        inf.immune += actual - adverse_deaths;
-                    } else {
-                        inf.immune += actual;
-                    }
+                    apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
-                    state.resources.funding -= cost;
-                    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
-                    state.medicines[medicine_idx].deployed_count += 1;
+                    deduct_deploy_costs(state, medicine_idx, cost, actual);
                     (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse, efficacy), adverse)
                 } else {
                     (format!("No infected population in {region_name}"), false)
@@ -158,6 +121,42 @@ pub(super) fn deploy_medicine(
     }
 
     (true, None, false)
+}
+
+/// Roll for adverse reaction on untested medicines.
+/// Returns (adverse_occurred, deaths). Deaths are capped at `max_deaths`
+/// to prevent killing more people than the target population.
+fn adverse_check(rng: &mut impl Rng, actual: f64, is_tested: bool, max_deaths: f64) -> (bool, f64) {
+    if !is_tested {
+        let roll: f64 = rng.r#gen();
+        if roll < 0.25 {
+            let deaths = (actual * 0.2).min(max_deaths);
+            return (true, deaths);
+        }
+    }
+    (false, 0.0)
+}
+
+/// Apply immune gains and adverse deaths to infection state.
+/// Caller must separately add adverse_deaths to region.dead.
+fn apply_immune_and_deaths(
+    inf: &mut RegionDiseaseState,
+    actual: f64,
+    adverse_deaths: f64,
+) {
+    if adverse_deaths > 0.0 {
+        inf.dead += adverse_deaths;
+        inf.immune += actual - adverse_deaths;
+    } else {
+        inf.immune += actual;
+    }
+}
+
+/// Deduct funds, doses, and increment deploy count.
+fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, cost: f64, actual: f64) {
+    state.resources.funding -= cost;
+    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
+    state.medicines[medicine_idx].deployed_count += 1;
 }
 
 pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
