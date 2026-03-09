@@ -187,6 +187,9 @@ pub fn tick(state: &GameState) -> GameState {
             if let Some(policy) = new.policies.get_mut(i) {
                 policy.clear_all();
             }
+            // Personnel loss: staff in the collapsed region are lost
+            let lost_personnel = 2u32.min(new.resources.personnel);
+            new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
             // Auto-pause so the player sees the collapse and can react
             new.sim_state = SimState::Paused;
@@ -205,13 +208,28 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Mercy rule: if the player has had zero agency for 5 consecutive days,
-    // end the game. This prevents 20+ minute zombie phases where the player
-    // watches helplessly with no funding, no research, and no medicines.
+    // Mercy rule: if the player has had zero/near-zero agency for several
+    // consecutive days, end the game. Two triggers:
+    // 1. Classic zero agency (broke + no research + no doses) — 5 day timer
+    // 2. Civilization collapse (4+ regions gone + no active research) — 2 day timer
+    //    This catches "has money but nothing useful to do" when most of the
+    //    world has fallen and no research pipeline exists.
     if new.outcome == GameOutcome::Playing {
-        if new.has_zero_agency() {
+        let collapsed_count = new.regions.iter().filter(|r| r.collapsed).count();
+        let no_research = new.field_research.is_empty()
+            && new.applied_research.is_none()
+            && new.basic_research.is_none();
+        let near_total_collapse = collapsed_count >= 4 && no_research;
+
+        if new.has_zero_agency() || near_total_collapse {
             new.zero_agency_ticks += 1;
-            if new.zero_agency_ticks >= crate::state::MERCY_RULE_TICKS {
+            let mercy_threshold = if near_total_collapse {
+                // Shorter timer when civilization has mostly collapsed
+                (2.0 * crate::state::TICKS_PER_DAY) as u64
+            } else {
+                crate::state::MERCY_RULE_TICKS
+            };
+            if new.zero_agency_ticks >= mercy_threshold {
                 new.outcome = GameOutcome::Lost;
                 new.mercy_rule = true;
                 new.active_crisis = None;
@@ -3266,7 +3284,7 @@ mod tests {
 
     #[test]
     fn pol_target_capped_at_90_percent() {
-        use crate::state::RegionDiseaseState;
+        use crate::state::{RegionDiseaseState, ResearchProject, ResearchKind, BasicTech};
         let mut state = GameState::new_default(42);
         // Massive deaths + infections to maximize severity
         for region in &mut state.regions {
@@ -3277,6 +3295,13 @@ mod tests {
         }
         state.resources.political_power = 0.95; // Start above the 0.90 cap
         state.tick = TICKS_PER_DAY as u64 * 100; // far into the game
+        // Keep research active to prevent mercy rule from ending the game early
+        state.basic_research = Some(ResearchProject {
+            kind: ResearchKind::BasicResearch { tech: BasicTech::TargetedDrugDesign },
+            progress: 0.0,
+            required_ticks: 99999.0,
+            personnel_assigned: 1,
+        });
 
         // Run a few days — POL should drift DOWN toward the 0.90 cap
         let mut s = state;
@@ -3412,6 +3437,38 @@ mod tests {
         assert_eq!(
             virus_resistance, 0.0,
             "HGT should not affect non-bacteria: got {virus_resistance}"
+        );
+    }
+
+    #[test]
+    fn collapse_kills_income_and_loses_personnel() {
+        let mut state = GameState::new_default(42);
+        detect_all_diseases(&mut state);
+        let initial_income = state.funding_income_rate();
+        let initial_personnel = state.resources.personnel;
+        assert!(initial_income > 0.0);
+
+        // Force a region to collapse
+        let region_idx = primary_outbreak_region(&state);
+        let pop = state.regions[region_idx].population as f64;
+        state.regions[region_idx].dead = pop * 0.6; // above collapse threshold
+
+        // Tick to trigger collapse detection
+        state = tick(&state);
+        assert!(state.regions[region_idx].collapsed, "region should have collapsed");
+
+        // Income should drop (collapsed region contributes nothing)
+        let post_collapse_income = state.funding_income_rate();
+        assert!(
+            post_collapse_income < initial_income,
+            "income should drop after collapse: was {initial_income}, now {post_collapse_income}"
+        );
+
+        // Personnel should be reduced by 2
+        assert_eq!(
+            state.resources.personnel,
+            initial_personnel - 2,
+            "should lose 2 personnel on collapse"
         );
     }
 }

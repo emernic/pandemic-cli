@@ -2834,6 +2834,10 @@ impl GameState {
         }
         let mut income = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
+            // Collapsed regions contribute nothing — society has broken down
+            if region.collapsed {
+                continue;
+            }
             let base = Self::region_base_income(region, total_pop);
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
                 TRAVEL_BAN_INCOME_PENALTY
