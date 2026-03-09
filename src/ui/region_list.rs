@@ -413,7 +413,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     // Collapse threshold line
     if !region.collapsed {
-        let death_pct = if pop > 0.0 { (dead / pop * 100.0).max(0.0) } else { 0.0 };
+        let death_pct = if pop > 0.0 { (dead / pop * 100.0).abs() } else { 0.0 };
         let collapse_death_pct = (1.0 - region.collapse_threshold) * 100.0;
         let proximity = if collapse_death_pct > 0.0 { death_pct / collapse_death_pct } else { 1.0 };
         let threshold_color = if proximity >= 0.75 {
