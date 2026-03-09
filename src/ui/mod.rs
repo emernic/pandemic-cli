@@ -42,6 +42,12 @@ pub fn process_events(state: &mut GameState) {
         state.ui.open_panel = Panel::None;
     }
 
+    // Handle crisis: pause and reset selection (UI concern)
+    if state.events.iter().any(|e| matches!(e, GameEvent::CrisisStarted)) {
+        state.paused = true;
+        state.ui.crisis_selection = 0;
+    }
+
     // Pick the most important event to display as status message.
     let suspended: Vec<_> = state.events.iter()
         .filter_map(|e| match e {
@@ -112,6 +118,17 @@ pub fn render(f: &mut Frame, state: &GameState) {
     resources::render(f, chunks[0], state);
     hotkey_bar::render(f, chunks[2], state);
 
+    // Crisis overlay takes priority over everything else
+    if let Some(crisis) = &state.active_crisis {
+        let split = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(chunks[1]);
+        region_list::render(f, split[0], state);
+        render_crisis(f, split[1], crisis, state.ui.crisis_selection);
+        return;
+    }
+
     // Main area: region list, optionally split with a panel
     match &state.ui.open_panel {
         Panel::None if state.outcome != GameOutcome::Playing => {
@@ -166,6 +183,98 @@ pub fn render(f: &mut Frame, state: &GameState) {
             render_placeholder_panel(f, split[1], panel);
         }
     }
+}
+
+fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize) {
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("  ⚠ {}", crisis.title),
+        Style::default().fg(Color::Yellow),
+    )));
+    lines.push(Line::from(""));
+
+    // Word-wrap description manually for the panel width
+    let desc = &crisis.description;
+    let max_width = area.width.saturating_sub(4) as usize;
+    for chunk in textwrap(desc, max_width) {
+        lines.push(Line::from(format!("  {}", chunk)));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  ── Choose your response ──",
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(""));
+
+    // Option A
+    let a_marker = if selection == 0 { "▶ " } else { "  " };
+    let a_style = if selection == 0 {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    lines.push(Line::from(Span::styled(
+        format!("  {}A: {}", a_marker, crisis.option_a.label),
+        a_style,
+    )));
+    lines.push(Line::from(Span::styled(
+        format!("      {}", crisis.option_a.description),
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+
+    // Option B
+    let b_marker = if selection == 1 { "▶ " } else { "  " };
+    let b_style = if selection == 1 {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    lines.push(Line::from(Span::styled(
+        format!("  {}B: {}", b_marker, crisis.option_b.label),
+        b_style,
+    )));
+    lines.push(Line::from(Span::styled(
+        format!("      {}", crisis.option_b.description),
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Select  [Enter] Confirm",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let block = Block::default()
+        .title(" CRISIS ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+/// Simple word wrap: split a string into lines that fit within max_width.
+fn textwrap(s: &str, max_width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in s.split_whitespace() {
+        if current.is_empty() {
+            current = word.to_string();
+        } else if current.len() + 1 + word.len() > max_width {
+            lines.push(current);
+            current = word.to_string();
+        } else {
+            current.push(' ');
+            current.push_str(word);
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
 }
 
 fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
