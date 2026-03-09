@@ -92,6 +92,16 @@ This migration is complete. `engine.rs` contains only `tick()` + `execute_comman
 
 **Ongoing discipline:** When adding new features, keep this layering intact. New game actions get `GameCommand` variants. New UI flows get `UiState` methods. `engine.rs` should never touch `UiState`.
 
+### Event System
+
+`tick()` produces `GameEvent` variants (stored in `state.events`, cleared each tick). These are ephemeral signals — `#[serde(skip)]`, not persisted.
+
+**Game-rule transitions live in `tick()`:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `tick()` sets `active_crisis` and `sim_state = Event { was_running }`. These are game rules — the engine decides *when* to pause, not the UI.
+
+**UI responses + message formatting live in `ui::process_events()`:** After each tick, the game loop calls `process_events()` to: (1) handle UI-specific responses to events (close panels on game-over, reset crisis selection), and (2) format events into human-readable `status_message` strings. It does not mutate `sim_state`, `outcome`, or other game state — only `UiState` fields and `status_message`.
+
+When adding new event types: if the event triggers a game-rule state transition (pause, mode change), put that in `tick()`. If it needs a UI response (panel changes, selection resets) or a player-visible message, add it to `process_events()`.
+
 ## What NOT to Change
 
 - **Single `GameState` struct** — This is good. One serializable blob = trivial save/load.

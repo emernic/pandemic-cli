@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, SimState, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ticks_to_days};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -32,22 +32,20 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
 /// Convert game events from the most recent tick into a status message.
 /// Called after each tick by the game loop / snapshot runner. This keeps
 /// human-facing strings in the UI layer, not in engine.rs.
+///
+/// Game-rule state transitions (sim_state pausing on game-over/crisis) are
+/// handled directly in `tick()`. This function handles UI responses to events
+/// (closing panels, resetting selections) and formats status messages.
 pub fn process_events(state: &mut GameState) {
     if state.events.is_empty() {
         return;
     }
 
-    // Handle game-over: pause and close panels (UI concern, not engine's job)
+    // UI responses to game events
     if state.events.iter().any(|e| matches!(e, GameEvent::GameOver)) {
-        state.sim_state = SimState::Paused;
         state.ui.open_panel = Panel::None;
     }
-
-    // Handle crisis: enter Event state, saving whether game was running
     if state.events.iter().any(|e| matches!(e, GameEvent::CrisisStarted)) {
-        state.sim_state = SimState::Event {
-            was_running: state.sim_state.is_running(),
-        };
         state.ui.crisis_selection = 0;
     }
 
