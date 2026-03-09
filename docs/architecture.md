@@ -2,7 +2,7 @@
 
 ## Core Principle
 
-All game state (simulation + UI) lives in a single JSON-serializable struct. The entire game is a pure function: `state + input → new state`.
+All game state (simulation + UI) lives in a single JSON-serializable struct. Each simulation step is two phases: `tick()` advances game logic and produces ephemeral `GameEvent`s, then `process_events()` translates those events into UI presentation (status messages, event log). Both phases are deterministic; events are transient (`#[serde(skip)]`) and always empty at save boundaries. See `docs/target-architecture.md` for the full event system documentation.
 
 ## Layers
 
