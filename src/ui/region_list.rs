@@ -85,8 +85,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let gap_col: u16 = 3;
     let gap_row: u16 = 1;
     let region_width = ((inner.width.saturating_sub(2 * gap_col)) / 3).min(30);
-    // Condensed boxes: 3 content lines + 2 border = 5
-    let region_height = ((inner.height.saturating_sub(gap_row)) / 2).min(5);
+    // Condensed boxes: 4 content lines + 2 border = 6 (name, stats, bar, collapse indicator)
+    let region_height = ((inner.height.saturating_sub(gap_row)) / 2).min(6);
 
     // Draw connections in gap areas
     let connections = drawable_connections(state);
@@ -271,7 +271,7 @@ fn render_region_box(
         }
     }
 
-    // Line 3: Health bar with collapse threshold marker
+    // Line 3: Health bar (rendered intact, no markers embedded)
     if inner.height >= 3 && pop > 0.0 {
         let bar_w = iw;
         let mut inf_w = if infected > 0.0 {
@@ -304,17 +304,6 @@ fn render_region_box(
         }
         let sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
 
-        // Collapse threshold position: deaths beyond (1 - threshold) fraction cause collapse.
-        // The bar goes: [susceptible/healthy][infected][immune][dead] left-to-right.
-        // Dead is on the right. The threshold marker shows where "dead" would reach collapse.
-        // Position from right: at (1 - threshold) * bar_w chars from the right end.
-        let death_fraction_at_collapse = 1.0 - region.collapse_threshold;
-        let collapse_pos = bar_w.saturating_sub(
-            (death_fraction_at_collapse * bar_w as f64).round() as usize
-        );
-
-        // Build bar segments, splitting at collapse marker position
-        let show_marker = !region.collapsed && collapse_pos > 0 && collapse_pos < bar_w;
         let segments: [(usize, Color); 4] = [
             (sus_w, Color::Cyan),
             (inf_w, Color::Red),
@@ -323,40 +312,34 @@ fn render_region_box(
         ];
 
         let mut spans = Vec::new();
-        let mut char_idx = 0;
         for (width, color) in segments {
-            if width == 0 { continue; }
-            let seg_start = char_idx;
-            let seg_end = char_idx + width;
-            if show_marker && collapse_pos > seg_start && collapse_pos < seg_end {
-                // Split this segment around the marker
-                let before = collapse_pos - seg_start;
-                if before > 0 {
-                    spans.push(Span::styled("█".repeat(before), Style::default().fg(color)));
-                }
-                spans.push(Span::styled("▼", Style::default().fg(Color::Red)));
-                let after = seg_end - collapse_pos - 1;
-                if after > 0 {
-                    spans.push(Span::styled("█".repeat(after), Style::default().fg(color)));
-                }
-            } else if show_marker && collapse_pos == seg_start {
-                // Marker at the very start of this segment
-                spans.push(Span::styled("▼", Style::default().fg(Color::Red)));
-                if width > 1 {
-                    spans.push(Span::styled("█".repeat(width - 1), Style::default().fg(color)));
-                }
-            } else {
+            if width > 0 {
                 spans.push(Span::styled("█".repeat(width), Style::default().fg(color)));
             }
-            char_idx = seg_end;
         }
         // Fill remaining with healthy (if rounding left gaps)
-        if char_idx < bar_w {
-            let remaining = bar_w - char_idx;
+        let total: usize = segments.iter().map(|(w, _)| w).sum();
+        if total < bar_w {
+            let remaining = bar_w - total;
             spans.push(Span::styled("█".repeat(remaining), Style::default().fg(Color::Cyan)));
         }
-
         lines.push(Line::from(spans));
+
+        // Line 4: Collapse threshold indicator below the bar
+        if inner.height >= 4 && !region.collapsed {
+            let death_fraction_at_collapse = 1.0 - region.collapse_threshold;
+            let collapse_pos = bar_w.saturating_sub(
+                (death_fraction_at_collapse * bar_w as f64).round() as usize
+            );
+            if collapse_pos > 0 && collapse_pos < bar_w {
+                let mut indicator_spans = Vec::new();
+                if collapse_pos > 0 {
+                    indicator_spans.push(Span::raw(" ".repeat(collapse_pos)));
+                }
+                indicator_spans.push(Span::styled("▲", Style::default().fg(Color::Red)));
+                lines.push(Line::from(indicator_spans));
+            }
+        }
     }
 
     let paragraph = Paragraph::new(lines);
