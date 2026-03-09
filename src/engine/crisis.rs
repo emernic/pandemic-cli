@@ -971,8 +971,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::ContemptOfCongress => {
-            let fine = scaled_cost(state, 0.15, 200.0, 600.0);
+        CrisisKind::ContemptOfCongress { fine } => {
             CrisisEvent {
                 title: "Contempt of Congress".into(),
                 description: format!(
@@ -988,7 +987,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 option_b: CrisisOption {
                     label: "Appeal".into(),
                     description: "Same cost, less political damage. −3% POL.".into(),
-                    cost: Some(CrisisCost { funding: fine, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: *fine, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -1569,21 +1568,21 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.political_power += 0.02;
             if state.rng.r#gen::<f64>() < 0.40 {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
-                state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress));
+                let fine = scaled_cost(state, 0.15, 200.0, 600.0);
+                state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
                 "Deputy testified. The committee has requested a follow-up session.".into()
             } else {
                 "Deputy testified. Committee satisfied.".into()
             }
         }
 
-        (CrisisKind::ContemptOfCongress, 0) => {
+        (CrisisKind::ContemptOfCongress { fine }, 0) => {
             // Pay fine — lose money and POL
-            let fine = scaled_cost(state, 0.15, 200.0, 600.0);
             state.resources.funding = (state.resources.funding - fine).max(0.0);
             state.resources.political_power -= 0.08;
             format!("Fine paid. ${:.0} deducted.", fine)
         }
-        (CrisisKind::ContemptOfCongress, _) => {
+        (CrisisKind::ContemptOfCongress { .. }, _) => {
             // Fight charges — pay same fine but less POL loss
             state.resources.political_power -= 0.03;
             "Appeal filed. Legal fees applied.".into()
