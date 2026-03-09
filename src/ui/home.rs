@@ -324,7 +324,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     // ── Research status ──
-    if state.field_research.is_some() || state.bench_research.is_some() || state.basic_research.is_some() {
+    if state.field_research.is_some() || state.applied_research.is_some() || state.basic_research.is_some() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── RESEARCH ──", cyan)));
         lines.push(Line::from(""));
@@ -332,7 +332,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let research_bar_w = (area.width as usize).saturating_sub(30).min(20);
         for (label, project) in [
             ("Field", &state.field_research),
-            ("Bench", &state.bench_research),
+            ("Applied", &state.applied_research),
             ("Basic", &state.basic_research),
         ] {
             if let Some(proj) = project {

@@ -112,7 +112,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
         let tracks = [
             ("Field", &state.field_research, Color::Cyan),
-            ("Bench", &state.bench_research, Color::Magenta),
+            ("Applied", &state.applied_research, Color::Magenta),
             ("Basic", &state.basic_research, Color::Green),
         ];
         for (i, (label, project, color)) in tracks.iter().enumerate() {
