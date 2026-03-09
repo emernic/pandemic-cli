@@ -146,7 +146,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let policies: Vec<(&str, bool, String, &str, Option<u32>)> = vec![
         ("Travel Ban", policy.travel_ban,
          format!("${:.0}/day + {} pers.", TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL),
-         "Blocks 90% spread into/out of region, halves income", Some(TRAVEL_BAN_PERSONNEL)),
+         "Blocks most spread into/out of region, halves income", Some(TRAVEL_BAN_PERSONNEL)),
         ("Quarantine", policy.quarantine,
          format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL),
          "Halves infection rate within the region", Some(QUARANTINE_PERSONNEL)),
