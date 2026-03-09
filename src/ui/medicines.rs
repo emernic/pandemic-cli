@@ -123,8 +123,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                     } else {
                         Color::Red
                     };
+                    // Show efficacy with trend arrow when declining
+                    let trend = if pct < 85 { "\u{25bc}" } else { "" }; // ▼ when degraded
                     detail_spans.push(Span::styled(
-                        format!(" ({}%)", pct),
+                        format!(" ({}%{})", pct, trend),
                         Style::default().fg(color),
                     ));
                     // Show resistance level if surveillance unlocked
