@@ -1540,7 +1540,7 @@ impl ResearchKind {
                 let med = medicines.get(*medicine_idx);
                 let targets = med.map_or(1, |m| m.target_diseases.len());
                 if targets > 1 {
-                    (10, 400.0, 1000.0) // broad: slow and expensive, covers all
+                    (10, 400.0, 700.0)  // broad: slow and expensive, covers all
                 } else if med.is_some_and(|m| m.rapid) {
                     (2, 120.0, 300.0)   // rapid: fast crisis response
                 } else {
