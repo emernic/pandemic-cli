@@ -2014,31 +2014,27 @@ mod tests {
     }
 
     #[test]
-    fn contact_hospital_surge_increases_infectivity() {
-        use crate::state::TransmissionVector;
-
+    fn hospital_surge_increases_infectivity() {
         let mut state = GameState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
-        state.diseases[0].transmission = TransmissionVector::Contact;
         state.diseases[0].infectivity = 0.02;
         state.diseases[0].lethality = 0.01;
         state.regions[region_idx].infections[0].infected = 5000.0;
 
-        // Run with hospital surge but no quarantine
+        // Run without hospital surge
+        let without = tick(&state);
+
+        // Run with hospital surge
         state.policies[region_idx].hospital_surge = true;
-        let with_hospital = tick(&state);
+        let with = tick(&state);
 
-        // Run Airborne with hospital surge (no infectivity penalty)
-        state.diseases[0].transmission = TransmissionVector::Airborne;
-        let with_hospital_airborne = tick(&state);
-
-        // Contact + hospital surge should have MORE new infections than Airborne + hospital surge
-        let contact_inf = with_hospital.regions[region_idx].infections[0].infected;
-        let airborne_inf = with_hospital_airborne.regions[region_idx].infections[0].infected;
-        assert!(contact_inf > airborne_inf,
-            "contact disease with hospital surge should spread faster than airborne: {} vs {}",
-            contact_inf, airborne_inf);
+        // Hospital surge should increase infections (25% spread penalty)
+        let inf_without = without.regions[region_idx].infections[0].infected;
+        let inf_with = with.regions[region_idx].infections[0].infected;
+        assert!(inf_with > inf_without,
+            "hospital surge should increase spread: {} vs {} without",
+            inf_with, inf_without);
     }
 
     #[test]
