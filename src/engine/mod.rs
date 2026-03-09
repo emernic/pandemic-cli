@@ -44,6 +44,10 @@ pub fn tick(state: &GameState) -> GameState {
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;
 
+    // Personnel upkeep — mandatory cost for maintaining your roster
+    let upkeep = new.personnel_upkeep_rate();
+    new.resources.funding -= upkeep;
+
     // Political Power: ramps based on severity + time.
     // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
     // Time = linear ramp reaching 0.4 at day 30 (baseline even if player contains well).
@@ -68,9 +72,10 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Low funding warning: warn when net burn rate will exhaust funds within ~5 ticks.
-    // Only warn if policies actually cost more than income (net negative).
-    let net_burn = policy_cost - funding_income;
-    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 5.0 {
+    // Only warn if total costs exceed income (net negative).
+    let total_costs = policy_cost + upkeep;
+    let net_burn = total_costs - funding_income;
+    if total_costs > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 5.0 {
         new.events.push(GameEvent::FundingWarning);
     }
 
@@ -1097,15 +1102,16 @@ mod tests {
         }
         // Use a known starting value with enough to cover policy costs
         state.resources.funding = 1000.0;
+        let upkeep = state.personnel_upkeep_rate();
 
         // Tick without any travel bans
         let no_ban = tick(&state);
-        let income_no_ban = no_ban.resources.funding - 1000.0;
+        let income_no_ban = no_ban.resources.funding - 1000.0 + upkeep; // add back upkeep to isolate income
 
         // Tick with travel ban on Asia (largest region, ~60% of world pop)
         state.policies[4].travel_ban = true;
         let with_ban = tick(&state);
-        let income_with_ban = with_ban.resources.funding - 1000.0 + TRAVEL_BAN_COST; // add back policy cost to isolate income effect
+        let income_with_ban = with_ban.resources.funding - 1000.0 + TRAVEL_BAN_COST + upkeep; // add back policy cost and upkeep
 
         assert!(
             income_with_ban < income_no_ban,
@@ -1117,6 +1123,29 @@ mod tests {
             reduction > 0.2 && reduction < 0.4,
             "Asia travel ban should reduce income by ~30%, got {:.0}%", reduction * 100.0
         );
+    }
+
+    #[test]
+    fn personnel_upkeep_reduces_funding() {
+        use crate::state::PERSONNEL_UPKEEP_COST;
+        let mut state = GameState::new_default(42);
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+        state.resources.funding = 1000.0;
+        let income = state.funding_income_rate();
+        let upkeep = state.resources.personnel as f64 * PERSONNEL_UPKEEP_COST;
+
+        let after = tick(&state);
+        let delta = after.resources.funding - 1000.0;
+
+        // Net change should be income minus upkeep (no policies)
+        assert!(
+            (delta - (income - upkeep)).abs() < 0.01,
+            "funding delta {delta:.2} should equal income {income:.2} - upkeep {upkeep:.2}"
+        );
+        // Upkeep should be significant (not negligible)
+        assert!(upkeep > 1.0, "upkeep {upkeep:.2} should be meaningful");
     }
 
     #[test]

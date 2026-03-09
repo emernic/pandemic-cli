@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days, PERSONNEL_UPKEEP_COST};
 use crate::format_number;
 
 /// Returns the height this bar needs: always 3 to show research status.
@@ -53,31 +53,20 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             format!("Funds: ${:.0}", state.resources.funding),
             Style::default().fg(Color::Green),
         ),
-        Span::styled(
-            format!(" (+${:.0}/day)", state.funding_income_rate() * TICKS_PER_DAY),
-            Style::default().fg(Color::DarkGray),
-        ),
         {
-            let ban_penalty = state.travel_ban_income_penalty() * TICKS_PER_DAY;
-            if ban_penalty > 0.5 {
-                Span::styled(
-                    format!(" (−${:.0} bans)", ban_penalty),
-                    Style::default().fg(Color::Yellow),
-                )
+            let gross = state.funding_income_rate() * TICKS_PER_DAY;
+            let upkeep = state.resources.personnel as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
+            let policy = state.total_policy_funding_cost() * TICKS_PER_DAY;
+            let net = gross - upkeep - policy;
+            let (sign, color) = if net >= 0.0 {
+                ("+", Color::DarkGray)
             } else {
-                Span::raw("")
-            }
-        },
-        {
-            let cost = state.total_policy_funding_cost();
-            if cost > 0.0 {
-                Span::styled(
-                    format!(" −${:.0}/day policy", cost * TICKS_PER_DAY),
-                    Style::default().fg(Color::Yellow),
-                )
-            } else {
-                Span::raw("")
-            }
+                ("", Color::Red)
+            };
+            Span::styled(
+                format!(" ({sign}${net:.0}/day)"),
+                Style::default().fg(color),
+            )
         },
         Span::raw("  "),
         Span::styled(
