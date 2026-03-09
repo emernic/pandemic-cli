@@ -1175,7 +1175,11 @@ impl UiState {
                 if let Some(&med_idx) = unlocked.get(self.panel_selection) {
                     self.medicine_ui =
                         Some(MedicineUiState::SelectRegion { medicine_idx: med_idx });
-                    self.panel_selection = 0;
+                    // Pre-select the region matching the current map selection
+                    let order = grid_reading_order(state.regions.len());
+                    self.panel_selection = order.iter()
+                        .position(|&idx| idx == self.map_selection)
+                        .unwrap_or(0);
                 }
                 None
             }
