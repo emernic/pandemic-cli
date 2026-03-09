@@ -5,6 +5,14 @@ use crate::state::{
     CRISIS_TYPE_COOLDOWN, TICKS_PER_DAY,
 };
 
+/// Scale a dollar amount relative to current funding.
+/// `fraction` is the target fraction of current funding (e.g., 0.15 = 15%).
+/// Result is clamped to [min, max] and rounded to nearest $10.
+fn scaled_cost(state: &GameState, fraction: f64, min: f64, max: f64) -> f64 {
+    let raw = (state.resources.funding * fraction).clamp(min, max);
+    (raw / 10.0).round() * 10.0
+}
+
 /// Generate a crisis event based on current game state. Returns None if no
 /// suitable crisis can be generated (e.g., no valid targets for any crisis type).
 pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<CrisisEvent> {
@@ -52,9 +60,9 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PersonnelCrisis { amount });
     }
 
-    // International aid: always available
-    let funding = 300.0 + (state.tick as f64 * 0.1).min(500.0);
-    let personnel = 3 + ((state.tick as f64 * 0.005).min(5.0) as u32);
+    // International aid: scales with current funding (15%) and headcount (15%)
+    let funding = scaled_cost(state, 0.15, 100.0, 500.0);
+    let personnel = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(2, 8);
     candidates.push(CrisisKind::InternationalAid { funding, personnel });
 
     // Mutation surge: requires a disease with strain_generation > 0 AND active infections
@@ -153,7 +161,9 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         .collect();
     if !identified.is_empty() {
         let idx = identified[rng.r#gen::<usize>() % identified.len()];
-        candidates.push(CrisisKind::ResourceDiversion { disease_idx: idx });
+        let share_reward = scaled_cost(state, 0.25, 150.0, 800.0);
+        let refuse_cost = scaled_cost(state, 0.15, 100.0, 600.0);
+        candidates.push(CrisisKind::ResourceDiversion { disease_idx: idx, share_reward, refuse_cost });
     }
 
     // Exhaustion epidemic: requires hospital_surge active
@@ -197,13 +207,16 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // Billionaire offer: requires day > 8
     if day > 8.0 {
-        candidates.push(CrisisKind::BillionaireOffer);
+        let reward = scaled_cost(state, 0.25, 150.0, 500.0);
+        let personnel_loss = ((state.resources.personnel as f64 * 0.10).round() as u32).clamp(1, 5);
+        candidates.push(CrisisKind::BillionaireOffer { reward, personnel_loss });
     }
 
     // WHO evacuation: requires day > 10, Europe not collapsed
     let europe_ok = state.regions.iter().any(|r| r.name == "Europe" && !r.collapsed);
     if day > 10.0 && europe_ok {
-        candidates.push(CrisisKind::WHOEvacuation);
+        let aid_loss = scaled_cost(state, 0.15, 100.0, 500.0);
+        candidates.push(CrisisKind::WHOEvacuation { aid_loss });
     }
 
     // Warlord demand: requires collapsed region
@@ -218,7 +231,9 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // Vaccine dispute: requires day > 15, at least one unlocked medicine
     if day > 15.0 && state.medicines.iter().any(|m| m.unlocked) {
-        candidates.push(CrisisKind::VaccineDispute);
+        let neutral_loss = scaled_cost(state, 0.20, 100.0, 700.0);
+        let credit_gain = scaled_cost(state, 0.30, 150.0, 800.0);
+        candidates.push(CrisisKind::VaccineDispute { neutral_loss, credit_gain });
     }
 
     // Filter out crisis types that are still on cooldown
@@ -261,10 +276,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: format!("Lose {} doses", crate::format_number(loss)),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Emergency reroute ($300)".into(),
-                    description: "Pay to save the supply".into(),
-                    cost: Some(CrisisCost { funding: 300.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.15, 100.0, 600.0);
+                    CrisisOption {
+                        label: format!("Emergency reroute (${:.0})", cost),
+                        description: "Pay to save the supply".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -283,10 +301,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: format!("Lose current {} research progress", track),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Emergency containment ($200, 3 personnel)".into(),
-                    description: "Spend resources to save the project".into(),
-                    cost: Some(CrisisCost { funding: 200.0, personnel: 3 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.10, 80.0, 400.0);
+                    CrisisOption {
+                        label: format!("Emergency containment (${:.0}, 3 personnel)", cost),
+                        description: "Spend resources to save the project".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 3 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -307,17 +328,20 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: format!("Remove quarantine in {}", region_name),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Resist ($500)".into(),
-                    description: "Pay to maintain quarantine".into(),
-                    cost: Some(CrisisCost { funding: 500.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.25, 150.0, 800.0);
+                    CrisisOption {
+                        label: format!("Resist (${:.0})", cost),
+                        description: "Pay to maintain quarantine".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
             }
         }
         CrisisKind::PersonnelCrisis { amount } => {
-            let retention_cost = *amount as f64 * 100.0;
+            let retention_cost = scaled_cost(state, 0.20, 100.0, 600.0);
             CrisisEvent {
                 title: "Staff Burnout".into(),
                 description: format!(
@@ -374,10 +398,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: "No cost, but mutation continues unchecked".into(),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Emergency analysis ($300)".into(),
-                    description: "Gain +0.15 knowledge of this pathogen".into(),
-                    cost: Some(CrisisCost { funding: 300.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.15, 100.0, 600.0);
+                    CrisisOption {
+                        label: format!("Emergency analysis (${:.0})", cost),
+                        description: "Gain +0.15 knowledge of this pathogen".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -448,10 +475,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: "Some are treated, but 20% suffer adverse reactions".into(),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Confiscate ($200)".into(),
-                    description: "Seize the drugs — safer, but no treatment for them".into(),
-                    cost: Some(CrisisCost { funding: 200.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.10, 80.0, 400.0);
+                    CrisisOption {
+                        label: format!("Confiscate (${:.0})", cost),
+                        description: "Seize the drugs — safer, but no treatment for them".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -492,10 +522,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: "−8% POL as public confidence erodes".into(),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Press conference ($300, 1 personnel)".into(),
-                    description: "Calm the panic, gain +5% POL".into(),
-                    cost: Some(CrisisCost { funding: 300.0, personnel: 1 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.15, 100.0, 600.0);
+                    CrisisOption {
+                        label: format!("Press conference (${:.0}, 1 personnel)", cost),
+                        description: "Calm the panic, gain +5% POL".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 1 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -546,10 +579,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: "Effective but −10% POL".into(),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Education campaign ($400)".into(),
-                    description: format!("Spend money, gain +5% POL in {}", region_name),
-                    cost: Some(CrisisCost { funding: 400.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.20, 120.0, 700.0);
+                    CrisisOption {
+                        label: format!("Education campaign (${:.0})", cost),
+                        description: format!("Spend money, gain +5% POL in {}", region_name),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -579,7 +615,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
-        CrisisKind::ResourceDiversion { disease_idx } => {
+        CrisisKind::ResourceDiversion { disease_idx, share_reward, refuse_cost } => {
             let disease_name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
@@ -592,14 +628,14 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     disease_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Share data (+$500)".into(),
-                    description: "−0.1 knowledge but receive $500 funding as goodwill".into(),
+                    label: format!("Share data (+${:.0})", share_reward),
+                    description: format!("−0.1 knowledge but receive ${:.0} funding as goodwill", share_reward),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Refuse".into(),
-                    description: "Keep your data, lose $300 in foreign aid".into(),
-                    cost: Some(CrisisCost { funding: 300.0, personnel: 0 }),
+                    description: format!("Keep your data, lose ${:.0} in foreign aid", refuse_cost),
+                    cost: Some(CrisisCost { funding: *refuse_cost, personnel: 0 }),
                 },
                 kind,
                 tick_created: tick,
@@ -665,10 +701,13 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: "Cede 5 personnel to military, gain +15% POL".into(),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Resist ($600)".into(),
-                    description: "Pay to fight the takeover, keep your team".into(),
-                    cost: Some(CrisisCost { funding: 600.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.30, 200.0, 1000.0);
+                    CrisisOption {
+                        label: format!("Resist (${:.0})", cost),
+                        description: "Pay to fight the takeover, keep your team".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -693,21 +732,25 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: "Deliveries resume, but −8% POL from the broadcast".into(),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Police raid ($400, 2 personnel)".into(),
-                    description: "Clear the blockade by force".into(),
-                    cost: Some(CrisisCost { funding: 400.0, personnel: 2 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.20, 120.0, 700.0);
+                    CrisisOption {
+                        label: format!("Police raid (${:.0}, 2 personnel)", cost),
+                        description: "Clear the blockade by force".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 2 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
             }
         }
-        CrisisKind::BillionaireOffer => {
+        CrisisKind::BillionaireOffer { reward, personnel_loss } => {
             CrisisEvent {
                 title: "Billionaire's Generous Offer".into(),
-                description: "A tech billionaire offers $500 in emergency funding — but wants \
+                description: format!(
+                    "A tech billionaire offers ${:.0} in emergency funding — but wants \
                     naming rights to every medicine you develop. Your scientists are furious. \
-                    The money would save lives. The morale cost might lose them.".into(),
+                    The money would save lives. The morale cost might lose them.", reward),
                 option_a: CrisisOption {
                     label: "Decline politely".into(),
                     description: "Keep team morale, no funding".into(),
@@ -715,14 +758,14 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Accept the deal".into(),
-                    description: "+$500 funding, −3 personnel quit in protest".into(),
+                    description: format!("+${:.0} funding, −{} personnel quit in protest", reward, personnel_loss),
                     cost: None,
                 },
                 kind,
                 tick_created: tick,
             }
         }
-        CrisisKind::WHOEvacuation => {
+        CrisisKind::WHOEvacuation { aid_loss } => {
             CrisisEvent {
                 title: "WHO Headquarters Evacuated".into(),
                 description: "A disease outbreak has forced WHO headquarters in Geneva to evacuate. \
@@ -730,13 +773,16 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     or let each region fend for itself.".into(),
                 option_a: CrisisOption {
                     label: "Let regions go independent".into(),
-                    description: "Lose $300 in aid income, −5% POL".into(),
+                    description: format!("Lose ${:.0} in aid income, −5% POL", aid_loss),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Take over coordination ($800, 3 personnel)".into(),
-                    description: "Expensive, but gain +10% POL and maintain global response".into(),
-                    cost: Some(CrisisCost { funding: 800.0, personnel: 3 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.40, 250.0, 1500.0);
+                    CrisisOption {
+                        label: format!("Take over coordination (${:.0}, 3 personnel)", cost),
+                        description: "Expensive, but gain +10% POL and maintain global response".into(),
+                        cost: Some(CrisisCost { funding: cost, personnel: 3 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
@@ -758,16 +804,19 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     description: format!("{} remains sealed, +5% POL", region_name),
                     cost: None,
                 },
-                option_b: CrisisOption {
-                    label: "Pay tribute ($500)".into(),
-                    description: format!("Un-collapse {} — medical access restored", region_name),
-                    cost: Some(CrisisCost { funding: 500.0, personnel: 0 }),
+                option_b: {
+                    let cost = scaled_cost(state, 0.25, 150.0, 800.0);
+                    CrisisOption {
+                        label: format!("Pay tribute (${:.0})", cost),
+                        description: format!("Un-collapse {} — medical access restored", region_name),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    }
                 },
                 kind,
                 tick_created: tick,
             }
         }
-        CrisisKind::VaccineDispute => {
+        CrisisKind::VaccineDispute { neutral_loss, credit_gain } => {
             CrisisEvent {
                 title: "Vaccine Credit War".into(),
                 description: "Two superpowers both claim credit for your vaccine breakthrough. \
@@ -775,12 +824,12 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     in the middle. Credit one, or stay neutral and lose both.".into(),
                 option_a: CrisisOption {
                     label: "Stay neutral".into(),
-                    description: "Both sides angry — −$400 in combined aid cuts".into(),
+                    description: format!("Both sides angry — −${:.0} in combined aid cuts", neutral_loss),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Credit one side".into(),
-                    description: "+$600 from the winner, −15% POL from the loser's allies".into(),
+                    description: format!("+${:.0} from the winner, −15% POL from the loser's allies", credit_gain),
                     cost: None,
                 },
                 kind,
@@ -1030,13 +1079,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Investigation successful — funds recovered, corrupt official removed".into()
         }
 
-        (CrisisKind::ResourceDiversion { disease_idx }, 0) => {
+        (CrisisKind::ResourceDiversion { disease_idx, share_reward, .. }, 0) => {
             // Share data — lose knowledge, gain funding
             if let Some(disease) = state.diseases.get_mut(*disease_idx) {
                 disease.knowledge = (disease.knowledge - 0.1).max(0.0);
             }
-            state.resources.funding += 500.0;
-            "Research data shared — received $500 in goodwill funding".into()
+            state.resources.funding += share_reward;
+            format!("Research data shared — received ${:.0} in goodwill funding", share_reward)
         }
         (CrisisKind::ResourceDiversion { .. }, _) => {
             // Refuse — costs already deducted
@@ -1099,24 +1148,25 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Police cleared the blockade — supply routes restored".into()
         }
 
-        (CrisisKind::BillionaireOffer, 0) => {
+        (CrisisKind::BillionaireOffer { .. }, 0) => {
             // Decline
             "Declined the billionaire's offer — team morale intact".into()
         }
-        (CrisisKind::BillionaireOffer, _) => {
+        (CrisisKind::BillionaireOffer { reward, personnel_loss }, _) => {
             // Accept — gain funding, lose personnel
-            state.resources.funding += 500.0;
-            state.resources.personnel = state.resources.personnel.saturating_sub(3);
-            "Accepted the deal — $500 received, but 3 researchers quit in protest".into()
+            state.resources.funding += reward;
+            state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
+            format!("Accepted the deal — ${:.0} received, but {} researchers quit in protest",
+                reward, personnel_loss)
         }
 
-        (CrisisKind::WHOEvacuation, 0) => {
+        (CrisisKind::WHOEvacuation { aid_loss }, 0) => {
             // Let regions go independent — lose funding and POL
-            state.resources.funding = (state.resources.funding - 300.0).max(0.0);
+            state.resources.funding = (state.resources.funding - aid_loss).max(0.0);
             state.resources.political_power -= 0.05;
-            "WHO collapsed — regions fending for themselves. Global coordination lost.".into()
+            format!("WHO collapsed — lost ${:.0} in aid. Regions fending for themselves.", aid_loss)
         }
-        (CrisisKind::WHOEvacuation, _) => {
+        (CrisisKind::WHOEvacuation { .. }, _) => {
             // Take over — costs already deducted, gain POL
             state.resources.political_power += 0.10;
             "Your agency is now coordinating the global response. Heavy responsibility.".into()
@@ -1139,16 +1189,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Paid the warlord — medical teams re-enter {}", region_name)
         }
 
-        (CrisisKind::VaccineDispute, 0) => {
+        (CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
             // Stay neutral — lose funding from both
-            state.resources.funding = (state.resources.funding - 400.0).max(0.0);
-            "Stayed neutral — both superpowers cut aid in retaliation".into()
+            state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
+            format!("Stayed neutral — both superpowers cut ${:.0} in aid", neutral_loss)
         }
-        (CrisisKind::VaccineDispute, _) => {
+        (CrisisKind::VaccineDispute { credit_gain, .. }, _) => {
             // Credit one side — gain funding, lose POL
-            state.resources.funding += 600.0;
+            state.resources.funding += credit_gain;
             state.resources.political_power -= 0.15;
-            "Picked a side — generous funding from the winner, furious allies of the loser".into()
+            format!("Picked a side — ${:.0} from the winner, furious allies of the loser", credit_gain)
         }
     };
     // Clamp POL after crisis modifications

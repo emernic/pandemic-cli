@@ -2718,12 +2718,12 @@ mod tests {
         detect_all_diseases(&mut state);
         state.diseases[0].knowledge = 0.5;
         state.resources.funding = 1000.0;
-        setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0 }, 0);
+        setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0, share_reward: 250.0, refuse_cost: 150.0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.diseases[0].knowledge - 0.4).abs() < 0.001,
             "option A should lose 0.1 knowledge");
-        assert!((after.resources.funding - 1500.0).abs() < 1.0,
-            "option A should gain $500 funding");
+        assert!((after.resources.funding - 1250.0).abs() < 1.0,
+            "option A should gain $250 funding (scaled)");
     }
 
     #[test]
@@ -2803,12 +2803,12 @@ mod tests {
         let mut state = GameState::new_default(42);
         let before_funding = state.resources.funding;
         let before_personnel = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::BillionaireOffer, 1);
+        setup_crisis(&mut state, CrisisKind::BillionaireOffer { reward: 200.0, personnel_loss: 2 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - (before_funding + 500.0)).abs() < 1.0,
-            "option B should gain $500");
-        assert_eq!(after.resources.personnel, before_personnel - 3,
-            "option B should lose 3 personnel");
+        assert!((after.resources.funding - (before_funding + 200.0)).abs() < 1.0,
+            "option B should gain scaled reward");
+        assert_eq!(after.resources.personnel, before_personnel - 2,
+            "option B should lose scaled personnel");
     }
 
     #[test]
@@ -2816,7 +2816,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         let before_funding = state.resources.funding;
         let before_personnel = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::BillionaireOffer, 0);
+        setup_crisis(&mut state, CrisisKind::BillionaireOffer { reward: 200.0, personnel_loss: 2 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.funding, before_funding,
             "option A should not change funding");
@@ -2830,10 +2830,10 @@ mod tests {
         state.resources.funding = 1000.0;
         state.resources.political_power = 0.50;
         let before_pol = state.resources.political_power;
-        setup_crisis(&mut state, CrisisKind::WHOEvacuation, 0);
+        setup_crisis(&mut state, CrisisKind::WHOEvacuation { aid_loss: 150.0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 700.0).abs() < 1.0,
-            "option A should lose $300");
+        assert!((after.resources.funding - 850.0).abs() < 1.0,
+            "option A should lose scaled aid amount ($150)");
         assert!((after.resources.political_power - (before_pol - 0.05)).abs() < 0.001,
             "option A should lose 0.05 POL modifier");
     }
@@ -2847,7 +2847,7 @@ mod tests {
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::WHOEvacuation,
+            kind: CrisisKind::WHOEvacuation { aid_loss: 150.0 },
             title: "T".into(), description: "T".into(),
             option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
             option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
@@ -2896,10 +2896,10 @@ mod tests {
     fn vaccine_dispute_option_a_loses_funding() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        setup_crisis(&mut state, CrisisKind::VaccineDispute, 0);
+        setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 600.0).abs() < 1.0,
-            "option A should lose $400");
+        assert!((after.resources.funding - 800.0).abs() < 1.0,
+            "option A should lose scaled neutral_loss ($200)");
     }
 
     #[test]
@@ -2908,10 +2908,10 @@ mod tests {
         state.resources.funding = 1000.0;
         state.resources.political_power = 0.50;
         let before_pol = state.resources.political_power;
-        setup_crisis(&mut state, CrisisKind::VaccineDispute, 1);
+        setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 1600.0).abs() < 1.0,
-            "option B should gain $600");
+        assert!((after.resources.funding - 1300.0).abs() < 1.0,
+            "option B should gain scaled credit_gain ($300)");
         assert!((after.resources.political_power - (before_pol - 0.15)).abs() < 0.001,
             "option B should lose 0.15 POL modifier");
     }
