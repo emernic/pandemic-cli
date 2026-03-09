@@ -139,10 +139,9 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     style,
                 )));
 
-                // Show target diseases for medicine development
-                if let Some(targets) = format_targets(kind, state) {
+                if let Some(detail) = format_detail(kind, state) {
                     lines.push(Line::from(Span::styled(
-                        format!("    Targets: {}", targets),
+                        format!("    {}", detail),
                         Style::default().fg(Color::DarkGray),
                     )));
                 }
@@ -189,9 +188,9 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
             format!("  Start: {}", format_kind(kind, state)),
             Style::default().fg(Color::Cyan),
         )));
-        if let Some(targets) = format_targets(kind, state) {
+        if let Some(detail) = format_detail(kind, state) {
             lines.push(Line::from(Span::styled(
-                format!("  Targets: {}", targets),
+                format!("  {}", detail),
                 Style::default().fg(Color::DarkGray),
             )));
         }
@@ -347,8 +346,8 @@ fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
     }
 }
 
-/// For DevelopMedicine projects, return the target disease names.
-fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
+/// Supplementary detail line for a research project (targets, knowledge, etc).
+fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
     match kind {
         ResearchKind::DevelopMedicine { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
@@ -358,7 +357,7 @@ fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
                         .map(|d| d.display_name(d_idx))
                 })
                 .collect();
-            Some(names.join(", "))
+            Some(format!("Targets: {}", names.join(", ")))
         }
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
@@ -372,6 +371,14 @@ fn format_targets(kind: &ResearchKind, state: &GameState) -> Option<String> {
         }
         ResearchKind::TrainPersonnel => {
             Some(format!("Current: {} personnel", state.resources.personnel))
+        }
+        ResearchKind::IdentifyThreat { disease_idx } => {
+            let disease = state.diseases.get(*disease_idx)?;
+            if disease.knowledge > 0.0 {
+                Some(format!("Knowledge: {:.0}%", disease.knowledge * 100.0))
+            } else {
+                None
+            }
         }
         _ => None,
     }
