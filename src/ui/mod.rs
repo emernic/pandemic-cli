@@ -43,7 +43,6 @@ pub fn process_events(state: &mut GameState) {
     }
 
     // Pick the most important event to display as status message.
-    // Priority: PolicySuspended > FundingWarning > DiseaseMutated
     let suspended: Vec<_> = state.events.iter()
         .filter_map(|e| match e {
             GameEvent::PolicySuspended { region_idx, policy_name } => {
