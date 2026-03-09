@@ -101,9 +101,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::SelectNext => {
             // In ViewActive, up/down adjusts personnel assignment
             // Down = remove (fewer), Up = add (more)
-            if let Some(ResearchUiState::ViewActive { track }) = &new.ui.research_ui {
+            if let Some(ResearchUiState::ViewActive { track, slot_idx }) = &new.ui.research_ui {
                 let track = *track;
-                let cmd = GameCommand::RemoveResearchPersonnel { track };
+                let slot_idx = *slot_idx;
+                let cmd = GameCommand::RemoveResearchPersonnel { track, slot_idx };
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;
             } else {
@@ -112,9 +113,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             }
         }
         Action::SelectPrev => {
-            if let Some(ResearchUiState::ViewActive { track }) = &new.ui.research_ui {
+            if let Some(ResearchUiState::ViewActive { track, slot_idx }) = &new.ui.research_ui {
                 let track = *track;
-                let cmd = GameCommand::AddResearchPersonnel { track };
+                let slot_idx = *slot_idx;
+                let cmd = GameCommand::AddResearchPersonnel { track, slot_idx };
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;
             } else {

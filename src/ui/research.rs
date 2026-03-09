@@ -16,7 +16,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
             render_confirm(state, *track, *project_idx, *double_personnel)
         }
-        Some(ResearchUiState::ViewActive { track }) => render_active(state, *track),
+        Some(ResearchUiState::ViewActive { track, slot_idx }) => render_active(state, *track, *slot_idx),
         None => (" Research ".to_string(), vec![]),
     };
 
@@ -51,15 +51,21 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
             style,
         )));
 
-        let active = state.research_slot(*track).is_some();
-        let (status, status_color) = if active {
-            (" [ACTIVE]", match track {
+        let (status, status_color) = if *track == ResearchTrack::Field {
+            let n = state.field_research.len();
+            if n > 0 {
+                (format!(" [{}/{}]", n, crate::state::MAX_FIELD_RESEARCH), Color::Cyan)
+            } else {
+                (" [NONE]".to_string(), Color::DarkGray)
+            }
+        } else if state.research_slot(*track).is_some() {
+            (" [ACTIVE]".to_string(), match track {
                 ResearchTrack::Field => Color::Cyan,
                 ResearchTrack::Applied => Color::Magenta,
                 ResearchTrack::Basic => Color::Green,
             })
         } else {
-            (" [NONE]", Color::DarkGray)
+            (" [NONE]".to_string(), Color::DarkGray)
         };
         lines.push(Line::from(vec![
             Span::styled(format!("    {}", desc), Style::default().fg(Color::DarkGray)),
@@ -98,83 +104,171 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
     )));
     lines.push(Line::from(""));
 
-    let active = state.research_slot(track);
+    if track == ResearchTrack::Field {
+        // Field track: show active projects first, then available (if capacity remains)
+        let n_active = state.field_research.len();
 
-    // When a project is active, only show it — no starting new projects until it completes
-    if let Some(project) = active {
-        has_selectable_items = true;
-        let selected = state.ui.panel_selection == 0;
-        let marker = if selected { "▶ " } else { "  " };
-        let style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Cyan)
-        };
+        for (i, project) in state.field_research.iter().enumerate() {
+            has_selectable_items = true;
+            let selected = state.ui.panel_selection == i;
+            let marker = if selected { "▶ " } else { "  " };
+            let style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Cyan)
+            };
 
-        let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
-        let remaining = (project.required_ticks - project.progress).max(0.0);
-        let speed = project.speed(&state.medicines);
-        let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
-        lines.push(Line::from(Span::styled(
-            format!("{}[ACTIVE] {}", marker, format_kind(&project.kind, state)),
-            style,
-        )));
-        lines.push(Line::from(Span::styled(
-            format!("    Progress: {:.0}% — {} remaining", pct, format_days(effective_remaining)),
-            Style::default().fg(Color::Green),
-        )));
-    } else {
-        let projects = state.available_projects(track);
+            let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
+            let remaining = (project.required_ticks - project.progress).max(0.0);
+            let speed = project.speed(&state.medicines);
+            let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
+            lines.push(Line::from(Span::styled(
+                format!("{}[ACTIVE] {}", marker, format_kind(&project.kind, state)),
+                style,
+            )));
+            lines.push(Line::from(Span::styled(
+                format!("    Progress: {:.0}% — {} remaining", pct, format_days(effective_remaining)),
+                Style::default().fg(Color::Green),
+            )));
+        }
 
-        if projects.is_empty() {
+        // Show available projects if capacity remains
+        if state.field_research_has_capacity() {
+            let projects = state.available_projects(track);
+            if !projects.is_empty() {
+                if n_active > 0 {
+                    lines.push(Line::from(""));
+                    lines.push(Line::from(Span::styled(
+                        format!("  ── Start New ({}/{} slots) ──", n_active, crate::state::MAX_FIELD_RESEARCH),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                    lines.push(Line::from(""));
+                }
+                has_selectable_items = true;
+                for (i, kind) in projects.iter().enumerate() {
+                    let sel_idx = n_active + i;
+                    let selected = state.ui.panel_selection == sel_idx;
+                    let marker = if selected { "▶ " } else { "  " };
+                    let style = if selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+
+                    lines.push(Line::from(Span::styled(
+                        format!("{}{}", marker, format_kind(kind, state)),
+                        style,
+                    )));
+
+                    if let Some(detail) = format_detail(kind, state) {
+                        lines.push(Line::from(Span::styled(
+                            format!("    {}", detail),
+                            Style::default().fg(Color::DarkGray),
+                        )));
+                    }
+
+                    let (personnel, ticks, funding) = kind.costs(&state.medicines);
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
+                        Span::raw("  "),
+                        Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
+                        Span::raw("  "),
+                        Span::styled(format_days(ticks), Style::default().fg(Color::DarkGray)),
+                    ]));
+                    lines.push(Line::from(""));
+                }
+            } else if n_active == 0 {
+                lines.push(Line::from(Span::styled(
+                    "  No projects available.",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        } else if n_active == 0 {
             lines.push(Line::from(Span::styled(
                 "  No projects available.",
                 Style::default().fg(Color::DarkGray),
             )));
-            let hint = match track {
-                ResearchTrack::Applied => Some("(Identify diseases to unlock medicine development)"),
-                ResearchTrack::Basic => Some("(Identify a pathogen to unlock basic research)"),
-                ResearchTrack::Field => None,
+        }
+    } else {
+        // Applied/Basic: single-slot behavior
+        let active = state.research_slot(track);
+
+        if let Some(project) = active {
+            has_selectable_items = true;
+            let selected = state.ui.panel_selection == 0;
+            let marker = if selected { "▶ " } else { "  " };
+            let style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Cyan)
             };
-            if let Some(hint_text) = hint {
+
+            let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
+            let remaining = (project.required_ticks - project.progress).max(0.0);
+            let speed = project.speed(&state.medicines);
+            let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
+            lines.push(Line::from(Span::styled(
+                format!("{}[ACTIVE] {}", marker, format_kind(&project.kind, state)),
+                style,
+            )));
+            lines.push(Line::from(Span::styled(
+                format!("    Progress: {:.0}% — {} remaining", pct, format_days(effective_remaining)),
+                Style::default().fg(Color::Green),
+            )));
+        } else {
+            let projects = state.available_projects(track);
+
+            if projects.is_empty() {
                 lines.push(Line::from(Span::styled(
-                    format!("  {}", hint_text),
+                    "  No projects available.",
                     Style::default().fg(Color::DarkGray),
                 )));
-            }
-        } else {
-            has_selectable_items = true;
-            for (i, kind) in projects.iter().enumerate() {
-                let selected = state.ui.panel_selection == i;
-                let marker = if selected { "▶ " } else { "  " };
-                let style = if selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::White)
+                let hint = match track {
+                    ResearchTrack::Applied => Some("(Identify diseases to unlock medicine development)"),
+                    ResearchTrack::Basic => Some("(Identify a pathogen to unlock basic research)"),
+                    ResearchTrack::Field => None,
                 };
-
-                lines.push(Line::from(Span::styled(
-                    format!("{}{}", marker, format_kind(kind, state)),
-                    style,
-                )));
-
-                if let Some(detail) = format_detail(kind, state) {
+                if let Some(hint_text) = hint {
                     lines.push(Line::from(Span::styled(
-                        format!("    {}", detail),
+                        format!("  {}", hint_text),
                         Style::default().fg(Color::DarkGray),
                     )));
                 }
+            } else {
+                has_selectable_items = true;
+                for (i, kind) in projects.iter().enumerate() {
+                    let selected = state.ui.panel_selection == i;
+                    let marker = if selected { "▶ " } else { "  " };
+                    let style = if selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
 
-                let (personnel, ticks, funding) = kind.costs(&state.medicines);
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
-                    Span::raw("  "),
-                    Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
-                    Span::raw("  "),
-                    Span::styled(format_days(ticks), Style::default().fg(Color::DarkGray)),
-                ]));
-                lines.push(Line::from(""));
+                    lines.push(Line::from(Span::styled(
+                        format!("{}{}", marker, format_kind(kind, state)),
+                        style,
+                    )));
+
+                    if let Some(detail) = format_detail(kind, state) {
+                        lines.push(Line::from(Span::styled(
+                            format!("    {}", detail),
+                            Style::default().fg(Color::DarkGray),
+                        )));
+                    }
+
+                    let (personnel, ticks, funding) = kind.costs(&state.medicines);
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
+                        Span::raw("  "),
+                        Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
+                        Span::raw("  "),
+                        Span::styled(format_days(ticks), Style::default().fg(Color::DarkGray)),
+                    ]));
+                    lines.push(Line::from(""));
+                }
             }
         }
     }
@@ -282,9 +376,12 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
     (" Confirm Research ".to_string(), lines)
 }
 
-fn render_active(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'static>>) {
+fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let project = state.research_slot(track);
+    let project = match track {
+        ResearchTrack::Field => state.field_research.get(slot_idx),
+        _ => state.research_slot(track),
+    };
 
     if let Some(project) = project {
         let pct = (project.progress / project.required_ticks * 100.0).min(100.0);

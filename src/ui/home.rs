@@ -401,14 +401,40 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     // ── Research status ──
-    if state.field_research.is_some() || state.applied_research.is_some() || state.basic_research.is_some() {
+    if !state.field_research.is_empty() || state.applied_research.is_some() || state.basic_research.is_some() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── RESEARCH ──", cyan)));
         lines.push(Line::from(""));
 
         let research_bar_w = (area.width as usize).saturating_sub(30).min(20);
+
+        // Field research: show all active projects
+        for (i, proj) in state.field_research.iter().enumerate() {
+            let label = if state.field_research.len() > 1 {
+                format!("Field {}", i + 1)
+            } else {
+                "Field".to_string()
+            };
+            let pct = if proj.required_ticks > 0.0 {
+                proj.progress / proj.required_ticks
+            } else { 1.0 };
+            let remaining = proj.required_ticks - proj.progress;
+            let speed = proj.speed(&state.medicines);
+            let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
+
+            let mut spans = vec![
+                Span::styled(format!("  {}: ", label), dim),
+            ];
+            spans.extend(bar(pct, research_bar_w, Color::Green));
+            spans.push(Span::styled(
+                format!(" {:.0}% ({} left)", pct * 100.0, format_days(effective_remaining)),
+                yellow,
+            ));
+            lines.push(Line::from(spans));
+        }
+
+        // Applied and Basic: single-slot
         for (label, project) in [
-            ("Field", &state.field_research),
             ("Applied", &state.applied_research),
             ("Basic", &state.basic_research),
         ] {

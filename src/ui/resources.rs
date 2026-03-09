@@ -111,21 +111,35 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     {
         let mut spans: Vec<Span> = Vec::new();
 
-        let tracks = [
-            ("Field", &state.field_research, Color::Cyan),
+        // Field research: show all active projects (or "None")
+        spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
+        if state.field_research.is_empty() {
+            spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+        } else {
+            for (i, project) in state.field_research.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+                }
+                let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
+                spans.push(Span::styled(
+                    format!("{} {}%", compact_research_label(&project.kind, state), pct),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+        }
+
+        // Applied and Basic tracks
+        for (label, project, color) in [
             ("Applied", &state.applied_research, Color::Magenta),
             ("Basic", &state.basic_research, Color::Green),
-        ];
-        for (i, (label, project, color)) in tracks.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            }
+        ] {
+            spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
             spans.push(Span::styled(format!("{}: ", label), Style::default().fg(Color::DarkGray)));
             if let Some(project) = project {
                 let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
                 spans.push(Span::styled(
                     format!("{} {}%", compact_research_label(&project.kind, state), pct),
-                    Style::default().fg(*color),
+                    Style::default().fg(color),
                 ));
             } else {
                 spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
