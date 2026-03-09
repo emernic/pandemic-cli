@@ -62,7 +62,7 @@ pub fn process_events(state: &mut GameState) {
         })
         .collect();
 
-    // Priority: RegionCollapsed > NewDiseaseEmerged > PolicySuspended > FundingWarning > DiseaseMutated
+    // Priority: RegionCollapsed > DiseaseDetected > PolicySuspended > FundingWarning > DiseaseMutated
     let msg = if let Some(GameEvent::RegionCollapsed { region_idx }) =
         state.events.iter().find(|e| matches!(e, GameEvent::RegionCollapsed { .. }))
     {
@@ -71,13 +71,20 @@ pub fn process_events(state: &mut GameState) {
             .unwrap_or("Unknown");
         let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
         format!("COLLAPSE: {region_name} has fallen! {remaining} regions remain.")
-    } else if let Some(GameEvent::NewDiseaseEmerged { region_idx, .. }) =
-        state.events.iter().find(|e| matches!(e, GameEvent::NewDiseaseEmerged { .. }))
+    } else if let Some(GameEvent::DiseaseDetected { disease_idx }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::DiseaseDetected { .. }))
     {
-        let region_name = state.regions.get(*region_idx)
+        // Find which regions have this disease
+        let affected: Vec<&str> = state.regions.iter()
+            .filter(|r| r.disease_state(*disease_idx).is_some_and(|inf| inf.infected > 0.0))
             .map(|r| r.name.as_str())
-            .unwrap_or("Unknown");
-        format!("NEW THREAT detected in {region_name}! Use [R] Research to identify it.")
+            .collect();
+        if affected.len() > 1 {
+            format!("NEW THREAT detected spreading across {} regions! Use [R] Research to identify it.", affected.len())
+        } else {
+            let region_name = affected.first().unwrap_or(&"unknown");
+            format!("NEW THREAT detected in {region_name}! Use [R] Research to identify it.")
+        }
     } else if !suspended.is_empty() {
         format!("Funding crisis: suspended {}", suspended.join(", "))
     } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {

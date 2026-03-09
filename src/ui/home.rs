@@ -36,9 +36,13 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
     segments.push(("              C . L . I .\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
 
-    // Find the initial outbreak region
+    // Find the initial outbreak region (only from detected diseases)
     let outbreak_region = state.regions.iter()
-        .find(|r| r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0))
+        .find(|r| r.infections.iter().any(|inf| {
+            inf.disease_idx == 0
+                && inf.infected > 0.0
+                && state.diseases.get(0).is_some_and(|d| d.detected)
+        }))
         .map(|r| r.name.as_str())
         .unwrap_or("an unknown region");
 
@@ -260,14 +264,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         chart_width,
         Color::Yellow,
         "Infected",
-        &format_number(state.total_infected()),
+        &format_number(state.total_infected_detected()),
     ));
     lines.extend(sparkline(
         &dead_data,
         chart_width,
         Color::Red,
         "Deaths",
-        &format_number(state.total_dead()),
+        &format_number(state.total_dead_detected()),
     ));
 
     // ── Active diseases ──
@@ -276,6 +280,11 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     lines.push(Line::from(""));
 
     for (i, disease) in state.diseases.iter().enumerate() {
+        // Skip undetected diseases — player shouldn't see them
+        if !disease.detected {
+            continue;
+        }
+
         let name = disease.display_name(i);
         let total_inf: f64 = state.regions.iter()
             .flat_map(|r| r.infections.iter())

@@ -98,12 +98,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         Span::styled(
-            format!("Infected: {}", format_number(state.total_infected())),
+            format!("Infected: {}", format_number(state.total_infected_detected())),
             Style::default().fg(Color::Red),
         ),
         Span::raw("  "),
         Span::styled(
-            format!("Dead: {}", format_number(state.total_dead())),
+            format!("Dead: {}", format_number(state.total_dead_detected())),
             Style::default().fg(Color::DarkGray),
         ),
     ]);

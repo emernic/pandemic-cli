@@ -157,9 +157,9 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
             Style::default().fg(Color::White)
         };
 
-        // Show region stats: population, total infected, total dead
-        let infected = region.total_infected();
-        let dead = region.total_dead();
+        // Show region stats: population, total infected, total dead (detected only)
+        let infected = region.detected_infected(&state.diseases);
+        let dead = region.detected_dead(&state.diseases);
 
         let mut spans = vec![
             Span::styled(format!("{}{:<14}", marker, region.name), style),

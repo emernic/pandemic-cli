@@ -74,16 +74,28 @@ pub fn tick(state: &GameState) -> GameState {
         new.events.push(GameEvent::FundingWarning);
     }
 
-    // Mid-game disease emergence
+    // Mid-game disease emergence (spawns undetected — player won't see it yet)
     if new.tick >= EMERGENCE_MIN_TICK
         && new.diseases.len() < MAX_DISEASES
         && rng.r#gen::<f64>() < EMERGENCE_CHANCE_PER_TICK
     {
-        if let Some((disease_idx, region_idx)) = new.spawn_disease(&mut rng) {
-            new.events.push(GameEvent::NewDiseaseEmerged {
-                disease_idx,
-                region_idx,
-            });
+        new.spawn_disease(&mut rng);
+    }
+
+    // Disease detection — undetected diseases are revealed when total infected
+    // crosses the detection threshold. This is a game rule, not UI logic.
+    for disease_idx in 0..new.diseases.len() {
+        if new.diseases[disease_idx].detected {
+            continue;
+        }
+        let total: f64 = new.regions.iter()
+            .flat_map(|r| &r.infections)
+            .filter(|inf| inf.disease_idx == disease_idx)
+            .map(|inf| inf.infected)
+            .sum();
+        if total >= crate::state::DETECTION_THRESHOLD {
+            new.diseases[disease_idx].detected = true;
+            new.events.push(GameEvent::DiseaseDetected { disease_idx });
         }
     }
 
@@ -156,8 +168,8 @@ pub fn tick(state: &GameState) -> GameState {
     if new.tick % crate::state::HISTORY_INTERVAL == 0 {
         new.history.push(crate::state::HistorySnapshot {
             tick: new.tick,
-            total_infected: new.total_infected(),
-            total_dead: new.total_dead(),
+            total_infected: new.total_infected_detected(),
+            total_dead: new.total_dead_detected(),
         });
         if new.history.len() > crate::state::HISTORY_MAX {
             new.history.remove(0);
@@ -228,6 +240,13 @@ mod tests {
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
+        }
+    }
+
+    /// Helper: mark all diseases as detected (most tests assume this).
+    fn detect_all_diseases(state: &mut GameState) {
+        for d in &mut state.diseases {
+            d.detected = true;
         }
     }
 
@@ -333,7 +352,8 @@ mod tests {
     fn cross_region_spread_eventually() {
         let state = GameState::new_default(42);
         let mut s = state;
-        for _ in 0..200 {
+        // With smaller initial seed (500-2500), need more ticks for cross-region spread
+        for _ in 0..1000 {
             s = tick(&s);
         }
         let infected_regions = s
@@ -343,7 +363,7 @@ mod tests {
             .count();
         assert!(
             infected_regions > 1,
-            "disease should spread to more than 1 region after 200 ticks, got {}",
+            "disease should spread to more than 1 region after 1000 ticks, got {}",
             infected_regions
         );
     }
@@ -831,6 +851,8 @@ mod tests {
     #[test]
     fn research_esc_backstep() {
         let mut state = GameState::new_default(42);
+        detect_all_diseases(&mut state);
+
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { bench: false })));
@@ -895,6 +917,12 @@ mod tests {
             disease.lethality = 0.06;
             disease.recovery_rate = 0.005;
             disease.cross_region_spread = 0.15;
+        }
+        // Boost initial infection so collapse happens within 10K ticks
+        for region in &mut state.regions {
+            for inf in &mut region.infections {
+                inf.infected = 10_000.0;
+            }
         }
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..10000 {
@@ -1282,6 +1310,7 @@ mod tests {
             knowledge: 1.0,
             strain_generation: 3,
             sequencing_count: 0,
+            detected: true,
         }];
 
         let med = Medicine {
@@ -1752,6 +1781,12 @@ mod tests {
             disease.lethality = 0.08;
             disease.recovery_rate = 0.002;
             disease.cross_region_spread = 0.20;
+        }
+        // Boost initial infection so collapse happens within 10K ticks
+        for region in &mut state.regions {
+            for inf in &mut region.infections {
+                inf.infected = 10_000.0;
+            }
         }
 
         // Inject an active crisis
