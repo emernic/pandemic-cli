@@ -665,6 +665,16 @@ pub struct Region {
     /// Tick when medicine was last deployed to this region. Used for deploy cooldown.
     #[serde(default)]
     pub last_deploy_tick: Option<u64>,
+    /// Cached recent death rate (deaths per day), updated once per day
+    /// by the tick function. Used for the time-to-collapse estimate.
+    #[serde(skip)]
+    pub cached_deaths_per_day: f64,
+    /// Death count at the previous rate-sampling point.
+    #[serde(skip)]
+    pub prev_dead: f64,
+    /// Tick at which `prev_dead` was last sampled.
+    #[serde(skip)]
+    pub prev_dead_tick: u64,
 }
 
 fn default_one() -> f64 {
@@ -682,6 +692,34 @@ impl Region {
 
     pub fn alive(&self) -> f64 {
         (self.population as f64 - self.total_dead()).max(0.0)
+    }
+
+    /// Effective collapse threshold accounting for traits and martial law.
+    /// The region collapses when alive < population * threshold.
+    pub fn effective_collapse_threshold(&self, martial_law: bool) -> f64 {
+        let mut threshold = self.collapse_threshold;
+        if self.has_trait(RegionTrait::ResilientPopulation) {
+            threshold -= 0.10;
+        }
+        if martial_law {
+            threshold -= 0.15;
+        }
+        threshold.max(0.10)
+    }
+
+    /// Estimated days until this region collapses at the current death rate.
+    /// Returns None if the death rate is negligible or the region has already collapsed.
+    pub fn days_to_collapse(&self, martial_law: bool) -> Option<f64> {
+        if self.collapsed || self.cached_deaths_per_day < 1.0 {
+            return None;
+        }
+        let pop = self.population as f64;
+        let collapse_dead = pop * (1.0 - self.effective_collapse_threshold(martial_law));
+        let deaths_remaining = collapse_dead - self.total_dead();
+        if deaths_remaining <= 0.0 {
+            return Some(0.0);
+        }
+        Some(deaths_remaining / self.cached_deaths_per_day)
     }
 
     /// Remaining cooldown ticks before this region can receive another deployment.
@@ -2972,6 +3010,9 @@ impl GameState {
                 income_modifier: 1.8,     // Wealthy — major economic contributor
                 healthcare_modifier: 0.85, // Good healthcare infrastructure
                 last_deploy_tick: None,
+                cached_deaths_per_day: 0.0,
+                prev_dead: 0.0,
+                prev_dead_tick: 0,
             },
             Region {
                 name: "South America".into(),
@@ -2987,6 +3028,9 @@ impl GameState {
                 income_modifier: 1.0,     // Moderate economy
                 healthcare_modifier: 0.95, // Decent healthcare
                 last_deploy_tick: None,
+                cached_deaths_per_day: 0.0,
+                prev_dead: 0.0,
+                prev_dead_tick: 0,
             },
             Region {
                 name: "Europe".into(),
@@ -3002,6 +3046,9 @@ impl GameState {
                 income_modifier: 1.5,     // Strong economy, hub region
                 healthcare_modifier: 0.80, // Excellent healthcare
                 last_deploy_tick: None,
+                cached_deaths_per_day: 0.0,
+                prev_dead: 0.0,
+                prev_dead_tick: 0,
             },
             Region {
                 name: "Africa".into(),
@@ -3017,6 +3064,9 @@ impl GameState {
                 income_modifier: 0.6,     // Lower per-capita income
                 healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
                 last_deploy_tick: None,
+                cached_deaths_per_day: 0.0,
+                prev_dead: 0.0,
+                prev_dead_tick: 0,
             },
             Region {
                 name: "Asia".into(),
@@ -3032,6 +3082,9 @@ impl GameState {
                 income_modifier: 0.9,     // Large but moderate per-capita
                 healthcare_modifier: 1.0,  // Baseline healthcare
                 last_deploy_tick: None,
+                cached_deaths_per_day: 0.0,
+                prev_dead: 0.0,
+                prev_dead_tick: 0,
             },
             Region {
                 name: "Oceania".into(),
@@ -3047,6 +3100,9 @@ impl GameState {
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
                 healthcare_modifier: 0.75, // Best healthcare infrastructure
                 last_deploy_tick: None,
+                cached_deaths_per_day: 0.0,
+                prev_dead: 0.0,
+                prev_dead_tick: 0,
             },
         ];
 

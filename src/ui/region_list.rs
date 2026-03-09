@@ -423,7 +423,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         } else {
             Color::DarkGray
         };
-        lines.push(Line::from(vec![
+        let mut collapse_spans = vec![
             Span::styled("Collapse at ", label),
             Span::styled(
                 format!("{:.0}% deaths", collapse_death_pct),
@@ -435,7 +435,27 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(threshold_color),
             ),
             Span::styled(")", label),
-        ]));
+        ];
+        // Show estimated time to collapse when the region is meaningfully threatened
+        if proximity >= 0.05 {
+            let martial_law = state.policies.get(idx).is_some_and(|p| p.martial_law);
+            if let Some(days) = region.days_to_collapse(martial_law) {
+                let eta_color = if days < 5.0 {
+                    Color::Red
+                } else if days < 15.0 {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                };
+                let label = if days < 1.0 {
+                    format!("  ~{:.0}h left", days * 24.0)
+                } else {
+                    format!("  ~{:.1} days left", days)
+                };
+                collapse_spans.push(Span::styled(label, Style::default().fg(eta_color)));
+            }
+        }
+        lines.push(Line::from(collapse_spans));
     }
 
     // Region traits (income and healthcare modifiers)
