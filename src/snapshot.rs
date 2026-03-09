@@ -3,7 +3,7 @@ use ratatui::{backend::TestBackend, Terminal};
 use crate::action::string_to_action;
 use crate::apply_action;
 use crate::engine::tick;
-use crate::state::GameState;
+use crate::state::{GameState, SimState};
 use crate::ui;
 
 /// Result of running snapshot mode: the rendered screen and the updated state.
@@ -64,7 +64,7 @@ pub fn run_snapshot(
                 }
             }
             SnapshotStep::Ticks(n) => {
-                state.paused = false;
+                state.sim_state = SimState::Running;
                 for _ in 0..n {
                     state = tick(&state);
                     ui::process_events(&mut state);

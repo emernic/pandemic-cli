@@ -14,7 +14,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, SimState, ticks_to_days};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -38,13 +38,15 @@ pub fn process_events(state: &mut GameState) {
 
     // Handle game-over: pause and close panels (UI concern, not engine's job)
     if state.events.iter().any(|e| matches!(e, GameEvent::GameOver)) {
-        state.paused = true;
+        state.sim_state = SimState::Paused;
         state.ui.open_panel = Panel::None;
     }
 
-    // Handle crisis: pause and reset selection (UI concern)
+    // Handle crisis: enter Event state, saving whether game was running
     if state.events.iter().any(|e| matches!(e, GameEvent::CrisisStarted)) {
-        state.paused = true;
+        state.sim_state = SimState::Event {
+            was_running: state.sim_state.is_running(),
+        };
         state.ui.crisis_selection = 0;
     }
 

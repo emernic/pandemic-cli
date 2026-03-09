@@ -3,10 +3,32 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum SimState {
+    Running,
+    Paused,
+    /// Game is paused for an event. `was_running` tracks pre-event state
+    /// so we can restore it on dismissal.
+    Event { was_running: bool },
+}
+
+impl Default for SimState {
+    fn default() -> Self {
+        SimState::Running
+    }
+}
+
+impl SimState {
+    pub fn is_running(&self) -> bool {
+        matches!(self, SimState::Running)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameState {
     pub tick: u64,
-    pub paused: bool,
+    #[serde(default)]
+    pub sim_state: SimState,
     pub rng: ChaCha8Rng,
     pub resources: Resources,
     pub regions: Vec<Region>,
@@ -1453,7 +1475,7 @@ impl GameState {
 
         Self {
             tick: 0,
-            paused: false,
+            sim_state: SimState::Running,
             rng,
             resources: Resources {
                 funding: 300.0,

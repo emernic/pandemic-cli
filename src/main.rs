@@ -149,7 +149,7 @@ fn game_loop(
             ui::render(f, &state);
         })?;
 
-        let timeout = if state.paused {
+        let timeout = if !state.sim_state.is_running() {
             Duration::from_millis(100)
         } else {
             tick_duration
@@ -165,10 +165,10 @@ fn game_loop(
                         if action == Action::Quit {
                             return Ok(state);
                         }
-                        let was_paused = state.paused;
+                        let was_stopped = !state.sim_state.is_running();
                         state = apply_action(&state, &action);
                         // Reset tick timer on unpause to avoid burst of catch-up ticks
-                        if was_paused && !state.paused {
+                        if was_stopped && state.sim_state.is_running() {
                             last_tick = Instant::now();
                         }
                     }
@@ -177,7 +177,7 @@ fn game_loop(
         }
 
         // Auto-tick when unpaused
-        if !state.paused && last_tick.elapsed() >= tick_duration {
+        if state.sim_state.is_running() && last_tick.elapsed() >= tick_duration {
             state = tick(&state);
             ui::process_events(&mut state);
             last_tick += tick_duration;
