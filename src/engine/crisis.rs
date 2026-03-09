@@ -370,7 +370,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Suppress the leak".into(),
-                    description: "Keep research progress, lose −10% POL".into(),
+                    description: "Keep research progress, −10% POL".into(),
                     cost: None,
                 },
                 kind,
@@ -434,7 +434,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     You can hold a press conference to calm things, or focus on the real work.".into(),
                 option_a: CrisisOption {
                     label: "Ignore it — focus on the crisis".into(),
-                    description: "Lose −8% POL as public confidence erodes".into(),
+                    description: "−8% POL as public confidence erodes".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -460,7 +460,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 ),
                 option_a: CrisisOption {
                     label: "Maintain standards".into(),
-                    description: "No shortcuts — lose −5% POL for refusing".into(),
+                    description: "No shortcuts — −5% POL for refusing".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -485,7 +485,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 ),
                 option_a: CrisisOption {
                     label: "Mandate vaccines".into(),
-                    description: "Effective but lose −10% POL".into(),
+                    description: "Effective but −10% POL".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -535,12 +535,12 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 ),
                 option_a: CrisisOption {
                     label: "Share data (+$500)".into(),
-                    description: "Lose −0.1 knowledge but receive funding as goodwill".into(),
+                    description: "−0.1 knowledge but receive $500 funding as goodwill".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Refuse".into(),
-                    description: "Keep your data, lose −$300 in foreign aid".into(),
+                    description: "Keep your data, lose $300 in foreign aid".into(),
                     cost: Some(CrisisCost { funding: 300.0, personnel: 0 }),
                 },
                 kind,
@@ -589,7 +589,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Continue deployment".into(),
-                    description: "Keep treating patients, lose −8% POL".into(),
+                    description: "Keep treating patients, −8% POL".into(),
                     cost: None,
                 },
                 kind,
