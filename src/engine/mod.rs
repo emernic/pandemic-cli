@@ -239,17 +239,8 @@ pub fn tick(state: &GameState) -> GameState {
         }
         let pop = new.regions[i].population as f64;
         let alive = new.regions[i].alive();
-        // Martial law reduces collapse threshold by 0.15 (region tolerates more deaths)
-        // ResilientPopulation trait reduces threshold by 0.10
         let martial_law_active = new.policies.get(i).is_some_and(|p| p.martial_law);
-        let mut threshold = new.regions[i].collapse_threshold;
-        if new.regions[i].has_trait(crate::state::RegionTrait::ResilientPopulation) {
-            threshold -= 0.10;
-        }
-        if martial_law_active {
-            threshold -= 0.15;
-        }
-        let threshold = threshold.max(0.10);
+        let threshold = new.regions[i].effective_collapse_threshold(martial_law_active);
         if alive < pop * threshold {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
@@ -352,6 +343,21 @@ pub fn tick(state: &GameState) -> GameState {
         });
         if new.history.len() > crate::state::HISTORY_MAX {
             new.history.remove(0);
+        }
+    }
+
+    // Update per-region death rate for collapse time estimates.
+    // Sampled every ~1 day so the rate reflects recent trends.
+    let rate_interval = TICKS_PER_DAY as u64;
+    for region in &mut new.regions {
+        let elapsed = new.tick.saturating_sub(region.prev_dead_tick);
+        if elapsed >= rate_interval {
+            if region.prev_dead_tick > 0 {
+                let death_delta = (region.total_dead() - region.prev_dead).max(0.0);
+                region.cached_deaths_per_day = death_delta / (elapsed as f64 / TICKS_PER_DAY);
+            }
+            region.prev_dead = region.total_dead();
+            region.prev_dead_tick = new.tick;
         }
     }
 
@@ -3844,5 +3850,42 @@ mod tests {
         let after = tick(&state);
         assert!(after.active_crisis.is_none(), "should not fire yet");
         assert_eq!(after.pending_crises.len(), 1, "should still be pending");
+    }
+
+    #[test]
+    fn collapse_rate_estimate_updates_after_one_day() {
+        let mut state = GameState::new_default(42);
+        let region_idx = primary_outbreak_region(&state);
+        // Run for 2+ days to ensure the rate sampler fires at least once
+        let ticks = (2.5 * TICKS_PER_DAY) as usize;
+        for _ in 0..ticks {
+            state = tick(&state);
+        }
+        let region = &state.regions[region_idx];
+        // The outbreak region should have deaths and a positive rate
+        assert!(
+            region.total_dead() > 0.0,
+            "outbreak region should have deaths by day 2.5"
+        );
+        assert!(
+            region.cached_deaths_per_day > 0.0,
+            "cached death rate should be positive: got {}",
+            region.cached_deaths_per_day
+        );
+        // days_to_collapse should return Some since the region has deaths
+        assert!(
+            region.days_to_collapse(false).is_some(),
+            "should estimate time to collapse when deaths are occurring"
+        );
+    }
+
+    #[test]
+    fn collapse_rate_not_shown_for_safe_regions() {
+        let state = GameState::new_default(42);
+        // At tick 0, no deaths have occurred — rate should be 0
+        for region in &state.regions {
+            assert_eq!(region.cached_deaths_per_day, 0.0);
+            assert!(region.days_to_collapse(false).is_none());
+        }
     }
 }
