@@ -8,9 +8,11 @@ use ratatui::{
 
 use crate::state::{
     GameState, PolicyUiState, ScreeningLevel, TICKS_PER_DAY,
-    TRAVEL_BAN_COST, QUARANTINE_COST, QUARANTINE_PERSONNEL,
+    TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
+    QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
-    BORDER_SCREENING_COST, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
+    BORDER_SCREENING_COST, BORDER_SCREENING_PERSONNEL,
+    WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     SCREENING_LOW_COST, SCREENING_MEDIUM_COST, SCREENING_HIGH_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
 };
@@ -143,8 +145,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     // Policy toggles — costs derived from constants in state.rs
     let policies: Vec<(&str, bool, String, &str, Option<u32>)> = vec![
         ("Travel Ban", policy.travel_ban,
-         format!("${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY),
-         "Blocks 90% spread, halves region income", None),
+         format!("${:.0}/day + {} pers.", TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL),
+         "Blocks 90% spread, halves region income", Some(TRAVEL_BAN_PERSONNEL)),
         ("Quarantine", policy.quarantine,
          format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL),
          "Halves infection rate", Some(QUARANTINE_PERSONNEL)),
@@ -152,20 +154,20 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
          "Halves lethality", Some(HOSPITAL_SURGE_PERSONNEL)),
         ("Border Screening", policy.border_screening,
-         format!("${:.0}/day", BORDER_SCREENING_COST * TICKS_PER_DAY),
-         "Blocks 50% spread, no income penalty", None),
+         format!("${:.0}/day + {} pers.", BORDER_SCREENING_COST * TICKS_PER_DAY, BORDER_SCREENING_PERSONNEL),
+         "Blocks 50% spread, no income penalty", Some(BORDER_SCREENING_PERSONNEL)),
         ("Water Sanitation", policy.water_sanitation,
          format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL),
          "Halves waterborne disease spread", Some(WATER_SANITATION_PERSONNEL)),
         ("Low Screening", policy.screening == ScreeningLevel::Low,
-         format!("${:.0}/day", SCREENING_LOW_COST * TICKS_PER_DAY),
-         "40% infection visibility, faster detection", None),
+         format!("${:.0}/day + 1 pers.", SCREENING_LOW_COST * TICKS_PER_DAY),
+         "40% infection visibility, faster detection", Some(1)),
         ("Med Screening", policy.screening == ScreeningLevel::Medium,
-         format!("${:.0}/day", SCREENING_MEDIUM_COST * TICKS_PER_DAY),
-         "70% infection visibility, faster detection", None),
+         format!("${:.0}/day + 2 pers.", SCREENING_MEDIUM_COST * TICKS_PER_DAY),
+         "70% infection visibility, faster detection", Some(2)),
         ("High Screening", policy.screening == ScreeningLevel::High,
-         format!("${:.0}/day", SCREENING_HIGH_COST * TICKS_PER_DAY),
-         "90% infection visibility, fastest detection", None),
+         format!("${:.0}/day + 3 pers.", SCREENING_HIGH_COST * TICKS_PER_DAY),
+         "90% infection visibility, fastest detection", Some(3)),
     ];
 
     for (i, (name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
@@ -175,11 +177,14 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         let can_afford_personnel = personnel_needed
             .map(|need| {
-                let avail = if *active {
-                    state.personnel_available() + need
-                } else {
-                    state.personnel_available()
-                };
+                let mut avail = state.personnel_available();
+                if *active {
+                    // If already active, its personnel would be freed on disable
+                    avail += need;
+                } else if i >= 5 && i <= 7 {
+                    // Screening upgrade: personnel from current tier would be freed
+                    avail += policy.screening.personnel_cost();
+                }
                 avail >= need
             })
             .unwrap_or(true);

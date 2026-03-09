@@ -93,11 +93,13 @@ pub const MAX_DISEASES: usize = 5;
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 6.0;
+pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 5.0;
-pub const QUARANTINE_PERSONNEL: u32 = 2;
+pub const QUARANTINE_PERSONNEL: u32 = 3;
 pub const HOSPITAL_SURGE_COST: f64 = 3.0;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
 pub const BORDER_SCREENING_COST: f64 = 2.5;
+pub const BORDER_SCREENING_PERSONNEL: u32 = 1;
 pub const WATER_SANITATION_COST: f64 = 4.0;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 
@@ -147,6 +149,16 @@ impl ScreeningLevel {
             ScreeningLevel::Low => SCREENING_LOW_COST,
             ScreeningLevel::Medium => SCREENING_MEDIUM_COST,
             ScreeningLevel::High => SCREENING_HIGH_COST,
+        }
+    }
+
+    /// Personnel required for this screening level.
+    pub fn personnel_cost(&self) -> u32 {
+        match self {
+            ScreeningLevel::None => 0,
+            ScreeningLevel::Low => 1,
+            ScreeningLevel::Medium => 2,
+            ScreeningLevel::High => 3,
         }
     }
 
@@ -216,9 +228,12 @@ impl RegionPolicy {
 
     pub fn personnel_cost(&self) -> u32 {
         let mut cost = 0;
+        if self.travel_ban { cost += TRAVEL_BAN_PERSONNEL; }
         if self.quarantine { cost += QUARANTINE_PERSONNEL; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; }
+        if self.border_screening { cost += BORDER_SCREENING_PERSONNEL; }
         if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; }
+        cost += self.screening.personnel_cost();
         cost
     }
 
