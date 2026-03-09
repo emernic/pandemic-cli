@@ -47,28 +47,28 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
             style,
         )));
 
-        let desc = match i {
+        let (desc_text, status, status_color) = match i {
             0 => {
-                let active = if state.field_research.is_some() {
-                    " [ACTIVE]"
+                let (s, c) = if state.field_research.is_some() {
+                    (" [ACTIVE]", Color::Cyan)
                 } else {
-                    ""
+                    (" [NONE]", Color::DarkGray)
                 };
-                format!("    Identify threats, run clinical trials{}", active)
+                ("    Identify threats, run clinical trials", s, c)
             }
             _ => {
-                let active = if state.bench_research.is_some() {
-                    " [ACTIVE]"
+                let (s, c) = if state.bench_research.is_some() {
+                    (" [ACTIVE]", Color::Magenta)
                 } else {
-                    ""
+                    (" [NONE]", Color::DarkGray)
                 };
-                format!("    Develop medicines, manufacture doses{}", active)
+                ("    Develop medicines, manufacture doses", s, c)
             }
         };
-        lines.push(Line::from(Span::styled(
-            desc,
-            Style::default().fg(Color::DarkGray),
-        )));
+        lines.push(Line::from(vec![
+            Span::styled(desc_text, Style::default().fg(Color::DarkGray)),
+            Span::styled(status, Style::default().fg(status_color)),
+        ]));
         lines.push(Line::from(""));
     }
 
