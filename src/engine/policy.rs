@@ -66,6 +66,30 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.as_str())
         .unwrap_or("Unknown");
+    // Check POL requirement (only when enabling, not disabling)
+    let is_currently_active = match policy_idx {
+        0 => state.policies[region_idx].travel_ban,
+        1 => state.policies[region_idx].quarantine,
+        2 => state.policies[region_idx].hospital_surge,
+        3 => state.policies[region_idx].border_screening,
+        4 => state.policies[region_idx].water_sanitation,
+        _ => false,
+    };
+    if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
+        let threshold = state.effective_pol_threshold(region_idx, policy_idx);
+        let policy_name = match policy_idx {
+            0 => "Travel Ban",
+            1 => "Quarantine",
+            2 => "Hospital Surge",
+            3 => "Border Screening",
+            4 => "Water Sanitation",
+            _ => "Policy",
+        };
+        return Some(format!(
+            "{} requires {:.0}% Political Power (current: {:.0}%)",
+            policy_name, threshold * 100.0, state.resources.political_power * 100.0
+        ));
+    }
     let available_personnel = state.personnel_available();
     match policy_idx {
         0 => {

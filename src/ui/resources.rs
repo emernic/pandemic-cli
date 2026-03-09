@@ -44,6 +44,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Yellow),
         ),
         Span::raw("  "),
+        {
+            let pol = state.resources.political_power;
+            let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };
+            Span::styled(
+                format!("POL: {:.0}%", pol * 100.0),
+                Style::default().fg(pol_color),
+            )
+        },
+        Span::raw("  "),
         Span::styled(
             format!("Funds: ${:.0}", state.resources.funding),
             Style::default().fg(Color::Green),

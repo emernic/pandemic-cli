@@ -10,7 +10,7 @@ use crate::state::{
     GameCommand, GameEvent, GameOutcome, GameState, SimState,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
-    KNOWLEDGE_NAME, MAX_DISEASES,
+    KNOWLEDGE_NAME, MAX_DISEASES, TICKS_PER_DAY,
     WIN_INFECTED_THRESHOLD,
 };
 
@@ -45,6 +45,18 @@ pub fn tick(state: &GameState) -> GameState {
     new.resources.funding += funding_income;
     let rp_income = new.rp_income_rate();
     new.resources.research_points += rp_income;
+
+    // Political Power: ramps based on severity + time.
+    // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
+    // Time = linear ramp reaching 0.4 at day 30 (baseline even if player contains well).
+    {
+        let initial_pop = new.initial_population();
+        let death_frac = if initial_pop > 0.0 { new.total_dead() / initial_pop } else { 0.0 };
+        let infected_frac = if initial_pop > 0.0 { new.total_infected() / initial_pop } else { 0.0 };
+        let time_frac = new.tick as f64 / (30.0 * TICKS_PER_DAY);
+        let severity = death_frac.sqrt() * 3.0 + infected_frac.sqrt() * 1.5;
+        new.resources.political_power = (severity + time_frac * 0.4).clamp(0.0, 1.0);
+    }
 
     // Low funding warning: warn when net burn rate will exhaust funds within ~5 ticks.
     // Only warn if policies actually cost more than income (net negative).
@@ -1181,6 +1193,7 @@ mod tests {
     #[test]
     fn policy_toggle_via_confirm() {
         let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0; // Full POL for testing
         state = apply_action(&state, &Action::OpenPolicy);
         assert_eq!(state.ui.open_panel, Panel::Policy);
 
