@@ -528,8 +528,8 @@ pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.50;
 
 /// Cost in RP to boost an active research project.
 pub const BOOST_RP_COST: f64 = 10.0;
-/// Ticks of progress added per boost.
-pub const BOOST_TICKS: f64 = 5.0;
+/// Ticks of progress added per boost (20 ticks = 4 hours).
+pub const BOOST_TICKS: f64 = 20.0;
 
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
 /// 120 chosen so 5 ticks = 1 hour exactly (120 / 24 = 5).
