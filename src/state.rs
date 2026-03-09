@@ -48,6 +48,9 @@ pub const QUARANTINE_COST: f64 = 8.0;
 pub const QUARANTINE_PERSONNEL: u32 = 2;
 pub const HOSPITAL_SURGE_COST: f64 = 5.0;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
+pub const BORDER_SCREENING_COST: f64 = 4.0;
+pub const WATER_SANITATION_COST: f64 = 6.0;
+pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 
 /// Per-region policy toggles. Each costs funding (and optionally personnel) per tick.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -59,7 +62,17 @@ pub struct RegionPolicy {
     pub quarantine: bool,
     /// Halves lethality in the region.
     pub hospital_surge: bool,
+    /// Reduces cross-region spread by 50%, no income penalty.
+    /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
+    #[serde(default)]
+    pub border_screening: bool,
+    /// Halves waterborne disease infectivity. No effect on airborne/contact.
+    #[serde(default)]
+    pub water_sanitation: bool,
 }
+
+/// Total number of policy types available per region.
+pub const POLICY_COUNT: usize = 5;
 
 impl RegionPolicy {
     pub fn funding_cost(&self) -> f64 {
@@ -67,6 +80,8 @@ impl RegionPolicy {
         if self.travel_ban { cost += TRAVEL_BAN_COST; }
         if self.quarantine { cost += QUARANTINE_COST; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
+        if self.border_screening { cost += BORDER_SCREENING_COST; }
+        if self.water_sanitation { cost += WATER_SANITATION_COST; }
         cost
     }
 
@@ -74,17 +89,21 @@ impl RegionPolicy {
         let mut cost = 0;
         if self.quarantine { cost += QUARANTINE_PERSONNEL; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; }
+        if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; }
         cost
     }
 
     pub fn any_active(&self) -> bool {
         self.travel_ban || self.quarantine || self.hospital_surge
+            || self.border_screening || self.water_sanitation
     }
 
     pub fn clear_all(&mut self) {
         self.travel_ban = false;
         self.quarantine = false;
         self.hospital_surge = false;
+        self.border_screening = false;
+        self.water_sanitation = false;
     }
 }
 
@@ -1693,7 +1712,7 @@ impl GameState {
                 Some(PolicyUiState::BrowseRegions) => {
                     self.regions.len().saturating_sub(1)
                 }
-                Some(PolicyUiState::ManagePolicies { .. }) => 2,
+                Some(PolicyUiState::ManagePolicies { .. }) => POLICY_COUNT - 1,
                 None => 0,
             },
             _ => 0,
