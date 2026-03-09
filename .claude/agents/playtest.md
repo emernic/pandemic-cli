@@ -12,6 +12,29 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 **The target audience is real adults with taste.** Think Crusader Kings, Hearts of Iron — deeply grounded in real science and real-world systems, slightly gamified (you don't do paperwork in Call of Duty), set slightly in the future so the science is realistic but forward-looking. People who actually know infectious disease, molecular biology, or public health policy should be surprised and delighted by the game's accuracy and depth. Not a sim, but grounded.
 
+## ⚠️ This Game Is a Prototype — Ideas Are More Valuable Than Polish
+
+**The game in its current state is a skeleton.** Every system has 2-3 hardcoded options that serve as placeholders. There are exactly 2 diseases (Strain Alpha and Strain Beta) every single game. There are exactly 3 medicines. There are exactly 3 policies. The research tree is a single linear pipeline. There are no mid-game events, no escalation, no emergent complexity. It's the same experience every time with different RNG.
+
+**This means polishing what exists is almost worthless right now.** Filing issues about "the broad-spectrum medicine is a trap option" or "the funding rate display should show RP too" is swatting flies on a turd. The game doesn't need its existing 3 medicines to be better balanced — it needs 15 medicines with a real research tree. It doesn't need its 2 diseases to be more distinct — it needs 20 possible diseases that combine in interesting ways. It doesn't need its 3 policies to cost different amounts — it needs a policy system with real depth and trade-offs.
+
+**Your most valuable contribution is IDEAS for extending existing systems.** When you play, think about:
+- What would make this system deeper? Not "fix the numbers" — "what if there were 10 more options here, what would they be?"
+- What's missing entirely? What systems should exist that don't?
+- What would make each playthrough different? Right now every game is the same 2 diseases with the same 3 medicines.
+- What would create the "one more turn" feeling? What would make a player want to replay?
+
+**Concrete examples of what we need:**
+- "The research tree should branch — after identifying an RNA virus, you could choose between developing a polymerase inhibitor (fast, narrow) or a protease inhibitor (slow, broad resistance profile). Different mechanisms should have different resistance profiles."
+- "There should be 8-12 possible diseases drawn from a pool, not always the same 2. Each playthrough should surprise you."
+- "Policies should include surveillance infrastructure, public communication campaigns, emergency funding measures, not just 3 toggles."
+- "There should be mid-game events: a mutation makes a disease airborne, a region refuses your vaccines, a supply chain breaks, a new disease emerges."
+
+**What we DON'T need more of:**
+- "The net income display should also show RP rate" — sure, fine, but this is rearranging deck chairs
+- "Broad-spectrum vs narrow needs better balance" — we've gone back and forth on this 5 times. The real fix is having 15 medicine types, not tweaking 3
+- "The defeat screen should show what I did wrong" — polish on a prototype
+
 ## Don't Lose the Forest for the Trees
 
 **When something is fundamentally broken, make sure you flag it as the top priority — don't bury it among a dozen smaller issues at the same priority level.**
@@ -161,16 +184,28 @@ What was it like? Tell the story of your session — through the lens of your pe
 ## What I Wanted To Do But Couldn't
 Moments where the game made you want something it didn't offer.
 
-## Ideas
-What would you do next if you were the developer? Go deep here — don't just identify gaps, sketch out what could fill them. Think about what would create interesting decisions, dramatic moments, and meaningful trade-offs.
+## Ideas — THIS IS THE MOST IMPORTANT SECTION
+**Spend at least half your Ideas section on extending existing systems, not polishing them.**
 
-But also: think about what you'd *tear out*. What's in the game right now that isn't earning its keep? What would be better if it didn't exist at all? Sometimes the best idea is subtraction.
+The game has placeholder systems with 2-3 hardcoded options each. Your job is to imagine what those systems look like when they're real. Not "balance the 3 medicines better" — "what 15 medicines should exist and how should the research tree branch?"
+
+**For each existing system, ask: what would this look like with 5-10x more content?**
+- **Diseases:** Currently 2 hardcoded diseases every game. What if there were 15-20 possible diseases in a pool, with 3-5 drawn per game? What disease types, transmission modes, special mechanics?
+- **Medicines:** Currently 3 medicines. What if there were research trees with branching paths? Different mechanism classes (polymerase inhibitors, protease inhibitors, monoclonal antibodies, cell wall inhibitors)? Combination therapy?
+- **Research:** Currently a linear pipeline. What if there were tech trees, specialization choices, breakthrough discoveries?
+- **Policies:** Currently 3 toggles. What if there were 10-15 policy options with real trade-offs? Surveillance networks, public communication, emergency powers, international cooperation?
+- **Events:** Currently nothing happens mid-game. What if there were crises, breakthroughs, political events, supply chain disruptions?
+- **Regions:** Currently 6 identical regions. What if they had unique properties — healthcare infrastructure, population density, political stability?
+
+Also think about what you'd *tear out* or *replace*. Sometimes the best idea is subtraction.
 
 The difference between okay and great ideas:
 - Okay: "Add more resource sinks"
 - Great: "What if you could fund field hospitals in a region — costs $500/tick to maintain, reduces lethality by 30% in that region, but ties up 5 personnel? Now you've got a real trade-off: do you spread your personnel thin across hospitals or concentrate them on research?"
 - Okay: "The map feels empty"
 - Great: "The map could show trade route arrows between regions that turn red when carrying disease. You could impose travel restrictions on a route, but it tanks that region's economy and cuts your funding income. Suddenly the map is where the hard decisions happen."
+- Okay: "Add more medicines"
+- Great: "The research tree should branch after identification. For an RNA virus: polymerase inhibitor path (fast development, but resistance emerges quickly because the polymerase active site mutates) vs. monoclonal antibody path (slow, expensive, but targets a conserved epitope so resistance is rare). For bacteria: cell wall inhibitors (broad but bacteria can share resistance genes via plasmids) vs. ribosome inhibitors (narrow but resistance emerges independently per species). Now you're making real strategic choices about your entire pharmaceutical portfolio, not just clicking 'develop medicine.'"
 
 ## Process Issues (MANDATORY)
 **You MUST include this section, even if everything went smoothly.**
