@@ -118,8 +118,9 @@ pub const MAX_DISEASES: usize = 5;
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
 /// Per-tick cost for each personnel on the roster (busy or idle).
-/// 20 personnel × 0.1 = $2/tick = $240/day upkeep vs $360/day gross income → ~$120/day net.
-pub const PERSONNEL_UPKEEP_COST: f64 = 0.1;
+/// 20 personnel × 0.03 = $0.6/tick = $72/day upkeep vs $360/day gross income → ~$288/day net.
+/// Previously 0.1, which made training personnel an economic trap (+$60/day per 5 trained).
+pub const PERSONNEL_UPKEEP_COST: f64 = 0.03;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;

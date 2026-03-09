@@ -1216,7 +1216,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.funding = 0.0;
         // High personnel count = high upkeep that exceeds income
-        state.resources.personnel = 50;
+        state.resources.personnel = 150;
         state.medicines.iter_mut().for_each(|m| m.doses = 0.0);
         state.field_research = None;
         state.applied_research = None;
@@ -1448,8 +1448,8 @@ mod tests {
             (delta - (income - upkeep)).abs() < 0.01,
             "funding delta {delta:.2} should equal income {income:.2} - upkeep {upkeep:.2}"
         );
-        // Upkeep should be significant (not negligible)
-        assert!(upkeep > 1.0, "upkeep {upkeep:.2} should be meaningful");
+        // Upkeep should be non-negligible
+        assert!(upkeep > 0.1, "upkeep {upkeep:.2} should be meaningful");
     }
 
     #[test]
@@ -1513,14 +1513,10 @@ mod tests {
         state = tick(&state);
         let net_change = state.resources.funding - funding_before;
 
-        // Should have deducted $6 and added income (less than without ban)
+        // Should have deducted travel ban cost and reduced region income
         assert!(
             net_change < income_no_policy,
             "travel ban should reduce net income: net {net_change:.1} vs no-policy {income_no_policy:.1}"
-        );
-        assert!(
-            net_change < 0.0,
-            "travel ban cost ($6) should exceed income (~$3): net change {net_change:.1}"
         );
     }
 
@@ -1559,14 +1555,19 @@ mod tests {
     #[test]
     fn funding_warning_when_runway_low() {
         let mut state = GameState::new_default(42);
-        // Enable expensive policies across multiple regions to create net burn.
-        // Travel ban ($1/tick) + quarantine ($0.6/tick) + hospital surge ($0.4/tick) = $2/tick per region
-        // Plus personnel upkeep: 20 × $0.1 = $2/tick. With just one region's policies + upkeep,
-        // total cost ~$4/tick vs ~$3/tick income. Travel ban also halves that region's income.
+        // Enable expensive policies across two regions to create net burn.
+        // Per region: travel ban ($1/tick) + quarantine ($0.6/tick) + hospital ($0.4/tick) = $2/tick
+        // Two regions = $4/tick policy cost. Plus upkeep: 20 × $0.03 = $0.6/tick. Total ~$4.6/tick.
+        // Income ~$3/tick (minus travel ban penalty). Net burn is positive → warning fires.
         state.policies[0].travel_ban = true;
         state.policies[0].quarantine = true;
         state.policies[0].hospital_surge = true;
-        state.resources.funding = 2.0; // Very low — should trigger warning
+        state.policies[1].travel_ban = true;
+        state.policies[1].quarantine = true;
+        state.policies[1].hospital_surge = true;
+        // Funding must be ≥ policy_cost (4.0) to avoid auto-suspension, but
+        // < net_burn * 5 (~10.5) so the runway warning fires.
+        state.resources.funding = 5.0;
         state = tick(&state);
         assert!(
             state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
