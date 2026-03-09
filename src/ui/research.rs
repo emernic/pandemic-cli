@@ -74,6 +74,14 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
     (" Research ".to_string(), lines)
 }
 
+fn track_name(track: ResearchTrack) -> &'static str {
+    match track {
+        ResearchTrack::Field => "Field",
+        ResearchTrack::Applied => "Applied",
+        ResearchTrack::Basic => "Basic",
+    }
+}
+
 fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let title = match track {
@@ -82,6 +90,13 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
         ResearchTrack::Basic => " Basic Research ",
     };
     let mut has_selectable_items = false;
+
+    // Breadcrumb so the player knows where they are in the hierarchy
+    lines.push(Line::from(Span::styled(
+        format!("  Research > {}", track_name(track)),
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
 
     let active = state.research_slot(track);
 
@@ -184,6 +199,13 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
         let has_personnel = state.personnel_available() >= personnel;
         let has_funding = state.resources.funding >= funding;
 
+        // Breadcrumb
+        lines.push(Line::from(Span::styled(
+            format!("  Research > {} > Confirm", track_name(track)),
+            Style::default().fg(Color::DarkGray),
+        )));
+        lines.push(Line::from(""));
+
         lines.push(Line::from(Span::styled(
             format!("  Start: {}", format_kind(kind, state)),
             Style::default().fg(Color::Cyan),
@@ -264,6 +286,13 @@ fn render_active(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'
     if let Some(project) = project {
         let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
         let remaining = (project.required_ticks - project.progress).max(0.0);
+
+        // Breadcrumb
+        lines.push(Line::from(Span::styled(
+            format!("  Research > {} > Active", track_name(track)),
+            Style::default().fg(Color::DarkGray),
+        )));
+        lines.push(Line::from(""));
 
         lines.push(Line::from(Span::styled(
             format!("  {}", format_kind(&project.kind, state)),
