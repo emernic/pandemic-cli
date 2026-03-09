@@ -1831,9 +1831,9 @@ impl GameState {
             Region {
                 name: "South America".into(),
                 population: 430_000_000,
-                connections: vec![0],
+                connections: vec![0, 3],
                 infections: vec![],
-                collapse_threshold: 0.55, // Same as NA — 45% dead
+                collapse_threshold: 0.55, // Moderate resilience — 45% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1842,16 +1842,16 @@ impl GameState {
                 population: 750_000_000,
                 connections: vec![0, 3, 4],
                 infections: vec![],
-                collapse_threshold: 0.50, // Developed infrastructure — collapses at 50% dead
+                collapse_threshold: 0.50, // Developed infrastructure — 50% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
             Region {
                 name: "Africa".into(),
                 population: 1_400_000_000,
-                connections: vec![2, 4],
+                connections: vec![1, 2, 4],
                 infections: vec![],
-                collapse_threshold: 0.30, // Most resilient — 70% dead
+                collapse_threshold: 0.50, // Resilient — 50% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
@@ -1860,7 +1860,7 @@ impl GameState {
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
                 infections: vec![],
-                collapse_threshold: 0.40, // Huge population buffer — 60% dead
+                collapse_threshold: 0.50, // Huge population — 50% dead
                 collapsed: false,
                 collapsed_at_tick: None,
             },
