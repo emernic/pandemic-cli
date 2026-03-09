@@ -86,15 +86,14 @@ pub(super) fn tick_spread_within(
         let death_scale = if raw_total_deaths > 0.0 { total_new_deaths / raw_total_deaths } else { 1.0 };
 
         for (i, outflow) in outflows.iter().enumerate() {
-            let scaled_deaths = outflow.new_deaths * death_scale;
-            let scaled_recoveries = outflow.new_recoveries;
+            let actual_deaths = outflow.new_deaths * death_scale;
             let inf = &mut region.infections[i];
-            inf.infected = inf.infected + outflow.new_infections - outflow.new_deaths - outflow.new_recoveries;
+            inf.infected = inf.infected + outflow.new_infections - actual_deaths - outflow.new_recoveries;
             if inf.infected < 1.0 {
                 inf.infected = 0.0;
             }
-            inf.immune += scaled_recoveries;
-            inf.dead += scaled_deaths; // attribution counter for display
+            inf.immune += outflow.new_recoveries;
+            inf.dead += actual_deaths; // attribution counter for display
         }
         region.dead += total_new_deaths;
 
