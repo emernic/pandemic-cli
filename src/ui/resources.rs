@@ -146,11 +146,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
     match kind {
         ResearchKind::IdentifyThreat { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
+            let disease = state.diseases.get(*disease_idx);
+            let name = disease
                 .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
                 .map(|d| d.name.as_str())
                 .unwrap_or("Unknown");
-            format!("Identifying {}", name)
+            let verb = if disease.is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME) {
+                "Studying"
+            } else {
+                "Identifying"
+            };
+            format!("{} {}", verb, name)
         }
         ResearchKind::DevelopMedicine { medicine_idx } => {
             let name = state.medicines.get(*medicine_idx)
