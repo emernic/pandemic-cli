@@ -394,7 +394,7 @@ impl RegionPolicy {
         let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
         let mut cost = 0.0;
         if self.travel_ban {
-            cost += if trade_dependent { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST };
+            cost += if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
         }
         if self.quarantine { cost += QUARANTINE_COST; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
@@ -582,6 +582,11 @@ pub enum RegionTrait {
     ResilientPopulation,
 }
 
+/// Travel ban cost multiplier for TradeDependent regions.
+pub const TRADE_DEPENDENT_TRAVEL_BAN_MULT: f64 = 2.0;
+/// Travel ban income retained factor for TradeDependent regions (25% retained vs normal 50%).
+pub const TRADE_DEPENDENT_INCOME_FACTOR: f64 = 0.25;
+
 impl RegionTrait {
     pub fn label(&self) -> &'static str {
         match self {
@@ -594,16 +599,6 @@ impl RegionTrait {
         }
     }
 
-    pub fn short_description(&self) -> &'static str {
-        match self {
-            RegionTrait::TradeDependent => "Travel Ban costs 2x, worse income penalty",
-            RegionTrait::DenseUrban => "Disease spreads 30% faster within region",
-            RegionTrait::IslandGeography => "50% less disease arrives from neighbors",
-            RegionTrait::LowInfrastructure => "Policies need +1 personnel each",
-            RegionTrait::StrongPublicHealth => "Hospital Surge 60% lethality reduction",
-            RegionTrait::ResilientPopulation => "10% more resilient to collapse",
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3255,9 +3250,8 @@ impl GameState {
             }
             let base = Self::region_base_income(region, total_pop);
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                // TradeDependent: 75% income lost (0.25 retained) vs normal 50% (0.5 retained)
                 if region.has_trait(RegionTrait::TradeDependent) {
-                    0.25
+                    TRADE_DEPENDENT_INCOME_FACTOR
                 } else {
                     TRAVEL_BAN_INCOME_PENALTY
                 }
@@ -3286,7 +3280,7 @@ impl GameState {
         let mut penalty = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
             if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                let factor = if region.has_trait(RegionTrait::TradeDependent) { 0.25 } else { TRAVEL_BAN_INCOME_PENALTY };
+                let factor = if region.has_trait(RegionTrait::TradeDependent) { TRADE_DEPENDENT_INCOME_FACTOR } else { TRAVEL_BAN_INCOME_PENALTY };
                 penalty += Self::region_base_income(region, total_pop) * (1.0 - factor);
             }
         }

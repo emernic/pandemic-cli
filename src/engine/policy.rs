@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState, RegionTrait, ScreeningLevel, policy_display_name,
+    GameEvent, GameState, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, policy_display_name,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     HEALTHCARE_INVESTMENT_COST,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
@@ -21,7 +21,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
             let trade_dep = state.regions.get(i).is_some_and(|r| r.has_trait(RegionTrait::TradeDependent));
-            let travel_ban_cost = if trade_dep { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST };
+            let travel_ban_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
             let bool_costs: &[(usize, f64)] = &[
                 (0, travel_ban_cost), (1, QUARANTINE_COST), (2, HOSPITAL_SURGE_COST),
                 (3, BORDER_CONTROLS_COST), (4, WATER_SANITATION_COST),
@@ -109,7 +109,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         0..=4 => {
             let (name, cost, personnel) = match policy_idx {
                 0 => ("Travel Ban",
-                    if trade_dep { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST },
+                    if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST },
                     TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 }),
                 1 => ("Quarantine", QUARANTINE_COST,
                     QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 }),

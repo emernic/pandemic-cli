@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, RegionTrait, ScreeningLevel, TransmissionVector, TICKS_PER_DAY,
+    GameState, PolicyUiState, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL, HOSPITAL_SURGE_SPREAD_FACTOR,
@@ -305,7 +305,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let low_infra = region.has_trait(RegionTrait::LowInfrastructure);
     let trade_dep = region.has_trait(RegionTrait::TradeDependent);
     let infra_extra: u32 = if low_infra { 1 } else { 0 };
-    let tb_cost = if trade_dep { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST };
+    let tb_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
 
     // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
     // doc in state.rs for the index mapping). Display position != policy_idx in general,
