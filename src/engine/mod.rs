@@ -170,24 +170,7 @@ pub fn tick(state: &GameState) -> GameState {
         if let Some(idx) = new.pending_crises.iter().position(|&(tick, _)| tick <= new.tick) {
             let (_, kind) = new.pending_crises.remove(idx);
             let crisis = crisis::build_crisis_event(&new, kind);
-            let auto_choice = new.auto_resolve_crises.get(crisis.kind.tag()).copied();
-            let auto_resolved = match auto_choice {
-                Some(choice) => {
-                    let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
-                    option.cost.as_ref().map_or(true, |c| c.affordable(&new))
-                }
-                None => false,
-            };
-            new.active_crisis = Some(crisis);
-            if auto_resolved {
-                crisis::resolve_crisis(&mut new, auto_choice.unwrap());
-                new.events.push(GameEvent::CrisisAutoResolved);
-            } else {
-                new.sim_state = SimState::Event {
-                    was_running: new.sim_state.is_running(),
-                };
-                new.events.push(GameEvent::CrisisStarted);
-            }
+            crisis::activate_crisis(&mut new, crisis);
         }
     }
 
@@ -204,28 +187,7 @@ pub fn tick(state: &GameState) -> GameState {
         && rng.r#gen::<f64>() < 1.0 / crisis_interval
     {
         if let Some(crisis) = crisis::generate_crisis(&new, &mut rng) {
-            // Check if we can auto-resolve via saved preference
-            let auto_choice = new.auto_resolve_crises.get(crisis.kind.tag()).copied();
-            let auto_resolved = match auto_choice {
-                Some(choice) => {
-                    let option = if choice == 0 { &crisis.option_a } else { &crisis.option_b };
-                    option.cost.as_ref().map_or(true, |c| c.affordable(&new))
-                }
-                None => false,
-            };
-
-            new.active_crisis = Some(crisis);
-
-            if auto_resolved {
-                crisis::resolve_crisis(&mut new, auto_choice.unwrap());
-                new.events.push(GameEvent::CrisisAutoResolved);
-            } else {
-                // Pause the game for the crisis — this is a game rule, not a UI concern.
-                new.sim_state = SimState::Event {
-                    was_running: new.sim_state.is_running(),
-                };
-                new.events.push(GameEvent::CrisisStarted);
-            }
+            crisis::activate_crisis(&mut new, crisis);
         }
     }
 
