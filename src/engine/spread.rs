@@ -19,9 +19,14 @@ pub(super) fn tick_spread_within(
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
 
+        // Total dead across ALL diseases — dead people can't catch any disease.
+        // Capped at population to prevent floating-point accumulation drift.
+        let total_dead_all: f64 = region.infections.iter()
+            .map(|i| i.dead).sum::<f64>().min(pop);
+
         for inf in &mut region.infections {
             if let Some(disease) = diseases.get(inf.disease_idx) {
-                let susceptible = pop - inf.infected - inf.dead - inf.immune;
+                let susceptible = pop - total_dead_all - inf.infected - inf.immune;
                 if susceptible <= 0.0 {
                     continue;
                 }

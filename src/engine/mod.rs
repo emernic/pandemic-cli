@@ -1119,6 +1119,41 @@ mod tests {
     }
 
     #[test]
+    fn multi_disease_dead_never_exceeds_population() {
+        use crate::state::RegionDiseaseState;
+        let mut state = GameState::new_default(42);
+        let ri = primary_outbreak_region(&state);
+        let pop = state.regions[ri].population as f64;
+        // Add a second disease with heavy infection in the same region
+        state.diseases.push(state.diseases[0].clone());
+        state.regions[ri].infections.push(RegionDiseaseState {
+            disease_idx: 1,
+            infected: pop * 0.3,
+            dead: 0.0,
+            immune: 0.0,
+        });
+        // Also boost first disease
+        state.regions[ri].infections[0].infected = pop * 0.3;
+        // Run many ticks — both diseases should share the population
+        for _ in 0..2000 {
+            state = tick(&state);
+            if state.active_crisis.is_some() {
+                state.active_crisis = None;
+                state.sim_state = crate::state::SimState::Running;
+            }
+            if state.outcome != GameOutcome::Playing {
+                break;
+            }
+        }
+        // Raw sum of dead across diseases should not wildly exceed population.
+        // Small floating-point overshoot is OK; 10% over is not.
+        let raw_dead: f64 = state.regions[ri].infections.iter()
+            .map(|i| i.dead).sum();
+        assert!(raw_dead < pop * 1.05,
+            "raw dead sum ({raw_dead:.0}) should not significantly exceed population ({pop:.0})");
+    }
+
+    #[test]
     fn burn_out_spawns_scaled_disease() {
         let mut state = GameState::new_default(42);
         // Clear all infections to simulate burn-out
