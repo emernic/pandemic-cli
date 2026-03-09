@@ -164,7 +164,7 @@ Before creating the issue, re-read your draft and check:
 
 ### Step 5: Create the Issue
 
-Use `gh issue create` with appropriate labels. Investigate issues should NOT have a priority label (the outcome is uncertain). All other types should have one.
+Use `gh issue create` with appropriate labels. Investigate issues should NOT have a priority label (the outcome is uncertain) — **unless the issue comes directly from the user**, in which case it should always get P0 or P1. Anything requested directly by the user is highest priority and requires special careful consideration of their exact wording. All other issue types should always have a priority label.
 
 ```bash
 gh issue create \
