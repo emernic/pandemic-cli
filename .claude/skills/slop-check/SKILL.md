@@ -31,15 +31,7 @@ Check specifically:
 
 ## Document Slop Check
 
-**If you wrote or edited any documents this session, this section applies. Documents are the highest-risk slop vector because there's no compiler or test suite to catch mistakes.**
-
-AI-generated documents have a specific failure mode: they sound authoritative and plausible on first read, but contain claims that are subtly wrong, misleading, or unverified. Code slop gets caught by tests. Document slop gets caught six months later when someone builds on a wrong assumption.
-
-Check specifically:
-1. **Unverified factual claims.** Did you describe a game, tool, system, or concept without checking whether your description is accurate? "This game is X" — is it actually? "This function does Y" — did you read the code? Every factual statement needs to trace back to something you verified, not something you assumed.
-2. **Plausible-sounding bullshit.** Re-read every sentence you wrote and ask: "Do I actually know this is true, or does it just sound right?" If you're not sure, check. If you can't check, qualify the claim or remove it.
-3. **One-pass documents.** Did you write it once and move on? That's slop. Documents need at least two passes: one to write, one to challenge every sentence. The second pass should be adversarial — try to find something wrong.
-4. **Sloppy extrapolation.** Did you take something the user said and restate it in a way that subtly changes the meaning? Re-read the user's words. Compare to what you wrote. Did you add, remove, or twist anything?
+**If you wrote or edited anything — documents, comments, descriptions, names — go back and re-read every word.** Is every word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
 
 ## Process
 

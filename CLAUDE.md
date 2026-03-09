@@ -119,7 +119,7 @@ These games represent the design values we're aiming for. When making design dec
 - **Crusader Kings 2** — Gameplay grounded in a world that pulls from real history but creates something far more fun, zany, sometimes funny, yet always engaging, thrilling, tense, and grand. Proof that realism and fun aren't opposites.
 - **Kerbal Space Program** — Takes a real domain (orbital mechanics), breaks it down to its bare essentials, finds the fun subset, and brings it to life in a gamified world that still draws heavily on reality. This is exactly what we're doing with epidemiology.
 - **Oxygen Not Included** — Interlocking systems that create emergent complexity. Every resource connects to three other resources. Every solution creates a new problem. Deeper than we can hope to achieve here, but the design philosophy is the north star.
-- **Steel Panthers / Operational Art of War** — Games that transcend extremely clunky, dated presentation and remain timeless because the underlying strategy — derived from real-world scenarios — is genuinely interesting. Proof that compelling systems matter more than polish.
+- **Steel Panthers / Operational Art of War** — Timeless because the underlying strategy — derived from real-world scenarios — is genuinely interesting. The UI is a product of its era, but the games are deeply polished where it counts. Proof that compelling systems are what make a game last.
 - **Other inspirations** (great games worth studying even where they don't apply directly): Kenshi, Mount & Blade, Noita, Starsector, Knights of the Old Republic, RimWorld, Grid World (obscure Steam game simulating cellular life).
 
 ## Quick Start
