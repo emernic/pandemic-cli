@@ -2189,9 +2189,14 @@ impl GameState {
     /// Returns `(disease_idx, region_idx)` if successful, or `None` if at the cap.
     /// Uses `self.rng` — caller must have extracted rng if borrowing mutably.
     pub fn spawn_disease(&mut self, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
+        // If at capacity, try to recycle a burned-out disease slot.
+        let recycle_idx = if self.diseases.len() >= MAX_DISEASES {
+            self.find_burned_out_disease()
+        } else {
+            None
+        };
 
-
-        if self.diseases.len() >= MAX_DISEASES {
+        if self.diseases.len() >= MAX_DISEASES && recycle_idx.is_none() {
             return None;
         }
 
@@ -2209,10 +2214,45 @@ impl GameState {
         let pathogen_type = types[rng.r#gen::<usize>() % types.len()];
 
         let used_names: Vec<String> = self.diseases.iter().map(|d| d.name.clone()).collect();
-        let disease_idx = self.diseases.len();
-        let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
-        disease.detected = false; // starts undetected
-        self.diseases.push(disease);
+
+        let disease_idx = if let Some(idx) = recycle_idx {
+            // Recycle: replace the burned-out disease and clean up its traces.
+            let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
+            disease.detected = false;
+            self.diseases[idx] = disease;
+
+            // Remove all infection entries for the old disease in all regions.
+            for region in &mut self.regions {
+                region.infections.retain(|inf| inf.disease_idx != idx);
+            }
+
+            // Replace the corresponding medicine.
+            if let Some(med) = self.medicines.iter_mut().find(|m| {
+                m.target_diseases.len() == 1 && m.target_diseases[0] == idx
+            }) {
+                *med = Medicine::new_targeted(idx, pathogen_type);
+            }
+
+            idx
+        } else {
+            // Normal path: append new disease.
+            let idx = self.diseases.len();
+            let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
+            disease.detected = false;
+            self.diseases.push(disease);
+            self.medicines.push(Medicine::new_targeted(idx, pathogen_type));
+
+            // Update broad-spectrum medicine to also target new disease
+            for med in &mut self.medicines {
+                if med.therapy_type == TherapyType::BroadSpectrum
+                    && !med.target_diseases.contains(&idx)
+                {
+                    med.target_diseases.push(idx);
+                }
+            }
+
+            idx
+        };
 
         // Place initial outbreak in a random region
         let region_idx = rng.r#gen::<usize>() % self.regions.len();
@@ -2224,18 +2264,21 @@ impl GameState {
             immune: 0.0,
         });
 
-        self.medicines.push(Medicine::new_targeted(disease_idx, pathogen_type));
+        Some((disease_idx, region_idx))
+    }
 
-        // Update broad-spectrum medicine to also target new disease
-        for med in &mut self.medicines {
-            if med.therapy_type == TherapyType::BroadSpectrum
-                && !med.target_diseases.contains(&disease_idx)
-            {
-                med.target_diseases.push(disease_idx);
+    /// Find a disease with zero infected across all regions (fully burned out).
+    fn find_burned_out_disease(&self) -> Option<usize> {
+        for (d_idx, _disease) in self.diseases.iter().enumerate() {
+            let total_infected: f64 = self.regions.iter()
+                .filter_map(|r| r.disease_state(d_idx))
+                .map(|inf| inf.infected)
+                .sum();
+            if total_infected < 1.0 {
+                return Some(d_idx);
             }
         }
-
-        Some((disease_idx, region_idx))
+        None
     }
 
     /// Spawn a disease with stats scaled up based on current game day.
