@@ -6,7 +6,7 @@ use crate::state::{
 /// Start a research project. Pure game logic — does NOT modify UI state.
 ///
 /// Returns (success, message).
-pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: usize) -> (bool, Option<String>) {
+pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
@@ -22,7 +22,8 @@ pub(super) fn start_research(state: &mut GameState, bench: bool, project_idx: us
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (personnel, duration, funding_cost) = kind.costs(&state.medicines);
+        let (base_personnel, duration, funding_cost) = kind.costs(&state.medicines);
+        let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
 
         if state.resources.funding < funding_cost {
             return (false, Some(super::medicine::insufficient_funds_message(funding_cost, state.resources.funding)));
@@ -90,8 +91,8 @@ pub(super) fn remove_personnel(state: &mut GameState, bench: bool) -> Option<Str
 }
 
 /// Advance research projects by one tick and handle completions.
-/// Progress scales linearly with personnel: base personnel = 1x speed,
-/// double personnel = 2x speed.
+/// Progress scales with diminishing returns: 2x personnel = 1.5x speed (peak),
+/// beyond 2x personnel = negative returns (too many cooks).
 pub(super) fn tick_research(state: &mut GameState) {
     if let Some(ref mut project) = state.field_research {
         let speed = project.speed(&state.medicines);
@@ -329,19 +330,40 @@ mod tests {
     fn more_personnel_means_faster_progress() {
         let mut state = GameState::new_default(42);
 
-        // Create a project with base 5 personnel, assign 10 for 2x speed
+        // Create a project with base 5 personnel, assign 10 (2x base)
+        // With diminishing returns: speed = 1 + (2-1)*(3-2)/2 = 1.5x
         state.field_research = Some(ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
             progress: 0.0,
             required_ticks: 160.0,
-            personnel_assigned: 10, // 2x base (5)
+            personnel_assigned: 10, // 2x base (5) — peak of diminishing returns
         });
 
         state = tick(&state);
-        // At 2x speed, 1 tick should yield 2.0 progress
+        // At 2x ratio, diminishing returns gives 1.5x speed
         assert!(
-            (state.field_research.as_ref().unwrap().progress - 2.0).abs() < 0.01,
-            "double personnel should give double speed, got {}",
+            (state.field_research.as_ref().unwrap().progress - 1.5).abs() < 0.01,
+            "2x personnel should give 1.5x speed (diminishing returns), got {}",
+            state.field_research.as_ref().unwrap().progress
+        );
+    }
+
+    #[test]
+    fn diminishing_returns_beyond_double() {
+        let mut state = GameState::new_default(42);
+
+        // Assign 3x base personnel — should be back to 1.0x speed
+        state.field_research = Some(ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 15, // 3x base (5)
+        });
+
+        state = tick(&state);
+        assert!(
+            (state.field_research.as_ref().unwrap().progress - 1.0).abs() < 0.01,
+            "3x personnel should give 1.0x speed (negative returns), got {}",
             state.field_research.as_ref().unwrap().progress
         );
     }
