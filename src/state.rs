@@ -1243,21 +1243,19 @@ impl GameState {
             available[rng.r#gen::<usize>() % available.len()].to_string()
         };
 
-        // Generate stats — later emergences are somewhat tougher
+        // Generate stats — mid-game threats are biased toward the upper end
         let ranges = pathogen_type.stat_ranges();
         let range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
             lo + rng.r#gen::<f64>() * (hi - lo)
         };
-        // Bias toward higher end of stat ranges for mid-game threats
-        let toughness_bias = 0.2; // shift stats up by 20% of range
         let biased_range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
             let base = lo + rng.r#gen::<f64>() * (hi - lo);
-            (base + (hi - lo) * toughness_bias).min(hi)
+            (base + (hi - lo) * 0.2).min(hi)
         };
 
         let disease_idx = self.diseases.len();
         self.diseases.push(Disease {
-            name: name.clone(),
+            name,
             pathogen_type,
             infectivity: biased_range_val(rng, ranges.infectivity),
             lethality: biased_range_val(rng, ranges.lethality),
