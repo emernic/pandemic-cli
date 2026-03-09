@@ -115,31 +115,10 @@ fn render_truncated(segments: &[(String, Style)], max_lines: usize) -> Vec<Line<
 fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
     let segments = build_splash_content(state);
 
-    let lines = {
-        // One full line per tick for a snappy typewriter effect
-        let lines_to_show = state.tick as usize;
-        let total_lines: usize = segments.iter().map(|(s, _)| s.chars().filter(|&c| c == '\n').count()).sum();
-        if lines_to_show >= total_lines {
-            let mut full_lines: Vec<Line> = Vec::new();
-            let mut current_spans: Vec<Span> = Vec::new();
-            for (text, style) in &segments {
-                for ch in text.chars() {
-                    if ch == '\n' {
-                        full_lines.push(Line::from(current_spans));
-                        current_spans = Vec::new();
-                    } else {
-                        current_spans.push(Span::styled(ch.to_string(), *style));
-                    }
-                }
-            }
-            if !current_spans.is_empty() {
-                full_lines.push(Line::from(current_spans));
-            }
-            full_lines
-        } else {
-            render_truncated(&segments, lines_to_show)
-        }
-    };
+    // One full line per tick for a snappy typewriter effect.
+    // usize::MAX means "show everything" (typewriter done).
+    let lines_to_show = state.tick as usize;
+    let lines = render_truncated(&segments, lines_to_show);
 
     let block = Block::default()
         .borders(Borders::ALL)
