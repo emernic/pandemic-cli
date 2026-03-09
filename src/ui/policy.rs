@@ -118,6 +118,59 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         lines.push(Line::from(spans));
     }
 
+    // Rally Public Support option
+    let num_regions = state.regions.len();
+    {
+        let rally_pos = num_regions;
+        let selected = state.ui.panel_selection == rally_pos;
+        let marker = if selected { "▶ " } else { "  " };
+
+        let cooldown = state.resources.rally_cooldown_remaining(state.tick);
+        let on_cooldown = cooldown > 0;
+        let can_afford = state.resources.funding >= crate::state::RALLY_COST;
+
+        if on_cooldown {
+            let days = cooldown as f64 / TICKS_PER_DAY;
+            let style = if selected {
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}", marker), style),
+                Span::styled("Rally Public Support", style),
+                Span::styled(
+                    format!("  [{days:.1}d cooldown]"),
+                    Style::default().fg(Color::Yellow),
+                ),
+            ]));
+        } else {
+            let name_style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}", marker), name_style),
+                Span::styled("Rally Public Support", name_style),
+                Span::styled(
+                    format!("  ${:.0}", crate::state::RALLY_COST),
+                    if can_afford {
+                        Style::default().fg(Color::Yellow)
+                    } else {
+                        Style::default().fg(Color::Red)
+                    },
+                ),
+                Span::styled(
+                    format!("  → POL +{:.0}%", crate::state::RALLY_POL_GAIN * 100.0),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]));
+        }
+    }
+
     // Emergency Decrees section
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
@@ -125,7 +178,6 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     )));
 
-    let num_regions = state.regions.len();
     let decree_descs: [String; DECREE_COUNT] = [
         format!("+{} personnel, -${:.0}/day income (permanent)",
             CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
@@ -135,7 +187,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
     ];
 
     for decree_idx in 0..DECREE_COUNT {
-        let display_pos = num_regions + decree_idx;
+        let display_pos = num_regions + 1 + decree_idx;
         let selected = state.ui.panel_selection == display_pos;
         let marker = if selected { "▶ " } else { "  " };
         let enacted = state.enacted_decrees.is_enacted(decree_idx);
