@@ -202,8 +202,14 @@ pub fn render(f: &mut Frame, state: &GameState) {
 fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
+    // Flashing warning symbols: toggle every ~500ms using wall-clock time
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let warning = if (millis / 500) % 2 == 0 { "⚠" } else { " " };
     lines.push(Line::from(Span::styled(
-        format!("  ⚠ {}", crisis.title),
+        format!("  {} {} {}", warning, crisis.title, warning),
         Style::default().fg(Color::Yellow),
     )));
     lines.push(Line::from(""));
