@@ -287,7 +287,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{GameState, MedicineUiState, Panel, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
+    use crate::state::{CrisisKind, GameState, MedicineUiState, Panel, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -2239,5 +2239,544 @@ mod tests {
             "applied research should be preserved on containment");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
+    }
+
+    // --- Crisis resolution effect tests ---
+
+    /// Helper: create a crisis event and inject it into state with choice pre-selected.
+    fn setup_crisis(state: &mut GameState, kind: CrisisKind, choice: usize) {
+        use crate::state::{CrisisEvent, CrisisOption, SimState};
+        state.sim_state = SimState::Event { was_running: true };
+        state.ui.crisis_selection = choice;
+        state.active_crisis = Some(CrisisEvent {
+            kind,
+            title: "Test Crisis".into(),
+            description: "Test".into(),
+            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            tick_created: 0,
+        });
+    }
+
+    #[test]
+    fn supply_disruption_option_a_loses_half_doses() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].doses = 1000.0;
+        setup_crisis(&mut state, CrisisKind::SupplyDisruption { medicine_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert_eq!(after.medicines[0].doses, 500.0,
+            "option A should lose 50% doses");
+    }
+
+    #[test]
+    fn supply_disruption_option_b_preserves_doses() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].doses = 1000.0;
+        let initial_doses = state.medicines[0].doses;
+        // Option B costs $300 — set up with cost
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            title: "T".into(),
+            description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 300.0, personnel: 0 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert_eq!(after.medicines[0].doses, initial_doses,
+            "option B should preserve doses");
+    }
+
+    #[test]
+    fn political_pressure_option_a_lifts_quarantine() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].quarantine = true;
+        setup_crisis(&mut state, CrisisKind::PoliticalPressure { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(!after.policies[0].quarantine,
+            "option A should lift quarantine");
+    }
+
+    #[test]
+    fn political_pressure_option_b_maintains_quarantine() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        state.policies[0].quarantine = true;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::PoliticalPressure { region_idx: 0 },
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 500.0, personnel: 0 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.policies[0].quarantine,
+            "option B should maintain quarantine");
+    }
+
+    #[test]
+    fn personnel_crisis_option_a_loses_personnel() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::PersonnelCrisis { amount: 3 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.resources.personnel, before - 3);
+    }
+
+    #[test]
+    fn mutation_surge_option_b_gains_knowledge() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        detect_all_diseases(&mut state);
+        let before = state.diseases[0].knowledge;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::MutationSurge { disease_idx: 0 },
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 300.0, personnel: 0 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.diseases[0].knowledge - (before + 0.15)).abs() < 0.001,
+            "option B should gain 0.15 knowledge");
+    }
+
+    #[test]
+    fn refugee_wave_option_a_spreads_infections() {
+        let mut state = GameState::new_default(42);
+        // Set up: region 0 collapsed with infections, region 1 as destination
+        state.regions[0].collapsed = true;
+        state.regions[0].infections = vec![RegionDiseaseState {
+            disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+        }];
+        let dest_infected_before = state.regions[1].infections
+            .iter().find(|i| i.disease_idx == 0)
+            .map(|i| i.infected).unwrap_or(0.0);
+        setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        let dest_infected_after = after.regions[1].infections
+            .iter().find(|i| i.disease_idx == 0)
+            .map(|i| i.infected).unwrap_or(0.0);
+        assert!(dest_infected_after > dest_infected_before,
+            "option A should increase infections in destination region");
+    }
+
+    #[test]
+    fn refugee_wave_option_b_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.10)).abs() < 0.001,
+            "option B should decrease pol_crisis_modifier by 0.10");
+    }
+
+    #[test]
+    fn data_leak_option_a_loses_research_gains_pol() {
+        use crate::state::{ResearchProject, ResearchKind, TICKS_PER_DAY};
+        let mut state = GameState::new_default(42);
+        state.field_research = Some(ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 500.0,
+            required_ticks: 1000.0,
+            personnel_assigned: 3,
+        });
+        let before_pol = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::DataLeak, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        let expected_progress = (500.0 - 2.0 * TICKS_PER_DAY as f64).max(0.0);
+        assert!((after.field_research.as_ref().unwrap().progress - expected_progress).abs() < 0.01,
+            "option A should lose 2 days of field research progress");
+        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.05)).abs() < 0.001,
+            "option A should gain 0.05 POL modifier");
+    }
+
+    #[test]
+    fn data_leak_option_b_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::DataLeak, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.10)).abs() < 0.001,
+            "option B should decrease pol_crisis_modifier by 0.10");
+    }
+
+    #[test]
+    fn black_market_option_a_treats_and_harms() {
+        let mut state = GameState::new_default(42);
+        // Need infections > 100 for the effect to kick in
+        state.regions[0].infections = vec![RegionDiseaseState {
+            disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+        }];
+        let before_dead = state.regions[0].dead;
+        setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        let inf = &after.regions[0].infections[0];
+        // 5% treated, of which 20% harmed
+        assert!(inf.infected < 10_000.0, "some should be treated");
+        assert!(inf.immune > 0.0, "some should gain immunity");
+        assert!(inf.dead > 0.0, "some should die from adverse reactions");
+        assert!(after.regions[0].dead > before_dead, "region dead should increase");
+    }
+
+    #[test]
+    fn quarantine_riot_option_a_lifts_quarantine() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].quarantine = true;
+        setup_crisis(&mut state, CrisisKind::QuarantineRiot { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(!after.policies[0].quarantine,
+            "option A should lift quarantine");
+    }
+
+    #[test]
+    fn quarantine_riot_option_b_loses_pol() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        state.policies[0].quarantine = true;
+        let before = state.resources.pol_crisis_modifier;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::QuarantineRiot { region_idx: 0 },
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 0.0, personnel: 2 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.15)).abs() < 0.001,
+            "option B should decrease pol_crisis_modifier by 0.15");
+    }
+
+    #[test]
+    fn media_panic_option_a_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::MediaPanic, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.08)).abs() < 0.001,
+            "option A should decrease pol_crisis_modifier by 0.08");
+    }
+
+    #[test]
+    fn media_panic_option_b_gains_pol() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::MediaPanic,
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 300.0, personnel: 1 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before + 0.05)).abs() < 0.001,
+            "option B should increase pol_crisis_modifier by 0.05");
+    }
+
+    #[test]
+    fn trial_shortcut_option_a_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.05)).abs() < 0.001,
+            "option A should decrease pol_crisis_modifier by 0.05");
+    }
+
+    #[test]
+    fn trial_shortcut_option_b_gains_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before + 0.10)).abs() < 0.001,
+            "option B should increase pol_crisis_modifier by 0.10");
+    }
+
+    #[test]
+    fn vaccine_hesitancy_option_a_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::VaccineHesitancy { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.10)).abs() < 0.001,
+            "option A should decrease pol_crisis_modifier by 0.10");
+    }
+
+    #[test]
+    fn vaccine_hesitancy_option_b_gains_pol() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        let before = state.resources.pol_crisis_modifier;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::VaccineHesitancy { region_idx: 0 },
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before + 0.05)).abs() < 0.001,
+            "option B should increase pol_crisis_modifier by 0.05");
+    }
+
+    #[test]
+    fn corrupt_official_option_a_loses_funding() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        let stolen = (2000.0_f64 * 0.15).min(500.0).round(); // 300
+        setup_crisis(&mut state, CrisisKind::CorruptOfficial, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.funding - (2000.0 - stolen)).abs() < 1.0,
+            "option A should lose 15% of funding (capped at 500)");
+    }
+
+    #[test]
+    fn corrupt_official_option_b_recovers_funding() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::CorruptOfficial,
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 0.0, personnel: 2 }) },
+            tick_created: 0,
+        });
+        let before_personnel = state.resources.personnel;
+        let after = apply_action(&state, &Action::Confirm);
+        // Option B: funding unchanged (just personnel cost), no theft
+        assert_eq!(after.resources.funding, 2000.0,
+            "option B should not lose funding");
+        assert_eq!(after.resources.personnel, before_personnel - 2,
+            "option B should cost 2 personnel");
+    }
+
+    #[test]
+    fn resource_diversion_option_a_trades_knowledge_for_funding() {
+        let mut state = GameState::new_default(42);
+        detect_all_diseases(&mut state);
+        state.diseases[0].knowledge = 0.5;
+        state.resources.funding = 1000.0;
+        setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.diseases[0].knowledge - 0.4).abs() < 0.001,
+            "option A should lose 0.1 knowledge");
+        assert!((after.resources.funding - 1500.0).abs() < 1.0,
+            "option A should gain $500 funding");
+    }
+
+    #[test]
+    fn exhaustion_epidemic_option_a_disables_hospital_surge() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].hospital_surge = true;
+        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(!after.policies[0].hospital_surge,
+            "option A should disable hospital surge");
+    }
+
+    #[test]
+    fn exhaustion_epidemic_option_b_loses_personnel() {
+        let mut state = GameState::new_default(42);
+        state.policies[0].hospital_surge = true;
+        let before = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.resources.personnel, before - 3,
+            "option B should lose 3 personnel");
+        assert!(after.policies[0].hospital_surge,
+            "option B should keep hospital surge active");
+    }
+
+    #[test]
+    fn whistleblower_option_a_destroys_doses_gains_pol() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].doses = 1000.0;
+        let before_pol = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.medicines[0].doses, 700.0,
+            "option A should destroy 30% of doses");
+        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.05)).abs() < 0.001,
+            "option A should gain 0.05 POL modifier");
+    }
+
+    #[test]
+    fn whistleblower_option_b_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.08)).abs() < 0.001,
+            "option B should decrease pol_crisis_modifier by 0.08");
+    }
+
+    #[test]
+    fn military_takeover_option_a_loses_personnel_gains_pol() {
+        let mut state = GameState::new_default(42);
+        let before_personnel = state.resources.personnel;
+        let before_pol = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::MilitaryTakeover, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.resources.personnel, before_personnel - 5,
+            "option A should lose 5 personnel");
+        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.15)).abs() < 0.001,
+            "option A should gain 0.15 POL modifier");
+    }
+
+    #[test]
+    fn cult_blockade_option_a_loses_pol() {
+        let mut state = GameState::new_default(42);
+        let before = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::CultBlockade { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before - 0.08)).abs() < 0.001,
+            "option A should decrease pol_crisis_modifier by 0.08");
+    }
+
+    #[test]
+    fn billionaire_option_b_gains_funding_loses_personnel() {
+        let mut state = GameState::new_default(42);
+        let before_funding = state.resources.funding;
+        let before_personnel = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::BillionaireOffer, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.funding - (before_funding + 2000.0)).abs() < 1.0,
+            "option B should gain $2000");
+        assert_eq!(after.resources.personnel, before_personnel - 3,
+            "option B should lose 3 personnel");
+    }
+
+    #[test]
+    fn billionaire_option_a_no_changes() {
+        let mut state = GameState::new_default(42);
+        let before_funding = state.resources.funding;
+        let before_personnel = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::BillionaireOffer, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert_eq!(after.resources.funding, before_funding,
+            "option A should not change funding");
+        assert_eq!(after.resources.personnel, before_personnel,
+            "option A should not change personnel");
+    }
+
+    #[test]
+    fn who_evacuation_option_a_loses_funding_and_pol() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        let before_pol = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::WHOEvacuation, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.funding - 700.0).abs() < 1.0,
+            "option A should lose $300");
+        assert!((after.resources.pol_crisis_modifier - (before_pol - 0.05)).abs() < 0.001,
+            "option A should lose 0.05 POL modifier");
+    }
+
+    #[test]
+    fn who_evacuation_option_b_gains_pol() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        let before_pol = state.resources.pol_crisis_modifier;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::WHOEvacuation,
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 800.0, personnel: 3 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.10)).abs() < 0.001,
+            "option B should gain 0.10 POL modifier");
+    }
+
+    #[test]
+    fn warlord_demand_option_a_gains_pol_region_stays_collapsed() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].collapsed = true;
+        let before_pol = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::WarlordDemand { region_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.regions[0].collapsed, "option A should keep region collapsed");
+        assert!((after.resources.pol_crisis_modifier - (before_pol + 0.05)).abs() < 0.001,
+            "option A should gain 0.05 POL modifier");
+    }
+
+    #[test]
+    fn warlord_demand_option_b_uncollapses_region() {
+        use crate::state::CrisisCost;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        state.regions[0].collapsed = true;
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(crate::state::CrisisEvent {
+            kind: CrisisKind::WarlordDemand { region_idx: 0 },
+            title: "T".into(), description: "T".into(),
+            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+                cost: Some(CrisisCost { funding: 500.0, personnel: 0 }) },
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(!after.regions[0].collapsed,
+            "option B should un-collapse the region");
+    }
+
+    #[test]
+    fn vaccine_dispute_option_a_loses_funding() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        setup_crisis(&mut state, CrisisKind::VaccineDispute, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.funding - 600.0).abs() < 1.0,
+            "option A should lose $400");
+    }
+
+    #[test]
+    fn vaccine_dispute_option_b_gains_funding_loses_pol() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        let before_pol = state.resources.pol_crisis_modifier;
+        setup_crisis(&mut state, CrisisKind::VaccineDispute, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.funding - 1600.0).abs() < 1.0,
+            "option B should gain $600");
+        assert!((after.resources.pol_crisis_modifier - (before_pol - 0.15)).abs() < 0.001,
+            "option B should lose 0.15 POL modifier");
     }
 }
