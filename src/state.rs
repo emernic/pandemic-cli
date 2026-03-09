@@ -110,8 +110,8 @@ pub const QUARANTINE_COST: f64 = 5.0;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
 pub const HOSPITAL_SURGE_COST: f64 = 3.0;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
-pub const BORDER_SCREENING_COST: f64 = 2.5;
-pub const BORDER_SCREENING_PERSONNEL: u32 = 1;
+pub const BORDER_CONTROLS_COST: f64 = 2.5;
+pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
 pub const WATER_SANITATION_COST: f64 = 4.0;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 
@@ -197,8 +197,8 @@ pub struct RegionPolicy {
     pub hospital_surge: bool,
     /// Reduces cross-region spread by 50%, no income penalty.
     /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
-    #[serde(default)]
-    pub border_screening: bool,
+    #[serde(default, alias = "border_screening")]
+    pub border_controls: bool,
     /// Halves waterborne disease infectivity. No effect on airborne/contact.
     #[serde(default)]
     pub water_sanitation: bool,
@@ -213,13 +213,13 @@ pub struct RegionPolicy {
 pub const POLICY_COUNT: usize = 8;
 
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
-/// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_screening,
+/// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_controls,
 /// water_sanitation, screening_low, screening_medium, screening_high.
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.30, // Travel Ban — major action, needs moderate political will
     0.25, // Quarantine — strong measure but regionally justified
     0.15, // Hospital Surge — relatively uncontroversial
-    0.05, // Border Screening — mild, early unlock
+    0.05, // Border Controls — mild, early unlock
     0.10, // Water Sanitation — basic public health
     0.00, // Low Disease Screening — available immediately
     0.10, // Medium Disease Screening
@@ -232,7 +232,7 @@ impl RegionPolicy {
         if self.travel_ban { cost += TRAVEL_BAN_COST; }
         if self.quarantine { cost += QUARANTINE_COST; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
-        if self.border_screening { cost += BORDER_SCREENING_COST; }
+        if self.border_controls { cost += BORDER_CONTROLS_COST; }
         if self.water_sanitation { cost += WATER_SANITATION_COST; }
         cost += self.screening.funding_cost();
         cost
@@ -243,7 +243,7 @@ impl RegionPolicy {
         if self.travel_ban { cost += TRAVEL_BAN_PERSONNEL; }
         if self.quarantine { cost += QUARANTINE_PERSONNEL; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; }
-        if self.border_screening { cost += BORDER_SCREENING_PERSONNEL; }
+        if self.border_controls { cost += BORDER_CONTROLS_PERSONNEL; }
         if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; }
         cost += self.screening.personnel_cost();
         cost
@@ -251,7 +251,7 @@ impl RegionPolicy {
 
     pub fn any_active(&self) -> bool {
         self.travel_ban || self.quarantine || self.hospital_surge
-            || self.border_screening || self.water_sanitation
+            || self.border_controls || self.water_sanitation
             || self.screening != ScreeningLevel::None
     }
 
@@ -259,7 +259,7 @@ impl RegionPolicy {
         self.travel_ban = false;
         self.quarantine = false;
         self.hospital_surge = false;
-        self.border_screening = false;
+        self.border_controls = false;
         self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
     }

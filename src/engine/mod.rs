@@ -1544,11 +1544,11 @@ mod tests {
     }
 
     #[test]
-    fn border_screening_reduces_cross_region_spread() {
+    fn border_controls_reduces_cross_region_spread() {
         use crate::state::TransmissionVector;
         use rand::SeedableRng;
 
-        let mut screening_spreads = 0u32;
+        let mut controls_spreads = 0u32;
         let mut no_policy_spreads = 0u32;
 
         for seed in 0..200 {
@@ -1570,20 +1570,20 @@ mod tests {
                 no_policy_spreads += 1;
             }
 
-            // Border screening on source region
-            state.policies[0].border_screening = true;
+            // Border controls on source region
+            state.policies[0].border_controls = true;
             state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
             let after = tick(&state);
             if after.regions.iter().skip(1).any(|r|
                 r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
             ) {
-                screening_spreads += 1;
+                controls_spreads += 1;
             }
         }
 
-        assert!(screening_spreads < no_policy_spreads,
-            "screening should reduce cross-region spread: {} vs {} (no policy)",
-            screening_spreads, no_policy_spreads);
+        assert!(controls_spreads < no_policy_spreads,
+            "border controls should reduce cross-region spread: {} vs {} (no policy)",
+            controls_spreads, no_policy_spreads);
     }
 
     #[test]
