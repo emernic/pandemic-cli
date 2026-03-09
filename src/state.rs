@@ -69,10 +69,6 @@ pub struct GameState {
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
     pub auto_resolve_crises: HashMap<String, usize>,
-    /// Consecutive ticks with zero infected across all regions.
-    /// Used to detect stalemate (diseases burned out without meeting win conditions).
-    #[serde(default)]
-    pub zero_infected_ticks: u64,
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -1122,16 +1118,12 @@ pub enum GameEvent {
     PersonnelAttrition { count: u32 },
 }
 
-/// Game outcome — checked each tick after simulation.
+/// Game outcome — there is no victory. You lose eventually. The question is when.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GameOutcome {
     #[default]
     Playing,
-    Won,
     Lost,
-    /// Diseases burned out on their own, but win conditions weren't fully met.
-    /// The epidemic is over, but the player didn't achieve a clean victory.
-    Stalemate,
 }
 
 /// A game command produced by UI wizard completion. The engine executes these
@@ -1241,11 +1233,6 @@ pub const CRISIS_INTERVAL: u64 = 840;
 /// Minimum ticks before the same crisis type can repeat (~15 days).
 pub const CRISIS_TYPE_COOLDOWN: u64 = 1800;
 
-/// Win when total infected drops below this threshold (with other conditions met).
-/// Individual region infections snap to 0.0 at < 1.0, so this means "truly eradicated."
-pub const WIN_INFECTED_THRESHOLD: f64 = 1.0;
-/// Consecutive ticks of zero infected before triggering stalemate (3 days).
-pub const STALEMATE_TICKS: u64 = (3.0 * TICKS_PER_DAY) as u64;
 /// Total infected across all regions at which a disease is detected by health systems.
 /// Below this, the disease spreads silently and is invisible to the player.
 pub const DETECTION_THRESHOLD: f64 = 10_000.0;
@@ -1963,7 +1950,6 @@ impl GameState {
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
             auto_resolve_crises: HashMap::new(),
-            zero_infected_ticks: 0,
             history: vec![],
             ui: UiState {
                 open_panel: Panel::None,
@@ -2188,6 +2174,26 @@ impl GameState {
         }
 
         Some((disease_idx, region_idx))
+    }
+
+    /// Spawn a disease with stats scaled up based on current game day.
+    /// Later diseases are tougher — simulating evolved superbugs.
+    /// Scaling: +5% per day elapsed, capped at 3x base stats.
+    pub fn spawn_disease_scaled(&mut self, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
+        let day = self.tick as f64 / TICKS_PER_DAY;
+        let scale = (1.0 + day * 0.05).min(3.0);
+
+        let result = self.spawn_disease(rng)?;
+        let (disease_idx, _) = result;
+
+        // Boost the newly spawned disease's stats
+        let d = &mut self.diseases[disease_idx];
+        d.infectivity *= scale;
+        d.lethality *= scale;
+        d.cross_region_spread *= scale;
+        // Don't scale recovery — harder diseases should be harder to recover from
+
+        Some(result)
     }
 
     /// Whether any tested/unlocked medicines targeting this disease have fallen behind

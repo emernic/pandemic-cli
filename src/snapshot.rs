@@ -300,19 +300,4 @@ mod tests {
             "standing regions should show 'held'");
     }
 
-    #[test]
-    fn stalemate_screen_renders() {
-        let mut state = GameState::new_default(42);
-        state.outcome = GameOutcome::Stalemate;
-        // Simulate some regions collapsed during the epidemic
-        state.regions[0].collapsed = true;
-        state.regions[0].collapsed_at_tick = Some(600);
-        let screen = render_to_string(&state);
-        assert!(screen.contains("STALEMATE"),
-            "should show STALEMATE header");
-        assert!(screen.contains("burned itself out"),
-            "should show stalemate headline");
-        assert!(screen.contains("Collapse Timeline"),
-            "should show collapse timeline for partial collapse");
-    }
 }
