@@ -543,11 +543,22 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                         .map(|d| d.display_name(d_idx))
                 })
                 .collect();
-            let variant = if med.rapid { "Rapid" } else { "Standard" };
-            let mech_info = med.mechanism
-                .map(|m| format!(" ({})", m.label()))
-                .unwrap_or_default();
-            Some(format!("{} variant{} — Targets: {}", variant, mech_info, names.join(", ")))
+            if let Some(mech) = med.mechanism {
+                let resist_label = if mech.resistance_rate_multiplier() > 1.2 {
+                    "High"
+                } else if mech.resistance_rate_multiplier() > 0.7 {
+                    "Med"
+                } else {
+                    "Low"
+                };
+                Some(format!("{} — {} | Eff {:.0}%, Resist: {}",
+                    mech.tradeoff_label(),
+                    names.join(", "),
+                    mech.efficacy_modifier() * 100.0,
+                    resist_label))
+            } else {
+                Some(format!("Targets: {}", names.join(", ")))
+            }
         }
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;

@@ -1941,32 +1941,43 @@ mod tests {
 
     #[test]
     fn targeted_medicines_have_mechanism_of_action() {
-        use crate::state::TherapyType;
+        use crate::state::{TherapyType, MechanismOfAction};
 
         let state = GameState::new_default(42);
-        // Disease 0 is never a prion — both targeted medicines should have mechanisms
+        // Disease 0 is never a prion — should have one medicine per mechanism
         let targeted_meds: Vec<_> = state.medicines.iter()
             .filter(|m| m.target_diseases.contains(&0)
                 && m.therapy_type != TherapyType::BroadSpectrum)
             .collect();
-        assert_eq!(targeted_meds.len(), 2,
-            "should have 2 targeted medicines for disease 0, got {}: {:?}",
+        // Bacteria have 4 mechanisms, viruses/fungi have 3
+        assert!(targeted_meds.len() >= 3,
+            "should have 3+ targeted medicines for disease 0, got {}: {:?}",
             targeted_meds.len(),
             targeted_meds.iter().map(|m| &m.name).collect::<Vec<_>>());
         for med in &targeted_meds {
             assert!(med.mechanism.is_some(),
                 "targeted medicine '{}' should have a mechanism", med.name);
         }
-        // The two medicines should have DIFFERENT mechanisms
-        assert_ne!(
-            targeted_meds[0].mechanism, targeted_meds[1].mechanism,
-            "two medicines for same disease should have different mechanisms"
-        );
-        // One should be rapid, one standard
-        assert_ne!(
-            targeted_meds[0].rapid, targeted_meds[1].rapid,
-            "should have one rapid and one standard variant"
-        );
+        // All mechanisms should be different
+        let mechs: Vec<_> = targeted_meds.iter()
+            .map(|m| m.mechanism.unwrap())
+            .collect();
+        for i in 0..mechs.len() {
+            for j in (i+1)..mechs.len() {
+                assert_ne!(mechs[i], mechs[j],
+                    "medicines should have different mechanisms");
+            }
+        }
+        // Each mechanism should have distinct tradeoff properties
+        let fast_mech = targeted_meds.iter()
+            .find(|m| m.mechanism.unwrap().dev_cost_multiplier() < 1.0)
+            .expect("should have a fast/cheap mechanism option");
+        let slow_mech = targeted_meds.iter()
+            .find(|m| m.mechanism.unwrap().dev_cost_multiplier() > 1.0)
+            .expect("should have a slow/expensive mechanism option");
+        assert!(fast_mech.mechanism.unwrap().resistance_rate_multiplier() >
+                slow_mech.mechanism.unwrap().resistance_rate_multiplier(),
+            "fast mechanism should build resistance faster than slow one");
 
         // Broad-spectrum medicine (last one) should have no mechanism
         let broad = state.medicines.last().unwrap();
