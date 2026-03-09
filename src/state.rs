@@ -2055,7 +2055,7 @@ pub enum CrisisKind {
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
     /// Follow-up to CongressionalHearing (Send deputy): contempt charges.
-    ContemptOfCongress,
+    ContemptOfCongress { fine: f64 },
     /// Follow-up to BlackMarketMedicine (Allow): counterfeit drugs killing people.
     CounterfeitEpidemic { region_idx: usize },
     /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
@@ -2098,7 +2098,7 @@ impl CrisisKind {
             CrisisKind::NamingRights { .. } => "naming_rights",
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
-            CrisisKind::ContemptOfCongress => "contempt",
+            CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::MilitaryOverreach => "military_overreach",
