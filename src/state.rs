@@ -1474,6 +1474,27 @@ impl GameState {
         income
     }
 
+    /// Income lost per tick due to travel ban penalties (halved region contributions).
+    /// Returns 0 if no travel bans are active.
+    pub fn travel_ban_income_penalty(&self) -> f64 {
+        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
+        if total_pop <= 0.0 {
+            return 0.0;
+        }
+        let mut penalty = 0.0;
+        for (i, region) in self.regions.iter().enumerate() {
+            if self.policies.get(i).is_some_and(|p| p.travel_ban) {
+                let pop = region.population as f64;
+                let dead: f64 = region.infections.iter().map(|inf| inf.dead).sum();
+                let healthy_frac = (pop - dead).max(0.0) / pop;
+                let region_share = pop / total_pop;
+                // Penalty is the income lost: the portion that travel_ban_factor removes
+                penalty += BASE_FUNDING_INCOME * region_share * healthy_frac * (1.0 - TRAVEL_BAN_INCOME_PENALTY);
+            }
+        }
+        penalty
+    }
+
     /// RP income per tick, degraded by global death toll.
     /// Scales linearly from full at 0% deaths to 10% floor at the loss threshold.
     pub fn rp_income_rate(&self) -> f64 {
