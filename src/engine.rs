@@ -359,6 +359,7 @@ pub fn tick(state: &GameState) -> GameState {
         };
 
         if game_over {
+            new.active_crisis = None; // game over supersedes any active crisis
             new.sim_state = SimState::Paused;
             new.events.push(GameEvent::GameOver);
         }
@@ -2919,5 +2920,42 @@ mod tests {
         assert_eq!(after.sim_state, SimState::Event { was_running: true },
             "spacebar should not change state during crisis");
         assert!(after.active_crisis.is_some(), "crisis should still be active");
+    }
+
+    #[test]
+    fn game_over_clears_active_crisis() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
+
+        let mut state = GameState::new_default(42);
+        // Set up a lethal disease to trigger game over quickly
+        state.diseases[0].infectivity = 0.10;
+        state.diseases[0].lethality = 0.05;
+        state.diseases[0].cross_region_spread = 0.05;
+
+        // Inject an active crisis
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            title: "Test".into(),
+            description: "Test".into(),
+            option_a: CrisisOption { label: "A".into(), description: "".into() },
+            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            tick_created: 0,
+        });
+        state.sim_state = SimState::Event { was_running: true };
+
+        // Run until game over
+        for _ in 0..2000 {
+            state = tick(&state);
+            crate::ui::process_events(&mut state);
+            if state.outcome != GameOutcome::Playing {
+                break;
+            }
+        }
+
+        assert_eq!(state.outcome, GameOutcome::Lost);
+        assert!(state.active_crisis.is_none(),
+            "active crisis should be cleared on game over");
+        assert_eq!(state.sim_state, SimState::Paused,
+            "sim state should be Paused, not Event");
     }
 }
