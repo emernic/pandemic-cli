@@ -11,7 +11,7 @@ use crate::state::{
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     KNOWLEDGE_NAME, MAX_DISEASES, TICKS_PER_DAY,
-    WIN_INFECTED_THRESHOLD,
+    STALEMATE_TICKS, WIN_INFECTED_THRESHOLD,
 };
 
 /// Advance the simulation by one tick.
@@ -174,6 +174,13 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Track consecutive ticks with zero infected (for stalemate detection)
+    if new.total_infected() < WIN_INFECTED_THRESHOLD {
+        new.zero_infected_ticks += 1;
+    } else {
+        new.zero_infected_ticks = 0;
+    }
+
     // Check win/lose conditions (only while still playing)
     if new.outcome == GameOutcome::Playing {
         let all_collapsed = new.regions.iter().all(|r| r.collapsed);
@@ -189,6 +196,10 @@ pub fn tick(state: &GameState) -> GameState {
             });
             if all_identified && all_have_tested_medicine {
                 new.outcome = GameOutcome::Won;
+                true
+            } else if new.zero_infected_ticks >= STALEMATE_TICKS {
+                // Diseases burned out but player didn't achieve clean victory
+                new.outcome = GameOutcome::Stalemate;
                 true
             } else {
                 false
@@ -1082,6 +1093,59 @@ mod tests {
         state = tick(&state);
         assert_eq!(state.outcome, GameOutcome::Won);
         assert_eq!(state.sim_state, crate::state::SimState::Paused);
+    }
+
+    #[test]
+    fn stalemate_triggers_when_infections_burn_out() {
+        use crate::state::STALEMATE_TICKS;
+        let mut state = GameState::new_default(42);
+        // Clear all infections to simulate diseases burning out
+        for region in &mut state.regions {
+            region.infections.clear();
+        }
+        // Diseases NOT identified — can't win, but infections are zero
+        // Run for just under the stalemate threshold
+        for _ in 0..(STALEMATE_TICKS - 1) {
+            state = tick(&state);
+            if state.active_crisis.is_some() {
+                state.active_crisis = None;
+                state.sim_state = SimState::Running;
+            }
+        }
+        assert_eq!(state.outcome, GameOutcome::Playing,
+            "should still be playing before stalemate threshold");
+        // One more tick should trigger stalemate
+        state = tick(&state);
+        assert_eq!(state.outcome, GameOutcome::Stalemate);
+        assert_eq!(state.sim_state, SimState::Paused);
+    }
+
+    #[test]
+    fn stalemate_resets_if_infection_returns() {
+        let mut state = GameState::new_default(42);
+        // Clear infections to start the counter
+        for region in &mut state.regions {
+            region.infections.clear();
+        }
+        // Advance partway toward stalemate
+        for _ in 0..100 {
+            state = tick(&state);
+            if state.active_crisis.is_some() {
+                state.active_crisis = None;
+                state.sim_state = SimState::Running;
+            }
+        }
+        assert!(state.zero_infected_ticks > 0);
+        // Re-introduce infection — counter should reset
+        use crate::state::RegionDiseaseState;
+        state.regions[0].infections.push(RegionDiseaseState {
+            disease_idx: 0,
+            infected: 100.0,
+            dead: 0.0,
+            immune: 0.0,
+        });
+        state = tick(&state);
+        assert_eq!(state.zero_infected_ticks, 0);
     }
 
     #[test]

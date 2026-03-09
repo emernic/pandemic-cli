@@ -333,12 +333,13 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
 }
 
 fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
-    let won = state.outcome == GameOutcome::Won;
-    let (title, border_color) = if won {
-        (" VICTORY ", Color::Green)
-    } else {
-        (" DEFEAT ", Color::Red)
+    let (title, border_color) = match state.outcome {
+        GameOutcome::Won => (" VICTORY ", Color::Green),
+        GameOutcome::Lost => (" DEFEAT ", Color::Red),
+        GameOutcome::Stalemate => (" STALEMATE ", Color::Yellow),
+        GameOutcome::Playing => unreachable!(),
     };
+    let won = state.outcome == GameOutcome::Won;
 
     let total_dead = state.total_dead();
     let total_immune = state.total_immune();
@@ -349,14 +350,15 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
-    let headline = if won {
-        "All diseases eradicated. Humanity is saved."
-    } else {
-        "Humanity has fallen. Too many lives were lost."
+    let (headline, headline_color) = match state.outcome {
+        GameOutcome::Won => ("All diseases eradicated. Humanity is saved.", Color::Green),
+        GameOutcome::Lost => ("Humanity has fallen. Too many lives were lost.", Color::Red),
+        GameOutcome::Stalemate => ("The epidemic burned itself out — but at great cost.", Color::Yellow),
+        GameOutcome::Playing => unreachable!(),
     };
     lines.push(Line::from(Span::styled(
         format!("  {headline}"),
-        Style::default().fg(if won { Color::Green } else { Color::Red }),
+        Style::default().fg(headline_color),
     )));
 
     lines.push(Line::from(""));

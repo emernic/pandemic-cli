@@ -69,6 +69,10 @@ pub struct GameState {
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
     pub auto_resolve_crises: HashMap<String, usize>,
+    /// Consecutive ticks with zero infected across all regions.
+    /// Used to detect stalemate (diseases burned out without meeting win conditions).
+    #[serde(default)]
+    pub zero_infected_ticks: u64,
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -1125,6 +1129,9 @@ pub enum GameOutcome {
     Playing,
     Won,
     Lost,
+    /// Diseases burned out on their own, but win conditions weren't fully met.
+    /// The epidemic is over, but the player didn't achieve a clean victory.
+    Stalemate,
 }
 
 /// A game command produced by UI wizard completion. The engine executes these
@@ -1237,6 +1244,8 @@ pub const CRISIS_TYPE_COOLDOWN: u64 = 1800;
 /// Win when total infected drops below this threshold (with other conditions met).
 /// Individual region infections snap to 0.0 at < 1.0, so this means "truly eradicated."
 pub const WIN_INFECTED_THRESHOLD: f64 = 1.0;
+/// Consecutive ticks of zero infected before triggering stalemate (3 days).
+pub const STALEMATE_TICKS: u64 = (3.0 * TICKS_PER_DAY) as u64;
 /// Total infected across all regions at which a disease is detected by health systems.
 /// Below this, the disease spreads silently and is invisible to the player.
 pub const DETECTION_THRESHOLD: f64 = 10_000.0;
@@ -1954,6 +1963,7 @@ impl GameState {
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
             auto_resolve_crises: HashMap::new(),
+            zero_infected_ticks: 0,
             history: vec![],
             ui: UiState {
                 open_panel: Panel::None,

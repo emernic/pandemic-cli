@@ -84,6 +84,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
             )));
         }
+        GameOutcome::Stalemate => {
+            lines.push(Line::from(Span::styled(
+                "The epidemic burned itself out — but at great cost.",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            )));
+        }
         GameOutcome::Playing => {
             if let Some(msg) = &state.ui.status_message {
                 let is_adverse = matches!(
