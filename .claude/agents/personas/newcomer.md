@@ -107,6 +107,6 @@ The sweet spot: the game gives you exactly one obvious first action. Not a tutor
 
 - **Meaningful abbreviations or full words.** "POL" could be anything — Policy? Political? Polish? Abbreviations that aren't obvious to a newcomer create unnecessary confusion. Screen space is limited, but the first time a newcomer sees a resource, they should be able to guess what it represents.
 
-- **Confirmation before big actions.** "Deploy Antiviral-A to Asia? (Cost: $200, Doses: 100K) [Enter to confirm, Esc to cancel]" tells the newcomer exactly what's about to happen, what it costs, and how to back out. Without this, every Enter press is a leap of faith.
+- **Confirmation before big actions.** "Deploy Antiviral-A to Asia? (Cost: $X, Doses: Y) [Enter to confirm, Esc to cancel]" tells the newcomer exactly what's about to happen, what it costs, and how to back out. Without this, every Enter press is a leap of faith.
 
 - **Progressive complexity.** The first panel you open should be the simplest. The first action you take should have the clearest feedback. As you learn more, the game can reveal more complexity. Don't show the newcomer everything on day 0 — show them one thing, let them master it, then reveal the next layer.
