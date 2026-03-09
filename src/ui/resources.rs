@@ -17,8 +17,6 @@ pub fn height(_state: &GameState) -> u16 {
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let pause_indicator = match &state.outcome {
         GameOutcome::Lost => Span::styled(" DEFEAT ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-        GameOutcome::Won => Span::styled(" VICTORY ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        GameOutcome::Stalemate => Span::styled(" STALEMATE ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         GameOutcome::Playing => match &state.sim_state {
             SimState::Running => {
                 let speed = state.ui.speed_multiplier.max(1);

@@ -62,7 +62,7 @@ pub(super) fn tick_spread_within(
                 }
 
                 inf.infected = inf.infected + new_infections - new_deaths - new_recoveries;
-                // Snap to zero when below 1 person — aligns with WIN_INFECTED_THRESHOLD
+                // Snap to zero when below 1 person — sub-person counts are meaningless
                 if inf.infected < 1.0 {
                     inf.infected = 0.0;
                 }

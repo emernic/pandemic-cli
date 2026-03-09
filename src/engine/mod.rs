@@ -10,8 +10,7 @@ use crate::state::{
     GameCommand, GameEvent, GameOutcome, GameState, SimState,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
-    KNOWLEDGE_NAME, MAX_DISEASES, TICKS_PER_DAY,
-    STALEMATE_TICKS, WIN_INFECTED_THRESHOLD,
+    MAX_DISEASES, TICKS_PER_DAY,
 };
 
 /// Advance the simulation by one tick.
@@ -95,12 +94,13 @@ pub fn tick(state: &GameState) -> GameState {
         new.events.push(GameEvent::FundingWarning);
     }
 
-    // Mid-game disease emergence (spawns undetected — player won't see it yet)
+    // Mid-game disease emergence (spawns undetected — player won't see it yet).
+    // Later diseases are tougher (scaled by game day).
     if new.tick >= EMERGENCE_MIN_TICK
         && new.diseases.len() < MAX_DISEASES
         && rng.r#gen::<f64>() < EMERGENCE_CHANCE_PER_TICK
     {
-        new.spawn_disease(&mut rng);
+        new.spawn_disease_scaled(&mut rng);
     }
 
     // Disease detection — undetected diseases are revealed when total infected
@@ -174,45 +174,27 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Track consecutive ticks with zero infected (for stalemate detection)
-    if new.total_infected() < WIN_INFECTED_THRESHOLD {
-        new.zero_infected_ticks += 1;
-    } else {
-        new.zero_infected_ticks = 0;
-    }
-
-    // Check win/lose conditions (only while still playing)
+    // Check defeat condition (only while still playing).
+    // There is no victory — you lose eventually. The question is when.
     if new.outcome == GameOutcome::Playing {
         let all_collapsed = new.regions.iter().all(|r| r.collapsed);
-
-        let game_over = if all_collapsed {
+        if all_collapsed {
             new.outcome = GameOutcome::Lost;
-            true
-        } else if new.total_infected() < WIN_INFECTED_THRESHOLD {
-            // Win requires: diseases identified, contained, and medicines tested
-            let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
-            let all_have_tested_medicine = (0..new.diseases.len()).all(|d_idx| {
-                new.medicines.iter().any(|m| m.tested_against.contains(&d_idx))
-            });
-            if all_identified && all_have_tested_medicine {
-                new.outcome = GameOutcome::Won;
-                true
-            } else if new.zero_infected_ticks >= STALEMATE_TICKS {
-                // Diseases burned out but player didn't achieve clean victory
-                new.outcome = GameOutcome::Stalemate;
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        if game_over {
-            new.active_crisis = None; // game over supersedes any active crisis
+            new.active_crisis = None;
             new.sim_state = SimState::Paused;
             new.events.push(GameEvent::GameOver);
         }
+    }
+
+    // If all diseases burned out but regions survive, spawn a tougher replacement.
+    // This prevents the "zombie state" where the game has no threats and no end.
+    if new.outcome == GameOutcome::Playing
+        && new.total_infected() < 1.0
+        && new.tick > EMERGENCE_MIN_TICK
+    {
+        let mut rng2 = new.rng.clone();
+        new.spawn_disease_scaled(&mut rng2);
+        new.rng = rng2;
     }
 
     // Record history for dashboard sparklines
@@ -1070,83 +1052,28 @@ mod tests {
     }
 
     #[test]
-    fn win_requires_identification_and_tested_medicines() {
+    fn no_victory_condition_exists() {
         let mut state = GameState::new_default(42);
-        // Clear all infections to simulate containment
+        // Clear all infections, identify everything, test all medicines
         for region in &mut state.regions {
             region.infections.clear();
         }
-        // Diseases NOT identified — should not trigger win
-        state = tick(&state);
-        assert_eq!(state.outcome, GameOutcome::Playing);
-
-        // Identify all diseases but no tested medicines — still no win
         for disease in &mut state.diseases {
             disease.knowledge = 1.0;
         }
-        state = tick(&state);
-        assert_eq!(state.outcome, GameOutcome::Playing);
-
-        // Test medicines against all diseases — now should win
         let disease_count = state.diseases.len();
         state.medicines[0].tested_against = (0..disease_count).collect();
+        // Advance past emergence threshold so burn-out spawn can fire
+        state.tick = crate::state::EMERGENCE_MIN_TICK + 1;
         state = tick(&state);
-        assert_eq!(state.outcome, GameOutcome::Won);
-        assert_eq!(state.sim_state, crate::state::SimState::Paused);
+        // Game should NOT end — there is no victory. Instead, a new disease spawns.
+        assert_eq!(state.outcome, GameOutcome::Playing);
+        assert!(
+            state.diseases.len() > disease_count,
+            "when all infections burn out, a new disease should spawn"
+        );
     }
 
-    #[test]
-    fn stalemate_triggers_when_infections_burn_out() {
-        use crate::state::STALEMATE_TICKS;
-        let mut state = GameState::new_default(42);
-        // Clear all infections to simulate diseases burning out
-        for region in &mut state.regions {
-            region.infections.clear();
-        }
-        // Diseases NOT identified — can't win, but infections are zero
-        // Run for just under the stalemate threshold
-        for _ in 0..(STALEMATE_TICKS - 1) {
-            state = tick(&state);
-            if state.active_crisis.is_some() {
-                state.active_crisis = None;
-                state.sim_state = SimState::Running;
-            }
-        }
-        assert_eq!(state.outcome, GameOutcome::Playing,
-            "should still be playing before stalemate threshold");
-        // One more tick should trigger stalemate
-        state = tick(&state);
-        assert_eq!(state.outcome, GameOutcome::Stalemate);
-        assert_eq!(state.sim_state, SimState::Paused);
-    }
-
-    #[test]
-    fn stalemate_resets_if_infection_returns() {
-        let mut state = GameState::new_default(42);
-        // Clear infections to start the counter
-        for region in &mut state.regions {
-            region.infections.clear();
-        }
-        // Advance partway toward stalemate
-        for _ in 0..100 {
-            state = tick(&state);
-            if state.active_crisis.is_some() {
-                state.active_crisis = None;
-                state.sim_state = SimState::Running;
-            }
-        }
-        assert!(state.zero_infected_ticks > 0);
-        // Re-introduce infection — counter should reset
-        use crate::state::RegionDiseaseState;
-        state.regions[0].infections.push(RegionDiseaseState {
-            disease_idx: 0,
-            infected: 100.0,
-            dead: 0.0,
-            immune: 0.0,
-        });
-        state = tick(&state);
-        assert_eq!(state.zero_infected_ticks, 0);
-    }
 
     #[test]
     fn no_deploy_after_game_over() {
@@ -1186,7 +1113,7 @@ mod tests {
         // Set up a region with sub-person infected count
         state.regions[ri].infections[0].infected = 0.7;
         state = tick(&state);
-        // Should have snapped to 0 (threshold aligned with WIN_INFECTED_THRESHOLD)
+        // Should have snapped to 0 (sub-person counts are meaningless)
         assert_eq!(
             state.regions[ri].infections[0].infected, 0.0,
             "infected below 1.0 should snap to zero"
@@ -1194,25 +1121,30 @@ mod tests {
     }
 
     #[test]
-    fn no_victory_while_infected_remain() {
+    fn burn_out_spawns_scaled_disease() {
         let mut state = GameState::new_default(42);
-        // Set up: all diseases identified, tested medicines exist, but people still infected
-        for disease in &mut state.diseases {
-            disease.knowledge = 1.0;
-        }
-        let disease_count = state.diseases.len();
-        state.medicines[0].tested_against = (0..disease_count).collect();
-        // Reduce infections to a small but non-zero amount (above threshold)
+        // Clear all infections to simulate burn-out
         for region in &mut state.regions {
-            for inf in &mut region.infections {
-                inf.infected = 50.0; // 50 people still infected per region
-            }
+            region.infections.clear();
         }
+        // Set to day 20 — scaled disease should have 2.0x boosted stats
+        state.tick = 20 * crate::state::TICKS_PER_DAY as u64;
+        let disease_count = state.diseases.len();
+        let original_infectivity = state.diseases[0].infectivity;
         state = tick(&state);
-        assert_eq!(
-            state.outcome,
-            GameOutcome::Playing,
-            "should not declare victory while people are still infected"
+
+        assert!(
+            state.diseases.len() > disease_count,
+            "should spawn a new disease when all infections burn out"
+        );
+        // The new disease at day 20 gets 2.0x scaling (1.0 + 20 * 0.05).
+        // Its base stats are in a similar range to disease 0, so after 2x scaling
+        // it should be notably more infectious.
+        let new_disease = &state.diseases[disease_count];
+        assert!(
+            new_disease.infectivity > original_infectivity,
+            "late-game disease infectivity ({}) should exceed original ({})",
+            new_disease.infectivity, original_infectivity
         );
     }
 
