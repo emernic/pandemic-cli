@@ -73,8 +73,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines = Vec::new();
     match &state.outcome {
         GameOutcome::Lost => {
+            let msg = if state.mercy_rule {
+                "Out of resources. The pandemic will run its course."
+            } else {
+                "Humanity has fallen. Too many lives were lost."
+            };
             lines.push(Line::from(Span::styled(
-                "Humanity has fallen. Too many lives were lost.",
+                msg,
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             )));
         }
