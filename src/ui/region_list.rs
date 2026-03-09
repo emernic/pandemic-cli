@@ -455,14 +455,33 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
             let mut policy_parts: Vec<Span> = vec![
                 Span::styled("  Policies: ", label),
             ];
+            let policy_style = Style::default().fg(Color::Yellow);
             if policy.travel_ban {
-                policy_parts.push(Span::styled("Travel Ban ", Style::default().fg(Color::Yellow)));
+                policy_parts.push(Span::styled("Travel Ban ", policy_style));
             }
             if policy.quarantine {
-                policy_parts.push(Span::styled("Quarantine ", Style::default().fg(Color::Yellow)));
+                policy_parts.push(Span::styled("Quarantine ", policy_style));
             }
             if policy.hospital_surge {
-                policy_parts.push(Span::styled("Hospital Surge ", Style::default().fg(Color::Yellow)));
+                policy_parts.push(Span::styled("Hospital Surge ", policy_style));
+            }
+            if policy.border_screening {
+                policy_parts.push(Span::styled("Border Screen ", policy_style));
+            }
+            if policy.water_sanitation {
+                policy_parts.push(Span::styled("Water Sanit. ", policy_style));
+            }
+            match policy.screening {
+                crate::state::ScreeningLevel::None => {}
+                crate::state::ScreeningLevel::Low => {
+                    policy_parts.push(Span::styled("Screening:Low ", policy_style));
+                }
+                crate::state::ScreeningLevel::Medium => {
+                    policy_parts.push(Span::styled("Screening:Med ", policy_style));
+                }
+                crate::state::ScreeningLevel::High => {
+                    policy_parts.push(Span::styled("Screening:High ", policy_style));
+                }
             }
             lines.push(Line::from(policy_parts));
         }
