@@ -40,7 +40,7 @@ Determine the issue type and priority:
 - `enhancement` — A new feature or improvement to existing functionality
 - `chore` — Refactoring, cleanup, tech debt, tooling improvements
 - `investigate` — Something looks off or confusing and needs follow-up. **You are NOT claiming there is a problem.** You're asking someone to take a closer look. **File these aggressively and constantly — they are free, they take 30 seconds, and they are the #1 most underused tool in this project.** If you finish a session without filing any, you weren't paying attention. ~30% turn out to be fine, ~30% lead to docs/cleanup, ~40% uncover real issues. All three outcomes are valuable.
-- `design` — A thinking task, not a coding task. The deliverable is a set of concrete implementation issues (bugs, enhancements, chores), not code. The person picking this up should research the area, play the game, think about the design direction in CLAUDE.md (especially the Game Inspirations and design philosophy), and then file well-scoped implementation issues. Prefix the title with "Design:".
+- `design` — A thinking task, not a coding task. Someone should play the game, think about this area, and file concrete implementation issues. The deliverable is child issues, not code. Prefix the title with "Design:".
 
 **Priority** (pick one label):
 - `P0-critical` — Game-breaking, blocks core functionality
@@ -109,22 +109,7 @@ Think carefully about the title and body before writing. The title should be spe
 [File paths and line numbers to look at]
 ```
 
-**For design issues**, use this structure:
-```markdown
-## Area
-[Which part of the game this is about — e.g., "policy system", "mid-game pacing", "resource economy"]
-
-## Context
-[What exists today and why it needs design attention. What's the player experience gap?]
-
-## Design Direction
-[Any constraints, inspirations, or principles from CLAUDE.md / gameplay.md that apply. What should this feel like?]
-
-## Deliverable
-This issue is complete when concrete implementation issues have been filed. No code changes expected.
-```
-
-Design issues are parent issues — they spawn other issues. The person picking one up should play the game, think carefully, and file focused implementation issues. The design issue is closed when those child issues exist and adequately cover the area.
+**For design issues**, describe what area of the game needs design work and what the player experience problem is. Be specific about what's wrong or missing today. The person picking this up will play the game, think, and file concrete implementation issues — so give them enough context to understand the problem, but don't prescribe the solution. There is no fixed template; just describe the problem clearly and concisely like any other issue. The issue is done when child issues have been filed, not when code ships.
 
 **CRITICAL: Investigate issues are about asking questions, not making claims.** You have NOT investigated the thing yet. You noticed something in passing while doing other work. You do not know whether it's a problem, and you do not know what the fix would be if it is. Your job is to say "hey, can someone look at this?" — nothing more.
 
