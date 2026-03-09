@@ -96,6 +96,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         5 => state.policies[region_idx].screening == ScreeningLevel::Low,
         6 => state.policies[region_idx].screening == ScreeningLevel::Medium,
         7 => state.policies[region_idx].screening == ScreeningLevel::High,
+        10 => state.regions[region_idx].healthcare_invested,
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
