@@ -17,21 +17,14 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     let mut policy_cost = state.total_policy_funding_cost();
     while policy_cost > 0.0 && state.resources.funding < policy_cost {
         // Find the most expensive active individual policy across all regions.
-        // Tracks (region_idx, policy_idx, cost) — no string matching.
+        // Uses active_policy_costs() — single source of truth for trait-adjusted pricing.
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
             let traits = state.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-            for idx in [0, 1, 2, 3, 4, 8] {
-                if p.get_bool(idx) {
-                    let cost = RegionPolicy::bool_policy_cost(idx, traits);
-                    if best.is_none() || cost > best.unwrap().2 {
-                        best = Some((i, idx, cost));
-                    }
+            for (idx, cost) in p.active_policy_costs(traits) {
+                if best.is_none() || cost > best.unwrap().2 {
+                    best = Some((i, idx, cost));
                 }
-            }
-            let scr_cost = p.screening.funding_cost();
-            if scr_cost > 0.0 && (best.is_none() || scr_cost > best.unwrap().2) {
-                best = Some((i, 5, scr_cost));
             }
         }
         if let Some((region_idx, policy_idx, _)) = best {

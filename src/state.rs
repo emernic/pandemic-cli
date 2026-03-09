@@ -393,11 +393,28 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
 }
 
 impl RegionPolicy {
-    /// Funding cost adjusted for regional traits.
-    /// TradeDependent: travel ban costs 2x.
-    /// Always pass the region's traits — use `&[]` only when no region context exists.
-    /// Per-tick funding cost of a single boolean policy, accounting for regional traits.
-    /// Does NOT include screening (which has its own `ScreeningLevel::funding_cost()`).
+    /// Per-policy funding costs for each active policy. Returns (policy_idx, cost)
+    /// pairs, trait-adjusted. Used by both `funding_cost()` and `tick_enforce_costs()`
+    /// to ensure a single source of truth for policy pricing.
+    pub fn active_policy_costs(&self, traits: &[RegionTrait]) -> Vec<(usize, f64)> {
+        let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
+        let mut costs = Vec::new();
+        if self.travel_ban {
+            let cost = if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
+            costs.push((0, cost));
+        }
+        if self.quarantine { costs.push((1, QUARANTINE_COST)); }
+        if self.hospital_surge { costs.push((2, HOSPITAL_SURGE_COST)); }
+        if self.border_controls { costs.push((3, BORDER_CONTROLS_COST)); }
+        if self.water_sanitation { costs.push((4, WATER_SANITATION_COST)); }
+        let scr_cost = self.screening.funding_cost();
+        if scr_cost > 0.0 { costs.push((5, scr_cost)); }
+        if self.martial_law { costs.push((8, MARTIAL_LAW_COST)); }
+        costs
+    }
+
+    /// Per-tick funding cost of a single boolean policy by index, trait-adjusted.
+    /// Used by toggle_policy to display the cost when enabling a policy.
     pub fn bool_policy_cost(policy_idx: usize, traits: &[RegionTrait]) -> f64 {
         let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
         match policy_idx {
@@ -411,15 +428,11 @@ impl RegionPolicy {
         }
     }
 
+    /// Funding cost adjusted for regional traits.
+    /// TradeDependent: travel ban costs 2x.
+    /// Always pass the region's traits — use `&[]` only when no region context exists.
     pub fn funding_cost(&self, traits: &[RegionTrait]) -> f64 {
-        let mut cost = 0.0;
-        for idx in [0, 1, 2, 3, 4, 8] {
-            if self.get_bool(idx) {
-                cost += Self::bool_policy_cost(idx, traits);
-            }
-        }
-        cost += self.screening.funding_cost();
-        cost
+        self.active_policy_costs(traits).iter().map(|(_, c)| c).sum()
     }
 
     /// Personnel cost adjusted for regional traits.
