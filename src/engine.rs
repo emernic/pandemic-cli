@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     CrisisEvent, CrisisKind, CrisisOption,
-    DeployTarget, GameCommand, GameEvent, GameOutcome, GameState,
+    DeployTarget, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     RegionDiseaseState, ResearchKind, ResearchProject, TransmissionVector,
     BORDER_SCREENING_COST, BOOST_RP_COST, BOOST_TICKS, CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
@@ -323,6 +323,10 @@ pub fn tick(state: &GameState) -> GameState {
     {
         if let Some(crisis) = generate_crisis(&new, &mut rng) {
             new.active_crisis = Some(crisis);
+            // Pause the game for the crisis — this is a game rule, not a UI concern.
+            new.sim_state = SimState::Event {
+                was_running: new.sim_state.is_running(),
+            };
             new.events.push(GameEvent::CrisisStarted);
         }
     }
@@ -335,9 +339,9 @@ pub fn tick(state: &GameState) -> GameState {
         let total_dead = new.total_dead();
         let death_threshold = new.initial_population() * LOSE_DEATH_FRACTION;
 
-        if total_dead >= death_threshold {
+        let game_over = if total_dead >= death_threshold {
             new.outcome = GameOutcome::Lost;
-            new.events.push(GameEvent::GameOver);
+            true
         } else if new.total_infected() < WIN_INFECTED_THRESHOLD {
             // Win requires: diseases identified, contained, and medicines tested
             let all_identified = new.diseases.iter().all(|d| d.knowledge >= KNOWLEDGE_NAME);
@@ -346,8 +350,17 @@ pub fn tick(state: &GameState) -> GameState {
             });
             if all_identified && all_have_tested_medicine {
                 new.outcome = GameOutcome::Won;
-                new.events.push(GameEvent::GameOver);
+                true
+            } else {
+                false
             }
+        } else {
+            false
+        };
+
+        if game_over {
+            new.sim_state = SimState::Paused;
+            new.events.push(GameEvent::GameOver);
         }
     }
 
