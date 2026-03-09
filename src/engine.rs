@@ -557,7 +557,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
         Action::ClosePanel => new.ui.close_panel(),
         Action::SelectNext => {
-            let max = new.panel_selection_max();
+            let max = new.ui.panel_selection_max(&new);
             new.ui.select_next(new.regions.len(), max);
         }
         Action::SelectPrev => {
