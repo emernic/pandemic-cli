@@ -993,13 +993,13 @@ mod tests {
     }
 
     #[test]
-    fn game_is_lost_within_20_days_without_intervention() {
-        // The game must be lost within 20 days with zero player intervention,
+    fn game_is_lost_within_60_days_without_intervention() {
+        // The game must be lost within 60 days with zero player intervention,
         // regardless of seed. If this test fails, disease parameters are too weak.
-        // Target: loss around day 10-18, with 20 as generous upper bound.
+        // Target: first collapse day 12-15, defeat day 25-40.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 20 * TICKS_PER_DAY as u64;
+            let max_ticks = 60 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1013,7 +1013,7 @@ mod tests {
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
             assert_eq!(state.outcome, GameOutcome::Lost,
-                "Seed {seed}: game should be lost within 20 days (reached day {day:.1}). \
+                "Seed {seed}: game should be lost within 60 days (reached day {day:.1}). \
                  Regions: {:?}",
                 state.regions.iter().map(|r| {
                     let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
@@ -1023,12 +1023,13 @@ mod tests {
     }
 
     #[test]
-    fn no_collapse_before_day_3_without_intervention() {
-        // First collapse should not occur before day 3, giving players
-        // minimum time for initial research and policy decisions.
+    fn no_collapse_before_day_10_without_intervention() {
+        // First collapse should not occur before day 10, giving players
+        // time for the full research pipeline (identify + develop + trial ≈ 4 days)
+        // plus time to deploy medicines and set policies.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 3 * TICKS_PER_DAY as u64;
+            let max_ticks = 10 * TICKS_PER_DAY as u64;
             for t in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1039,7 +1040,7 @@ mod tests {
                 let collapsed = state.regions.iter().find(|r| r.collapsed);
                 assert!(
                     collapsed.is_none(),
-                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 3",
+                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 10",
                     collapsed.map(|r| r.name.as_str()).unwrap_or("?"),
                     t as f64 / TICKS_PER_DAY
                 );
