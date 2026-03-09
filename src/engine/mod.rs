@@ -1492,14 +1492,15 @@ mod tests {
         let initial_diseases = state.diseases.len();
         let initial_medicines = state.medicines.len();
 
-        // Fast-forward past emergence threshold by running many ticks
-        // Use a seed known to trigger emergence within a reasonable window
-        for _ in 0..1000 {
+        // Fast-forward past emergence threshold by running many ticks.
+        // With EMERGENCE_MIN_TICK=840 and EMERGENCE_CHANCE=0.0007,
+        // we need ~2500 eligible ticks for reliable emergence.
+        for _ in 0..3500 {
             state = tick(&state);
         }
 
-        // With 0.4% chance per tick over 800 eligible ticks, emergence
-        // is virtually guaranteed (1 - 0.996^800 ≈ 96%)
+        // With 0.07% chance per tick over ~2660 eligible ticks, emergence
+        // is virtually guaranteed (1 - 0.9993^2660 ≈ 84%)
         if state.diseases.len() > initial_diseases {
             // New disease appeared — verify it's properly set up
             let new_idx = initial_diseases;

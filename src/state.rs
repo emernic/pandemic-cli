@@ -98,11 +98,12 @@ pub const TREATMENT_FRACTION: f64 = 0.5;
 pub const VACCINATION_FRACTION: f64 = 0.02;
 
 // Disease emergence constants.
-/// First new disease can emerge after this many ticks (~day 3).
-pub const EMERGENCE_MIN_TICK: u64 = 360;
+/// First new disease can emerge after this many ticks (~day 7).
+/// Gives the player time to identify disease 0 and start the research pipeline.
+pub const EMERGENCE_MIN_TICK: u64 = 840;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 5 days (600 ticks).
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0017;
+/// ~1 new disease every 12 days (1440 ticks) → ~3 new diseases in a 45-day game.
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0007;
 /// Maximum number of simultaneous diseases.
 pub const MAX_DISEASES: usize = 5;
 
