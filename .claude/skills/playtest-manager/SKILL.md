@@ -64,11 +64,7 @@ Other agents are merging features constantly. Playtesting stale code generates n
 
 **⚠️ THIS ALSO APPLIES DURING TRIAGE (Step 4).** If you need to read source code to verify a finding, file a bug, or check current values — **re-fetch first**: `git fetch origin` then use `git show origin/master:<filepath>` to see the current code on master. **Never read code that might be stale. Never file issues about code that's already been changed.**
 
-## Step 2: Launch Playtest (OR SKIP — see below)
-
-**⚠️ BEFORE LAUNCHING: Check if snapshot navigation is broken.** Run `gh issue view 827 --json state --jq .state`. If it's OPEN, snapshot mode navigation is unreliable and playtests will produce garbage data. **Skip the playtest entirely and go straight to Step 4 (Design Features).** You can design great features without running a playtest — use the game inspirations, read the code, think about what's missing. Don't waste time on a playtest that can't reliably play the game.
-
-If #827 is closed/fixed, proceed:
+## Step 2: Launch Playtest
 
 ```
 Agent(subagent_type=playtest, prompt=...)
