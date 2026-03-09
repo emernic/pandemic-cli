@@ -170,7 +170,14 @@ pub fn tick(state: &GameState) -> GameState {
         }
         let pop = new.regions[i].population as f64;
         let alive = new.regions[i].alive();
-        if alive < pop * new.regions[i].collapse_threshold {
+        // Martial law reduces collapse threshold by 0.15 (region tolerates more deaths)
+        let martial_law_active = new.policies.get(i).is_some_and(|p| p.martial_law);
+        let threshold = if martial_law_active {
+            (new.regions[i].collapse_threshold - 0.15).max(0.10)
+        } else {
+            new.regions[i].collapse_threshold
+        };
+        if alive < pop * threshold {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
             // Clear all policies in the collapsed region

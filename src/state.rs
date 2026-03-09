@@ -123,6 +123,10 @@ pub const BORDER_CONTROLS_COST: f64 = 0.1;
 pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
 pub const WATER_SANITATION_COST: f64 = 0.3;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
+pub const MARTIAL_LAW_COST: f64 = 1.5;
+pub const MARTIAL_LAW_PERSONNEL: u32 = 4;
+/// One-time funding cost for nuclear annihilation (no ongoing cost).
+pub const NUCLEAR_ANNIHILATION_COST: f64 = 200.0;
 
 /// Disease surveillance intensity. Higher levels reveal more infections
 /// and help detect new hidden diseases faster. Per-region setting.
@@ -215,11 +219,20 @@ pub struct RegionPolicy {
     /// are visible to the player and how quickly new diseases are detected.
     #[serde(default)]
     pub screening: ScreeningLevel,
+    /// Reduces collapse threshold by 15 percentage points. Must be enacted
+    /// before collapse — cleared when region collapses like all other policies.
+    #[serde(default)]
+    pub martial_law: bool,
+    /// One-shot action for collapsed regions only. Kills 99% of remaining
+    /// population, eliminating disease spread from the region. Irreversible.
+    #[serde(default)]
+    pub nuclear_annihilation: bool,
 }
 
 /// Total number of policy types available per region.
-/// Indices 0-4: boolean policies, 5-7: screening tiers (Low/Medium/High).
-pub const POLICY_COUNT: usize = 8;
+/// Indices 0-4: standard boolean policies, 5-7: screening tiers,
+/// 8: martial law, 9: nuclear annihilation.
+pub const POLICY_COUNT: usize = 10;
 
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_controls,
@@ -233,6 +246,8 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.00, // Low Disease Screening — available immediately
     0.10, // Medium Disease Screening
     0.15, // High Disease Screening
+    0.40, // Martial Law — drastic, needs high political will
+    0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
 ];
 
 impl RegionPolicy {
@@ -243,6 +258,8 @@ impl RegionPolicy {
         if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
         if self.border_controls { cost += BORDER_CONTROLS_COST; }
         if self.water_sanitation { cost += WATER_SANITATION_COST; }
+        if self.martial_law { cost += MARTIAL_LAW_COST; }
+        // nuclear_annihilation has no ongoing cost
         cost += self.screening.funding_cost();
         cost
     }
@@ -254,6 +271,8 @@ impl RegionPolicy {
         if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; }
         if self.border_controls { cost += BORDER_CONTROLS_PERSONNEL; }
         if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; }
+        if self.martial_law { cost += MARTIAL_LAW_PERSONNEL; }
+        // nuclear_annihilation requires no personnel
         cost += self.screening.personnel_cost();
         cost
     }
@@ -262,6 +281,7 @@ impl RegionPolicy {
         self.travel_ban || self.quarantine || self.hospital_surge
             || self.border_controls || self.water_sanitation
             || self.screening != ScreeningLevel::None
+            || self.martial_law || self.nuclear_annihilation
     }
 
     pub fn clear_all(&mut self) {
@@ -271,9 +291,11 @@ impl RegionPolicy {
         self.border_controls = false;
         self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
+        self.martial_law = false;
+        // nuclear_annihilation is NOT cleared — it's permanent and post-collapse
     }
 
-    /// Access a boolean policy field by index (0-4).
+    /// Access a boolean policy field by index (0-4, 8-9).
     pub fn get_bool(&self, idx: usize) -> bool {
         match idx {
             0 => self.travel_ban,
@@ -281,11 +303,13 @@ impl RegionPolicy {
             2 => self.hospital_surge,
             3 => self.border_controls,
             4 => self.water_sanitation,
+            8 => self.martial_law,
+            9 => self.nuclear_annihilation,
             _ => false,
         }
     }
 
-    /// Set a boolean policy field by index (0-4).
+    /// Set a boolean policy field by index (0-4, 8-9).
     pub fn set_bool(&mut self, idx: usize, val: bool) {
         match idx {
             0 => self.travel_ban = val,
@@ -293,6 +317,8 @@ impl RegionPolicy {
             2 => self.hospital_surge = val,
             3 => self.border_controls = val,
             4 => self.water_sanitation = val,
+            8 => self.martial_law = val,
+            9 => self.nuclear_annihilation = val,
             _ => {}
         }
     }
