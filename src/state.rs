@@ -1260,8 +1260,8 @@ impl BasicTech {
 impl ResearchKind {
     /// Project costs: (personnel, duration_ticks, funding).
     ///
-    /// DevelopMedicine costs scale with medicine target count:
-    /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
+    /// DevelopMedicine costs depend on variant: rapid (fast/cheap), standard (slow/expensive),
+    /// or broad (multi-target, most expensive).
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
