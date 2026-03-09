@@ -146,9 +146,11 @@ fn render_projects(state: &GameState, bench: bool) -> (String, Vec<Line<'static>
                     )));
                 }
 
-                let (personnel, ticks) = kind.costs(&state.medicines);
+                let (personnel, ticks, funding) = kind.costs(&state.medicines);
                 lines.push(Line::from(vec![
                     Span::raw("    "),
+                    Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
+                    Span::raw("  "),
                     Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
                     Span::raw("  "),
                     Span::styled(format_days(ticks), Style::default().fg(Color::DarkGray)),
@@ -180,7 +182,9 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
     };
 
     if let Some(kind) = projects.get(project_idx) {
-        let (personnel, ticks) = kind.costs(&state.medicines);
+        let (personnel, ticks, funding) = kind.costs(&state.medicines);
+        let has_personnel = state.personnel_available() >= personnel;
+        let has_funding = state.resources.funding >= funding;
 
         lines.push(Line::from(Span::styled(
             format!("  Start: {}", format_kind(kind, state)),
@@ -194,9 +198,19 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
         }
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
+            Span::raw("  Cost: "),
+            Span::styled(format!("${:.0}", funding), Style::default().fg(
+                if has_funding { Color::Green } else { Color::Red }
+            )),
+            Span::styled(
+                format!("  (have ${:.0})", state.resources.funding),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        lines.push(Line::from(vec![
             Span::raw("  Personnel: "),
             Span::styled(format!("{}", personnel), Style::default().fg(
-                if state.personnel_available() >= personnel { Color::Green } else { Color::Red }
+                if has_personnel { Color::Green } else { Color::Red }
             )),
             Span::styled(
                 format!("  ({} available)", state.personnel_available()),
@@ -208,7 +222,7 @@ fn render_confirm(state: &GameState, bench: bool, project_idx: usize) -> (String
             Span::styled(format_days(ticks), Style::default().fg(Color::White)),
         ]));
 
-        let can_afford = state.personnel_available() >= personnel;
+        let can_afford = has_personnel && has_funding;
 
         lines.push(Line::from(""));
         if can_afford {

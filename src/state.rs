@@ -762,26 +762,26 @@ pub enum ResearchKind {
 }
 
 impl ResearchKind {
-    /// Project costs: (personnel, duration_ticks).
+    /// Project costs: (personnel, duration_ticks, funding).
     ///
     /// DevelopMedicine costs scale with medicine target count:
     /// narrow (1 target) is cheaper/faster, broad (2+ targets) is more expensive/slower.
-    pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64) {
+    pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
-            ResearchKind::IdentifyThreat { .. } => (5, 160.0),
+            ResearchKind::IdentifyThreat { .. } => (5, 160.0, 200.0),
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (3, 200.0)  // narrow: fast and cheap, single-target
+                    (3, 200.0, 300.0)  // narrow: fast and cheap, single-target
                 } else {
-                    (10, 400.0) // broad: slow and expensive, covers all
+                    (10, 400.0, 600.0) // broad: slow and expensive, covers all
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (5, 160.0),
-            ResearchKind::ManufactureDoses { .. } => (3, 120.0),
-            ResearchKind::GenomicSequencing { .. } => (5, 200.0),
-            ResearchKind::TrainPersonnel => (1, 160.0),
+            ResearchKind::ClinicalTrial { .. } => (5, 160.0, 200.0),
+            ResearchKind::ManufactureDoses { .. } => (3, 120.0, 150.0),
+            ResearchKind::GenomicSequencing { .. } => (5, 200.0, 300.0),
+            ResearchKind::TrainPersonnel => (1, 160.0, 100.0),
         }
     }
 }
@@ -794,7 +794,7 @@ impl ResearchProject {
     /// Speed multiplier based on personnel assigned vs. base requirement.
     /// More personnel = proportionally faster. E.g. 10 assigned / 5 base = 2.0x.
     pub fn speed(&self, medicines: &[Medicine]) -> f64 {
-        let (base, _) = self.kind.costs(medicines);
+        let (base, _, _) = self.kind.costs(medicines);
         self.personnel_assigned as f64 / base.max(1) as f64
     }
 }
