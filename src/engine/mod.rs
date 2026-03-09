@@ -928,7 +928,6 @@ mod tests {
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..10000 {
             state = tick(&state);
-            crate::ui::process_events(&mut state);
             if state.outcome != GameOutcome::Playing {
                 break;
             }
@@ -961,7 +960,6 @@ mod tests {
         let disease_count = state.diseases.len();
         state.medicines[0].tested_against = (0..disease_count).collect();
         state = tick(&state);
-        crate::ui::process_events(&mut state);
         assert_eq!(state.outcome, GameOutcome::Won);
         assert_eq!(state.sim_state, crate::state::SimState::Paused);
     }
@@ -1804,7 +1802,6 @@ mod tests {
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..10000 {
             state = tick(&state);
-            crate::ui::process_events(&mut state);
             if state.outcome != GameOutcome::Playing {
                 break;
             }
