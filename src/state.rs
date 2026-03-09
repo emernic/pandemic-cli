@@ -911,10 +911,6 @@ impl Medicine {
         }
     }
 
-    /// Number of target options in the UI (vaccinate + treat per target disease).
-    pub fn num_deploy_targets(&self) -> usize {
-        2 * self.target_diseases.len()
-    }
 
     /// Efficacy multiplier based on how many generations behind this medicine is
     /// for a given disease. Each generation of drift reduces efficacy by 15%,

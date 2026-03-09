@@ -789,6 +789,62 @@ mod tests {
     }
 
     #[test]
+    fn multi_target_medicine_shows_disease_selection() {
+        let mut state = GameState::new_default(42);
+        // Make medicine 0 target two diseases
+        state.medicines[0].unlocked = true;
+        state.medicines[0].tested_against = vec![0, 1];
+        state.medicines[0].target_diseases = vec![0, 1];
+        // Add a second disease
+        state.diseases.push(state.diseases[0].clone());
+        state.diseases[1].detected = true;
+
+        state = apply_action(&state, &Action::OpenMedicines);
+        state = apply_action(&state, &Action::Confirm); // select medicine 0
+        state = apply_action(&state, &Action::Confirm); // select region → should go to SelectDisease
+        assert!(matches!(
+            state.ui.medicine_ui,
+            Some(MedicineUiState::SelectDisease { medicine_idx: 0, .. })
+        ), "multi-target should go to SelectDisease, got: {:?}", state.ui.medicine_ui);
+
+        state = apply_action(&state, &Action::Confirm); // select disease 0 → SelectTarget
+        assert!(matches!(
+            state.ui.medicine_ui,
+            Some(MedicineUiState::SelectTarget { medicine_idx: 0, disease_idx: 0, .. })
+        ), "should go to SelectTarget with disease 0, got: {:?}", state.ui.medicine_ui);
+
+        // Back should return to SelectDisease
+        state = apply_action(&state, &Action::ClosePanel);
+        assert!(matches!(
+            state.ui.medicine_ui,
+            Some(MedicineUiState::SelectDisease { .. })
+        ), "back from SelectTarget should go to SelectDisease, got: {:?}", state.ui.medicine_ui);
+    }
+
+    #[test]
+    fn single_target_medicine_skips_disease_selection() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        // Single-target medicines should skip disease step
+        assert_eq!(state.medicines[0].target_diseases.len(), 1);
+
+        state = apply_action(&state, &Action::OpenMedicines);
+        state = apply_action(&state, &Action::Confirm); // select medicine 0
+        state = apply_action(&state, &Action::Confirm); // select region → should skip to SelectTarget
+        assert!(matches!(
+            state.ui.medicine_ui,
+            Some(MedicineUiState::SelectTarget { .. })
+        ), "single-target should skip to SelectTarget, got: {:?}", state.ui.medicine_ui);
+
+        // Back should go to SelectRegion (not SelectDisease)
+        state = apply_action(&state, &Action::ClosePanel);
+        assert!(matches!(
+            state.ui.medicine_ui,
+            Some(MedicineUiState::SelectRegion { .. })
+        ), "back from SelectTarget should go to SelectRegion, got: {:?}", state.ui.medicine_ui);
+    }
+
+    #[test]
     fn untested_medicine_requires_confirmation() {
         let mut state = GameState::new_default(42);
         unlock_untested(&mut state);
