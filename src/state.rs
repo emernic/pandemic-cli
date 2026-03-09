@@ -1359,8 +1359,8 @@ pub struct Medicine {
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
-    /// Rapid-development variant: faster/cheaper to develop, fewer doses, higher deploy cost.
-    /// Standard variants are slower to develop but have more doses and lower deploy cost.
+    /// Legacy field, kept for save file compatibility. Previously distinguished
+    /// rapid vs standard variants; now mechanism properties drive all costs.
     #[serde(default)]
     pub rapid: bool,
 }

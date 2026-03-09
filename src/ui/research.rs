@@ -544,11 +544,18 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                 })
                 .collect();
             if let Some(mech) = med.mechanism {
-                Some(format!("{} — {} | Eff {:.0}%, Resist {}x",
+                let resist_label = if mech.resistance_rate_multiplier() > 1.2 {
+                    "High"
+                } else if mech.resistance_rate_multiplier() > 0.7 {
+                    "Med"
+                } else {
+                    "Low"
+                };
+                Some(format!("{} — {} | Eff {:.0}%, Resist: {}",
                     mech.tradeoff_label(),
                     names.join(", "),
                     mech.efficacy_modifier() * 100.0,
-                    mech.resistance_rate_multiplier()))
+                    resist_label))
             } else {
                 Some(format!("Targets: {}", names.join(", ")))
             }
