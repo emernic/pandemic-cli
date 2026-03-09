@@ -993,14 +993,9 @@ mod tests {
         assert!(state.regions.iter().all(|r| r.collapsed_at_tick.is_some()),
             "every collapsed region should have a collapse timestamp");
         // Collapse timestamps should be in order (earlier collapses have lower tick values)
-        let mut ticks: Vec<u64> = state.regions.iter()
+        let ticks: Vec<u64> = state.regions.iter()
             .filter_map(|r| r.collapsed_at_tick)
             .collect();
-        let sorted = {
-            let mut s = ticks.clone();
-            s.sort();
-            s
-        };
         assert_eq!(ticks.len(), state.regions.len());
         // Not all should be the same tick (regions collapse at different rates)
         assert!(ticks.iter().collect::<std::collections::HashSet<_>>().len() > 1,
