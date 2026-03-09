@@ -232,27 +232,24 @@ pub fn tick(state: &GameState) -> GameState {
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
 
             // Trigger refugee crisis toward a non-collapsed neighbor (if any).
-            // This fires immediately as a crisis event, not from the random pool.
-            if new.active_crisis.is_none() {
-                let neighbors: Vec<usize> = new.regions[i].connections.iter()
-                    .filter(|&&c| !new.regions[c].collapsed)
-                    .copied()
-                    .collect();
-                let to = if neighbors.len() > 1 {
-                    Some(neighbors[new.rng.r#gen::<usize>() % neighbors.len()])
-                } else {
-                    neighbors.first().copied()
+            // Overrides any active crisis — collapse is a major event and its
+            // refugee consequence must not be silently lost.
+            let neighbors: Vec<usize> = new.regions[i].connections.iter()
+                .filter(|&&c| !new.regions[c].collapsed)
+                .copied()
+                .collect();
+            let to = if neighbors.len() > 1 {
+                Some(neighbors[new.rng.r#gen::<usize>() % neighbors.len()])
+            } else {
+                neighbors.first().copied()
+            };
+            if let Some(to) = to {
+                let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to };
+                new.active_crisis = Some(crisis::build_crisis_event(&new, kind));
+                new.sim_state = SimState::Event {
+                    was_running: new.sim_state.is_running(),
                 };
-                if let Some(to) = to {
-                    let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to };
-                    new.active_crisis = Some(crisis::build_crisis_event(&new, kind));
-                    new.sim_state = SimState::Event {
-                        was_running: new.sim_state.is_running(),
-                    };
-                    new.events.push(GameEvent::CrisisStarted);
-                } else {
-                    new.sim_state = SimState::Paused;
-                }
+                new.events.push(GameEvent::CrisisStarted);
             } else {
                 new.sim_state = SimState::Paused;
             }
@@ -2812,6 +2809,24 @@ mod tests {
         assert_eq!(after.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS");
         assert!(matches!(after.sim_state, SimState::Event { .. }),
             "sim state should be Event (not just Paused)");
+    }
+
+    #[test]
+    fn collapse_refugee_crisis_overrides_active_crisis() {
+        let mut state = GameState::new_default(42);
+        // Push region 0 right to the edge of collapse
+        let threshold = state.regions[0].collapse_threshold;
+        let pop = state.regions[0].population as f64;
+        state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
+        state.regions[0].infections[0].dead = state.regions[0].dead;
+        // Pre-load an active crisis (simulating a random crisis on the same tick)
+        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
+        assert!(state.active_crisis.is_some());
+        // Tick should trigger collapse and OVERRIDE the existing crisis
+        let after = tick(&state);
+        assert!(after.regions[0].collapsed, "region should collapse");
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS",
+            "refugee crisis must override any existing crisis on collapse");
     }
 
     #[test]
