@@ -940,17 +940,16 @@ mod tests {
     #[test]
     fn lose_condition_triggers_when_all_regions_collapse() {
         let mut state = GameState::new_default(42);
-        // Ensure a highly lethal, fast-spreading disease so all regions collapse.
-        // Lethality must be high enough to overcome recovery and kill >70% (Africa's threshold).
-        // cross_region_spread must be high enough to reach refugia (S.America, Oceania)
-        // through the sparser connection graph.
+        // Push disease to upper end of normal ranges plus a lethality boost.
+        // With rebalanced parameters (R0 2-4), we just need high lethality
+        // to kill >70% (Africa's threshold) and high cross-region to reach all regions.
         for disease in &mut state.diseases {
-            disease.infectivity = 0.08;
-            disease.lethality = 0.06;
+            disease.infectivity = 0.06;
+            disease.lethality = 0.02;
             disease.recovery_rate = 0.005;
-            disease.cross_region_spread = 0.15;
+            disease.cross_region_spread = 0.05;
         }
-        // Boost initial infection so collapse happens within 10K ticks
+        // Seed all regions with infections so collapse happens within 10K ticks
         for region in &mut state.regions {
             for inf in &mut region.infections {
                 inf.infected = 10_000.0;
@@ -982,6 +981,36 @@ mod tests {
         // Not all should be the same tick (regions collapse at different rates)
         assert!(ticks.iter().collect::<std::collections::HashSet<_>>().len() > 1,
             "regions should collapse at different times, got {:?}", ticks);
+    }
+
+    #[test]
+    fn game_is_lost_within_20_days_without_intervention() {
+        // The game must be lost within 20 days with zero player intervention,
+        // regardless of seed. If this test fails, disease parameters are too weak.
+        for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
+            let mut state = GameState::new_default(seed);
+            let max_ticks = 20 * TICKS_PER_DAY as u64;
+            for _ in 0..max_ticks {
+                state = tick(&state);
+                // Auto-resolve any crisis that pauses the sim
+                if state.active_crisis.is_some() {
+                    use crate::state::SimState;
+                    state.active_crisis = None;
+                    state.sim_state = SimState::Running;
+                }
+                if state.outcome != GameOutcome::Playing {
+                    break;
+                }
+            }
+            let day = state.tick as f64 / TICKS_PER_DAY;
+            assert_eq!(state.outcome, GameOutcome::Lost,
+                "Seed {seed}: game should be lost within 20 days (reached day {day:.1}). \
+                 Regions: {:?}",
+                state.regions.iter().map(|r| {
+                    let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
+                    (r.name.clone(), r.collapsed, format!("{pct:.1}% dead"))
+                }).collect::<Vec<_>>());
+        }
     }
 
     #[test]
@@ -1325,20 +1354,23 @@ mod tests {
     #[test]
     fn disease_mutates_over_time() {
         let mut state = GameState::new_default(42);
-        // Force disease to be RNA virus (highest mutation rate: 0.001/tick).
-        // Over 5000 ticks we expect ~5 mutations, but the game may end
-        // in defeat before then. Run ticks until either mutation occurs or
-        // game ends, and check that mutations happen while game is playing.
         state.diseases[0].pathogen_type = crate::state::PathogenType::RnaVirus;
+        // Slow the disease so it doesn't kill everyone before mutating.
+        // This test verifies mutation mechanics work, not game balance.
+        state.diseases[0].infectivity = 0.01;
+        state.diseases[0].lethality = 0.001;
+        state.diseases[0].recovery_rate = 0.005;
         let original_infectivity = state.diseases[0].infectivity;
         for _ in 0..5000 {
             if state.outcome != GameOutcome::Playing {
                 break;
             }
             state = tick(&state);
+            if state.active_crisis.is_some() {
+                state.active_crisis = None;
+                state.sim_state = crate::state::SimState::Running;
+            }
         }
-        // With 0.001/tick and potentially thousands of ticks before defeat,
-        // we should see at least one mutation.
         assert!(
             state.diseases[0].strain_generation > 0,
             "RNA virus should have mutated at least once (ran {} ticks)",
