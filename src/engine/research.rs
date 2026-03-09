@@ -686,4 +686,72 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Try to confirm
         assert!(state.field_research.is_empty(), "should not start research after game over");
     }
+
+    #[test]
+    fn parallel_field_research_runs_and_completes_independently() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = 1.0;
+        state.medicines[0].unlocked = true;
+        state.resources.funding = 3000.0;
+        state.resources.personnel = 30;
+
+        // Start first field project (Identify will target an unknown disease)
+        state.field_research = vec![
+            ResearchProject {
+                kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+                progress: 0.0,
+                required_ticks: 50.0,
+                personnel_assigned: 5,
+            },
+            ResearchProject {
+                kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
+                progress: 0.0,
+                required_ticks: 100.0,
+                personnel_assigned: 5,
+            },
+        ];
+
+        assert_eq!(state.field_research.len(), 2, "should have 2 parallel field projects");
+        assert_eq!(state.personnel_busy(), 10, "10 personnel busy across 2 projects");
+
+        // Advance until first project completes but second hasn't
+        for _ in 0..55 {
+            state = tick(&state);
+        }
+        assert_eq!(state.field_research.len(), 1, "first project should have completed");
+        assert!(matches!(&state.field_research[0].kind, ResearchKind::ClinicalTrial { .. }),
+            "remaining project should be the clinical trial");
+
+        // Advance until second completes
+        for _ in 0..50 {
+            state = tick(&state);
+        }
+        assert!(state.field_research.is_empty(), "both projects should have completed");
+    }
+
+    #[test]
+    fn field_research_capped_at_max() {
+        use crate::state::MAX_FIELD_RESEARCH;
+        let mut state = GameState::new_default(42);
+        state.resources.personnel = 50;
+
+        // Fill all field slots
+        for i in 0..MAX_FIELD_RESEARCH {
+            state.field_research.push(ResearchProject {
+                kind: ResearchKind::IdentifyThreat { disease_idx: i },
+                progress: 0.0,
+                required_ticks: 160.0,
+                personnel_assigned: 5,
+            });
+        }
+        assert!(!state.field_research_has_capacity(), "should be at capacity");
+        assert_eq!(state.field_research.len(), MAX_FIELD_RESEARCH);
+
+        // Try to start another — should fail
+        let (ok, _msg) = super::start_research(
+            &mut state, ResearchTrack::Field, 0, false,
+        );
+        assert!(!ok, "should not start field research when at capacity");
+        assert_eq!(state.field_research.len(), MAX_FIELD_RESEARCH);
+    }
 }
