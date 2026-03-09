@@ -49,9 +49,14 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         rp,
     });
 
-    // Mutation surge: requires a disease with strain_generation > 0
+    // Mutation surge: requires a disease with strain_generation > 0 AND active infections
     let mutated: Vec<usize> = state.diseases.iter().enumerate()
-        .filter(|(_, d)| d.strain_generation > 0)
+        .filter(|(i, d)| {
+            d.strain_generation > 0
+                && state.regions.iter().any(|r| {
+                    r.disease_state(*i).map_or(false, |ds| ds.infected > 0.0)
+                })
+        })
         .map(|(i, _)| i)
         .collect();
     if !mutated.is_empty() {
