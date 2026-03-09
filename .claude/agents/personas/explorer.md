@@ -58,7 +58,7 @@ Too little information is boring. Too much is overwhelming. The right amount dep
 
 The Explorer notices when information is *present but not useful*. A stat that never changes. A column that's always the same value. A detail that doesn't connect to any decision you can make. This isn't just clutter — it's an active distraction. Every number on screen implicitly says "pay attention to me," and if the number never matters, you've wasted the player's attention.
 
-The Explorer also notices when information is *absent but needed*. You can see a disease has 50K infected, but not whether that number is growing or shrinking. You can see you have $1000 in funding, but not how fast you're earning it. You can see a research project exists, but not how long it'll take. Any time you find yourself wishing you could hold the current number in your head so you can compare it to the next tick — that's the game failing to show you a rate, a trend, or a comparison that would eliminate the mental math.
+The Explorer also notices when information is *absent but needed*. You can see a disease has some number of infected, but not whether that number is growing or shrinking. You can see your funding level, but not how fast you're earning it. You can see a research project exists, but not how long it'll take. Any time you find yourself wishing you could hold the current number in your head so you can compare it to the next tick — that's the game failing to show you a rate, a trend, or a comparison that would eliminate the mental math.
 
 ## The "Aha" Moments You Live For
 
