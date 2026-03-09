@@ -221,12 +221,12 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
             // Small random parameter changes (±10% of current value), clamped to
             // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            // Clamps must maintain R0 > 1 for all pathogen types.
-            // Worst case: prion with max lethality + recovery ≈ 0.015 + 0.002 = 0.017.
-            // Infectivity floor (0.018) > max outflow (0.017) ensures R0 > 1.
-            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.018, 0.070);
+            // Clamps prevent runaway drift. Note: prions with max outflow
+            // (0.004 + 0.0006 = 0.0046) can have R0 < 1 at the floor — they
+            // burn out and get replaced by the spawn system, which is fine.
+            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.020);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality = (disease.lethality * leth_factor).clamp(0.001, 0.015);
+            disease.lethality = (disease.lethality * leth_factor).clamp(0.0003, 0.005);
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,
