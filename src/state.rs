@@ -845,6 +845,18 @@ pub struct Disease {
     /// Undetected diseases spread silently — the player sees only "?" in the threats panel.
     #[serde(default = "default_true")]
     pub detected: bool,
+    /// Per-mechanism resistance levels. When a medicine with mechanism X is deployed
+    /// against this disease, resistance to mechanism X increases — affecting ALL drugs
+    /// sharing that mechanism. Broad-spectrum drugs (mechanism=None) track separately.
+    #[serde(default)]
+    pub mechanism_resistance: Vec<ResistanceEntry>,
+}
+
+/// Resistance level for a specific mechanism of action against a disease.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResistanceEntry {
+    pub mechanism: Option<MechanismOfAction>,
+    pub level: f64,
 }
 
 fn default_true() -> bool {
@@ -859,6 +871,31 @@ impl Disease {
             self.name.clone()
         } else {
             format!("Unknown Pathogen #{}", idx + 1)
+        }
+    }
+
+    /// Get resistance level for a specific mechanism (0.0–1.0).
+    pub fn get_resistance(&self, mechanism: Option<MechanismOfAction>) -> f64 {
+        self.mechanism_resistance.iter()
+            .find(|e| e.mechanism == mechanism)
+            .map(|e| e.level)
+            .unwrap_or(0.0)
+    }
+
+    /// Efficacy multiplier from mechanism resistance (0.2–1.0).
+    pub fn resistance_factor(&self, mechanism: Option<MechanismOfAction>) -> f64 {
+        (1.0 - self.get_resistance(mechanism)).max(0.2)
+    }
+
+    /// Add resistance for a mechanism, capping at 1.0.
+    pub fn add_resistance(&mut self, mechanism: Option<MechanismOfAction>, amount: f64) {
+        if let Some(entry) = self.mechanism_resistance.iter_mut().find(|e| e.mechanism == mechanism) {
+            entry.level = (entry.level + amount).min(1.0);
+        } else {
+            self.mechanism_resistance.push(ResistanceEntry {
+                mechanism,
+                level: amount.min(1.0),
+            });
         }
     }
 
@@ -914,6 +951,7 @@ impl Disease {
             strain_generation: 0,
             sequencing_count: 0,
             detected: true, // callers override to false for new diseases
+            mechanism_resistance: vec![],
         }
     }
 }
@@ -1141,10 +1179,6 @@ pub struct Medicine {
     /// Standard variants are slower to develop but have more doses and lower deploy cost.
     #[serde(default)]
     pub rapid: bool,
-    /// Per-disease resistance level (0.0–1.0), parallel to `target_diseases`.
-    /// Grows with each deployment (treatment pressure). Reduces efficacy multiplicatively.
-    #[serde(default)]
-    pub resistance: Vec<f64>,
 }
 
 /// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
@@ -1188,7 +1222,6 @@ impl Medicine {
                     strain_generations: vec![],
                     deployed_count: 0,
                     rapid: false,
-                    resistance: vec![],
                 }];
             }
         };
@@ -1211,7 +1244,6 @@ impl Medicine {
                 strain_generations: vec![],
                 deployed_count: 0,
                 rapid: true,
-                resistance: vec![],
             },
             // Standard variant: slower to develop, more doses, lower deploy cost
             Medicine {
@@ -1227,7 +1259,6 @@ impl Medicine {
                 strain_generations: vec![],
                 deployed_count: 0,
                 rapid: false,
-                resistance: vec![],
             },
         ]
     }
@@ -1257,14 +1288,12 @@ impl Medicine {
         }
     }
 
-    /// Efficacy multiplier from resistance (0.2–1.0). Resistance builds from deployment
-    /// pressure. Floor at 0.2 so even fully-resistant medicines retain some effectiveness.
-    pub fn resistance_factor(&self, disease_idx: usize) -> f64 {
-        let pos = self.target_diseases.iter().position(|&d| d == disease_idx);
-        match pos {
-            Some(i) => (1.0 - self.resistance.get(i).copied().unwrap_or(0.0)).max(0.2),
-            None => 1.0,
-        }
+    /// Efficacy multiplier from mechanism resistance (0.2–1.0). Reads resistance
+    /// from the disease based on this medicine's mechanism of action.
+    pub fn resistance_factor(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
+        diseases.get(disease_idx)
+            .map(|d| d.resistance_factor(self.mechanism))
+            .unwrap_or(1.0)
     }
 
     /// Estimate how many people a vaccination deployment would protect.
@@ -1319,7 +1348,7 @@ impl Medicine {
         } else {
             1.0
         };
-        let resistance = self.resistance_factor(disease_idx);
+        let resistance = self.resistance_factor(disease_idx, diseases);
         therapy_efficacy * strain_eff * cross_reactive * resistance
     }
 
@@ -2617,7 +2646,6 @@ impl GameState {
             strain_generations: vec![],
             deployed_count: 0,
             rapid: false,
-            resistance: vec![],
         });
 
         Self {
@@ -3044,7 +3072,7 @@ impl GameState {
         self.medicines.iter().any(|m| {
             m.target_diseases.contains(&disease_idx)
                 && m.deployed_count > 0
-                && m.resistance_factor(disease_idx) < 0.7
+                && m.resistance_factor(disease_idx, &self.diseases) < 0.7
         })
     }
 

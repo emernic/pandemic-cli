@@ -157,6 +157,7 @@ fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, cost: f64, ac
 /// CombinationTherapy tech halves all resistance buildup.
 fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
     let med = &state.medicines[medicine_idx];
+    let mechanism = med.mechanism;
     let base = if is_treatment { 0.03 } else { 0.005 };
     let type_mult = match med.therapy_type {
         crate::state::TherapyType::BroadSpectrum => 2.0,
@@ -164,13 +165,11 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
     };
     let combo_mult = state.resistance_multiplier();
     let gain = base * type_mult * combo_mult;
-    // Ensure resistance vec is populated (parallel to target_diseases)
-    let med = &mut state.medicines[medicine_idx];
-    while med.resistance.len() < med.target_diseases.len() {
-        med.resistance.push(0.0);
-    }
-    if let Some(pos) = med.target_diseases.iter().position(|&d| d == disease_idx) {
-        med.resistance[pos] = (med.resistance[pos] + gain).min(1.0);
+    // Resistance lives on the disease, keyed by mechanism — so deploying
+    // any CellWallInhibitor drug builds resistance that affects ALL
+    // CellWallInhibitor drugs against this disease.
+    if let Some(disease) = state.diseases.get_mut(disease_idx) {
+        disease.add_resistance(mechanism, gain);
     }
 }
 

@@ -1748,6 +1748,7 @@ mod tests {
             strain_generation: 3,
             sequencing_count: 0,
             detected: true,
+            mechanism_resistance: vec![],
         }];
 
         let med = Medicine {
@@ -1763,7 +1764,6 @@ mod tests {
             strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
             deployed_count: 0,
             rapid: false,
-            resistance: vec![],
         };
 
         // 3 generations behind = 1.0 - 3*0.15 = 0.55
@@ -1807,7 +1807,7 @@ mod tests {
         });
 
         // Record initial resistance
-        let initial_res = state.medicines[med_idx].resistance_factor(disease_idx);
+        let initial_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
         assert!((initial_res - 1.0).abs() < 0.001, "should start with no resistance");
 
         // Deploy treatment multiple times
@@ -1820,7 +1820,7 @@ mod tests {
             let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1); // target_selection 1 = Treat
         }
 
-        let after_res = state.medicines[med_idx].resistance_factor(disease_idx);
+        let after_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
         assert!(after_res < 1.0, "resistance should have built up after 10 treatments, got factor {after_res}");
         assert!(after_res > 0.2, "resistance shouldn't be maxed after only 10 treatments, got factor {after_res}");
 
@@ -1841,7 +1841,7 @@ mod tests {
             let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, 1);
         }
 
-        let bs_res = state.medicines[bs_idx].resistance_factor(disease_idx);
+        let bs_res = state.medicines[bs_idx].resistance_factor(disease_idx, &state.diseases);
         assert!(bs_res < after_res, "broad-spectrum should build resistance faster than targeted: bs={bs_res} vs targeted={after_res}");
     }
 
