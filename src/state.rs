@@ -936,6 +936,22 @@ pub struct ResearchProject {
     pub personnel_assigned: u32,
 }
 
+impl ResearchProject {
+    /// Whether this research project references the given disease index
+    /// (directly or via a medicine that targets it).
+    pub fn references_disease(&self, disease_idx: usize) -> bool {
+        match &self.kind {
+            ResearchKind::IdentifyThreat { disease_idx: d } => *d == disease_idx,
+            ResearchKind::GenomicSequencing { disease_idx: d } => *d == disease_idx,
+            ResearchKind::ClinicalTrial { disease_idx: d, .. } => *d == disease_idx,
+            ResearchKind::DevelopMedicine { .. }
+            | ResearchKind::ManufactureDoses { .. }
+            | ResearchKind::TrainPersonnel
+            | ResearchKind::BasicResearch { .. } => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchKind {
     IdentifyThreat { disease_idx: usize },
@@ -2224,6 +2240,14 @@ impl GameState {
             // Remove all infection entries for the old disease in all regions.
             for region in &mut self.regions {
                 region.infections.retain(|inf| inf.disease_idx != idx);
+            }
+
+            // Cancel any active research targeting the recycled disease.
+            if self.field_research.as_ref().is_some_and(|r| r.references_disease(idx)) {
+                self.field_research = None;
+            }
+            if self.applied_research.as_ref().is_some_and(|r| r.references_disease(idx)) {
+                self.applied_research = None;
             }
 
             // Replace the corresponding medicine.
