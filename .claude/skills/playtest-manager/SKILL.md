@@ -118,7 +118,13 @@ gh issue comment <number> --body "Bumping priority: confirmed by 3+ independent 
 gh issue view <number> --json stateReason --jq '.stateReason'
 ```
 
-If `COMPLETED` and the problem persists, reopen with a confirmation comment:
+**⚠️ Before reopening: verify on FRESH code.** Master changes constantly — other agents are merging features every few minutes. Your local code is stale the moment you check it out. If you think a completed issue's fix isn't working, do NOT just grep your local code. Either:
+1. Check the actual PR that closed the issue (`gh pr view <number>`) to see what was implemented
+2. Or `git fetch origin && git checkout origin/master` and verify there before claiming it's not fixed
+
+**This has caused real damage before:** a playtest manager grepped a stale branch, didn't find the expected code, incorrectly reopened a completed issue, and created confusion. Don't repeat this mistake.
+
+If `COMPLETED` and the problem genuinely persists on latest master, reopen with a confirmation comment:
 
 ```bash
 gh issue reopen <number> --comment "$(cat <<'EOF'
