@@ -399,4 +399,22 @@ mod tests {
             "standing regions should show 'held'");
     }
 
+    #[test]
+    fn defeat_screen_shows_pathogen_report_and_score() {
+        let mut state = GameState::new_default(42);
+        state.outcome = GameOutcome::Lost;
+        state.tick = 2400; // 20 days
+        // Give disease 0 some deaths
+        state.regions[0].infections[0].dead = 50_000.0;
+        state.regions[0].dead = 50_000.0;
+        let screen = render_to_string(&state);
+        assert!(screen.contains("Pathogen Report"),
+            "defeat screen should show pathogen report");
+        assert!(screen.contains("Score"),
+            "defeat screen should show score");
+        // Disease names are revealed on defeat (even unidentified ones)
+        assert!(screen.contains(&state.diseases[0].name),
+            "defeat screen should reveal true disease name");
+    }
+
 }
