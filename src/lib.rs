@@ -45,10 +45,13 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         return new;
                     }
                 }
-                // Save auto-resolve preference if toggled on
+                // Save or clear auto-resolve preference
+                let tag = new.active_crisis.as_ref().unwrap().kind.tag().to_string();
                 if new.ui.crisis_auto_resolve {
-                    let tag = new.active_crisis.as_ref().unwrap().kind.tag().to_string();
                     new.auto_resolve_crises.insert(tag, choice);
+                } else {
+                    // Manually handling a crisis clears any saved preference
+                    new.auto_resolve_crises.remove(&tag);
                 }
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
@@ -280,5 +283,29 @@ mod tests {
         // Confirm without toggling auto-resolve
         let state = apply_action(&state, &Action::Confirm);
         assert!(state.auto_resolve_crises.is_empty());
+    }
+
+    #[test]
+    fn manual_confirm_clears_existing_preference() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+
+        let mut state = GameState::new_default(42);
+        // Pre-existing preference for aid crises
+        state.auto_resolve_crises.insert("aid".to_string(), 0);
+
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            title: "Aid Offer".into(),
+            description: "Choose wisely".into(),
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            tick_created: 0,
+        });
+
+        // Confirm WITHOUT [X] — should clear the existing preference
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(!state.auto_resolve_crises.contains_key("aid"),
+            "manually handling a crisis should clear saved preference");
     }
 }
