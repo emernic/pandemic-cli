@@ -220,7 +220,7 @@ pub fn tick(state: &GameState) -> GameState {
     if new.tick % crate::state::HISTORY_INTERVAL == 0 {
         new.history.push(crate::state::HistorySnapshot {
             tick: new.tick,
-            total_infected: new.total_infected_detected(),
+            total_infected: new.total_infected_screened(),
             total_dead: new.total_dead_detected(),
         });
         if new.history.len() > crate::state::HISTORY_MAX {
