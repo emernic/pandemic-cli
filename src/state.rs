@@ -109,18 +109,18 @@ pub const MAX_DISEASES: usize = 5;
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
 /// Per-tick cost for each personnel on the roster (busy or idle).
-/// 20 personnel × 0.1 = $2/tick = $240/day upkeep vs $360/day base income.
+/// 20 personnel × 0.1 = $2/tick = $240/day upkeep vs $360/day gross income → ~$120/day net.
 pub const PERSONNEL_UPKEEP_COST: f64 = 0.1;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
-pub const TRAVEL_BAN_COST: f64 = 6.0;
+pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
-pub const QUARANTINE_COST: f64 = 5.0;
+pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
-pub const HOSPITAL_SURGE_COST: f64 = 3.0;
+pub const HOSPITAL_SURGE_COST: f64 = 0.4;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
-pub const BORDER_CONTROLS_COST: f64 = 0.4;
+pub const BORDER_CONTROLS_COST: f64 = 0.1;
 pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
-pub const WATER_SANITATION_COST: f64 = 4.0;
+pub const WATER_SANITATION_COST: f64 = 0.3;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 
 /// Disease surveillance intensity. Higher levels reveal more infections
@@ -135,9 +135,9 @@ pub enum ScreeningLevel {
 }
 
 /// Per-tick cost for each screening level.
-pub const SCREENING_LOW_COST: f64 = 1.5;
-pub const SCREENING_MEDIUM_COST: f64 = 3.0;
-pub const SCREENING_HIGH_COST: f64 = 5.0;
+pub const SCREENING_LOW_COST: f64 = 0.2;
+pub const SCREENING_MEDIUM_COST: f64 = 0.4;
+pub const SCREENING_HIGH_COST: f64 = 0.6;
 
 impl ScreeningLevel {
     /// Fraction of actual infections visible to the player.
