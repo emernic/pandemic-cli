@@ -1485,6 +1485,7 @@ impl UiState {
             MapDirection::Left,
             num_regions,
         );
+        self.sync_panel_region();
     }
 
     /// Navigate right on the map (always, regardless of open panel).
@@ -1495,6 +1496,21 @@ impl UiState {
             MapDirection::Right,
             num_regions,
         );
+        self.sync_panel_region();
+    }
+
+    /// Keep region-specific panel views in sync with the map selection.
+    fn sync_panel_region(&mut self) {
+        if let Some(PolicyUiState::ManagePolicies { region_idx }) = &mut self.policy_ui {
+            *region_idx = self.map_selection;
+        }
+        match &mut self.medicine_ui {
+            Some(MedicineUiState::SelectTarget { region_idx, .. })
+            | Some(MedicineUiState::ConfirmDeploy { region_idx, .. }) => {
+                *region_idx = self.map_selection;
+            }
+            _ => {}
+        }
     }
 
     /// Handle a Confirm keypress. Advances wizard state machines and returns
