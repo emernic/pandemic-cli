@@ -291,13 +291,29 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let green = Style::default().fg(Color::Green);
         let red_style = Style::default().fg(Color::Red);
 
-        // Income line
+        // Income line — show travel ban penalty separately when active
         let alive_regions = state.regions.iter().filter(|r| !r.collapsed).count();
-        lines.push(Line::from(vec![
-            Span::styled("  Income:   ", dim),
-            Span::styled(format!("+${:.0}/day", gross), green),
-            Span::styled(format!("  ({} regions)", alive_regions), dim),
-        ]));
+        let ban_penalty = state.travel_ban_income_penalty() * TICKS_PER_DAY;
+        if ban_penalty > 0.0 {
+            // Show the pre-penalty income so the player can see the true cost
+            let base_income = gross + ban_penalty;
+            lines.push(Line::from(vec![
+                Span::styled("  Income:   ", dim),
+                Span::styled(format!("+${:.0}/day", base_income), green),
+                Span::styled(format!("  ({} regions)", alive_regions), dim),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("  Ban cost: ", dim),
+                Span::styled(format!("-${:.0}/day", ban_penalty), red_style),
+                Span::styled("  (halved income)", dim),
+            ]));
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled("  Income:   ", dim),
+                Span::styled(format!("+${:.0}/day", gross), green),
+                Span::styled(format!("  ({} regions)", alive_regions), dim),
+            ]));
+        }
 
         // Upkeep line
         if upkeep > 0.0 {
