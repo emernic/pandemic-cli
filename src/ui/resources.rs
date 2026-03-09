@@ -45,6 +45,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::DarkGray),
         ),
         {
+            let ban_penalty = state.travel_ban_income_penalty() * TICKS_PER_DAY;
+            if ban_penalty > 0.5 {
+                Span::styled(
+                    format!(" (−${:.0} bans)", ban_penalty),
+                    Style::default().fg(Color::Yellow),
+                )
+            } else {
+                Span::raw("")
+            }
+        },
+        {
             let cost = state.total_policy_funding_cost();
             if cost > 0.0 {
                 Span::styled(
