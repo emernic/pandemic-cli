@@ -330,6 +330,25 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.00, // Healthcare Investment — always available, encourages early spending
 ];
 
+/// Short display name for each policy by index. Canonical source — used by
+/// both engine (status messages) and UI (panel rendering).
+pub fn policy_display_name(policy_idx: usize) -> &'static str {
+    match policy_idx {
+        0 => "Travel Ban",
+        1 => "Quarantine",
+        2 => "Hospital Surge",
+        3 => "Border Controls",
+        4 => "Water Sanitation",
+        5 => "Basic Screening",
+        6 => "Med Screening",
+        7 => "Mass Screening",
+        8 => "Martial Law",
+        9 => "Nuclear Option",
+        10 => "Healthcare",
+        _ => "Unknown Policy",
+    }
+}
+
 impl RegionPolicy {
     pub fn funding_cost(&self) -> f64 {
         let mut cost = 0.0;
@@ -2777,6 +2796,40 @@ impl GameState {
     /// Whether a policy can be activated given current POL and regional severity.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
         self.resources.political_power >= self.effective_pol_threshold(region_idx, policy_idx)
+    }
+
+    /// Current POL drift target based on severity, time, and active policies.
+    /// POL drifts toward this value at ~30%/day. Called by engine::tick().
+    pub fn pol_target(&self) -> f64 {
+        let initial_pop = self.initial_population();
+        let death_frac = if initial_pop > 0.0 { self.total_dead() / initial_pop } else { 0.0 };
+        let infected_frac = if initial_pop > 0.0 { self.total_infected() / initial_pop } else { 0.0 };
+        let time_frac = self.tick as f64 / (30.0 * TICKS_PER_DAY);
+        let severity = death_frac.sqrt() + infected_frac.sqrt() * 0.4;
+        let active_policies: u32 = self.policies.iter().map(|p| p.active_count()).sum();
+        let policy_drain = active_policies as f64 * 0.02;
+        (severity + time_frac * 0.1 - policy_drain).clamp(0.0, 0.90)
+    }
+
+    /// The next policy that would unlock with more POL. Returns (name, threshold)
+    /// for the lowest-threshold policy not yet globally available, or None if all
+    /// are already unlocked at current POL.
+    pub fn next_pol_unlock(&self) -> Option<(&'static str, f64)> {
+        let pol = self.resources.political_power;
+        let mut best: Option<(&'static str, f64)> = None;
+        for idx in 0..POLICY_COUNT {
+            let threshold = POLICY_POL_THRESHOLDS[idx];
+            if threshold <= 0.0 {
+                continue; // Always available, skip
+            }
+            if pol >= threshold {
+                continue; // Already unlocked
+            }
+            if best.is_none() || threshold < best.unwrap().1 {
+                best = Some((policy_display_name(idx), threshold));
+            }
+        }
+        best
     }
 
     /// Spawn a new disease mid-game: generates a random disease, places an initial

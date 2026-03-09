@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState, ScreeningLevel,
+    GameEvent, GameState, ScreeningLevel, policy_display_name,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     HEALTHCARE_INVESTMENT_COST,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
@@ -9,23 +9,6 @@ use crate::state::{
     TICKS_PER_DAY, TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
 };
-
-/// Display name for a policy by index. Shared between enforcement and toggle
-/// so the name is defined in exactly one place.
-fn policy_display_name(policy_idx: usize) -> &'static str {
-    match policy_idx {
-        0 => "Travel Ban",
-        1 => "Quarantine",
-        2 => "Hospital Surge",
-        3 => "Border Controls",
-        4 => "Water Sanitation",
-        5 => "Disease Screening",
-        8 => "Martial Law",
-        9 => "Nuclear Annihilation",
-        10 => "Healthcare Investment",
-        _ => "Unknown Policy",
-    }
-}
 
 /// Enforce policy costs: suspend most expensive policies one at a time
 /// until affordable, then deduct the total cost. Returns the total
@@ -53,14 +36,23 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
             }
         }
         if let Some((region_idx, policy_idx, _)) = best {
-            if policy_idx <= 4 {
-                state.policies[region_idx].set_bool(policy_idx, false);
-            } else {
+            let name = if policy_idx == 5 {
+                // Screening: resolve tier-specific name before clearing
+                let tier_name = match state.policies[region_idx].screening {
+                    ScreeningLevel::Basic => "Basic Screening",
+                    ScreeningLevel::Antigen => "Med Screening",
+                    ScreeningLevel::MassRapid => "Mass Screening",
+                    ScreeningLevel::None => "Screening",
+                };
                 state.policies[region_idx].screening = ScreeningLevel::None;
-            }
+                tier_name.to_string()
+            } else {
+                state.policies[region_idx].set_bool(policy_idx, false);
+                policy_display_name(policy_idx).to_string()
+            };
             state.events.push(GameEvent::PolicySuspended {
                 region_idx,
-                policy_name: policy_display_name(policy_idx).to_string(),
+                policy_name: name,
             });
             policy_cost = state.total_policy_funding_cost();
         } else {
@@ -101,15 +93,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
         let threshold = state.effective_pol_threshold(region_idx, policy_idx);
-        let policy_name = match policy_idx {
-            5 => "Basic Screening",
-            6 => "Antigen Screening",
-            7 => "Mass Rapid Screening",
-            _ => policy_display_name(policy_idx),
-        };
         return (Some(format!(
             "{} requires {:.0}% Political Power (current: {:.0}%)",
-            policy_name, threshold * 100.0, state.resources.political_power * 100.0
+            policy_display_name(policy_idx), threshold * 100.0, state.resources.political_power * 100.0
         )), false);
     }
     let available_personnel = state.personnel_available();

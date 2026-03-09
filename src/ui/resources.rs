@@ -47,6 +47,27 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(pol_color),
             )
         },
+        // POL trend arrow: compare current POL to its drift target
+        {
+            let target = state.pol_target();
+            let pol = state.resources.political_power;
+            let gap = target - pol;
+            if gap > 0.02 {
+                Span::styled(" \u{25b2}", Style::default().fg(Color::Green)) // ▲ rising
+            } else if gap < -0.02 {
+                Span::styled(" \u{25bc}", Style::default().fg(Color::Red)) // ▼ falling
+            } else {
+                Span::styled(" \u{2014}", Style::default().fg(Color::DarkGray)) // — stable
+            }
+        },
+        // Next POL unlock hint
+        match state.next_pol_unlock() {
+            Some((name, threshold)) => Span::styled(
+                format!(" ({}@{:.0}%)", name, threshold * 100.0),
+                Style::default().fg(Color::DarkGray),
+            ),
+            None => Span::raw(""),
+        },
         Span::raw("  "),
         Span::styled(
             format!("Funds: ${:.0}", state.resources.funding),
