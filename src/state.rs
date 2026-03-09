@@ -1011,7 +1011,7 @@ impl ResearchKind {
                     (10, 400.0, 600.0) // broad: slow and expensive, covers all
                 }
             }
-            ResearchKind::ClinicalTrial { .. } => (5, 160.0, 200.0),
+            ResearchKind::ClinicalTrial { .. } => (2, 60.0, 100.0),
             ResearchKind::ManufactureDoses { .. } => (3, 120.0, 150.0),
             ResearchKind::GenomicSequencing { .. } => (5, 200.0, 300.0),
             ResearchKind::TrainPersonnel => (1, 160.0, 100.0),
