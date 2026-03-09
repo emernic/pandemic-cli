@@ -1,5 +1,5 @@
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::{GameOutcome, GameState};
+use pandemic_cli_lib::state::{GameOutcome, GameState, SimState};
 
 /// Smoke test: initial screen renders without panicking and contains key UI elements.
 #[test]
@@ -29,7 +29,7 @@ fn after_ticks() {
 fn game_over_defeat() {
     let mut state = GameState::new_default(42);
     state.outcome = GameOutcome::Lost;
-    state.paused = true;
+    state.sim_state = SimState::Paused;
     let output = render_to_string(&state);
     assert!(output.contains("DEFEAT"), "missing defeat indicator");
     assert!(output.contains("Humanity has fallen"), "missing defeat message");

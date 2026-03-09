@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: 2 normally, 3 when research is active.
@@ -22,8 +22,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let pause_indicator = match &state.outcome {
         GameOutcome::Lost => Span::styled(" DEFEAT ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
         GameOutcome::Won => Span::styled(" VICTORY ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        GameOutcome::Playing if state.paused => Span::styled(" PAUSED ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-        GameOutcome::Playing => Span::styled(" RUNNING ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        GameOutcome::Playing => match &state.sim_state {
+            SimState::Running => Span::styled(" RUNNING ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            SimState::Paused => Span::styled(" PAUSED ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            SimState::Event { .. } => Span::styled(" EVENT ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        },
     };
 
     let line1 = Line::from(vec![

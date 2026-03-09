@@ -6,7 +6,7 @@ pub mod ui;
 
 use action::Action;
 use engine::execute_command;
-use state::{GameCommand, GameOutcome, GameState, Panel};
+use state::{GameCommand, GameOutcome, GameState, Panel, SimState};
 
 /// Route a player action to the appropriate handler.
 ///
@@ -19,7 +19,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
     new.ui.status_message = None;
 
-    // When a crisis is active, only allow selecting options and confirming
+    // When a crisis is active (Event state), only allow selecting options and confirming
     if new.active_crisis.is_some() {
         match action {
             Action::SelectNext | Action::SelectRight => {
@@ -34,18 +34,25 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
+                // Restore pre-event sim state
+                if let SimState::Event { was_running } = new.sim_state {
+                    new.sim_state = if was_running { SimState::Running } else { SimState::Paused };
+                }
             }
             Action::Quit => {} // Still allow quit
-            _ => {} // Block all other actions during crisis
+            _ => {} // Block all other actions during crisis (including TogglePause)
         }
         return new;
     }
 
     match action {
         Action::TogglePause => {
-            // Can't unpause after game over
             if new.outcome == GameOutcome::Playing {
-                new.paused = !new.paused;
+                match new.sim_state {
+                    SimState::Running => new.sim_state = SimState::Paused,
+                    SimState::Paused => new.sim_state = SimState::Running,
+                    SimState::Event { .. } => {} // blocked during events
+                }
             }
         }
         Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),

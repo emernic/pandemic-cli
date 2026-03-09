@@ -1145,12 +1145,13 @@ mod tests {
 
     #[test]
     fn toggle_pause() {
+        use crate::state::SimState;
         let state = GameState::new_default(42);
-        assert!(!state.paused);
+        assert!(state.sim_state.is_running());
         let s = apply_action(&state, &Action::TogglePause);
-        assert!(s.paused);
+        assert_eq!(s.sim_state, SimState::Paused);
         let s = apply_action(&s, &Action::TogglePause);
-        assert!(!s.paused);
+        assert!(s.sim_state.is_running());
     }
 
     #[test]
@@ -1861,7 +1862,7 @@ mod tests {
             }
         }
         assert_eq!(state.outcome, GameOutcome::Lost);
-        assert!(state.paused);
+        assert_eq!(state.sim_state, crate::state::SimState::Paused);
         // Deaths should be just over the threshold
         let threshold = state.initial_population() * LOSE_DEATH_FRACTION;
         assert!(state.total_dead() >= threshold);
@@ -1891,7 +1892,7 @@ mod tests {
         state = tick(&state);
         crate::ui::process_events(&mut state);
         assert_eq!(state.outcome, GameOutcome::Won);
-        assert!(state.paused);
+        assert_eq!(state.sim_state, crate::state::SimState::Paused);
     }
 
     #[test]
@@ -1926,9 +1927,9 @@ mod tests {
     fn no_unpause_after_game_over() {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;
-        state.paused = true;
+        state.sim_state = crate::state::SimState::Paused;
         let s = apply_action(&state, &Action::TogglePause);
-        assert!(s.paused, "should not be able to unpause after game over");
+        assert_eq!(s.sim_state, crate::state::SimState::Paused, "should not be able to unpause after game over");
     }
 
     #[test]
@@ -2799,5 +2800,70 @@ mod tests {
         assert!(after.active_crisis.is_none());
         assert_eq!(after.resources.personnel, initial_personnel - 3,
             "should lose personnel when can't afford retention");
+    }
+
+    #[test]
+    fn crisis_restores_running_state_on_dismiss() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
+
+        let mut state = GameState::new_default(42);
+        // Game is running, crisis fires
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            title: "Test".into(),
+            description: "Test".into(),
+            option_a: CrisisOption { label: "A".into(), description: "".into() },
+            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            tick_created: 0,
+        });
+
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert_eq!(after.sim_state, SimState::Running,
+            "should restore Running state after crisis when game was running");
+    }
+
+    #[test]
+    fn crisis_restores_paused_state_on_dismiss() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
+
+        let mut state = GameState::new_default(42);
+        // Game was paused when crisis fired
+        state.sim_state = SimState::Event { was_running: false };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            title: "Test".into(),
+            description: "Test".into(),
+            option_a: CrisisOption { label: "A".into(), description: "".into() },
+            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            tick_created: 0,
+        });
+
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert_eq!(after.sim_state, SimState::Paused,
+            "should restore Paused state after crisis when game was paused");
+    }
+
+    #[test]
+    fn spacebar_blocked_during_event_state() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
+
+        let mut state = GameState::new_default(42);
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 100.0, rp: 10.0 },
+            title: "Test".into(),
+            description: "Test".into(),
+            option_a: CrisisOption { label: "A".into(), description: "".into() },
+            option_b: CrisisOption { label: "B".into(), description: "".into() },
+            tick_created: 0,
+        });
+
+        let after = apply_action(&state, &Action::TogglePause);
+        assert_eq!(after.sim_state, SimState::Event { was_running: true },
+            "spacebar should not change state during crisis");
+        assert!(after.active_crisis.is_some(), "crisis should still be active");
     }
 }
