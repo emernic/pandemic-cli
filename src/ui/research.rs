@@ -112,12 +112,15 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
         };
 
         let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
+        let remaining = (project.required_ticks - project.progress).max(0.0);
+        let speed = project.speed(&state.medicines);
+        let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
         lines.push(Line::from(Span::styled(
             format!("{}[ACTIVE] {}", marker, format_kind(&project.kind, state)),
             style,
         )));
         lines.push(Line::from(Span::styled(
-            format!("    Progress: {:.0}% ({}/{})", pct, format_days(project.progress), format_days(project.required_ticks)),
+            format!("    Progress: {:.0}% — {} remaining", pct, format_days(effective_remaining)),
             Style::default().fg(Color::Green),
         )));
     } else {
