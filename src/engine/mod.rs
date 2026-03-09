@@ -609,16 +609,16 @@ mod tests {
         let ri = primary_outbreak_region(&state);
         // Set 90% of the region's population as immune — drastically reduces susceptible pool
         let pop = state.regions[ri].population as f64;
-        state.regions[ri].infections[0].immune = pop * 0.9;
-        let before = state.regions[ri].infections[0].infected;
+        state.regions[ri].get_or_create_infection(0).immune = pop * 0.9;
+        let before = state.regions[ri].disease_state(0).unwrap().infected;
         let after = tick(&state);
-        let growth = after.regions[ri].infections[0].infected - before;
+        let growth = after.regions[ri].disease_state(0).unwrap().infected - before;
 
         let state2 = GameState::new_default(42);
         let ri2 = primary_outbreak_region(&state2);
         let after2 = tick(&state2);
-        let growth2 = after2.regions[ri2].infections[0].infected
-            - state2.regions[ri2].infections[0].infected;
+        let growth2 = after2.regions[ri2].disease_state(0).unwrap().infected
+            - state2.regions[ri2].disease_state(0).unwrap().infected;
 
         assert!(
             growth < growth2,
@@ -708,7 +708,7 @@ mod tests {
             state = tick(&state);
         }
         let ri = primary_outbreak_region(&state);
-        let infected_before = state.regions[ri].infections[0].infected;
+        let infected_before = state.regions[ri].disease_state(0).unwrap().infected;
 
         // Navigate: open medicines → select first medicine → navigate to the
         // outbreak region → select treat target
@@ -723,7 +723,7 @@ mod tests {
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm); // deploy
 
-        let infected_after = state.regions[ri].infections[0].infected;
+        let infected_after = state.regions[ri].disease_state(0).unwrap().infected;
         assert!(
             infected_after < infected_before,
             "treatment should reduce infected: {} -> {}",
@@ -1372,11 +1372,11 @@ mod tests {
         let mut state = GameState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Set up a region with sub-person infected count
-        state.regions[ri].infections[0].infected = 0.7;
+        state.regions[ri].get_or_create_infection(0).infected = 0.7;
         state = tick(&state);
         // Should have snapped to 0 (sub-person counts are meaningless)
         assert_eq!(
-            state.regions[ri].infections[0].infected, 0.0,
+            state.regions[ri].disease_state(0).unwrap().infected, 0.0,
             "infected below 1.0 should snap to zero"
         );
     }
@@ -1390,7 +1390,7 @@ mod tests {
         state.diseases.push(state.diseases[0].clone());
         state.regions[ri].get_or_create_infection(1).infected = pop * 0.3;
         // Also boost first disease
-        state.regions[ri].infections[0].infected = pop * 0.3;
+        state.regions[ri].get_or_create_infection(0).infected = pop * 0.3;
         // Run many ticks — both diseases should share the population
         for _ in 0..2000 {
             state = tick(&state);
@@ -2096,16 +2096,16 @@ mod tests {
         state.diseases[0].infectivity = 0.02;
         state.diseases[0].knowledge = 1.0;
         // Give the region a big susceptible pool
-        state.regions[region_idx].infections[0].infected = 1000.0;
+        state.regions[region_idx].get_or_create_infection(0).infected = 1000.0;
 
         // Run without quarantine
         let no_quarantine = tick(&state);
-        let inf_no_q = no_quarantine.regions[region_idx].infections[0].infected;
+        let inf_no_q = no_quarantine.regions[region_idx].disease_state(0).unwrap().infected;
 
         // Run with quarantine
         state.policies[region_idx].quarantine = true;
         let with_quarantine = tick(&state);
-        let inf_with_q = with_quarantine.regions[region_idx].infections[0].infected;
+        let inf_with_q = with_quarantine.regions[region_idx].disease_state(0).unwrap().infected;
 
         // Quarantine should reduce new infections significantly for Contact
         // (quarantine_factor = 0.30, so infectivity drops to 30%)
@@ -2114,7 +2114,7 @@ mod tests {
         // Now test Waterborne (quarantine factor = 0.75, less effective)
         state.diseases[0].transmission = TransmissionVector::Waterborne;
         let with_q_waterborne = tick(&state);
-        let inf_with_q_wb = with_q_waterborne.regions[region_idx].infections[0].infected;
+        let inf_with_q_wb = with_q_waterborne.regions[region_idx].disease_state(0).unwrap().infected;
 
         // Waterborne quarantine should be less effective than Contact quarantine
         assert!(inf_with_q_wb > inf_with_q,
@@ -2128,7 +2128,7 @@ mod tests {
 
         state.diseases[0].infectivity = 0.02;
         state.diseases[0].lethality = 0.01;
-        state.regions[region_idx].infections[0].infected = 5000.0;
+        state.regions[region_idx].get_or_create_infection(0).infected = 5000.0;
 
         // Run without hospital surge
         let without = tick(&state);
@@ -2138,8 +2138,8 @@ mod tests {
         let with = tick(&state);
 
         // Hospital surge should increase infections (25% spread penalty)
-        let inf_without = without.regions[region_idx].infections[0].infected;
-        let inf_with = with.regions[region_idx].infections[0].infected;
+        let inf_without = without.regions[region_idx].disease_state(0).unwrap().infected;
+        let inf_with = with.regions[region_idx].disease_state(0).unwrap().infected;
         assert!(inf_with > inf_without,
             "hospital surge should increase spread: {} vs {} without",
             inf_with, inf_without);
@@ -2250,16 +2250,16 @@ mod tests {
 
         state.diseases[0].transmission = TransmissionVector::Waterborne;
         state.diseases[0].infectivity = 0.02;
-        state.regions[region_idx].infections[0].infected = 1000.0;
+        state.regions[region_idx].get_or_create_infection(0).infected = 1000.0;
 
         // Without sanitation
         let no_sanitation = tick(&state);
-        let inf_no = no_sanitation.regions[region_idx].infections[0].infected;
+        let inf_no = no_sanitation.regions[region_idx].disease_state(0).unwrap().infected;
 
         // With sanitation
         state.policies[region_idx].water_sanitation = true;
         let with_sanitation = tick(&state);
-        let inf_with = with_sanitation.regions[region_idx].infections[0].infected;
+        let inf_with = with_sanitation.regions[region_idx].disease_state(0).unwrap().infected;
 
         assert!(inf_with < inf_no,
             "water sanitation should reduce waterborne infections: {} vs {}",
@@ -2270,8 +2270,8 @@ mod tests {
         let airborne_with_sanitation = tick(&state);
         state.policies[region_idx].water_sanitation = false;
         let airborne_without = tick(&state);
-        let inf_airborne_with = airborne_with_sanitation.regions[region_idx].infections[0].infected;
-        let inf_airborne_without = airborne_without.regions[region_idx].infections[0].infected;
+        let inf_airborne_with = airborne_with_sanitation.regions[region_idx].disease_state(0).unwrap().infected;
+        let inf_airborne_without = airborne_without.regions[region_idx].disease_state(0).unwrap().infected;
 
         // Should be roughly equal (same noise seed means identical)
         assert!((inf_airborne_with - inf_airborne_without).abs() < 1.0,
@@ -2824,7 +2824,7 @@ mod tests {
         let pop = state.regions[0].population as f64;
         // Need alive < pop * threshold, so dead > pop * (1 - threshold)
         state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
-        state.regions[0].infections[0].dead = state.regions[0].dead;
+        state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
         // Ensure no other crisis is active
         assert!(state.active_crisis.is_none());
         // Tick should trigger collapse AND refugee crisis
@@ -2843,7 +2843,7 @@ mod tests {
         let threshold = state.regions[0].collapse_threshold;
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
-        state.regions[0].infections[0].dead = state.regions[0].dead;
+        state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
         // Pre-load an active crisis (simulating a random crisis on the same tick)
         state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
         assert!(state.active_crisis.is_some());
@@ -2895,7 +2895,7 @@ mod tests {
         let before_dead = state.regions[0].dead;
         setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        let inf = &after.regions[0].infections[0];
+        let inf = after.regions[0].disease_state(0).unwrap();
         // 5% treated, of which 20% harmed
         assert!(inf.infected < 10_000.0, "some should be treated");
         assert!(inf.immune > 0.0, "some should gain immunity");

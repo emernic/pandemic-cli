@@ -291,7 +291,7 @@ mod tests {
         // Detection threshold is 10,000 total infected across all regions.
         state.diseases[0].detected = false;
         let near_threshold = 9_900.0;
-        state.regions[0].infections[0].infected = near_threshold;
+        state.regions[0].get_or_create_infection(0).infected = near_threshold;
 
         // With the disease growing, detection should trigger during these ticks.
         let result = run_snapshot(state, &["d1".to_string()]).unwrap();
@@ -342,7 +342,7 @@ mod tests {
         state.outcome = GameOutcome::Lost;
         state.tick = 2400; // 20 days
         // Give disease 0 some deaths
-        state.regions[0].infections[0].dead = 50_000.0;
+        state.regions[0].get_or_create_infection(0).dead = 50_000.0;
         state.regions[0].dead = 50_000.0;
         let screen = render_to_string(&state);
         assert!(screen.contains("Pathogen Report"),

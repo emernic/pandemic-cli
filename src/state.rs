@@ -637,6 +637,10 @@ impl Region {
         self.infections.iter().find(|i| i.disease_idx == disease_idx)
     }
 
+    pub fn disease_state_mut(&mut self, disease_idx: usize) -> Option<&mut RegionDiseaseState> {
+        self.infections.iter_mut().find(|i| i.disease_idx == disease_idx)
+    }
+
     /// Get or create an infection entry for the given disease. Prevents duplicate
     /// entries for the same disease_idx, which would cause silent data corruption
     /// (only the first entry is visible to `disease_state()`).
