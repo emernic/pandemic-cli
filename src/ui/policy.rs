@@ -13,6 +13,8 @@ use crate::state::{
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
+    MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
+    NUCLEAR_ANNIHILATION_COST,
     SCREENING_LOW_COST, SCREENING_MEDIUM_COST, SCREENING_HIGH_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
 };
@@ -77,6 +79,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 policy.is_some_and(|p| p.hospital_surge).then_some("Hospital"),
                 policy.is_some_and(|p| p.border_controls).then_some("Border"),
                 policy.is_some_and(|p| p.water_sanitation).then_some("Sanitation"),
+                policy.is_some_and(|p| p.martial_law).then_some("Martial Law"),
+                policy.is_some_and(|p| p.nuclear_annihilation).then_some("☢ NUKED"),
             ].into_iter().flatten().collect();
             if let Some(p) = policy {
                 match p.screening {
@@ -168,11 +172,46 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         ("High Screening", policy.screening == ScreeningLevel::High,
          format!("${:.0}/day + 3 pers.", SCREENING_HIGH_COST * TICKS_PER_DAY),
          "90% infection visibility, fastest detection", Some(3)),
+        ("Martial Law", policy.martial_law,
+         format!("${:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL),
+         "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL)),
+        ("☢ Nuclear Option", policy.nuclear_annihilation,
+         format!("One-time: ${:.0}", NUCLEAR_ANNIHILATION_COST),
+         "Eliminate 99% of population — stops all disease spread", None),
     ];
 
     for (i, (name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
         let marker = if selected { "▶ " } else { "  " };
+
+        // Collapsed regions: only nuclear annihilation (idx 9) is available
+        // Non-collapsed regions: nuclear annihilation is not available
+        let structurally_locked = if region.collapsed {
+            i != 9 && !*active  // only nuclear annihilation on collapsed regions
+        } else {
+            i == 9  // nuclear annihilation not available on non-collapsed
+        };
+
+        if structurally_locked {
+            let name_style = if selected {
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}", marker), name_style),
+                Span::styled("— ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", name), name_style),
+                Span::styled(
+                    format!("  ({})", reason),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            lines.push(Line::from(""));
+            continue;
+        }
+
         let pol_unlocked = state.policy_unlocked(region_idx, i);
 
         let can_afford_personnel = personnel_needed
