@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{Disease, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
+use crate::state::{GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
 use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -57,7 +57,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::Cyan),
                     ),
                 ];
-                push_mutation_indicator(&mut type_spans, state, i, disease);
+                push_mutation_indicator(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
                 lines.push(Line::from(vec![
                     Span::raw("    "),
@@ -82,7 +82,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::Yellow),
                     ),
                 ];
-                push_mutation_indicator(&mut type_spans, state, i, disease);
+                push_mutation_indicator(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
                 // Full stats visible
                 lines.push(Line::from(vec![
@@ -154,27 +154,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-/// Push a mutation indicator span if the disease has mutated.
-/// Shows "Medicines outdated!" if any tested/unlocked medicines are behind,
-/// or just "Mutated" if no medicines are affected yet.
+/// Push a mutation indicator span only when the player's medicines are affected.
+/// Bare "Mutated" with no actionable context is noise — only surface mutations
+/// that require the player to act (re-trial to recalibrate).
 fn push_mutation_indicator(
     spans: &mut Vec<Span<'static>>,
     state: &GameState,
     disease_idx: usize,
-    disease: &Disease,
 ) {
-    if disease.strain_generation == 0 {
-        return;
-    }
     if state.has_outdated_medicine(disease_idx) {
         spans.push(Span::styled(
             "  Medicines outdated!".to_string(),
             Style::default().fg(Color::Red),
-        ));
-    } else {
-        spans.push(Span::styled(
-            "  Mutated".to_string(),
-            Style::default().fg(Color::Yellow),
         ));
     }
 }
