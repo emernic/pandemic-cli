@@ -629,12 +629,98 @@ impl RegionTrait {
 
 }
 
+/// Governor personality — determines how loyalty reacts to player decisions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GovernorPersonality {
+    /// Loyalty drifts up faster, starts higher. Easy to keep happy.
+    Cooperative,
+    /// Loyalty drops sharply from policies that restrict their region.
+    /// Wants OTHER regions restricted, not theirs.
+    Nationalist,
+    /// Loyalty drops from expensive policies and high spending.
+    /// Wants cost-effective solutions.
+    Populist,
+    /// Loyalty rises when research is active. Tolerates harsh policies
+    /// if they're backed by science.
+    Technocrat,
+}
+
+impl GovernorPersonality {
+    pub fn label(&self) -> &'static str {
+        match self {
+            GovernorPersonality::Cooperative => "Cooperative",
+            GovernorPersonality::Nationalist => "Nationalist",
+            GovernorPersonality::Populist => "Populist",
+            GovernorPersonality::Technocrat => "Technocrat",
+        }
+    }
+}
+
+/// A regional governor who reacts to player decisions.
+/// Loyalty below 40 means defiance (policies less effective).
+/// Loyalty above 80 means cooperation bonus (cheaper policies).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Governor {
+    pub name: String,
+    pub personality: GovernorPersonality,
+    /// Loyalty 0-100. Starts at 60-80 depending on personality.
+    pub loyalty: f64,
+}
+
+/// Loyalty threshold below which the governor becomes defiant.
+pub const GOVERNOR_DEFIANCE_THRESHOLD: f64 = 40.0;
+/// Loyalty threshold above which the governor provides cooperation bonuses.
+pub const GOVERNOR_COOPERATION_THRESHOLD: f64 = 80.0;
+/// Policy effectiveness multiplier when governor is defiant.
+pub const GOVERNOR_DEFIANCE_EFFECTIVENESS: f64 = 0.7;
+/// Policy cost multiplier when governor is cooperative.
+pub const GOVERNOR_COOPERATION_COST_MULT: f64 = 0.8;
+/// Cost to appease a governor.
+pub const APPEASE_COST: f64 = 200.0;
+/// Loyalty gain from appease action.
+pub const APPEASE_LOYALTY_GAIN: f64 = 15.0;
+
+impl Governor {
+    /// Returns true if this governor is defiant (loyalty below threshold).
+    pub fn is_defiant(&self) -> bool {
+        self.loyalty < GOVERNOR_DEFIANCE_THRESHOLD
+    }
+
+    /// Returns true if this governor provides cooperation bonuses.
+    pub fn is_cooperative(&self) -> bool {
+        self.loyalty >= GOVERNOR_COOPERATION_THRESHOLD
+    }
+
+    /// Policy effectiveness multiplier based on loyalty.
+    /// 1.0 = normal, 0.7 = defiant.
+    pub fn policy_effectiveness(&self) -> f64 {
+        if self.is_defiant() {
+            GOVERNOR_DEFIANCE_EFFECTIVENESS
+        } else {
+            1.0
+        }
+    }
+
+    /// Policy cost multiplier based on loyalty.
+    /// 1.0 = normal, 0.8 = cooperative.
+    pub fn cost_multiplier(&self) -> f64 {
+        if self.is_cooperative() {
+            GOVERNOR_COOPERATION_COST_MULT
+        } else {
+            1.0
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Region {
     pub name: String,
     pub population: u64,
     pub connections: Vec<usize>,
     pub infections: Vec<RegionDiseaseState>,
+    /// Regional governor who reacts to player decisions.
+    #[serde(default = "default_governor")]
+    pub governor: Governor,
     /// Regional traits that affect policy costs and effectiveness.
     #[serde(default)]
     pub traits: Vec<RegionTrait>,
@@ -682,6 +768,14 @@ pub struct Region {
     pub prev_dead_tick: u64,
 }
 
+fn default_governor() -> Governor {
+    Governor {
+        name: "Unknown".into(),
+        personality: GovernorPersonality::Cooperative,
+        loyalty: 70.0,
+    }
+}
+
 fn default_one() -> f64 {
     1.0
 }
@@ -697,6 +791,12 @@ impl Region {
 
     pub fn alive(&self) -> f64 {
         (self.population as f64 - self.total_dead()).max(0.0)
+    }
+
+    /// Policy effectiveness multiplier based on governor loyalty.
+    /// 1.0 when normal/cooperative, 0.7 when defiant.
+    pub fn policy_effectiveness(&self) -> f64 {
+        self.governor.policy_effectiveness()
     }
 
     /// Effective collapse threshold accounting for traits and martial law.
@@ -2079,6 +2179,8 @@ pub enum GameCommand {
     },
     /// Spend funds to boost POL directly.
     RallySupport,
+    /// Spend funds to boost a governor's loyalty.
+    AppeaseGovernor { region_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -2541,7 +2643,15 @@ impl UiState {
                     // Items: 0..regions-1 = regions, regions = rally, regions+1..regions+DECREE_COUNT = decrees
                     state.regions.len() + 1 + DECREE_COUNT - 1
                 }
-                Some(PolicyUiState::ManagePolicies { .. }) => POLICY_COUNT - 1,
+                // Policies (0..POLICY_COUNT-1) + Appease Governor (POLICY_COUNT)
+                // Appease is hidden for collapsed regions, so max is one less.
+                Some(PolicyUiState::ManagePolicies { region_idx }) => {
+                    if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
+                        POLICY_COUNT - 1
+                    } else {
+                        POLICY_COUNT
+                    }
+                }
                 Some(PolicyUiState::SelectSacrificeRegion) => {
                     // Only non-collapsed regions are selectable
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
@@ -2875,13 +2985,16 @@ impl UiState {
                 }
             }
             Some(PolicyUiState::ManagePolicies { region_idx }) => {
-                // panel_selection is display position; currently matches policy_idx
-                // (see POLICY_COUNT doc for the index mapping)
-                let policy_idx = self.panel_selection;
-                Some(GameCommand::TogglePolicy {
-                    region_idx,
-                    policy_idx,
-                })
+                if self.panel_selection == POLICY_COUNT {
+                    // Appease Governor (last item in the list)
+                    Some(GameCommand::AppeaseGovernor { region_idx })
+                } else {
+                    // Toggle policy (panel_selection matches policy_idx)
+                    Some(GameCommand::TogglePolicy {
+                        region_idx,
+                        policy_idx: self.panel_selection,
+                    })
+                }
             }
             Some(PolicyUiState::SelectSacrificeRegion) => {
                 // Map display position to actual region index (skipping collapsed)
@@ -3005,6 +3118,11 @@ impl GameState {
                 name: "North America".into(),
                 population: 500_000_000,
                 connections: vec![1, 2],
+                governor: Governor {
+                    name: "Gov. Torres".into(),
+                    personality: GovernorPersonality::Nationalist,
+                    loyalty: 65.0,
+                },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
                 collapse_threshold: 0.55, // Fragile — collapses at 45% dead
@@ -3023,6 +3141,11 @@ impl GameState {
                 name: "South America".into(),
                 population: 430_000_000,
                 connections: vec![0, 3],
+                governor: Governor {
+                    name: "Gov. Vasquez".into(),
+                    personality: GovernorPersonality::Populist,
+                    loyalty: 70.0,
+                },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
                 collapse_threshold: 0.55, // Moderate resilience — 45% dead
@@ -3041,6 +3164,11 @@ impl GameState {
                 name: "Europe".into(),
                 population: 750_000_000,
                 connections: vec![0, 3, 4],
+                governor: Governor {
+                    name: "Gov. Lindqvist".into(),
+                    personality: GovernorPersonality::Technocrat,
+                    loyalty: 75.0,
+                },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
                 collapse_threshold: 0.50, // Developed infrastructure — 50% dead
@@ -3059,6 +3187,11 @@ impl GameState {
                 name: "Africa".into(),
                 population: 1_400_000_000,
                 connections: vec![1, 2, 4],
+                governor: Governor {
+                    name: "Gov. Okonkwo".into(),
+                    personality: GovernorPersonality::Populist,
+                    loyalty: 60.0,
+                },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
                 collapse_threshold: 0.50, // Resilient — 50% dead
@@ -3077,6 +3210,11 @@ impl GameState {
                 name: "Asia".into(),
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
+                governor: Governor {
+                    name: "Gov. Chen".into(),
+                    personality: GovernorPersonality::Cooperative,
+                    loyalty: 70.0,
+                },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
                 collapse_threshold: 0.50, // Huge population — 50% dead
@@ -3095,6 +3233,11 @@ impl GameState {
                 name: "Oceania".into(),
                 population: 45_000_000,
                 connections: vec![4],
+                governor: Governor {
+                    name: "Gov. Whitfield".into(),
+                    personality: GovernorPersonality::Nationalist,
+                    loyalty: 75.0,
+                },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
                 collapse_threshold: 0.50, // Small but developed — 50% dead
@@ -3336,8 +3479,10 @@ impl GameState {
     pub fn total_policy_funding_cost(&self) -> f64 {
         self.policies.iter().enumerate()
             .map(|(i, p)| {
-                let traits = self.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-                p.funding_cost(traits)
+                let region = self.regions.get(i);
+                let traits = region.map(|r| r.traits.as_slice()).unwrap_or(&[]);
+                let gov_mult = region.map(|r| r.governor.cost_multiplier()).unwrap_or(1.0);
+                p.funding_cost(traits) * gov_mult
             })
             .sum()
     }

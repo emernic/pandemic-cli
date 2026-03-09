@@ -40,6 +40,9 @@ pub fn tick(state: &GameState) -> GameState {
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
 
+    // Governor loyalty drift — reacts to policies, deaths, and personality.
+    policy::tick_governor_loyalty(&mut new);
+
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;
@@ -380,6 +383,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         }
         GameCommand::RallySupport => {
             let (msg, success) = policy::rally_support(state);
+            CommandResult { message: msg, success, adverse: false }
+        }
+        GameCommand::AppeaseGovernor { region_idx } => {
+            let (msg, success) = policy::appease_governor(state, *region_idx);
             CommandResult { message: msg, success, adverse: false }
         }
     }

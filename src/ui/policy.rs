@@ -22,6 +22,7 @@ use crate::state::{
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
+    POLICY_COUNT, APPEASE_COST, APPEASE_LOYALTY_GAIN,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -463,6 +464,61 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             Span::raw("      "),
             Span::styled(
                 format!("Cost: {cost_str}"),
+                Style::default().fg(Color::Yellow),
+            ),
+        ]));
+        lines.push(Line::from(""));
+    }
+
+    // Appease Governor action (after all policies)
+    if !region.collapsed {
+        let appease_pos = POLICY_COUNT;
+        let selected = state.ui.panel_selection == appease_pos;
+        let gov = &region.governor;
+        let marker = if selected { "▶ " } else { "  " };
+        let name_style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let loyalty_color = if gov.is_defiant() {
+            Color::Red
+        } else if gov.is_cooperative() {
+            Color::Green
+        } else {
+            Color::Yellow
+        };
+        let status_label = if gov.is_defiant() {
+            "DEFIANT"
+        } else if gov.is_cooperative() {
+            "cooperative"
+        } else {
+            ""
+        };
+        lines.push(Line::from(vec![
+            Span::styled(marker.to_string(), name_style),
+            Span::styled(
+                format!("Appease {} ", gov.name),
+                name_style,
+            ),
+            Span::styled(
+                format!("(Loyalty: {:.0}", gov.loyalty),
+                Style::default().fg(loyalty_color),
+            ),
+            if !status_label.is_empty() {
+                Span::styled(
+                    format!(" — {}", status_label),
+                    Style::default().fg(loyalty_color).add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("")
+            },
+            Span::styled(")", Style::default().fg(loyalty_color)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("      "),
+            Span::styled(
+                format!("Cost: ${:.0}  →  +{:.0} loyalty", APPEASE_COST, APPEASE_LOYALTY_GAIN),
                 Style::default().fg(Color::Yellow),
             ),
         ]));

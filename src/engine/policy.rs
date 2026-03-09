@@ -238,6 +238,92 @@ pub(super) fn rally_support(state: &mut GameState) -> (Option<String>, bool) {
     (Some(format!("Rally successful! POL +{:.0}% → {pol_pct:.0}%", RALLY_POL_GAIN * 100.0)), true)
 }
 
+/// Spend funds to boost a governor's loyalty.
+pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+    use crate::state::{APPEASE_COST, APPEASE_LOYALTY_GAIN};
+
+    if region_idx >= state.regions.len() {
+        return (None, false);
+    }
+    if state.regions[region_idx].collapsed {
+        let name = &state.regions[region_idx].name;
+        return (Some(format!("{name} has collapsed — no governor to appease")), false);
+    }
+    if state.resources.funding < APPEASE_COST {
+        return (Some(format!("Not enough funding (need ${APPEASE_COST:.0})")), false);
+    }
+    state.resources.funding -= APPEASE_COST;
+    let gov = &mut state.regions[region_idx].governor;
+    gov.loyalty = (gov.loyalty + APPEASE_LOYALTY_GAIN).min(100.0);
+    let name = &state.regions[region_idx].governor.name;
+    let loyalty = state.regions[region_idx].governor.loyalty;
+    (Some(format!("{name} appeased — loyalty now {loyalty:.0} (-${APPEASE_COST:.0})")), true)
+}
+
+/// Tick governor loyalty drift. Called once per tick from tick().
+/// Loyalty drifts based on:
+/// - Active policy pressure (harsh policies decrease loyalty)
+/// - Regional health (high death rates decrease loyalty)
+/// - Personality modifiers
+pub(super) fn tick_governor_loyalty(state: &mut GameState) {
+    let num_regions = state.regions.len();
+    for i in 0..num_regions {
+        if state.regions[i].collapsed {
+            continue;
+        }
+
+        let policy = &state.policies[i];
+        let personality = state.regions[i].governor.personality;
+
+        // Count active restrictive policies (travel ban, quarantine, martial law, border controls)
+        let restrictive_count = [
+            policy.travel_ban,
+            policy.quarantine,
+            policy.martial_law,
+            policy.border_controls,
+        ].iter().filter(|&&b| b).count() as f64;
+
+        // Death pressure: higher death rate = more loyalty loss
+        let pop = state.regions[i].population as f64;
+        let death_frac = if pop > 0.0 { state.regions[i].dead / pop } else { 0.0 };
+
+        // Base drift per tick: mild regression toward 50
+        let current = state.regions[i].governor.loyalty;
+        let base_drift = (50.0 - current) * 0.0001; // ~1.2% per day toward 50
+
+        // Policy pressure: each restrictive policy drains loyalty
+        let policy_drain = -restrictive_count * 0.003; // ~0.36/day per restrictive policy
+
+        // Death pressure: deaths erode trust
+        let death_drain = -death_frac.sqrt() * 0.01; // scales with death severity
+
+        // Personality modifiers
+        use crate::state::GovernorPersonality;
+        let personality_mod = match personality {
+            GovernorPersonality::Cooperative => 0.001, // slow passive loyalty gain
+            GovernorPersonality::Nationalist => {
+                // Gets extra angry about restrictions on THEIR region
+                -restrictive_count * 0.002 // additional drain per policy
+            }
+            GovernorPersonality::Populist => {
+                // Hates expensive policies — loses loyalty proportional to cost
+                let cost = state.policies[i].funding_cost(&state.regions[i].traits);
+                -(cost / 1000.0) * 0.001 // ~0.12/day per $1000 spent
+            }
+            GovernorPersonality::Technocrat => {
+                // Gains loyalty when ANY research is active
+                let research_active = !state.field_research.is_empty()
+                    || state.applied_research.is_some()
+                    || state.basic_research.is_some();
+                if research_active { 0.002 } else { -0.001 }
+            }
+        };
+
+        let total_drift = base_drift + policy_drain + death_drain + personality_mod;
+        state.regions[i].governor.loyalty = (current + total_drift).clamp(0.0, 100.0);
+    }
+}
+
 /// Enact an emergency decree. Permanent, irreversible.
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
@@ -671,5 +757,99 @@ mod tests {
         let (msg, ok) = enact_decree(&mut state, 2, Some(0));
         assert!(!ok, "should not sacrifice already collapsed region");
         assert!(msg.unwrap().contains("collapsed"));
+    }
+
+    #[test]
+    fn appease_governor_boosts_loyalty() {
+        let mut state = screening_test_state();
+        state.regions[0].governor.loyalty = 50.0;
+        let funding_before = state.resources.funding;
+
+        let (msg, ok) = appease_governor(&mut state, 0);
+        assert!(ok, "should succeed with sufficient funds");
+        assert!(msg.unwrap().contains("appeased"));
+        assert!((state.regions[0].governor.loyalty - 65.0).abs() < 0.01);
+        assert!((state.resources.funding - (funding_before - crate::state::APPEASE_COST)).abs() < 0.01);
+    }
+
+    #[test]
+    fn appease_governor_blocked_by_insufficient_funds() {
+        let mut state = screening_test_state();
+        state.resources.funding = 50.0;
+
+        let (_, ok) = appease_governor(&mut state, 0);
+        assert!(!ok, "should fail without funds");
+    }
+
+    #[test]
+    fn appease_governor_blocked_for_collapsed_region() {
+        let mut state = screening_test_state();
+        state.regions[0].collapsed = true;
+
+        let (msg, ok) = appease_governor(&mut state, 0);
+        assert!(!ok, "should fail for collapsed region");
+        assert!(msg.unwrap().contains("collapsed"));
+    }
+
+    #[test]
+    fn appease_governor_caps_at_100() {
+        let mut state = screening_test_state();
+        state.regions[0].governor.loyalty = 95.0;
+
+        let (_, ok) = appease_governor(&mut state, 0);
+        assert!(ok);
+        assert!((state.regions[0].governor.loyalty - 100.0).abs() < 0.01,
+            "loyalty should cap at 100: got {}", state.regions[0].governor.loyalty);
+    }
+
+    #[test]
+    fn governor_loyalty_drifts_with_restrictive_policies() {
+        let mut state = screening_test_state();
+        state.regions[0].governor.loyalty = 60.0;
+        state.policies[0].travel_ban = true;
+        state.policies[0].quarantine = true;
+        state.policies[0].martial_law = true;
+
+        let before = state.regions[0].governor.loyalty;
+        // Tick loyalty for ~1 day (120 ticks)
+        for _ in 0..120 {
+            tick_governor_loyalty(&mut state);
+        }
+        assert!(state.regions[0].governor.loyalty < before,
+            "loyalty should decrease with restrictive policies: was {before}, now {}",
+            state.regions[0].governor.loyalty);
+    }
+
+    #[test]
+    fn governor_defiance_reduces_policy_effectiveness() {
+        use crate::state::GOVERNOR_DEFIANCE_THRESHOLD;
+
+        let mut state = screening_test_state();
+        state.regions[0].governor.loyalty = GOVERNOR_DEFIANCE_THRESHOLD - 1.0;
+        assert!(state.regions[0].governor.is_defiant());
+        assert!(state.regions[0].policy_effectiveness() < 1.0);
+
+        state.regions[0].governor.loyalty = GOVERNOR_DEFIANCE_THRESHOLD + 1.0;
+        assert!(!state.regions[0].governor.is_defiant());
+        assert!((state.regions[0].policy_effectiveness() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn governor_cooperation_reduces_costs() {
+        use crate::state::GOVERNOR_COOPERATION_THRESHOLD;
+
+        let mut state = screening_test_state();
+        state.policies[0].hospital_surge = true;
+
+        // Normal loyalty — full cost
+        state.regions[0].governor.loyalty = 50.0;
+        let normal_cost = state.total_policy_funding_cost();
+
+        // Cooperative loyalty — reduced cost
+        state.regions[0].governor.loyalty = GOVERNOR_COOPERATION_THRESHOLD + 1.0;
+        let coop_cost = state.total_policy_funding_cost();
+
+        assert!(coop_cost < normal_cost,
+            "cooperative governor should reduce costs: normal={normal_cost}, coop={coop_cost}");
     }
 }

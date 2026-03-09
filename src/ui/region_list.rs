@@ -502,6 +502,41 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         }
     }
 
+    // Governor loyalty
+    {
+        let gov = &region.governor;
+        let loyalty_color = if gov.is_defiant() {
+            Color::Red
+        } else if gov.is_cooperative() {
+            Color::Green
+        } else {
+            Color::Yellow
+        };
+        let status = if gov.is_defiant() {
+            " DEFIANT"
+        } else if gov.is_cooperative() {
+            " cooperative"
+        } else {
+            ""
+        };
+        lines.push(Line::from(vec![
+            Span::styled(&gov.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!(" ({}) ", gov.personality.label()),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled("Loyalty: ", label),
+            Span::styled(
+                format!("{:.0}", gov.loyalty),
+                Style::default().fg(loyalty_color),
+            ),
+            Span::styled(
+                status,
+                Style::default().fg(loyalty_color).add_modifier(Modifier::BOLD),
+            ),
+        ]));
+    }
+
     // Co-infection warning (only show detected diseases — don't leak undetected info)
     {
         let coinfection_count = region.infections.iter()

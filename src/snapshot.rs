@@ -337,6 +337,26 @@ mod tests {
     }
 
     #[test]
+    fn region_detail_shows_governor() {
+        let state = GameState::new_default(42);
+        let screen = render_to_string(&state);
+        // Governor name and personality should be visible in the selected region's detail
+        assert!(screen.contains("Gov."),
+            "region detail should show governor name");
+        assert!(screen.contains("Loyalty:"),
+            "region detail should show governor loyalty");
+    }
+
+    #[test]
+    fn policy_panel_shows_appease() {
+        let state = GameState::new_default(42);
+        // Open policy panel, enter first region's management
+        let result = run_snapshot(state, &["p".to_string(), "enter".to_string()]).unwrap();
+        assert!(result.screen.contains("Appease Gov."),
+            "policy management should show Appease option");
+    }
+
+    #[test]
     fn defeat_screen_shows_pathogen_report_and_score() {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;
