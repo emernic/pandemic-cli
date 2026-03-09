@@ -494,9 +494,6 @@ impl EnactedDecrees {
         }
     }
 
-    pub fn any_enacted(&self) -> bool {
-        self.conscript_researchers || self.authorize_human_trials || self.sacrificed_region.is_some()
-    }
 }
 
 /// Display name for a decree by index.
