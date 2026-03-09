@@ -23,9 +23,17 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::SupplyDisruption { medicine_idx: idx });
     }
 
-    // Lab accident: requires active applied research
-    if state.applied_research.is_some() {
-        candidates.push(CrisisKind::LabAccident);
+    // Lab accident: requires active applied or basic research
+    let has_applied = state.applied_research.is_some();
+    let has_basic = state.basic_research.is_some();
+    if has_applied || has_basic {
+        // If both tracks are running, randomly target one
+        let targets_basic = if has_applied && has_basic {
+            rng.r#gen::<bool>()
+        } else {
+            has_basic
+        };
+        candidates.push(CrisisKind::LabAccident { targets_basic });
     }
 
     // Political pressure: requires active quarantine somewhere
@@ -258,14 +266,17 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
-        CrisisKind::LabAccident => {
+        CrisisKind::LabAccident { targets_basic } => {
+            let track = if *targets_basic { "basic" } else { "applied" };
             CrisisEvent {
                 title: "Laboratory Accident".into(),
-                description: "A containment breach in your research lab threatens \
-                    to destroy the current applied research project.".into(),
+                description: format!(
+                    "A containment breach in your research lab threatens \
+                    to destroy the current {} research project.", track
+                ),
                 option_a: CrisisOption {
                     label: "Evacuate lab".into(),
-                    description: "Lose current applied research progress".into(),
+                    description: format!("Lose current {} research progress", track),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -810,11 +821,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::SupplyDisruption { .. }, _) => {
             "Emergency reroute successful — supply chain restored".into()
         }
-        (CrisisKind::LabAccident, 0) => {
-            state.applied_research = None;
-            "Lab evacuated — applied research project lost".into()
+        (CrisisKind::LabAccident { targets_basic }, 0) => {
+            if *targets_basic {
+                state.basic_research = None;
+                "Lab evacuated — basic research project lost".into()
+            } else {
+                state.applied_research = None;
+                "Lab evacuated — applied research project lost".into()
+            }
         }
-        (CrisisKind::LabAccident, _) => {
+        (CrisisKind::LabAccident { .. }, _) => {
             "Containment successful — research project saved".into()
         }
         (CrisisKind::PoliticalPressure { region_idx }, 0) => {
