@@ -1,7 +1,8 @@
 use ratatui::{backend::TestBackend, Terminal};
 
 use crate::action::string_to_action;
-use crate::engine::{apply_action, tick};
+use crate::apply_action;
+use crate::engine::tick;
 use crate::state::GameState;
 use crate::ui;
 

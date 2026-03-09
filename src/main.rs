@@ -11,7 +11,8 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 use pandemic_cli_lib::action::{key_to_action, Action};
-use pandemic_cli_lib::engine::{apply_action, tick};
+use pandemic_cli_lib::apply_action;
+use pandemic_cli_lib::engine::tick;
 use pandemic_cli_lib::snapshot;
 use pandemic_cli_lib::state::GameState;
 use pandemic_cli_lib::ui;
