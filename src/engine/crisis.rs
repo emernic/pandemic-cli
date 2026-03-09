@@ -1045,11 +1045,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 // medicine works but at reduced efficacy (~0.70x).
                 if let Some(pos) = medicine.target_diseases.iter().position(|&d| d == *disease_idx) {
                     let current_gen = state.diseases.get(*disease_idx)
-                        .map_or(0, |d| d.strain_generation);
+                        .map_or(0, |d| d.strain_generation) as i32;
                     while medicine.strain_generations.len() <= pos {
                         medicine.strain_generations.push(0);
                     }
-                    medicine.strain_generations[pos] = current_gen.saturating_sub(2);
+                    medicine.strain_generations[pos] = current_gen - 2;
                 }
             }
             let name = state.diseases.get(*disease_idx)

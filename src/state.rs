@@ -891,8 +891,9 @@ pub struct Medicine {
     /// Strain generation this medicine was calibrated for, per target disease.
     /// Parallel to `target_diseases`. When a disease mutates past this generation,
     /// the medicine becomes less effective. Re-running a clinical trial updates this.
+    /// Signed to allow negative values (fast-tracked medicines start behind gen 0).
     #[serde(default)]
-    pub strain_generations: Vec<u32>,
+    pub strain_generations: Vec<i32>,
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
@@ -942,8 +943,8 @@ impl Medicine {
                 match med_gen {
                     Some(mg) => {
                         let disease_gen = diseases.get(disease_idx)
-                            .map_or(0, |d| d.strain_generation);
-                        let behind = disease_gen.saturating_sub(mg);
+                            .map_or(0, |d| d.strain_generation) as i32;
+                        let behind = (disease_gen - mg).max(0);
                         (1.0 - behind as f64 * 0.15).max(0.1)
                     }
                     // Not yet calibrated (developed before mutation system) — full efficacy
@@ -2640,7 +2641,7 @@ impl GameState {
                     // Tested, but check if strain has drifted
                     let med_gen = med.strain_generations.get(target_pos).copied().unwrap_or(0);
                     let disease_gen = self.diseases.get(d_idx)
-                        .map_or(0, |d| d.strain_generation);
+                        .map_or(0, |d| d.strain_generation) as i32;
                     disease_gen > med_gen
                 };
                 if needs_trial {
