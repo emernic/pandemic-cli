@@ -15,6 +15,7 @@ use crate::state::{
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
+    HEALTHCARE_INVESTMENT_COST,
     SCREENING_LOW_COST, SCREENING_MEDIUM_COST, SCREENING_HIGH_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
 };
@@ -65,7 +66,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         };
 
         let policy = state.policies.get(region_idx);
-        let has_active = policy.is_some_and(|p| p.any_active());
+        let has_active = policy.is_some_and(|p| p.any_active()) || region.healthcare_invested;
 
         let mut spans = vec![
             Span::styled(format!("{}{:<16}", marker, region.name), style),
@@ -81,6 +82,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 policy.is_some_and(|p| p.water_sanitation).then_some("Sanitation"),
                 policy.is_some_and(|p| p.martial_law).then_some("Martial Law"),
                 policy.is_some_and(|p| p.nuclear_annihilation).then_some("☢ NUKED"),
+                region.healthcare_invested.then_some("Healthcare"),
             ].into_iter().flatten().collect();
             if let Some(p) = policy {
                 match p.screening {
@@ -181,6 +183,9 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         (9, "☢ Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ${:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population — stops all disease spread", None),
+        (10, "Healthcare Investment", region.healthcare_invested,
+         format!("One-time: ${:.0}", HEALTHCARE_INVESTMENT_COST),
+         "Permanent 25% lethality reduction", None),
     ];
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
@@ -189,6 +194,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         // Collapsed regions: only nuclear annihilation (idx 9) is available
         // Non-collapsed regions: nuclear annihilation is not available
+        // Healthcare investment (idx 10): only available pre-collapse
         let structurally_locked = if region.collapsed {
             *policy_idx != 9 && !*active
         } else {

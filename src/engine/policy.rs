@@ -1,6 +1,7 @@
 use crate::state::{
     GameEvent, GameState, ScreeningLevel,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
+    HEALTHCARE_INVESTMENT_COST,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
@@ -21,6 +22,7 @@ fn policy_display_name(policy_idx: usize) -> &'static str {
         5 => "Disease Screening",
         8 => "Martial Law",
         9 => "Nuclear Annihilation",
+        10 => "Healthcare Investment",
         _ => "Unknown Policy",
     }
 }
@@ -94,6 +96,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         5 => state.policies[region_idx].screening == ScreeningLevel::Low,
         6 => state.policies[region_idx].screening == ScreeningLevel::Medium,
         7 => state.policies[region_idx].screening == ScreeningLevel::High,
+        10 => state.regions[region_idx].healthcare_invested,
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
@@ -208,6 +211,21 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 }
                 (Some(format!("☢ Nuclear annihilation in {region_name} — {:.1}M casualties",
                     killed / 1_000_000.0)), true)
+            }
+        }
+        // Healthcare Investment (10): one-time per-region permanent upgrade
+        10 => {
+            let region = &state.regions[region_idx];
+            if region.healthcare_invested {
+                (Some(format!("{region_name} already has healthcare infrastructure")), false)
+            } else if region.collapsed {
+                (Some(format!("{region_name} has collapsed — cannot invest")), false)
+            } else if state.resources.funding < HEALTHCARE_INVESTMENT_COST {
+                (Some(format!("Not enough funding (need ${:.0})", HEALTHCARE_INVESTMENT_COST)), false)
+            } else {
+                state.resources.funding -= HEALTHCARE_INVESTMENT_COST;
+                state.regions[region_idx].healthcare_invested = true;
+                (Some(format!("Healthcare infrastructure built in {region_name} — lethality reduced 25%")), true)
             }
         }
         _ => (None, false),
@@ -392,5 +410,57 @@ mod tests {
         let best = state.best_screening_level();
         assert_eq!(best.visibility_rate(), ScreeningLevel::High.visibility_rate(),
             "best_screening_level should return High when any region has High");
+    }
+
+    #[test]
+    fn healthcare_investment_reduces_lethality() {
+        let mut state = screening_test_state();
+        // Set up a region with significant infections for measurable deaths
+        state.regions[0].infections[0].infected = 100_000.0;
+        state.diseases[0].lethality = 0.01;
+
+        // Run without healthcare investment
+        let without = tick(&state);
+        let deaths_without = without.regions[0].dead;
+
+        // Now invest in healthcare
+        state.regions[0].healthcare_invested = true;
+        let with = tick(&state);
+        let deaths_with = with.regions[0].dead;
+
+        // Healthcare reduces lethality by 25%, so deaths should be ~75% of baseline
+        assert!(deaths_with < deaths_without,
+            "healthcare should reduce deaths: {deaths_with:.1} vs {deaths_without:.1}");
+        let ratio = deaths_with / deaths_without;
+        assert!(ratio > 0.60 && ratio < 0.90,
+            "healthcare should reduce deaths by ~25% (ratio: {ratio:.2})");
+    }
+
+    #[test]
+    fn healthcare_investment_toggle() {
+        let mut state = screening_test_state();
+
+        // Purchase healthcare
+        let (msg, ok) = toggle_policy(&mut state, 0, 10);
+        assert!(ok, "should succeed with sufficient funds");
+        assert!(state.regions[0].healthcare_invested);
+        assert!(msg.unwrap().contains("lethality reduced"));
+        let expected_cost = state.resources.funding;
+        assert!(expected_cost < 10_000.0, "funding should be deducted");
+
+        // Try to purchase again — should fail
+        let (msg, ok) = toggle_policy(&mut state, 0, 10);
+        assert!(!ok, "should not purchase twice");
+        assert!(msg.unwrap().contains("already"));
+    }
+
+    #[test]
+    fn healthcare_blocked_for_collapsed_regions() {
+        let mut state = screening_test_state();
+        state.regions[0].collapsed = true;
+
+        let (msg, ok) = toggle_policy(&mut state, 0, 10);
+        assert!(!ok, "should not invest in collapsed region");
+        assert!(msg.unwrap().contains("collapsed"));
     }
 }

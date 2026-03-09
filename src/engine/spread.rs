@@ -58,11 +58,13 @@ pub(super) fn tick_spread_within(
                     (infectivity * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
 
-                let lethality = if hospital_active {
-                    disease.lethality * 0.5
-                } else {
-                    disease.lethality
-                };
+                let mut lethality = disease.lethality;
+                if hospital_active {
+                    lethality *= 0.5;
+                }
+                if region.healthcare_invested {
+                    lethality *= 0.75;
+                }
                 let mut new_deaths = (lethality * inf.infected * noise).max(0.0);
                 let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
                 let total_outflow = new_deaths + new_recoveries;

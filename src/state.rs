@@ -163,6 +163,10 @@ pub const MARTIAL_LAW_COST: f64 = 1.5;
 pub const MARTIAL_LAW_PERSONNEL: u32 = 4;
 /// One-time funding cost for nuclear annihilation (no ongoing cost).
 pub const NUCLEAR_ANNIHILATION_COST: f64 = 200.0;
+/// One-time per-region cost to invest in healthcare infrastructure.
+/// Permanently reduces lethality by 25% in the region. Competes with
+/// research spending ($350-700) for early-game funding.
+pub const HEALTHCARE_INVESTMENT_COST: f64 = 400.0;
 
 /// Disease surveillance intensity. Higher levels reveal more infections
 /// and help detect new hidden diseases faster. Per-region setting.
@@ -270,7 +274,7 @@ pub struct RegionPolicy {
 /// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
 ///   0 = Travel Ban        5 = Low Screening      8 = Martial Law
 ///   1 = Quarantine         6 = Medium Screening   9 = Nuclear Annihilation
-///   2 = Hospital Surge     7 = High Screening
+///   2 = Hospital Surge     7 = High Screening    10 = Healthcare Investment
 ///   3 = Border Controls
 ///   4 = Water Sanitation
 ///
@@ -279,7 +283,7 @@ pub struct RegionPolicy {
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
-pub const POLICY_COUNT: usize = 10;
+pub const POLICY_COUNT: usize = 11;
 
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
@@ -294,6 +298,7 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.15, // High Disease Screening
     0.40, // Martial Law — drastic, needs high political will
     0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
+    0.00, // Healthcare Investment — always available, encourages early spending
 ];
 
 impl RegionPolicy {
@@ -427,6 +432,10 @@ pub struct Region {
     /// Tick when this region collapsed (None if still standing).
     #[serde(default)]
     pub collapsed_at_tick: Option<u64>,
+    /// Permanent healthcare infrastructure investment. One-time purchase
+    /// that reduces disease lethality by 25% in this region.
+    #[serde(default)]
+    pub healthcare_invested: bool,
 }
 
 fn default_collapse_threshold() -> f64 {
@@ -2285,6 +2294,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                healthcare_invested: false,
             },
             Region {
                 name: "South America".into(),
@@ -2295,6 +2305,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                healthcare_invested: false,
             },
             Region {
                 name: "Europe".into(),
@@ -2305,6 +2316,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                healthcare_invested: false,
             },
             Region {
                 name: "Africa".into(),
@@ -2315,6 +2327,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                healthcare_invested: false,
             },
             Region {
                 name: "Asia".into(),
@@ -2325,6 +2338,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                healthcare_invested: false,
             },
             Region {
                 name: "Oceania".into(),
@@ -2335,6 +2349,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                healthcare_invested: false,
             },
         ];
 
