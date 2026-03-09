@@ -465,7 +465,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Fast-track (+10% POL)".into(),
-                    description: "Mark medicine as untested but gain public approval".into(),
+                    description: "Skip safety checks — public approves the speed".into(),
                     cost: None,
                 },
                 kind,
@@ -479,18 +479,19 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 title: "Vaccine Hesitancy".into(),
                 description: format!(
                     "Anti-vaccine sentiment is spreading in {}. People are refusing treatment. \
-                     An education campaign costs money. A mandate would be faster but authoritarian.",
+                     A mandate is free but authoritarian. An education campaign costs money but \
+                     builds trust.",
                     region_name,
                 ),
                 option_a: CrisisOption {
+                    label: "Mandate vaccines".into(),
+                    description: "Effective but lose −10% POL".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
                     label: "Education campaign ($400)".into(),
                     description: format!("Spend money, gain +5% POL in {}", region_name),
                     cost: Some(CrisisCost { funding: 400.0, personnel: 0 }),
-                },
-                option_b: CrisisOption {
-                    label: "Mandate vaccines".into(),
-                    description: "Free but lose −10% POL".into(),
-                    cost: None,
                 },
                 kind,
                 tick_created: tick,
@@ -811,17 +812,17 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Fast-tracked treatment for {} — public approves, but safety unknown", name)
         }
 
-        (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
+        (CrisisKind::VaccineHesitancy { .. }, 0) => {
+            // Mandate — lose POL
+            state.resources.political_power = (state.resources.political_power - 10.0).max(0.0);
+            "Vaccine mandate imposed — effective but deeply unpopular".into()
+        }
+        (CrisisKind::VaccineHesitancy { region_idx }, _) => {
             // Education campaign — costs already deducted, gain POL
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             state.resources.political_power = (state.resources.political_power + 5.0).min(100.0);
             format!("Education campaign in {} — vaccine acceptance improving", region_name)
-        }
-        (CrisisKind::VaccineHesitancy { .. }, _) => {
-            // Mandate — lose POL
-            state.resources.political_power = (state.resources.political_power - 10.0).max(0.0);
-            "Vaccine mandate imposed — effective but deeply unpopular".into()
         }
 
         (CrisisKind::CorruptOfficial, 0) => {
