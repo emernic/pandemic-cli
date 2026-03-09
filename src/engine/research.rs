@@ -99,6 +99,12 @@ pub(super) fn remove_personnel(state: &mut GameState, track: ResearchTrack, slot
 /// Progress scales with diminishing returns: 2x personnel = 1.5x speed (peak),
 /// beyond 2x personnel = negative returns (too many cooks).
 pub(super) fn tick_research(state: &mut GameState) {
+    // Proactively auto-start research on idle tracks (e.g., new unknown pathogen
+    // detected while auto-research is enabled and a field slot is free).
+    for track in [ResearchTrack::Field, ResearchTrack::Applied, ResearchTrack::Basic] {
+        try_auto_start(state, track);
+    }
+
     // Advance all field research projects and collect completion effects
     for project in &mut state.field_research {
         let speed = project.speed(&state.medicines);
@@ -946,5 +952,31 @@ mod tests {
             state.field_research.is_empty(),
             "no auto-start when auto-research is disabled"
         );
+    }
+
+    #[test]
+    fn auto_research_identifies_new_unknown_pathogen() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+        state.resources.personnel = 30;
+
+        // Enable auto-research for field track
+        state.auto_research[ResearchTrack::Field.index()] = true;
+
+        // No field research running, disease 0 is unknown and detected
+        assert!(state.field_research.is_empty());
+        assert!(state.diseases[0].knowledge < 1.0);
+        assert!(state.diseases[0].detected);
+
+        // A single tick should auto-start identification
+        state = tick(&state);
+        assert!(
+            !state.field_research.is_empty(),
+            "auto-research should proactively start identification of unknown pathogen"
+        );
+        assert!(matches!(
+            &state.field_research[0].kind,
+            ResearchKind::IdentifyThreat { disease_idx: 0 }
+        ));
     }
 }
