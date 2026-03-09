@@ -104,6 +104,13 @@ pub fn process_events(state: &mut GameState) {
         } else {
             format!("THREAT: {name} has killed {deaths_str} — NO MEDICINE AVAILABLE! Use [R] Research.")
         }
+    } else if let Some(GameEvent::HumanTrialAdverseEvent { disease_idx, deaths }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::HumanTrialAdverseEvent { .. }))
+    {
+        let name = state.diseases.get(*disease_idx)
+            .map(|d| d.display_name(*disease_idx))
+            .unwrap_or_else(|| "?".to_string());
+        format!("ADVERSE EVENT: Human trial for {name} killed {:.0} patients!", deaths)
     } else if !suspended.is_empty() {
         format!("Funding crisis: suspended {}", suspended.join(", "))
     } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {

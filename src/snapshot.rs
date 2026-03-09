@@ -323,6 +323,20 @@ mod tests {
     }
 
     #[test]
+    fn policy_panel_shows_decrees() {
+        let state = GameState::new_default(42);
+        let result = run_snapshot(state, &["p".to_string()]).unwrap();
+        assert!(result.screen.contains("EMERGENCY DECREES"),
+            "policy panel should show decrees section");
+        assert!(result.screen.contains("Conscript"),
+            "should show Conscript Researchers decree");
+        assert!(result.screen.contains("Human Trials"),
+            "should show Authorize Human Trials decree");
+        assert!(result.screen.contains("Sacrifice"),
+            "should show Sacrifice Region decree");
+    }
+
+    #[test]
     fn defeat_screen_shows_pathogen_report_and_score() {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;

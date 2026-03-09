@@ -70,6 +70,9 @@ pub struct GameState {
     /// Per-region active policies.
     #[serde(default)]
     pub policies: Vec<RegionPolicy>,
+    /// Emergency decrees — permanent, irreversible global decisions.
+    #[serde(default)]
+    pub enacted_decrees: EnactedDecrees,
     #[serde(default)]
     pub outcome: GameOutcome,
     /// Events from the most recent tick. Consumed by the UI layer for status
@@ -198,6 +201,27 @@ pub enum ScreeningLevel {
     #[serde(alias = "High")]
     MassRapid,
 }
+
+// Emergency Decree constants — permanent, irreversible global decisions.
+pub const DECREE_COUNT: usize = 3;
+/// Conscript Researchers: immediately gain personnel, permanent income penalty.
+pub const CONSCRIPT_PERSONNEL_GAIN: u32 = 10;
+/// Per-tick income penalty for Conscript Researchers ($50/day = 0.417/tick).
+pub const CONSCRIPT_INCOME_PENALTY: f64 = 50.0 / 120.0;
+/// Authorize Human Trials: clinical trial duration multiplier (0.5 = half duration).
+pub const HUMAN_TRIALS_SPEED: f64 = 0.5;
+/// Chance of adverse event killing infected when a human-trial clinical trial completes.
+pub const HUMAN_TRIALS_ADVERSE_CHANCE: f64 = 0.30;
+/// Fraction of infected killed in the adverse event.
+pub const HUMAN_TRIALS_KILL_FRACTION: f64 = 0.05;
+/// Sacrifice Region: income multiplier for remaining regions.
+pub const SACRIFICE_INCOME_BONUS: f64 = 1.20;
+/// Minimum POL required for each decree (indexed by decree position).
+pub const DECREE_POL_THRESHOLDS: [f64; DECREE_COUNT] = [
+    0.30, // Conscript Researchers — forcing citizens
+    0.40, // Authorize Human Trials — ethical violation
+    0.50, // Sacrifice Region — abandoning millions
+];
 
 /// Per-tick cost for each screening level.
 pub const SCREENING_BASIC_COST: f64 = 0.2;
@@ -440,6 +464,48 @@ impl RegionPolicy {
             9 => self.nuclear_annihilation = val,
             _ => {}
         }
+    }
+}
+
+/// Emergency decrees — permanent, irreversible global decisions with powerful
+/// benefits and serious costs. Inspired by Frostpunk's "Book of Laws."
+/// Once enacted, a decree cannot be undone.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct EnactedDecrees {
+    /// Conscript Researchers: +10 personnel immediately, permanent income penalty.
+    #[serde(default)]
+    pub conscript_researchers: bool,
+    /// Authorize Human Trials: clinical trials complete 50% faster,
+    /// but 30% chance of adverse event (kills 5% of infected) on completion.
+    #[serde(default)]
+    pub authorize_human_trials: bool,
+    /// Sacrifice Region: voluntarily collapse one region for +20% income from the rest.
+    #[serde(default)]
+    pub sacrificed_region: Option<usize>,
+}
+
+impl EnactedDecrees {
+    pub fn is_enacted(&self, decree_idx: usize) -> bool {
+        match decree_idx {
+            0 => self.conscript_researchers,
+            1 => self.authorize_human_trials,
+            2 => self.sacrificed_region.is_some(),
+            _ => false,
+        }
+    }
+
+    pub fn any_enacted(&self) -> bool {
+        self.conscript_researchers || self.authorize_human_trials || self.sacrificed_region.is_some()
+    }
+}
+
+/// Display name for a decree by index.
+pub fn decree_display_name(decree_idx: usize) -> &'static str {
+    match decree_idx {
+        0 => "Conscript Researchers",
+        1 => "Authorize Human Trials",
+        2 => "Sacrifice Region",
+        _ => "Unknown Decree",
     }
 }
 
@@ -1703,6 +1769,11 @@ pub enum GameEvent {
         deaths: f64,
         has_medicine: bool,
     },
+    /// Human Trials decree caused an adverse event during a clinical trial.
+    HumanTrialAdverseEvent {
+        disease_idx: usize,
+        deaths: f64,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -1742,6 +1813,11 @@ pub enum GameCommand {
     /// Resolve the active crisis by choosing option A (0) or B (1).
     ResolveCrisis {
         choice: usize,
+    },
+    /// Enact an emergency decree. `region_idx` is only used for SacrificeRegion.
+    EnactDecree {
+        decree_idx: usize,
+        region_idx: Option<usize>,
     },
 }
 
@@ -1907,6 +1983,8 @@ pub enum PolicyUiState {
     BrowseRegions,
     /// Manage policies for a specific region.
     ManagePolicies { region_idx: usize },
+    /// Select which region to sacrifice (for Sacrifice Region decree).
+    SelectSacrificeRegion,
 }
 
 /// Research panel UI state machine, following the medicines panel pattern.
@@ -2044,7 +2122,8 @@ impl UiState {
             }
             Panel::Policy => {
                 match &self.policy_ui {
-                    Some(PolicyUiState::ManagePolicies { .. }) => {
+                    Some(PolicyUiState::ManagePolicies { .. })
+                    | Some(PolicyUiState::SelectSacrificeRegion) => {
                         self.policy_ui = Some(PolicyUiState::BrowseRegions);
                         self.panel_selection = 0;
                     }
@@ -2142,9 +2221,15 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    state.regions.len().saturating_sub(1)
+                    // Regions + separator (not selectable) + decrees
+                    // Items: 0..regions-1 = regions, regions..regions+DECREE_COUNT-1 = decrees
+                    state.regions.len() + DECREE_COUNT - 1
                 }
                 Some(PolicyUiState::ManagePolicies { .. }) => POLICY_COUNT - 1,
+                Some(PolicyUiState::SelectSacrificeRegion) => {
+                    // Only non-collapsed regions are selectable
+                    state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
+                }
                 None => 0,
             },
             _ => 0,
@@ -2439,13 +2524,28 @@ impl UiState {
     fn handle_policy_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
         match self.policy_ui.clone() {
             Some(PolicyUiState::BrowseRegions) => {
-                let order = grid_reading_order(state.regions.len());
-                let region_idx = order.get(self.panel_selection).copied().unwrap_or(0);
-                if region_idx < state.regions.len() {
-                    self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
-                    self.panel_selection = 0;
+                let num_regions = state.regions.len();
+                if self.panel_selection < num_regions {
+                    // Region selected — manage its policies
+                    let order = grid_reading_order(num_regions);
+                    let region_idx = order.get(self.panel_selection).copied().unwrap_or(0);
+                    if region_idx < num_regions {
+                        self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
+                        self.panel_selection = 0;
+                    }
+                    None
+                } else {
+                    // Decree selected (indices after regions)
+                    let decree_idx = self.panel_selection - num_regions;
+                    if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
+                        // Sacrifice Region needs sub-selection
+                        self.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
+                        self.panel_selection = 0;
+                        None
+                    } else {
+                        Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+                    }
                 }
-                None
             }
             Some(PolicyUiState::ManagePolicies { region_idx }) => {
                 // panel_selection is display position; currently matches policy_idx
@@ -2455,6 +2555,22 @@ impl UiState {
                     region_idx,
                     policy_idx,
                 })
+            }
+            Some(PolicyUiState::SelectSacrificeRegion) => {
+                // Map display position to actual region index (skipping collapsed)
+                let non_collapsed: Vec<usize> = state.regions.iter()
+                    .enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
+                    Some(GameCommand::EnactDecree {
+                        decree_idx: 2,
+                        region_idx: Some(region_idx),
+                    })
+                } else {
+                    None
+                }
             }
             None => None,
         }
@@ -2719,6 +2835,7 @@ impl GameState {
                 attrition_accum: 0.0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
+            enacted_decrees: EnactedDecrees::default(),
             regions,
             diseases,
             medicines,
@@ -2889,6 +3006,13 @@ impl GameState {
                 1.0
             };
             income += base * travel_ban_factor;
+        }
+        // Decree modifiers
+        if self.enacted_decrees.sacrificed_region.is_some() {
+            income *= SACRIFICE_INCOME_BONUS;
+        }
+        if self.enacted_decrees.conscript_researchers {
+            income = (income - CONSCRIPT_INCOME_PENALTY).max(0.0);
         }
         income
     }
