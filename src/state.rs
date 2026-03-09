@@ -1313,23 +1313,23 @@ pub enum CrisisKind {
     /// Corrupt official siphoning funds — amount locked at generation time.
     CorruptOfficial { stolen: f64 },
     /// Powerful nation wants your research data — share or refuse.
-    ResourceDiversion { disease_idx: usize },
+    ResourceDiversion { disease_idx: usize, share_reward: f64, refuse_cost: f64 },
     /// Hospital workers collapsing — reduce shifts or push through.
-    ExhaustionEpidemic { region_idx: usize },
+    ExhaustionEpidemic { region_idx: usize, personnel_loss: u32 },
     /// Whistleblower reports medicine side effects — halt or continue.
     WhistleblowerReport { medicine_idx: usize },
     /// Military threatens takeover of health agency.
-    MilitaryTakeover,
+    MilitaryTakeover { cooperate_loss: u32 },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
     /// Billionaire offers to fund everything — for a price.
-    BillionaireOffer,
+    BillionaireOffer { reward: f64, personnel_loss: u32 },
     /// WHO headquarters loses power — relocate or improvise.
-    WHOEvacuation,
+    WHOEvacuation { aid_loss: f64 },
     /// Warlord declares himself ruler of collapsed region, demands recognition.
     WarlordDemand { region_idx: usize },
     /// Two nations claim credit for your vaccine, threaten war.
-    VaccineDispute,
+    VaccineDispute { neutral_loss: f64, credit_gain: f64 },
 }
 
 impl CrisisKind {
@@ -1354,12 +1354,12 @@ impl CrisisKind {
             CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::WhistleblowerReport { .. } => "whistleblower",
-            CrisisKind::MilitaryTakeover => "military",
+            CrisisKind::MilitaryTakeover { .. } => "military",
             CrisisKind::CultBlockade { .. } => "cult",
-            CrisisKind::BillionaireOffer => "billionaire",
-            CrisisKind::WHOEvacuation => "who_evac",
+            CrisisKind::BillionaireOffer { .. } => "billionaire",
+            CrisisKind::WHOEvacuation { .. } => "who_evac",
             CrisisKind::WarlordDemand { .. } => "warlord",
-            CrisisKind::VaccineDispute => "vaccine_dispute",
+            CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
         }
     }
 }
