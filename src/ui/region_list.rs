@@ -435,6 +435,38 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
+    // Region traits (income and healthcare modifiers)
+    {
+        let income_label = if region.income_modifier >= 1.5 {
+            ("High", Color::Green)
+        } else if region.income_modifier >= 1.0 {
+            ("Moderate", Color::Yellow)
+        } else {
+            ("Low", Color::Red)
+        };
+        let healthcare_label = if region.healthcare_modifier <= 0.80 {
+            ("Excellent", Color::Green)
+        } else if region.healthcare_modifier <= 0.95 {
+            ("Good", Color::Cyan)
+        } else if region.healthcare_modifier <= 1.0 {
+            ("Average", Color::Yellow)
+        } else {
+            ("Strained", Color::Red)
+        };
+        lines.push(Line::from(vec![
+            Span::styled("Economy: ", label),
+            Span::styled(
+                format!("{} ({:.1}x)", income_label.0, region.income_modifier),
+                Style::default().fg(income_label.1),
+            ),
+            Span::styled("  Healthcare: ", label),
+            Span::styled(
+                healthcare_label.0,
+                Style::default().fg(healthcare_label.1),
+            ),
+        ]));
+    }
+
     // Per-disease breakdown (detected diseases only)
     if !region.infections.is_empty() {
         for inf in &region.infections {

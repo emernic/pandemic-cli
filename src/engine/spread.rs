@@ -63,7 +63,7 @@ pub(super) fn tick_spread_within(
                     (infectivity * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
 
-                let mut lethality = disease.lethality;
+                let mut lethality = disease.lethality * region.healthcare_modifier;
                 if hospital_active {
                     lethality *= 0.5;
                 }

@@ -484,6 +484,18 @@ pub struct Region {
     /// that reduces disease lethality by 25% in this region.
     #[serde(default)]
     pub healthcare_invested: bool,
+    /// Per-capita income multiplier. Higher values mean this region
+    /// contributes more funding per person. Default 1.0.
+    #[serde(default = "default_one")]
+    pub income_modifier: f64,
+    /// Lethality multiplier from baseline healthcare quality. Lower values
+    /// mean better healthcare infrastructure reduces deaths. Default 1.0.
+    #[serde(default = "default_one")]
+    pub healthcare_modifier: f64,
+}
+
+fn default_one() -> f64 {
+    1.0
 }
 
 fn default_collapse_threshold() -> f64 {
@@ -2535,6 +2547,8 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 healthcare_invested: false,
+                income_modifier: 1.8,     // Wealthy — major economic contributor
+                healthcare_modifier: 0.85, // Good healthcare infrastructure
             },
             Region {
                 name: "South America".into(),
@@ -2546,6 +2560,8 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 healthcare_invested: false,
+                income_modifier: 1.0,     // Moderate economy
+                healthcare_modifier: 0.95, // Decent healthcare
             },
             Region {
                 name: "Europe".into(),
@@ -2557,6 +2573,8 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 healthcare_invested: false,
+                income_modifier: 1.5,     // Strong economy, hub region
+                healthcare_modifier: 0.80, // Excellent healthcare
             },
             Region {
                 name: "Africa".into(),
@@ -2568,6 +2586,8 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 healthcare_invested: false,
+                income_modifier: 0.6,     // Lower per-capita income
+                healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
             },
             Region {
                 name: "Asia".into(),
@@ -2579,6 +2599,8 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 healthcare_invested: false,
+                income_modifier: 0.9,     // Large but moderate per-capita
+                healthcare_modifier: 1.0,  // Baseline healthcare
             },
             Region {
                 name: "Oceania".into(),
@@ -2590,6 +2612,8 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 healthcare_invested: false,
+                income_modifier: 2.5,     // Tiny but wealthy — high per-capita
+                healthcare_modifier: 0.75, // Best healthcare infrastructure
             },
         ];
 
@@ -2807,7 +2831,7 @@ impl GameState {
         let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
         let healthy_frac = (pop - incapacitated).max(0.0) / pop;
         let region_share = pop / total_pop;
-        BASE_FUNDING_INCOME * region_share * healthy_frac
+        BASE_FUNDING_INCOME * region_share * healthy_frac * region.income_modifier
     }
 
     /// Estimated funding income per tick, based on current population health and policies.
