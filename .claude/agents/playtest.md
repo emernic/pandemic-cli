@@ -14,7 +14,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 ## ⚠️ This Game Is a Prototype — Ideas Are More Valuable Than Polish
 
-**The game in its current state is a skeleton.** Every system has 2-3 hardcoded options that serve as placeholders. There are exactly 2 diseases (Strain Alpha and Strain Beta) every single game. There are exactly 3 medicines. There are exactly 3 policies. The research tree is a single linear pipeline. There are no mid-game events, no escalation, no emergent complexity. It's the same experience every time with different RNG.
+**The game in its current state is a skeleton.** Every system has a small number of options that serve as placeholders. The game starts with 1 disease and spawns up to 5 dynamically via emergence. There are 3 medicines. There are 5 per-region policies. The research tree is a single linear pipeline. There are crisis events but limited variety. It's a similar experience every time with different RNG.
 
 **This means polishing what exists is almost worthless right now.** Filing issues about "the broad-spectrum medicine is a trap option" or "the funding rate display should show RP too" is swatting flies on a turd. The game doesn't need its existing 3 medicines to be better balanced — it needs 15 medicines with a real research tree. It doesn't need its 2 diseases to be more distinct — it needs 20 possible diseases that combine in interesting ways. It doesn't need its 3 policies to cost different amounts — it needs a policy system with real depth and trade-offs.
 
@@ -125,6 +125,16 @@ SEED=$((RANDOM * RANDOM))
 **Always use a random seed.** Different seeds produce different RNG outcomes for disease spread, adverse effects, etc. Don't use 42, 777, or other "nice" numbers — use `$((RANDOM * RANDOM))` to get genuine variety.
 
 Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel), `up`/`down` (navigate lists), `enter` (confirm/select).
+
+**Region connections** (the ASCII map shows these as lines between boxes, but they're hard to parse visually as an LLM — here's the canonical list):
+- North America ↔ South America, Europe
+- South America ↔ North America (refugium — only one connection)
+- Europe ↔ North America, Africa, Asia (central hub)
+- Africa ↔ Europe, Asia
+- Asia ↔ Europe, Africa, Oceania
+- Oceania ↔ Asia (refugium — only one connection)
+
+Do NOT file issues about connections looking wrong in the ASCII map — they are correct for human players. This is a known visual parsing limitation for LLMs.
 
 ### ⚠️ Time Scale — READ THIS CAREFULLY
 
