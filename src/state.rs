@@ -1282,7 +1282,8 @@ pub enum ResearchKind {
 }
 
 /// Technology nodes in the Basic Research tech tree.
-/// Each unlocks new capabilities in Applied Research.
+/// Each unlocks or enhances capabilities across the game (drug development,
+/// field research speed, vaccination effectiveness, etc.).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BasicTech {
     /// Unlocks targeted drug development (Antiviral / Antibiotic).
