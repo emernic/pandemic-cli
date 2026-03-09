@@ -19,9 +19,16 @@ pub(super) fn tick_spread_within(
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
 
+        // Dead people from ANY disease can't catch other diseases.
+        // Compute total dead across all diseases so each disease's
+        // susceptible pool accounts for cross-disease mortality.
+        let total_dead: f64 = region.infections.iter().map(|i| i.dead).sum();
+
         for inf in &mut region.infections {
             if let Some(disease) = diseases.get(inf.disease_idx) {
-                let susceptible = pop - inf.infected - inf.dead - inf.immune;
+                // Susceptible = population minus dead (all diseases) minus
+                // this disease's infected and immune.
+                let susceptible = (pop - total_dead - inf.infected - inf.immune).max(0.0);
                 if susceptible <= 0.0 {
                     continue;
                 }
@@ -170,9 +177,9 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
             // Small random parameter changes (±10% of current value), clamped to
             // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.06);
+            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.08);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality = (disease.lethality * leth_factor).clamp(0.0002, 0.01);
+            disease.lethality = (disease.lethality * leth_factor).clamp(0.0002, 0.02);
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,
