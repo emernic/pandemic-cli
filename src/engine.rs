@@ -3,11 +3,12 @@ use rand::Rng;
 use crate::action::Action;
 use crate::state::{
     DeployTarget, GameCommand, GameEvent, GameOutcome, GameState,
-    Panel, RegionDiseaseState, ResearchKind, ResearchProject,
-    BOOST_RP_COST, BOOST_TICKS, EMERGENCE_CHANCE_PER_TICK,
+    Panel, RegionDiseaseState, ResearchKind, ResearchProject, TransmissionVector,
+    BORDER_SCREENING_COST, BOOST_RP_COST, BOOST_TICKS, EMERGENCE_CHANCE_PER_TICK,
     EMERGENCE_MIN_TICK, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, MAX_DISEASES,
     QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
+    WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     WIN_INFECTED_THRESHOLD, format_days,
 };
 
@@ -32,6 +33,7 @@ pub fn tick(state: &GameState) -> GameState {
         let policy = new.policies.get(region_idx);
         let quarantine_active = policy.is_some_and(|p| p.quarantine);
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
+        let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
 
         for inf in &mut region.infections {
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
@@ -50,6 +52,10 @@ pub fn tick(state: &GameState) -> GameState {
                 // (healthcare workers in close contact with patients)
                 if hospital_active {
                     infectivity *= disease.transmission.hospital_infectivity_factor();
+                }
+                // Water sanitation halves waterborne disease infectivity
+                if sanitation_active && disease.transmission == TransmissionVector::Waterborne {
+                    infectivity *= 0.5;
                 }
                 let new_infections =
                     infectivity * inf.infected * (susceptible / pop) * noise;
@@ -86,6 +92,7 @@ pub fn tick(state: &GameState) -> GameState {
     let regions_snapshot: Vec<_> = new.regions.clone();
     for (i, region) in new.regions.iter_mut().enumerate() {
         let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
+        let dest_has_screening = new.policies.get(i).is_some_and(|p| p.border_screening);
 
         for (d_idx, disease) in state.diseases.iter().enumerate() {
             let connected_infected: f64 = regions_snapshot[i]
@@ -94,8 +101,13 @@ pub fn tick(state: &GameState) -> GameState {
                 .filter_map(|&conn_idx| {
                     let source_has_travel_ban =
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
+                    let source_has_screening =
+                        new.policies.get(conn_idx).is_some_and(|p| p.border_screening);
+                    // Travel ban supersedes border screening
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
                         disease.transmission.travel_ban_factor()
+                    } else if source_has_screening || dest_has_screening {
+                        0.5
                     } else {
                         1.0
                     };
@@ -245,6 +257,8 @@ pub fn tick(state: &GameState) -> GameState {
                 ("Travel Ban", p.travel_ban, TRAVEL_BAN_COST),
                 ("Quarantine", p.quarantine, QUARANTINE_COST),
                 ("Hospital Surge", p.hospital_surge, HOSPITAL_SURGE_COST),
+                ("Water Sanitation", p.water_sanitation, WATER_SANITATION_COST),
+                ("Border Screening", p.border_screening, BORDER_SCREENING_COST),
             ] {
                 if active {
                     if best.is_none() || cost > best.unwrap().2 {
@@ -258,6 +272,8 @@ pub fn tick(state: &GameState) -> GameState {
                 "Travel Ban" => new.policies[region_idx].travel_ban = false,
                 "Quarantine" => new.policies[region_idx].quarantine = false,
                 "Hospital Surge" => new.policies[region_idx].hospital_surge = false,
+                "Border Screening" => new.policies[region_idx].border_screening = false,
+                "Water Sanitation" => new.policies[region_idx].water_sanitation = false,
                 _ => unreachable!(),
             }
             new.events.push(GameEvent::PolicySuspended {
@@ -613,6 +629,27 @@ fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx: usize) ->
             } else {
                 Some(format!(
                     "Not enough personnel for hospital surge (need {})", HOSPITAL_SURGE_PERSONNEL
+                ))
+            }
+        }
+        3 => {
+            let new_state = !state.policies[region_idx].border_screening;
+            state.policies[region_idx].border_screening = new_state;
+            let verb = if new_state { "enabled" } else { "disabled" };
+            Some(format!("Border Screening {verb} in {region_name} — ${:.0}/day",
+                BORDER_SCREENING_COST * TICKS_PER_DAY))
+        }
+        4 => {
+            if state.policies[region_idx].water_sanitation {
+                state.policies[region_idx].water_sanitation = false;
+                Some(format!("Water Sanitation disabled in {region_name}"))
+            } else if available_personnel >= WATER_SANITATION_PERSONNEL {
+                state.policies[region_idx].water_sanitation = true;
+                Some(format!("Water Sanitation enabled in {region_name} — ${:.0}/day + {} personnel",
+                    WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL))
+            } else {
+                Some(format!(
+                    "Not enough personnel for water sanitation (need {})", WATER_SANITATION_PERSONNEL
                 ))
             }
         }
@@ -2301,5 +2338,83 @@ mod tests {
         assert!(airborne_spreads > contact_spreads,
             "airborne should spread to more regions than contact: {} vs {}",
             airborne_spreads, contact_spreads);
+    }
+
+    #[test]
+    fn border_screening_reduces_cross_region_spread() {
+        use rand::SeedableRng;
+
+        let mut screening_spreads = 0u32;
+        let mut no_policy_spreads = 0u32;
+
+        for seed in 0..200 {
+            let mut state = GameState::new_default(42);
+            state.diseases.truncate(1);
+            state.diseases[0].transmission = TransmissionVector::Airborne;
+            state.diseases[0].cross_region_spread = 0.01;
+            for region in &mut state.regions { region.infections.clear(); }
+            state.regions[0].infections.push(RegionDiseaseState {
+                disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+            });
+
+            // No policy
+            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            let after = tick(&state);
+            if after.regions.iter().skip(1).any(|r|
+                r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
+            ) {
+                no_policy_spreads += 1;
+            }
+
+            // Border screening on source region
+            state.policies[0].border_screening = true;
+            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            let after = tick(&state);
+            if after.regions.iter().skip(1).any(|r|
+                r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
+            ) {
+                screening_spreads += 1;
+            }
+        }
+
+        assert!(screening_spreads < no_policy_spreads,
+            "screening should reduce cross-region spread: {} vs {} (no policy)",
+            screening_spreads, no_policy_spreads);
+    }
+
+    #[test]
+    fn water_sanitation_reduces_waterborne_infectivity() {
+        let mut state = GameState::new_default(42);
+        let region_idx = primary_outbreak_region(&state);
+
+        state.diseases[0].transmission = TransmissionVector::Waterborne;
+        state.diseases[0].infectivity = 0.02;
+        state.regions[region_idx].infections[0].infected = 1000.0;
+
+        // Without sanitation
+        let no_sanitation = tick(&state);
+        let inf_no = no_sanitation.regions[region_idx].infections[0].infected;
+
+        // With sanitation
+        state.policies[region_idx].water_sanitation = true;
+        let with_sanitation = tick(&state);
+        let inf_with = with_sanitation.regions[region_idx].infections[0].infected;
+
+        assert!(inf_with < inf_no,
+            "water sanitation should reduce waterborne infections: {} vs {}",
+            inf_with, inf_no);
+
+        // Sanitation should NOT affect airborne diseases
+        state.diseases[0].transmission = TransmissionVector::Airborne;
+        let airborne_with_sanitation = tick(&state);
+        state.policies[region_idx].water_sanitation = false;
+        let airborne_without = tick(&state);
+        let inf_airborne_with = airborne_with_sanitation.regions[region_idx].infections[0].infected;
+        let inf_airborne_without = airborne_without.regions[region_idx].infections[0].infected;
+
+        // Should be roughly equal (same noise seed means identical)
+        assert!((inf_airborne_with - inf_airborne_without).abs() < 1.0,
+            "sanitation should not affect airborne: {} vs {}",
+            inf_airborne_with, inf_airborne_without);
     }
 }

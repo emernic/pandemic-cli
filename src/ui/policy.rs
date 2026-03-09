@@ -10,6 +10,7 @@ use crate::state::{
     GameState, PolicyUiState, TICKS_PER_DAY,
     TRAVEL_BAN_COST, QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
+    BORDER_SCREENING_COST, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -68,6 +69,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 policy.is_some_and(|p| p.travel_ban).then_some("Travel Ban"),
                 policy.is_some_and(|p| p.quarantine).then_some("Quarantine"),
                 policy.is_some_and(|p| p.hospital_surge).then_some("Hospital"),
+                policy.is_some_and(|p| p.border_screening).then_some("Screening"),
+                policy.is_some_and(|p| p.water_sanitation).then_some("Sanitation"),
             ].into_iter().flatten().collect();
 
             spans.push(Span::styled(
@@ -125,7 +128,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     lines.push(Line::from(""));
 
     // Policy toggles — costs derived from constants in state.rs
-    let policies: [(&str, bool, String, &str, Option<u32>); 3] = [
+    let policies: [(&str, bool, String, &str, Option<u32>); 5] = [
         ("Travel Ban", policy.travel_ban,
          format!("${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY),
          "Blocks 90% spread, halves region income", None),
@@ -135,6 +138,12 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         ("Hospital Surge", policy.hospital_surge,
          format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
          "Halves lethality", Some(HOSPITAL_SURGE_PERSONNEL)),
+        ("Border Screening", policy.border_screening,
+         format!("${:.0}/day", BORDER_SCREENING_COST * TICKS_PER_DAY),
+         "Blocks 50% spread, no income penalty", None),
+        ("Water Sanitation", policy.water_sanitation,
+         format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL),
+         "Halves waterborne disease spread", Some(WATER_SANITATION_PERSONNEL)),
     ];
 
     for (i, (name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
