@@ -28,6 +28,9 @@ pub struct GameState {
     /// messages. Cleared at the start of each tick.
     #[serde(skip)]
     pub events: Vec<GameEvent>,
+    /// Active crisis event requiring player decision. Game pauses while active.
+    #[serde(default)]
+    pub active_crisis: Option<CrisisEvent>,
     pub ui: UiState,
 }
 
@@ -711,6 +714,8 @@ pub enum GameEvent {
     /// The game just ended (win or lose). UI should pause and close panels.
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
     GameOver,
+    /// A crisis event appeared and needs player attention.
+    CrisisStarted,
 }
 
 /// Game outcome — checked each tick after simulation.
@@ -742,7 +747,51 @@ pub enum GameCommand {
         region_idx: usize,
         policy_idx: usize,
     },
+    /// Resolve the active crisis by choosing option A (0) or B (1).
+    ResolveCrisis {
+        choice: usize,
+    },
 }
+
+/// A crisis event that pauses the game and requires a player decision.
+/// Crises create ongoing strategic choices throughout the game — the player
+/// must pick one of two options, each with trade-offs.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CrisisEvent {
+    pub kind: CrisisKind,
+    pub title: String,
+    pub description: String,
+    pub option_a: CrisisOption,
+    pub option_b: CrisisOption,
+    pub tick_created: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CrisisOption {
+    pub label: String,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CrisisKind {
+    /// Supply chain disrupted — lose medicine doses or pay to protect them.
+    SupplyDisruption { medicine_idx: usize },
+    /// Lab accident — lose bench research or spend resources to contain.
+    LabAccident,
+    /// Political pressure — lift quarantine in a region or pay to resist.
+    PoliticalPressure { region_idx: usize },
+    /// Staff burnout — lose personnel or pay retention bonus.
+    PersonnelCrisis { amount: u32 },
+    /// International aid offer — choose funding or research points.
+    InternationalAid { funding: f64, rp: f64 },
+    /// Mutation surge — pay RP to gain knowledge or let it drift.
+    MutationSurge { disease_idx: usize },
+}
+
+/// Crisis events start appearing after this many ticks.
+pub const CRISIS_MIN_TICK: u64 = 200;
+/// Average ticks between crises (~2 days).
+pub const CRISIS_INTERVAL: u64 = 200;
 
 /// Fraction of initial world population that, when dead, triggers game over.
 pub const LOSE_DEATH_FRACTION: f64 = 0.10;
@@ -805,6 +854,9 @@ pub struct UiState {
     /// Temporary status message shown above the hotkey bar (cleared on next action).
     #[serde(default)]
     pub status_message: Option<String>,
+    /// Which crisis option is selected (0 = A, 1 = B).
+    #[serde(default)]
+    pub crisis_selection: usize,
 }
 
 impl UiState {
@@ -1162,7 +1214,9 @@ impl UiState {
                     self.panel_selection = 0;
                 }
             }
-            GameCommand::BoostResearch { .. } | GameCommand::TogglePolicy { .. } => {
+            GameCommand::BoostResearch { .. }
+            | GameCommand::TogglePolicy { .. }
+            | GameCommand::ResolveCrisis { .. } => {
                 // No UI navigation change needed
             }
         }
@@ -1413,6 +1467,7 @@ impl GameState {
             bench_research: None,
             outcome: GameOutcome::Playing,
             events: vec![],
+            active_crisis: None,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -1421,6 +1476,7 @@ impl GameState {
                 research_ui: None,
                 policy_ui: None,
                 status_message: None,
+                crisis_selection: 0,
             },
         }
     }
