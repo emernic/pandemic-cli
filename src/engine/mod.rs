@@ -32,6 +32,7 @@ pub fn tick(state: &GameState) -> GameState {
     spread::tick_spread_within(&mut new, &state.diseases, &mut rng);
     spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng);
     spread::tick_mutation(&mut new, &mut rng);
+    spread::tick_horizontal_gene_transfer(&mut new);
 
     // Research progress
     research::tick_research(&mut new);
@@ -304,7 +305,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{CrisisKind, GameState, MedicineUiState, Panel, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
+    use crate::state::{CrisisKind, GameState, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -3325,6 +3326,96 @@ mod tests {
             "income drop {:.1}% should be close to expected {:.1}%",
             actual_drop_frac * 100.0,
             expected_drop_frac * 100.0,
+        );
+    }
+
+    #[test]
+    fn horizontal_gene_transfer_between_bacteria() {
+        let mut state = GameState::new_default(42);
+        // Set up two Bacterium diseases co-located in the same region
+        state.diseases[0].pathogen_type = PathogenType::Bacterium;
+        // Add a second Bacterium disease
+        let mut disease2 = state.diseases[0].clone();
+        disease2.name = "Test Bacterium B".into();
+        disease2.pathogen_type = PathogenType::Bacterium;
+        disease2.mechanism_resistance.clear();
+        state.diseases.push(disease2);
+
+        // Give disease 0 significant broad-spectrum resistance (mechanism=None)
+        state.diseases[0].add_resistance(None, 0.5);
+
+        // Ensure both diseases have infections in the same region
+        let region_idx = primary_outbreak_region(&state);
+        let has_d1 = state.regions[region_idx].disease_state(1).is_some();
+        if !has_d1 {
+            state.regions[region_idx].infections.push(RegionDiseaseState {
+                disease_idx: 1,
+                infected: 1000.0,
+                dead: 0.0,
+                immune: 0.0,
+            });
+        }
+
+        // Disease 1 should start with no resistance
+        assert_eq!(state.diseases[1].get_resistance(None), 0.0);
+
+        // Run many ticks to allow HGT to accumulate
+        for _ in 0..1200 { // ~10 days
+            state = tick(&state);
+        }
+
+        // Disease 1 should have gained meaningful broad-spectrum resistance
+        // At 10%/day over 10 days with 0.5 donor: expect ~0.5*(1-0.9^10) ≈ 0.33
+        let transferred = state.diseases[1].get_resistance(None);
+        assert!(
+            transferred > 0.10,
+            "HGT should transfer meaningful resistance: got {transferred}"
+        );
+        assert!(
+            transferred < 0.5,
+            "HGT should not fully equalize: got {transferred}"
+        );
+    }
+
+    #[test]
+    fn horizontal_gene_transfer_only_affects_bacteria() {
+        let mut state = GameState::new_default(42);
+        // Disease 0 is Bacterium with resistance, disease 1 is RnaVirus
+        state.diseases[0].pathogen_type = PathogenType::Bacterium;
+        state.diseases[0].add_resistance(None, 0.5);
+
+        // Ensure there's a second disease that's a virus
+        if state.diseases.len() < 2 {
+            let mut d = state.diseases[0].clone();
+            d.name = "Test Virus".into();
+            d.pathogen_type = PathogenType::RnaVirus;
+            d.mechanism_resistance.clear();
+            state.diseases.push(d);
+        } else {
+            state.diseases[1].pathogen_type = PathogenType::RnaVirus;
+            state.diseases[1].mechanism_resistance.clear();
+        }
+
+        // Ensure co-location
+        let region_idx = primary_outbreak_region(&state);
+        if state.regions[region_idx].disease_state(1).is_none() {
+            state.regions[region_idx].infections.push(RegionDiseaseState {
+                disease_idx: 1,
+                infected: 1000.0,
+                dead: 0.0,
+                immune: 0.0,
+            });
+        }
+
+        for _ in 0..1200 {
+            state = tick(&state);
+        }
+
+        // Virus should NOT gain resistance from bacterial HGT
+        let virus_resistance = state.diseases[1].get_resistance(None);
+        assert_eq!(
+            virus_resistance, 0.0,
+            "HGT should not affect non-bacteria: got {virus_resistance}"
         );
     }
 }

@@ -69,7 +69,7 @@ pub fn process_events(state: &mut GameState) {
         })
         .collect();
 
-    // Priority: RegionCollapsed > DiseaseDetected > PolicySuspended > FundingWarning > DiseaseMutated
+    // Priority: RegionCollapsed > DiseaseDetected > PolicySuspended > FundingWarning > DiseaseMutated > ... > ResistanceTransferred > DiseaseSpread
     let msg = if let Some(GameEvent::RegionCollapsed { region_idx }) =
         state.events.iter().find(|e| matches!(e, GameEvent::RegionCollapsed { .. }))
     {
@@ -142,6 +142,16 @@ pub fn process_events(state: &mut GameState) {
         format!("Auto-started {} research", track_name)
     } else if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
         "Crisis auto-resolved (saved preference)".to_string()
+    } else if let Some(GameEvent::ResistanceTransferred { from_disease_idx, to_disease_idx }) =
+        state.events.iter().find(|e| matches!(e, GameEvent::ResistanceTransferred { .. }))
+    {
+        let from_name = state.diseases.get(*from_disease_idx)
+            .map(|d| d.display_name(*from_disease_idx))
+            .unwrap_or_else(|| "?".to_string());
+        let to_name = state.diseases.get(*to_disease_idx)
+            .map(|d| d.display_name(*to_disease_idx))
+            .unwrap_or_else(|| "?".to_string());
+        format!("Gene transfer: {from_name} resistance spreading to {to_name}!")
     } else if let Some(GameEvent::DiseaseSpreadToRegion { region_idx, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseSpreadToRegion { .. }))
     {
