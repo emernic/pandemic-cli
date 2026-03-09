@@ -47,6 +47,7 @@ pub fn process_events(state: &mut GameState) {
     }
     if state.events.iter().any(|e| matches!(e, GameEvent::CrisisStarted)) {
         state.ui.crisis_selection = 0;
+        state.ui.crisis_auto_resolve = false;
     }
 
     // Pick the most important event to display as status message.
@@ -100,6 +101,8 @@ pub fn process_events(state: &mut GameState) {
         } else {
             format!("{name} has mutated.")
         }
+    } else if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
+        "Crisis auto-resolved (saved preference)".to_string()
     } else if let Some(GameEvent::DiseaseSpreadToRegion { region_idx, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseSpreadToRegion { .. }))
     {
@@ -207,6 +210,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
 }
 
 fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize, state: &GameState) {
+    let auto_resolve = state.ui.crisis_auto_resolve;
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
     // Flashing warning symbols: toggle every ~500ms using wall-clock time
@@ -261,8 +265,18 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
         lines.push(Line::from(""));
     }
 
+    // Auto-resolve toggle indicator
+    if auto_resolve {
+        lines.push(Line::from(Span::styled(
+            "  [X] Always pick selected option",
+            Style::default().fg(Color::Green),
+        )));
+        lines.push(Line::from(""));
+    }
+
+    let auto_hint = if auto_resolve { "[X] Auto:ON " } else { "[X] Auto " };
     lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Enter] Confirm",
+        format!("  [↑/↓] Select  [Enter] Confirm  {}", auto_hint),
         Style::default().fg(Color::DarkGray),
     )));
 
@@ -317,6 +331,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [P] Policy panel"),
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [Z] Speed up (1x→2x→4x→6x, pause resets)"),
+            Line::from("  [X] Auto-resolve crisis (toggle during event)"),
             Line::from("  [←/→] Cycle regions  [↑/↓] Panel items"),
             Line::from("  [Esc] Close panel"),
             Line::from("  [Q] Save & Quit"),

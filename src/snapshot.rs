@@ -63,7 +63,7 @@ pub fn run_snapshot(
                     }
                     None => {
                         return Err(format!(
-                            "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, left, right, h, l, enter, z, q",
+                            "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, left, right, h, l, enter, z, x, q",
                             key_str
                         ));
                     }
@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn snapshot_invalid_key() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["x".to_string()]);
+        let result = run_snapshot(state, &["!".to_string()]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown key"));
     }

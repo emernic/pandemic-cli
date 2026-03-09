@@ -28,6 +28,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             Action::SelectPrev | Action::SelectLeft => {
                 new.ui.crisis_selection = 0;
             }
+            Action::ToggleAutoResolve => {
+                new.ui.crisis_auto_resolve = !new.ui.crisis_auto_resolve;
+            }
             Action::Confirm => {
                 let choice = new.ui.crisis_selection;
                 // Check if the selected option is affordable
@@ -42,10 +45,16 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         return new;
                     }
                 }
+                // Save auto-resolve preference if toggled on
+                if new.ui.crisis_auto_resolve {
+                    let tag = new.active_crisis.as_ref().unwrap().kind.tag().to_string();
+                    new.auto_resolve_crises.insert(tag, choice);
+                }
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
+                new.ui.crisis_auto_resolve = false;
                 // Restore pre-event sim state
                 if let SimState::Event { was_running } = new.sim_state {
                     new.sim_state = if was_running { SimState::Running } else { SimState::Paused };
@@ -137,6 +146,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
             }
         }
+        Action::ToggleAutoResolve => {} // Only meaningful during crisis (handled above)
         Action::Quit => {} // Handled by the caller
     }
 
@@ -200,5 +210,75 @@ mod tests {
         let state = apply_action(&state, &Action::TogglePause); // pause
         let state = apply_action(&state, &Action::SpeedUp);
         assert_eq!(state.ui.speed_multiplier, 1); // unchanged
+    }
+
+    #[test]
+    fn auto_resolve_toggle_during_crisis() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+
+        let mut state = GameState::new_default(42);
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            title: "Aid Offer".into(),
+            description: "Choose wisely".into(),
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            tick_created: 0,
+        });
+
+        // Toggle auto-resolve on
+        let state = apply_action(&state, &Action::ToggleAutoResolve);
+        assert!(state.ui.crisis_auto_resolve);
+
+        // Toggle it off
+        let state = apply_action(&state, &Action::ToggleAutoResolve);
+        assert!(!state.ui.crisis_auto_resolve);
+    }
+
+    #[test]
+    fn auto_resolve_saves_preference_on_confirm() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+
+        let mut state = GameState::new_default(42);
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            title: "Aid Offer".into(),
+            description: "Choose wisely".into(),
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            tick_created: 0,
+        });
+
+        // Toggle auto-resolve, select option B, confirm
+        let state = apply_action(&state, &Action::ToggleAutoResolve);
+        let state = apply_action(&state, &Action::SelectNext); // select B
+        let state = apply_action(&state, &Action::Confirm);
+
+        // Preference should be saved
+        assert_eq!(state.auto_resolve_crises.get("aid"), Some(&1));
+        assert!(state.active_crisis.is_none());
+        assert!(!state.ui.crisis_auto_resolve); // reset after confirm
+    }
+
+    #[test]
+    fn auto_resolve_no_preference_without_toggle() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+
+        let mut state = GameState::new_default(42);
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            title: "Aid Offer".into(),
+            description: "Choose wisely".into(),
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            tick_created: 0,
+        });
+
+        // Confirm without toggling auto-resolve
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(state.auto_resolve_crises.is_empty());
     }
 }
