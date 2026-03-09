@@ -2228,6 +2228,10 @@ pub enum ResearchUiState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
+    /// Generic list index — "which item is selected in the current view."
+    /// Meaning depends on the active panel and wizard step (e.g., medicine index,
+    /// region index, policy index). Always bounded by `panel_selection_max()` and
+    /// reset to 0 on every wizard step transition.
     pub panel_selection: usize,
     #[serde(default)]
     pub medicine_ui: Option<MedicineUiState>,
