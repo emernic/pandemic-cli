@@ -317,14 +317,14 @@ pub const POLICY_COUNT: usize = 11;
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
-    0.30, // Travel Ban — major action, needs moderate political will
-    0.25, // Quarantine — strong measure but regionally justified
-    0.15, // Hospital Surge — relatively uncontroversial
-    0.05, // Border Controls — mild, early unlock
-    0.10, // Water Sanitation — basic public health
+    0.30, // Travel Ban — restricts citizens, needs political will
+    0.25, // Quarantine — restricts movement, needs political will
+    0.00, // Hospital Surge — defensive infrastructure, always available
+    0.00, // Border Controls — checkpoint screening, always available
+    0.00, // Water Sanitation — public health infrastructure, always available
     0.00, // Low Disease Screening — available immediately
-    0.10, // Medium Disease Screening
-    0.15, // High Disease Screening
+    0.10, // Medium Disease Screening — mandatory testing, needs political will
+    0.15, // High Disease Screening — mandatory mass testing, needs political will
     0.40, // Martial Law — drastic, needs high political will
     0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
     0.00, // Healthcare Investment — always available, encourages early spending
