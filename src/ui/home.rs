@@ -348,8 +348,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
                     proj.progress / proj.required_ticks
                 } else { 1.0 };
                 let remaining = proj.required_ticks - proj.progress;
-                let (base_pers, _) = proj.kind.costs(&state.medicines);
-                let speed = proj.personnel_assigned as f64 / base_pers.max(1) as f64;
+                let speed = proj.speed(&state.medicines);
                 let remaining_days = ticks_to_days(if speed > 0.0 { remaining / speed } else { remaining });
 
                 let mut spans = vec![

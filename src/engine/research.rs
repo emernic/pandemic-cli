@@ -86,8 +86,7 @@ pub(super) fn remove_personnel(state: &mut GameState, bench: bool) -> Option<Str
 /// double personnel = 2x speed.
 pub(super) fn tick_research(state: &mut GameState) {
     if let Some(ref mut project) = state.field_research {
-        let (base_personnel, _) = project.kind.costs(&state.medicines);
-        let speed = project.personnel_assigned as f64 / base_personnel.max(1) as f64;
+        let speed = project.speed(&state.medicines);
         project.progress += speed;
         if project.is_complete() {
             match &project.kind {
@@ -130,8 +129,7 @@ pub(super) fn tick_research(state: &mut GameState) {
         }
     }
     if let Some(ref mut project) = state.bench_research {
-        let (base_personnel, _) = project.kind.costs(&state.medicines);
-        let speed = project.personnel_assigned as f64 / base_personnel.max(1) as f64;
+        let speed = project.speed(&state.medicines);
         project.progress += speed;
         if project.is_complete() {
             match &project.kind {

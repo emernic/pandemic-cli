@@ -258,8 +258,7 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
             ),
             Span::raw(format!(" {:.0}%", pct)),
         ]));
-        let (base_personnel, _) = project.kind.costs(&state.medicines);
-        let speed = project.personnel_assigned as f64 / base_personnel.max(1) as f64;
+        let speed = project.speed(&state.medicines);
         let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
