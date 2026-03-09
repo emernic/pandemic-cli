@@ -1,3 +1,4 @@
+pub mod home;
 pub mod hotkey_bar;
 pub mod medicines;
 pub mod policy;
@@ -142,7 +143,12 @@ pub fn render(f: &mut Frame, state: &GameState) {
             render_game_over(f, split[1], state);
         }
         Panel::None => {
-            region_list::render(f, chunks[1], state);
+            let split = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(chunks[1]);
+            region_list::render(f, split[0], state);
+            home::render(f, split[1], state);
         }
         Panel::Threats => {
             let split = Layout::default()
