@@ -83,9 +83,10 @@ pub fn tick(state: &GameState) -> GameState {
         new.resources.political_power = (new.resources.political_power + delta).clamp(0.0, 1.0);
     }
 
-    // POL-based personnel: ~1 person per 15 days at max POL
+    // POL-based personnel: ~1 person per 3 days at max POL (0.90).
+    // With typical mid-game POL (~30-40%), this gives ~1 per 8-10 days.
     {
-        let rate = new.resources.political_power / (15.0 * TICKS_PER_DAY);
+        let rate = new.resources.political_power / (3.0 * TICKS_PER_DAY);
         new.resources.personnel_accum += rate;
         if new.resources.personnel_accum >= 1.0 {
             let gained = new.resources.personnel_accum as u32;
