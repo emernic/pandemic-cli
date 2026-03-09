@@ -213,3 +213,184 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         _ => (None, false),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{GameState, ScreeningLevel};
+    use crate::engine::tick;
+
+    /// Helper: set up a state with full POL and plenty of personnel for screening tests.
+    fn screening_test_state() -> GameState {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.resources.funding = 10_000.0;
+        state
+    }
+
+    #[test]
+    fn screening_mutual_exclusivity() {
+        let mut state = screening_test_state();
+        // Enable Low screening on region 0
+        let (_, ok) = toggle_policy(&mut state, 0, 5);
+        assert!(ok);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Low);
+
+        // Switch to Medium — should replace Low, not stack
+        let (_, ok) = toggle_policy(&mut state, 0, 6);
+        assert!(ok);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Medium);
+
+        // Switch to High — replaces Medium
+        let (_, ok) = toggle_policy(&mut state, 0, 7);
+        assert!(ok);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::High);
+
+        // Toggle High again — disables screening
+        let (_, ok) = toggle_policy(&mut state, 0, 7);
+        assert!(ok);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::None);
+    }
+
+    #[test]
+    fn screening_pol_gating() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        // Low screening has 0.0 POL threshold — should work with no POL
+        state.resources.political_power = 0.0;
+        let (_, ok) = toggle_policy(&mut state, 0, 5);
+        assert!(ok, "Low screening should work at 0 POL");
+
+        // Medium requires 0.10 POL
+        state.resources.political_power = 0.05;
+        let (msg, ok) = toggle_policy(&mut state, 0, 6);
+        assert!(!ok, "Medium screening should be blocked at 5% POL");
+        assert!(msg.unwrap().contains("Political Power"));
+
+        // With enough POL, Medium should work
+        state.resources.political_power = 0.15;
+        let (_, ok) = toggle_policy(&mut state, 0, 6);
+        assert!(ok, "Medium screening should work at 15% POL");
+    }
+
+    #[test]
+    fn screening_upgrade_frees_personnel_from_current_tier() {
+        let mut state = screening_test_state();
+        // Start with Low screening (1 personnel)
+        toggle_policy(&mut state, 0, 5);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Low);
+
+        // Use up all remaining personnel except 1 (which is committed to Low screening)
+        // Medium needs 2 personnel. With 1 freed from Low, we need 1 available.
+        let busy = state.personnel_busy();
+        // Set personnel so that available = 0 but we have 1 in Low screening
+        state.resources.personnel = busy; // exactly enough for current commitments
+
+        // Upgrade to Medium: needs 2, frees 1 from Low, so needs 1 more available
+        // With available=0 and freed=1, effective_available=1 < needed=2 → should fail
+        let (_, ok) = toggle_policy(&mut state, 0, 6);
+        assert!(!ok, "should fail: 0 available + 1 freed = 1 < 2 needed");
+
+        // Give 1 more personnel: available=1, freed=1 from Low → effective=2 >= 2
+        state.resources.personnel = busy + 1;
+        let (_, ok) = toggle_policy(&mut state, 0, 6);
+        assert!(ok, "should succeed: 1 available + 1 freed = 2 >= 2 needed");
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Medium);
+    }
+
+    #[test]
+    fn screening_suspension_when_funding_runs_out() {
+        let mut state = screening_test_state();
+        state.policies[0].screening = ScreeningLevel::High; // $0.6/tick
+        // Set funding just below screening cost so it gets suspended
+        state.resources.funding = 0.3;
+        // Clear infections so tick doesn't muddy funding math
+        for r in &mut state.regions { r.infections.clear(); }
+
+        state = tick(&state);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::None,
+            "High screening should be suspended when unaffordable");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::PolicySuspended { policy_name, .. } if policy_name.contains("Screening"))
+        ), "should emit PolicySuspended event for screening");
+    }
+
+    #[test]
+    fn screening_cost_vs_boolean_policy_suspension_order() {
+        let mut state = screening_test_state();
+        // Set up: High screening ($0.6/tick) + quarantine ($0.6/tick) = $1.2/tick
+        state.policies[0].screening = ScreeningLevel::High;
+        state.policies[0].quarantine = true;
+        // Enough for one but not both
+        state.resources.funding = 0.8;
+        for r in &mut state.regions { r.infections.clear(); }
+
+        state = tick(&state);
+        // Both cost $0.6; one should be suspended. The enforcement loop finds
+        // whichever it encounters first at the max cost — just verify one survived.
+        let screening_alive = state.policies[0].screening != ScreeningLevel::None;
+        let quarantine_alive = state.policies[0].quarantine;
+        assert!(screening_alive != quarantine_alive || (!screening_alive && !quarantine_alive),
+            "at most one of the two equal-cost policies should survive");
+    }
+
+    #[test]
+    fn screening_lowers_detection_threshold() {
+        let mut state = GameState::new_default(42);
+        // Place undetected disease just below the screening-reduced threshold
+        state.diseases[0].detected = false;
+        // High screening: threshold = 10,000 * 0.2 = 2,000
+        state.policies[0].screening = ScreeningLevel::High;
+        state.resources.funding = 10_000.0;
+        // Set infections to 2,500 (above 2,000 threshold but below 10,000 default)
+        state.regions[0].infections[0].infected = 2_500.0;
+        // Clear other regions so total is just 2,500
+        for r in &mut state.regions[1..] { r.infections.clear(); }
+
+        let after = tick(&state);
+        assert!(after.diseases[0].detected,
+            "disease should be detected at 2,500 infected with High screening (threshold 2,000)");
+
+        // Without screening, same infection level should NOT trigger detection
+        let mut state2 = state.clone();
+        state2.policies[0].screening = ScreeningLevel::None;
+        let after2 = tick(&state2);
+        assert!(!after2.diseases[0].detected,
+            "disease should NOT be detected at 2,500 infected without screening (threshold 10,000)");
+    }
+
+    #[test]
+    fn screening_visibility_scales_reported_infections() {
+        let mut state = screening_test_state();
+        // Set a known infection level
+        state.regions[0].infections[0].infected = 100_000.0;
+
+        // Without screening: visibility = 15%
+        let screened_none = state.total_infected_screened();
+
+        // With High screening on region 0: visibility = 90%
+        state.policies[0].screening = ScreeningLevel::High;
+        let screened_high = state.total_infected_screened();
+
+        assert!(screened_high > screened_none,
+            "High screening should show more infections: {screened_high:.0} vs {screened_none:.0}");
+
+        // Region 0's contribution should be roughly 90%/15% = 6x higher
+        let ratio = screened_high / screened_none;
+        // Not exactly 6x because other regions contribute too, but should be meaningfully higher
+        assert!(ratio > 2.0,
+            "screening should substantially increase visible infections (ratio: {ratio:.1}x)");
+    }
+
+    #[test]
+    fn best_screening_level_returns_highest_across_regions() {
+        let mut state = screening_test_state();
+        state.policies[0].screening = ScreeningLevel::Low;
+        state.policies[2].screening = ScreeningLevel::High;
+        state.policies[4].screening = ScreeningLevel::Medium;
+
+        let best = state.best_screening_level();
+        assert_eq!(best.visibility_rate(), ScreeningLevel::High.visibility_rate(),
+            "best_screening_level should return High when any region has High");
+    }
+}
