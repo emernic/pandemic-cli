@@ -347,13 +347,12 @@ pub struct Resources {
     pub funding: f64,
     pub personnel: u32,
     /// Political Power (0.0–1.0). Represents global willingness to act.
-    /// Increases based on disease severity and time. Gates policies.
+    /// Drifts toward a severity-based target (~30%/day). Crisis choices modify
+    /// this directly, so POL hits take real time to recover from.
     #[serde(default)]
     pub political_power: f64,
-    /// Crisis-driven POL modifier (same scale as political_power, typically ±0.15).
-    /// Accumulated from crisis resolutions, decays toward 0 over time (~5-day half-life).
-    /// Added to the base severity+time formula each tick; final result clamped to 0–1.
-    #[serde(default)]
+    /// Legacy: old saves may include this field. Not used in game logic.
+    #[serde(default, skip_serializing)]
     pub pol_crisis_modifier: f64,
     /// Fractional accumulator for POL-based personnel gains.
     #[serde(default)]
