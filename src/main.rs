@@ -91,6 +91,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let result = snapshot::run_snapshot(state, &steps)
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        // Write save file BEFORE printing to stdout — if output is piped
+        // through `head` or similar, SIGPIPE kills the process on print,
+        // so the save must happen first.
+        if let Some(ref path) = save_file {
+            if let Some(parent) = std::path::Path::new(path).parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let json = serde_json::to_string_pretty(&result.state)?;
+            fs::write(path, json)?;
+        }
         if let Some(ref path) = snapshot_autosave_notice {
             println!("No save file passed in. Creating {}.", path);
             println!(
@@ -100,14 +110,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!();
         }
         print!("{}", result.screen);
-        // Write updated state back to save file if one was provided
-        if let Some(ref path) = save_file {
-            if let Some(parent) = std::path::Path::new(path).parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let json = serde_json::to_string_pretty(&result.state)?;
-            fs::write(path, json)?;
-        }
         Ok(())
     } else {
         run_interactive(state, save_file)
