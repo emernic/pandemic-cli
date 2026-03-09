@@ -475,7 +475,8 @@ pub const BOOST_RP_COST: f64 = 10.0;
 pub const BOOST_TICKS: f64 = 5.0;
 
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
-pub const TICKS_PER_DAY: f64 = 100.0;
+/// 120 chosen so 5 ticks = 1 hour exactly (120 / 24 = 5).
+pub const TICKS_PER_DAY: f64 = 120.0;
 
 /// Convert ticks to days for display purposes.
 pub fn ticks_to_days(ticks: f64) -> f64 {
