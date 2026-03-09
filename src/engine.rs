@@ -1,10 +1,9 @@
 use rand::Rng;
 
-use crate::action::Action;
 use crate::state::{
     CrisisEvent, CrisisKind, CrisisOption,
     DeployTarget, GameCommand, GameEvent, GameOutcome, GameState,
-    Panel, RegionDiseaseState, ResearchKind, ResearchProject, TransmissionVector,
+    RegionDiseaseState, ResearchKind, ResearchProject, TransmissionVector,
     BORDER_SCREENING_COST, BOOST_RP_COST, BOOST_TICKS, CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
@@ -555,77 +554,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
     }
 }
 
-/// Apply a player action to the game state.
-pub fn apply_action(state: &GameState, action: &Action) -> GameState {
-    let mut new = state.clone();
-    new.ui.status_message = None;
-
-    // When a crisis is active, only allow selecting options and confirming
-    if new.active_crisis.is_some() {
-        match action {
-            Action::SelectNext | Action::SelectRight => {
-                new.ui.crisis_selection = 1;
-            }
-            Action::SelectPrev | Action::SelectLeft => {
-                new.ui.crisis_selection = 0;
-            }
-            Action::Confirm => {
-                let choice = new.ui.crisis_selection;
-                let cmd = GameCommand::ResolveCrisis { choice };
-                let result = execute_command(&mut new, &cmd);
-                new.ui.status_message = result.message;
-                new.ui.crisis_selection = 0;
-            }
-            Action::Quit => {} // Still allow quit
-            _ => {} // Block all other actions during crisis
-        }
-        return new;
-    }
-
-    match action {
-        Action::TogglePause => {
-            // Can't unpause after game over
-            if new.outcome == GameOutcome::Playing {
-                new.paused = !new.paused;
-            }
-        }
-        Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
-        Action::OpenResearch => new.ui.toggle_panel(Panel::Research),
-        Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines),
-        Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy),
-        Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
-        Action::ClosePanel => new.ui.close_panel(),
-        Action::SelectNext => {
-            let max = new.ui.panel_selection_max(&new);
-            new.ui.select_next(new.regions.len(), max);
-        }
-        Action::SelectPrev => {
-            new.ui.select_prev(new.regions.len());
-        }
-        Action::SelectLeft => {
-            new.ui.select_left(new.regions.len());
-        }
-        Action::SelectRight => {
-            new.ui.select_right(new.regions.len());
-        }
-        Action::Confirm => {
-            if new.outcome == GameOutcome::Playing {
-                let state_snapshot = new.clone();
-                if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
-                    let result = execute_command(&mut new, &cmd);
-                    new.ui.apply_command_result(&cmd, result.success);
-                    if new.ui.status_message.is_none() {
-                        new.ui.status_message = result.message;
-                    }
-                }
-            }
-        }
-        Action::Quit => {} // Handled by the caller
-    }
-
-    new
-}
-
 /// Generate a crisis event based on current game state. Returns None if no
 /// suitable crisis can be generated (e.g., no valid targets for any crisis type).
 fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<CrisisEvent> {
@@ -1089,7 +1017,9 @@ fn boost_research(state: &mut GameState, bench: bool) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{GameState, MedicineUiState, PolicyUiState, ResearchUiState};
+    use crate::action::Action;
+    use crate::apply_action;
+    use crate::state::{GameState, MedicineUiState, Panel, PolicyUiState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
