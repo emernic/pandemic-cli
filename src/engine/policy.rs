@@ -597,10 +597,15 @@ mod tests {
         assert!(state.regions[0].collapsed);
         assert_eq!(state.enacted_decrees.sacrificed_region, Some(0));
 
-        // Income should be boosted (even though one region lost)
+        // Income should reflect the sacrifice: the collapsed region's contribution
+        // is lost, but remaining regions get a +20% bonus.
         let income_after = state.funding_income_rate();
-        // The region's contribution is removed but remaining gets +20%
-        assert!(income_after > 0.0, "should still have income");
+        assert!(income_after > 0.0, "should still have income from remaining regions");
+        // The bonus should make remaining income higher than it would be without
+        // the boost (income_before includes the sacrificed region's contribution,
+        // so after sacrifice we lose that but gain 20% on the rest).
+        assert!(income_after != income_before,
+            "income should change after sacrifice: before={income_before:.3}, after={income_after:.3}");
 
         // Cannot sacrifice again
         let (_, ok) = enact_decree(&mut state, 2, Some(1));
