@@ -1315,11 +1315,11 @@ pub enum CrisisKind {
     /// Powerful nation wants your research data — share or refuse.
     ResourceDiversion { disease_idx: usize, share_reward: f64, refuse_cost: f64 },
     /// Hospital workers collapsing — reduce shifts or push through.
-    ExhaustionEpidemic { region_idx: usize },
+    ExhaustionEpidemic { region_idx: usize, personnel_loss: u32 },
     /// Whistleblower reports medicine side effects — halt or continue.
     WhistleblowerReport { medicine_idx: usize },
     /// Military threatens takeover of health agency.
-    MilitaryTakeover,
+    MilitaryTakeover { cooperate_loss: u32 },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
     /// Billionaire offers to fund everything — for a price.
@@ -1354,7 +1354,7 @@ impl CrisisKind {
             CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::WhistleblowerReport { .. } => "whistleblower",
-            CrisisKind::MilitaryTakeover => "military",
+            CrisisKind::MilitaryTakeover { .. } => "military",
             CrisisKind::CultBlockade { .. } => "cult",
             CrisisKind::BillionaireOffer { .. } => "billionaire",
             CrisisKind::WHOEvacuation { .. } => "who_evac",

@@ -173,7 +173,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         .collect();
     if !hospitals_active.is_empty() {
         let idx = hospitals_active[rng.r#gen::<usize>() % hospitals_active.len()];
-        candidates.push(CrisisKind::ExhaustionEpidemic { region_idx: idx });
+        let personnel_loss = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(2, 5);
+        candidates.push(CrisisKind::ExhaustionEpidemic { region_idx: idx, personnel_loss });
     }
 
     // Whistleblower report: requires medicine that's been deployed (has less than original doses)
@@ -188,7 +189,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // Military takeover: requires POL < 40% and day > 8
     if state.resources.political_power < 0.40 && day > 8.0 {
-        candidates.push(CrisisKind::MilitaryTakeover);
+        let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
+        candidates.push(CrisisKind::MilitaryTakeover { cooperate_loss });
     }
 
     // --- Late-game crisis types (day-gated) ---
@@ -641,7 +643,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
-        CrisisKind::ExhaustionEpidemic { region_idx } => {
+        CrisisKind::ExhaustionEpidemic { region_idx, personnel_loss } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
@@ -657,7 +659,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Push through (−3 personnel)".into(),
+                    label: format!("Push through (−{} personnel)", personnel_loss),
                     description: "Maintain surge — some workers quit permanently".into(),
                     cost: None, // Personnel cost applied in resolve
                 },
@@ -690,7 +692,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
-        CrisisKind::MilitaryTakeover => {
+        CrisisKind::MilitaryTakeover { cooperate_loss } => {
             CrisisEvent {
                 title: "Military Threatens Takeover".into(),
                 description: "Generals are threatening to seize control of the pandemic response, \
@@ -698,7 +700,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                     authority, or resist and fight for independence.".into(),
                 option_a: CrisisOption {
                     label: "Cooperate".into(),
-                    description: "Cede 5 personnel to military, gain +15% POL".into(),
+                    description: format!("Cede {} personnel to military, gain +15% POL", cooperate_loss),
                     cost: None,
                 },
                 option_b: {
@@ -1092,7 +1094,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Refused to share research — foreign aid reduced".into()
         }
 
-        (CrisisKind::ExhaustionEpidemic { region_idx }, 0) => {
+        (CrisisKind::ExhaustionEpidemic { region_idx, .. }, 0) => {
             // Reduce shifts — disable hospital surge
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
@@ -1101,10 +1103,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
             format!("Hospital surge suspended in {} — staff recovering", region_name)
         }
-        (CrisisKind::ExhaustionEpidemic { .. }, _) => {
+        (CrisisKind::ExhaustionEpidemic { personnel_loss, .. }, _) => {
             // Push through — lose personnel
-            state.resources.personnel = state.resources.personnel.saturating_sub(3);
-            "Pushed through — 3 workers quit permanently from exhaustion".into()
+            state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
+            format!("Pushed through — {} workers quit permanently from exhaustion", personnel_loss)
         }
 
         (CrisisKind::WhistleblowerReport { medicine_idx }, 0) => {
@@ -1125,13 +1127,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Continuing deployment despite concerns — public confidence shaken".into()
         }
 
-        (CrisisKind::MilitaryTakeover, 0) => {
+        (CrisisKind::MilitaryTakeover { cooperate_loss }, 0) => {
             // Cooperate — lose personnel, gain POL
-            state.resources.personnel = state.resources.personnel.saturating_sub(5);
+            state.resources.personnel = state.resources.personnel.saturating_sub(*cooperate_loss);
             state.resources.political_power += 0.15;
-            "Ceded 5 staff to military — agency retains civilian control with their backing".into()
+            format!("Ceded {} staff to military — agency retains civilian control with their backing", cooperate_loss)
         }
-        (CrisisKind::MilitaryTakeover, _) => {
+        (CrisisKind::MilitaryTakeover { .. }, _) => {
             // Resist — costs already deducted
             "Fought off military takeover — independence maintained at great cost".into()
         }

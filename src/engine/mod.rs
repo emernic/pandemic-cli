@@ -2730,7 +2730,7 @@ mod tests {
     fn exhaustion_epidemic_option_a_disables_hospital_surge() {
         let mut state = GameState::new_default(42);
         state.policies[0].hospital_surge = true;
-        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0 }, 0);
+        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0, personnel_loss: 3 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(!after.policies[0].hospital_surge,
             "option A should disable hospital surge");
@@ -2741,10 +2741,10 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.policies[0].hospital_surge = true;
         let before = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0 }, 1);
+        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0, personnel_loss: 3 }, 1);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.personnel, before - 3,
-            "option B should lose 3 personnel");
+            "option B should lose scaled personnel");
         assert!(after.policies[0].hospital_surge,
             "option B should keep hospital surge active");
     }
@@ -2779,10 +2779,10 @@ mod tests {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
         let before_pol = state.resources.political_power;
-        setup_crisis(&mut state, CrisisKind::MilitaryTakeover, 0);
+        setup_crisis(&mut state, CrisisKind::MilitaryTakeover { cooperate_loss: 4 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.resources.personnel, before_personnel - 5,
-            "option A should lose 5 personnel");
+        assert_eq!(after.resources.personnel, before_personnel - 4,
+            "option A should lose scaled personnel");
         assert!((after.resources.political_power - (before_pol + 0.15)).abs() < 0.001,
             "option A should gain 0.15 POL modifier");
     }
