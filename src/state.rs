@@ -445,9 +445,9 @@ impl ResearchKind {
                 let targets = medicines.get(*medicine_idx)
                     .map_or(1, |m| m.target_diseases.len());
                 if targets <= 1 {
-                    (30.0, 5, 150.0)  // narrow
+                    (20.0, 3, 100.0)  // narrow: fast and cheap, single-target
                 } else {
-                    (60.0, 10, 250.0) // broad: slow and expensive
+                    (60.0, 10, 250.0) // broad: slow and expensive, covers all
                 }
             }
             ResearchKind::ClinicalTrial { .. } => (20.0, 5, 80.0),
@@ -1107,8 +1107,8 @@ impl GameState {
             therapy_type: TherapyType::BroadSpectrum,
             target_diseases: all_disease_indices,
             cost: 200.0,
-            doses: 150_000.0,
-            max_doses: 150_000.0,
+            doses: 100_000.0,
+            max_doses: 100_000.0,
             unlocked: false,
             tested_against: vec![],
             strain_generations: vec![],
