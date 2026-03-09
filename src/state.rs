@@ -285,7 +285,7 @@ pub enum TransmissionVector {
     #[default]
     Airborne,
     /// Spreads via contaminated water/food. Harder to contain with quarantine.
-    /// Travel bans are less effective. Larger populations hit harder.
+    /// Travel bans are less effective.
     Waterborne,
     /// Requires close physical contact. Slow cross-region spread.
     /// Quarantine is extremely effective. Hospital surge is risky
