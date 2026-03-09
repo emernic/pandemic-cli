@@ -258,13 +258,14 @@ fn render_active(state: &GameState, bench: bool) -> (String, Vec<Line<'static>>)
             ),
             Span::raw(format!(" {:.0}%", pct)),
         ]));
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            format!("  {} remaining", format_days(remaining)),
-            Style::default().fg(Color::White),
-        )));
         let (base_personnel, _) = project.kind.costs(&state.medicines);
         let speed = project.personnel_assigned as f64 / base_personnel.max(1) as f64;
+        let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  {} remaining", format_days(effective_remaining)),
+            Style::default().fg(Color::White),
+        )));
         lines.push(Line::from(Span::styled(
             format!("  {} personnel assigned ({}x speed)", project.personnel_assigned, format!("{:.1}", speed)),
             Style::default().fg(Color::Cyan),
