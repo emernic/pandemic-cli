@@ -267,6 +267,30 @@ impl RegionPolicy {
         self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
     }
+
+    /// Access a boolean policy field by index (0-4).
+    pub fn get_bool(&self, idx: usize) -> bool {
+        match idx {
+            0 => self.travel_ban,
+            1 => self.quarantine,
+            2 => self.hospital_surge,
+            3 => self.border_controls,
+            4 => self.water_sanitation,
+            _ => false,
+        }
+    }
+
+    /// Set a boolean policy field by index (0-4).
+    pub fn set_bool(&mut self, idx: usize, val: bool) {
+        match idx {
+            0 => self.travel_ban = val,
+            1 => self.quarantine = val,
+            2 => self.hospital_surge = val,
+            3 => self.border_controls = val,
+            4 => self.water_sanitation = val,
+            _ => {}
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
