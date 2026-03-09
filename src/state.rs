@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -56,6 +58,10 @@ pub struct GameState {
     /// Tag of the most recently resolved crisis, used to prevent back-to-back repeats.
     #[serde(default)]
     pub last_crisis_tag: Option<String>,
+    /// Auto-resolve preferences: crisis tag → choice index (0 = A, 1 = B).
+    /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
+    #[serde(default)]
+    pub auto_resolve_crises: HashMap<String, usize>,
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -933,6 +939,8 @@ pub enum GameEvent {
     GameOver,
     /// A crisis event appeared and needs player attention.
     CrisisStarted,
+    /// A crisis was auto-resolved based on player's saved preference.
+    CrisisAutoResolved,
 }
 
 /// Game outcome — checked each tick after simulation.
@@ -1115,6 +1123,9 @@ pub struct UiState {
     /// Which crisis option is selected (0 = A, 1 = B).
     #[serde(default)]
     pub crisis_selection: usize,
+    /// Whether the [X] auto-resolve toggle is active for the current crisis popup.
+    #[serde(default)]
+    pub crisis_auto_resolve: bool,
     /// Whether the home splash animation has completed (or been skipped).
     /// Once true, the home panel renders fully without animation.
     #[serde(default)]
@@ -1763,6 +1774,7 @@ impl GameState {
             events: vec![],
             active_crisis: None,
             last_crisis_tag: None,
+            auto_resolve_crises: HashMap::new(),
             history: vec![],
             ui: UiState {
                 open_panel: Panel::None,
@@ -1773,6 +1785,7 @@ impl GameState {
                 policy_ui: None,
                 status_message: None,
                 crisis_selection: 0,
+                crisis_auto_resolve: false,
                 home_splash_done: false,
                 speed_multiplier: 1,
             },
