@@ -148,6 +148,9 @@ pub const BASE_FUNDING_INCOME: f64 = 3.0;
 /// 20 personnel × 0.03 = $0.6/tick = $72/day upkeep vs $360/day gross income → ~$288/day net.
 /// Previously 0.1, which made training personnel an economic trap (+$60/day per 5 trained).
 pub const PERSONNEL_UPKEEP_COST: f64 = 0.03;
+/// Fraction of infected people who are too sick to contribute economically.
+/// 70% are incapacitated (hospitalized, quarantined, bedridden); 30% are mild/asymptomatic.
+pub const INFECTED_INCAPACITATION_RATE: f64 = 0.7;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
 pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
@@ -2551,7 +2554,9 @@ impl GameState {
         let mut income = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
             let pop = region.population as f64;
-            let healthy_frac = (pop - region.dead).max(0.0) / pop;
+            let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
+            let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
+            let healthy_frac = (pop - incapacitated).max(0.0) / pop;
             let region_share = pop / total_pop;
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
                 TRAVEL_BAN_INCOME_PENALTY
@@ -2574,7 +2579,9 @@ impl GameState {
         for (i, region) in self.regions.iter().enumerate() {
             if self.policies.get(i).is_some_and(|p| p.travel_ban) {
                 let pop = region.population as f64;
-                let healthy_frac = (pop - region.dead).max(0.0) / pop;
+                let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
+                let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
+                let healthy_frac = (pop - incapacitated).max(0.0) / pop;
                 let region_share = pop / total_pop;
                 // Penalty is the income lost: the portion that travel_ban_factor removes
                 penalty += BASE_FUNDING_INCOME * region_share * healthy_frac * (1.0 - TRAVEL_BAN_INCOME_PENALTY);

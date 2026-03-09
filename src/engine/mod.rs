@@ -3202,4 +3202,42 @@ mod tests {
         assert!(s.resources.political_power < 0.92,
             "POL should drift toward 0.90 cap, got {:.3}", s.resources.political_power);
     }
+
+    #[test]
+    fn infections_reduce_funding_income() {
+        use crate::state::INFECTED_INCAPACITATION_RATE;
+        let mut state = GameState::new_default(42);
+        // Clear all infections to get baseline
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+        let baseline_income = state.funding_income_rate();
+
+        // Infect 10% of region 0's population
+        let pop = state.regions[0].population as f64;
+        let infected = pop * 0.10;
+        state.regions[0].infections.push(crate::state::RegionDiseaseState {
+            disease_idx: 0,
+            infected,
+            dead: 0.0,
+            immune: 0.0,
+        });
+
+        let infected_income = state.funding_income_rate();
+        assert!(
+            infected_income < baseline_income,
+            "income should drop with infections: {infected_income:.4} vs {baseline_income:.4}"
+        );
+
+        // The drop should be proportional to the infected fraction × incapacitation rate
+        let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
+        let expected_drop_frac = (infected * INFECTED_INCAPACITATION_RATE) / total_pop;
+        let actual_drop_frac = 1.0 - infected_income / baseline_income;
+        assert!(
+            (actual_drop_frac - expected_drop_frac).abs() < 0.01,
+            "income drop {:.1}% should be close to expected {:.1}%",
+            actual_drop_frac * 100.0,
+            expected_drop_frac * 100.0,
+        );
+    }
 }
