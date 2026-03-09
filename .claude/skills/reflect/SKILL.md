@@ -43,6 +43,21 @@ Think back through your entire session:
 
 **If you have zero investigate issues to file after a non-trivial session, you almost certainly weren't paying enough attention.** Go back and look harder.
 
+## Game Design Ownership Check
+
+**Also mandatory. This is a game. You are the game designer. There is nobody else.**
+
+Every time you touch game logic, you are making design decisions — whether you realize it or not. "That's a design decision" is not a reason to defer. Designed by whom? There is no designer waiting in the wings. There is no game design team. If a mechanic is unfun, confusing, or broken, **you** need to fix it or file an issue. If you don't, nobody will. The next Claude session starts from scratch with zero memory of what you noticed.
+
+Ask yourself:
+
+1. **Did you encounter a game mechanic that doesn't make sense?** A cost with no counterplay, a choice that's always obvious, a system that creates no interesting decisions? Don't wave it away — file an issue or fix it.
+2. **Did you fix a symptom without addressing the underlying design problem?** Clamping a value at 0 is a band-aid. If the real problem is "players have no way to manage this resource," say so. File the design issue.
+3. **Would a real player enjoy the thing you just built or fixed?** Not "does it compile" or "do the tests pass" — would it be *fun*? Would it create interesting choices? If not, that's a problem you own.
+4. **Did you dismiss something as "a design decision for later"?** There is no "later." There is no one coming after you to make that decision. If you noticed the gap, you are the one responsible for it. File the issue at minimum.
+
+**The failure mode:** You fix a bug, notice the surrounding system is poorly designed, and think "well, that's beyond the scope of this issue." No it isn't. You saw it. You own it. The game being badly designed is YOUR problem, because you are the only one who will ever notice it in this session.
+
 ## Complexity Ratchet Check
 
 **Also mandatory. This is how complexity silently kills projects.**
