@@ -25,8 +25,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(MedicineUiState::SelectRegion { medicine_idx }) => {
             render_select_region(state, *medicine_idx)
         }
-        Some(MedicineUiState::SelectTarget { medicine_idx, region_idx }) => {
-            render_select_target(state, *medicine_idx, *region_idx)
+        Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
+            render_select_disease(state, *medicine_idx, *region_idx)
+        }
+        Some(MedicineUiState::SelectTarget { medicine_idx, region_idx, disease_idx }) => {
+            render_select_target(state, *medicine_idx, *region_idx, *disease_idx)
         }
         Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
             render_confirm_deploy(state, *medicine_idx, *region_idx, *target_selection)
@@ -193,7 +196,7 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     (format!(" Deploy: {} ", med.name), lines)
 }
 
-fn render_select_target(
+fn render_select_disease(
     state: &GameState,
     medicine_idx: usize,
     region_idx: usize,
@@ -201,7 +204,6 @@ fn render_select_target(
     let mut lines: Vec<Line> = Vec::new();
     let med = &state.medicines[medicine_idx];
     let region = &state.regions[region_idx];
-    let pop = region.population as f64;
 
     lines.push(Line::from(Span::styled(
         format!("  {} → {}", med.name, region.name),
@@ -209,125 +211,165 @@ fn render_select_target(
     )));
     lines.push(Line::from(""));
 
-    for i in 0..med.num_deploy_targets() {
-        let target = med.decode_deploy_target(i).unwrap();
+    for (i, &disease_idx) in med.target_diseases.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
-
-        let disease_idx = match &target {
-            DeployTarget::Vaccinate { disease_idx } => *disease_idx,
-            DeployTarget::Treat { disease_idx } => *disease_idx,
-        };
+        let marker = if selected { "▶ " } else { "  " };
         let disease_name = state.diseases.get(disease_idx)
             .map(|d| d.display_name(disease_idx))
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+        let inf = region.infections.iter().find(|inf| inf.disease_idx == disease_idx);
+        let infected = inf.map(|i| i.infected).unwrap_or(0.0);
 
-        // Compute efficacy: therapy × pathogen × strain match
-        let therapy_efficacy = state.diseases.get(disease_idx)
-            .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
-            .unwrap_or(0.0);
-        let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
-        let efficacy = therapy_efficacy * strain_eff;
-        let eff_color = if efficacy >= 0.8 {
-            Color::Green
-        } else if efficacy >= 0.5 {
-            Color::Yellow
+        let style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
-            Color::Red
+            Style::default().fg(Color::White)
         };
-        let strain_outdated = strain_eff < 1.0;
 
-        match &target {
-            DeployTarget::Vaccinate { .. } => {
-                let infected = inf.map(|i| i.infected).unwrap_or(0.0);
-                let immune = inf.map(|i| i.immune).unwrap_or(0.0);
-                let susceptible = (pop - infected - region.dead - immune).max(0.0);
-                let empty = susceptible == 0.0;
-                let will_vaccinate = med.estimate_vaccination(susceptible, efficacy);
+        lines.push(Line::from(Span::styled(
+            format!("{}{}", marker, disease_name),
+            style,
+        )));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                format!("{} infected", format_number(infected)),
+                Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
+            ),
+        ]));
+    }
 
-                let marker = if selected { "▶ " } else { "  " };
-                let style = if empty {
-                    Style::default().fg(Color::DarkGray)
-                } else if selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::White)
-                };
+    lines.push(Line::from(""));
+    lines.push(hint_line(state, "Select", "Back"));
 
-                lines.push(Line::from(Span::styled(
-                    format!("{}Protect susceptible ({})", marker, disease_name),
-                    style,
-                )));
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("{} susceptible", format_number(susceptible)),
-                        Style::default().fg(if empty { Color::DarkGray } else { Color::Cyan }),
-                    ),
-                    Span::raw(" | "),
-                    Span::styled(
-                        format!("will protect {}", format_number(will_vaccinate)),
-                        Style::default().fg(eff_color),
-                    ),
-                    Span::styled(
-                        format!(" ({:.0}%)", efficacy * 100.0),
-                        Style::default().fg(eff_color),
-                    ),
-                ]));
-                if strain_outdated {
-                    lines.push(Line::from(Span::styled(
-                        format!("    Strain outdated! ({:.0}% strain match — re-trial to update)", strain_eff * 100.0),
-                        Style::default().fg(Color::Yellow),
-                    )));
-                }
-            }
-            DeployTarget::Treat { .. } => {
-                let infected = inf.map(|i| i.infected).unwrap_or(0.0);
-                let empty = infected == 0.0;
+    (format!(" {} → {} ", med.name, region.name), lines)
+}
 
-                let marker = if selected { "▶ " } else { "  " };
-                let style = if empty {
-                    Style::default().fg(Color::DarkGray)
-                } else if selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::White)
-                };
+fn render_select_target(
+    state: &GameState,
+    medicine_idx: usize,
+    region_idx: usize,
+    disease_idx: usize,
+) -> (String, Vec<Line<'static>>) {
+    let mut lines: Vec<Line> = Vec::new();
+    let med = &state.medicines[medicine_idx];
+    let region = &state.regions[region_idx];
+    let pop = region.population as f64;
+    let disease_name = state.diseases.get(disease_idx)
+        .map(|d| d.display_name(disease_idx))
+        .unwrap_or_else(|| "Unknown".to_string());
 
-                lines.push(Line::from(Span::styled(
-                    format!("{}Treat infected ({})", marker, disease_name),
-                    style,
-                )));
-                let will_treat = med.estimate_treatment(infected, efficacy);
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("{} infected", format_number(infected)),
-                        Style::default().fg(if empty { Color::DarkGray } else { Color::Red }),
-                    ),
-                    Span::raw(" | "),
-                    Span::styled(
-                        format!("will treat {}", format_number(will_treat)),
-                        Style::default().fg(eff_color),
-                    ),
-                    Span::styled(
-                        format!(" ({:.0}%)", efficacy * 100.0),
-                        Style::default().fg(eff_color),
-                    ),
-                ]));
-                if strain_outdated {
-                    lines.push(Line::from(Span::styled(
-                        format!("    Strain outdated! ({:.0}% strain match — re-trial to update)", strain_eff * 100.0),
-                        Style::default().fg(Color::Yellow),
-                    )));
-                }
-            }
-        }
+    lines.push(Line::from(Span::styled(
+        format!("  {} → {} → {}", med.name, region.name, disease_name),
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(""));
+
+    let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+
+    // Compute efficacy
+    let therapy_efficacy = state.diseases.get(disease_idx)
+        .map(|d| med.therapy_type.efficacy(&d.pathogen_type))
+        .unwrap_or(0.0);
+    let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
+    let efficacy = therapy_efficacy * strain_eff;
+    let eff_color = if efficacy >= 0.8 {
+        Color::Green
+    } else if efficacy >= 0.5 {
+        Color::Yellow
+    } else {
+        Color::Red
+    };
+    let strain_outdated = strain_eff < 1.0;
+
+    // Option 0: Vaccinate
+    {
+        let infected = inf.map(|i| i.infected).unwrap_or(0.0);
+        let immune = inf.map(|i| i.immune).unwrap_or(0.0);
+        let susceptible = (pop - infected - region.dead - immune).max(0.0);
+        let empty = susceptible == 0.0;
+        let will_vaccinate = med.estimate_vaccination(susceptible, efficacy);
+        let selected = state.ui.panel_selection == 0;
+
+        let marker = if selected { "▶ " } else { "  " };
+        let style = if empty {
+            Style::default().fg(Color::DarkGray)
+        } else if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        lines.push(Line::from(Span::styled(
+            format!("{}Protect susceptible", marker),
+            style,
+        )));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                format!("{} susceptible", format_number(susceptible)),
+                Style::default().fg(if empty { Color::DarkGray } else { Color::Cyan }),
+            ),
+            Span::raw(" → will protect "),
+            Span::styled(
+                format_number(will_vaccinate),
+                Style::default().fg(eff_color),
+            ),
+        ]));
+    }
+
+    // Option 1: Treat
+    {
+        let infected = inf.map(|i| i.infected).unwrap_or(0.0);
+        let empty = infected == 0.0;
+        let will_treat = med.estimate_treatment(infected, efficacy);
+        let selected = state.ui.panel_selection == 1;
+
+        let marker = if selected { "▶ " } else { "  " };
+        let style = if empty {
+            Style::default().fg(Color::DarkGray)
+        } else if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        lines.push(Line::from(Span::styled(
+            format!("{}Treat infected", marker),
+            style,
+        )));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                format!("{} infected", format_number(infected)),
+                Style::default().fg(if empty { Color::DarkGray } else { Color::Red }),
+            ),
+            Span::raw(" → will treat "),
+            Span::styled(
+                format_number(will_treat),
+                Style::default().fg(eff_color),
+            ),
+        ]));
+    }
+
+    // Efficacy info
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  Efficacy: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{:.0}%", efficacy * 100.0),
+            Style::default().fg(eff_color),
+        ),
+    ]));
+    if strain_outdated {
+        lines.push(Line::from(Span::styled(
+            format!("  Strain outdated ({:.0}% match — re-trial to update)", strain_eff * 100.0),
+            Style::default().fg(Color::Yellow),
+        )));
     }
 
     let deploy_cost = med.deploy_cost(region.population);
-    lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
@@ -356,7 +398,7 @@ fn render_select_target(
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Deploy", "Back"));
 
-    (format!(" {} → {} ", med.name, region.name), lines)
+    (format!(" {} → {} → {} ", med.name, region.name, disease_name), lines)
 }
 
 fn render_confirm_deploy(

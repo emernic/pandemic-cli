@@ -1380,7 +1380,10 @@ pub enum Panel {
 pub enum MedicineUiState {
     BrowseMedicines,
     SelectRegion { medicine_idx: usize },
-    SelectTarget { medicine_idx: usize, region_idx: usize },
+    /// Choose which disease to target (skipped for single-target medicines).
+    SelectDisease { medicine_idx: usize, region_idx: usize },
+    /// Choose vaccinate (0) or treat (1) for the selected disease.
+    SelectTarget { medicine_idx: usize, region_idx: usize, disease_idx: usize },
     ConfirmDeploy { medicine_idx: usize, region_idx: usize, target_selection: usize },
     /// Shown after a deployment completes, displaying the result prominently.
     DeployResult { medicine_idx: usize, message: String, adverse: bool },
@@ -1476,7 +1479,7 @@ impl UiState {
     }
 
     /// Handle Escape — go back one step in the current panel's wizard, or close the panel.
-    pub fn close_panel(&mut self) {
+    pub fn close_panel(&mut self, medicines: &[Medicine]) {
         match self.open_panel {
             Panel::Medicines => {
                 match self.medicine_ui.clone() {
@@ -1485,13 +1488,34 @@ impl UiState {
                         self.panel_selection = 0;
                     }
                     Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
+                        let med = &medicines[medicine_idx];
+                        // Reconstruct disease_idx and action from target_selection
+                        let n = med.target_diseases.len();
+                        let (disease_idx, action) = if target_selection < n {
+                            (med.target_diseases[target_selection], 0)
+                        } else {
+                            (med.target_diseases[target_selection - n], 1)
+                        };
                         self.medicine_ui = Some(MedicineUiState::SelectTarget {
                             medicine_idx,
                             region_idx,
+                            disease_idx,
                         });
-                        self.panel_selection = target_selection;
+                        self.panel_selection = action;
                     }
-                    Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
+                    Some(MedicineUiState::SelectTarget { medicine_idx, region_idx, .. }) => {
+                        let med = &medicines[medicine_idx];
+                        if med.target_diseases.len() == 1 {
+                            self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                        } else {
+                            self.medicine_ui = Some(MedicineUiState::SelectDisease {
+                                medicine_idx,
+                                region_idx,
+                            });
+                        }
+                        self.panel_selection = 0;
+                    }
+                    Some(MedicineUiState::SelectDisease { medicine_idx, .. }) => {
                         self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
                         self.panel_selection = 0;
                     }
@@ -1567,10 +1591,13 @@ impl UiState {
                 Some(MedicineUiState::SelectRegion { .. }) => {
                     state.regions.len().saturating_sub(1)
                 }
-                Some(MedicineUiState::SelectTarget { medicine_idx, .. }) => {
+                Some(MedicineUiState::SelectDisease { medicine_idx, .. }) => {
                     state.medicines[*medicine_idx]
-                        .num_deploy_targets()
+                        .target_diseases.len()
                         .saturating_sub(1)
+                }
+                Some(MedicineUiState::SelectTarget { .. }) => {
+                    1 // vaccinate (0) or treat (1)
                 }
                 Some(MedicineUiState::ConfirmDeploy { .. })
                 | Some(MedicineUiState::DeployResult { .. })
@@ -1656,22 +1683,32 @@ impl UiState {
             *region_idx = self.map_selection;
         }
         match &self.medicine_ui {
-            Some(MedicineUiState::SelectTarget { region_idx, medicine_idx }) => {
+            Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
                 if *region_idx != self.map_selection {
                     let med = *medicine_idx;
-                    self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                    self.medicine_ui = Some(MedicineUiState::SelectDisease {
                         medicine_idx: med,
                         region_idx: self.map_selection,
                     });
                     self.panel_selection = 0;
                 }
             }
+            Some(MedicineUiState::SelectTarget { medicine_idx, disease_idx, region_idx }) => {
+                if *region_idx != self.map_selection {
+                    let (med, dis) = (*medicine_idx, *disease_idx);
+                    self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                        medicine_idx: med,
+                        region_idx: self.map_selection,
+                        disease_idx: dis,
+                    });
+                    self.panel_selection = 0;
+                }
+            }
             Some(MedicineUiState::ConfirmDeploy { medicine_idx, .. }) => {
-                // Regress to target selection — don't silently change region on confirm screen
+                // Regress to region selection — don't silently change region on confirm screen
                 let med = *medicine_idx;
-                self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                self.medicine_ui = Some(MedicineUiState::SelectRegion {
                     medicine_idx: med,
-                    region_idx: self.map_selection,
                 });
                 self.panel_selection = 0;
             }
@@ -1716,9 +1753,31 @@ impl UiState {
                 let order = grid_reading_order(state.regions.len());
                 let region_idx = order.get(self.panel_selection).copied().unwrap_or(0);
                 if region_idx < state.regions.len() {
+                    let med = &state.medicines[medicine_idx];
+                    if med.target_diseases.len() == 1 {
+                        // Single-target: skip disease selection
+                        self.medicine_ui = Some(MedicineUiState::SelectTarget {
+                            medicine_idx,
+                            region_idx,
+                            disease_idx: med.target_diseases[0],
+                        });
+                    } else {
+                        self.medicine_ui = Some(MedicineUiState::SelectDisease {
+                            medicine_idx,
+                            region_idx,
+                        });
+                    }
+                    self.panel_selection = 0;
+                }
+                None
+            }
+            Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
+                let med = &state.medicines[medicine_idx];
+                if let Some(&disease_idx) = med.target_diseases.get(self.panel_selection) {
                     self.medicine_ui = Some(MedicineUiState::SelectTarget {
                         medicine_idx,
                         region_idx,
+                        disease_idx,
                     });
                     self.panel_selection = 0;
                 }
@@ -1727,10 +1786,16 @@ impl UiState {
             Some(MedicineUiState::SelectTarget {
                 medicine_idx,
                 region_idx,
+                disease_idx,
             }) => {
-                let target_selection = self.panel_selection;
                 let med = &state.medicines[medicine_idx];
-                if let Some(target) = med.decode_deploy_target(target_selection) {
+                // panel_selection: 0 = vaccinate, 1 = treat
+                let pos = med.target_diseases.iter().position(|&d| d == disease_idx);
+                let target_selection = match pos {
+                    Some(p) => p + self.panel_selection * med.target_diseases.len(),
+                    None => return None,
+                };
+                if med.decode_deploy_target(target_selection).is_some() {
                     let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
                     if state.resources.funding < deploy_cost {
                         self.status_message = Some(
@@ -1739,10 +1804,6 @@ impl UiState {
                         );
                         None
                     } else {
-                        let disease_idx = match &target {
-                            DeployTarget::Vaccinate { disease_idx } => *disease_idx,
-                            DeployTarget::Treat { disease_idx } => *disease_idx,
-                        };
                         let is_tested = med.tested_against.contains(&disease_idx);
 
                         if !is_tested {
