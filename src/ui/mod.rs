@@ -305,7 +305,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),
             Line::from("  [Space] Pause/Resume"),
-            Line::from("  [↑/↓/←/→] Navigate map & panels"),
+            Line::from("  [←/→] Cycle regions  [↑/↓] Panel items"),
             Line::from("  [Esc] Close panel"),
             Line::from("  [Q] Save & Quit"),
         ],
