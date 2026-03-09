@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState, ScreeningLevel, policy_display_name,
+    GameEvent, GameState, RegionTrait, ScreeningLevel, policy_display_name,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     HEALTHCARE_INVESTMENT_COST,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
@@ -20,8 +20,10 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
         // Tracks (region_idx, policy_idx, cost) — no string matching.
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
+            let trade_dep = state.regions.get(i).is_some_and(|r| r.has_trait(RegionTrait::TradeDependent));
+            let travel_ban_cost = if trade_dep { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST };
             let bool_costs: &[(usize, f64)] = &[
-                (0, TRAVEL_BAN_COST), (1, QUARANTINE_COST), (2, HOSPITAL_SURGE_COST),
+                (0, travel_ban_cost), (1, QUARANTINE_COST), (2, HOSPITAL_SURGE_COST),
                 (3, BORDER_CONTROLS_COST), (4, WATER_SANITATION_COST),
                 (8, MARTIAL_LAW_COST),
             ];
@@ -99,15 +101,24 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         )), false);
     }
     let available_personnel = state.personnel_available();
+    let region_traits = state.regions.get(region_idx).map(|r| r.traits.as_slice()).unwrap_or(&[]);
+    let low_infra = region_traits.contains(&RegionTrait::LowInfrastructure);
+    let trade_dep = region_traits.contains(&RegionTrait::TradeDependent);
     match policy_idx {
         // Boolean policies (0-4): identical toggle logic, different metadata.
         0..=4 => {
             let (name, cost, personnel) = match policy_idx {
-                0 => ("Travel Ban", TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL),
-                1 => ("Quarantine", QUARANTINE_COST, QUARANTINE_PERSONNEL),
-                2 => ("Hospital Surge", HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL),
-                3 => ("Border Controls", BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL),
-                4 => ("Water Sanitation", WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL),
+                0 => ("Travel Ban",
+                    if trade_dep { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST },
+                    TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 }),
+                1 => ("Quarantine", QUARANTINE_COST,
+                    QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 }),
+                2 => ("Hospital Surge", HOSPITAL_SURGE_COST,
+                    HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 }),
+                3 => ("Border Controls", BORDER_CONTROLS_COST,
+                    BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 }),
+                4 => ("Water Sanitation", WATER_SANITATION_COST,
+                    WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 }),
                 _ => unreachable!(),
             };
             if state.policies[region_idx].get_bool(policy_idx) {
@@ -139,8 +150,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 (Some(format!("Disease Screening disabled in {region_name}")), true)
             } else {
                 // Check personnel — account for personnel freed from current tier
-                let needed = target.personnel_cost();
-                let freed = current.personnel_cost();
+                let infra_extra = if low_infra { 1 } else { 0 };
+                let needed = target.personnel_cost() + infra_extra;
+                let freed = current.personnel_cost() + if current != ScreeningLevel::None { infra_extra } else { 0 };
                 let effective_available = available_personnel + freed;
                 if effective_available >= needed {
                     state.policies[region_idx].screening = target;
@@ -155,16 +167,17 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         }
         // Martial Law (8): normal boolean toggle, pre-collapse only
         8 => {
+            let ml_personnel = MARTIAL_LAW_PERSONNEL + if low_infra { 1 } else { 0 };
             if state.policies[region_idx].martial_law {
                 state.policies[region_idx].martial_law = false;
                 (Some(format!("Martial Law lifted in {region_name}")), true)
-            } else if available_personnel >= MARTIAL_LAW_PERSONNEL {
+            } else if available_personnel >= ml_personnel {
                 state.policies[region_idx].martial_law = true;
                 (Some(format!("Martial Law declared in {region_name} — ${:.0}/day + {} personnel",
-                    MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL)), true)
+                    MARTIAL_LAW_COST * TICKS_PER_DAY, ml_personnel)), true)
             } else {
                 (Some(format!(
-                    "Not enough personnel for martial law (need {})", MARTIAL_LAW_PERSONNEL
+                    "Not enough personnel for martial law (need {})", ml_personnel
                 )), false)
             }
         }

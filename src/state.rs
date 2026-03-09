@@ -385,28 +385,46 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
 
 impl RegionPolicy {
     pub fn funding_cost(&self) -> f64 {
+        self.funding_cost_with_traits(&[])
+    }
+
+    /// Funding cost adjusted for regional traits.
+    /// TradeDependent: travel ban costs 2x.
+    pub fn funding_cost_with_traits(&self, traits: &[RegionTrait]) -> f64 {
+        let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
         let mut cost = 0.0;
-        if self.travel_ban { cost += TRAVEL_BAN_COST; }
+        if self.travel_ban {
+            cost += if trade_dependent { TRAVEL_BAN_COST * 2.0 } else { TRAVEL_BAN_COST };
+        }
         if self.quarantine { cost += QUARANTINE_COST; }
         if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
         if self.border_controls { cost += BORDER_CONTROLS_COST; }
         if self.water_sanitation { cost += WATER_SANITATION_COST; }
         if self.martial_law { cost += MARTIAL_LAW_COST; }
-        // nuclear_annihilation has no ongoing cost
         cost += self.screening.funding_cost();
         cost
     }
 
     pub fn personnel_cost(&self) -> u32 {
-        let mut cost = 0;
-        if self.travel_ban { cost += TRAVEL_BAN_PERSONNEL; }
-        if self.quarantine { cost += QUARANTINE_PERSONNEL; }
-        if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; }
-        if self.border_controls { cost += BORDER_CONTROLS_PERSONNEL; }
-        if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; }
-        if self.martial_law { cost += MARTIAL_LAW_PERSONNEL; }
-        // nuclear_annihilation requires no personnel
-        cost += self.screening.personnel_cost();
+        self.personnel_cost_with_traits(&[])
+    }
+
+    /// Personnel cost adjusted for regional traits.
+    /// LowInfrastructure: each active policy needs +1 personnel.
+    pub fn personnel_cost_with_traits(&self, traits: &[RegionTrait]) -> u32 {
+        let low_infra = traits.contains(&RegionTrait::LowInfrastructure);
+        let mut cost = 0u32;
+        let mut active_count = 0u32;
+        if self.travel_ban { cost += TRAVEL_BAN_PERSONNEL; active_count += 1; }
+        if self.quarantine { cost += QUARANTINE_PERSONNEL; active_count += 1; }
+        if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; active_count += 1; }
+        if self.border_controls { cost += BORDER_CONTROLS_PERSONNEL; active_count += 1; }
+        if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; active_count += 1; }
+        if self.martial_law { cost += MARTIAL_LAW_PERSONNEL; active_count += 1; }
+        let screening_cost = self.screening.personnel_cost();
+        cost += screening_cost;
+        if screening_cost > 0 { active_count += 1; }
+        if low_infra { cost += active_count; }
         cost
     }
 
@@ -546,12 +564,57 @@ impl Resources {
     }
 }
 
+/// Regional traits that make each region play differently.
+/// Each region has 1-2 traits that modify policy costs, spread rates, or resilience.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegionTrait {
+    /// Travel ban funding cost 2x, income penalty 75% instead of 50%.
+    TradeDependent,
+    /// Within-region spread rate +30% (crowded cities, public transit).
+    DenseUrban,
+    /// Cross-region inbound spread reduced 50% (natural isolation).
+    IslandGeography,
+    /// All policy personnel costs +1 (harder to staff programs).
+    LowInfrastructure,
+    /// Hospital surge lethality reduction 60% instead of 50%.
+    StrongPublicHealth,
+    /// Collapse threshold -10pp (region endures more before collapsing).
+    ResilientPopulation,
+}
+
+impl RegionTrait {
+    pub fn label(&self) -> &'static str {
+        match self {
+            RegionTrait::TradeDependent => "Trade-Dependent",
+            RegionTrait::DenseUrban => "Dense Urban",
+            RegionTrait::IslandGeography => "Island Geography",
+            RegionTrait::LowInfrastructure => "Low Infrastructure",
+            RegionTrait::StrongPublicHealth => "Strong Public Health",
+            RegionTrait::ResilientPopulation => "Resilient Population",
+        }
+    }
+
+    pub fn short_description(&self) -> &'static str {
+        match self {
+            RegionTrait::TradeDependent => "Travel Ban costs 2x, worse income penalty",
+            RegionTrait::DenseUrban => "Disease spreads 30% faster within region",
+            RegionTrait::IslandGeography => "50% less disease arrives from neighbors",
+            RegionTrait::LowInfrastructure => "Policies need +1 personnel each",
+            RegionTrait::StrongPublicHealth => "Hospital Surge 60% lethality reduction",
+            RegionTrait::ResilientPopulation => "10% more resilient to collapse",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Region {
     pub name: String,
     pub population: u64,
     pub connections: Vec<usize>,
     pub infections: Vec<RegionDiseaseState>,
+    /// Regional traits that affect policy costs and effectiveness.
+    #[serde(default)]
+    pub traits: Vec<RegionTrait>,
     /// Fraction of population that must remain alive to avoid collapse.
     /// E.g., 0.75 means the region collapses when alive drops below 75% of initial population.
     /// More developed regions have higher thresholds (fragile); less developed are more resilient.
@@ -595,6 +658,10 @@ fn default_collapse_threshold() -> f64 {
 }
 
 impl Region {
+    pub fn has_trait(&self, t: RegionTrait) -> bool {
+        self.traits.contains(&t)
+    }
+
     pub fn alive(&self) -> f64 {
         (self.population as f64 - self.total_dead()).max(0.0)
     }
@@ -2848,6 +2915,7 @@ impl GameState {
                 population: 500_000_000,
                 connections: vec![1, 2],
                 infections: vec![],
+                traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
                 collapse_threshold: 0.55, // Fragile — collapses at 45% dead
                 dead: 0.0,
                 collapsed: false,
@@ -2862,6 +2930,7 @@ impl GameState {
                 population: 430_000_000,
                 connections: vec![0, 3],
                 infections: vec![],
+                traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
                 collapse_threshold: 0.55, // Moderate resilience — 45% dead
                 dead: 0.0,
                 collapsed: false,
@@ -2876,6 +2945,7 @@ impl GameState {
                 population: 750_000_000,
                 connections: vec![0, 3, 4],
                 infections: vec![],
+                traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
                 collapse_threshold: 0.50, // Developed infrastructure — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -2890,6 +2960,7 @@ impl GameState {
                 population: 1_400_000_000,
                 connections: vec![1, 2, 4],
                 infections: vec![],
+                traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
                 collapse_threshold: 0.50, // Resilient — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -2904,6 +2975,7 @@ impl GameState {
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
                 infections: vec![],
+                traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
                 collapse_threshold: 0.50, // Huge population — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -2918,6 +2990,7 @@ impl GameState {
                 population: 45_000_000,
                 connections: vec![4],
                 infections: vec![],
+                traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
                 collapse_threshold: 0.50, // Small but developed — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -3135,7 +3208,12 @@ impl GameState {
         let field: u32 = self.field_research.iter().map(|p| p.personnel_assigned).sum();
         let applied = self.applied_research.as_ref().map_or(0, |p| p.personnel_assigned);
         let basic = self.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
-        let policy: u32 = self.policies.iter().map(|p| p.personnel_cost()).sum();
+        let policy: u32 = self.policies.iter().enumerate()
+            .map(|(i, p)| {
+                let traits = self.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
+                p.personnel_cost_with_traits(traits)
+            })
+            .sum();
         field + applied + basic + policy
     }
 
@@ -3144,7 +3222,12 @@ impl GameState {
     }
 
     pub fn total_policy_funding_cost(&self) -> f64 {
-        self.policies.iter().map(|p| p.funding_cost()).sum()
+        self.policies.iter().enumerate()
+            .map(|(i, p)| {
+                let traits = self.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
+                p.funding_cost_with_traits(traits)
+            })
+            .sum()
     }
 
     /// Per-region income contribution before travel ban modifier.
@@ -3172,7 +3255,12 @@ impl GameState {
             }
             let base = Self::region_base_income(region, total_pop);
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                TRAVEL_BAN_INCOME_PENALTY
+                // TradeDependent: 75% income lost (0.25 retained) vs normal 50% (0.5 retained)
+                if region.has_trait(RegionTrait::TradeDependent) {
+                    0.25
+                } else {
+                    TRAVEL_BAN_INCOME_PENALTY
+                }
             } else {
                 1.0
             };
@@ -3198,7 +3286,8 @@ impl GameState {
         let mut penalty = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
             if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                penalty += Self::region_base_income(region, total_pop) * (1.0 - TRAVEL_BAN_INCOME_PENALTY);
+                let factor = if region.has_trait(RegionTrait::TradeDependent) { 0.25 } else { TRAVEL_BAN_INCOME_PENALTY };
+                penalty += Self::region_base_income(region, total_pop) * (1.0 - factor);
             }
         }
         penalty
@@ -3973,5 +4062,38 @@ mod tests {
         let tips = state.defeat_tips();
         assert!(!tips.iter().any(|t| t.contains("never deployed")),
             "should not claim 'never deployed' when deployed_count > 0: {:?}", tips);
+    }
+
+    #[test]
+    fn all_regions_have_traits() {
+        let state = GameState::new_default(42);
+        for region in &state.regions {
+            assert!(!region.traits.is_empty(),
+                "{} should have at least one trait", region.name);
+        }
+    }
+
+    #[test]
+    fn trade_dependent_travel_ban_costs_more() {
+        let mut policy = RegionPolicy::default();
+        policy.travel_ban = true;
+        let base_cost = policy.funding_cost_with_traits(&[]);
+        let trade_cost = policy.funding_cost_with_traits(&[RegionTrait::TradeDependent]);
+        assert!(trade_cost > base_cost,
+            "TradeDependent should increase travel ban cost: {} vs {}", trade_cost, base_cost);
+        assert!((trade_cost - base_cost * 2.0).abs() < 0.01,
+            "TradeDependent should double travel ban cost");
+    }
+
+    #[test]
+    fn low_infrastructure_increases_personnel() {
+        let mut policy = RegionPolicy::default();
+        policy.quarantine = true;
+        policy.hospital_surge = true;
+        let base = policy.personnel_cost_with_traits(&[]);
+        let low_infra = policy.personnel_cost_with_traits(&[RegionTrait::LowInfrastructure]);
+        // 2 active policies, each +1 = base + 2
+        assert_eq!(low_infra, base + 2,
+            "LowInfrastructure should add +1 per active policy");
     }
 }
