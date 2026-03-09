@@ -26,7 +26,7 @@ keypress → action.rs: key_to_action() → Action
              UI actions (navigate, select) → UiState methods
              Confirm → UiState::handle_confirm() → Option<GameCommand>
                → engine::execute_command() → CommandResult { message, success }
-               → UiState::apply_command_result()
+               → lib.rs maps result to UI navigation (inline in apply_action)
 ```
 
 `execute_command()` never touches `UiState`. It returns a result and the caller handles UI updates.
