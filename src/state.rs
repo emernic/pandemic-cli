@@ -2204,8 +2204,10 @@ impl GameState {
             };
             income += BASE_FUNDING_INCOME * region_share * healthy_frac * travel_ban_factor;
         }
-        // Political Power bonus: up to 50% more funding at full POL
-        income *= 1.0 + self.resources.political_power * 0.5;
+        // Political Power bonus: up to 15% more funding at full POL.
+        // Kept small so deaths (healthy_frac drop) dominate the economy.
+        // Previously 50%, which made income RISE during pandemics.
+        income *= 1.0 + self.resources.political_power * 0.15;
         income
     }
 
