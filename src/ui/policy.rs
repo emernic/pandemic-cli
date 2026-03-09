@@ -10,7 +10,7 @@ use crate::state::{
     GameState, PolicyUiState, ScreeningLevel, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
-    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
+    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL, HOSPITAL_SURGE_SPREAD_FACTOR,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
@@ -358,14 +358,9 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
                     else { Color::Red };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
-            2 => { // Hospital Surge
-                let factor = vector.hospital_infectivity_factor();
-                if factor > 1.0 {
-                    let increase = (factor - 1.0) * 100.0;
-                    (format!("{name} ({}, +{increase:.0}% spread!)", vector.label()), Color::Red)
-                } else {
-                    (format!("{name} ({}, no spread risk)", vector.label()), Color::Green)
-                }
+            2 => { // Hospital Surge — universal +25% spread
+                let increase = (HOSPITAL_SURGE_SPREAD_FACTOR - 1.0) * 100.0;
+                (format!("{name} ({}, +{increase:.0}% spread!)", vector.label()), Color::Red)
             }
             4 => { // Water Sanitation
                 match vector {

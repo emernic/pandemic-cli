@@ -163,6 +163,8 @@ pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
 pub const HOSPITAL_SURGE_COST: f64 = 0.4;
 pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
+/// Hospital Surge increases infectivity by this factor (1.25 = +25% spread).
+pub const HOSPITAL_SURGE_SPREAD_FACTOR: f64 = 1.25;
 pub const BORDER_CONTROLS_COST: f64 = 0.1;
 pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
 pub const WATER_SANITATION_COST: f64 = 0.3;
@@ -789,14 +791,6 @@ impl TransmissionVector {
             TransmissionVector::Waterborne => 0.7,
             TransmissionVector::Contact => 0.5,
         }
-    }
-
-    /// Infectivity multiplier when hospital surge is active.
-    /// Concentrating patients in hospitals increases exposure for staff and
-    /// visitors regardless of transmission vector — a real trade-off against
-    /// the halved lethality.
-    pub fn hospital_infectivity_factor(&self) -> f64 {
-        1.25 // 25% increase for all transmission types
     }
 
     /// Infectivity multiplier when water sanitation is active.

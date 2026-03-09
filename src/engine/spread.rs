@@ -1,7 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, PathogenType, RegionDiseaseState, TICKS_PER_DAY,
+    Disease, GameEvent, GameState, PathogenType, RegionDiseaseState,
+    HOSPITAL_SURGE_SPREAD_FACTOR, TICKS_PER_DAY,
 };
 
 /// Per-disease outflows computed in phase 1, applied in phase 2.
@@ -49,7 +50,7 @@ pub(super) fn tick_spread_within(
                     disease.infectivity
                 };
                 if hospital_active {
-                    infectivity *= disease.transmission.hospital_infectivity_factor();
+                    infectivity *= HOSPITAL_SURGE_SPREAD_FACTOR;
                 }
                 if sanitation_active {
                     infectivity *= disease.transmission.water_sanitation_factor();
