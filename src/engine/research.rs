@@ -1,5 +1,5 @@
 use crate::state::{
-    GameOutcome, GameState, ResearchKind, ResearchProject,
+    GameEvent, GameOutcome, GameState, ResearchKind, ResearchProject,
     ResearchTrack, KNOWLEDGE_FULL,
 };
 
@@ -153,6 +153,10 @@ pub(super) fn tick_research(state: &mut GameState) {
             _ => {}
         }
     }
+    // Auto-start next field project if any completed and auto is on
+    if !completed_fields.is_empty() {
+        try_auto_start(state, ResearchTrack::Field);
+    }
     if let Some(ref mut project) = state.applied_research {
         let speed = project.speed(&state.medicines);
         project.progress += speed;
@@ -181,6 +185,7 @@ pub(super) fn tick_research(state: &mut GameState) {
                 _ => {}
             }
             state.applied_research = None;
+            try_auto_start(state, ResearchTrack::Applied);
         }
     }
     if let Some(ref mut project) = state.basic_research {
@@ -194,7 +199,37 @@ pub(super) fn tick_research(state: &mut GameState) {
                 }
             }
             state.basic_research = None;
+            try_auto_start(state, ResearchTrack::Basic);
         }
+    }
+}
+
+/// Try to auto-start the next research project on a track (if auto-research is enabled).
+fn try_auto_start(state: &mut GameState, track: ResearchTrack) {
+    if !state.auto_research[track.index()] {
+        return;
+    }
+    // Check if there's room to start a new project
+    match track {
+        ResearchTrack::Field => {
+            if !state.field_research_has_capacity() {
+                return;
+            }
+        }
+        _ => {
+            if state.research_slot(track).is_some() {
+                return;
+            }
+        }
+    }
+    let projects = state.available_projects(track);
+    if projects.is_empty() {
+        return;
+    }
+    // Try to start the first (highest-priority) project with default personnel
+    let (ok, _msg) = start_research(state, track, 0, false);
+    if ok {
+        state.events.push(GameEvent::ResearchAutoStarted { track });
     }
 }
 
@@ -817,6 +852,66 @@ mod tests {
         assert!(
             (boosted - base * 3.0).abs() < 1.0,
             "VaccinePlatform should triple vaccination: base={base}, boosted={boosted}"
+        );
+    }
+
+    #[test]
+    fn auto_research_starts_next_project_on_completion() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+        state.resources.personnel = 30;
+
+        // Enable auto-research for field track
+        state.auto_research[ResearchTrack::Field.index()] = true;
+
+        // Manually start an identify project that's almost done
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 149.0,
+            required_ticks: 150.0,
+            personnel_assigned: 5,
+        }];
+
+        // Tick to complete it
+        for _ in 0..5 {
+            state = tick(&state);
+        }
+
+        // The identify should have completed, and auto-research should have started the next project
+        assert!(state.diseases[0].knowledge >= 0.49, "identification should have completed");
+        assert!(
+            !state.field_research.is_empty(),
+            "auto-research should have started a new field project"
+        );
+    }
+
+    #[test]
+    fn auto_research_does_not_start_when_disabled() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+        state.resources.personnel = 30;
+
+        // Auto-research OFF (default)
+        assert!(!state.auto_research[ResearchTrack::Field.index()]);
+
+        // Manually start an identify project that's almost done
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 149.0,
+            required_ticks: 150.0,
+            personnel_assigned: 5,
+        }];
+
+        // Tick to complete it
+        for _ in 0..5 {
+            state = tick(&state);
+        }
+
+        // Identification complete but no auto-start
+        assert!(state.diseases[0].knowledge >= 0.49);
+        assert!(
+            state.field_research.is_empty(),
+            "no auto-start when auto-research is disabled"
         );
     }
 }

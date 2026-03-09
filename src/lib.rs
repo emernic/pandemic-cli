@@ -6,7 +6,7 @@ pub mod ui;
 
 use action::Action;
 use engine::execute_command;
-use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, ResearchUiState, SimState};
+use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, ResearchTrack, ResearchUiState, SimState};
 
 /// Route a player action to the appropriate handler.
 ///
@@ -133,6 +133,27 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             // Toggle "Assign 2x personnel" on research confirm screen
             if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
                 *double_personnel = !*double_personnel;
+            }
+            // Toggle auto-research when browsing categories or projects
+            else if let Some(ref ui) = new.ui.research_ui {
+                let track = match ui {
+                    ResearchUiState::BrowseCategories => {
+                        // Use selected category index to determine track
+                        match new.ui.panel_selection {
+                            0 => Some(ResearchTrack::Field),
+                            1 => Some(ResearchTrack::Applied),
+                            2 => Some(ResearchTrack::Basic),
+                            _ => None,
+                        }
+                    }
+                    ResearchUiState::BrowseProjects { track } => Some(*track),
+                    ResearchUiState::ViewActive { track, .. } => Some(*track),
+                    _ => None,
+                };
+                if let Some(track) = track {
+                    let idx = track.index();
+                    new.auto_research[idx] = !new.auto_research[idx];
+                }
             }
         }
         Action::Confirm => {
