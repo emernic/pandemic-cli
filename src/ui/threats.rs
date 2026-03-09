@@ -252,6 +252,8 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
         state.screening_visibility(i) < 1.0
     });
     let infected_label = if any_estimated { "Infected~" } else { "Infected" };
+    // Check if any region has Antigen+ screening (shows immune counts)
+    let any_shows_immune = state.policies.iter().any(|p| p.screening.shows_immune());
     lines.push(Line::from(vec![
         Span::raw("    "),
         Span::styled(format!("{:<16}", "Region"), hdr),
@@ -276,8 +278,12 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
             }
             let visibility = state.screening_visibility(region_idx);
             let screened = inf.infected * visibility;
+            let shows_immune = state.policies.get(region_idx)
+                .map(|p| p.screening.shows_immune())
+                .unwrap_or(false);
+            let shown_immune = if shows_immune { inf.immune } else { 0.0 };
             total_infected += screened;
-            total_immune += inf.immune;
+            total_immune += shown_immune;
             total_dead += inf.dead;
 
             let name = format!("{:<16}", region.name);
@@ -291,8 +297,8 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
                 ),
                 Span::raw("  "),
                 Span::styled(
-                    format!("{:>8}", format_number(inf.immune)),
-                    Style::default().fg(Color::Green),
+                    format!("{:>8}", if shows_immune { format_number(shown_immune) } else { "?".to_string() }),
+                    Style::default().fg(if shows_immune { Color::Green } else { Color::DarkGray }),
                 ),
                 Span::raw("  "),
                 Span::styled(
@@ -323,8 +329,8 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
         ),
         Span::raw("  "),
         Span::styled(
-            format!("{:>8}", format_number(total_immune)),
-            Style::default().fg(Color::Green),
+            format!("{:>8}", if any_shows_immune { format_number(total_immune) } else { "?".to_string() }),
+            Style::default().fg(if any_shows_immune { Color::Green } else { Color::DarkGray }),
         ),
         Span::raw("  "),
         Span::styled(

@@ -172,21 +172,27 @@ pub const NUCLEAR_ANNIHILATION_COST: f64 = 200.0;
 /// research spending ($350-700) for early-game funding.
 pub const HEALTHCARE_INVESTMENT_COST: f64 = 400.0;
 
-/// Disease surveillance intensity. Higher levels reveal more infections
-/// and help detect new hidden diseases faster. Per-region setting.
+/// Disease surveillance intensity. Each tier reveals different information
+/// and only Mass Rapid screening actively reduces disease spread.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ScreeningLevel {
     #[default]
     None,
-    Low,
-    Medium,
-    High,
+    /// Rough infected estimates. Cheap but inaccurate.
+    #[serde(alias = "Low")]
+    Basic,
+    /// Reveals infected + immune counts with moderate accuracy.
+    #[serde(alias = "Medium")]
+    Antigen,
+    /// Near-complete data on infected/immune AND reduces disease spread.
+    #[serde(alias = "High")]
+    MassRapid,
 }
 
 /// Per-tick cost for each screening level.
-pub const SCREENING_LOW_COST: f64 = 0.2;
-pub const SCREENING_MEDIUM_COST: f64 = 0.4;
-pub const SCREENING_HIGH_COST: f64 = 0.6;
+pub const SCREENING_BASIC_COST: f64 = 0.2;
+pub const SCREENING_ANTIGEN_COST: f64 = 0.5;
+pub const SCREENING_MASS_RAPID_COST: f64 = 1.0;
 
 impl ScreeningLevel {
     /// Fraction of actual infections visible to the player.
@@ -194,9 +200,9 @@ impl ScreeningLevel {
     pub fn visibility_rate(&self) -> f64 {
         match self {
             ScreeningLevel::None => 0.15,
-            ScreeningLevel::Low => 0.40,
-            ScreeningLevel::Medium => 0.70,
-            ScreeningLevel::High => 0.90,
+            ScreeningLevel::Basic => 0.40,
+            ScreeningLevel::Antigen => 0.75,
+            ScreeningLevel::MassRapid => 0.95,
         }
     }
 
@@ -205,9 +211,9 @@ impl ScreeningLevel {
     pub fn detection_multiplier(&self) -> f64 {
         match self {
             ScreeningLevel::None => 1.0,
-            ScreeningLevel::Low => 0.7,
-            ScreeningLevel::Medium => 0.4,
-            ScreeningLevel::High => 0.2,
+            ScreeningLevel::Basic => 0.7,
+            ScreeningLevel::Antigen => 0.4,
+            ScreeningLevel::MassRapid => 0.15,
         }
     }
 
@@ -215,9 +221,9 @@ impl ScreeningLevel {
     pub fn funding_cost(&self) -> f64 {
         match self {
             ScreeningLevel::None => 0.0,
-            ScreeningLevel::Low => SCREENING_LOW_COST,
-            ScreeningLevel::Medium => SCREENING_MEDIUM_COST,
-            ScreeningLevel::High => SCREENING_HIGH_COST,
+            ScreeningLevel::Basic => SCREENING_BASIC_COST,
+            ScreeningLevel::Antigen => SCREENING_ANTIGEN_COST,
+            ScreeningLevel::MassRapid => SCREENING_MASS_RAPID_COST,
         }
     }
 
@@ -225,9 +231,9 @@ impl ScreeningLevel {
     pub fn personnel_cost(&self) -> u32 {
         match self {
             ScreeningLevel::None => 0,
-            ScreeningLevel::Low => 1,
-            ScreeningLevel::Medium => 2,
-            ScreeningLevel::High => 3,
+            ScreeningLevel::Basic => 1,
+            ScreeningLevel::Antigen => 2,
+            ScreeningLevel::MassRapid => 4,
         }
     }
 
@@ -235,9 +241,24 @@ impl ScreeningLevel {
     pub fn label(&self) -> &'static str {
         match self {
             ScreeningLevel::None => "None",
-            ScreeningLevel::Low => "Low",
-            ScreeningLevel::Medium => "Medium",
-            ScreeningLevel::High => "High",
+            ScreeningLevel::Basic => "Basic",
+            ScreeningLevel::Antigen => "Antigen",
+            ScreeningLevel::MassRapid => "Mass Rapid",
+        }
+    }
+
+    /// Whether this screening level reveals immune population counts.
+    /// Only Antigen and Mass Rapid testing can identify immunity.
+    pub fn shows_immune(&self) -> bool {
+        matches!(self, ScreeningLevel::Antigen | ScreeningLevel::MassRapid)
+    }
+
+    /// Spread reduction factor (1.0 = no reduction, lower = less spread).
+    /// Only Mass Rapid screening actively reduces disease transmission.
+    pub fn spread_factor(&self) -> f64 {
+        match self {
+            ScreeningLevel::MassRapid => 0.75, // 25% spread reduction
+            _ => 1.0,
         }
     }
 }

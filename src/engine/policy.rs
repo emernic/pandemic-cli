@@ -93,18 +93,18 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     // Check POL requirement (only when enabling, not disabling)
     let is_currently_active = match policy_idx {
         0..=4 | 8 | 9 => state.policies[region_idx].get_bool(policy_idx),
-        5 => state.policies[region_idx].screening == ScreeningLevel::Low,
-        6 => state.policies[region_idx].screening == ScreeningLevel::Medium,
-        7 => state.policies[region_idx].screening == ScreeningLevel::High,
+        5 => state.policies[region_idx].screening == ScreeningLevel::Basic,
+        6 => state.policies[region_idx].screening == ScreeningLevel::Antigen,
+        7 => state.policies[region_idx].screening == ScreeningLevel::MassRapid,
         10 => state.regions[region_idx].healthcare_invested,
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
         let threshold = state.effective_pol_threshold(region_idx, policy_idx);
         let policy_name = match policy_idx {
-            5 => "Low Disease Screening",
-            6 => "Medium Disease Screening",
-            7 => "High Disease Screening",
+            5 => "Basic Screening",
+            6 => "Antigen Screening",
+            7 => "Mass Rapid Screening",
             _ => policy_display_name(policy_idx),
         };
         return (Some(format!(
@@ -137,14 +137,14 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 )), false)
             }
         }
-        // Screening tiers (5=Low, 6=Medium, 7=High) — mutually exclusive.
+        // Screening tiers (5=Basic, 6=Antigen, 7=MassRapid) — mutually exclusive.
         // Selecting the current level disables screening; selecting a different
         // level upgrades/downgrades to that tier.
         5 | 6 | 7 => {
             let target = match policy_idx {
-                5 => ScreeningLevel::Low,
-                6 => ScreeningLevel::Medium,
-                _ => ScreeningLevel::High,
+                5 => ScreeningLevel::Basic,
+                6 => ScreeningLevel::Antigen,
+                _ => ScreeningLevel::MassRapid,
             };
             let current = state.policies[region_idx].screening;
             if current == target {
@@ -252,17 +252,17 @@ mod tests {
         // Enable Low screening on region 0
         let (_, ok) = toggle_policy(&mut state, 0, 5);
         assert!(ok);
-        assert_eq!(state.policies[0].screening, ScreeningLevel::Low);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Basic);
 
         // Switch to Medium — should replace Low, not stack
         let (_, ok) = toggle_policy(&mut state, 0, 6);
         assert!(ok);
-        assert_eq!(state.policies[0].screening, ScreeningLevel::Medium);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Antigen);
 
         // Switch to High — replaces Medium
         let (_, ok) = toggle_policy(&mut state, 0, 7);
         assert!(ok);
-        assert_eq!(state.policies[0].screening, ScreeningLevel::High);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::MassRapid);
 
         // Toggle High again — disables screening
         let (_, ok) = toggle_policy(&mut state, 0, 7);
@@ -296,7 +296,7 @@ mod tests {
         let mut state = screening_test_state();
         // Start with Low screening (1 personnel)
         toggle_policy(&mut state, 0, 5);
-        assert_eq!(state.policies[0].screening, ScreeningLevel::Low);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Basic);
 
         // Use up all remaining personnel except 1 (which is committed to Low screening)
         // Medium needs 2 personnel. With 1 freed from Low, we need 1 available.
@@ -313,13 +313,13 @@ mod tests {
         state.resources.personnel = busy + 1;
         let (_, ok) = toggle_policy(&mut state, 0, 6);
         assert!(ok, "should succeed: 1 available + 1 freed = 2 >= 2 needed");
-        assert_eq!(state.policies[0].screening, ScreeningLevel::Medium);
+        assert_eq!(state.policies[0].screening, ScreeningLevel::Antigen);
     }
 
     #[test]
     fn screening_suspension_when_funding_runs_out() {
         let mut state = screening_test_state();
-        state.policies[0].screening = ScreeningLevel::High; // $0.6/tick
+        state.policies[0].screening = ScreeningLevel::MassRapid; // $0.6/tick
         // Set funding just below screening cost so it gets suspended
         state.resources.funding = 0.3;
         // Clear infections so tick doesn't muddy funding math
@@ -337,7 +337,7 @@ mod tests {
     fn screening_cost_vs_boolean_policy_suspension_order() {
         let mut state = screening_test_state();
         // Set up: High screening ($0.6/tick) + quarantine ($0.6/tick) = $1.2/tick
-        state.policies[0].screening = ScreeningLevel::High;
+        state.policies[0].screening = ScreeningLevel::MassRapid;
         state.policies[0].quarantine = true;
         // Enough for one but not both
         state.resources.funding = 0.8;
@@ -358,7 +358,7 @@ mod tests {
         // Place undetected disease just below the screening-reduced threshold
         state.diseases[0].detected = false;
         // High screening: threshold = 10,000 * 0.2 = 2,000
-        state.policies[0].screening = ScreeningLevel::High;
+        state.policies[0].screening = ScreeningLevel::MassRapid;
         state.resources.funding = 10_000.0;
         // Set infections to 2,500 (above 2,000 threshold but below 10,000 default)
         state.regions[0].infections[0].infected = 2_500.0;
@@ -387,7 +387,7 @@ mod tests {
         let screened_none = state.total_infected_screened();
 
         // With High screening on region 0: visibility = 90%
-        state.policies[0].screening = ScreeningLevel::High;
+        state.policies[0].screening = ScreeningLevel::MassRapid;
         let screened_high = state.total_infected_screened();
 
         assert!(screened_high > screened_none,
@@ -403,12 +403,12 @@ mod tests {
     #[test]
     fn best_screening_level_returns_highest_across_regions() {
         let mut state = screening_test_state();
-        state.policies[0].screening = ScreeningLevel::Low;
-        state.policies[2].screening = ScreeningLevel::High;
-        state.policies[4].screening = ScreeningLevel::Medium;
+        state.policies[0].screening = ScreeningLevel::Basic;
+        state.policies[2].screening = ScreeningLevel::MassRapid;
+        state.policies[4].screening = ScreeningLevel::Antigen;
 
         let best = state.best_screening_level();
-        assert_eq!(best.visibility_rate(), ScreeningLevel::High.visibility_rate(),
+        assert_eq!(best.visibility_rate(), ScreeningLevel::MassRapid.visibility_rate(),
             "best_screening_level should return High when any region has High");
     }
 
