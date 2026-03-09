@@ -229,7 +229,8 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
             // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
             // Clamps prevent runaway drift. Note: prions with max outflow
-            // (0.004 + 0.0006 = 0.0046) can have R0 < 1 at the floor — they
+            // (lethality cap 0.005 + recovery ≤0.0006 = 0.0056) can have
+            // R0 < 1 at the infectivity floor (0.003/0.0056 ≈ 0.54) — they
             // burn out and get replaced by the spawn system, which is fine.
             disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.020);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
