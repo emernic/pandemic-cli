@@ -30,6 +30,14 @@ pub struct GameState {
     pub ui: UiState,
 }
 
+// Disease emergence constants.
+/// First new disease can emerge after this many ticks.
+pub const EMERGENCE_MIN_TICK: u64 = 200;
+/// Per-tick probability of a new disease emerging (after min tick).
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.004; // ~1 every 250 ticks
+/// Maximum number of simultaneous diseases.
+pub const MAX_DISEASES: usize = 5;
+
 // Policy cost constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.0;
 pub const BASE_RP_INCOME: f64 = 0.4;
@@ -469,6 +477,11 @@ pub enum GameEvent {
     DiseaseMutated {
         disease_idx: usize,
         new_generation: u32,
+    },
+    /// A new disease emerged mid-game. UI should notify the player.
+    NewDiseaseEmerged {
+        disease_idx: usize,
+        region_idx: usize,
     },
     /// The game just ended (win or lose). UI should pause and close panels.
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
@@ -1182,6 +1195,101 @@ impl GameState {
     /// Total initial population across all regions (before any deaths).
     pub fn initial_population(&self) -> f64 {
         self.regions.iter().map(|r| r.population as f64).sum()
+    }
+
+    /// Spawn a new disease mid-game: generates a random disease, places an initial
+    /// outbreak in a random region, and creates a matching targeted medicine.
+    /// Returns `(disease_idx, region_idx)` if successful, or `None` if at the cap.
+    /// Uses `self.rng` — caller must have extracted rng if borrowing mutably.
+    pub fn spawn_disease(&mut self, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
+        use rand::Rng;
+
+        if self.diseases.len() >= MAX_DISEASES {
+            return None;
+        }
+
+        // Pick a pathogen type (weighted: prions rare)
+        let mut types = vec![
+            PathogenType::RnaVirus,
+            PathogenType::RnaVirus,
+            PathogenType::DnaVirus,
+            PathogenType::Bacterium,
+            PathogenType::Bacterium,
+        ];
+        if rng.r#gen::<f64>() < 0.15 {
+            types.push(PathogenType::Prion);
+        }
+        let pathogen_type = types[rng.r#gen::<usize>() % types.len()];
+
+        // Pick a unique name
+        let used_names: Vec<&str> = self.diseases.iter().map(|d| d.name.as_str()).collect();
+        let pool = pathogen_type.name_pool();
+        let available: Vec<&&str> = pool.iter().filter(|n| !used_names.contains(*n)).collect();
+        let name = if available.is_empty() {
+            format!("Pathogen-{}", self.diseases.len() + 1)
+        } else {
+            available[rng.r#gen::<usize>() % available.len()].to_string()
+        };
+
+        // Generate stats — later emergences are somewhat tougher
+        let ranges = pathogen_type.stat_ranges();
+        let range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
+            lo + rng.r#gen::<f64>() * (hi - lo)
+        };
+        // Bias toward higher end of stat ranges for mid-game threats
+        let toughness_bias = 0.2; // shift stats up by 20% of range
+        let biased_range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
+            let base = lo + rng.r#gen::<f64>() * (hi - lo);
+            (base + (hi - lo) * toughness_bias).min(hi)
+        };
+
+        let disease_idx = self.diseases.len();
+        self.diseases.push(Disease {
+            name: name.clone(),
+            pathogen_type,
+            infectivity: biased_range_val(rng, ranges.infectivity),
+            lethality: biased_range_val(rng, ranges.lethality),
+            cross_region_spread: range_val(rng, ranges.cross_region),
+            recovery_rate: range_val(rng, ranges.recovery),
+            knowledge: 0.0,
+            strain_generation: 0,
+        });
+
+        // Place initial outbreak in a random region
+        let region_idx = rng.r#gen::<usize>() % self.regions.len();
+        let initial_infected = 500.0 + rng.r#gen::<f64>() * 2_000.0;
+        self.regions[region_idx].infections.push(RegionDiseaseState {
+            disease_idx,
+            infected: initial_infected,
+            dead: 0.0,
+            immune: 0.0,
+        });
+
+        // Generate a matching targeted medicine
+        let therapy = pathogen_type.matched_therapy();
+        let letter = (b'A' + disease_idx as u8) as char;
+        self.medicines.push(Medicine {
+            name: format!("{}-{}", therapy.label(), letter),
+            therapy_type: therapy,
+            target_diseases: vec![disease_idx],
+            cost: 100.0,
+            doses: 100_000.0,
+            max_doses: 100_000.0,
+            unlocked: false,
+            tested_against: vec![],
+            strain_generations: vec![],
+        });
+
+        // Update broad-spectrum medicine to also target new disease
+        for med in &mut self.medicines {
+            if med.therapy_type == TherapyType::BroadSpectrum
+                && !med.target_diseases.contains(&disease_idx)
+            {
+                med.target_diseases.push(disease_idx);
+            }
+        }
+
+        Some((disease_idx, region_idx))
     }
 
     /// Generate strategic tips based on what the player did (or didn't do) before defeat.
