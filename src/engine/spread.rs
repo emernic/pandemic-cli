@@ -240,6 +240,8 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,
+                infectivity_factor: inf_factor,
+                lethality_factor: leth_factor,
             });
         }
     }

@@ -26,7 +26,7 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
     let projects = state.available_projects(track);
 
     if let Some(kind) = projects.get(project_idx) {
-        let (base_personnel, duration, funding_cost) = kind.costs(&state.medicines);
+        let (base_personnel, duration, funding_cost) = state.effective_costs(kind);
         let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
 
         if state.resources.funding < funding_cost {
@@ -753,5 +753,35 @@ mod tests {
         );
         assert!(!ok, "should not start field research when at capacity");
         assert_eq!(state.field_research.len(), MAX_FIELD_RESEARCH);
+    }
+
+    #[test]
+    fn rapid_sequencing_unlocks_after_sequencing() {
+        let mut state = GameState::new_default(42);
+        // No sequencing done yet — RapidSequencing should not be available
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::RapidSequencing }
+        )), "RapidSequencing should not be available without sequencing");
+
+        // Complete one sequencing
+        state.diseases[0].sequencing_count = 1;
+        let basic = state.available_basic_projects();
+        assert!(basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::RapidSequencing }
+        )), "RapidSequencing should be available after sequencing");
+    }
+
+    #[test]
+    fn rapid_sequencing_halves_genomic_sequencing_duration() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::GenomicSequencing { disease_idx: 0 };
+
+        let (_, base_dur, _) = state.effective_costs(&kind);
+        assert_eq!(base_dur, 200.0, "base genomic sequencing should be 200 ticks");
+
+        state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
+        let (_, rapid_dur, _) = state.effective_costs(&kind);
+        assert_eq!(rapid_dur, 100.0, "with RapidSequencing, should be 100 ticks");
     }
 }

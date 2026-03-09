@@ -1272,6 +1272,9 @@ pub enum BasicTech {
     /// Unlocks phage therapy development for bacteria.
     /// Prereq: TargetedDrugDesign + fully studied any bacterium (knowledge >= 1.0).
     PhageTherapy,
+    /// Halves genomic sequencing duration and reveals mutation stat details.
+    /// Prereq: completed at least one genomic sequencing project.
+    RapidSequencing,
 }
 
 impl BasicTech {
@@ -1281,6 +1284,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Targeted Drug Design",
             BasicTech::MonoclonalAntibodies => "Monoclonal Antibodies",
             BasicTech::PhageTherapy => "Phage Therapy",
+            BasicTech::RapidSequencing => "Rapid Sequencing",
         }
     }
 
@@ -1290,6 +1294,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Unlocks targeted Antiviral/Antibiotic development",
             BasicTech::MonoclonalAntibodies => "Unlocks high-efficacy mAb drugs for viruses",
             BasicTech::PhageTherapy => "Unlocks phage therapy drugs for bacteria",
+            BasicTech::RapidSequencing => "Halves sequencing time, reveals mutation details",
         }
     }
 
@@ -1315,6 +1320,10 @@ impl BasicTech {
                         d.knowledge >= 1.0 && d.pathogen_type == PathogenType::Bacterium
                     })
             }
+            BasicTech::RapidSequencing => {
+                // Prereq: completed at least one genomic sequencing on any disease
+                state.diseases.iter().any(|d| d.sequencing_count > 0)
+            }
         }
     }
 
@@ -1324,6 +1333,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
             BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
+            BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
         }
     }
 
@@ -1333,6 +1343,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
+            BasicTech::RapidSequencing,
         ]
     }
 }
@@ -1342,6 +1353,7 @@ impl ResearchKind {
     ///
     /// DevelopMedicine costs depend on variant: rapid (fast/cheap), standard (slow/expensive),
     /// or broad (multi-target, most expensive).
+    /// RapidSequencing tech halves GenomicSequencing duration.
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
@@ -1364,6 +1376,7 @@ impl ResearchKind {
                 BasicTech::TargetedDrugDesign => (3, 240.0, 600.0),
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
+                BasicTech::RapidSequencing => (4, 300.0, 750.0),
             },
         }
     }
@@ -1411,6 +1424,10 @@ pub enum GameEvent {
     DiseaseMutated {
         disease_idx: usize,
         new_generation: u32,
+        /// Infectivity change factor (e.g., 1.1 = +10%). Only meaningful with RapidSequencing.
+        infectivity_factor: f64,
+        /// Lethality change factor (e.g., 0.9 = -10%). Only meaningful with RapidSequencing.
+        lethality_factor: f64,
     },
     /// A previously undetected disease has been detected by health systems.
     DiseaseDetected {
@@ -2979,6 +2996,18 @@ impl GameState {
             ResearchTrack::Applied => self.available_applied_projects(),
             ResearchTrack::Basic => self.available_basic_projects(),
         }
+    }
+
+    /// Project costs adjusted for unlocked technologies.
+    /// Currently: RapidSequencing halves GenomicSequencing duration.
+    pub fn effective_costs(&self, kind: &ResearchKind) -> (u32, f64, f64) {
+        let (personnel, mut duration, funding) = kind.costs(&self.medicines);
+        if matches!(kind, ResearchKind::GenomicSequencing { .. })
+            && self.unlocked_techs.contains(&BasicTech::RapidSequencing)
+        {
+            duration *= 0.5;
+        }
+        (personnel, duration, funding)
     }
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.

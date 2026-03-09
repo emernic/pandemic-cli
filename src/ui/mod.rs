@@ -100,7 +100,7 @@ pub fn process_events(state: &mut GameState) {
         state.events.iter().find(|e| matches!(e, GameEvent::PersonnelAttrition { .. }))
     {
         format!("{count} personnel resigned — no funding for wages")
-    } else if let Some(GameEvent::DiseaseMutated { disease_idx, .. }) =
+    } else if let Some(GameEvent::DiseaseMutated { disease_idx, infectivity_factor, lethality_factor, .. }) =
         state.events.iter().find(|e| matches!(e, GameEvent::DiseaseMutated { .. }))
     {
         // Only show mutation messages when the player has medicines affected by the drift.
@@ -116,7 +116,15 @@ pub fn process_events(state: &mut GameState) {
                     && (m.tested_against.contains(disease_idx) || m.unlocked))
                 .map(|m| m.strain_efficacy(*disease_idx, &state.diseases))
                 .fold(1.0_f64, f64::min);
-            format!("{name} mutated — medicine efficacy dropped to {:.0}%! Re-trial in [R] to recalibrate.",
+            // With Rapid Sequencing unlocked, show stat change details
+            let detail = if state.unlocked_techs.contains(&crate::state::BasicTech::RapidSequencing) {
+                let inf_pct = (infectivity_factor - 1.0) * 100.0;
+                let leth_pct = (lethality_factor - 1.0) * 100.0;
+                format!(" (spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
+            } else {
+                String::new()
+            };
+            format!("{name} mutated{detail} — efficacy {:.0}%! Re-trial in [R].",
                 worst_eff * 100.0)
         } else {
             return; // No actionable medicine — suppress noise
