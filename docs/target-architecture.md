@@ -13,7 +13,7 @@ lib.rs                    Coordination (apply_action routes input)
         ↓
 ui/  |  engine/           Rendering + UI state  |  Game logic
         ↓                         ↓
-state.rs                  Pure data (structs, enums, constants, queries)
+state.rs                  Data + UI state machines (structs, enums, queries, UiState methods)
 ```
 
 **UI and engine are peers — neither imports from the other.** Both depend on state.rs. The coordination layer in lib.rs connects them: UI state machines translate user intent into `GameCommand`s, and `apply_action()` passes those to `engine::execute_command()`.
