@@ -483,11 +483,12 @@ mod tests {
         assert_eq!(na_inf.immune, expected_immune);
         assert!(matches!(
             state.ui.medicine_ui,
-            Some(MedicineUiState::SelectRegion { medicine_idx: 0 })
+            Some(MedicineUiState::DeployResult { medicine_idx: 0, adverse: false, .. })
         ));
-        // Deployment feedback message should be set
-        let msg = state.ui.status_message.as_ref().expect("status message should be set after deploy");
-        assert!(msg.contains("Vaccinated"), "message should mention vaccination: {msg}");
+        // DeployResult should contain the feedback message
+        if let Some(MedicineUiState::DeployResult { message, .. }) = &state.ui.medicine_ui {
+            assert!(message.contains("Vaccinated"), "message should mention vaccination: {message}");
+        }
     }
 
     #[test]
@@ -705,8 +706,8 @@ mod tests {
         // Confirm again → actually deploys
         state = apply_action(&state, &Action::Confirm);
         assert!(
-            matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })),
-            "should return to SelectRegion after deploy"
+            matches!(state.ui.medicine_ui, Some(MedicineUiState::DeployResult { .. })),
+            "should show DeployResult after deploy"
         );
         assert!(state.resources.funding < funding_before, "should have spent funding");
     }
@@ -740,7 +741,7 @@ mod tests {
         let funding_before = state.resources.funding;
         state = apply_action(&state, &Action::Confirm); // deploy immediately
         assert!(
-            matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })),
+            matches!(state.ui.medicine_ui, Some(MedicineUiState::DeployResult { .. })),
             "tested medicine should deploy without confirmation"
         );
         assert!(state.resources.funding < funding_before);

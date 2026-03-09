@@ -31,6 +31,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
             render_confirm_deploy(state, *medicine_idx, *region_idx, *target_selection)
         }
+        Some(MedicineUiState::DeployResult { medicine_idx, message, adverse }) => {
+            render_deploy_result(state, *medicine_idx, message, *adverse)
+        }
         _ => render_browse(state),
     };
 
@@ -409,4 +412,77 @@ fn render_confirm_deploy(
     lines.push(hint_line(state, "Confirm", "Cancel"));
 
     (format!(" ⚠ {} ", med.name), lines)
+}
+
+fn render_deploy_result(
+    state: &GameState,
+    medicine_idx: usize,
+    message: &str,
+    adverse: bool,
+) -> (String, Vec<Line<'static>>) {
+    let mut lines: Vec<Line> = Vec::new();
+    let med_name = state.medicines.get(medicine_idx)
+        .map(|m| m.name.as_str())
+        .unwrap_or("Unknown");
+
+    lines.push(Line::from(""));
+
+    if adverse {
+        lines.push(Line::from(Span::styled(
+            "  ⚠ ADVERSE REACTION ⚠",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(""));
+    }
+
+    // Split the message at " -- " to separate the deploy info from adverse details
+    let parts: Vec<&str> = message.splitn(2, " -- ").collect();
+
+    // Main deploy info
+    lines.push(Line::from(Span::styled(
+        format!("  {}", parts[0]),
+        Style::default().fg(if adverse { Color::Yellow } else { Color::Green }),
+    )));
+
+    // Adverse detail on its own line if present
+    if let Some(adverse_detail) = parts.get(1) {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  {}", adverse_detail),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+    }
+
+    lines.push(Line::from(""));
+
+    // Show updated medicine state
+    if let Some(med) = state.medicines.get(medicine_idx) {
+        let dc = dose_color(med);
+        let dose_text = if med.doses <= 0.0 {
+            "EMPTY".to_string()
+        } else {
+            format!("{}/{}", format_number(med.doses), format_number(med.max_doses))
+        };
+        lines.push(Line::from(vec![
+            Span::styled("  Doses remaining: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(dose_text, Style::default().fg(dc)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("  Funding: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("${:.0}", state.resources.funding),
+                Style::default().fg(Color::Yellow),
+            ),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(hint_line(state, "Continue", "Back"));
+
+    let title = if adverse {
+        format!(" ⚠ {} — Adverse Reaction ", med_name)
+    } else {
+        format!(" ✓ {} — Deployed ", med_name)
+    };
+    (title, lines)
 }
