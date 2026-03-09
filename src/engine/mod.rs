@@ -44,9 +44,11 @@ pub fn tick(state: &GameState) -> GameState {
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;
 
-    // Personnel upkeep — mandatory cost for maintaining your roster
+    // Personnel upkeep — mandatory cost for maintaining your roster.
+    // Floor at 0: if income can't cover upkeep, the deficit is absorbed
+    // (personnel stay but the treasury doesn't go negative).
     let upkeep = new.personnel_upkeep_rate();
-    new.resources.funding -= upkeep;
+    new.resources.funding = (new.resources.funding - upkeep).max(0.0);
 
     // Political Power: ramps based on severity + time.
     // Severity = sqrt(death_fraction) provides fast initial growth then diminishing returns.
