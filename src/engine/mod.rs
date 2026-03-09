@@ -560,7 +560,7 @@ mod tests {
             Some(MedicineUiState::SelectTarget { .. })
         ));
         let funding_before = state.resources.funding;
-        let efficacy = state.medicines[0].therapy_type.efficacy(&state.diseases[0].pathogen_type);
+        let efficacy = state.medicines[0].effective_efficacy(0, &state.diseases);
         let region = &state.regions[0];
         let inf_state = region.infections.iter().find(|i| i.disease_idx == 0);
         let infected = inf_state.map(|i| i.infected).unwrap_or(0.0);
