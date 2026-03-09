@@ -1183,6 +1183,31 @@ mod tests {
     }
 
     #[test]
+    fn burn_out_recycles_slot_at_max_diseases() {
+        use crate::state::MAX_DISEASES;
+        let mut state = GameState::new_default(42);
+        // Fill up to MAX_DISEASES
+        while state.diseases.len() < MAX_DISEASES {
+            let mut rng = state.rng.clone();
+            state.spawn_disease(&mut rng);
+            state.rng = rng;
+        }
+        assert_eq!(state.diseases.len(), MAX_DISEASES);
+        // Clear all infections to simulate burn-out
+        for region in &mut state.regions {
+            region.infections.clear();
+        }
+        state.tick = 20 * crate::state::TICKS_PER_DAY as u64;
+        state = tick(&state);
+        // Should have recycled a slot — disease count stays at MAX_DISEASES
+        assert_eq!(state.diseases.len(), MAX_DISEASES,
+            "should recycle a slot, not exceed MAX_DISEASES");
+        // At least one disease should have infections (the recycled one)
+        assert!(state.total_infected() > 0.0,
+            "recycled disease should have active infections");
+    }
+
+    #[test]
     fn policy_travel_ban_reduces_spread() {
         let mut state = GameState::new_default(42);
         // Run without travel ban
