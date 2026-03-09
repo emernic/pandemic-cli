@@ -88,6 +88,22 @@ When picking up an investigate issue:
 
 5. Investigate issues are often small and self-contained. Many can be resolved quickly — but don't use that as an excuse to skip the "step back and think" part.
 
+## Design Issues
+
+Issues labeled `design` are thinking tasks, not coding tasks. **The deliverable is a set of concrete implementation issues, not a PR with code changes.** You are being asked to be a game designer.
+
+When picking up a design issue:
+
+1. **Play the game.** Seriously. Run snapshot commands, experience the area the issue is about. You cannot design what you haven't experienced.
+2. **Read the design direction.** Check the Game Inspirations and design philosophy sections in CLAUDE.md. Read `docs/gameplay.md`. Understand what the game is trying to be and how the existing systems work.
+3. **Think.** What does this area need? What would create interesting decisions for the player? What existing systems can you build on — new combinations of existing legos, not new legos? What would the games in our inspirations list do here?
+4. **File concrete implementation issues.** Each one should be a focused, self-contained enhancement or bug that an agent can pick up and ship. Use the create-issue skill. Reference the parent design issue in each child issue.
+5. **Close the design issue** when you've filed the child issues. Comment with a summary of what you filed and why.
+
+**Do not write code.** Do not create a branch. The design issue is complete when the child issues exist. No PR, no merge.
+
+**The trap to avoid:** Don't treat this as a brainstorming exercise where you generate a dozen half-baked ideas. Think carefully about each issue you file. Would you want to implement it? Does it make the game genuinely better? Every issue you file will cost an agent a full session to implement — make sure it's worth that cost.
+
 ## Playtest Feedback Issues
 
 Issues labeled `playtest-feedback` were filed by automated playtest agents. **These are the most dangerous issues in the backlog** because they look like real bug reports but are often completely wrong. Playtest agents can't see colors, they play for a few seconds, and they confidently file issues about "problems" that don't exist. They are LLMs describing a game they cannot actually see.
