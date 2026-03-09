@@ -815,9 +815,13 @@ impl Disease {
 pub const KNOWLEDGE_NAME: f64 = 0.33;
 pub const KNOWLEDGE_PARTIAL_STATS: f64 = 0.66;
 pub const KNOWLEDGE_FULL: f64 = 1.0;
-/// Minimum knowledge required to develop a medicine targeting this disease.
-/// One identification (0.50 knowledge) is enough to start development.
+/// Minimum knowledge to develop broad-spectrum medicines targeting this disease.
+/// One identification (0.50 knowledge) is enough for broad-spectrum.
 pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.50;
+/// Minimum knowledge to develop targeted medicines (Antiviral/Antibiotic).
+/// Requires full study (knowledge 1.0) — creates a strategic choice between
+/// rushing a broad-spectrum medicine now vs. studying for a more effective targeted one.
+pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 
 
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
@@ -2876,13 +2880,14 @@ impl GameState {
                 }
                 continue;
             }
+            // Targeted medicines (Antiviral/Antibiotic) require full study (knowledge 1.0)
+            // plus TargetedDrugDesign tech. Broad-spectrum only needs identification (0.5).
+            let is_targeted = med.therapy_type != TherapyType::BroadSpectrum;
+            let knowledge_threshold = if is_targeted { KNOWLEDGE_FOR_TARGETED } else { KNOWLEDGE_FOR_MEDICINE };
             let has_knowledge = med.target_diseases.iter().any(|&d_idx| {
-                self.diseases.get(d_idx).map_or(false, |d| d.knowledge >= KNOWLEDGE_FOR_MEDICINE)
+                self.diseases.get(d_idx).map_or(false, |d| d.knowledge >= knowledge_threshold)
             });
-            // Targeted medicines (Antiviral/Antibiotic) require TargetedDrugDesign.
-            // BroadSpectrum medicines can be developed without basic research.
-            let needs_tech = med.therapy_type != TherapyType::BroadSpectrum;
-            let has_tech = !needs_tech
+            let has_tech = !is_targeted
                 || self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
             if has_knowledge && has_tech {
                 let kind = ResearchKind::DevelopMedicine { medicine_idx: i };
@@ -3032,6 +3037,46 @@ mod tests {
         let tips = state.defeat_tips();
         assert!(tips.iter().any(|t| t.contains("develop") || t.contains("Applied")),
             "should suggest developing medicine: {:?}", tips);
+    }
+
+    #[test]
+    fn targeted_medicine_requires_full_study() {
+        let mut state = GameState::new_default(42);
+        // Give identification-level knowledge (0.5) — enough for broad-spectrum
+        for d in &mut state.diseases {
+            d.knowledge = KNOWLEDGE_FOR_MEDICINE;
+        }
+        // Unlock TargetedDrugDesign so the tech gate isn't the blocker
+        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+
+        let projects = state.available_applied_projects();
+        // Broad-spectrum should be available (only needs knowledge 0.5)
+        let has_broad = projects.iter().any(|k| match k {
+            ResearchKind::DevelopMedicine { medicine_idx } =>
+                state.medicines[*medicine_idx].therapy_type == TherapyType::BroadSpectrum,
+            _ => false,
+        });
+        assert!(has_broad, "broad-spectrum should be available at knowledge 0.5");
+
+        // Targeted should NOT be available (needs knowledge 1.0)
+        let has_targeted = projects.iter().any(|k| match k {
+            ResearchKind::DevelopMedicine { medicine_idx } =>
+                state.medicines[*medicine_idx].therapy_type != TherapyType::BroadSpectrum,
+            _ => false,
+        });
+        assert!(!has_targeted, "targeted medicine should NOT be available at knowledge 0.5");
+
+        // Now give full study knowledge (1.0) — targeted should unlock
+        for d in &mut state.diseases {
+            d.knowledge = KNOWLEDGE_FULL;
+        }
+        let projects = state.available_applied_projects();
+        let has_targeted = projects.iter().any(|k| match k {
+            ResearchKind::DevelopMedicine { medicine_idx } =>
+                state.medicines[*medicine_idx].therapy_type != TherapyType::BroadSpectrum,
+            _ => false,
+        });
+        assert!(has_targeted, "targeted medicine should be available at knowledge 1.0");
     }
 
     #[test]
