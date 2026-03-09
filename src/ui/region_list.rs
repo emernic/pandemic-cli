@@ -502,10 +502,11 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         }
     }
 
-    // Co-infection warning
+    // Co-infection warning (only show detected diseases — don't leak undetected info)
     {
         let coinfection_count = region.infections.iter()
-            .filter(|inf| inf.infected >= COINFECTION_THRESHOLD)
+            .filter(|inf| inf.infected >= COINFECTION_THRESHOLD
+                && state.diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
             .count();
         if coinfection_count >= 2 {
             let pct = (COINFECTION_LETHALITY_PER_DISEASE * (coinfection_count as f64 - 1.0) * 100.0) as u32;
