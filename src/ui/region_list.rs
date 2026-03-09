@@ -153,7 +153,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let rect = Rect::new(x, y, region_width, region_height);
         let selected = idx == state.ui.map_selection;
         let visibility = state.screening_visibility(idx);
-        render_region_box(f, rect, region, selected, &state.diseases, visibility);
+        let shows_immune = state.policies.get(idx)
+            .map(|p| p.screening.shows_immune())
+            .unwrap_or(false);
+        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune);
     }
 
     // Detail panel below the grid for the selected region
@@ -172,6 +175,7 @@ fn render_region_box(
     selected: bool,
     diseases: &[crate::state::Disease],
     visibility: f64,
+    shows_immune: bool,
 ) {
     let border_color = if selected {
         Color::Yellow
@@ -196,7 +200,7 @@ fn render_region_box(
     }
 
     let infected = region.screened_infected(diseases, visibility);
-    let immune = region.detected_immune(diseases);
+    let immune = if shows_immune { region.detected_immune(diseases) } else { 0.0 };
     let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
 
