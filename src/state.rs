@@ -72,6 +72,14 @@ pub struct GameState {
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
+    /// Consecutive ticks the player has had zero agency (no funds, no research, no doses).
+    /// After MERCY_RULE_TICKS, the game ends.
+    #[serde(default)]
+    pub zero_agency_ticks: u64,
+    /// True if defeat was triggered by the mercy rule (zero agency) rather than
+    /// all regions collapsing. Used by the UI to show a distinct defeat message.
+    #[serde(default)]
+    pub mercy_rule: bool,
     pub ui: UiState,
 }
 
@@ -779,6 +787,8 @@ pub const KNOWLEDGE_FOR_MEDICINE: f64 = 0.50;
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
 /// 120 chosen so 5 ticks = 1 hour exactly (120 / 24 = 5).
 pub const TICKS_PER_DAY: f64 = 120.0;
+/// Mercy rule threshold: 5 days of zero player agency triggers defeat.
+pub const MERCY_RULE_TICKS: u64 = 600;
 
 /// Convert ticks to days for display purposes.
 pub fn ticks_to_days(ticks: f64) -> f64 {
@@ -2074,6 +2084,8 @@ impl GameState {
             crisis_cooldowns: HashMap::new(),
             auto_resolve_crises: HashMap::new(),
             history: vec![],
+            zero_agency_ticks: 0,
+            mercy_rule: false,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -2183,8 +2195,7 @@ impl GameState {
         let mut income = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
             let pop = region.population as f64;
-            let dead: f64 = region.infections.iter().map(|inf| inf.dead).sum();
-            let healthy_frac = (pop - dead).max(0.0) / pop;
+            let healthy_frac = (pop - region.dead).max(0.0) / pop;
             let region_share = pop / total_pop;
             let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
                 TRAVEL_BAN_INCOME_PENALTY
@@ -2209,8 +2220,7 @@ impl GameState {
         for (i, region) in self.regions.iter().enumerate() {
             if self.policies.get(i).is_some_and(|p| p.travel_ban) {
                 let pop = region.population as f64;
-                let dead: f64 = region.infections.iter().map(|inf| inf.dead).sum();
-                let healthy_frac = (pop - dead).max(0.0) / pop;
+                let healthy_frac = (pop - region.dead).max(0.0) / pop;
                 let region_share = pop / total_pop;
                 // Penalty is the income lost: the portion that travel_ban_factor removes
                 penalty += BASE_FUNDING_INCOME * region_share * healthy_frac * (1.0 - TRAVEL_BAN_INCOME_PENALTY);
@@ -2393,6 +2403,25 @@ impl GameState {
                 && (m.tested_against.contains(&disease_idx) || m.unlocked)
                 && m.strain_efficacy(disease_idx, &self.diseases) < 1.0
         })
+    }
+
+    /// Check if the player has zero agency — no meaningful actions available.
+    pub fn has_zero_agency(&self) -> bool {
+        let upkeep = self.personnel_upkeep_rate();
+        let policy_cost = self.total_policy_funding_cost();
+        let income = self.funding_income_rate();
+        let net_income = income - upkeep - policy_cost;
+
+        // Must have very low funds AND negative/zero income (can't recover)
+        let broke = self.resources.funding < 100.0 && net_income <= 0.0;
+        // No active research of any kind
+        let no_research = self.field_research.is_none()
+            && self.applied_research.is_none()
+            && self.basic_research.is_none();
+        // No medicine doses to deploy
+        let no_doses = self.medicines.iter().all(|m| m.doses <= 0.0);
+
+        broke && no_research && no_doses
     }
 
     /// Generate strategic tips based on what the player did (or didn't do) before defeat.

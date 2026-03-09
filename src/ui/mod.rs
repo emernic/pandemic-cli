@@ -344,8 +344,13 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
+    let defeat_msg = if state.mercy_rule {
+        "  Your organization has run out of resources. The pandemic will run its course."
+    } else {
+        "  Humanity has fallen. Too many lives were lost."
+    };
     lines.push(Line::from(Span::styled(
-        "  Humanity has fallen. Too many lives were lost.",
+        defeat_msg,
         Style::default().fg(Color::Red),
     )));
 
