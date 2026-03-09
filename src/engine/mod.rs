@@ -548,9 +548,9 @@ mod tests {
             .find(|i| i.disease_idx == 0)
             .unwrap();
         assert_eq!(na_inf.immune, expected_immune);
-        // With 500M pop and 2% fraction, target = 10M > 5M doses, so all doses used
-        // But with a smaller population, proportional vaccination would preserve doses
-        assert!(expected_immune <= 5_000_000.0, "vaccination should be capped by dose supply");
+        // With 500M pop and 2% fraction, target = ~10M. With 100M doses available,
+        // doses are not the bottleneck — proportional vaccination determines the count.
+        assert!(expected_immune <= 100_000_000.0, "vaccination should be capped by dose supply");
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::DeployResult { medicine_idx: 0, adverse: false, .. })
