@@ -6,6 +6,16 @@ use crate::state::{
     HOSPITAL_SURGE_SPREAD_FACTOR, TICKS_PER_DAY,
 };
 
+/// Scale a policy reduction factor by governor effectiveness.
+/// For a policy that multiplies by `factor` (e.g., 0.3 = 70% reduction),
+/// defiance (effectiveness < 1.0) weakens the reduction:
+///   effective = 1.0 - (1.0 - factor) * effectiveness
+/// At effectiveness=1.0: returns factor unchanged.
+/// At effectiveness=0.7: a 0.3 factor becomes 0.51 (49% reduction instead of 70%).
+fn scale_policy_factor(factor: f64, effectiveness: f64) -> f64 {
+    1.0 - (1.0 - factor) * effectiveness
+}
+
 /// Per-disease outflows computed in phase 1, applied in phase 2.
 struct DiseaseOutflows {
     new_infections: f64,
@@ -32,6 +42,7 @@ pub(super) fn tick_spread_within(
         let quarantine_active = policy.is_some_and(|p| p.quarantine);
         let hospital_active = policy.is_some_and(|p| p.hospital_surge);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
+        let gov_eff = region.policy_effectiveness();
         let alive = (pop - region.dead).max(0.0);
 
         // Co-infection: count diseases with significant active infections.
@@ -54,19 +65,21 @@ pub(super) fn tick_spread_within(
 
                 let noise: f64 = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.1;
                 let mut infectivity = if quarantine_active {
-                    disease.infectivity * disease.transmission.quarantine_factor()
+                    let f = disease.transmission.quarantine_factor();
+                    disease.infectivity * scale_policy_factor(f, gov_eff)
                 } else {
                     disease.infectivity
                 };
                 if hospital_active {
-                    infectivity *= HOSPITAL_SURGE_SPREAD_FACTOR;
+                    infectivity *= scale_policy_factor(HOSPITAL_SURGE_SPREAD_FACTOR, gov_eff);
                 }
                 if sanitation_active {
-                    infectivity *= disease.transmission.water_sanitation_factor();
+                    let f = disease.transmission.water_sanitation_factor();
+                    infectivity *= scale_policy_factor(f, gov_eff);
                 }
                 // Mass Rapid screening identifies and isolates cases, reducing spread
                 let screening_factor = policy
-                    .map(|p| p.screening.spread_factor())
+                    .map(|p| scale_policy_factor(p.screening.spread_factor(), gov_eff))
                     .unwrap_or(1.0);
                 infectivity *= screening_factor;
                 // Dense Urban trait: +30% within-region spread
@@ -85,7 +98,7 @@ pub(super) fn tick_spread_within(
                     } else {
                         0.5
                     };
-                    lethality *= surge_factor;
+                    lethality *= scale_policy_factor(surge_factor, gov_eff);
                 }
                 if region.healthcare_invested {
                     lethality *= 0.75;
@@ -165,6 +178,7 @@ pub(super) fn tick_spread_cross_region(
         }
         let dest_has_travel_ban = new.policies.get(i).is_some_and(|p| p.travel_ban);
         let dest_has_border_controls = new.policies.get(i).is_some_and(|p| p.border_controls);
+        let dest_gov_eff = regions_snapshot[i].policy_effectiveness();
         let dest_screening_factor = new.policies.get(i)
             .map(|p| p.screening.spread_factor())
             .unwrap_or(1.0);
@@ -189,19 +203,26 @@ pub(super) fn tick_spread_cross_region(
                         new.policies.get(conn_idx).is_some_and(|p| p.travel_ban);
                     let source_has_border_controls =
                         new.policies.get(conn_idx).is_some_and(|p| p.border_controls);
+                    let source_gov_eff = regions_snapshot.get(conn_idx)
+                        .map(|r| r.policy_effectiveness())
+                        .unwrap_or(1.0);
                     let source_screening_factor = new.policies.get(conn_idx)
                         .map(|p| p.screening.spread_factor())
                         .unwrap_or(1.0);
                     // Travel ban supersedes border controls
+                    // Governor defiance weakens enforcement (use min effectiveness of both endpoints)
+                    let eff = dest_gov_eff.min(source_gov_eff);
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
-                        disease.transmission.travel_ban_factor()
+                        scale_policy_factor(disease.transmission.travel_ban_factor(), eff)
                     } else if source_has_border_controls || dest_has_border_controls {
-                        0.5
+                        scale_policy_factor(0.5, eff)
                     } else {
                         1.0
                     };
                     // Mass Rapid screening reduces cross-region spread at both ends
-                    let screening = dest_screening_factor.min(source_screening_factor);
+                    let screening = scale_policy_factor(
+                        dest_screening_factor.min(source_screening_factor), eff
+                    );
                     // Island Geography: 50% less inbound spread
                     let island_factor = if regions_snapshot[i].has_trait(RegionTrait::IslandGeography) {
                         0.5
