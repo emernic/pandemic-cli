@@ -1013,16 +1013,15 @@ mod tests {
     }
 
     #[test]
-    fn game_is_lost_within_100_days_without_intervention() {
-        // The game must be lost within 100 days with zero player intervention,
+    fn game_is_lost_within_20_days_without_intervention() {
+        // The game must be lost within 20 days with zero player intervention,
         // regardless of seed. If this test fails, disease parameters are too weak.
-        // Target: loss around day 30-60, with 100 as generous upper bound.
+        // Target: loss around day 10-18, with 20 as generous upper bound.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 100 * TICKS_PER_DAY as u64;
+            let max_ticks = 20 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
-                // Auto-resolve any crisis that pauses the sim
                 if state.active_crisis.is_some() {
                     use crate::state::SimState;
                     state.active_crisis = None;
@@ -1034,7 +1033,7 @@ mod tests {
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
             assert_eq!(state.outcome, GameOutcome::Lost,
-                "Seed {seed}: game should be lost within 100 days (reached day {day:.1}). \
+                "Seed {seed}: game should be lost within 20 days (reached day {day:.1}). \
                  Regions: {:?}",
                 state.regions.iter().map(|r| {
                     let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
@@ -1044,13 +1043,12 @@ mod tests {
     }
 
     #[test]
-    fn no_collapse_before_day_8_without_intervention() {
-        // First collapse should not occur before day 8, giving players
-        // time for research, policies, and economic decisions.
-        // (Old balance: first collapse at day 1-3. New balance: day 9-14.)
+    fn no_collapse_before_day_3_without_intervention() {
+        // First collapse should not occur before day 3, giving players
+        // minimum time for initial research and policy decisions.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 8 * TICKS_PER_DAY as u64;
+            let max_ticks = 3 * TICKS_PER_DAY as u64;
             for t in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1061,7 +1059,7 @@ mod tests {
                 let collapsed = state.regions.iter().find(|r| r.collapsed);
                 assert!(
                     collapsed.is_none(),
-                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 8",
+                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 3",
                     collapsed.map(|r| r.name.as_str()).unwrap_or("?"),
                     t as f64 / TICKS_PER_DAY
                 );
