@@ -49,6 +49,13 @@ pub fn process_events(state: &mut GameState) {
         state.ui.crisis_selection = 0;
         state.ui.crisis_auto_resolve = false;
     }
+    // Auto-pause when a region collapses — creates a dramatic "stop" moment
+    // so the player notices and processes each collapse instead of watching
+    // them fly by during fast-forward.
+    if state.events.iter().any(|e| matches!(e, GameEvent::RegionCollapsed { .. })) {
+        state.sim_state = crate::state::SimState::Paused;
+        state.ui.speed_multiplier = 1;
+    }
 
     // Pick the most important event to display as status message.
     let suspended: Vec<_> = state.events.iter()
@@ -399,29 +406,71 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]));
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  ── Regions ──",
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
+    // Collapse timeline (defeat) or region summary (victory)
+    if !won {
+        // Sort regions by collapse order for a narrative timeline
+        let mut collapse_order: Vec<(usize, Option<u64>)> = state.regions.iter().enumerate()
+            .map(|(i, r)| (i, r.collapsed_at_tick))
+            .collect();
+        collapse_order.sort_by_key(|(_, tick)| tick.unwrap_or(u64::MAX));
 
-    let order = grid_reading_order(state.regions.len());
-    for &region_idx in &order {
-        let region = &state.regions[region_idx];
-        let dead = region.total_dead();
-        let alive = region.alive();
-        let pop = region.population as f64;
-        let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 + 0.0 } else { 0.0 };
-        lines.push(Line::from(vec![
-            Span::styled(format!("  {:<16}", region.name), stat_value),
-            Span::styled(format!("{:>8} alive", format_number(alive)), Style::default().fg(Color::Green)),
-            Span::raw("  "),
-            Span::styled(
-                format!("{:>8} dead ({:.1}%)", format_number(dead), dead_pct),
-                Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray }),
-            ),
-        ]));
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ── Collapse Timeline ──",
+            Style::default().fg(Color::Cyan),
+        )));
+        lines.push(Line::from(""));
+
+        for (region_idx, collapsed_tick) in &collapse_order {
+            let region = &state.regions[*region_idx];
+            let dead = region.total_dead();
+            let pop = region.population as f64;
+            let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 } else { 0.0 };
+            let timing = if let Some(tick) = collapsed_tick {
+                format!("Day {:>5.1}", ticks_to_days(*tick as f64))
+            } else {
+                "       ".to_string()
+            };
+            let status_color = if region.collapsed { Color::Red } else { Color::Green };
+            let status = if region.collapsed { "FELL" } else { "held" };
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {timing}  "), stat_label),
+                Span::styled(format!("{:<16}", region.name), stat_value),
+                Span::styled(
+                    format!("{status:<4}"),
+                    Style::default().fg(status_color),
+                ),
+                Span::styled(
+                    format!("  {} dead ({:.1}%)", format_number(dead), dead_pct),
+                    Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray }),
+                ),
+            ]));
+        }
+    } else {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ── Regions ──",
+            Style::default().fg(Color::Cyan),
+        )));
+        lines.push(Line::from(""));
+
+        let order = grid_reading_order(state.regions.len());
+        for &region_idx in &order {
+            let region = &state.regions[region_idx];
+            let dead = region.total_dead();
+            let alive = region.alive();
+            let pop = region.population as f64;
+            let dead_pct = if pop > 0.0 { (dead / pop) * 100.0 } else { 0.0 };
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {:<16}", region.name), stat_value),
+                Span::styled(format!("{:>8} alive", format_number(alive)), Style::default().fg(Color::Green)),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:>8} dead ({:.1}%)", format_number(dead), dead_pct),
+                    Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray }),
+                ),
+            ]));
+        }
     }
 
     // Strategic tips (defeat only)
