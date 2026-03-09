@@ -142,7 +142,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // Corrupt official: requires funding > 500
     if state.resources.funding > 500.0 {
-        candidates.push(CrisisKind::CorruptOfficial);
+        let stolen = (state.resources.funding * 0.15).min(500.0).round();
+        candidates.push(CrisisKind::CorruptOfficial { stolen });
     }
 
     // Resource diversion: requires identified disease
@@ -554,8 +555,8 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
-        CrisisKind::CorruptOfficial => {
-            let stolen = (state.resources.funding * 0.15).min(500.0).round();
+        CrisisKind::CorruptOfficial { stolen } => {
+            let stolen = *stolen;
             CrisisEvent {
                 title: "Corruption Scandal".into(),
                 description: format!(
@@ -1019,13 +1020,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Education campaign in {} — vaccine acceptance improving", region_name)
         }
 
-        (CrisisKind::CorruptOfficial, 0) => {
-            // Ignore — lose the stolen money
-            let stolen = (state.resources.funding * 0.15).min(500.0).round();
+        (CrisisKind::CorruptOfficial { stolen }, 0) => {
+            // Ignore — lose the stolen money (amount locked at generation time)
             state.resources.funding -= stolen;
             format!("Corruption ignored — ${:.0} lost from the pandemic fund", stolen)
         }
-        (CrisisKind::CorruptOfficial, _) => {
+        (CrisisKind::CorruptOfficial { .. }, _) => {
             // Investigate — recover money (personnel cost already deducted)
             "Investigation successful — funds recovered, corrupt official removed".into()
         }
