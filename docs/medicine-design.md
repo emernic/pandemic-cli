@@ -44,7 +44,7 @@ When a disease mutates (increments `strain_generation`), medicines calibrated to
 
 Medicines with a mechanism of action can be deployed against ANY disease whose pathogen type matches the mechanism's category — not just their primary target diseases. A CellWall inhibitor developed for Bacterium-A can also treat Bacterium-B, because all bacteria have cell walls.
 
-Cross-reactive deployments suffer a **50% efficacy penalty** (`CROSS_REACTIVE_PENALTY = 0.5`). This stacks with therapy type efficacy and strain drift. Running a clinical trial against the cross-reactive target does NOT remove the penalty — it only calibrates strain drift.
+Cross-reactive deployments suffer a **50% efficacy penalty** (`CROSS_REACTIVE_PENALTY = 0.5`). This stacks with therapy type efficacy and strain drift. Running a clinical trial against a cross-reactive target **promotes it to a primary target**, removing the penalty and calibrating strain drift. This gives clinical trials a new strategic role: validating off-label use.
 
 This creates strategic depth: when a second bacterium emerges, you can immediately deploy your existing antibiotic at reduced efficacy while developing a dedicated medicine. Mechanism choice matters because broader mechanisms (like CellWall inhibitors, which work on all bacteria) provide more cross-reactive coverage than narrow ones.
 

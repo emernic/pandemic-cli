@@ -1138,11 +1138,16 @@ impl Medicine {
     /// All diseases this medicine can be deployed against: primary targets first,
     /// then cross-reactive targets (same mechanism category, different disease).
     /// Cross-reactive targets get a 50% efficacy penalty during deployment.
+    /// Only includes diseases whose pathogen type is known (identified to KNOWLEDGE_NAME).
     pub fn deployable_diseases(&self, diseases: &[Disease]) -> Vec<usize> {
         let mut result: Vec<usize> = self.target_diseases.clone();
         if let Some(mech) = self.mechanism {
             for (i, disease) in diseases.iter().enumerate() {
-                if !result.contains(&i) && mech.targets_pathogen(&disease.pathogen_type) {
+                if !result.contains(&i)
+                    && disease.detected
+                    && disease.knowledge >= KNOWLEDGE_NAME
+                    && mech.targets_pathogen(&disease.pathogen_type)
+                {
                     result.push(i);
                 }
             }
