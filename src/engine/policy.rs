@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState,
+    GameEvent, GameState, ScreeningLevel,
     BORDER_SCREENING_COST, HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
@@ -27,6 +27,13 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
                     }
                 }
             }
+            // Screening as a single suspendable entry
+            let scr_cost = p.screening.funding_cost();
+            if scr_cost > 0.0 {
+                if best.is_none() || scr_cost > best.unwrap().2 {
+                    best = Some((i, "Disease Screening", scr_cost));
+                }
+            }
         }
         if let Some((region_idx, policy_name, _)) = best {
             match policy_name {
@@ -35,6 +42,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
                 "Hospital Surge" => state.policies[region_idx].hospital_surge = false,
                 "Border Screening" => state.policies[region_idx].border_screening = false,
                 "Water Sanitation" => state.policies[region_idx].water_sanitation = false,
+                "Disease Screening" => state.policies[region_idx].screening = ScreeningLevel::None,
                 _ => unreachable!(),
             }
             state.events.push(GameEvent::PolicySuspended {
@@ -74,6 +82,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         2 => state.policies[region_idx].hospital_surge,
         3 => state.policies[region_idx].border_screening,
         4 => state.policies[region_idx].water_sanitation,
+        5 => state.policies[region_idx].screening == ScreeningLevel::Low,
+        6 => state.policies[region_idx].screening == ScreeningLevel::Medium,
+        7 => state.policies[region_idx].screening == ScreeningLevel::High,
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
@@ -84,6 +95,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             2 => "Hospital Surge",
             3 => "Border Screening",
             4 => "Water Sanitation",
+            5 => "Low Disease Screening",
+            6 => "Medium Disease Screening",
+            7 => "High Disease Screening",
             _ => "Policy",
         };
         return (Some(format!(
@@ -152,6 +166,27 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 (Some(format!(
                     "Not enough personnel for water sanitation (need {})", WATER_SANITATION_PERSONNEL
                 )), false)
+            }
+        }
+        // Screening tiers (5=Low, 6=Medium, 7=High) — mutually exclusive.
+        // Selecting the current level disables screening; selecting a different
+        // level upgrades/downgrades to that tier.
+        5 | 6 | 7 => {
+            let target = match policy_idx {
+                5 => ScreeningLevel::Low,
+                6 => ScreeningLevel::Medium,
+                _ => ScreeningLevel::High,
+            };
+            let current = state.policies[region_idx].screening;
+            if current == target {
+                // Toggle off
+                state.policies[region_idx].screening = ScreeningLevel::None;
+                (Some(format!("Disease Screening disabled in {region_name}")), true)
+            } else {
+                // Enable/upgrade
+                state.policies[region_idx].screening = target;
+                (Some(format!("{} Disease Screening enabled in {region_name} — ${:.0}/day",
+                    target.label(), target.funding_cost() * TICKS_PER_DAY)), true)
             }
         }
         _ => (None, false),

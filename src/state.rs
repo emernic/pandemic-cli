@@ -101,6 +101,66 @@ pub const BORDER_SCREENING_COST: f64 = 2.5;
 pub const WATER_SANITATION_COST: f64 = 4.0;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
 
+/// Disease surveillance intensity. Higher levels reveal more infections
+/// and help detect new hidden diseases faster. Per-region setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ScreeningLevel {
+    #[default]
+    None,
+    Low,
+    Medium,
+    High,
+}
+
+/// Per-tick cost for each screening level.
+pub const SCREENING_LOW_COST: f64 = 1.5;
+pub const SCREENING_MEDIUM_COST: f64 = 3.0;
+pub const SCREENING_HIGH_COST: f64 = 5.0;
+
+impl ScreeningLevel {
+    /// Fraction of actual infections visible to the player.
+    /// Without screening, only ~15% of cases are reported organically.
+    pub fn visibility_rate(&self) -> f64 {
+        match self {
+            ScreeningLevel::None => 0.15,
+            ScreeningLevel::Low => 0.40,
+            ScreeningLevel::Medium => 0.70,
+            ScreeningLevel::High => 0.90,
+        }
+    }
+
+    /// Multiplier on the detection threshold for hidden diseases.
+    /// Lower = detect new threats sooner.
+    pub fn detection_multiplier(&self) -> f64 {
+        match self {
+            ScreeningLevel::None => 1.0,
+            ScreeningLevel::Low => 0.7,
+            ScreeningLevel::Medium => 0.4,
+            ScreeningLevel::High => 0.2,
+        }
+    }
+
+    /// Per-tick funding cost for this screening level.
+    pub fn funding_cost(&self) -> f64 {
+        match self {
+            ScreeningLevel::None => 0.0,
+            ScreeningLevel::Low => SCREENING_LOW_COST,
+            ScreeningLevel::Medium => SCREENING_MEDIUM_COST,
+            ScreeningLevel::High => SCREENING_HIGH_COST,
+        }
+    }
+
+    /// Display name for the policy panel.
+    pub fn label(&self) -> &'static str {
+        match self {
+            ScreeningLevel::None => "None",
+            ScreeningLevel::Low => "Low",
+            ScreeningLevel::Medium => "Medium",
+            ScreeningLevel::High => "High",
+        }
+    }
+}
+
 /// Per-region policy toggles. Each costs funding (and optionally personnel) per tick.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RegionPolicy {
@@ -118,19 +178,28 @@ pub struct RegionPolicy {
     /// Halves waterborne disease infectivity. No effect on airborne/contact.
     #[serde(default)]
     pub water_sanitation: bool,
+    /// Disease surveillance level — determines what fraction of infections
+    /// are visible to the player and how quickly new diseases are detected.
+    #[serde(default)]
+    pub screening: ScreeningLevel,
 }
 
 /// Total number of policy types available per region.
-pub const POLICY_COUNT: usize = 5;
+/// Indices 0-4: boolean policies, 5-7: screening tiers (Low/Medium/High).
+pub const POLICY_COUNT: usize = 8;
 
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
-/// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_screening, water_sanitation.
+/// Ordered by policy_idx: travel_ban, quarantine, hospital_surge, border_screening,
+/// water_sanitation, screening_low, screening_medium, screening_high.
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.30, // Travel Ban — major action, needs moderate political will
     0.25, // Quarantine — strong measure but regionally justified
     0.15, // Hospital Surge — relatively uncontroversial
     0.05, // Border Screening — mild, early unlock
     0.10, // Water Sanitation — basic public health
+    0.00, // Low Disease Screening — available immediately
+    0.10, // Medium Disease Screening
+    0.15, // High Disease Screening
 ];
 
 impl RegionPolicy {
@@ -141,6 +210,7 @@ impl RegionPolicy {
         if self.hospital_surge { cost += HOSPITAL_SURGE_COST; }
         if self.border_screening { cost += BORDER_SCREENING_COST; }
         if self.water_sanitation { cost += WATER_SANITATION_COST; }
+        cost += self.screening.funding_cost();
         cost
     }
 
@@ -155,6 +225,7 @@ impl RegionPolicy {
     pub fn any_active(&self) -> bool {
         self.travel_ban || self.quarantine || self.hospital_surge
             || self.border_screening || self.water_sanitation
+            || self.screening != ScreeningLevel::None
     }
 
     pub fn clear_all(&mut self) {
@@ -163,6 +234,7 @@ impl RegionPolicy {
         self.hospital_surge = false;
         self.border_screening = false;
         self.water_sanitation = false;
+        self.screening = ScreeningLevel::None;
     }
 }
 
@@ -230,7 +302,15 @@ impl Region {
             .sum()
     }
 
+    /// Screened infection count: actual detected infections × visibility rate.
+    /// This is what the player sees — imperfect surveillance means not all
+    /// cases are reported.
+    pub fn screened_infected(&self, diseases: &[Disease], visibility: f64) -> f64 {
+        self.detected_infected(diseases) * visibility
+    }
+
     /// Total dead from detected diseases only (for UI display).
+    /// Deaths are always reported accurately regardless of screening level.
     pub fn detected_dead(&self, diseases: &[Disease]) -> f64 {
         self.infections.iter()
             .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
@@ -1703,6 +1783,37 @@ impl GameState {
             .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
             .map(|inf| inf.infected)
             .sum()
+    }
+
+    /// Total screened infections across all regions — what the player sees.
+    /// Each region's infections are scaled by that region's screening visibility rate.
+    pub fn total_infected_screened(&self) -> f64 {
+        self.regions.iter().enumerate()
+            .map(|(i, r)| {
+                let vis = self.policies.get(i)
+                    .map(|p| p.screening.visibility_rate())
+                    .unwrap_or(ScreeningLevel::None.visibility_rate());
+                r.screened_infected(&self.diseases, vis)
+            })
+            .sum()
+    }
+
+    /// Screening visibility rate for a specific region.
+    pub fn screening_visibility(&self, region_idx: usize) -> f64 {
+        self.policies.get(region_idx)
+            .map(|p| p.screening.visibility_rate())
+            .unwrap_or(ScreeningLevel::None.visibility_rate())
+    }
+
+    /// Best screening level across all regions — used for detection threshold.
+    pub fn best_screening_level(&self) -> ScreeningLevel {
+        self.policies.iter()
+            .map(|p| p.screening)
+            .max_by(|a, b| {
+                a.visibility_rate().partial_cmp(&b.visibility_rate())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or_default()
     }
 
     /// Total dead from detected diseases only (for UI display).

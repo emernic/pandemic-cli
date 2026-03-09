@@ -7,10 +7,11 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, TICKS_PER_DAY,
+    GameState, PolicyUiState, ScreeningLevel, TICKS_PER_DAY,
     TRAVEL_BAN_COST, QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
     BORDER_SCREENING_COST, WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
+    SCREENING_LOW_COST, SCREENING_MEDIUM_COST, SCREENING_HIGH_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
 };
 use crate::ui::hint_line;
@@ -68,13 +69,21 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
 
         if has_active {
             let cost = policy.map(|p| p.funding_cost()).unwrap_or(0.0);
-            let labels: Vec<&str> = [
+            let mut labels: Vec<&str> = [
                 policy.is_some_and(|p| p.travel_ban).then_some("Travel Ban"),
                 policy.is_some_and(|p| p.quarantine).then_some("Quarantine"),
                 policy.is_some_and(|p| p.hospital_surge).then_some("Hospital"),
-                policy.is_some_and(|p| p.border_screening).then_some("Screening"),
+                policy.is_some_and(|p| p.border_screening).then_some("Border"),
                 policy.is_some_and(|p| p.water_sanitation).then_some("Sanitation"),
             ].into_iter().flatten().collect();
+            if let Some(p) = policy {
+                match p.screening {
+                    ScreeningLevel::Low => labels.push("Screen:Lo"),
+                    ScreeningLevel::Medium => labels.push("Screen:Med"),
+                    ScreeningLevel::High => labels.push("Screen:Hi"),
+                    ScreeningLevel::None => {}
+                }
+            }
 
             spans.push(Span::styled(
                 labels.join(", "),
@@ -111,7 +120,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     )));
     lines.push(Line::from(""));
 
-    let infected = region.detected_infected(&state.diseases);
+    let visibility = state.screening_visibility(region_idx);
+    let infected = region.screened_infected(&state.diseases, visibility);
     let dead = region.detected_dead(&state.diseases);
     lines.push(Line::from(vec![
         Span::raw("  "),
@@ -131,7 +141,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     lines.push(Line::from(""));
 
     // Policy toggles — costs derived from constants in state.rs
-    let policies: [(&str, bool, String, &str, Option<u32>); 5] = [
+    let policies: Vec<(&str, bool, String, &str, Option<u32>)> = vec![
         ("Travel Ban", policy.travel_ban,
          format!("${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY),
          "Blocks 90% spread, halves region income", None),
@@ -147,6 +157,15 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         ("Water Sanitation", policy.water_sanitation,
          format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL),
          "Halves waterborne disease spread", Some(WATER_SANITATION_PERSONNEL)),
+        ("Low Screening", policy.screening == ScreeningLevel::Low,
+         format!("${:.0}/day", SCREENING_LOW_COST * TICKS_PER_DAY),
+         "40% infection visibility, faster detection", None),
+        ("Med Screening", policy.screening == ScreeningLevel::Medium,
+         format!("${:.0}/day", SCREENING_MEDIUM_COST * TICKS_PER_DAY),
+         "70% infection visibility, faster detection", None),
+        ("High Screening", policy.screening == ScreeningLevel::High,
+         format!("${:.0}/day", SCREENING_HIGH_COST * TICKS_PER_DAY),
+         "90% infection visibility, fastest detection", None),
     ];
 
     for (i, (name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
