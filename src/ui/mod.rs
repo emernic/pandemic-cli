@@ -409,7 +409,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]));
     lines.push(Line::from(vec![
-        Span::styled("  Immunized:      ", stat_label),
+        Span::styled("  Immune:         ", stat_label),
         Span::styled(
             format_number(total_immune),
             Style::default().fg(Color::Cyan),
