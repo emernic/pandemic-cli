@@ -42,6 +42,13 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} has collapsed — deployment impossible")), false);
     }
+    // Block deployment during cooldown
+    let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick);
+    if cooldown > 0 {
+        let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
+        let region_name = &state.regions[region_idx].name;
+        return (false, Some(format!("{region_name} on cooldown — {days:.1} days remaining")), false);
+    }
     let med = &state.medicines[medicine_idx];
     let cost = med.deploy_cost(state.regions[region_idx].population);
     let med_name = med.name.clone();
@@ -85,7 +92,7 @@ pub(super) fn deploy_medicine(
                     let inf = get_or_create_infection(region, disease_idx);
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
-                    deduct_deploy_costs(state, medicine_idx, cost, actual);
+                    deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
                     build_resistance(state, medicine_idx, disease_idx, false);
                     (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse_deaths, efficacy), adverse)
                 } else {
@@ -100,7 +107,7 @@ pub(super) fn deploy_medicine(
                     inf.infected -= actual;
                     apply_immune_and_deaths(inf, actual, adverse_deaths);
                     region.dead += adverse_deaths;
-                    deduct_deploy_costs(state, medicine_idx, cost, actual);
+                    deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
                     build_resistance(state, medicine_idx, disease_idx, true);
                     (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse_deaths, efficacy), adverse)
                 } else {
@@ -144,11 +151,12 @@ fn apply_immune_and_deaths(
     }
 }
 
-/// Deduct funds, doses, and increment deploy count.
-fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, cost: f64, actual: f64) {
+/// Deduct funds, doses, increment deploy count, and start region cooldown.
+fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, region_idx: usize, cost: f64, actual: f64) {
     state.resources.funding -= cost;
     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
     state.medicines[medicine_idx].deployed_count += 1;
+    state.regions[region_idx].last_deploy_tick = Some(state.tick);
 }
 
 /// Build resistance from deployment pressure. Treatment creates much more

@@ -494,6 +494,9 @@ pub struct Region {
     /// healthcare = fewer deaths. Stacks with `healthcare_invested`. Default 1.0.
     #[serde(default = "default_one")]
     pub healthcare_modifier: f64,
+    /// Tick when medicine was last deployed to this region. Used for deploy cooldown.
+    #[serde(default)]
+    pub last_deploy_tick: Option<u64>,
 }
 
 fn default_one() -> f64 {
@@ -507,6 +510,18 @@ fn default_collapse_threshold() -> f64 {
 impl Region {
     pub fn alive(&self) -> f64 {
         (self.population as f64 - self.total_dead()).max(0.0)
+    }
+
+    /// Remaining cooldown ticks before this region can receive another deployment.
+    /// Returns 0 if ready.
+    pub fn deploy_cooldown_remaining(&self, current_tick: u64) -> u64 {
+        match self.last_deploy_tick {
+            Some(t) => {
+                let elapsed = current_tick.saturating_sub(t);
+                DEPLOY_COOLDOWN_TICKS.saturating_sub(elapsed)
+            }
+            None => 0,
+        }
     }
 
     /// Total infected across all diseases, capped at population.
@@ -978,6 +993,9 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 pub const TICKS_PER_DAY: f64 = 120.0;
 /// Mercy rule threshold: 5 days of zero player agency triggers defeat.
 pub const MERCY_RULE_TICKS: u64 = 600;
+/// Deploy cooldown per region in ticks (2 days). Healthcare systems need
+/// time to distribute and administer doses.
+pub const DEPLOY_COOLDOWN_TICKS: u64 = 240;
 
 /// Convert ticks to days for display purposes.
 pub fn ticks_to_days(ticks: f64) -> f64 {
@@ -2541,6 +2559,7 @@ impl GameState {
                 healthcare_invested: false,
                 income_modifier: 1.8,     // Wealthy — major economic contributor
                 healthcare_modifier: 0.85, // Good healthcare infrastructure
+                last_deploy_tick: None,
             },
             Region {
                 name: "South America".into(),
@@ -2554,6 +2573,7 @@ impl GameState {
                 healthcare_invested: false,
                 income_modifier: 1.0,     // Moderate economy
                 healthcare_modifier: 0.95, // Decent healthcare
+                last_deploy_tick: None,
             },
             Region {
                 name: "Europe".into(),
@@ -2567,6 +2587,7 @@ impl GameState {
                 healthcare_invested: false,
                 income_modifier: 1.5,     // Strong economy, hub region
                 healthcare_modifier: 0.80, // Excellent healthcare
+                last_deploy_tick: None,
             },
             Region {
                 name: "Africa".into(),
@@ -2580,6 +2601,7 @@ impl GameState {
                 healthcare_invested: false,
                 income_modifier: 0.6,     // Lower per-capita income
                 healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
+                last_deploy_tick: None,
             },
             Region {
                 name: "Asia".into(),
@@ -2593,6 +2615,7 @@ impl GameState {
                 healthcare_invested: false,
                 income_modifier: 0.9,     // Large but moderate per-capita
                 healthcare_modifier: 1.0,  // Baseline healthcare
+                last_deploy_tick: None,
             },
             Region {
                 name: "Oceania".into(),
@@ -2606,6 +2629,7 @@ impl GameState {
                 healthcare_invested: false,
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
                 healthcare_modifier: 0.75, // Best healthcare infrastructure
+                last_deploy_tick: None,
             },
         ];
 
