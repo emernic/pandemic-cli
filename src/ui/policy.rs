@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, ScreeningLevel, TICKS_PER_DAY,
+    GameState, PolicyUiState, ScreeningLevel, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL,
@@ -150,13 +150,13 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let policies: Vec<(&str, bool, String, &str, Option<u32>)> = vec![
         ("Travel Ban", policy.travel_ban,
          format!("${:.0}/day + {} pers.", TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL),
-         "Blocks most spread into/out of region, halves income", Some(TRAVEL_BAN_PERSONNEL)),
+         "Reduces cross-region spread, halves income", Some(TRAVEL_BAN_PERSONNEL)),
         ("Quarantine", policy.quarantine,
          format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL),
-         "Halves infection rate within the region", Some(QUARANTINE_PERSONNEL)),
+         "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL)),
         ("Hospital Surge", policy.hospital_surge,
          format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
-         "Halves lethality", Some(HOSPITAL_SURGE_PERSONNEL)),
+         "Halves lethality (may increase contact spread)", Some(HOSPITAL_SURGE_PERSONNEL)),
         ("Border Controls", policy.border_controls,
          format!("${:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL),
          "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL)),
@@ -274,6 +274,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             Span::raw("      "),
             Span::styled(*desc, Style::default().fg(Color::DarkGray)),
         ]));
+        // Effectiveness hints for transmission-sensitive policies
+        if let Some(hint) = effectiveness_hint(state, region_idx, i) {
+            lines.push(hint);
+        }
         lines.push(Line::from(vec![
             Span::raw("      "),
             Span::styled(
@@ -287,4 +291,82 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     lines.push(hint_line(state, "Toggle", "Back"));
 
     (format!(" Policy: {} ", region.name), lines)
+}
+
+/// Generate an effectiveness hint line for transmission-sensitive policies.
+/// Shows per-disease reduction percentages based on transmission vector.
+fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -> Option<Line<'static>> {
+    // Only transmission-sensitive policies get hints
+    // 0=Travel Ban, 1=Quarantine, 2=Hospital Surge, 4=Water Sanitation
+    if !matches!(policy_idx, 0 | 1 | 2 | 4) {
+        return None;
+    }
+
+    let region = &state.regions[region_idx];
+
+    // Collect detected diseases with active infections in this region
+    let active_diseases: Vec<(String, TransmissionVector)> = region
+        .infections
+        .iter()
+        .filter(|inf| inf.infected > 0.0)
+        .filter_map(|inf| {
+            let disease = state.diseases.get(inf.disease_idx)?;
+            if disease.detected {
+                Some((disease.display_name(inf.disease_idx), disease.transmission))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if active_diseases.is_empty() {
+        return None;
+    }
+
+    let mut spans: Vec<Span<'static>> = vec![Span::raw("      → ")];
+
+    for (j, (name, vector)) in active_diseases.iter().enumerate() {
+        if j > 0 {
+            spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
+        }
+
+        let (label, color) = match policy_idx {
+            0 => { // Travel Ban
+                let reduction = (1.0 - vector.travel_ban_factor()) * 100.0;
+                let color = if reduction >= 80.0 { Color::Green } else { Color::Yellow };
+                (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
+            }
+            1 => { // Quarantine
+                let reduction = (1.0 - vector.quarantine_factor()) * 100.0;
+                let color = if reduction >= 50.0 { Color::Green }
+                    else if reduction >= 30.0 { Color::Yellow }
+                    else { Color::Red };
+                (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
+            }
+            2 => { // Hospital Surge
+                let factor = vector.hospital_infectivity_factor();
+                if factor > 1.0 {
+                    let increase = (factor - 1.0) * 100.0;
+                    (format!("{name} ({}, +{increase:.0}% spread!)", vector.label()), Color::Red)
+                } else {
+                    (format!("{name} ({}, no spread risk)", vector.label()), Color::Green)
+                }
+            }
+            4 => { // Water Sanitation
+                match vector {
+                    TransmissionVector::Waterborne => {
+                        (format!("{name} (waterborne, -50%)"), Color::Green)
+                    }
+                    _ => {
+                        (format!("{name} ({}, no effect)", vector.label()), Color::DarkGray)
+                    }
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        spans.push(Span::styled(label, Style::default().fg(color)));
+    }
+
+    Some(Line::from(spans))
 }
