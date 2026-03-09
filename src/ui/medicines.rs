@@ -127,14 +127,16 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                         format!(" ({}%)", pct),
                         Style::default().fg(color),
                     ));
-                    // Show resistance level if non-zero
-                    let res_pct = ((1.0 - res_factor) * 100.0).round() as u32;
-                    if res_pct > 0 {
-                        let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
-                        detail_spans.push(Span::styled(
-                            format!(" Res:{}%", res_pct),
-                            Style::default().fg(res_color),
-                        ));
+                    // Show resistance level if surveillance unlocked
+                    if state.has_resistance_surveillance() {
+                        let res_pct = ((1.0 - res_factor) * 100.0).round() as u32;
+                        if res_pct > 0 {
+                            let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
+                            detail_spans.push(Span::styled(
+                                format!(" Res:{}%", res_pct),
+                                Style::default().fg(res_color),
+                            ));
+                        }
                     }
                 } else {
                     detail_spans.push(Span::styled(
@@ -411,7 +413,7 @@ fn render_select_target(
             Style::default().fg(Color::Yellow),
         )));
     }
-    if res_pct > 0 {
+    if state.has_resistance_surveillance() && res_pct > 0 {
         let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
         let warning = if res_pct >= 50 { " — consider switching drugs" } else { "" };
         lines.push(Line::from(Span::styled(

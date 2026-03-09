@@ -1417,6 +1417,11 @@ pub enum BasicTech {
     /// Triples preventive vaccination effectiveness.
     /// Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform).
     VaccinePlatform,
+    /// Reveals per-medicine resistance levels and trend indicators.
+    /// Without this, players see efficacy dropping but don't know if it's
+    /// strain drift (fixable by re-trial) or resistance (need new drug).
+    /// Prereq: RapidSequencing.
+    ResistanceSurveillance,
 }
 
 impl BasicTech {
@@ -1428,6 +1433,7 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Phage Therapy",
             BasicTech::RapidSequencing => "Rapid Sequencing",
             BasicTech::VaccinePlatform => "Vaccine Platform",
+            BasicTech::ResistanceSurveillance => "Resistance Surveillance",
         }
     }
 
@@ -1439,6 +1445,7 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Unlocks phage therapy drugs for bacteria",
             BasicTech::RapidSequencing => "Halves sequencing time, reveals mutation details",
             BasicTech::VaccinePlatform => "3x preventive vaccination effectiveness",
+            BasicTech::ResistanceSurveillance => "Reveals drug resistance levels and trends",
         }
     }
 
@@ -1473,6 +1480,10 @@ impl BasicTech {
                 state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
                     || state.unlocked_techs.contains(&BasicTech::PhageTherapy)
             }
+            BasicTech::ResistanceSurveillance => {
+                // Prereq: RapidSequencing (need sequencing infrastructure to monitor resistance)
+                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
+            }
         }
     }
 
@@ -1484,6 +1495,7 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
+            BasicTech::ResistanceSurveillance => "Rapid Sequencing",
         }
     }
 
@@ -1495,6 +1507,7 @@ impl BasicTech {
             BasicTech::PhageTherapy,
             BasicTech::RapidSequencing,
             BasicTech::VaccinePlatform,
+            BasicTech::ResistanceSurveillance,
         ]
     }
 }
@@ -1529,6 +1542,7 @@ impl ResearchKind {
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
                 BasicTech::RapidSequencing => (4, 300.0, 750.0),
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
+                BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
             },
         }
     }
@@ -3237,6 +3251,11 @@ impl GameState {
         } else {
             1.0
         }
+    }
+
+    /// True if the player has unlocked Resistance Surveillance (can see resistance levels).
+    pub fn has_resistance_surveillance(&self) -> bool {
+        self.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
     }
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
