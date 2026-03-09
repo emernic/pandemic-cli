@@ -108,7 +108,7 @@ Concrete examples of what to watch for:
 
 Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rust + ratatui TUI.
 
-**Win condition:** Contain all diseases (total infected below threshold), identify all threats, and have tested medicines for each. This requires completing the full research→develop→trial pipeline for every disease while keeping infections under control. The game is designed to be very hard — most runs will end in loss. Don't make balance changes that trivialize the challenge.
+**There is no win condition.** The game is a survival/endurance challenge — diseases will eventually overwhelm the player. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-20 days. Don't make balance changes that trivialize the challenge.
 
 ## Game Inspirations
 
