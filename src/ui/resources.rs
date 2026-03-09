@@ -9,13 +9,9 @@ use ratatui::{
 use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
-/// Returns the height this bar needs: 2 normally, 3 when research is active.
-pub fn height(state: &GameState) -> u16 {
-    if state.field_research.is_some() || state.bench_research.is_some() {
-        3
-    } else {
-        2
-    }
+/// Returns the height this bar needs: always 3 to show research status.
+pub fn height(_state: &GameState) -> u16 {
+    3
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -110,29 +106,32 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
     let mut lines = vec![line1];
 
-    // Show active research on a second line when any research is running
-    if state.field_research.is_some() || state.bench_research.is_some() {
+    // Always show research status line so empty slots are visible
+    {
         let mut spans: Vec<Span> = Vec::new();
 
+        spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
         if let Some(ref project) = state.field_research {
             let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
-            spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
             spans.push(Span::styled(
                 format!("{} {}%", compact_research_label(&project.kind, state), pct),
                 Style::default().fg(Color::Cyan),
             ));
+        } else {
+            spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
         }
 
+        spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
+
+        spans.push(Span::styled("Bench: ", Style::default().fg(Color::DarkGray)));
         if let Some(ref project) = state.bench_research {
-            if !spans.is_empty() {
-                spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            }
             let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
-            spans.push(Span::styled("Bench: ", Style::default().fg(Color::DarkGray)));
             spans.push(Span::styled(
                 format!("{} {}%", compact_research_label(&project.kind, state), pct),
                 Style::default().fg(Color::Magenta),
             ));
+        } else {
+            spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
         }
 
         lines.push(Line::from(spans));
