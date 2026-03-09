@@ -61,10 +61,23 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::TogglePause => {
             if new.outcome == GameOutcome::Playing {
                 match new.sim_state {
-                    SimState::Running => new.sim_state = SimState::Paused,
+                    SimState::Running => {
+                        new.sim_state = SimState::Paused;
+                        new.ui.speed_multiplier = 1;
+                    }
                     SimState::Paused => new.sim_state = SimState::Running,
                     SimState::Event { .. } => {} // blocked during events
                 }
+            }
+        }
+        Action::SpeedUp => {
+            if new.outcome == GameOutcome::Playing && new.sim_state.is_running() {
+                new.ui.speed_multiplier = match new.ui.speed_multiplier {
+                    1 => 2,
+                    2 => 4,
+                    4 => 6,
+                    _ => 1,
+                };
             }
         }
         Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
@@ -128,5 +141,48 @@ pub fn format_number(n: f64) -> String {
         format!("{:.1}K", n / 1_000.0)
     } else {
         format!("{:.0}", n)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn speed_cycles_through_multipliers() {
+        let state = GameState::new_default(42);
+        assert_eq!(state.ui.speed_multiplier, 1);
+
+        let state = apply_action(&state, &Action::SpeedUp);
+        assert_eq!(state.ui.speed_multiplier, 2);
+
+        let state = apply_action(&state, &Action::SpeedUp);
+        assert_eq!(state.ui.speed_multiplier, 4);
+
+        let state = apply_action(&state, &Action::SpeedUp);
+        assert_eq!(state.ui.speed_multiplier, 6);
+
+        let state = apply_action(&state, &Action::SpeedUp);
+        assert_eq!(state.ui.speed_multiplier, 1);
+    }
+
+    #[test]
+    fn pause_resets_speed() {
+        let state = GameState::new_default(42);
+        let state = apply_action(&state, &Action::SpeedUp);
+        assert_eq!(state.ui.speed_multiplier, 2);
+
+        // Pause should reset to 1x
+        let state = apply_action(&state, &Action::TogglePause);
+        assert_eq!(state.ui.speed_multiplier, 1);
+        assert!(!state.sim_state.is_running());
+    }
+
+    #[test]
+    fn speed_up_ignored_when_paused() {
+        let state = GameState::new_default(42);
+        let state = apply_action(&state, &Action::TogglePause); // pause
+        let state = apply_action(&state, &Action::SpeedUp);
+        assert_eq!(state.ui.speed_multiplier, 1); // unchanged
     }
 }

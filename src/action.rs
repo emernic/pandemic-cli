@@ -14,6 +14,7 @@ pub enum Action {
     SelectLeft,
     SelectRight,
     Confirm,
+    SpeedUp,
     Quit,
 }
 
@@ -32,6 +33,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Left | KeyCode::Char('h') => Some(Action::SelectLeft),
         KeyCode::Right | KeyCode::Char('l') => Some(Action::SelectRight),
         KeyCode::Enter => Some(Action::Confirm),
+        KeyCode::Char('z') | KeyCode::Char('Z') => Some(Action::SpeedUp),
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(Action::Quit),
         _ => None,
     }
@@ -54,6 +56,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "left" | "h" => Some(Action::SelectLeft),
         "right" | "l" => Some(Action::SelectRight),
         "enter" => Some(Action::Confirm),
+        "z" => Some(Action::SpeedUp),
         "q" => Some(Action::Quit),
         _ => None,
     }
