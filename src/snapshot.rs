@@ -281,4 +281,22 @@ mod tests {
         assert_eq!(result.state.tick, tick_before,
             "tick should not advance after game over");
     }
+
+    #[test]
+    fn defeat_screen_shows_collapse_timeline() {
+        let mut state = GameState::new_default(42);
+        state.outcome = GameOutcome::Lost;
+        // Simulate collapse at different times
+        state.regions[0].collapsed = true;
+        state.regions[0].collapsed_at_tick = Some(600);
+        state.regions[2].collapsed = true;
+        state.regions[2].collapsed_at_tick = Some(1200);
+        let screen = render_to_string(&state);
+        assert!(screen.contains("Collapse Timeline"),
+            "defeat screen should show collapse timeline");
+        assert!(screen.contains("FELL"),
+            "collapsed regions should show FELL");
+        assert!(screen.contains("held"),
+            "standing regions should show 'held'");
+    }
 }

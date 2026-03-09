@@ -321,6 +321,9 @@ pub struct Region {
     /// cannot conduct field research, and are cut off from flight connections.
     #[serde(default)]
     pub collapsed: bool,
+    /// Tick when this region collapsed (None if still standing).
+    #[serde(default)]
+    pub collapsed_at_tick: Option<u64>,
 }
 
 fn default_collapse_threshold() -> f64 {
@@ -1763,6 +1766,7 @@ impl GameState {
                 infections: vec![],
                 collapse_threshold: 0.75, // Fragile — collapses at 25% dead
                 collapsed: false,
+                collapsed_at_tick: None,
             },
             Region {
                 name: "South America".into(),
@@ -1771,6 +1775,7 @@ impl GameState {
                 infections: vec![],
                 collapse_threshold: 0.50, // Moderate resilience — 50% dead
                 collapsed: false,
+                collapsed_at_tick: None,
             },
             Region {
                 name: "Europe".into(),
@@ -1779,6 +1784,7 @@ impl GameState {
                 infections: vec![],
                 collapse_threshold: 0.70, // Fragile — 30% dead
                 collapsed: false,
+                collapsed_at_tick: None,
             },
             Region {
                 name: "Africa".into(),
@@ -1787,6 +1793,7 @@ impl GameState {
                 infections: vec![],
                 collapse_threshold: 0.30, // Very resilient — 70% dead
                 collapsed: false,
+                collapsed_at_tick: None,
             },
             Region {
                 name: "Asia".into(),
@@ -1795,6 +1802,7 @@ impl GameState {
                 infections: vec![],
                 collapse_threshold: 0.60, // Moderate — 40% dead
                 collapsed: false,
+                collapsed_at_tick: None,
             },
             Region {
                 name: "Oceania".into(),
@@ -1803,6 +1811,7 @@ impl GameState {
                 infections: vec![],
                 collapse_threshold: 0.65, // Moderate — 35% dead
                 collapsed: false,
+                collapsed_at_tick: None,
             },
         ];
 

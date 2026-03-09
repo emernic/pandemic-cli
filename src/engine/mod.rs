@@ -151,6 +151,7 @@ pub fn tick(state: &GameState) -> GameState {
         let alive = new.regions[i].alive();
         if alive < pop * new.regions[i].collapse_threshold {
             new.regions[i].collapsed = true;
+            new.regions[i].collapsed_at_tick = Some(new.tick);
             // Clear all policies in the collapsed region
             if let Some(policy) = new.policies.get_mut(i) {
                 policy.clear_all();
@@ -964,8 +965,23 @@ mod tests {
         }
         assert_eq!(state.outcome, GameOutcome::Lost);
         assert_eq!(state.sim_state, crate::state::SimState::Paused);
-        // All regions should be collapsed
+        // All regions should be collapsed with timestamps
         assert!(state.regions.iter().all(|r| r.collapsed));
+        assert!(state.regions.iter().all(|r| r.collapsed_at_tick.is_some()),
+            "every collapsed region should have a collapse timestamp");
+        // Collapse timestamps should be in order (earlier collapses have lower tick values)
+        let mut ticks: Vec<u64> = state.regions.iter()
+            .filter_map(|r| r.collapsed_at_tick)
+            .collect();
+        let sorted = {
+            let mut s = ticks.clone();
+            s.sort();
+            s
+        };
+        assert_eq!(ticks.len(), state.regions.len());
+        // Not all should be the same tick (regions collapse at different rates)
+        assert!(ticks.iter().collect::<std::collections::HashSet<_>>().len() > 1,
+            "regions should collapse at different times, got {:?}", ticks);
     }
 
     #[test]
