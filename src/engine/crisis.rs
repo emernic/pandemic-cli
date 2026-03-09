@@ -114,17 +114,20 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::MediaPanic);
     }
 
-    // Trial shortcut: requires identified disease (knowledge > 0) without tested medicine
-    let identifiable: Vec<usize> = state.diseases.iter().enumerate()
-        .filter(|(i, d)| {
-            d.detected && d.knowledge > 0.0
-                && !state.medicines.iter().any(|m| m.tested_against.contains(i))
+    // Trial shortcut: requires an unlocked medicine that targets a disease it hasn't
+    // been trialled against yet. The crisis offers to skip the trial (fast-track) at the
+    // cost of reduced strain calibration.
+    let trial_candidates: Vec<(usize, usize)> = state.medicines.iter().enumerate()
+        .filter(|(_, m)| m.unlocked)
+        .flat_map(|(m_idx, m)| {
+            m.target_diseases.iter()
+                .filter(|&&d_idx| !m.tested_against.contains(&d_idx))
+                .map(move |&d_idx| (d_idx, m_idx))
         })
-        .map(|(i, _)| i)
         .collect();
-    if !identifiable.is_empty() {
-        let idx = identifiable[rng.r#gen::<usize>() % identifiable.len()];
-        candidates.push(CrisisKind::TrialShortcut { disease_idx: idx });
+    if !trial_candidates.is_empty() {
+        let &(d_idx, m_idx) = &trial_candidates[rng.r#gen::<usize>() % trial_candidates.len()];
+        candidates.push(CrisisKind::TrialShortcut { disease_idx: d_idx, medicine_idx: m_idx });
     }
 
     // Vaccine hesitancy: requires any unlocked medicine
@@ -497,17 +500,20 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 tick_created: tick,
             }
         }
-        CrisisKind::TrialShortcut { disease_idx } => {
+        CrisisKind::TrialShortcut { disease_idx, medicine_idx } => {
             let disease_name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
+            let med_name = state.medicines.get(*medicine_idx)
+                .map(|m| m.name.as_str())
+                .unwrap_or("Unknown");
             CrisisEvent {
                 title: "Pressure to Skip Trials".into(),
                 description: format!(
-                    "Politicians are demanding you skip clinical trials for {} treatment. \
-                     Fast-tracking saves time but the medicine won't be tested. \
-                     Maintaining standards keeps people safe but costs lives to the delay.",
-                    disease_name,
+                    "Politicians are demanding you skip clinical trials for {} ({} treatment). \
+                     Fast-tracking deploys the medicine immediately but with reduced efficacy. \
+                     Maintaining standards delays deployment but ensures full potency.",
+                    disease_name, med_name,
                 ),
                 option_a: CrisisOption {
                     label: "Maintain standards".into(),
@@ -516,7 +522,7 @@ fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
                 },
                 option_b: CrisisOption {
                     label: "Fast-track (+10% POL)".into(),
-                    description: "Skip safety checks — public approves the speed".into(),
+                    description: "Deploy now at reduced efficacy — public approves the speed".into(),
                     cost: None,
                 },
                 kind,
@@ -975,13 +981,29 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.pol_crisis_modifier -= 0.05;
             "Maintained trial standards — public frustrated by the delay".into()
         }
-        (CrisisKind::TrialShortcut { disease_idx }, _) => {
-            // Fast-track — gain POL, but medicine stays untested
+        (CrisisKind::TrialShortcut { disease_idx, medicine_idx }, _) => {
+            // Fast-track — gain POL, mark medicine as tested but 2 generations behind
+            // current strain (30% efficacy penalty from drift).
             state.resources.pol_crisis_modifier += 0.10;
+            if let Some(medicine) = state.medicines.get_mut(*medicine_idx) {
+                if !medicine.tested_against.contains(disease_idx) {
+                    medicine.tested_against.push(*disease_idx);
+                }
+                // Set strain calibration 2 generations behind current, so the
+                // medicine works but at reduced efficacy (~0.70x).
+                if let Some(pos) = medicine.target_diseases.iter().position(|&d| d == *disease_idx) {
+                    let current_gen = state.diseases.get(*disease_idx)
+                        .map_or(0, |d| d.strain_generation);
+                    while medicine.strain_generations.len() <= pos {
+                        medicine.strain_generations.push(0);
+                    }
+                    medicine.strain_generations[pos] = current_gen.saturating_sub(2);
+                }
+            }
             let name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "the pathogen".into());
-            format!("Fast-tracked treatment for {} — public approves, but safety unknown", name)
+            format!("Fast-tracked {} treatment — deployed at reduced efficacy", name)
         }
 
         (CrisisKind::VaccineHesitancy { .. }, 0) => {

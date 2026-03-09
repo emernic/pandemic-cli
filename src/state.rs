@@ -1292,8 +1292,8 @@ pub enum CrisisKind {
     QuarantineRiot { region_idx: usize },
     /// Media causing panic — address it or ignore.
     MediaPanic,
-    /// Pressure to skip clinical trials.
-    TrialShortcut { disease_idx: usize },
+    /// Pressure to skip clinical trials — fast-track marks medicine tested but with strain drift penalty.
+    TrialShortcut { disease_idx: usize, medicine_idx: usize },
     /// Public refusing vaccines — education campaign or mandate.
     VaccineHesitancy { region_idx: usize },
     /// Corrupt official siphoning funds — investigate or ignore.
