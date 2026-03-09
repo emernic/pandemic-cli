@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameState,
+    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, SimState,
     CRISIS_TYPE_COOLDOWN, TICKS_PER_DAY,
 };
 
@@ -1101,8 +1101,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
 /// resolve immediately or pause the game for player input.
 /// Called from tick() for both scheduled and randomly generated crises.
 pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
-    use crate::state::GameEvent;
-
     let auto_choice = state.auto_resolve_crises.get(crisis.kind.tag()).copied();
     let can_auto = match auto_choice {
         Some(choice) => {
@@ -1116,7 +1114,7 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
         resolve_crisis(state, auto_choice.unwrap());
         state.events.push(GameEvent::CrisisAutoResolved);
     } else {
-        state.sim_state = crate::state::SimState::Event {
+        state.sim_state = SimState::Event {
             was_running: state.sim_state.is_running(),
         };
         state.events.push(GameEvent::CrisisStarted);
