@@ -48,13 +48,15 @@ Agent(subagent_type=playtest, prompt=...)
 - What to focus on (vary this across sessions — don't test the same thing every time)
 - Remind it to write the log to `./playtests/`
 
+**Critical game design context: The game is designed to be unwinnable.** There is no win condition — it's a survival/endurance challenge like a roguelike. The player will eventually lose; the question is how long they last and how many lives they save. 20+ days is decent, 40+ is good, 100+ is exceptional. When triaging findings, do NOT file issues about "the game feels unwinnable" or "can't keep up with diseases" — that's the design. DO file issues about the *experience* of losing: was it interesting? Did the player have meaningful decisions? Was the loss dramatic or just a slow fade?
+
 **Vary the focus area.** To avoid testing the same thing every time, check which focus area was tested most recently by looking at existing playtest logs in `./playtests/` or the git log for recent playtest branches. Then pick a different one:
 
 1. Early game pacing and onboarding
 2. Full research pipeline end-to-end
 3. Policy system depth and trade-offs
-4. Late game / win-loss conditions
-5. Multi-disease management
+4. Late game endurance and loss arc
+5. Multi-disease triage decisions
 6. Economy and resource pressure
 7. Crisis events and player agency
 
