@@ -77,7 +77,7 @@ pub fn process_events(state: &mut GameState) {
         let region_name = state.regions.get(*region_idx)
             .map(|r| r.name.as_str())
             .unwrap_or("Unknown");
-        format!("NEW THREAT detected in {region_name}! Use [T] to view.")
+        format!("NEW THREAT detected in {region_name}! Use [R] Research to identify it.")
     } else if !suspended.is_empty() {
         format!("Funding crisis: suspended {}", suspended.join(", "))
     } else if state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)) {
