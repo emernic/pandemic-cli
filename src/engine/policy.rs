@@ -218,6 +218,29 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     }
 }
 
+/// Rally public support: spend funding to boost POL directly.
+/// Returns (message, success).
+pub(super) fn rally_support(state: &mut GameState) -> (Option<String>, bool) {
+    use crate::state::{RALLY_COST, RALLY_POL_GAIN};
+
+    let cooldown = state.resources.rally_cooldown_remaining(state.tick);
+    if cooldown > 0 {
+        let days = cooldown as f64 / TICKS_PER_DAY;
+        return (Some(format!("Rally on cooldown — {days:.1} days remaining")), false);
+    }
+
+    if state.resources.funding < RALLY_COST {
+        return (Some(format!("Not enough funding (need ${RALLY_COST:.0})")), false);
+    }
+
+    state.resources.funding -= RALLY_COST;
+    state.resources.last_rally_tick = Some(state.tick);
+    state.resources.political_power = (state.resources.political_power + RALLY_POL_GAIN).min(1.0);
+
+    let pol_pct = state.resources.political_power * 100.0;
+    (Some(format!("Rally successful! POL +{:.0}% → {pol_pct:.0}%", RALLY_POL_GAIN * 100.0)), true)
+}
+
 /// Enact an emergency decree. Permanent, irreversible.
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
@@ -591,6 +614,51 @@ mod tests {
         let (msg, ok) = enact_decree(&mut state, 2, None);
         assert!(!ok, "should require region selection");
         assert!(msg.unwrap().contains("Select"));
+    }
+
+    #[test]
+    fn rally_support_boosts_pol_and_deducts_funding() {
+        let mut state = screening_test_state();
+        state.resources.political_power = 0.10;
+        let funding_before = state.resources.funding;
+
+        let (msg, ok) = rally_support(&mut state);
+        assert!(ok, "should succeed with sufficient funds");
+        assert!(msg.unwrap().contains("Rally successful"));
+        assert!((state.resources.political_power - 0.15).abs() < 0.001);
+        assert!((state.resources.funding - (funding_before - crate::state::RALLY_COST)).abs() < 0.01);
+        assert!(state.resources.last_rally_tick.is_some());
+    }
+
+    #[test]
+    fn rally_support_blocked_by_cooldown() {
+        let mut state = screening_test_state();
+        state.resources.last_rally_tick = Some(state.tick);
+
+        let (msg, ok) = rally_support(&mut state);
+        assert!(!ok, "should be blocked by cooldown");
+        assert!(msg.unwrap().contains("cooldown"));
+    }
+
+    #[test]
+    fn rally_support_blocked_by_insufficient_funding() {
+        let mut state = screening_test_state();
+        state.resources.funding = 100.0;
+
+        let (msg, ok) = rally_support(&mut state);
+        assert!(!ok, "should be blocked by insufficient funding");
+        assert!(msg.unwrap().contains("funding"));
+    }
+
+    #[test]
+    fn rally_support_caps_pol_at_100() {
+        let mut state = screening_test_state();
+        state.resources.political_power = 0.98;
+
+        let (_, ok) = rally_support(&mut state);
+        assert!(ok);
+        assert!((state.resources.political_power - 1.0).abs() < 0.001,
+            "POL should cap at 100%: got {}", state.resources.political_power);
     }
 
     #[test]
