@@ -1228,15 +1228,24 @@ mod tests {
     #[test]
     fn disease_mutates_over_time() {
         let mut state = GameState::new_default(42);
-        // RNA virus has mutation_rate 0.008, so over 1000 ticks
-        // we expect ~8 mutations. Run enough ticks to virtually guarantee at least one.
+        // Force disease to be RNA virus (highest mutation rate: 0.001/tick).
+        // Over 5000 ticks we expect ~5 mutations, but the game may end
+        // in defeat before then. Run ticks until either mutation occurs or
+        // game ends, and check that mutations happen while game is playing.
+        state.diseases[0].pathogen_type = crate::state::PathogenType::RnaVirus;
         let original_infectivity = state.diseases[0].infectivity;
-        for _ in 0..1000 {
+        for _ in 0..5000 {
+            if state.outcome != GameOutcome::Playing {
+                break;
+            }
             state = tick(&state);
         }
+        // With 0.001/tick and potentially thousands of ticks before defeat,
+        // we should see at least one mutation.
         assert!(
             state.diseases[0].strain_generation > 0,
-            "RNA virus should have mutated at least once in 500 ticks"
+            "RNA virus should have mutated at least once (ran {} ticks)",
+            state.tick,
         );
         assert_ne!(
             state.diseases[0].infectivity, original_infectivity,
