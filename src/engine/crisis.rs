@@ -123,13 +123,15 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Trial shortcut: requires an unlocked medicine that targets a disease it hasn't
-    // been trialled against yet. The crisis offers to skip the trial (fast-track) at the
-    // cost of reduced strain calibration.
+    // been trialled against yet, AND the disease must have mutated at least twice
+    // (strain_generation >= 2) so the 2-gen drift penalty actually bites.
     let trial_candidates: Vec<(usize, usize)> = state.medicines.iter().enumerate()
         .filter(|(_, m)| m.unlocked)
         .flat_map(|(m_idx, m)| {
             m.target_diseases.iter()
                 .filter(|&&d_idx| !m.tested_against.contains(&d_idx))
+                .filter(|&&d_idx| state.diseases.get(d_idx)
+                    .map_or(false, |d| d.strain_generation >= 2))
                 .map(move |&d_idx| (d_idx, m_idx))
         })
         .collect();
