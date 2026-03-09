@@ -240,12 +240,16 @@ pub fn tick(state: &GameState) -> GameState {
         let pop = new.regions[i].population as f64;
         let alive = new.regions[i].alive();
         // Martial law reduces collapse threshold by 0.15 (region tolerates more deaths)
+        // ResilientPopulation trait reduces threshold by 0.10
         let martial_law_active = new.policies.get(i).is_some_and(|p| p.martial_law);
-        let threshold = if martial_law_active {
-            (new.regions[i].collapse_threshold - 0.15).max(0.10)
-        } else {
-            new.regions[i].collapse_threshold
-        };
+        let mut threshold = new.regions[i].collapse_threshold;
+        if new.regions[i].has_trait(crate::state::RegionTrait::ResilientPopulation) {
+            threshold -= 0.10;
+        }
+        if martial_law_active {
+            threshold -= 0.15;
+        }
+        let threshold = threshold.max(0.10);
         if alive < pop * threshold {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
@@ -626,6 +630,26 @@ mod tests {
             growth,
             growth2
         );
+    }
+
+    #[test]
+    fn dense_urban_increases_spread() {
+        use crate::state::RegionTrait;
+        let mut state = GameState::new_default(42);
+        let ri = primary_outbreak_region(&state);
+        let before = state.regions[ri].disease_state(0).unwrap().infected;
+
+        // Tick without DenseUrban
+        let after_normal = tick(&state);
+        let growth_normal = after_normal.regions[ri].disease_state(0).unwrap().infected - before;
+
+        // Add DenseUrban trait and tick again
+        state.regions[ri].traits.push(RegionTrait::DenseUrban);
+        let after_dense = tick(&state);
+        let growth_dense = after_dense.regions[ri].disease_state(0).unwrap().infected - before;
+
+        assert!(growth_dense > growth_normal,
+            "DenseUrban should increase within-region spread: {} vs {}", growth_dense, growth_normal);
     }
 
     #[test]

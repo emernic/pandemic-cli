@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, ScreeningLevel, TransmissionVector, TICKS_PER_DAY,
+    GameState, PolicyUiState, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL, HOSPITAL_SURGE_SPREAD_FACTOR,
@@ -80,7 +80,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         ];
 
         if has_active {
-            let cost = policy.map(|p| p.funding_cost()).unwrap_or(0.0);
+            let traits = region.traits.as_slice();
+            let cost = policy.map(|p| p.funding_cost_with_traits(traits)).unwrap_or(0.0);
             let mut labels: Vec<&str> = [
                 policy.is_some_and(|p| p.travel_ban).then_some("Travel Ban"),
                 policy.is_some_and(|p| p.quarantine).then_some("Quarantine"),
@@ -290,38 +291,61 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     ]));
     lines.push(Line::from(""));
 
+    // Show regional traits
+    if !region.traits.is_empty() {
+        let trait_labels: Vec<&str> = region.traits.iter().map(|t| t.label()).collect();
+        lines.push(Line::from(vec![
+            Span::raw("  Traits: "),
+            Span::styled(trait_labels.join(", "), Style::default().fg(Color::Yellow)),
+        ]));
+        lines.push(Line::from(""));
+    }
+
+    // Trait-adjusted costs
+    let low_infra = region.has_trait(RegionTrait::LowInfrastructure);
+    let trade_dep = region.has_trait(RegionTrait::TradeDependent);
+    let infra_extra: u32 = if low_infra { 1 } else { 0 };
+    let tb_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
+
     // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
     // doc in state.rs for the index mapping). Display position != policy_idx in general,
     // though currently they happen to match.
     //                   (policy_idx, name, active, cost_str, desc, personnel_needed)
     let policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
         (0, "Travel Ban", policy.travel_ban,
-         format!("${:.0}/day + {} pers.", TRAVEL_BAN_COST * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL),
-         "Reduces cross-region spread, halves income", Some(TRAVEL_BAN_PERSONNEL)),
+         format!("${:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
+         if trade_dep { "Reduces cross-region spread, 75% income penalty" }
+         else { "Reduces cross-region spread, halves income" },
+         Some(TRAVEL_BAN_PERSONNEL + infra_extra)),
         (1, "Quarantine", policy.quarantine,
-         format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL),
-         "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL)),
+         format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
+         "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra)),
         (2, "Hospital Surge", policy.hospital_surge,
-         format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL),
-         "Halves lethality, +25% spread (hospital exposure)", Some(HOSPITAL_SURGE_PERSONNEL)),
+         format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL + infra_extra),
+         if region.has_trait(RegionTrait::StrongPublicHealth) {
+             "60% lethality reduction, +25% spread (hospital exposure)"
+         } else {
+             "Halves lethality, +25% spread (hospital exposure)"
+         },
+         Some(HOSPITAL_SURGE_PERSONNEL + infra_extra)),
         (3, "Border Controls", policy.border_controls,
-         format!("${:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL),
-         "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL)),
+         format!("${:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
+         "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra)),
         (4, "Water Sanitation", policy.water_sanitation,
-         format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL),
-         "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL)),
+         format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
+         "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra)),
         (5, "Basic Screening", policy.screening == ScreeningLevel::Basic,
-         format!("${:.0}/day + 1 pers.", SCREENING_BASIC_COST * TICKS_PER_DAY),
-         "Rough infected estimates, faster detection", Some(1)),
+         format!("${:.0}/day + {} pers.", SCREENING_BASIC_COST * TICKS_PER_DAY, 1 + infra_extra),
+         "Rough infected estimates, faster detection", Some(1 + infra_extra)),
         (6, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
-         format!("${:.0}/day + 2 pers.", SCREENING_ANTIGEN_COST * TICKS_PER_DAY),
-         "Shows infected + immune counts, good accuracy", Some(2)),
+         format!("${:.0}/day + {} pers.", SCREENING_ANTIGEN_COST * TICKS_PER_DAY, 2 + infra_extra),
+         "Shows infected + immune counts, good accuracy", Some(2 + infra_extra)),
         (7, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
-         format!("${:.0}/day + 4 pers.", SCREENING_MASS_RAPID_COST * TICKS_PER_DAY),
-         "Near-complete data, reduces spread by 25%", Some(4)),
+         format!("${:.0}/day + {} pers.", SCREENING_MASS_RAPID_COST * TICKS_PER_DAY, 4 + infra_extra),
+         "Near-complete data, reduces spread by 25%", Some(4 + infra_extra)),
         (8, "Martial Law", policy.martial_law,
-         format!("${:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL),
-         "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL)),
+         format!("${:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
+         "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra)),
         (9, "☢ Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ${:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population — stops all disease spread", None),

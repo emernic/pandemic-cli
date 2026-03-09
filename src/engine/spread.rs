@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, PathogenType,
+    Disease, GameEvent, GameState, PathogenType, RegionTrait,
     HOSPITAL_SURGE_SPREAD_FACTOR, TICKS_PER_DAY,
 };
 
@@ -60,13 +60,23 @@ pub(super) fn tick_spread_within(
                     .map(|p| p.screening.spread_factor())
                     .unwrap_or(1.0);
                 infectivity *= screening_factor;
+                // Dense Urban trait: +30% within-region spread
+                if region.has_trait(RegionTrait::DenseUrban) {
+                    infectivity *= 1.3;
+                }
                 let new_infections =
                     (infectivity * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
 
                 let mut lethality = disease.lethality * region.healthcare_modifier;
                 if hospital_active {
-                    lethality *= 0.5;
+                    // StrongPublicHealth: 60% reduction instead of 50%
+                    let surge_factor = if region.has_trait(RegionTrait::StrongPublicHealth) {
+                        0.4
+                    } else {
+                        0.5
+                    };
+                    lethality *= surge_factor;
                 }
                 if region.healthcare_invested {
                     lethality *= 0.75;
@@ -181,9 +191,15 @@ pub(super) fn tick_spread_cross_region(
                     };
                     // Mass Rapid screening reduces cross-region spread at both ends
                     let screening = dest_screening_factor.min(source_screening_factor);
+                    // Island Geography: 50% less inbound spread
+                    let island_factor = if regions_snapshot[i].has_trait(RegionTrait::IslandGeography) {
+                        0.5
+                    } else {
+                        1.0
+                    };
                     regions_snapshot[conn_idx]
                         .disease_state(d_idx)
-                        .map(|inf| inf.infected * ban_factor * collapse_factor * screening)
+                        .map(|inf| inf.infected * ban_factor * collapse_factor * screening * island_factor)
                 })
                 .sum();
 
