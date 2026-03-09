@@ -3364,11 +3364,12 @@ mod tests {
             state = tick(&state);
         }
 
-        // Disease 1 should have gained some broad-spectrum resistance
+        // Disease 1 should have gained meaningful broad-spectrum resistance
+        // At 10%/day over 10 days with 0.5 donor: expect ~0.5*(1-0.9^10) ≈ 0.33
         let transferred = state.diseases[1].get_resistance(None);
         assert!(
-            transferred > 0.01,
-            "HGT should transfer resistance: got {transferred}"
+            transferred > 0.10,
+            "HGT should transfer meaningful resistance: got {transferred}"
         );
         assert!(
             transferred < 0.5,

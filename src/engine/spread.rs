@@ -237,8 +237,9 @@ pub(super) fn tick_spread_cross_region(
 /// fundamentally scarier — one resistance event cascades across all bacterial
 /// threats. Targeted antibiotic resistance does NOT transfer.
 ///
-/// Rate: ~2% of the resistance gap per day. A donor at 0.5 resistance gives
-/// recipients ~0.01/day initially, becoming noticeable within 5-10 days.
+/// Rate: ~10% of the resistance gap per day. A donor at 0.4 resistance gives
+/// recipients ~0.26 over 10 days — enough to noticeably degrade efficacy
+/// within a typical game's timeframe.
 /// Only fires when both diseases have active infections in at least one
 /// shared region (conjugation requires physical proximity).
 pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
@@ -252,7 +253,7 @@ pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
     }
 
     // For each pair, check if they co-exist in any region
-    let transfer_rate = 0.02 / TICKS_PER_DAY;
+    let transfer_rate = 0.10 / TICKS_PER_DAY;
     let mut transfers: Vec<(usize, usize, f64)> = Vec::new(); // (from, to, amount)
 
     for i in 0..bacteria.len() {
