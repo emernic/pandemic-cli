@@ -71,8 +71,11 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         0 => {
             let new_state = !state.policies[region_idx].travel_ban;
             state.policies[region_idx].travel_ban = new_state;
-            let verb = if new_state { "enabled" } else { "disabled" };
-            Some(format!("Travel Ban {verb} in {region_name} — ${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY))
+            if new_state {
+                Some(format!("Travel Ban enabled in {region_name} — ${:.0}/day", TRAVEL_BAN_COST * TICKS_PER_DAY))
+            } else {
+                Some(format!("Travel Ban disabled in {region_name}"))
+            }
         }
         1 => {
             if state.policies[region_idx].quarantine {
@@ -105,9 +108,12 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         3 => {
             let new_state = !state.policies[region_idx].border_screening;
             state.policies[region_idx].border_screening = new_state;
-            let verb = if new_state { "enabled" } else { "disabled" };
-            Some(format!("Border Screening {verb} in {region_name} — ${:.0}/day",
-                BORDER_SCREENING_COST * TICKS_PER_DAY))
+            if new_state {
+                Some(format!("Border Screening enabled in {region_name} — ${:.0}/day",
+                    BORDER_SCREENING_COST * TICKS_PER_DAY))
+            } else {
+                Some(format!("Border Screening disabled in {region_name}"))
+            }
         }
         4 => {
             if state.policies[region_idx].water_sanitation {
