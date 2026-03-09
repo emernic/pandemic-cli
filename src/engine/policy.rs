@@ -196,8 +196,13 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 let alive = region.alive();
                 let killed = alive * 0.99;
                 region.dead += killed;
-                // Zero out all disease pools in this region
+                // Attribute nuke deaths proportionally across disease pools
+                // so they're visible in the UI (which sums inf.dead)
+                let total_inf_dead: f64 = region.infections.iter().map(|i| i.dead).sum();
+                let num_infections = region.infections.len().max(1) as f64;
                 for inf in &mut region.infections {
+                    let share = if total_inf_dead > 0.0 { inf.dead / total_inf_dead } else { 1.0 / num_infections };
+                    inf.dead += killed * share;
                     inf.infected = 0.0;
                     inf.immune = 0.0;
                 }
