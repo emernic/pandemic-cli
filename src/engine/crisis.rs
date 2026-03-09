@@ -1334,14 +1334,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             if let Some(region) = state.regions.get_mut(*region_idx) {
+                let mut total_killed = 0.0;
                 for inf in &mut region.infections {
                     if inf.infected > 100.0 {
                         let killed = inf.infected * 0.10;
                         inf.infected -= killed;
                         inf.dead += killed;
-                        region.dead += killed;
+                        total_killed += killed;
                     }
                 }
+                region.dead += total_killed;
             }
             format!("Counterfeit medicines killing patients in {} — no resources to stop it", region_name)
         }
