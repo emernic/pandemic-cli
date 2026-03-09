@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, ticks_to_days};
 use crate::format_number;
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
@@ -129,6 +129,17 @@ pub fn process_events(state: &mut GameState) {
         } else {
             return; // No actionable medicine — suppress noise
         }
+    } else if state.events.iter().any(|e| matches!(e, GameEvent::ResearchAutoStarted { .. })) {
+        // Show what was auto-started — find the most recently started project
+        let track_name = state.events.iter().find_map(|e| match e {
+            GameEvent::ResearchAutoStarted { track } => Some(match track {
+                ResearchTrack::Field => "Field",
+                ResearchTrack::Applied => "Applied",
+                ResearchTrack::Basic => "Basic",
+            }),
+            _ => None,
+        }).unwrap_or("Research");
+        format!("Auto-started {} research", track_name)
     } else if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
         "Crisis auto-resolved (saved preference)".to_string()
     } else if let Some(GameEvent::DiseaseSpreadToRegion { region_idx, .. }) =

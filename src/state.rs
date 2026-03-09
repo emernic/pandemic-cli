@@ -87,6 +87,10 @@ pub struct GameState {
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
     pub auto_resolve_crises: HashMap<String, usize>,
+    /// Auto-research: when a project completes, automatically start the next
+    /// highest-priority available project (if affordable). Per-track toggle.
+    #[serde(default)]
+    pub auto_research: [bool; 3],
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -1242,6 +1246,16 @@ pub enum ResearchTrack {
     Basic,
 }
 
+impl ResearchTrack {
+    pub fn index(self) -> usize {
+        match self {
+            ResearchTrack::Field => 0,
+            ResearchTrack::Applied => 1,
+            ResearchTrack::Basic => 2,
+        }
+    }
+}
+
 /// An active research project.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ResearchProject {
@@ -1485,6 +1499,8 @@ pub enum GameEvent {
     CrisisStarted,
     /// A crisis was auto-resolved based on player's saved preference.
     CrisisAutoResolved,
+    /// A research project was auto-started because auto-research is on.
+    ResearchAutoStarted { track: ResearchTrack },
     /// Personnel left due to unpaid wages (funding at $0).
     PersonnelAttrition { count: u32 },
 }
@@ -2496,6 +2512,7 @@ impl GameState {
             crisis_cooldowns: HashMap::new(),
             auto_resolve_crises: HashMap::new(),
             history: vec![],
+            auto_research: [false; 3],
             zero_agency_ticks: 0,
             mercy_rule: false,
             ui: UiState {

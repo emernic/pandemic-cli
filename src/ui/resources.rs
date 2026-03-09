@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: always 3 to show research status.
@@ -112,7 +112,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let mut spans: Vec<Span> = Vec::new();
 
         // Field research: show all active projects (or "None")
-        spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
+        let field_auto = if state.auto_research[ResearchTrack::Field.index()] { "Field(A): " } else { "Field: " };
+        spans.push(Span::styled(field_auto, Style::default().fg(Color::DarkGray)));
         if state.field_research.is_empty() {
             spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
         } else {
@@ -129,12 +130,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         // Applied and Basic tracks
-        for (label, project, color) in [
-            ("Applied", &state.applied_research, Color::Magenta),
-            ("Basic", &state.basic_research, Color::Green),
+        for (label, track, project, color) in [
+            ("Applied", ResearchTrack::Applied, &state.applied_research, Color::Magenta),
+            ("Basic", ResearchTrack::Basic, &state.basic_research, Color::Green),
         ] {
             spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            spans.push(Span::styled(format!("{}: ", label), Style::default().fg(Color::DarkGray)));
+            let auto_tag = if state.auto_research[track.index()] { "(A)" } else { "" };
+            spans.push(Span::styled(format!("{}{}: ", label, auto_tag), Style::default().fg(Color::DarkGray)));
             if let Some(project) = project {
                 let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
                 spans.push(Span::styled(

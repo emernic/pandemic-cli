@@ -67,15 +67,24 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
         } else {
             (" [NONE]".to_string(), Color::DarkGray)
         };
+        let auto_label = if state.auto_research[track.index()] {
+            Span::styled(" AUTO", Style::default().fg(Color::Green))
+        } else {
+            Span::raw("")
+        };
         lines.push(Line::from(vec![
             Span::styled(format!("    {}", desc), Style::default().fg(Color::DarkGray)),
             Span::styled(status, Style::default().fg(status_color)),
+            auto_label,
         ]));
         lines.push(Line::from(""));
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select", "Close"));
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Select  [Enter] Confirm  [X] Auto",
+        Style::default().fg(Color::DarkGray),
+    )));
 
     (" Research ".to_string(), lines)
 }
@@ -274,8 +283,12 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
     }
 
     lines.push(Line::from(""));
+    let auto_status = if state.auto_research[track.index()] { " ON" } else { " OFF" };
     if has_selectable_items {
-        lines.push(hint_line(state, "Select", "Back"));
+        lines.push(Line::from(Span::styled(
+            format!("  [↑/↓] Select  [Enter] Confirm  [X] Auto{}", auto_status),
+            Style::default().fg(Color::DarkGray),
+        )));
     } else {
         lines.push(Line::from(Span::styled(
             "  [Esc] Back",
