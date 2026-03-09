@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days, PERSONNEL_UPKEEP_COST};
+use crate::state::{GameOutcome, GameState, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: always 3 to show research status.
@@ -55,7 +55,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         {
             let gross = state.funding_income_rate() * TICKS_PER_DAY;
-            let upkeep = state.resources.personnel as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
+            let upkeep = state.personnel_upkeep_rate() * TICKS_PER_DAY;
             let policy = state.total_policy_funding_cost() * TICKS_PER_DAY;
             let net = gross - upkeep - policy;
             let (sign, color) = if net >= 0.0 {
