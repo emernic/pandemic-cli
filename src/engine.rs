@@ -10,7 +10,7 @@ use crate::state::{
     KNOWLEDGE_FULL, KNOWLEDGE_NAME, LOSE_DEATH_FRACTION, MAX_DISEASES,
     QUARANTINE_COST, QUARANTINE_PERSONNEL, TICKS_PER_DAY, TRAVEL_BAN_COST,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
-    WIN_INFECTED_THRESHOLD, format_days,
+    WIN_INFECTED_THRESHOLD,
 };
 
 /// Advance the simulation by one tick.
@@ -997,10 +997,7 @@ fn boost_research(state: &mut GameState, bench: bool) -> Option<String> {
         if !project.is_complete() && state.resources.research_points >= BOOST_RP_COST {
             state.resources.research_points -= BOOST_RP_COST;
             project.progress = (project.progress + BOOST_TICKS).min(project.required_ticks);
-            Some(format!(
-                "Boosted research! (-{:.0} RP, +{})",
-                BOOST_RP_COST, format_days(BOOST_TICKS)
-            ))
+            Some(format!("Boosted research! (-{:.0} RP)", BOOST_RP_COST))
         } else if state.resources.research_points < BOOST_RP_COST {
             Some(format!(
                 "Need {:.0} RP to boost (have {:.0})",
