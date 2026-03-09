@@ -4,3 +4,4 @@ playtests/*.md
 save.json
 playtest-*.json
 playtest_*.json
+saves/

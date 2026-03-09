@@ -155,8 +155,8 @@ The UI/engine separation is done. The engine god file has been broken into subsy
 **Before starting any feature or bug fix, play a few frames of the game yourself.** Not a sub-agent. Not the playtest agent. YOU. Run snapshot commands directly with the Bash tool so you see the rendered output with your own eyes. This grounds you in what the game actually looks like and how it behaves right now.
 
 ```bash
-cargo run -- --snapshot                          # see initial state (fresh game, no save)
-cargo run -- --snapshot --days 1                 # advance 1 day (fresh game)
+cargo run -- --snapshot                          # see initial state (auto-creates a resumable save under saves/)
+cargo run -- --snapshot --days 1                 # advance 1 day and print the resume command
 cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half a day
 ```
@@ -180,22 +180,31 @@ Concretely: **crisis events and game over interrupt `--days` advancement**, just
 
 **Never add code that auto-dismisses, auto-resolves, or silently skips game events in snapshot mode.** If an event blocks the player in interactive mode, it must also block in snapshot mode. The inconvenience is the point — it forces playtest agents to learn to handle crises, which produces better feedback.
 
-### ⚠️ Save files are REQUIRED for real playtesting
+### Snapshot persistence and real playtesting
 
-**Without a save file, every `cargo run --snapshot` starts a brand new game from day 0.** This means you can never test multi-step flows that span multiple invocations. To actually play the game across invocations:
+`--snapshot` always plays a real sequence of inputs. The only question is whether you want to continue that same run later.
+
+- If you pass a save path explicitly, snapshot mode loads and saves that file.
+- If you don't pass a save path, snapshot mode now auto-creates one under `./saves/`, prints the path before the screen output, and tells you the exact command to resume.
+- A single invocation can still contain a full scripted sequence via repeated `--do`, so explicit save files are mainly for longer sessions or branching from a known state.
+
+To continue the same playthrough across multiple invocations, either reuse the auto-created file or pass one yourself:
 
 ```bash
-# Use a save file (in your worktree, NOT in a shared location):
-cargo run -- ./playtest_save.json --snapshot --days 1            # creates save, advances 1 day
-cargo run -- ./playtest_save.json --snapshot --key r --key enter  # continues from day 1, opens research
-cargo run -- ./playtest_save.json --snapshot --days 2            # advances 2 more days (now at day 3)
+# Explicit save path:
+cargo run -- saves/manual-playtest.json --snapshot --days 1
+cargo run -- saves/manual-playtest.json --snapshot --key r --key enter
+
+# Or use the auto-created file printed by the first run:
+cargo run -- --snapshot --days 1
+cargo run -- saves/playtest-12345-67890.json --snapshot --key r --key enter
 ```
 
-Each invocation with a save file picks up exactly where the last one left off. **If you are playtesting without a save file, you are not actually testing the game — you are testing that the UI renders at day 0.**
+The old foot gun was running multiple separate `cargo run -- --snapshot ...` commands and assuming they shared state. They did not. With the new auto-save behavior, every snapshot run gives you a resumable file by default.
 
 Do this **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game.
 
-For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one. **Make sure to tell the playtest agent to use a save file** — this is the most common failure mode.
+For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one. Tell the playtest agent to keep using the printed `saves/...` file if the flow spans multiple commands.
 
 **AI playtester color blindness:** Playtest agents cannot see console colors (ANSI codes, background colors, border highlights). Many playtest reports about "missing indicators" are actually color-based indicators that work fine for human players. When filing or evaluating playtest issues, consider whether the "problem" is just color blindness. That said, the game should strive to be playable without color — use structural indicators (border styles, text markers, symbols) in addition to color, not instead of it.
 
@@ -246,7 +255,7 @@ Adapt the list to the task — small fixes won't need playtests, doc changes won
 - **Stay contained within your working directory.** Don't write files to shared locations like `~/.pandemic-cli/` or `/tmp/` — other agents may be doing the same thing and you'll collide. If you need scratch files, keep them in your worktree.
 - **Your worktree may have leftover state from a previous task.** Agents often work on multiple issues sequentially in the same worktree. You might start on a random feature branch with uncommitted changes from a completely unrelated task. Always check and clean up before starting new work.
 - **Other agents are picking up issues at the same time.** Always check the `in-progress` label before claiming work, and claim quickly to minimize race windows.
-- **Snapshot mode (`--snapshot`) is safe for concurrent use** — it only writes if you pass an explicit save file path. Interactive mode (`cargo run` without `--snapshot`) defaults to `./save.json` in the working directory. Both are local to the worktree and safe for concurrent agents.
+- **Snapshot mode (`--snapshot`) is safe for concurrent use** — it writes to a local worktree save file, either the explicit path you pass or an auto-created file under `./saves/`. Interactive mode (`cargo run` without `--snapshot`) defaults to `./save.json` in the working directory. Both are local to the worktree and safe for concurrent agents.
 
 ## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 

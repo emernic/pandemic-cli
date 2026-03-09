@@ -1,5 +1,6 @@
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
@@ -49,11 +50,18 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    let mut snapshot_autosave_notice = None;
     // Use explicit path, or default to ./save.json for interactive mode.
-    // Local to working directory so each worktree gets its own save.
-    let save_file = cli.save_file.or_else(|| {
-        if !cli.snapshot { Some("save.json".into()) } else { None }
-    });
+    // Snapshot mode now also auto-creates a local save file so runs are resumable.
+    let save_file = if let Some(path) = cli.save_file.clone() {
+        Some(path)
+    } else if cli.snapshot {
+        let path = auto_snapshot_save_path();
+        snapshot_autosave_notice = Some(path.clone());
+        Some(path)
+    } else {
+        Some("save.json".into())
+    };
 
     // Load or create state
     let state: GameState = if let Some(ref path) = save_file {
@@ -83,9 +91,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let result = snapshot::run_snapshot(state, &steps)
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        if let Some(ref path) = snapshot_autosave_notice {
+            println!("No save file passed in. Creating {}.", path);
+            println!(
+                "Run `cargo run -- {} --snapshot` to continue this playthrough.",
+                path
+            );
+            println!();
+        }
         print!("{}", result.screen);
         // Write updated state back to save file if one was provided
         if let Some(ref path) = save_file {
+            if let Some(parent) = std::path::Path::new(path).parent() {
+                fs::create_dir_all(parent)?;
+            }
             let json = serde_json::to_string_pretty(&result.state)?;
             fs::write(path, json)?;
         }
@@ -93,6 +112,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         run_interactive(state, save_file)
     }
+}
+
+fn auto_snapshot_save_path() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_nanos();
+    let mut path = PathBuf::from("saves");
+    path.push(format!("playtest-{}-{}.json", std::process::id(), nanos));
+    path.to_string_lossy().into_owned()
 }
 
 fn install_panic_hook() {
@@ -212,5 +241,18 @@ fn game_loop(
         if state.active_crisis.is_none() {
             event_appeared_at = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::auto_snapshot_save_path;
+
+    #[test]
+    fn auto_snapshot_save_uses_gitignored_saves_directory() {
+        let path = auto_snapshot_save_path();
+        assert!(path.starts_with("saves/"));
+        assert!(path.ends_with(".json"));
+        assert!(path.contains("playtest-"));
     }
 }
