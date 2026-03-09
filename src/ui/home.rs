@@ -118,7 +118,8 @@ fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
     let segments = build_splash_content(state);
 
     let lines = {
-        let chars_to_show = (state.tick as usize) * 2;
+        // ~50 chars/tick ≈ one line per tick for a zippy typewriter effect
+        let chars_to_show = (state.tick as usize) * 50;
         let total_chars: usize = segments.iter().map(|(s, _)| s.len()).sum();
         if chars_to_show >= total_chars {
             let mut full_lines: Vec<Line> = Vec::new();
