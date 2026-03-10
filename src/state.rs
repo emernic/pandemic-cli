@@ -138,6 +138,12 @@ pub struct GameState {
     /// Prevents repeat alerts for the same threshold.
     #[serde(default, alias = "threat_alert_level")]
     pub death_milestone_tier: Vec<u8>,
+    /// Per-disease flag: whether the pre-detection intel briefing has fired for this disease.
+    /// Advanced Intel stations generate a warning before full detection when local infections
+    /// cross 500. This vec is grown alongside `diseases` to track which diseases have been
+    /// briefed already.
+    #[serde(default)]
+    pub intel_pre_detection_briefed: Vec<bool>,
     /// Named scientists on the player's roster. Each has a specialty, trait,
     /// and status. Scientists are assigned to research projects by ID.
     #[serde(default)]
@@ -306,6 +312,17 @@ pub const MEDICAL_CENTER_COST: f64 = 800.0;
 pub const MEDICAL_CENTER_PERSONNEL: u32 = 2;
 /// Medicine deployment effectiveness bonus in regions with Medical Center.
 pub const MEDICAL_CENTER_EFFICACY_BONUS: f64 = 0.25;
+
+/// Intel Station (Level 1): one-time build cost per region.
+/// Detects new diseases at 3,000 local infections instead of 10,000. Requires 1 ongoing personnel.
+pub const INTEL_STATION_COST: f64 = 75.0;
+/// Intel Station ongoing personnel requirement (Level 1 and Level 2).
+pub const INTEL_STATION_PERSONNEL: u32 = 1;
+/// Advanced Intel (Level 2): upgrade cost on top of Level 1.
+/// Detects at 1,000 local infections. Generates intelligence briefings. Requires 2 ongoing personnel.
+pub const ADVANCED_INTEL_COST: f64 = 150.0;
+/// Advanced Intel ongoing personnel requirement (replaces Level 1 cost).
+pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 
 /// Disease surveillance intensity. Each tier reveals different information
 /// and only Mass Rapid screening actively reduces disease spread.
@@ -605,7 +622,7 @@ pub struct RegionPolicy {
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
-pub const POLICY_COUNT: usize = 11;
+pub const POLICY_COUNT: usize = 12;
 
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
@@ -621,6 +638,7 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.40, // Martial Law — drastic, needs high political will
     0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
     0.00, // Healthcare Investment — always available, encourages early spending
+    0.00, // Intel Station — always available, encourages early investment
 ];
 
 /// Short display name for each policy by index. Canonical source — used by
@@ -638,6 +656,7 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
         8 => "Martial Law",
         9 => "Nuclear Option",
         10 => "Field Hospital",
+        11 => "Intel Station",
         _ => "Unknown Policy",
     }
 }
@@ -1057,6 +1076,11 @@ pub struct Region {
     /// Destroyed (reset to 0) when region collapses.
     #[serde(default, alias = "healthcare_invested", deserialize_with = "deserialize_hospital_level")]
     pub hospital_level: u8,
+    /// Intelligence station level: 0 = none, 1 = Intel Station (detects at 3k local infections),
+    /// 2 = Advanced Intel (detects at 1k infections, generates briefings).
+    /// Destroyed (reset to 0) when region collapses.
+    #[serde(default)]
+    pub intel_level: u8,
     /// Per-capita income multiplier. Higher values mean this region
     /// contributes more funding per person. Default 1.0.
     #[serde(default = "default_one")]
@@ -1519,6 +1543,9 @@ pub struct Disease {
     /// Undetected diseases spread silently — the player sees "Unknown pathogen (undetected)" in the threats panel.
     #[serde(default = "default_true")]
     pub detected: bool,
+    /// Tick at which this disease was spawned. Used to compute silent spread duration at detection.
+    #[serde(default)]
+    pub spawned_at_tick: u64,
     /// Per-mechanism resistance levels. When a medicine with mechanism X is deployed
     /// against this disease, resistance to mechanism X increases — affecting ALL drugs
     /// sharing that mechanism. Broad-spectrum drugs (mechanism=None) track separately.
@@ -1632,6 +1659,7 @@ impl Disease {
             strain_generation: 0,
             sequencing_count: 0,
             detected: true, // callers override to false for new diseases
+            spawned_at_tick: 0, // callers override to current tick when spawning
             mechanism_resistance: vec![],
             containment_adaptation: 0.0,
         }
@@ -2519,6 +2547,13 @@ pub enum GameEvent {
     /// A previously undetected disease has been detected by health systems.
     DiseaseDetected {
         disease_idx: usize,
+        /// Days the disease was spreading silently before detection.
+        #[serde(default)]
+        silent_days: f64,
+    },
+    /// An intelligence briefing from an Advanced Intel station.
+    IntelBriefing {
+        message: String,
     },
     /// A disease spread to a new region via cross-region transmission.
     DiseaseSpreadToRegion {
@@ -3632,6 +3667,7 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 hospital_level: 0,
+                intel_level: 0,
                 income_modifier: 1.8,     // Wealthy — major economic contributor
                 healthcare_modifier: 0.85, // Good healthcare infrastructure
                 last_deploy_tick: None,
@@ -3657,6 +3693,7 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 hospital_level: 0,
+                intel_level: 0,
                 income_modifier: 1.0,     // Moderate economy
                 healthcare_modifier: 0.95, // Decent healthcare
                 last_deploy_tick: None,
@@ -3682,6 +3719,7 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 hospital_level: 0,
+                intel_level: 0,
                 income_modifier: 1.5,     // Strong economy, hub region
                 healthcare_modifier: 0.80, // Excellent healthcare
                 last_deploy_tick: None,
@@ -3707,6 +3745,7 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 hospital_level: 0,
+                intel_level: 0,
                 income_modifier: 0.6,     // Lower per-capita income
                 healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
                 last_deploy_tick: None,
@@ -3732,6 +3771,7 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 hospital_level: 0,
+                intel_level: 0,
                 income_modifier: 0.9,     // Large but moderate per-capita
                 healthcare_modifier: 1.0,  // Baseline healthcare
                 last_deploy_tick: None,
@@ -3757,6 +3797,7 @@ impl GameState {
                 collapsed: false,
                 collapsed_at_tick: None,
                 hospital_level: 0,
+                intel_level: 0,
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
                 healthcare_modifier: 0.75, // Best healthcare infrastructure
                 last_deploy_tick: None,
@@ -3865,6 +3906,7 @@ impl GameState {
             zero_agency_ticks: 0,
             mercy_rule: false,
             death_milestone_tier: vec![0; num_diseases],
+            intel_pre_detection_briefed: vec![false; num_diseases],
             scientists,
             ark_protocol: None,
             threat_level: ThreatLevel::Normal,
@@ -4103,7 +4145,12 @@ impl GameState {
             1 => FIELD_HOSPITAL_PERSONNEL,
             _ => 0,
         }).sum();
-        field + applied + basic + policy + hospitals
+        let intel: u32 = self.regions.iter().map(|r| match r.intel_level {
+            2 => ADVANCED_INTEL_PERSONNEL,
+            1 => INTEL_STATION_PERSONNEL,
+            _ => 0,
+        }).sum();
+        field + applied + basic + policy + hospitals + intel
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -4443,7 +4490,13 @@ impl GameState {
             // Recycle: replace the burned-out disease and clean up its traces.
             let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
             disease.detected = false;
+            disease.spawned_at_tick = self.tick;
             self.diseases[idx] = disease;
+
+            // Reset intel briefing flag so the new disease can trigger pre-detection briefings.
+            if idx < self.intel_pre_detection_briefed.len() {
+                self.intel_pre_detection_briefed[idx] = false;
+            }
 
             // Remove all infection entries for the old disease in all regions.
             for region in &mut self.regions {
@@ -4470,6 +4523,7 @@ impl GameState {
             let idx = self.diseases.len();
             let mut disease = Disease::generate(rng, pathogen_type, &used_names, true);
             disease.detected = false;
+            disease.spawned_at_tick = self.tick;
             self.diseases.push(disease);
             self.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
 
