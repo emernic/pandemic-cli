@@ -932,8 +932,6 @@ pub const BARGAIN_LOYALTY_GAIN: f64 = 20.0;
 pub const BARGAIN_BLOWHARD_LOYALTY_GAIN: f64 = 30.0;
 /// Buffoon bargain cost: small POL cost (public praise).
 pub const BARGAIN_BUFFOON_POL_COST: f64 = 0.05;
-/// Buffoon loyalty decay rate: loyalty drops faster after bargain (~1.5/day extra).
-pub const BARGAIN_BUFFOON_DECAY_EXTRA: f64 = 0.0125;
 /// Blowhard bargain cost: small funding cost.
 pub const BARGAIN_BLOWHARD_FUNDING_COST: f64 = 100.0;
 /// Recluse bargain cost: personnel (you send someone to physically manage).
