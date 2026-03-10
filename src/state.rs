@@ -470,7 +470,7 @@ pub struct RegionPolicy {
     /// Blocks 90% of cross-region spread to/from this region.
     /// Also halves the region's contribution to funding income.
     pub travel_ban: bool,
-    /// Halves infection rate within the region.
+    /// Reduces infection rate within the region (20–65% depending on transmission vector).
     pub quarantine: bool,
     /// Halves lethality in the region.
     pub hospital_surge: bool,
@@ -503,13 +503,14 @@ pub struct RegionPolicy {
 /// Total number of policy types available per region.
 ///
 /// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
-///   0 = Travel Ban        5 = Low Screening      8 = Martial Law
-///   1 = Quarantine         6 = Medium Screening   9 = Nuclear Annihilation
-///   2 = Hospital Surge     7 = High Screening    10 = Healthcare Investment
-///   3 = Border Controls
+///   0 = Travel Ban        5 = Basic Screening     8 = Martial Law
+///   1 = Quarantine         6 = Antigen Screening   9 = Nuclear Annihilation
+///   2 = Hospital Surge     7 = Mass Rapid Screen  10 = Field Hospital
+///   3 = Border Controls   11 = Intel Station
 ///   4 = Water Sanitation
 ///
-/// Display position equals policy_idx. If you add a new policy, you must update:
+/// Display position is determined by `policy_display_order()` (sorted by POL threshold).
+/// If you add a new policy, you must update:
 ///   - POLICY_COUNT and POLICY_POL_THRESHOLDS (this file)
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
@@ -538,17 +539,17 @@ pub const INFRA_ITEM_COUNT: usize = 3;
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
-    0.30, // Travel Ban — restricts citizens, needs political will
-    0.25, // Quarantine — restricts movement, needs political will
-    0.00, // Hospital Surge — defensive infrastructure, always available
+    0.15, // Travel Ban — basic containment, available early
+    0.20, // Quarantine — restricts movement, moderate political will
+    0.10, // Hospital Surge — medical infrastructure, needs some authority
     0.00, // Border Controls — basic containment, always available (costs personnel + funding)
     0.00, // Water Sanitation — basic public health, always available (costs personnel + funding)
     0.00, // Basic Screening — disease reporting, always available (costs personnel + funding)
-    0.10, // Medium Disease Screening — mandatory testing, needs political will
-    0.15, // High Disease Screening — mandatory mass testing, needs political will
+    0.10, // Antigen Screening — mandatory testing, needs political will
+    0.15, // Mass Rapid Screening — mandatory mass testing, needs political will
     0.40, // Martial Law — drastic, needs high political will
     0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
-    0.00, // Healthcare Investment — always available, encourages early spending
+    0.15, // Field Hospital — institutional build, needs political authority
     0.00, // Intel Station — always available, encourages early investment
 ];
 
@@ -589,8 +590,8 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
         3 => "Border Controls",
         4 => "Water Sanitation",
         5 => "Basic Screening",
-        6 => "Med Screening",
-        7 => "Mass Screening",
+        6 => "Antigen Screening",
+        7 => "Mass Rapid Screen",
         8 => "Martial Law",
         9 => "Nuclear Option",
         10 => "Field Hospital",
@@ -1813,9 +1814,9 @@ impl TransmissionVector {
     /// Lower = quarantine is more effective at reducing spread.
     pub fn quarantine_factor(&self) -> f64 {
         match self {
-            TransmissionVector::Airborne => 0.50,   // standard: halves infectivity
-            TransmissionVector::Waterborne => 0.75,  // weak: only 25% reduction
-            TransmissionVector::Contact => 0.30,     // strong: 70% reduction
+            TransmissionVector::Airborne => 0.55,   // standard: 45% infectivity reduction
+            TransmissionVector::Waterborne => 0.80,  // weak: only 20% reduction
+            TransmissionVector::Contact => 0.35,     // strong: 65% reduction
         }
     }
 
