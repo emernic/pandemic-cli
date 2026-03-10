@@ -32,9 +32,12 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
     Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray)))
 }
 
-/// Convert game events from the most recent tick into a status message.
-/// Called after each tick by the game loop / snapshot runner. This keeps
-/// human-facing strings in the UI layer, not in engine.rs.
+/// Convert game events from the most recent tick into status/log messages.
+/// Called after each tick by the game loop / snapshot runner.
+///
+/// Note: this handles TICK-TIME event formatting. Command responses
+/// (deploy, research, policy) are formatted in engine command handlers
+/// and returned via CommandResult.message — see target-architecture.md.
 ///
 /// Game-rule state transitions (pausing on game-over, disease detection,
 /// region collapse, crisis events) are handled in tick(). This function

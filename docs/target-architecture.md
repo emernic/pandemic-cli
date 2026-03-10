@@ -99,6 +99,16 @@ Each subsystem module follows the same pattern:
 
 When adding new event types: game-rule transitions go in `tick()`. Presentation responses go in `process_events()`.
 
+## Two Feedback Pipelines
+
+There are two distinct pipelines for player-visible messages, each serving a different purpose:
+
+1. **Tick-time events** → `GameEvent` enum → `ui::process_events()` → event log + status bar. These are asynchronous notifications (disease detected, shipment delivered, region collapsed). They need priority ordering, log persistence, and may trigger UI state changes (panel resets, speed changes).
+
+2. **Command responses** → `CommandResult.message` → `status_message`. These are synchronous feedback to a player action (deployed medicine, started research, toggled policy). Formatted directly in engine command handlers. Shown once in the status bar, not logged.
+
+This is intentional. Command handlers have the context needed to compose feedback (amounts, names, reasons) and the messages are simple enough that structured result types would add boilerplate without functional benefit. The convention is: new tick events → `GameEvent` variant + `process_events()` handler. New commands → return `(success, Option<String>)` from the handler.
+
 ## What NOT to Change
 
 - **Single `GameState` struct** — One serializable blob = trivial save/load.
