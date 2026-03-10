@@ -202,6 +202,12 @@ pub fn run_snapshot(
                             StopReason::CrisisStarted => {
                                 eprintln!("[Day {day:.1}] [auto-crises] Auto-resolving crisis.");
                                 state = auto_resolve_crisis(state);
+                                // If crisis is still active after resolution attempt, both options
+                                // were unaffordable — stop rather than infinite-loop.
+                                if state.active_crisis.is_some() {
+                                    eprintln!("[auto-crises] Cannot afford either crisis option — stopping.");
+                                    break;
+                                }
                             }
                             StopReason::GamePaused { .. } => {
                                 // advance_ticks() forces SimState::Running on next call — just continue.
