@@ -1330,7 +1330,7 @@ pub struct Region {
     #[serde(default)]
     pub emergency_response_until: Option<u64>,
     /// Tick until which this region suffers network disruption from a neighboring collapse.
-    /// While active: +30% policy costs, +50% medicine deployment costs.
+    /// While active: +50% medicine deployment costs (see DISRUPTION_MEDICINE_COST_MULT).
     /// Multiple collapses extend the duration (last-collapse-wins on end tick).
     #[serde(default)]
     pub disrupted_until: Option<u64>,
