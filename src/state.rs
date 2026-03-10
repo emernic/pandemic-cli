@@ -2731,7 +2731,8 @@ pub enum GameEvent {
     /// A crisis event appeared and needs player attention.
     CrisisStarted,
     /// A crisis was auto-resolved based on player's saved preference.
-    CrisisAutoResolved,
+    /// Carries the resolution outcome message for the event log.
+    CrisisAutoResolved { message: String },
     /// A research project was auto-started because auto-research is on.
     ResearchAutoStarted { track: ResearchTrack },
     /// Personnel left due to unpaid wages (funding at $0).
