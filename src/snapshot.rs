@@ -3,7 +3,7 @@ use ratatui::{backend::TestBackend, Terminal};
 use crate::action::string_to_action;
 use crate::apply_action;
 use crate::engine::tick;
-use crate::state::{GameEvent, GameState, GameOutcome, SimState};
+use crate::state::{GameState, GameOutcome, SimState};
 use crate::ui;
 
 /// Result of running snapshot mode: the rendered screen and the updated state.
@@ -47,19 +47,16 @@ enum StopReason {
     Completed,
     /// A crisis event fired — player must react before continuing.
     CrisisStarted,
-    /// Game paused due to an event (detection, collapse, breakthrough, etc.).
-    GamePaused { event_description: String },
     /// Game over — no more ticks possible.
     GameOver,
 }
 
 /// Advance simulation by up to `n` ticks.
 ///
-/// Stops early if a crisis fires, the game pauses (detection, collapse,
-/// breakthroughs), or the game ends. Returns the reason for stopping.
+/// Stops early if a crisis fires or the game ends. Returns the reason for stopping.
 ///
-/// This mirrors interactive mode: crises and events interrupt progression
-/// and require player input before play can continue.
+/// This mirrors interactive mode: crises interrupt progression and require
+/// player input before play can continue.
 fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
     if state.active_crisis.is_some() {
         return StopReason::CrisisStarted; // Don't advance even one tick with a pending crisis
@@ -78,50 +75,10 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
             return StopReason::CrisisStarted;
         }
 
-        // Pause state: stop and show the screen. Currently this path is only
-        // reached if future code adds a new SimState::Paused transition during ticks
-        // (game over sets Paused but is caught above by outcome check).
-        if state.sim_state == SimState::Paused {
-            let description = describe_pause_events(&state.events);
-            return StopReason::GamePaused { event_description: description };
-        }
     }
     StopReason::Completed
 }
 
-/// Build a human-readable description of what triggered the current pause.
-fn describe_pause_events(events: &[GameEvent]) -> String {
-    let mut parts = Vec::new();
-    for event in events {
-        match event {
-            GameEvent::DiseaseDetected { disease_idx, silent_days } => {
-                if *silent_days > 0.5 {
-                    parts.push(format!("new threat detected (pathogen #{}, spreading {:.1} days)", disease_idx + 1, silent_days));
-                } else {
-                    parts.push(format!("new threat detected (pathogen #{})", disease_idx + 1));
-                }
-            }
-            GameEvent::RegionCollapsed { region_idx } => {
-                parts.push(format!("region {} collapsed", region_idx + 1));
-            }
-            GameEvent::PathogenIdentified { .. } => {
-                parts.push("pathogen identified".to_string());
-            }
-            GameEvent::MedicineDeveloped { .. } => {
-                parts.push("medicine developed".to_string());
-            }
-            GameEvent::TrialCompleted { .. } => {
-                parts.push("clinical trial completed".to_string());
-            }
-            _ => {}
-        }
-    }
-    if parts.is_empty() {
-        "game event".to_string()
-    } else {
-        parts.join(", ")
-    }
-}
 
 /// Run snapshot mode: process an ordered sequence of steps, then render.
 /// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
@@ -130,8 +87,6 @@ fn describe_pause_events(events: &[GameEvent]) -> String {
 /// - Crisis events interrupt tick advancement. Subsequent key steps still fire
 ///   (so `--do d60 --do enter --do d5` works inline). Subsequent --days steps
 ///   are skipped until the crisis is dismissed.
-/// - Pause events (disease detection, collapse, breakthroughs) also interrupt
-///   and drop remaining queued steps.
 ///
 /// The rendered output shows whatever state the game is in when execution stops.
 ///
@@ -177,17 +132,6 @@ pub fn run_snapshot(
                             "Dismiss with --do enter (or --do up/down to change selection first). Subsequent key steps in this invocation still fire."
                         );
                         // continue (not break): subsequent key steps like --do enter can still dismiss the crisis
-                    }
-                    StopReason::GamePaused { event_description } => {
-                        eprintln!(
-                            "\n[Day {day_after:.1}] Game paused: {event_description}."
-                        );
-                        eprintln!(
-                            "Tick advancement stopped. Subsequent steps still fire (next --do d<N> resumes automatically)."
-                        );
-                        // continue (not break): subsequent steps still fire.
-                        // advance_ticks() forces SimState::Running on next call, so pauses
-                        // are purely informational — no player action needed to proceed.
                     }
                 }
             }
@@ -305,11 +249,10 @@ mod tests {
         // In either case, tick should NOT have reached 60 days = 7200 ticks
         // (the game ends well before 60 days without intervention).
         let is_blocked = result.state.active_crisis.is_some()
-            || result.state.outcome != GameOutcome::Playing
-            || result.state.sim_state == SimState::Paused;
+            || result.state.outcome != GameOutcome::Playing;
         assert!(
             is_blocked,
-            "snapshot should have stopped due to crisis/pause/gameover before 60 days (tick {})",
+            "snapshot should have stopped due to crisis/gameover before 60 days (tick {})",
             result.state.tick
         );
     }
