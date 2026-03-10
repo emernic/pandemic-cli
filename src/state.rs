@@ -627,6 +627,19 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.00, // Intel Station — always available, encourages early investment
 ];
 
+/// Panel selection positions for the ManagePolicies subpanel.
+///
+/// Layout: [0..POLICY_COUNT) = policy toggles in display order,
+///         [MANAGE_INFRA_BASE..+3) = infrastructure repair (HC, SL, CO),
+///         MANAGE_APPEASE_POS = Appease Governor,
+///         MANAGE_BARGAIN_POS = Bargain (only when governor is defiant).
+///
+/// Both `ui/policy.rs` (render_manage) and `state.rs` (handle_policy_confirm) use
+/// these constants so the two sites stay in sync automatically.
+pub const MANAGE_INFRA_BASE: usize = POLICY_COUNT;
+pub const MANAGE_APPEASE_POS: usize = POLICY_COUNT + 3;
+pub const MANAGE_BARGAIN_POS: usize = POLICY_COUNT + 4;
+
 /// Policy indices sorted by POL unlock threshold (ascending), ties broken by index.
 /// This is the canonical display ordering — both the policy renderer and the confirm
 /// handler use this to map display position → policy_idx.
@@ -3607,17 +3620,14 @@ impl UiState {
                     // regions+DECREE_COUNT+1..regions+DECREE_COUNT+2 = standing orders (2 items)
                     state.regions.len() + 1 + DECREE_COUNT + 2 - 1
                 }
-                // Policies (0..POLICY_COUNT-1) + Repair HC/SL/CO (POLICY_COUNT..POLICY_COUNT+2)
-                // + Appease Governor (POLICY_COUNT+3)
-                // + Bargain (POLICY_COUNT+4, only when defiant & available)
-                // Repair/Appease are hidden for collapsed regions, so max is one less.
+                // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
                     if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
                         POLICY_COUNT - 1
                     } else if state.bargain_available(*region_idx) {
-                        POLICY_COUNT + 4
+                        MANAGE_BARGAIN_POS
                     } else {
-                        POLICY_COUNT + 3
+                        MANAGE_APPEASE_POS
                     }
                 }
                 Some(PolicyUiState::SelectSacrificeRegion) => {
@@ -3966,7 +3976,10 @@ impl UiState {
                     let kind = self.panel_selection - num_regions - 1 - DECREE_COUNT;
                     Some(GameCommand::ToggleStandingOrder { kind })
                 } else {
-                    // Decree selected (indices after rally)
+                    // Decree selected (indices after rally).
+                    // display_pos = num_regions + 1 + decree_idx (see ui/policy.rs BrowseRegions renderer).
+                    // These two formulas are inverses — if new items are inserted between rally and decrees,
+                    // both sites must be updated together.
                     let decree_idx = self.panel_selection - num_regions - 1;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
                         // Sacrifice Region needs sub-selection — but only if threat level is met
@@ -3984,15 +3997,15 @@ impl UiState {
                 }
             }
             Some(PolicyUiState::ManagePolicies { region_idx }) => {
-                if self.panel_selection == POLICY_COUNT + 4 {
+                if self.panel_selection == MANAGE_BARGAIN_POS {
                     // Bargain with Governor (only when defiant)
                     Some(GameCommand::BargainWithGovernor { region_idx })
-                } else if self.panel_selection == POLICY_COUNT + 3 {
+                } else if self.panel_selection == MANAGE_APPEASE_POS {
                     // Appease Governor
                     Some(GameCommand::AppeaseGovernor { region_idx })
-                } else if self.panel_selection >= POLICY_COUNT {
-                    // Repair infrastructure (POLICY_COUNT=HC, +1=SL, +2=CO)
-                    let system = match self.panel_selection - POLICY_COUNT {
+                } else if self.panel_selection >= MANAGE_INFRA_BASE {
+                    // Repair infrastructure (MANAGE_INFRA_BASE=HC, +1=SL, +2=CO)
+                    let system = match self.panel_selection - MANAGE_INFRA_BASE {
                         0 => InfraSystem::Healthcare,
                         1 => InfraSystem::SupplyLines,
                         _ => InfraSystem::CivilOrder,

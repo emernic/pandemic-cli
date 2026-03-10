@@ -25,7 +25,8 @@ use crate::state::{
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
-    POLICY_COUNT, policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
+    POLICY_COUNT, MANAGE_INFRA_BASE, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
+    policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
@@ -597,7 +598,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         ];
 
         for (i, (system, current, cost)) in repair_items.iter().enumerate() {
-            let display_pos = POLICY_COUNT + i;
+            let display_pos = MANAGE_INFRA_BASE + i;
             let selected = state.ui.panel_selection == display_pos;
             if selected { selected_line = Some(lines.len()); }
             let marker = if selected { "▶ " } else { "  " };
@@ -643,7 +644,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
     // Appease Governor action (after repair actions)
     if !region.collapsed {
-        let appease_pos = POLICY_COUNT + 3;
+        let appease_pos = MANAGE_APPEASE_POS;
         let selected = state.ui.panel_selection == appease_pos;
         if selected { selected_line = Some(lines.len()); }
         let gov = &region.governor;
@@ -698,7 +699,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         // Bargain option (below Appease, only when governor is defiant and bargain available)
         if state.bargain_available(region_idx) {
-            let bargain_pos = POLICY_COUNT + 4;
+            let bargain_pos = MANAGE_BARGAIN_POS;
             let selected = state.ui.panel_selection == bargain_pos;
             if selected { selected_line = Some(lines.len()); }
             let marker = if selected { "▶ " } else { "  " };
