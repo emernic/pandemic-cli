@@ -246,5 +246,17 @@ fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or_else(|| "Unknown".to_string());
             format!("Suppress {}", name)
         }
+        ResearchKind::AttenuatePathogen { disease_idx } => {
+            let name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| "Unknown".to_string());
+            format!("Attenuate {}", name)
+        }
+        ResearchKind::InterdictPathogen { disease_idx } => {
+            let name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| "Unknown".to_string());
+            format!("Interdict {}", name)
+        }
     }
 }

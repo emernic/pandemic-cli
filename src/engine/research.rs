@@ -266,6 +266,30 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     ));
                 }
             }
+            ResearchKind::AttenuatePathogen { disease_idx } => {
+                let d_idx = *disease_idx;
+                if let Some(disease) = state.diseases.get_mut(d_idx) {
+                    // Permanently reduce lethality by 30%
+                    disease.lethality *= 0.70;
+                    let name = disease.display_name(d_idx);
+                    state.event_log.push_back((
+                        state.tick as f64 / crate::state::TICKS_PER_DAY,
+                        format!("Attenuation complete: {name} lethality reduced 30%"),
+                    ));
+                }
+            }
+            ResearchKind::InterdictPathogen { disease_idx } => {
+                let d_idx = *disease_idx;
+                if let Some(disease) = state.diseases.get_mut(d_idx) {
+                    // Permanently eliminate cross-region spread
+                    disease.cross_region_spread = 0.0;
+                    let name = disease.display_name(d_idx);
+                    state.event_log.push_back((
+                        state.tick as f64 / crate::state::TICKS_PER_DAY,
+                        format!("Interdiction complete: {name} cross-region transmission eliminated"),
+                    ));
+                }
+            }
             _ => {}
         }
     }
@@ -1400,6 +1424,106 @@ mod tests {
         assert!(
             (reduced - expected).abs() < 0.001,
             "infectivity should drop by 20%: original={original_infectivity:.4}, expected={expected:.4}, got={reduced:.4}"
+        );
+    }
+
+    #[test]
+    fn directed_attenuation_prereqs() {
+        let mut state = GameState::new_default(42);
+
+        // Without PathogenSuppression — not available
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::DirectedAttenuation }
+        )), "DirectedAttenuation should not be available without PathogenSuppression");
+
+        // With PathogenSuppression — available
+        state.unlocked_techs.push(crate::state::BasicTech::PathogenSuppression);
+        let basic = state.available_basic_projects();
+        assert!(basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::DirectedAttenuation }
+        )), "DirectedAttenuation should be available with PathogenSuppression");
+    }
+
+    #[test]
+    fn genomic_interdiction_prereqs() {
+        let mut state = GameState::new_default(42);
+
+        // Without DirectedAttenuation — not available
+        state.unlocked_techs.push(crate::state::BasicTech::PathogenSuppression);
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::GenomicInterdiction }
+        )), "GenomicInterdiction should not be available without DirectedAttenuation");
+
+        // With DirectedAttenuation — available
+        state.unlocked_techs.push(crate::state::BasicTech::DirectedAttenuation);
+        let basic = state.available_basic_projects();
+        assert!(basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::GenomicInterdiction }
+        )), "GenomicInterdiction should be available with DirectedAttenuation");
+    }
+
+    #[test]
+    fn attenuate_pathogen_reduces_lethality_30_percent() {
+        use crate::state::KNOWLEDGE_FULL;
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = KNOWLEDGE_FULL;
+        state.resources.funding = 5000.0;
+        state.resources.personnel = 20;
+        state.regions[0].infections[0].infected = 1000.0;
+
+        let original_lethality = state.diseases[0].lethality;
+
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::AttenuatePathogen { disease_idx: 0 },
+            progress: 599.0,
+            required_ticks: 600.0,
+            personnel_assigned: 8,
+            scientist_ids: vec![],
+        }];
+
+        for _ in 0..5 {
+            state = tick(&state);
+        }
+
+        assert!(state.field_research.is_empty(), "attenuation project should have completed");
+        let reduced = state.diseases[0].lethality;
+        let expected = original_lethality * 0.70;
+        assert!(
+            (reduced - expected).abs() < 0.001,
+            "lethality should drop by 30%: original={original_lethality:.4}, expected={expected:.4}, got={reduced:.4}"
+        );
+    }
+
+    #[test]
+    fn interdict_pathogen_eliminates_cross_region_spread() {
+        use crate::state::KNOWLEDGE_FULL;
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = KNOWLEDGE_FULL;
+        state.resources.funding = 5000.0;
+        state.resources.personnel = 20;
+        state.regions[0].infections[0].infected = 1000.0;
+
+        assert!(state.diseases[0].cross_region_spread > 0.0, "disease should have cross-region spread initially");
+
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::InterdictPathogen { disease_idx: 0 },
+            progress: 799.0,
+            required_ticks: 800.0,
+            personnel_assigned: 10,
+            scientist_ids: vec![],
+        }];
+
+        for _ in 0..5 {
+            state = tick(&state);
+        }
+
+        assert!(state.field_research.is_empty(), "interdiction project should have completed");
+        assert!(
+            state.diseases[0].cross_region_spread == 0.0,
+            "cross-region spread should be eliminated, got {}",
+            state.diseases[0].cross_region_spread
         );
     }
 }
