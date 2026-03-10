@@ -88,6 +88,10 @@ pub(super) fn tick_spread_within(
                 if region.has_trait(RegionTrait::DenseUrban) {
                     infectivity *= 1.3;
                 }
+                // Infrastructure: civil order anarchy increases spread
+                if region.civil_order <= 0.0 {
+                    infectivity *= crate::state::CIVIL_ORDER_ANARCHY_SPREAD;
+                }
                 let new_infections =
                     (infectivity * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
@@ -109,6 +113,12 @@ pub(super) fn tick_spread_within(
                 }
                 // Co-infection amplifies lethality (overwhelmed hospitals, immune suppression)
                 lethality *= coinfection_factor;
+                // Infrastructure: healthcare capacity degradation increases lethality
+                if region.healthcare_capacity < crate::state::INFRA_CRITICAL {
+                    lethality *= crate::state::HEALTHCARE_CRITICAL_LETHALITY;
+                } else if region.healthcare_capacity < crate::state::INFRA_STRESSED {
+                    lethality *= crate::state::HEALTHCARE_STRESSED_LETHALITY;
+                }
                 let mut new_deaths = (lethality * inf.infected * noise).max(0.0);
                 let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);
                 let total_outflow = new_deaths + new_recoveries;

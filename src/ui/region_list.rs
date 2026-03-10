@@ -529,6 +529,45 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         }
     }
 
+    // Infrastructure status
+    if !region.collapsed {
+        fn infra_label(val: f64) -> (&'static str, Color) {
+            if val <= 0.0 {
+                ("FAILED", Color::Red)
+            } else if val < crate::state::INFRA_CRITICAL {
+                ("CRITICAL", Color::Red)
+            } else if val < crate::state::INFRA_STRESSED {
+                ("STRESSED", Color::Yellow)
+            } else {
+                ("OK", Color::Green)
+            }
+        }
+        let hc = infra_label(region.healthcare_capacity);
+        let sl = infra_label(region.supply_lines);
+        let co = infra_label(region.civil_order);
+        // Only show infrastructure line when at least one system is degraded
+        if region.healthcare_capacity < 1.0 || region.supply_lines < 1.0 || region.civil_order < 1.0 {
+            lines.push(Line::from(vec![
+                Span::styled("Infra: ", label),
+                Span::styled("HC ", label),
+                Span::styled(
+                    format!("{}%", (region.healthcare_capacity * 100.0) as u32),
+                    Style::default().fg(hc.1),
+                ),
+                Span::styled("  SL ", label),
+                Span::styled(
+                    format!("{}%", (region.supply_lines * 100.0) as u32),
+                    Style::default().fg(sl.1),
+                ),
+                Span::styled("  CO ", label),
+                Span::styled(
+                    format!("{}%", (region.civil_order * 100.0) as u32),
+                    Style::default().fg(co.1),
+                ),
+            ]));
+        }
+    }
+
     // Governor loyalty
     {
         let gov = &region.governor;
