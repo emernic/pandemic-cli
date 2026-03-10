@@ -5493,6 +5493,40 @@ impl GameState {
         }
     }
 
+    // -- Regional specialization bonuses --
+    // Each region provides a unique passive bonus while it hasn't collapsed.
+    // Losing a region means losing its specialization permanently.
+
+    /// North America: Applied research hub. +20% applied research speed.
+    pub fn applied_research_bonus(&self) -> f64 {
+        if !self.regions[0].collapsed { 1.2 } else { 1.0 }
+    }
+
+    /// South America: Field research expertise. +20% field research speed.
+    pub fn field_research_bonus(&self) -> f64 {
+        if !self.regions[1].collapsed { 1.2 } else { 1.0 }
+    }
+
+    /// Europe: Manufacturing capacity. +20% bonus doses from manufacturing.
+    pub fn manufacturing_yield_bonus(&self) -> f64 {
+        if !self.regions[2].collapsed { 1.2 } else { 1.0 }
+    }
+
+    /// Africa: Basic research networks. +20% basic research speed.
+    pub fn basic_research_bonus(&self) -> f64 {
+        if !self.regions[3].collapsed { 1.2 } else { 1.0 }
+    }
+
+    /// Asia: Supply chain efficiency. 20% cheaper medicine deployment.
+    pub fn deployment_cost_bonus(&self) -> f64 {
+        if !self.regions[4].collapsed { 0.8 } else { 1.0 }
+    }
+
+    /// Oceania: Clinical trial infrastructure. +25% faster clinical trials.
+    pub fn clinical_trial_bonus(&self) -> f64 {
+        if !self.regions[5].collapsed { 0.75 } else { 1.0 }
+    }
+
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
     pub fn available_basic_projects(&self) -> Vec<ResearchKind> {
         let active_kind = self.basic_research.as_ref().map(|p| &p.kind);
