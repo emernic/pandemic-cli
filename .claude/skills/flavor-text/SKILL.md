@@ -238,6 +238,9 @@ The bad mission briefings read like spy thriller novels. The good ones read like
 ### 6. Trying too hard to be profound
 "The door is open. You are the only lock." "Pick up the hammer or get out of the way." These are the AI reaching for quotable closing lines. The good versions don't strain for profundity — "And now we can" is devastating precisely because it's stated so plainly. The best text sounds effortless. The bad versions sound like they're performing.
 
+### 8. Em dash abuse
+Nearly every bad example is riddled with em dashes. "Not a threat — just a fact." "Not destroyed — dissolved." "The door is open — you are the only lock." This is the laziest possible way to connect two ideas. It avoids the work of writing a real sentence. A period forces you to commit to what you're saying. An em dash lets you smush two half-thoughts together and pretend that's writing. Never use them. Period.
+
 ### 7. Wrong format for the medium
 Game text is UI text. It shares space with buttons, stats, navigation elements. It is read quickly, often repeatedly. The bad versions are written like short fiction with narrative arcs and dramatic reveals. Players don't read event pop-ups like novels. They glance at them. The text needs to land in a glance.
 
@@ -287,3 +290,4 @@ Brief. Factual. The numbers speak for themselves. Don't write an elegy.
 5. **Prefer plain statement over poetic flourish.** "Treatment efficacy has dropped to 30%" > "Your once-mighty medicines now barely hold back the tide."
 6. **Write for the medium.** This is TUI text in a terminal. Monospace font. Limited screen real estate. It will be read alongside health bars, infection counts, and navigation hints.
 7. **When in doubt, write less.** The best game text is almost always shorter than you think it should be.
+8. **Never use em dashes (—).** Em dashes are the #1 tell of AI-generated text. They are a lazy way to connect two phrases without thinking about how they actually relate. Every em dash is a place where you avoided writing a real sentence. Use periods. Use colons where structurally appropriate. Rewrite the sentence so it doesn't need a dash. If you find yourself reaching for an em dash, stop and think about what you're actually trying to say, then say it properly. This rule has zero exceptions.

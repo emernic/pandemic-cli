@@ -94,7 +94,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
                 let hint = crate::state::BasicTech::all()
                     .iter()
                     .find(|t| !state.unlocked_techs.contains(t))
-                    .map(|t| format!(" [LOCKED] — {} to unlock {}", t.prereq_description(), t.name()))
+                    .map(|t| format!(" [LOCKED] {} to unlock {}", t.prereq_description(), t.name()))
                     .unwrap_or_else(|| " [LOCKED]".to_string());
                 (hint, Color::DarkGray)
             }
@@ -174,7 +174,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                 style,
             )));
             lines.push(Line::from(Span::styled(
-                format!("    Progress: {:.0}% — {} remaining", pct, format_days(effective_remaining)),
+                format!("    Progress: {:.0}%, {} remaining", pct, format_days(effective_remaining)),
                 Style::default().fg(Color::Green),
             )));
         }
@@ -266,7 +266,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                 style,
             )));
             lines.push(Line::from(Span::styled(
-                format!("    Progress: {:.0}% — {} remaining", pct, format_days(effective_remaining)),
+                format!("    Progress: {:.0}%, {} remaining", pct, format_days(effective_remaining)),
                 Style::default().fg(Color::Green),
             )));
         } else {
@@ -572,7 +572,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                 } else {
                     "Low"
                 };
-                Some(format!("{} — {} | Eff {:.0}%, Resist: {}",
+                Some(format!("{}: {} | Eff {:.0}%, Resist: {}",
                     mech.tradeoff_label(),
                     names.join(", "),
                     mech.efficacy_modifier() * 100.0,
@@ -612,7 +612,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                 } else {
                     "Fully studied"
                 };
-                Some(format!("Knowledge: {:.0}% — {}", disease.knowledge * 100.0, next))
+                Some(format!("Knowledge: {:.0}% ({})", disease.knowledge * 100.0, next))
             } else if disease.knowledge > 0.0 {
                 Some(format!("Knowledge: {:.0}%", disease.knowledge * 100.0))
             } else {

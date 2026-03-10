@@ -133,7 +133,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         else { Color::Green };
                     Span::styled(format!("CFR: {cfr:.0}%"), Style::default().fg(color))
                 } else {
-                    Span::styled("CFR: —", Style::default().fg(Color::DarkGray))
+                    Span::styled("CFR: ?", Style::default().fg(Color::DarkGray))
                 };
 
                 // Region spread count

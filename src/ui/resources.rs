@@ -68,7 +68,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             } else if gap < -0.02 {
                 Span::styled(" \u{25bc}", Style::default().fg(Color::Red)) // ▼ falling
             } else {
-                Span::styled(" \u{2014}", Style::default().fg(Color::DarkGray)) // — stable
+                Span::styled(" \u{2500}", Style::default().fg(Color::DarkGray)) // ─ stable
             }
         },
         // Next POL unlock hint

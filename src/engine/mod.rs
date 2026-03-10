@@ -260,7 +260,7 @@ pub fn tick(state: &GameState) -> GameState {
                     new.intel_pre_detection_briefed[d_idx] = true;
                     new.events.push(GameEvent::IntelBriefing {
                         message: format!(
-                            "INTEL: {} — anomalous hospital admissions. Possible emerging pathogen, monitoring closely.",
+                            "INTEL: {} anomalous hospital admissions. Possible emerging pathogen, monitoring closely.",
                             region.name
                         ),
                     });
@@ -4318,7 +4318,7 @@ mod tests {
         state.pending_crises.push((100, CrisisKind::PublicInquiry));
         let after = tick(&state);
         assert!(after.active_crisis.is_some(), "pending crisis should fire");
-        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Cover-Up Exposed");
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Data Suppression Exposed");
         assert!(after.pending_crises.is_empty(), "fired crisis should be removed from pending");
     }
 

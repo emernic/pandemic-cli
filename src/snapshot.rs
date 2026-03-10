@@ -31,7 +31,7 @@ fn parse_step(s: &str) -> Result<SnapshotStep, String> {
     }
     // "t" alone is a valid key (opens Threats panel), "d" alone is not a key
     if s == "d" {
-        return Err("Invalid step: 'd' — did you mean 'd1' (1 day)?".to_string());
+        return Err("Invalid step: 'd'. Did you mean 'd1' (1 day)?".to_string());
     }
     Ok(SnapshotStep::Key(s.to_string()))
 }

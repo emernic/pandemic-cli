@@ -307,7 +307,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Supply Chain Disruption".into(),
                 description: format!(
-                    "Cold chain failure en route — {} doses of {} are at risk of spoilage.",
+                    "Cold chain failure en route. {} doses of {} at risk of spoilage.",
                     crate::format_number(loss), med_name,
                 ),
                 option_a: CrisisOption {
@@ -358,12 +358,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Political Pressure".into(),
                 description: format!(
-                    "Public unrest in {} is mounting against the quarantine. \
-                     Political leaders demand it be lifted immediately.",
+                    "The regional administration in {} is threatening to revoke \
+                     your quarantine operating authority.",
                     region_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Comply — lift quarantine".into(),
+                    label: "Lift quarantine".into(),
                     description: format!("Remove quarantine in {}", region_name),
                     cost: None,
                 },
@@ -382,10 +382,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::PersonnelCrisis { amount } => {
             let retention_cost = scaled_cost(state, 0.20, 100.0, 600.0);
             CrisisEvent {
-                title: "Staff Burnout".into(),
+                title: "Personnel Attrition".into(),
                 description: format!(
-                    "Frontline workers are exhausted. {} personnel are threatening to resign \
-                     unless conditions improve.",
+                    "Sustained operational tempo is unsustainable. {} staff have submitted \
+                     resignation notices.",
                     amount,
                 ),
                 option_a: CrisisOption {
@@ -404,8 +404,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::InternationalAid { funding, personnel } => {
             CrisisEvent {
-                title: "International Aid Package".into(),
-                description: "The WHO is offering an emergency aid package.".into(),
+                title: "Emergency Aid Package".into(),
+                description: "The N.W.H.O. emergency reserve has authorized a disbursement.".into(),
                 option_a: CrisisOption {
                     label: format!("Emergency funding (+¥{:.0})", funding),
                     description: "Direct financial support".into(),
@@ -413,7 +413,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: format!("Personnel support (+{} staff)", personnel),
-                    description: "Trained researchers and field workers".into(),
+                    description: "Trained researchers and field staff".into(),
                     cost: None,
                 },
                 kind,
@@ -432,7 +432,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     disease_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Ignore — focus resources elsewhere".into(),
+                    label: "Ignore".into(),
                     description: "No cost, but mutation continues unchecked".into(),
                     cost: None,
                 },
@@ -440,7 +440,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency analysis (¥{:.0})", cost),
-                        description: "Current strain sequenced — pathogen knowledge updated.".into(),
+                        description: "Current strain sequenced. Pathogen knowledge updated.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -467,17 +467,17 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     from_name, survivors_m, to_name,
                 ),
                 2 => format!(
-                    "A second collapse. {} — {:.0}M survivors en route to {}. \
+                    "A second collapse. {}: {:.0}M survivors en route to {}. \
                      Intake capacity is already strained from the first wave.",
                     from_name, survivors_m, to_name,
                 ),
                 3 => format!(
                     "{} has collapsed. {:.0}M additional survivors moving toward {}. \
-                     Receiving systems are overwhelmed — three regions down.",
+                     Receiving systems are overwhelmed. Three regions down.",
                     from_name, survivors_m, to_name,
                 ),
                 _ => format!(
-                    "{} has fallen — collapse number {}. \
+                    "{} has fallen. Collapse number {}. \
                      {:.0}M survivors have nowhere to go.",
                     from_name, wave, survivors_m,
                 ),
@@ -519,7 +519,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::DataLeak => {
             CrisisEvent {
                 title: "Research Data Leaked".into(),
-                description: "Classified research data has been leaked through anonymous channels.".into(),
+                description: "Classified pathogen data has appeared on open networks.".into(),
                 option_a: CrisisOption {
                     label: "Go transparent".into(),
                     description: "Lose 2 days of research progress, gain +5% POL".into(),
@@ -552,7 +552,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.10, 80.0, 400.0);
                     CrisisOption {
                         label: format!("Confiscate (¥{:.0})", cost),
-                        description: "Seize the drugs — safer, but no treatment for them".into(),
+                        description: "Seize the drugs. No treatment available for them.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -566,12 +566,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Quarantine Riots".into(),
                 description: format!(
-                    "Violent riots have erupted in {} against the quarantine. \
-                     The military can restore order, but it will be ugly.",
+                    "Containment perimeter in {} has been breached. \
+                     Civil unrest is escalating.",
                     region_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Negotiate — ease quarantine".into(),
+                    label: "Negotiate".into(),
                     description: format!("Lift quarantine in {}, avoid violence", region_name),
                     cost: None,
                 },
@@ -586,19 +586,19 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::MediaPanic => {
             CrisisEvent {
-                title: "Media Firestorm".into(),
-                description: "Sensationalized news coverage is causing mass panic. \
-                    People are hoarding supplies and ignoring health guidelines.".into(),
+                title: "Communications Failure".into(),
+                description: "Regional reporting systems are returning inconsistent data. \
+                    Population-level noncompliance is rising.".into(),
                 option_a: CrisisOption {
-                    label: "Ignore it — focus on the crisis".into(),
-                    description: "−8% POL as public confidence erodes".into(),
+                    label: "Deprioritize".into(),
+                    description: "−8% POL as institutional trust degrades".into(),
                     cost: None,
                 },
                 option_b: {
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
-                        label: format!("Public address (¥{:.0}, 1 personnel)", cost),
-                        description: "Calm the panic, gain +5% POL".into(),
+                        label: format!("Restore comms infrastructure (¥{:.0}, 1 personnel)", cost),
+                        description: "Stabilize reporting systems, gain +5% POL".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 1 }),
                     }
                 },
@@ -616,17 +616,18 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Pressure to Skip Trials".into(),
                 description: format!(
-                    "Politicians are demanding you skip clinical trials for {} ({} treatment).",
+                    "The board is demanding accelerated deployment of {} ({} treatment). \
+                     Trial protocols can be bypassed.",
                     disease_name, med_name,
                 ),
                 option_a: CrisisOption {
                     label: "Maintain standards".into(),
-                    description: "No shortcuts — −5% POL for refusing".into(),
+                    description: "−5% POL".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Fast-track (+10% POL)".into(),
-                    description: "Clear for use at reduced efficacy — public approves the speed".into(),
+                    description: "Clear for use at reduced efficacy".into(),
                     cost: None,
                 },
                 kind,
@@ -637,21 +638,22 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
-                title: "Vaccine Hesitancy".into(),
+                title: "Treatment Noncompliance".into(),
                 description: format!(
-                    "Anti-vaccine sentiment is spreading in {}. People are refusing treatment.",
+                    "Compliance rates in {} have dropped below operational thresholds. \
+                     Population is refusing medical directives.",
                     region_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Mandate vaccines".into(),
+                    label: "Enforce compliance".into(),
                     description: "Effective but −10% POL".into(),
                     cost: None,
                 },
                 option_b: {
                     let cost = scaled_cost(state, 0.20, 120.0, 700.0);
                     CrisisOption {
-                        label: format!("Education campaign (¥{:.0})", cost),
-                        description: format!("Spend money, gain +5% POL in {}", region_name),
+                        label: format!("Incentive program (¥{:.0})", cost),
+                        description: format!("Buy cooperation in {}, gain +5% POL", region_name),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -664,19 +666,18 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Corruption Scandal".into(),
                 description: format!(
-                    "An internal audit reveals an official has been siphoning ¥{:.0} from \
-                     the pandemic response fund. Investigating recovers the money but pulls \
-                     staff from the front lines.",
+                    "Internal audit flagged ¥{:.0} in unauthorized disbursements. \
+                     Investigation will recover the funds but requires diverting staff.",
                     stolen,
                 ),
                 option_a: CrisisOption {
                     label: format!("Ignore it (lose ¥{:.0})", stolen),
-                    description: "Let the theft go — can't spare the staff".into(),
+                    description: "Write off the loss".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: "Investigate (2 personnel)".into(),
-                    description: format!("Recover ¥{:.0} but divert staff for a week", stolen),
+                    description: format!("Recover ¥{:.0}, divert 2 staff to audit", stolen),
                     cost: Some(CrisisCost { funding: 0.0, personnel: 2 }),
                 },
                 kind,
@@ -688,14 +689,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
             CrisisEvent {
-                title: "Superpower Demands Research".into(),
+                title: "Research Data Request".into(),
                 description: format!(
-                    "A powerful nation is demanding access to your research data on {}.",
+                    "A member state is demanding access to your sequencing data on {}.",
                     disease_name,
                 ),
                 option_a: CrisisOption {
                     label: format!("Share data (+¥{:.0})", share_reward),
-                    description: format!("−0.1 knowledge but receive ¥{:.0} funding as goodwill", share_reward),
+                    description: format!("−0.1 knowledge, receive ¥{:.0}", share_reward),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -719,12 +720,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 option_a: CrisisOption {
                     label: "Reduce shifts".into(),
-                    description: format!("Disable hospital surge in {} — staff recover", region_name),
+                    description: format!("Disable hospital surge in {}. Staff recover.", region_name),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: format!("Push through (−{} personnel)", personnel_loss),
-                    description: "Maintain surge — some workers quit permanently".into(),
+                    description: "Maintain surge. Some workers quit permanently.".into(),
                     cost: None, // Personnel cost applied in resolve
                 },
                 kind,
@@ -757,8 +758,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::MilitaryTakeover { cooperate_loss } => {
             CrisisEvent {
                 title: "Military Threatens Takeover".into(),
-                description: "Generals are threatening to seize control of the pandemic response, \
-                    citing your agency's declining public support.".into(),
+                description: "Joint command has issued an ultimatum. They want operational \
+                    authority over your agency, citing security concerns.".into(),
                 option_a: CrisisOption {
                     label: "Cooperate".into(),
                     description: format!("Cede {} personnel to military, gain +15% POL", cooperate_loss),
@@ -783,22 +784,22 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
-                title: "Doomsday Cult Blockade".into(),
+                title: "Supply Route Blockade".into(),
                 description: format!(
-                    "A doomsday cult in {} has blockaded supply routes, claiming the pandemic \
-                     is divine punishment. They want a global broadcast to spread their message.",
+                    "An organized resistance group in {} has blockaded supply routes. \
+                     They're demanding concessions before allowing deliveries to resume.",
                     region_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Negotiate — give them airtime".into(),
-                    description: "Deliveries resume, but −8% POL from the broadcast".into(),
+                    label: "Grant concessions".into(),
+                    description: "Deliveries resume, −8% POL".into(),
                     cost: None,
                 },
                 option_b: {
                     let cost = scaled_cost(state, 0.20, 120.0, 700.0);
                     CrisisOption {
-                        label: format!("Police raid (¥{:.0}, 2 personnel)", cost),
-                        description: "Clear the blockade by force".into(),
+                        label: format!("Clear by force (¥{:.0}, 2 personnel)", cost),
+                        description: "Enforce access to supply routes".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 2 }),
                     }
                 },
@@ -808,11 +809,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::BillionaireOffer { reward, personnel_loss } => {
             CrisisEvent {
-                title: "Billionaire's Generous Offer".into(),
+                title: "Private Funding Offer".into(),
                 description: format!(
-                    "A tech billionaire offers ¥{:.0} in emergency funding — but wants \
-                    naming rights to every medicine you develop. Your scientists are furious. \
-                    The money would save lives. The morale cost might lose them.", reward),
+                    "A private donor offers ¥{:.0} in exchange for institutional concessions. \
+                    Your research staff will not be happy about the terms.", reward),
                 option_a: CrisisOption {
                     label: "Decline politely".into(),
                     description: "Keep team morale, no funding".into(),
@@ -829,9 +829,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::WHOEvacuation { aid_loss } => {
             CrisisEvent {
-                title: "WHO Headquarters Evacuated".into(),
-                description: "A disease outbreak has forced WHO headquarters in Geneva to evacuate. \
-                    Global coordination is collapsing.".into(),
+                title: "N.W.H.O. Headquarters Evacuated".into(),
+                description: "A containment breach has forced N.W.H.O. headquarters to evacuate. \
+                    Global coordination is degrading.".into(),
                 option_a: CrisisOption {
                     label: "Let regions go independent".into(),
                     description: format!("Lose ¥{:.0} in aid income, −5% POL", aid_loss),
@@ -855,13 +855,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Warlord Seizes Control".into(),
                 description: format!(
-                    "A general has declared himself ruler of collapsed {}. He demands official \
-                     recognition and ¥500 in tribute. In exchange, he'll allow medical teams \
-                     back in. Refusing means the region stays sealed off.",
+                    "A local commander has seized control of collapsed {}. \
+                     He's demanding tribute in exchange for allowing medical access.",
                     region_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Refuse — maintain principles".into(),
+                    label: "Refuse".into(),
                     description: format!("{} remains sealed, +5% POL", region_name),
                     cost: None,
                 },
@@ -869,7 +868,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.25, 150.0, 800.0);
                     CrisisOption {
                         label: format!("Pay tribute (¥{:.0})", cost),
-                        description: format!("Un-collapse {} — medical access restored", region_name),
+                        description: format!("Medical access restored in {}", region_name),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -879,13 +878,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::VaccineDispute { neutral_loss, credit_gain } => {
             CrisisEvent {
-                title: "Vaccine Credit War".into(),
-                description: "Two superpowers both claim credit for your vaccine breakthrough. \
-                    They're threatening sanctions against each other — and your agency is caught \
-                    in the middle. Credit one, or stay neutral and lose both.".into(),
+                title: "Attribution Dispute".into(),
+                description: "Two member states both claim credit for your treatment breakthrough. \
+                    Both are threatening to cut funding if you don't back their claim.".into(),
                 option_a: CrisisOption {
                     label: "Stay neutral".into(),
-                    description: format!("Both sides angry — −¥{:.0} in combined aid cuts", neutral_loss),
+                    description: format!("Both cut funding. −¥{:.0} total.", neutral_loss),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -930,11 +928,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "the pathogen".into());
             CrisisEvent {
-                title: "Naming Rights Offer".into(),
+                title: "Naming Rights".into(),
                 description: format!(
-                    "PharmaCorp Global offers ¥{:.0} for the naming rights to {}. Their proposal: \
-                     rename it after the CEO's ex-wife. Their legal team assures you this is \
-                     \"standard brand integration practice.\"",
+                    "A pharmaceutical consortium offers ¥{:.0} for the naming rights to {}. \
+                     Their legal team assures you this is \"standard brand integration.\"",
                     payout, disease_name,
                 ),
                 option_a: CrisisOption {
@@ -1059,12 +1056,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 option_a: CrisisOption {
                     label: format!("Purge the department (−{} personnel)", purge_cost),
-                    description: "Fire everyone involved — stops the bleeding but guts your team".into(),
+                    description: "Fire everyone involved. Stops the bleeding.".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: format!("Buy them off (¥{:.0})", buyoff),
-                    description: "Pay to make the problem go away — they keep what they stole".into(),
+                    description: "They keep what they stole".into(),
                     cost: Some(CrisisCost { funding: buyoff, personnel: 0 }),
                 },
                 kind,
@@ -1074,18 +1071,18 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::MilitaryOverreach => {
             let resist_cost = scaled_cost(state, 0.25, 200.0, 800.0);
             CrisisEvent {
-                title: "Military Seizes Research".into(),
+                title: "Research Data Classified".into(),
                 description:
-                    "The military you cooperated with is now classifying your pathogen data. \
-                     Generals want to weaponize your findings. Civilian researchers are locked out.".into(),
+                    "The military you cooperated with has classified your pathogen data. \
+                     Civilian researchers are locked out of their own findings.".into(),
                 option_a: CrisisOption {
-                    label: "Leak it publicly (−10% POL)".into(),
-                    description: "Public scandal forces military to back down, but damages your credibility".into(),
+                    label: "Go public (−10% POL)".into(),
+                    description: "Force declassification, but damages institutional credibility".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
                     label: format!("Legal challenge (¥{:.0})", resist_cost),
-                    description: "Fight it in court — expensive but preserves institutional trust".into(),
+                    description: "Expensive but preserves civilian control".into(),
                     cost: Some(CrisisCost { funding: resist_cost, personnel: 0 }),
                 },
                 kind,
@@ -1099,7 +1096,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.10, 80.0, 400.0);
             CrisisEvent {
-                title: format!("{} — Accidental Catastrophe", gov_name),
+                title: format!("{}: Sovereignty Dispute", gov_name),
                 description: format!(
                     "{gov_name} issued a public statement in {region_name} and accidentally \
                      announced that the pandemic is over. Crowds are celebrating in the streets."),
@@ -1109,8 +1106,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: format!("Emergency correction (¥{cost:.0})"),
-                    description: "Pay for an immediate public correction".into(),
+                    label: format!("Federal override (¥{:.0})", cost),
+                    description: "Maintain operations. Governor will resent it.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
@@ -1124,13 +1121,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.10, 80.0, 400.0);
             CrisisEvent {
-                title: format!("{} — Public Denunciation", gov_name),
+                title: format!("{}: General Strike", gov_name),
                 description: format!(
                     "{gov_name} went on live broadcast accusing your agency of incompetence \
                      in {region_name}. The charges are mostly baseless."),
                 option_a: CrisisOption {
                     label: "Ignore it".into(),
-                    description: "Small POL loss — the noise will die down".into(),
+                    description: "Small POL loss. The noise will die down.".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -1148,7 +1145,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let gov_name = state.regions.get(*region_idx)
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
-                title: format!("{} — Gone Dark", gov_name),
+                title: format!("{}: Methodology Review", gov_name),
                 description: format!(
                     "{gov_name} has stopped returning calls. Policy enforcement in {region_name} \
                      has ground to a halt. Your field teams are operating without local support."),
@@ -1159,7 +1156,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: "Send a delegation".into(),
-                    description: "Send staff to manage directly — costs personnel".into(),
+                    description: "Send staff to manage directly. Costs personnel.".into(),
                     cost: Some(CrisisCost { funding: 0.0, personnel: 2 }),
                 },
                 kind,
@@ -1173,7 +1170,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.20, 150.0, 800.0);
             CrisisEvent {
-                title: format!("{} — Sovereignty Dispute", gov_name),
+                title: format!("{}: Sovereignty Dispute", gov_name),
                 description: format!(
                     "{gov_name} has declared your health mandate unconstitutional in {region_name}. \
                      Local authorities are blocking your field teams."),
@@ -1184,7 +1181,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: format!("Federal override (¥{cost:.0})"),
-                    description: "Maintain operations — governor will resent it".into(),
+                    description: "Maintain operations. Governor will resent it.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
@@ -1196,18 +1193,18 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.15, 100.0, 600.0);
             CrisisEvent {
-                title: format!("{} — Openly Skimming", gov_name),
+                title: format!("{}: Formal Complaint", gov_name),
                 description: format!(
                     "{gov_name} has stopped hiding the embezzlement. Your field staff know. \
                      If you don't act, they'll assume you're complicit."),
                 option_a: CrisisOption {
                     label: "Look the other way".into(),
-                    description: "Lose 15% POL — your staff lose respect".into(),
+                    description: "Lose 15% POL. Your staff lose respect.".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: format!("Formal audit (¥{cost:.0})"),
-                    description: "Costly but sends a message — skim rate reduced".into(),
+                    label: format!("Commission a response (¥{:.0})", cost),
+                    description: "Formally counter the complaint. Limits political damage.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
@@ -1221,12 +1218,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.bargain_count).unwrap_or(0);
             let demand = 200.0 * 2.0_f64.powi(count as i32);
             CrisisEvent {
-                title: format!("{} — Escalating Demands", gov_name),
+                title: format!("{}: Escalating Demands", gov_name),
                 description: format!(
                     "{gov_name} wants ¥{demand:.0}. Last time it was less. Next time it will be more."),
                 option_a: CrisisOption {
                     label: "Refuse".into(),
-                    description: "Lose 20% POL — they'll make your life difficult".into(),
+                    description: "Lose 20% POL. They'll make your life difficult.".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
@@ -1246,17 +1243,17 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 title: "THE ARK PROTOCOL".into(),
                 description: format!(
                     "{} regions have fallen. Your remaining teams are spread too thin. \
-                     Recommend consolidating all personnel and resources into {} — \
-                     abandon all other regions.",
+                     Recommend consolidating all personnel and resources into {}. \
+                     Abandon all other regions.",
                     collapsed_count, region_name,
                 ),
                 option_a: CrisisOption {
-                    label: format!("Activate — fall back to {}", region_name),
+                    label: format!("Activate: fall back to {}", region_name),
                     description: "Abandon all other regions. Concentrate everything here.".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Decline — fight on all fronts".into(),
+                    label: "Decline".into(),
                     description: "Maintain scattered operations. Personnel and funding lost to overextension.".into(),
                     cost: Some(CrisisCost { funding: 150.0, personnel: 3 }),
                 },
@@ -1266,10 +1263,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::PublicInquiry => {
             CrisisEvent {
-                title: "Cover-Up Exposed".into(),
+                title: "Data Suppression Exposed".into(),
                 description:
-                    "The data leak you suppressed has been exposed through unauthorized public channels. \
-                     Internal records are circulating. A full public inquiry is now demanded.".into(),
+                    "The data leak you suppressed has resurfaced. Your concealment is now \
+                     a matter of public record. An independent inquiry has been demanded.".into(),
                 option_a: CrisisOption {
                     label: "Full transparency now".into(),
                     description: "Lose 3 days research progress, gain +10% POL for honesty".into(),
@@ -1277,7 +1274,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: "Stonewall".into(),
-                    description: "Refuse to cooperate — −20% POL, but keep research intact".into(),
+                    description: "−20% POL. Research intact.".into(),
                     cost: None,
                 },
                 kind,
@@ -1288,17 +1285,17 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
-                title: "Infodemic".into(),
+                title: "Information Cascade".into(),
                 description: format!(
-                    "Misinformation from the earlier public panic has taken root in {region_name}. \
-                     Health workers report residents hiding symptoms and refusing screening."),
+                    "The earlier communications failure has cascaded in {region_name}. \
+                     Field teams report population is hiding symptoms and refusing screening."),
                 option_a: CrisisOption {
                     label: "Accept reduced visibility".into(),
                     description: format!("Screening downgraded in {region_name}"),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Counter-information campaign".into(),
+                    label: "Restore screening infrastructure".into(),
                     description: "Maintain screening, but it takes resources".into(),
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.15, 100.0, 500.0),
@@ -1313,8 +1310,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Sanctions Threat".into(),
                 description:
-                    "The superpower you sided against in the vaccine dispute is retaliating. \
-                     They're threatening to freeze your international accounts and block supply chains.".into(),
+                    "The member state you sided against in the attribution dispute is retaliating. \
+                     They're threatening to freeze your accounts and block supply chains.".into(),
                 option_a: CrisisOption {
                     label: "Accept sanctions".into(),
                     description: format!("Lose ¥{funding_loss:.0} and international standing"),
@@ -1322,7 +1319,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: "Diplomatic back-channel".into(),
-                    description: "Negotiate privately — costs resources but preserves trade".into(),
+                    description: "Costs resources but preserves trade".into(),
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.20, 150.0, 600.0),
                         personnel: 2,
@@ -1335,7 +1332,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
     };
     // INVARIANT: option_a must always be free so the player is never softlocked.
     debug_assert!(event.option_a.cost.is_none(),
-        "Crisis '{}' has a cost on option_a — every crisis must have at least one free option",
+        "Crisis '{}' has a cost on option_a: every crisis must have at least one free option",
         event.title);
     event
 }
@@ -1395,19 +1392,19 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
         }
         (CrisisKind::SupplyDisruption { .. }, _) => {
-            "Emergency reroute successful — supply chain restored".into()
+            "Emergency reroute successful. Supply chain restored.".into()
         }
         (CrisisKind::LabAccident { targets_basic }, 0) => {
             if *targets_basic {
                 state.basic_research = None;
-                "Lab evacuated — basic research project lost".into()
+                "Lab evacuated. Basic research project lost.".into()
             } else {
                 state.applied_research = None;
-                "Lab evacuated — applied research project lost".into()
+                "Lab evacuated. Applied research project lost.".into()
             }
         }
         (CrisisKind::LabAccident { .. }, _) => {
-            "Containment successful — research project saved".into()
+            "Containment successful. Research project saved.".into()
         }
         (CrisisKind::PoliticalPressure { region_idx }, 0) => {
             let region_name = state.regions.get(*region_idx)
@@ -1418,7 +1415,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Quarantine lifted in {} due to political pressure", region_name)
         }
         (CrisisKind::PoliticalPressure { .. }, _) => {
-            "Political pressure resisted — quarantine maintained".into()
+            "Quarantine authority maintained".into()
         }
         (CrisisKind::PersonnelCrisis { amount }, 0) => {
             state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
@@ -1431,14 +1428,14 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if research_demand > state.resources.personnel
                 && state.field_research.pop().is_some()
             {
-                format!("Lost {} personnel to burnout — field research cancelled, not enough staff",
+                format!("Lost {} personnel. Field research cancelled, insufficient staff.",
                     amount)
             } else {
-                format!("Lost {} personnel to burnout", amount)
+                format!("Lost {} personnel to attrition", amount)
             }
         }
         (CrisisKind::PersonnelCrisis { .. }, _) => {
-            "Retention bonuses paid — staff morale restored".into()
+            "Retention bonuses paid. Attrition stabilized.".into()
         }
         (CrisisKind::InternationalAid { funding, .. }, 0) => {
             state.resources.funding += funding;
@@ -1446,16 +1443,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::InternationalAid { personnel, .. }, _) => {
             state.resources.personnel += personnel;
-            format!("Received {} personnel from international collaboration", personnel)
+            format!("Received {} personnel from N.W.H.O. reserve", personnel)
         }
         (CrisisKind::MutationSurge { .. }, 0) => {
-            "Mutation surge ignored — focusing resources elsewhere".into()
+            "Mutation surge ignored".into()
         }
         (CrisisKind::MutationSurge { disease_idx }, _) => {
             if let Some(disease) = state.diseases.get_mut(*disease_idx) {
                 disease.knowledge = (disease.knowledge + 0.15).min(1.0);
                 let name = disease.display_name(*disease_idx);
-                format!("Emergency analysis complete — gained knowledge of {}", name)
+                format!("Emergency analysis complete. Gained knowledge of {}.", name)
             } else {
                 "Emergency analysis complete".into()
             }
@@ -1487,7 +1484,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 inf.immune += immune;
             }
             let survivors_m = survivors / 1_000_000.0;
-            format!("{:.0}M refugees from {} accepted into {} — population surging, infections spreading",
+            format!("{:.0}M refugees from {} accepted into {}. Population surging, infections spreading.",
                 survivors_m, from_name, to_name)
         }
         (CrisisKind::RefugeeWave { from_region, wave, .. }, _) => {
@@ -1516,7 +1513,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             state.resources.political_power += 0.05;
-            "Went transparent — lost research time but gained public trust".into()
+            "Went transparent. Lost research time, gained public trust.".into()
         }
         (CrisisKind::DataLeak, _) => {
             // Suppress — lose POL
@@ -1524,7 +1521,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Schedule follow-up: public inquiry in 5 days
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::PublicInquiry));
-            "Leak suppressed — research intact but public confidence shaken".into()
+            "Leak suppressed. Research intact, public confidence shaken.".into()
         }
 
         (CrisisKind::BlackMarketMedicine { region_idx }, 0) => {
@@ -1548,12 +1545,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Schedule follow-up: counterfeit epidemic in 5 days
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::CounterfeitEpidemic { region_idx: *region_idx }));
-            format!("Black market drugs allowed in {} — some treated, some suffered adverse reactions", region_name)
+            format!("Black market drugs allowed in {}. Some treated, some suffered adverse reactions.", region_name)
         }
         (CrisisKind::BlackMarketMedicine { region_idx }, _) => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Black market drugs confiscated in {} — people left without treatment", region_name)
+            format!("Black market drugs confiscated in {}. No alternative treatment available.", region_name)
         }
 
         (CrisisKind::QuarantineRiot { region_idx }, 0) => {
@@ -1563,12 +1560,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(policy) = state.policies.get_mut(*region_idx) {
                 policy.quarantine = false;
             }
-            format!("Quarantine lifted in {} after riots — disease may spread", region_name)
+            format!("Quarantine lifted in {} after unrest", region_name)
         }
         (CrisisKind::QuarantineRiot { .. }, _) => {
             // Deploy military — lose POL (personnel already deducted)
             state.resources.political_power -= 0.15;
-            "Military deployed — quarantine maintained by force. International condemnation.".into()
+            "Military deployed. Quarantine maintained by force.".into()
         }
 
         (CrisisKind::MediaPanic, 0) => {
@@ -1586,18 +1583,18 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 .unwrap_or(0);
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
-            "Public panic continues unchecked — misinformation spreading".into()
+            "Communications degradation spreading. Reporting systems unreliable.".into()
         }
         (CrisisKind::MediaPanic, _) => {
             // Press conference — gain POL (costs already deducted)
             state.resources.political_power += 0.05;
-            "Public address calmed the panic — confidence restored".into()
+            "Communications infrastructure restored. Reporting stabilized.".into()
         }
 
         (CrisisKind::TrialShortcut { .. }, 0) => {
             // Maintain standards — lose POL
             state.resources.political_power -= 0.05;
-            "Maintained trial standards — public frustrated by the delay".into()
+            "Maintained trial standards. Board noted the delay.".into()
         }
         (CrisisKind::TrialShortcut { disease_idx, medicine_idx }, _) => {
             // Fast-track — gain POL, mark medicine as tested but 2 generations behind
@@ -1621,7 +1618,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "the pathogen".into());
-            format!("Fast-tracked {} treatment — deployed at reduced efficacy", name)
+            format!("Fast-tracked {} treatment. Deployed at reduced efficacy.", name)
         }
 
         (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
@@ -1638,9 +1635,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if governor_rebels {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 state.pending_crises.push((followup_tick, CrisisKind::GovernorHardliner { region_idx: *region_idx }));
-                "Vaccine mandate imposed — governor furious, threatening to defy federal authority".into()
+                "Compliance enforced. Governor threatening to defy authority.".into()
             } else {
-                "Vaccine mandate imposed — effective but deeply resented".into()
+                "Compliance enforced. Effective but deeply resented.".into()
             }
         }
         (CrisisKind::VaccineHesitancy { region_idx }, _) => {
@@ -1648,7 +1645,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             state.resources.political_power += 0.05;
-            format!("Education campaign in {} — vaccine acceptance improving", region_name)
+            format!("Incentive program deployed in {}. Compliance rates improving.", region_name)
         }
 
         (CrisisKind::CorruptOfficial { stolen }, 0) => {
@@ -1658,11 +1655,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let daily_drain = (state.resources.funding * 0.05).clamp(20.0, 200.0);
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::EmbezzlementRing { stolen_per_day: daily_drain }));
-            format!("Corruption ignored — ¥{:.0} lost from the pandemic fund", stolen)
+            format!("Corruption ignored. ¥{:.0} lost.", stolen)
         }
         (CrisisKind::CorruptOfficial { .. }, _) => {
             // Investigate — recover money (personnel cost already deducted)
-            "Investigation successful — funds recovered, corrupt official removed".into()
+            "Investigation successful. Funds recovered, official removed.".into()
         }
 
         (CrisisKind::ResourceDiversion { disease_idx, share_reward, .. }, 0) => {
@@ -1671,11 +1668,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 disease.knowledge = (disease.knowledge - 0.1).max(0.0);
             }
             state.resources.funding += share_reward;
-            format!("Research data shared — received ¥{:.0} in goodwill funding", share_reward)
+            format!("Research data shared. Received ¥{:.0}.", share_reward)
         }
         (CrisisKind::ResourceDiversion { .. }, _) => {
             // Refuse — costs already deducted
-            "Refused to share research — foreign aid reduced".into()
+            "Refused to share research. Foreign aid reduced.".into()
         }
 
         (CrisisKind::ExhaustionEpidemic { region_idx, .. }, 0) => {
@@ -1685,12 +1682,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(policy) = state.policies.get_mut(*region_idx) {
                 policy.hospital_surge = false;
             }
-            format!("Hospital surge suspended in {} — staff recovering", region_name)
+            format!("Hospital surge suspended in {}. Staff recovering.", region_name)
         }
         (CrisisKind::ExhaustionEpidemic { personnel_loss, .. }, _) => {
             // Push through — lose personnel
             state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
-            format!("Pushed through — {} workers quit permanently from exhaustion", personnel_loss)
+            format!("{} workers quit permanently", personnel_loss)
         }
 
         (CrisisKind::WhistleblowerReport { medicine_idx }, 0) => {
@@ -1699,7 +1696,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 let destroyed = (med.doses * 0.3).round();
                 med.doses = (med.doses - destroyed).max(0.0);
                 state.resources.political_power += 0.05;
-                format!("Halted deployment of {} — {} doses destroyed. Public trusts your caution.",
+                format!("Halted deployment of {}. {} doses destroyed.",
                     med.name, crate::format_number(destroyed))
             } else {
                 "Deployment halted".into()
@@ -1708,7 +1705,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::WhistleblowerReport { .. }, _) => {
             // Continue deployment — lose POL
             state.resources.political_power -= 0.08;
-            "Continuing deployment despite concerns — public confidence shaken".into()
+            "Continuing deployment despite concerns. Public confidence shaken.".into()
         }
 
         (CrisisKind::MilitaryTakeover { cooperate_loss }, 0) => {
@@ -1718,11 +1715,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Schedule follow-up: military overreach in 4 days
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::MilitaryOverreach));
-            format!("Ceded {} staff to military — agency retains civilian control with their backing", cooperate_loss)
+            format!("Ceded {} staff to military. Agency retains civilian control.", cooperate_loss)
         }
         (CrisisKind::MilitaryTakeover { .. }, _) => {
             // Resist — costs already deducted
-            "Fought off military takeover — independence maintained at great cost".into()
+            "Military takeover averted. Independence maintained.".into()
         }
 
         // --- Late-game crisis resolutions ---
@@ -1730,16 +1727,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::CultBlockade { .. }, 0) => {
             // Negotiate — give them airtime, lose POL
             state.resources.political_power -= 0.08;
-            "Cult got their broadcast — deliveries resume, but public is spooked".into()
+            "Concessions granted. Deliveries resume.".into()
         }
         (CrisisKind::CultBlockade { .. }, _) => {
             // Police raid — costs already deducted
-            "Police cleared the blockade — supply routes restored".into()
+            "Blockade cleared. Supply routes restored.".into()
         }
 
         (CrisisKind::BillionaireOffer { .. }, 0) => {
             // Decline
-            "Declined the billionaire's offer — team morale intact".into()
+            "Offer declined. Team morale intact.".into()
         }
         (CrisisKind::BillionaireOffer { reward, personnel_loss }, _) => {
             // Accept — gain funding, lose personnel, basic research disrupted
@@ -1750,7 +1747,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 let loss = 2.0 * TICKS_PER_DAY as f64;
                 proj.progress = (proj.progress - loss).max(0.0);
             }
-            format!("Accepted the deal — ¥{:.0} received, {} researchers quit, basic research disrupted",
+            format!("Deal accepted. ¥{:.0} received, {} researchers quit.",
                 reward, personnel_loss)
         }
 
@@ -1758,7 +1755,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Let regions go independent — lose funding and POL
             state.resources.funding = (state.resources.funding - aid_loss).max(0.0);
             state.resources.political_power -= 0.05;
-            format!("WHO collapsed — lost ¥{:.0} in aid. Regions fending for themselves.", aid_loss)
+            format!("N.W.H.O. coordination collapsed. Lost ¥{:.0} in aid.", aid_loss)
         }
         (CrisisKind::WHOEvacuation { .. }, _) => {
             // Take over — costs already deducted, gain POL
@@ -1771,7 +1768,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             state.resources.political_power += 0.05;
-            format!("Refused the warlord — {} remains sealed off, but your principles are intact", region_name)
+            format!("Refused the warlord. {} remains sealed.", region_name)
         }
         (CrisisKind::WarlordDemand { region_idx }, _) => {
             // Pay tribute — costs already deducted, un-collapse the region
@@ -1780,13 +1777,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.collapsed = false;
             }
-            format!("Paid the warlord — medical teams re-enter {}", region_name)
+            format!("Paid the warlord. Medical teams re-enter {}.", region_name)
         }
 
         (CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
             // Stay neutral — lose funding from both
             state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
-            format!("Stayed neutral — both superpowers cut ¥{:.0} in aid", neutral_loss)
+            format!("Stayed neutral. Both sides cut ¥{:.0} in aid.", neutral_loss)
         }
         (CrisisKind::VaccineDispute { credit_gain, .. }, _) => {
             // Credit one side — gain funding, lose POL, schedule retaliation
@@ -1795,7 +1792,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss }));
-            format!("Picked a side — ¥{:.0} from the winner. The loser won't forget this.", credit_gain)
+            format!("Picked a side. ¥{:.0} from the winner.", credit_gain)
         }
 
         // --- Dark comedy event resolutions ---
@@ -1921,7 +1918,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 }
                 region.dead += total_killed;
             }
-            format!("Counterfeit medicines killing patients in {} — no resources to stop it", region_name)
+            format!("Counterfeit medicines killing patients in {}", region_name)
         }
         (CrisisKind::CounterfeitEpidemic { region_idx }, _) => {
             // Crackdown — costs already deducted
@@ -1934,21 +1931,21 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Purge department — lose personnel
             let purge = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(3, 6);
             state.resources.personnel = state.resources.personnel.saturating_sub(purge);
-            format!("Department purged — {} staff fired, embezzlement ring broken", purge)
+            format!("Department purged. {} staff fired, embezzlement ring broken.", purge)
         }
         (CrisisKind::EmbezzlementRing { .. }, _) => {
             // Buy them off — costs already deducted
-            "Paid off the embezzlers — they'll stop... for now".into()
+            "Paid off the embezzlers. They'll stop. For now.".into()
         }
 
         (CrisisKind::MilitaryOverreach, 0) => {
             // Go to the press — lose POL, but research continues
             state.resources.political_power -= 0.10;
-            "Went public — military forced to release research data. Your credibility took a hit.".into()
+            "Went public. Military forced to release research data.".into()
         }
         (CrisisKind::MilitaryOverreach, _) => {
             // Legal challenge — costs already deducted
-            "Legal challenge successful — civilian control of research restored".into()
+            "Legal challenge successful. Civilian control of research restored.".into()
         }
 
         // --- Governor archetype crisis resolutions ---
@@ -2001,15 +1998,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 policy.martial_law = false;
                 policy.border_controls = false;
             }
-            format!("Restrictive policies withdrawn in {} — governor placated", region_name)
+            format!("Restrictive policies withdrawn in {}", region_name)
         }
         (CrisisKind::GovernorHardliner { .. }, _) => {
             // Federal override — costs already deducted
-            "Federal authority imposed — governor forced to comply".into()
+            "Federal authority imposed. Governor forced to comply.".into()
         }
 
         (CrisisKind::GovernorOperative { .. }, 0) => {
-            // Look the other way — lose POL
+            // Look the other way, lose POL
             state.resources.political_power -= 0.15;
             "Turned a blind eye. Your team noticed.".into()
         }
@@ -2027,7 +2024,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Refused to pay. They're making your life difficult.".into()
         }
         (CrisisKind::GovernorMobster { region_idx }, _) => {
-            // Pay — costs already deducted, increment bargain count
+            // Pay: costs already deducted, increment bargain count
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.bargain_count += 1;
                 region.governor.loyalty = (region.governor.loyalty + 15.0).min(100.0);
@@ -2049,11 +2046,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.events.push(GameEvent::ArkProtocolActivated {
                 region_idx: *region_idx,
             });
-            format!("ARK PROTOCOL ACTIVATED — all resources consolidated in {}", region_name)
+            format!("ARK PROTOCOL ACTIVATED. All resources consolidated in {}.", region_name)
         }
         (CrisisKind::ArkProtocol { .. }, _) => {
             // Declined — standard cooldown prevents re-fire
-            "Ark Protocol declined — continuing on all fronts".into()
+            "Ark Protocol declined. Continuing on all fronts.".into()
         }
 
         (CrisisKind::PublicInquiry, 0) => {
@@ -2065,12 +2062,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             state.resources.political_power += 0.10;
-            "Full transparency — lost research time but rebuilt public trust".into()
+            "Full transparency. Lost research time, rebuilt public trust.".into()
         }
         (CrisisKind::PublicInquiry, _) => {
             // Stonewall — massive POL loss
             state.resources.political_power -= 0.20;
-            "Stonewalled the inquiry — public outrage intensifies".into()
+            "Stonewalled the inquiry. Public outrage intensifies.".into()
         }
 
         (CrisisKind::Infodemic { region_idx }, 0) => {
@@ -2084,24 +2081,24 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     ScreeningLevel::Basic | ScreeningLevel::None => ScreeningLevel::None,
                 };
             }
-            format!("Screening downgraded in {} — misinformation too entrenched to fight", region_name)
+            format!("Screening downgraded in {}", region_name)
         }
         (CrisisKind::Infodemic { region_idx }, _) => {
             // Counter-information campaign — costs already deducted, screening maintained
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Counter-information campaign in {} — screening maintained", region_name)
+            format!("Screening infrastructure restored in {}", region_name)
         }
 
         (CrisisKind::SanctionsThreat { funding_loss }, 0) => {
             // Accept sanctions — lose funding + POL hit
             state.resources.funding = (state.resources.funding - funding_loss).max(0.0);
             state.resources.political_power -= 0.10;
-            format!("Sanctions imposed — ¥{:.0} frozen. International standing damaged.", funding_loss)
+            format!("Sanctions imposed. ¥{:.0} frozen.", funding_loss)
         }
         (CrisisKind::SanctionsThreat { .. }, _) => {
             // Diplomatic back-channel — costs already deducted, trade preserved
-            "Back-channel negotiations successful — sanctions averted".into()
+            "Back-channel negotiations successful. Sanctions averted.".into()
         }
     };
     // Clamp POL after crisis modifications

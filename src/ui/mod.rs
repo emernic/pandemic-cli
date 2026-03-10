@@ -92,7 +92,7 @@ pub fn process_events(state: &mut GameState) {
                     affected.first().unwrap_or(&"unknown").to_string()
                 };
                 let msg = if *silent_days > 0.5 {
-                    format!("NEW THREAT detected in {} — spreading silently for {:.1} days", location, silent_days)
+                    format!("NEW THREAT detected in {}. Spreading silently for {:.1} days.", location, silent_days)
                 } else {
                     format!("NEW THREAT detected in {}", location)
                 };
@@ -107,9 +107,9 @@ pub fn process_events(state: &mut GameState) {
                     .unwrap_or_else(|| "Unknown".to_string());
                 let deaths_str = format_number(*deaths);
                 let msg = if *has_medicine {
-                    format!("{name}: {deaths_str} dead — deploy medicine!")
+                    format!("{name}: {deaths_str} dead. Deploy medicine!")
                 } else {
-                    format!("{name}: {deaths_str} dead — no medicine available!")
+                    format!("{name}: {deaths_str} dead. No medicine available.")
                 };
                 (2, msg)
             }
@@ -124,12 +124,12 @@ pub fn process_events(state: &mut GameState) {
                 let name = d.map(|d| d.name.clone()).unwrap_or_else(|| "?".to_string());
                 let ptype = d.map(|d| d.pathogen_type.label()).unwrap_or("Unknown");
                 let transmission = d.map(|d| d.transmission.label()).unwrap_or("Unknown");
-                (1, format!("IDENTIFIED: {} — {} / {} transmission", name, ptype, transmission))
+                (1, format!("IDENTIFIED: {} [{} / {} transmission]", name, ptype, transmission))
             }
             GameEvent::MedicineDeveloped { medicine_idx } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("Unknown");
-                (2, format!("BREAKTHROUGH: {} developed — ready for clinical trials", med_name))
+                (2, format!("BREAKTHROUGH: {} developed. Ready for clinical trials.", med_name))
             }
             GameEvent::TrialCompleted { medicine_idx, disease_idx } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -140,10 +140,10 @@ pub fn process_events(state: &mut GameState) {
                 let efficacy = state.medicines.get(*medicine_idx)
                     .map(|m| m.effective_efficacy(*disease_idx, &state.diseases) * 100.0)
                     .unwrap_or(0.0);
-                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%) — auto-deploy ON. Press [X] in Medicines to disable.", med_name, disease_name, efficacy))
+                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%). Auto-deploy ON. Press [X] in Medicines to disable.", med_name, disease_name, efficacy))
             }
             GameEvent::TechUnlocked { tech } => {
-                (3, format!("TECH UNLOCKED: {} — {}", tech.name(), tech.description()))
+                (3, format!("TECH UNLOCKED: {} [{}]", tech.name(), tech.description()))
             }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
@@ -154,7 +154,7 @@ pub fn process_events(state: &mut GameState) {
                 (5, "LOW FUNDS: Policies at risk of suspension".to_string())
             }
             GameEvent::PersonnelAttrition { count } => {
-                (6, format!("{} personnel resigned — no funding", count))
+                (6, format!("{} personnel resigned, no funding", count))
             }
             GameEvent::DiseaseMutated { disease_idx, infectivity_factor, lethality_factor, .. } => {
                 if !state.has_outdated_medicine(*disease_idx) {
@@ -175,7 +175,7 @@ pub fn process_events(state: &mut GameState) {
                 } else {
                     String::new()
                 };
-                (7, format!("{} mutated{} — efficacy {:.0}%", name, detail, worst_eff * 100.0))
+                (7, format!("{} mutated{}. Efficacy {:.0}%.", name, detail, worst_eff * 100.0))
             }
             GameEvent::ResearchAutoStarted { track } => {
                 let track_name = match track {
@@ -190,7 +190,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "?".to_string());
                 let pct = (level * 100.0).round() as u32;
-                (3, format!("{} adapting to containment — quarantine/travel ban {}% less effective", name, pct))
+                (3, format!("{} adapting to containment. Quarantine/travel ban {}% less effective.", name, pct))
             }
             GameEvent::CrisisAutoResolved => {
                 // Don't log auto-resolves — they're noise
@@ -211,24 +211,24 @@ pub fn process_events(state: &mut GameState) {
                 (10, format!("Disease spreading to {}", region_name))
             }
             GameEvent::ScientistBurnout { scientist_name } => {
-                (6, format!("{} burned out — unavailable for 3 days", scientist_name))
+                (6, format!("{} burned out, unavailable for 3 days", scientist_name))
             }
             GameEvent::ScientistInfected { scientist_name } => {
-                (5, format!("{} contracted disease in the field — unavailable for 4 days", scientist_name))
+                (5, format!("{} contracted disease in the field, unavailable for 4 days", scientist_name))
             }
             GameEvent::ScientistBreakthrough { scientist_name } => {
-                (3, format!("{} had a breakthrough — research accelerated", scientist_name))
+                (3, format!("{} had a breakthrough. Research accelerated.", scientist_name))
             }
             GameEvent::ArkProtocolActivated { region_idx } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                (1, format!("⚠ ARK PROTOCOL — all resources consolidated in {}", region_name))
+                (1, format!("⚠ ARK PROTOCOL: all resources consolidated in {}", region_name))
             }
             GameEvent::GovernorAction { description, .. } => {
                 (4, description.clone())
             }
             GameEvent::ThreatLevelChanged { to, .. } => {
-                (1, format!("DEFCON {} — Threat level: {}", to.defcon(), to.label()))
+                (1, format!("DEFCON {}: Threat level {}", to.defcon(), to.label()))
             }
             GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -240,7 +240,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.population as f64).unwrap_or(1.0);
                 let coverage = *doses / pop * 100.0;
                 let msg = if coverage >= 50.0 {
-                    format!("{dose_str} doses of {med_name} dispatched to {region_name} — {coverage:.0}% population coverage")
+                    format!("{dose_str} doses of {med_name} dispatched to {region_name} ({coverage:.0}% population coverage)")
                 } else {
                     format!("{dose_str} doses of {med_name} en route to {region_name}")
                 };
@@ -251,7 +251,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                (4, format!("⚠ {} shipment blocked at {} — travel ban in effect. Lift ban to deliver.", med_name, region_name))
+                (4, format!("⚠ {} shipment blocked at {}. Travel ban in effect. Lift ban to deliver.", med_name, region_name))
             }
             GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -260,9 +260,9 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 let dose_str = format_number(*doses);
                 if *adverse {
-                    (3, format!("⚠ {dose_str} doses of {med_name} delivered to {region_name} — ADVERSE REACTION reported"))
+                    (3, format!("⚠ {dose_str} doses of {med_name} delivered to {region_name}. ADVERSE REACTION reported."))
                 } else {
-                    (9, format!("{med_name} delivered to {region_name} — {dose_str} doses administered"))
+                    (9, format!("{med_name} delivered to {region_name}, {dose_str} doses administered"))
                 }
             }
             GameEvent::InfrastructureBreakpoint { region_idx, system, threshold } => {

@@ -27,12 +27,12 @@ pub(super) fn deploy_medicine(
     // Block deployment to collapsed regions
     if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} has collapsed — deployment impossible")));
+        return (false, Some(format!("{region_name} has collapsed. Deployment impossible.")));
     }
     // Block deployment to abandoned regions (Ark Protocol)
     if state.is_abandoned(region_idx) {
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} abandoned — deploy to the Ark instead")));
+        return (false, Some(format!("{region_name} abandoned. Deploy to the Ark instead.")));
     }
     // Block deployment when supply lines have completely failed
     if state.regions[region_idx].supply_lines <= 0.0 {
@@ -44,7 +44,7 @@ pub(super) fn deploy_medicine(
     if cooldown > 0 {
         let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} on cooldown — {days:.1} days remaining")));
+        return (false, Some(format!("{region_name} on cooldown, {days:.1} days remaining")));
     }
     let med = &state.medicines[medicine_idx];
     let cost = med.deploy_cost(state.regions[region_idx].population);
@@ -55,7 +55,7 @@ pub(super) fn deploy_medicine(
         return (false, Some(insufficient_funds_message(cost, state.resources.funding)));
     }
     if state.medicines[medicine_idx].doses <= 0.0 {
-        return (false, Some(format!("No doses remaining for {med_name} — manufacture more via Research")));
+        return (false, Some(format!("No doses remaining for {med_name}. Manufacture more via Research.")));
     }
 
     let disease_idx = match &target {
@@ -118,7 +118,7 @@ pub(super) fn deploy_medicine(
     let doses_str = crate::format_number(doses_to_ship);
     let days = (SHIPPING_TICKS as f64 * supply_mult) / crate::state::TICKS_PER_DAY;
     let msg = format!(
-        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}) — arriving in {days:.0} day{}", if days > 1.5 { "s" } else { "" }
+        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}). Arriving in {days:.0} day{}.", if days > 1.5 { "s" } else { "" }
     );
     (true, Some(msg))
 }
