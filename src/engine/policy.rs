@@ -1,9 +1,9 @@
 use crate::state::{
-    CrisisKind, GameEvent, GameState, RegionPolicy, RegionTrait, ScreeningLevel, policy_display_name,
+    CrisisKind, GameEvent, GameState, RegionTrait, ScreeningLevel, policy_display_name,
     BORDER_CONTROLS_PERSONNEL,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     HOSPITAL_SURGE_PERSONNEL,
-    MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
+    MARTIAL_LAW_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
     QUARANTINE_PERSONNEL,
@@ -102,22 +102,35 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     match policy_idx {
         // Boolean policies (0-4): identical toggle logic, different metadata.
         0..=4 => {
-            let (name, personnel) = match policy_idx {
-                0 => ("Travel Ban", TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 }),
-                1 => ("Quarantine", QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 }),
-                2 => ("Hospital Surge", HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 }),
-                3 => ("Border Controls", BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 }),
-                4 => ("Water Sanitation", WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 }),
+            let (name, personnel, on_msg, off_msg) = match policy_idx {
+                0 => ("Travel Ban",
+                      TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 },
+                      "Travel Ban enacted — all cross-border movement suspended",
+                      "Travel Ban lifted — borders reopened"),
+                1 => ("Quarantine",
+                      QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 },
+                      "Quarantine imposed — movement within region restricted",
+                      "Quarantine lifted"),
+                2 => ("Hospital Surge",
+                      HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 },
+                      "Hospital Surge authorized — surge capacity activated",
+                      "Hospital Surge stood down"),
+                3 => ("Border Controls",
+                      BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 },
+                      "Border Controls established — checkpoint screening active",
+                      "Border Controls removed"),
+                4 => ("Water Sanitation",
+                      WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 },
+                      "Water Sanitation active — treatment protocols deployed",
+                      "Water Sanitation suspended"),
                 _ => unreachable!(),
             };
-            let cost = RegionPolicy::bool_policy_cost(policy_idx, region_traits);
             if state.policies[region_idx].get_bool(policy_idx) {
                 state.policies[region_idx].set_bool(policy_idx, false);
-                (Some(format!("{name} disabled in {region_name}")), true)
+                (Some(format!("{region_name}: {off_msg}")), true)
             } else if available_personnel >= personnel {
                 state.policies[region_idx].set_bool(policy_idx, true);
-                (Some(format!("{name} enabled in {region_name} — ${:.0}/day + {personnel} personnel",
-                    cost * TICKS_PER_DAY)), true)
+                (Some(format!("{region_name}: {on_msg}")), true)
             } else {
                 (Some(format!(
                     "Not enough personnel for {} (need {personnel})", name.to_lowercase()
@@ -137,7 +150,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             if current == target {
                 // Toggle off
                 state.policies[region_idx].screening = ScreeningLevel::None;
-                (Some(format!("Disease Screening disabled in {region_name}")), true)
+                (Some(format!("{region_name}: Disease screening suspended")), true)
             } else {
                 // Check personnel — account for personnel freed from current tier
                 let infra_extra = if low_infra { 1 } else { 0 };
@@ -146,8 +159,14 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 let effective_available = available_personnel + freed;
                 if effective_available >= needed {
                     state.policies[region_idx].screening = target;
-                    (Some(format!("{} Disease Screening enabled in {region_name} — ${:.0}/day + {} personnel",
-                        target.label(), target.funding_cost() * TICKS_PER_DAY, needed)), true)
+                    let tier_desc = match target {
+                        ScreeningLevel::Basic => "rough infected estimates, faster detection",
+                        ScreeningLevel::Antigen => "infected + immune counts, improved accuracy",
+                        ScreeningLevel::MassRapid => "near-complete data, 25% spread reduction",
+                        ScreeningLevel::None => unreachable!(),
+                    };
+                    (Some(format!("{region_name}: {} screening active — {tier_desc}",
+                        target.label())), true)
                 } else {
                     (Some(format!(
                         "Not enough personnel for {} screening (need {})", target.label().to_lowercase(), needed
@@ -160,11 +179,10 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             let ml_personnel = MARTIAL_LAW_PERSONNEL + if low_infra { 1 } else { 0 };
             if state.policies[region_idx].martial_law {
                 state.policies[region_idx].martial_law = false;
-                (Some(format!("Martial Law lifted in {region_name}")), true)
+                (Some(format!("{region_name}: Martial Law lifted — civilian governance restored")), true)
             } else if available_personnel >= ml_personnel {
                 state.policies[region_idx].martial_law = true;
-                (Some(format!("Martial Law declared in {region_name} — ${:.0}/day + {} personnel",
-                    MARTIAL_LAW_COST * TICKS_PER_DAY, ml_personnel)), true)
+                (Some(format!("{region_name}: Martial Law declared — adds 15% collapse resilience")), true)
             } else {
                 (Some(format!(
                     "Not enough personnel for martial law (need {})", ml_personnel
@@ -198,7 +216,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     inf.infected = 0.0;
                     inf.immune = 0.0;
                 }
-                (Some(format!("☢ Nuclear annihilation in {region_name} — {:.1}M casualties",
+                (Some(format!("☢ {region_name} annihilated — {:.1}M dead. Disease eradicated.",
                     killed / 1_000_000.0)), true)
             }
         }
@@ -217,7 +235,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     state.resources.funding -= FIELD_HOSPITAL_COST;
                     state.regions[region_idx].hospital_level = 1;
                     state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
-                    (Some(format!("Field Hospital built in {region_name} — lethality -25%, loyalty +10")), true)
+                    (Some(format!("{region_name}: Field Hospital operational — reduces mortality 25%")), true)
                 }
             } else if region.hospital_level == 1 {
                 // Upgrade to Level 2: Medical Center
@@ -229,7 +247,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     state.resources.funding -= MEDICAL_CENTER_COST;
                     state.regions[region_idx].hospital_level = 2;
                     state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
-                    (Some(format!("Medical Center built in {region_name} — lethality -40%, medicine +25%, loyalty +10")), true)
+                    (Some(format!("{region_name}: Medical Center operational — mortality -40%, medicine efficacy +25%")), true)
                 }
             } else {
                 (Some(format!("{region_name} already has a Medical Center")), false)
@@ -442,7 +460,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             state.sync_scientists_to_personnel();
             let penalty_per_day = CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY;
             (Some(format!(
-                "⚠ DECREE: Conscript Researchers — +{} personnel, -${:.0}/day income permanently",
+                "⚠ DECREE: Conscript Researchers enacted — +{} personnel. Income reduced ${:.0}/day, permanently.",
                 CONSCRIPT_PERSONNEL_GAIN, penalty_per_day
             )), true)
         }
@@ -450,7 +468,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             // Authorize Human Trials: faster clinical trials, risk of adverse events
             state.enacted_decrees.authorize_human_trials = true;
             (Some(
-                "⚠ DECREE: Authorize Human Trials — clinical trials 50% faster, risk of adverse events".to_string()
+                "⚠ DECREE: Human Trials authorized — clinical trials 50% faster. Adverse event risk elevated, permanently.".to_string()
             ), true)
         }
         2 => {
@@ -476,7 +494,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             }
             let bonus_pct = (SACRIFICE_INCOME_BONUS - 1.0) * 100.0;
             (Some(format!(
-                "⚠ DECREE: {} sacrificed — +{:.0}% income from remaining regions",
+                "⚠ DECREE: {} designated a sacrifice zone — abandoned. Remaining regions: +{:.0}% income.",
                 region_name, bonus_pct
             )), true)
         }
@@ -772,7 +790,7 @@ mod tests {
 
         let (msg, ok) = enact_decree(&mut state, 2, Some(0));
         assert!(ok, "should succeed");
-        assert!(msg.unwrap().contains("sacrificed"));
+        assert!(msg.unwrap().contains("sacrifice zone"));
         assert!(state.regions[0].collapsed);
         assert_eq!(state.enacted_decrees.sacrificed_region, Some(0));
 
