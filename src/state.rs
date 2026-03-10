@@ -159,6 +159,18 @@ pub struct GameState {
     /// state metrics. Gates Emergency Decrees and displayed in the status bar.
     #[serde(default)]
     pub threat_level: ThreatLevel,
+    /// Cumulative doses deployed across all medicines and regions.
+    #[serde(default)]
+    pub total_doses_deployed: f64,
+    /// Count of pathogen suppression operations completed (field research).
+    #[serde(default)]
+    pub pathogens_suppressed: u32,
+    /// Count of pathogen attenuation operations completed (field research).
+    #[serde(default)]
+    pub pathogens_attenuated: u32,
+    /// Count of pathogen interdiction operations completed (field research).
+    #[serde(default)]
+    pub pathogens_interdicted: u32,
     pub ui: UiState,
 }
 
@@ -2706,6 +2718,7 @@ pub enum GameEvent {
     MedicineShipped {
         medicine_idx: usize,
         region_idx: usize,
+        doses: f64,
     },
     /// A shipment was blocked by a travel ban on arrival.
     ShipmentBlocked {
@@ -2716,6 +2729,7 @@ pub enum GameEvent {
     ShipmentDelivered {
         medicine_idx: usize,
         region_idx: usize,
+        doses: f64,
         adverse: bool,
     },
     /// A disease has adapted to containment measures — quarantine/travel ban less effective.
@@ -4016,6 +4030,10 @@ impl GameState {
             scientists,
             ark_protocol: None,
             threat_level: ThreatLevel::Normal,
+            total_doses_deployed: 0.0,
+            pathogens_suppressed: 0,
+            pathogens_attenuated: 0,
+            pathogens_interdicted: 0,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,

@@ -89,6 +89,7 @@ pub(super) fn deploy_medicine(
     state.resources.funding -= cost;
     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - doses_to_ship).max(0.0);
     state.medicines[medicine_idx].deployed_count += 1;
+    state.total_doses_deployed += doses_to_ship;
     state.regions[region_idx].last_deploy_tick = Some(state.tick);
 
     // Create the shipment
@@ -102,7 +103,7 @@ pub(super) fn deploy_medicine(
         arrive_tick,
         blocked_by_travel_ban: false,
     });
-    state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx });
+    state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
 
     let doses_str = crate::format_number(doses_to_ship);
     let msg = format!(
@@ -218,6 +219,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
     state.events.push(GameEvent::ShipmentDelivered {
         medicine_idx: med_idx,
         region_idx: reg_idx,
+        doses: shipment.doses,
         adverse,
     });
 }
