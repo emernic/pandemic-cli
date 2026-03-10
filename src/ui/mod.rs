@@ -5,7 +5,6 @@ pub mod operations;
 pub mod policy;
 pub mod research;
 pub mod resources;
-pub mod scientists;
 pub mod threats;
 pub mod region_list;
 
@@ -237,15 +236,6 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 (10, format!("Disease spreading to {}", region_name))
             }
-            GameEvent::ScientistBurnout { scientist_name } => {
-                (6, format!("{} burned out, unavailable for 3 days", scientist_name))
-            }
-            GameEvent::ScientistInfected { scientist_name } => {
-                (5, format!("{} contracted disease in the field, unavailable for 4 days", scientist_name))
-            }
-            GameEvent::ScientistBreakthrough { scientist_name } => {
-                (3, format!("{} had a breakthrough. Research accelerated.", scientist_name))
-            }
             GameEvent::ArkProtocolActivated { region_idx } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -390,7 +380,6 @@ pub fn render(f: &mut Frame, state: &GameState) {
             Panel::Medicines => medicines::render(f, split[1], state),
             Panel::Research => research::render(f, split[1], state),
             Panel::Policy => policy::render(f, split[1], state),
-            Panel::Scientists => scientists::render(f, split[1], state),
             Panel::Operations => operations::render(f, split[1], state),
             panel => render_placeholder_panel(f, split[1], panel),
         }
@@ -517,7 +506,6 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [R] Research panel"),
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),
-            Line::from("  [S] Scientists panel"),
             Line::from("  [O] Field operations"),
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [Z] Speed up (1x→2x→4x→6x, pause resets)"),

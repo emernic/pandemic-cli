@@ -738,7 +738,6 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             // Conscript Researchers: +personnel, permanent income penalty
             state.enacted_decrees.conscript_researchers = true;
             state.resources.personnel += CONSCRIPT_PERSONNEL_GAIN;
-            state.sync_scientists_to_personnel();
             let penalty_per_day = CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY;
             (Some(format!(
                 "⚠ DECREE: Conscript Researchers enacted. +{} personnel. Income reduced ¥{:.0}/day, permanently.",

@@ -1,7 +1,7 @@
 use crate::state::{
     GameEvent, GameOutcome, GameState, ResearchKind, ResearchProject,
-    ResearchTrack, ScientistTrait, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
-    BRILLIANT_BREAKTHROUGH_CHANCE, BRILLIANT_BREAKTHROUGH_PROGRESS, TRAIN_PERSONNEL_BATCH,
+    ResearchTrack, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
+    TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
 };
 
@@ -49,20 +49,11 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
         } else {
             duration
         };
-        // Pick scientists for this project (best specialty match first)
-        let scientist_ids = super::personnel::pick_scientists(state, personnel, kind);
-        let tick = state.tick;
-        for sid in &scientist_ids {
-            if let Some(s) = state.scientists.iter_mut().find(|s| s.id == *sid) {
-                s.assigned_since = Some(tick);
-            }
-        }
         let project = ResearchProject {
             kind: kind.clone(),
             progress: 0.0,
             required_ticks: effective_duration,
             personnel_assigned: personnel,
-            scientist_ids,
         };
 
         match track {
@@ -75,75 +66,6 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
     (false, None)
 }
 
-/// Get mutable reference to a research project by track and slot index.
-fn research_project_mut(state: &mut GameState, track: ResearchTrack, slot_idx: usize) -> Option<&mut ResearchProject> {
-    match track {
-        ResearchTrack::Field => state.field_research.get_mut(slot_idx),
-        ResearchTrack::Applied => state.applied_research.as_mut(),
-        ResearchTrack::Basic => state.basic_research.as_mut(),
-    }
-}
-
-/// Add personnel to an active research project. More personnel = faster progress.
-///
-/// Returns an optional status message.
-pub(super) fn add_personnel(state: &mut GameState, track: ResearchTrack, slot_idx: usize) -> Option<String> {
-    let available = state.personnel_available();
-    // Get the project's kind and current scientist_ids for picking
-    let project = research_project_mut(state, track, slot_idx)?;
-    if project.is_complete() {
-        return None;
-    }
-    if available < 1 {
-        return Some("No available personnel to assign".to_string());
-    }
-    let kind = project.kind.clone();
-    let current_ids = project.scientist_ids.clone();
-
-    // Try to pick a scientist
-    if let Some(sid) = super::personnel::pick_one_scientist(state, &kind, &current_ids) {
-        let tick = state.tick;
-        if let Some(s) = state.scientists.iter_mut().find(|s| s.id == sid) {
-            s.assigned_since = Some(tick);
-        }
-        let name = state.scientist_by_id(sid).map(|s| s.short_name()).unwrap_or_default();
-        let project = research_project_mut(state, track, slot_idx)?;
-        project.scientist_ids.push(sid);
-        project.personnel_assigned = project.scientist_ids.len() as u32;
-        let count = project.personnel_assigned;
-        Some(format!("Assigned {} ({} on project)", name, count))
-    } else {
-        // No scientists available — fall back to anonymous personnel
-        let project = research_project_mut(state, track, slot_idx)?;
-        project.personnel_assigned += 1;
-        Some(format!("Assigned +1 personnel ({} total on project)", project.personnel_assigned))
-    }
-}
-
-/// Remove personnel from an active research project.
-///
-/// Returns an optional status message.
-pub(super) fn remove_personnel(state: &mut GameState, track: ResearchTrack, slot_idx: usize) -> Option<String> {
-    let project = research_project_mut(state, track, slot_idx)?;
-    if project.personnel_assigned <= 1 {
-        return Some("Cannot remove. At least 1 person required.".to_string());
-    }
-    // Remove the last assigned scientist (if any)
-    let removed_id = project.scientist_ids.pop();
-    project.personnel_assigned -= 1;
-    let remaining = project.personnel_assigned;
-
-    if let Some(sid) = removed_id {
-        // Release the scientist
-        if let Some(s) = state.scientists.iter_mut().find(|s| s.id == sid) {
-            s.assigned_since = None;
-        }
-        let name = state.scientist_by_id(sid).map(|s| s.short_name()).unwrap_or_default();
-        Some(format!("Removed {} ({} remaining)", name, remaining))
-    } else {
-        Some(format!("Removed 1 personnel ({} remaining on project)", remaining))
-    }
-}
 
 /// Advance research projects by one tick and handle completions.
 /// Progress scales with diminishing returns: 2x personnel = 1.5x speed (peak),
@@ -155,15 +77,11 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
         try_auto_start(state, track);
     }
 
-    // Brilliant breakthroughs: each Brilliant scientist on any project has a per-tick
-    // chance of a eureka moment that jumps the project forward.
-    check_breakthroughs(state, rng);
-
     let lab_mult = state.lab_speed_multiplier();
 
     // Advance all field research projects and collect completion effects
     for project in &mut state.field_research {
-        let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
+        let speed = project.speed(&state.medicines);
         project.progress += speed * lab_mult;
     }
     // Process completions (drain_filter pattern via retain)
@@ -284,21 +202,16 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             _ => {}
         }
     }
-    // Release scientists from completed field projects
-    for project in &completed_fields {
-        super::personnel::release_scientists(state, &project.scientist_ids);
-    }
     // Auto-start next field project if any completed and auto is on
     if !completed_fields.is_empty() {
         try_auto_start(state, ResearchTrack::Field);
     }
     if let Some(ref mut project) = state.applied_research {
-        let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
+        let speed = project.speed(&state.medicines);
         project.progress += speed * lab_mult;
     }
     if state.applied_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.applied_research.take().unwrap();
-        super::personnel::release_scientists(state, &project.scientist_ids);
         match &project.kind {
             ResearchKind::DevelopMedicine { medicine_idx } => {
                 let m_idx = *medicine_idx;
@@ -320,19 +233,17 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             }
             ResearchKind::TrainPersonnel => {
                 state.resources.personnel += TRAIN_PERSONNEL_BATCH;
-                state.sync_scientists_to_personnel();
             }
             _ => {}
         }
         try_auto_start(state, ResearchTrack::Applied);
     }
     if let Some(ref mut project) = state.basic_research {
-        let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
+        let speed = project.speed(&state.medicines);
         project.progress += speed * lab_mult;
     }
     if state.basic_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.basic_research.take().unwrap();
-        super::personnel::release_scientists(state, &project.scientist_ids);
         if let ResearchKind::BasicResearch { tech } = &project.kind {
             let tech = *tech;
             if !state.unlocked_techs.contains(&tech) {
@@ -416,62 +327,6 @@ fn min_progression_cost(state: &GameState, exclude: ResearchTrack) -> f64 {
         }
     }
     if min_cost == f64::MAX { 0.0 } else { min_cost }
-}
-
-/// Check all active research projects for Brilliant scientist breakthroughs.
-/// Each Brilliant scientist has a per-tick chance of a eureka moment that
-/// adds bonus progress to their project.
-fn check_breakthroughs(state: &mut GameState, rng: &mut impl rand::Rng) {
-    // Collect (project_track_index, scientist_name) pairs for breakthroughs
-    // Track encoding: 0..N = field[i], N = applied, N+1 = basic
-    let field_count = state.field_research.len();
-    let mut breakthroughs: Vec<(usize, String)> = Vec::new();
-
-    // Check field projects
-    for (i, project) in state.field_research.iter().enumerate() {
-        for &sid in &project.scientist_ids {
-            if let Some(s) = state.scientists.iter().find(|s| s.id == sid) {
-                if s.scientist_trait == ScientistTrait::Brilliant && rng.r#gen::<f64>() < BRILLIANT_BREAKTHROUGH_CHANCE {
-                    breakthroughs.push((i, s.name.clone()));
-                }
-            }
-        }
-    }
-    // Check applied project
-    if let Some(project) = &state.applied_research {
-        for &sid in &project.scientist_ids {
-            if let Some(s) = state.scientists.iter().find(|s| s.id == sid) {
-                if s.scientist_trait == ScientistTrait::Brilliant && rng.r#gen::<f64>() < BRILLIANT_BREAKTHROUGH_CHANCE {
-                    breakthroughs.push((field_count, s.name.clone()));
-                }
-            }
-        }
-    }
-    // Check basic project
-    if let Some(project) = &state.basic_research {
-        for &sid in &project.scientist_ids {
-            if let Some(s) = state.scientists.iter().find(|s| s.id == sid) {
-                if s.scientist_trait == ScientistTrait::Brilliant && rng.r#gen::<f64>() < BRILLIANT_BREAKTHROUGH_CHANCE {
-                    breakthroughs.push((field_count + 1, s.name.clone()));
-                }
-            }
-        }
-    }
-
-    // Apply breakthroughs
-    for (track_idx, name) in breakthroughs {
-        let project = if track_idx < field_count {
-            state.field_research.get_mut(track_idx)
-        } else if track_idx == field_count {
-            state.applied_research.as_mut()
-        } else {
-            state.basic_research.as_mut()
-        };
-        if let Some(p) = project {
-            p.progress += BRILLIANT_BREAKTHROUGH_PROGRESS;
-            state.events.push(GameEvent::ScientistBreakthrough { scientist_name: name });
-        }
-    }
 }
 
 /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
@@ -591,68 +446,6 @@ mod tests {
     }
 
     #[test]
-    fn add_personnel_speeds_up_research() {
-        let mut state = GameState::new_default(42);
-
-        // Start a field research project
-        state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select first project
-        state = apply_action(&state, &Action::Confirm); // Confirm → starts project
-
-        assert!(!state.field_research.is_empty());
-        let initial_personnel = state.field_research.first().unwrap().personnel_assigned;
-
-        // Navigate to ViewActive and add personnel (SelectPrev/up = add in ViewActive)
-        state = apply_action(&state, &Action::Confirm); // → ViewActive
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ViewActive { track: ResearchTrack::Field, .. })));
-
-        state = apply_action(&state, &Action::SelectPrev); // Add personnel
-        assert_eq!(
-            state.field_research.first().unwrap().personnel_assigned,
-            initial_personnel + 1,
-            "should add 1 personnel"
-        );
-        assert!(state.ui.status_message.as_ref().unwrap().contains("Assigned"));
-    }
-
-    #[test]
-    fn remove_personnel_from_research() {
-        let mut state = GameState::new_default(42);
-
-        // Start a field research project (needs 5 personnel)
-        state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select first project
-        state = apply_action(&state, &Action::Confirm); // Confirm → starts
-
-        assert!(!state.field_research.is_empty());
-        let initial_personnel = state.field_research.first().unwrap().personnel_assigned;
-        assert!(initial_personnel > 1, "need >1 to test removal");
-
-        // Navigate to ViewActive and remove personnel (SelectNext/down = remove in ViewActive)
-        state = apply_action(&state, &Action::Confirm); // → ViewActive
-
-        state = apply_action(&state, &Action::SelectNext); // Remove personnel
-        assert_eq!(
-            state.field_research.first().unwrap().personnel_assigned,
-            initial_personnel - 1,
-            "should remove 1 personnel"
-        );
-
-        // Remove down to 1 — should stop
-        for _ in 0..20 {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        assert_eq!(
-            state.field_research.first().unwrap().personnel_assigned,
-            1,
-            "should not go below 1"
-        );
-        assert!(state.ui.status_message.as_ref().unwrap().contains("At least 1"));
-    }
-
-    #[test]
     fn more_personnel_means_faster_progress() {
         let mut state = GameState::new_default(42);
 
@@ -663,7 +456,6 @@ mod tests {
             progress: 0.0,
             required_ticks: 160.0,
             personnel_assigned: 10, // 2x base (5) — peak of diminishing returns
-            scientist_ids: vec![],
         }];
 
         state = tick(&state);
@@ -685,7 +477,6 @@ mod tests {
             progress: 0.0,
             required_ticks: 160.0,
             personnel_assigned: 15, // 3x base (5)
-            scientist_ids: vec![],
         }];
 
         state = tick(&state);
@@ -755,7 +546,6 @@ mod tests {
             progress: 24.0, // will complete on next tick
             required_ticks: 25.0,
             personnel_assigned: 5,
-        scientist_ids: vec![],
         });
 
         state = tick(&state);
@@ -779,7 +569,6 @@ mod tests {
             progress: 24.0,
             required_ticks: 25.0,
             personnel_assigned: 5,
-            scientist_ids: vec![],
         }];
 
         state = tick(&state);
@@ -800,7 +589,6 @@ mod tests {
             progress: 24.0,
             required_ticks: 25.0,
             personnel_assigned: 5,
-            scientist_ids: vec![],
         }];
 
         // auto_deploy should be false/absent before trial completes
@@ -869,7 +657,6 @@ mod tests {
             progress: 14.0,
             required_ticks: 15.0,
             personnel_assigned: 3,
-        scientist_ids: vec![],
         });
         state = tick(&state);
 
@@ -1028,14 +815,12 @@ mod tests {
                 progress: 0.0,
                 required_ticks: 50.0,
                 personnel_assigned: 5,
-            scientist_ids: vec![],
             },
             ResearchProject {
                 kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
                 progress: 0.0,
                 required_ticks: 100.0,
                 personnel_assigned: 5,
-            scientist_ids: vec![],
             },
         ];
 
@@ -1070,7 +855,6 @@ mod tests {
                 progress: 0.0,
                 required_ticks: 160.0,
                 personnel_assigned: 5,
-            scientist_ids: vec![],
             });
         }
         assert!(!state.field_research_has_capacity(), "should be at capacity");
@@ -1197,7 +981,6 @@ mod tests {
             progress: 149.0,
             required_ticks: 150.0,
             personnel_assigned: 5,
-            scientist_ids: vec![],
         }];
 
         // Tick to complete it
@@ -1228,7 +1011,6 @@ mod tests {
             progress: 149.0,
             required_ticks: 150.0,
             personnel_assigned: 5,
-            scientist_ids: vec![],
         }];
 
         // Tick to complete it
@@ -1288,7 +1070,6 @@ mod tests {
             progress: 159.0,
             required_ticks: 160.0,
             personnel_assigned: 5,
-            scientist_ids: vec![],
         }];
 
         // $900 funds. After study completes, the next field project would be
@@ -1421,7 +1202,6 @@ mod tests {
             progress: 599.0,
             required_ticks: 600.0,
             personnel_assigned: 8,
-            scientist_ids: vec![],
         }];
 
         // Tick to complete
@@ -1492,7 +1272,6 @@ mod tests {
             progress: 599.0,
             required_ticks: 600.0,
             personnel_assigned: 8,
-            scientist_ids: vec![],
         }];
 
         for _ in 0..5 {
@@ -1525,7 +1304,6 @@ mod tests {
             progress: 799.0,
             required_ticks: 800.0,
             personnel_assigned: 10,
-            scientist_ids: vec![],
         }];
 
         for _ in 0..5 {
@@ -1552,7 +1330,6 @@ mod tests {
             progress: 0.0,
             required_ticks: 160.0,
             personnel_assigned: 5, // base personnel, 1.0x speed
-            scientist_ids: vec![],
         }];
 
         // Baseline: one tick at standard lab

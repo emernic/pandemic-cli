@@ -3,7 +3,6 @@ mod disease;
 mod infrastructure;
 mod medicine;
 mod operations;
-mod personnel;
 mod policy;
 mod research;
 mod spread;
@@ -41,9 +40,6 @@ pub fn tick(state: &GameState) -> GameState {
 
     // Research progress
     research::tick_research(&mut new, &mut rng);
-
-    // Scientist burnout and recovery
-    personnel::tick_personnel(&mut new, &mut rng);
 
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new);
@@ -310,11 +306,6 @@ pub fn tick(state: &GameState) -> GameState {
 
     new.rng = rng;
 
-    // Sync scientist roster with personnel count. Done here (after RNG write-back)
-    // so that any personnel changes earlier in tick() are reflected, and sync's
-    // RNG draws are properly recorded in new.rng.
-    new.sync_scientists_to_personnel();
-
     new.tick += 1;
 
     // Check regional collapse
@@ -338,7 +329,6 @@ pub fn tick(state: &GameState) -> GameState {
             // Personnel loss: staff in the collapsed region are lost
             let lost_personnel = 2u32.min(new.resources.personnel);
             new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
-            new.sync_scientists_to_personnel();
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
 
             // Apply network disruption to connected non-collapsed regions.
@@ -549,14 +539,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         GameCommand::StartResearch { track, project_idx, double_personnel } => {
             let (ok, msg) = research::start_research(state, *track, *project_idx, *double_personnel);
             CommandResult { message: msg, success: ok }
-        }
-        GameCommand::AddResearchPersonnel { track, slot_idx } => {
-            let msg = research::add_personnel(state, *track, *slot_idx);
-            CommandResult { message: msg, success: true }
-        }
-        GameCommand::RemoveResearchPersonnel { track, slot_idx } => {
-            let msg = research::remove_personnel(state, *track, *slot_idx);
-            CommandResult { message: msg, success: true }
         }
         GameCommand::TogglePolicy {
             region_idx,
@@ -2995,7 +2977,6 @@ mod tests {
             progress: 50.0,
             required_ticks: 200.0,
             personnel_assigned: 3,
-        scientist_ids: vec![],
         });
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
@@ -3037,7 +3018,6 @@ mod tests {
             progress: 100.0,
             required_ticks: 240.0,
             personnel_assigned: 3,
-        scientist_ids: vec![],
         });
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
@@ -3078,7 +3058,6 @@ mod tests {
             progress: 50.0,
             required_ticks: 200.0,
             personnel_assigned: 3,
-        scientist_ids: vec![],
         });
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 1; // Select option B
@@ -3343,7 +3322,6 @@ mod tests {
             progress: 500.0,
             required_ticks: 1000.0,
             personnel_assigned: 3,
-            scientist_ids: vec![],
         }];
         let before_pol = state.resources.political_power;
         setup_crisis(&mut state, CrisisKind::DataLeak, 0);
@@ -3919,7 +3897,6 @@ mod tests {
             progress: 0.0,
             required_ticks: 99999.0,
             personnel_assigned: 1,
-        scientist_ids: vec![],
         });
 
         // Run a few days — POL should drift DOWN toward the 0.90 cap

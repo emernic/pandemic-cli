@@ -97,34 +97,15 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenResearch => new.ui.toggle_panel(Panel::Research, new.regions.len()),
         Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines, new.regions.len()),
         Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy, new.regions.len()),
-        Action::OpenScientists => new.ui.toggle_panel(Panel::Scientists, new.regions.len()),
         Action::OpenOperations => new.ui.toggle_panel(Panel::Operations, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(&new.medicines, &new.diseases),
         Action::SelectNext => {
-            // In ViewActive, up/down adjusts personnel assignment
-            // Down = remove (fewer), Up = add (more)
-            if let Some(ResearchUiState::ViewActive { track, slot_idx }) = &new.ui.research_ui {
-                let track = *track;
-                let slot_idx = *slot_idx;
-                let cmd = GameCommand::RemoveResearchPersonnel { track, slot_idx };
-                let result = execute_command(&mut new, &cmd);
-                new.ui.status_message = result.message;
-            } else {
-                let max = new.ui.panel_selection_max(&new);
-                new.ui.select_next(new.regions.len(), max);
-            }
+            let max = new.ui.panel_selection_max(&new);
+            new.ui.select_next(new.regions.len(), max);
         }
         Action::SelectPrev => {
-            if let Some(ResearchUiState::ViewActive { track, slot_idx }) = &new.ui.research_ui {
-                let track = *track;
-                let slot_idx = *slot_idx;
-                let cmd = GameCommand::AddResearchPersonnel { track, slot_idx };
-                let result = execute_command(&mut new, &cmd);
-                new.ui.status_message = result.message;
-            } else {
-                new.ui.select_prev(new.regions.len());
-            }
+            new.ui.select_prev(new.regions.len());
         }
         Action::SelectLeft => {
             new.ui.select_left(new.regions.len());
