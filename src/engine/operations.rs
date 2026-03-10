@@ -1,7 +1,8 @@
 use crate::state::{
     FieldOpKind, FieldOperation, GameEvent, GameOutcome, GameState, InfraSystem,
-    KNOWLEDGE_NAME, OP_EMERGENCY_EFFECT_TICKS, OP_EMERGENCY_LETHALITY_MULT,
-    OP_RECON_KNOWLEDGE, OP_SURVEY_REPAIR,
+    KNOWLEDGE_NAME, MAX_INFRA_RESILIENCE, OP_EMERGENCY_EFFECT_TICKS,
+    OP_EMERGENCY_LETHALITY_MULT, OP_RECON_KNOWLEDGE, OP_SURVEY_REPAIR,
+    OP_SUPPLY_RESTORE, OP_SUPPLY_RESILIENCE, OP_CIVIL_RESTORE, OP_CIVIL_RESILIENCE,
 };
 
 /// Start a field operation. Validates personnel availability and target.
@@ -20,6 +21,16 @@ pub(super) fn start_field_op(
             "Need {} personnel ({} available)",
             personnel, state.personnel_available()
         )));
+    }
+
+    // Check funding cost
+    if let Some(cost) = kind.cost() {
+        if state.resources.funding < cost {
+            return (false, Some(format!(
+                "Need ¥{:.0} ({:.0} available)",
+                cost, state.resources.funding
+            )));
+        }
     }
 
     // Validate targets
@@ -55,10 +66,33 @@ pub(super) fn start_field_op(
                 return (false, Some("Infrastructure survey already in progress".to_string()));
             }
         }
+        FieldOpKind::SupplyChainReinforcement { region_idx } => {
+            if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
+                return (false, Some("Region has collapsed".to_string()));
+            }
+            if state.field_operations.iter().any(|op| matches!(&op.kind, FieldOpKind::SupplyChainReinforcement { region_idx: r } if r == region_idx)) {
+                return (false, Some("Supply reinforcement already in progress".to_string()));
+            }
+        }
+        FieldOpKind::CivilOrderStabilization { region_idx } => {
+            if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
+                return (false, Some("Region has collapsed".to_string()));
+            }
+            if state.field_operations.iter().any(|op| matches!(&op.kind, FieldOpKind::CivilOrderStabilization { region_idx: r } if r == region_idx)) {
+                return (false, Some("Civil stabilization already in progress".to_string()));
+            }
+        }
     }
 
     let label = kind.label();
+    let cost = kind.cost();
     let duration_ticks = kind.duration_ticks();
+
+    // Deduct funding if this op has a cost
+    if let Some(c) = cost {
+        state.resources.funding -= c;
+    }
+
     state.field_operations.push(FieldOperation {
         kind,
         personnel,
@@ -66,7 +100,8 @@ pub(super) fn start_field_op(
         total_ticks: duration_ticks,
     });
 
-    (true, Some(format!("{} dispatched ({} personnel)", label, personnel)))
+    let cost_note = cost.map(|c| format!(", ¥{:.0}", c)).unwrap_or_default();
+    (true, Some(format!("{} dispatched ({} personnel{})", label, personnel, cost_note)))
 }
 
 /// Tick all active field operations. Complete ones that finish.
@@ -144,6 +179,34 @@ fn complete_operation(state: &mut GameState, op: &FieldOperation) {
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             ("Infra Survey".to_string(), format!("{}: {} repaired to {}%", name, worst_sys.label(), new_pct))
         }
+        FieldOpKind::SupplyChainReinforcement { region_idx } => {
+            let r_idx = *region_idx;
+            if let Some(region) = state.regions.get_mut(r_idx) {
+                region.supply_lines = (region.supply_lines + OP_SUPPLY_RESTORE).min(1.0);
+                region.supply_resilience = (region.supply_resilience + OP_SUPPLY_RESILIENCE).min(MAX_INFRA_RESILIENCE);
+            }
+            let new_pct = state.regions.get(r_idx)
+                .map(|r| (r.supply_lines * 100.0) as u32).unwrap_or(0);
+            let res_pct = state.regions.get(r_idx)
+                .map(|r| (r.supply_resilience * 100.0) as u32).unwrap_or(0);
+            let name = state.regions.get(r_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            ("Supply Reinforcement".to_string(), format!("{}: supply lines {}%, resilience {}%", name, new_pct, res_pct))
+        }
+        FieldOpKind::CivilOrderStabilization { region_idx } => {
+            let r_idx = *region_idx;
+            if let Some(region) = state.regions.get_mut(r_idx) {
+                region.civil_order = (region.civil_order + OP_CIVIL_RESTORE).min(1.0);
+                region.civil_resilience = (region.civil_resilience + OP_CIVIL_RESILIENCE).min(MAX_INFRA_RESILIENCE);
+            }
+            let new_pct = state.regions.get(r_idx)
+                .map(|r| (r.civil_order * 100.0) as u32).unwrap_or(0);
+            let res_pct = state.regions.get(r_idx)
+                .map(|r| (r.civil_resilience * 100.0) as u32).unwrap_or(0);
+            let name = state.regions.get(r_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            ("Civil Stabilization".to_string(), format!("{}: civil order {}%, resilience {}%", name, new_pct, res_pct))
+        }
     };
 
     state.events.push(GameEvent::FieldOpCompleted { label, result });
@@ -152,7 +215,7 @@ fn complete_operation(state: &mut GameState, op: &FieldOperation) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::{GameState, OP_SUPPLY_COST, OP_CIVIL_COST};
 
     #[test]
     fn recon_adds_knowledge() {
@@ -225,5 +288,74 @@ mod tests {
         let (ok, msg) = start_field_op(&mut state, kind);
         assert!(!ok);
         assert!(msg.unwrap().contains("personnel"));
+    }
+
+    #[test]
+    fn supply_reinforcement_restores_and_adds_resilience() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        state.regions[0].supply_lines = 0.50;
+        let funding_before = state.resources.funding;
+
+        let kind = FieldOpKind::SupplyChainReinforcement { region_idx: 0 };
+        let (ok, msg) = start_field_op(&mut state, kind);
+        assert!(ok);
+        assert!(msg.unwrap().contains("¥800"));
+        assert!((state.resources.funding - (funding_before - OP_SUPPLY_COST)).abs() < 0.01,
+            "funding should be deducted on dispatch");
+
+        // Tick until complete (360 ticks)
+        for _ in 0..370 {
+            tick_field_operations(&mut state);
+        }
+        assert_eq!(state.field_operations.len(), 0);
+        assert!((state.regions[0].supply_lines - 0.70).abs() < 0.01,
+            "supply lines should be restored by 20%: got {}", state.regions[0].supply_lines);
+        assert!((state.regions[0].supply_resilience - 0.25).abs() < 0.01,
+            "should gain 25% supply resilience: got {}", state.regions[0].supply_resilience);
+    }
+
+    #[test]
+    fn civil_stabilization_restores_and_adds_resilience() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        state.regions[0].civil_order = 0.40;
+        let funding_before = state.resources.funding;
+
+        let kind = FieldOpKind::CivilOrderStabilization { region_idx: 0 };
+        let (ok, _) = start_field_op(&mut state, kind);
+        assert!(ok);
+        assert!((state.resources.funding - (funding_before - OP_CIVIL_COST)).abs() < 0.01);
+        assert_eq!(state.personnel_available(), 20 - 1); // 1 personnel
+
+        for _ in 0..250 {
+            tick_field_operations(&mut state);
+        }
+        assert_eq!(state.field_operations.len(), 0);
+        assert!((state.regions[0].civil_order - 0.55).abs() < 0.01,
+            "civil order should be restored by 15%: got {}", state.regions[0].civil_order);
+        assert!((state.regions[0].civil_resilience - 0.25).abs() < 0.01,
+            "should gain 25% civil resilience: got {}", state.regions[0].civil_resilience);
+    }
+
+    #[test]
+    fn funded_op_blocked_when_insufficient_funding() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 100.0; // Not enough for ¥800
+        let kind = FieldOpKind::SupplyChainReinforcement { region_idx: 0 };
+        let (ok, msg) = start_field_op(&mut state, kind);
+        assert!(!ok);
+        assert!(msg.unwrap().contains("¥800"));
+    }
+
+    #[test]
+    fn blocks_duplicate_supply_reinforcement() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        let kind = FieldOpKind::SupplyChainReinforcement { region_idx: 0 };
+        let (ok1, _) = start_field_op(&mut state, kind.clone());
+        assert!(ok1);
+        let (ok2, _) = start_field_op(&mut state, kind);
+        assert!(!ok2);
     }
 }

@@ -1203,6 +1203,25 @@ pub const OP_SURVEY_PERSONNEL: u32 = 2;
 pub const OP_SURVEY_TICKS: f64 = 240.0; // 2 days
 pub const OP_SURVEY_REPAIR: f64 = 0.15; // restores 15%
 
+/// Supply Chain Reinforcement: funded investment to bolster supply lines in a region.
+/// Restores supply lines AND adds permanent resilience (reduces degradation rate).
+pub const OP_SUPPLY_PERSONNEL: u32 = 2;
+pub const OP_SUPPLY_TICKS: f64 = 360.0; // 3 days
+pub const OP_SUPPLY_COST: f64 = 800.0;
+pub const OP_SUPPLY_RESTORE: f64 = 0.20; // restores 20%
+pub const OP_SUPPLY_RESILIENCE: f64 = 0.25; // +25% degradation resistance per deployment
+
+/// Civil Order Stabilization: funded operation to shore up civil order in a region.
+/// Restores civil order AND adds permanent resilience (reduces degradation rate).
+pub const OP_CIVIL_PERSONNEL: u32 = 1;
+pub const OP_CIVIL_TICKS: f64 = 240.0; // 2 days
+pub const OP_CIVIL_COST: f64 = 600.0;
+pub const OP_CIVIL_RESTORE: f64 = 0.15; // restores 15%
+pub const OP_CIVIL_RESILIENCE: f64 = 0.25; // +25% degradation resistance per deployment
+
+/// Maximum resilience bonus from infrastructure investment (caps stacking).
+pub const MAX_INFRA_RESILIENCE: f64 = 0.75; // 75% max degradation reduction
+
 /// What kind of field operation is being conducted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldOpKind {
@@ -1212,6 +1231,10 @@ pub enum FieldOpKind {
     EmergencyResponse { region_idx: usize },
     /// Infrastructure repair via engineering survey.
     InfraSurvey { region_idx: usize },
+    /// Bolster supply lines in a region (funded).
+    SupplyChainReinforcement { region_idx: usize },
+    /// Shore up civil order in a region (funded).
+    CivilOrderStabilization { region_idx: usize },
 }
 
 impl FieldOpKind {
@@ -1220,6 +1243,8 @@ impl FieldOpKind {
             FieldOpKind::Recon { .. } => OP_RECON_PERSONNEL,
             FieldOpKind::EmergencyResponse { .. } => OP_EMERGENCY_PERSONNEL,
             FieldOpKind::InfraSurvey { .. } => OP_SURVEY_PERSONNEL,
+            FieldOpKind::SupplyChainReinforcement { .. } => OP_SUPPLY_PERSONNEL,
+            FieldOpKind::CivilOrderStabilization { .. } => OP_CIVIL_PERSONNEL,
         }
     }
 
@@ -1228,6 +1253,8 @@ impl FieldOpKind {
             FieldOpKind::Recon { .. } => OP_RECON_TICKS,
             FieldOpKind::EmergencyResponse { .. } => OP_EMERGENCY_TICKS,
             FieldOpKind::InfraSurvey { .. } => OP_SURVEY_TICKS,
+            FieldOpKind::SupplyChainReinforcement { .. } => OP_SUPPLY_TICKS,
+            FieldOpKind::CivilOrderStabilization { .. } => OP_CIVIL_TICKS,
         }
     }
 
@@ -1236,6 +1263,17 @@ impl FieldOpKind {
             FieldOpKind::Recon { .. } => "Recon Mission",
             FieldOpKind::EmergencyResponse { .. } => "Emergency Response",
             FieldOpKind::InfraSurvey { .. } => "Infrastructure Survey",
+            FieldOpKind::SupplyChainReinforcement { .. } => "Supply Reinforcement",
+            FieldOpKind::CivilOrderStabilization { .. } => "Civil Stabilization",
+        }
+    }
+
+    /// Funding cost to start this operation, if any. Free ops return None.
+    pub fn cost(&self) -> Option<f64> {
+        match self {
+            FieldOpKind::SupplyChainReinforcement { .. } => Some(OP_SUPPLY_COST),
+            FieldOpKind::CivilOrderStabilization { .. } => Some(OP_CIVIL_COST),
+            _ => None,
         }
     }
 }
@@ -1358,6 +1396,14 @@ pub struct Region {
     /// At 0: all policies disabled, spread rate +50%.
     #[serde(default = "default_one")]
     pub civil_order: f64,
+    /// Permanent resilience bonus for supply lines (0.0-0.75). Reduces supply line
+    /// degradation rate. Stacks from Supply Reinforcement operations.
+    #[serde(default)]
+    pub supply_resilience: f64,
+    /// Permanent resilience bonus for civil order (0.0-0.75). Reduces civil order
+    /// degradation rate. Stacks from Civil Stabilization operations.
+    #[serde(default)]
+    pub civil_resilience: f64,
     /// Tick at which an emergency response effect expires. While active,
     /// lethality in this region is reduced by OP_EMERGENCY_LETHALITY_MULT.
     #[serde(default)]
@@ -3456,6 +3502,10 @@ pub enum OpsUiState {
     SelectEmergencyTarget,
     /// Pick a target region (for Infra Survey).
     SelectSurveyTarget,
+    /// Pick a target region (for Supply Chain Reinforcement).
+    SelectSupplyTarget,
+    /// Pick a target region (for Civil Order Stabilization).
+    SelectCivilOrderTarget,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3652,7 +3702,9 @@ impl UiState {
                 match &self.operations_ui {
                     Some(OpsUiState::SelectReconTarget)
                     | Some(OpsUiState::SelectEmergencyTarget)
-                    | Some(OpsUiState::SelectSurveyTarget) => {
+                    | Some(OpsUiState::SelectSurveyTarget)
+                    | Some(OpsUiState::SelectSupplyTarget)
+                    | Some(OpsUiState::SelectCivilOrderTarget) => {
                         self.operations_ui = Some(OpsUiState::BrowseOps);
                         self.panel_selection = 0;
                     }
@@ -3752,8 +3804,8 @@ impl UiState {
             },
             Panel::Operations => match &self.operations_ui {
                 Some(OpsUiState::BrowseOps) => {
-                    // Active ops + 3 operation types
-                    (state.field_operations.len() + 3).saturating_sub(1)
+                    // Active ops + 5 operation types
+                    (state.field_operations.len() + 5).saturating_sub(1)
                 }
                 Some(OpsUiState::SelectReconTarget) => {
                     // Unidentified diseases
@@ -3763,7 +3815,9 @@ impl UiState {
                         .saturating_sub(1)
                 }
                 Some(OpsUiState::SelectEmergencyTarget)
-                | Some(OpsUiState::SelectSurveyTarget) => {
+                | Some(OpsUiState::SelectSurveyTarget)
+                | Some(OpsUiState::SelectSupplyTarget)
+                | Some(OpsUiState::SelectCivilOrderTarget) => {
                     // Non-collapsed regions
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
                 }
@@ -4216,6 +4270,18 @@ impl UiState {
                             self.panel_selection = 0;
                             None
                         }
+                        3 => {
+                            // Supply Chain Reinforcement — pick a region
+                            self.operations_ui = Some(OpsUiState::SelectSupplyTarget);
+                            self.panel_selection = 0;
+                            None
+                        }
+                        4 => {
+                            // Civil Order Stabilization — pick a region
+                            self.operations_ui = Some(OpsUiState::SelectCivilOrderTarget);
+                            self.panel_selection = 0;
+                            None
+                        }
                         _ => None,
                     }
                 }
@@ -4254,6 +4320,32 @@ impl UiState {
                 if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
                     Some(GameCommand::StartFieldOp {
                         kind: FieldOpKind::InfraSurvey { region_idx },
+                    })
+                } else {
+                    None
+                }
+            }
+            Some(OpsUiState::SelectSupplyTarget) => {
+                let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
+                    Some(GameCommand::StartFieldOp {
+                        kind: FieldOpKind::SupplyChainReinforcement { region_idx },
+                    })
+                } else {
+                    None
+                }
+            }
+            Some(OpsUiState::SelectCivilOrderTarget) => {
+                let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
+                    Some(GameCommand::StartFieldOp {
+                        kind: FieldOpKind::CivilOrderStabilization { region_idx },
                     })
                 } else {
                     None
@@ -4392,6 +4484,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4427,6 +4521,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4462,6 +4558,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4497,6 +4595,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4532,6 +4632,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4567,6 +4669,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
