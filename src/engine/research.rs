@@ -1,6 +1,6 @@
 use crate::state::{
     GameEvent, GameOutcome, GameState, ResearchKind, ResearchProject,
-    ResearchTrack, KNOWLEDGE_FULL,
+    ResearchTrack, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
@@ -132,8 +132,16 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
         match &project.kind {
             ResearchKind::IdentifyThreat { disease_idx } => {
                 let d_idx = *disease_idx;
+                let was_unknown = state.diseases.get(d_idx)
+                    .is_some_and(|d| d.knowledge < KNOWLEDGE_NAME);
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
                     disease.knowledge = (disease.knowledge + 0.50).min(KNOWLEDGE_FULL);
+                }
+                // Fire identification event when crossing the name threshold
+                if was_unknown && state.diseases.get(d_idx)
+                    .is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME)
+                {
+                    state.events.push(GameEvent::PathogenIdentified { disease_idx: d_idx });
                 }
             }
             ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
@@ -157,6 +165,10 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     }
                     medicine.strain_generations[pos] = current_gen;
                 }
+                state.events.push(GameEvent::TrialCompleted {
+                    medicine_idx: m_idx,
+                    disease_idx: d_idx,
+                });
                 // Human Trials decree: chance of adverse event killing infected
                 if state.enacted_decrees.authorize_human_trials {
                     let roll: f64 = rng.r#gen();
@@ -212,6 +224,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                                 .map_or(0, |d| d.strain_generation as i32))
                             .collect();
                     }
+                    state.events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
                 }
                 ResearchKind::ManufactureDoses { medicine_idx } => {
                     let m_idx = *medicine_idx;
@@ -236,6 +249,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                 let tech = *tech;
                 if !state.unlocked_techs.contains(&tech) {
                     state.unlocked_techs.push(tech);
+                    state.events.push(GameEvent::TechUnlocked { tech });
                 }
             }
             state.basic_research = None;

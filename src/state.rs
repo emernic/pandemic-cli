@@ -2032,6 +2032,23 @@ pub enum GameEvent {
         disease_idx: usize,
         deaths: f64,
     },
+    /// A pathogen was identified through field research — name and type revealed.
+    PathogenIdentified {
+        disease_idx: usize,
+    },
+    /// A medicine was developed through applied research — ready for trials.
+    MedicineDeveloped {
+        medicine_idx: usize,
+    },
+    /// A clinical trial completed — medicine tested against a disease.
+    TrialCompleted {
+        medicine_idx: usize,
+        disease_idx: usize,
+    },
+    /// A basic research tech was unlocked.
+    TechUnlocked {
+        tech: BasicTech,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.

@@ -37,6 +37,14 @@ pub fn tick(state: &GameState) -> GameState {
     // Research progress
     research::tick_research(&mut new, &mut rng);
 
+    // Auto-pause on major research breakthroughs so the player sees the good news
+    if new.events.iter().any(|e| matches!(e,
+        GameEvent::PathogenIdentified { .. } | GameEvent::MedicineDeveloped { .. }
+        | GameEvent::TrialCompleted { .. }))
+    {
+        new.sim_state = SimState::Paused;
+    }
+
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
 

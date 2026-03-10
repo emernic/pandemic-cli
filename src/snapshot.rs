@@ -56,8 +56,8 @@ fn advance_ticks(state: &mut GameState, n: u64) {
         if state.outcome != GameOutcome::Playing {
             return;
         }
-        // Auto-pause events (DiseaseDetected, RegionCollapsed) set SimState::Paused.
-        // In snapshot mode, log the event and auto-resume rather than blocking.
+        // Various events auto-pause the game (disease detection, collapse,
+        // research breakthroughs, etc.). In snapshot mode, log and auto-resume.
         if state.sim_state == SimState::Paused {
             for event in &state.events {
                 match event {
@@ -72,6 +72,26 @@ fn advance_ticks(state: &mut GameState, n: u64) {
                             .map(|r| r.name.as_str())
                             .unwrap_or("Unknown");
                         eprintln!("⚠ REGION COLLAPSED: {}", name);
+                    }
+                    GameEvent::PathogenIdentified { disease_idx } => {
+                        let name = state.diseases.get(*disease_idx)
+                            .map(|d| d.name.clone())
+                            .unwrap_or_else(|| "?".to_string());
+                        eprintln!("★ IDENTIFIED: {}", name);
+                    }
+                    GameEvent::MedicineDeveloped { medicine_idx } => {
+                        let name = state.medicines.get(*medicine_idx)
+                            .map(|m| m.name.as_str())
+                            .unwrap_or("?");
+                        eprintln!("★ MEDICINE DEVELOPED: {}", name);
+                    }
+                    GameEvent::TrialCompleted { medicine_idx, disease_idx } => {
+                        let med = state.medicines.get(*medicine_idx)
+                            .map(|m| m.name.as_str()).unwrap_or("?");
+                        let disease = state.diseases.get(*disease_idx)
+                            .map(|d| d.display_name(*disease_idx))
+                            .unwrap_or_else(|| "?".to_string());
+                        eprintln!("★ TRIAL SUCCESS: {} vs {}", med, disease);
                     }
                     _ => {}
                 }
