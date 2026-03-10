@@ -116,8 +116,9 @@ pub(super) fn deploy_medicine(
     state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
 
     let doses_str = crate::format_number(doses_to_ship);
+    let days = (SHIPPING_TICKS as f64 * supply_mult) / crate::state::TICKS_PER_DAY;
     let msg = format!(
-        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}) — arriving in 1 day"
+        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}) — arriving in {days:.0} day{}", if days > 1.5 { "s" } else { "" }
     );
     (true, Some(msg))
 }
