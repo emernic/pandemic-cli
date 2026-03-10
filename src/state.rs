@@ -142,6 +142,10 @@ pub struct GameState {
     /// and status. Scientists are assigned to research projects by ID.
     #[serde(default)]
     pub scientists: Vec<Scientist>,
+    /// Ark Protocol: when activated, all resources concentrate on one region.
+    /// Contains the index of the designated Ark region, or None if not active.
+    #[serde(default)]
+    pub ark_protocol: Option<usize>,
     pub ui: UiState,
 }
 
@@ -2415,6 +2419,10 @@ pub enum GameEvent {
         /// Adaptation level (0.0–1.0) at the time of the event.
         level: f64,
     },
+    /// The Ark Protocol was activated — all resources consolidated into one region.
+    ArkProtocolActivated {
+        region_idx: usize,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -2576,6 +2584,12 @@ pub enum CrisisKind {
     /// Cooperative governor leaks to media, damages political power.
     GovernorCooperative { region_idx: usize },
 
+    // --- Endgame crisis types ---
+
+    /// Ark Protocol: consolidate all resources into one surviving region.
+    /// Fires when 2+ regions have collapsed.
+    ArkProtocol { region_idx: usize },
+
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
     /// Follow-up to CongressionalHearing (Send deputy): contempt charges.
@@ -2626,6 +2640,7 @@ impl CrisisKind {
             CrisisKind::GovernorPopulist { .. } => "gov_populist",
             CrisisKind::GovernorTechnocrat { .. } => "gov_technocrat",
             CrisisKind::GovernorCooperative { .. } => "gov_cooperative",
+            CrisisKind::ArkProtocol { .. } => "ark_protocol",
             CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
@@ -3648,6 +3663,7 @@ impl GameState {
             mercy_rule: false,
             threat_alert_level: vec![0; num_diseases],
             scientists,
+            ark_protocol: None,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -4246,6 +4262,13 @@ impl GameState {
     }
 
     /// Check if the player has zero agency — no meaningful actions available.
+    /// Returns true if the Ark Protocol is active and this region is not the Ark
+    /// and not already collapsed. These regions have been abandoned.
+    pub fn is_abandoned(&self, region_idx: usize) -> bool {
+        self.ark_protocol.is_some_and(|ark| ark != region_idx)
+            && !self.regions.get(region_idx).is_some_and(|r| r.collapsed)
+    }
+
     pub fn has_zero_agency(&self) -> bool {
         let upkeep = self.personnel_upkeep_rate();
         let policy_cost = self.total_policy_funding_cost();

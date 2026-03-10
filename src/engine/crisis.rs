@@ -263,6 +263,9 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         }
     }
 
+    // Ark Protocol: scheduled deterministically in tick() when 2+ regions collapse,
+    // not generated randomly.
+
     // Filter out crisis types that are still on cooldown
     candidates.retain(|k| {
         match state.crisis_cooldowns.get(k.tag()) {
@@ -1172,6 +1175,32 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::ArkProtocol { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
+            CrisisEvent {
+                title: "THE ARK PROTOCOL".into(),
+                description: format!(
+                    "{} regions have fallen. Your remaining teams are spread too thin. \
+                     Recommend consolidating all personnel and resources into {} — \
+                     abandon all other regions.",
+                    collapsed_count, region_name,
+                ),
+                option_a: CrisisOption {
+                    label: format!("Activate — fall back to {}", region_name),
+                    description: "Abandon all other regions. Concentrate everything here.".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Decline — fight on all fronts".into(),
+                    description: "Continue defending every surviving region.".into(),
+                    cost: None,
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::PublicInquiry => {
             CrisisEvent {
                 title: "Cover-Up Exposed".into(),
@@ -1821,6 +1850,27 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::GovernorCooperative { .. }, _) => {
             // PR campaign — costs already deducted
             "PR campaign contained the leak — minimal damage".into()
+        }
+
+        (CrisisKind::ArkProtocol { region_idx }, 0) => {
+            // Activate Ark Protocol
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            state.ark_protocol = Some(*region_idx);
+            // Deactivate all policies in non-Ark regions
+            for (i, policy) in state.policies.iter_mut().enumerate() {
+                if i != *region_idx {
+                    policy.clear_all();
+                }
+            }
+            state.events.push(GameEvent::ArkProtocolActivated {
+                region_idx: *region_idx,
+            });
+            format!("ARK PROTOCOL ACTIVATED — all resources consolidated in {}", region_name)
+        }
+        (CrisisKind::ArkProtocol { .. }, _) => {
+            // Declined — standard cooldown prevents re-fire
+            "Ark Protocol declined — continuing on all fronts".into()
         }
 
         (CrisisKind::PublicInquiry, 0) => {
