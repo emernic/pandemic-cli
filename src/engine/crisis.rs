@@ -1,7 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, ScreeningLevel,
+    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, CrisisOperation,
+    GameEvent, GameState, ScreeningLevel,
     SimState, CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -1804,7 +1805,7 @@ pub(super) fn tick_crisis_operations(state: &mut GameState) {
         state.crisis_operations[i].ticks_remaining -= 1.0;
         if state.crisis_operations[i].ticks_remaining <= 0.0 {
             let op = state.crisis_operations.remove(i);
-            state.events.push(crate::state::GameEvent::CrisisTeamReturned {
+            state.events.push(GameEvent::CrisisTeamReturned {
                 label: op.label,
                 personnel: op.personnel,
             });
@@ -1836,8 +1837,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 // Create a temporary operation — personnel are tied up and returned later
                 let label = cost.operation_label.clone()
                     .unwrap_or_else(|| "Crisis Response".to_string());
-                let ticks = days * crate::state::TICKS_PER_DAY;
-                state.crisis_operations.push(crate::state::CrisisOperation {
+                let ticks = days * TICKS_PER_DAY;
+                state.crisis_operations.push(CrisisOperation {
                     label,
                     personnel: cost.personnel,
                     ticks_remaining: ticks,
