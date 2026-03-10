@@ -3777,7 +3777,9 @@ mod tests {
             "income should drop with infections: {infected_income:.4} vs {baseline_income:.4}"
         );
 
-        // The drop should be proportional to the infected fraction × incapacitation rate
+        // The drop should be approximately proportional to the infected fraction × incapacitation rate.
+        // Trade network effects add a small additional penalty (neighbors see reduced trade health),
+        // but at 10% infection in one region, the trade effect is within tolerance.
         let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
         let expected_drop_frac = (infected * INFECTED_INCAPACITATION_RATE) / total_pop;
         let actual_drop_frac = 1.0 - infected_income / baseline_income;

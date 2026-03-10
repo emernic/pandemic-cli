@@ -4208,7 +4208,9 @@ impl GameState {
     }
 
     /// Economic health factor for a region (0.0 = collapsed, up to 1.0 = fully healthy).
-    /// Used by neighbors to compute trade income.
+    /// Used by neighbors to compute trade income. Accounts for both active infections
+    /// and cumulative deaths — a region that lost 30% of its population is economically
+    /// devastated even if current infections are low.
     fn region_economic_health(region: &Region) -> f64 {
         if region.collapsed {
             return 0.0;
@@ -4219,8 +4221,11 @@ impl GameState {
         }
         let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
         let infected_frac = infected / pop;
-        // Smooth degradation: healthy = 1.0, 10% infected = 0.7, 30%+ infected ≈ 0.1
-        (1.0 - infected_frac * 3.0).max(0.1)
+        let death_frac = region.dead / pop;
+        // Active infections are weighted more heavily (immediate economic disruption)
+        // Deaths reflect permanent economic damage
+        let damage = infected_frac * 3.0 + death_frac * 2.0;
+        (1.0 - damage).clamp(0.1, 1.0)
     }
 
     /// Average economic health of a region's connected neighbors (0.0 to 1.0).
