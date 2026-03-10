@@ -206,6 +206,9 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ScientistInfected { scientist_name } => {
                 (5, format!("{} contracted disease in the field — unavailable for 4 days", scientist_name))
             }
+            GameEvent::ScientistBreakthrough { scientist_name } => {
+                (3, format!("{} had a breakthrough — research accelerated", scientist_name))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
