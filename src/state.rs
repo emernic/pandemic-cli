@@ -1085,8 +1085,11 @@ pub const SEVERITY_MOD_THRESHOLD: f64 = 1_000.0;
 pub const GOVERNOR_DEFIANCE_THRESHOLD: f64 = 40.0;
 /// Loyalty threshold above which the governor provides cooperation bonuses.
 pub const GOVERNOR_COOPERATION_THRESHOLD: f64 = 80.0;
-/// Policy effectiveness multiplier when governor is defiant.
+/// Policy effectiveness multiplier when governor is defiant (most personalities).
 pub const GOVERNOR_DEFIANCE_EFFECTIVENESS: f64 = 0.7;
+/// Policy effectiveness for a defiant Recluse — worse than other personalities
+/// because the governor has completely checked out.
+pub const RECLUSE_DEFIANCE_EFFECTIVENESS: f64 = 0.4;
 /// Policy cost multiplier when governor is cooperative.
 pub const GOVERNOR_COOPERATION_COST_MULT: f64 = 0.8;
 /// Cost to appease a governor.
@@ -1238,11 +1241,15 @@ impl Governor {
         self.loyalty >= GOVERNOR_COOPERATION_THRESHOLD
     }
 
-    /// Policy effectiveness multiplier based on loyalty.
-    /// 1.0 = normal, 0.7 = defiant.
+    /// Policy effectiveness multiplier based on loyalty and personality.
+    /// 1.0 = normal, 0.7 = defiant, 0.4 = defiant Recluse.
     pub fn policy_effectiveness(&self) -> f64 {
         if self.is_defiant() {
-            GOVERNOR_DEFIANCE_EFFECTIVENESS
+            if self.personality == GovernorPersonality::Recluse {
+                RECLUSE_DEFIANCE_EFFECTIVENESS
+            } else {
+                GOVERNOR_DEFIANCE_EFFECTIVENESS
+            }
         } else {
             1.0
         }
@@ -1384,8 +1391,8 @@ impl Region {
         (self.population as f64 - self.total_dead()).max(0.0)
     }
 
-    /// Policy effectiveness multiplier based on governor loyalty.
-    /// 1.0 when normal/cooperative, 0.7 when defiant.
+    /// Policy effectiveness multiplier based on governor loyalty and personality.
+    /// 1.0 when normal/cooperative, 0.7 when defiant, 0.4 when defiant Recluse.
     pub fn policy_effectiveness(&self) -> f64 {
         self.governor.policy_effectiveness()
     }
