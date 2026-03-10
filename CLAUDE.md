@@ -227,6 +227,8 @@ Game over also stops execution immediately.
 
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
+**⛔ NEVER add an `--auto-crises` flag or any equivalent.** This has been implemented and deleted multiple times. Crisis events are a core gameplay mechanic. Playtests must handle them, not bypass them — if playtest agents complain about crises, the answer is to improve the crisis events, not skip them. Any flag, option, or code path that auto-resolves or skips crisis events in snapshot mode is permanently off-limits.
+
 ### Snapshot persistence and real playtesting
 
 `--snapshot` always plays a real sequence of inputs. The only question is whether you want to continue that same run later.
