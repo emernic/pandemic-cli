@@ -110,7 +110,7 @@ Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rus
 
 ### ⚠️ THIS GAME IS UNWINNABLE — THIS IS AN AXIOM, NOT A DESIGN CHOICE
 
-**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 15-45 days. Don't make balance changes that trivialize the challenge.
+**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-30 days (median ~15, never past 65). Don't make balance changes that trivialize the challenge.
 
 ## Game Inspirations
 
@@ -162,20 +162,20 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 **These come directly from the project owner. They are non-negotiable. Do not weaken diseases.**
 
 Hard requirements for zero player input (no buttons pressed at all):
-- **45 days absolute maximum** — 100% of seeds must lose by day 45, no exceptions
-- **~15-20 day median loss** without intervention (currently ~17.5 days across 50 seeds)
-- **Some seeds lost before day 15** — early bad luck is expected and correct
+- **65 days absolute maximum** — 100% of seeds must lose by day 65, no exceptions
+- **~10-20 day median loss** (all regions collapse) without player intervention
+- **Some seeds lost by day 10** — early bad luck is expected and correct
 - **First collapse no earlier than day 3** — players need minimum time for initial decisions
 
 Hard requirements for active play:
 - **~40 day median** for a competent player
 - **100 days = absolute maximum** — surviving past 100 days should be essentially impossible
 
-The game must be threatening. Diseases must kill fast enough that players feel genuine pressure from day 1. Late-game diseases (day 30+) should be next-generation monsters — massively scaled infectivity and lethality that overwhelm any containment. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse.
+These are not 20th century diseases. These are superbugs resulting from varying levels of engineering and mutation that will kill very quickly unattended, and the player is starting with an outbreak already underway. Late-game diseases (day 30+) should be next-generation monsters — massively scaled infectivity and lethality that overwhelm any containment. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse.
 
 **CRITICAL: Do NOT increase per-tick lethality or recovery to "speed up" deaths.** A high per-tick lethality+recovery shortens the infectious period, causing epidemic burnout after infecting only a small fraction of each region. The right approach is LOW per-tick lethality/recovery (8–15 day infectious period) with HIGH infectivity. See `PathogenType::stat_ranges()` comment in state.rs for the full explanation.
 
-The `game_is_lost_within_45_days_without_intervention` test enforces the 45-day deadline across 50 seeds with a median < 35 assertion.
+The `game_is_lost_within_65_days_without_intervention` test enforces the 65-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 30, something is wrong.
 
 **Governor-imposed policies (quarantine, border controls, martial law) are GOOD and should stay.** They create interesting dynamics. If policies are keeping the game alive too long, the answer is MORE lethal diseases, not weaker governors.
 
@@ -258,8 +258,6 @@ cargo run -- --snapshot --days 1
 cargo run -- saves/playtest-12345-67890.json --snapshot --key r --key enter
 ```
 
-The old foot gun was running multiple separate `cargo run -- --snapshot ...` commands and assuming they shared state. They did not. With the new auto-save behavior, every snapshot run gives you a resumable file by default.
-
 Do this **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game.
 
 For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one. Tell the playtest agent to keep using the printed `saves/...` file if the flow spans multiple commands.
@@ -273,13 +271,6 @@ For extended playtesting (e.g., as a final check after a feature is complete), u
 - When your tests pass and you're happy with the changes, merge immediately with `gh pr merge --squash`.
 - If you notice something else to improve after merging, that's fine — create a new branch, fix it, open a new PR, merge again. Iterate freely.
 - The only exception: if you're genuinely unsure whether a change is correct (e.g., it might break something you can't test), flag it. But this should be rare.
-
-## Pre-Merge Checklist
-
-Before merging any significant feature or bug fix:
-
-1. **Run a fresh playtest**: Use the playtest agent to test your final changes. Guide it toward the specific things that matter — describe what you changed, what the key behaviors are, and what commands will exercise them.
-2. **Summarize results in the PR body**: Describe what the playtest found — key behaviors verified, any issues discovered. Do NOT commit playtest log files to the repo (they are gitignored). The PR description is the reviewable record.
 
 ## Task Tracking
 
@@ -313,7 +304,6 @@ Adapt the list to the task — small fixes won't need playtests, doc changes won
 - **Stay contained within your working directory.** Don't write files to shared locations like `~/.pandemic-cli/` or `/tmp/` — other agents may be doing the same thing and you'll collide. If you need scratch files, keep them in your worktree.
 - **Your worktree may have leftover state from a previous task.** Agents often work on multiple issues sequentially in the same worktree. You might start on a random feature branch with uncommitted changes from a completely unrelated task. Always check and clean up before starting new work.
 - **Other agents are picking up issues at the same time.** Always check the `in-progress` label before claiming work, and claim quickly to minimize race windows.
-- **Snapshot mode (`--snapshot`) is safe for concurrent use** — it writes to a local worktree save file, either the explicit path you pass or an auto-created file under `./saves/`. Interactive mode (`cargo run` without `--snapshot`) defaults to `./save.json` in the working directory. Both are local to the worktree and safe for concurrent agents.
 
 ## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 
@@ -351,7 +341,7 @@ This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-ass
 
 ### Root Causes Before Symptoms
 
-**Before filing ANY issue, ask: "Is this a symptom of something bigger?"** If the game lasts 5 minutes instead of 60, don't file 10 issues about mid-game UX — the mid-game doesn't exist yet. File ONE issue about the broken game duration. Ten symptom issues are worth less than one root-cause issue. This applies to everything: bugs, enhancements, investigate issues. Always look for the upstream cause.
+**Before filing ANY issue, ask: "Is this a symptom of something else?"** If the game lasts 5 minutes instead of 60, don't file 10 issues about mid-game UX — the mid-game doesn't exist yet. File ONE issue about the broken game duration. Ten symptom issues are worth less than one root-cause issue. This applies to everything: bugs, enhancements, investigate issues. Always look for the upstream cause.
 
 ### Investigate Issues — File Them Constantly
 
