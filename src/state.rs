@@ -916,7 +916,7 @@ pub struct Governor {
 }
 
 /// Global threat level (DEFCON-style). Computed from game state metrics each tick.
-/// Higher severity = lower number. Gates Emergency Decrees and affects crisis frequency.
+/// Higher severity = lower number. Gates Emergency Decrees.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ThreatLevel {
     /// DEFCON 5: Starting state. No significant threat detected.
