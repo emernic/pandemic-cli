@@ -596,10 +596,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (msg, success) = policy::enact_decree(state, *decree_idx, *region_idx);
             CommandResult { message: msg, success }
         }
-        GameCommand::RallySupport => {
-            let (msg, success) = policy::rally_support(state);
-            CommandResult { message: msg, success }
-        }
         GameCommand::AppeaseGovernor { region_idx } => {
             let (msg, success) = policy::appease_governor(state, *region_idx);
             CommandResult { message: msg, success }
@@ -4331,14 +4327,14 @@ mod tests {
         state.resources.funding = 10_000.0;
         state.threat_level = crate::state::ThreatLevel::Extinction;
 
-        // Open policy panel, navigate past 6 regions + 1 rally to first decree
+        // Open policy panel, navigate past 6 regions to first decree
         state = apply_action(&state, &Action::OpenPolicy);
         assert_eq!(state.ui.open_panel, Panel::Policy);
-        for _ in 0..7 {
+        for _ in 0..6 {
             state = apply_action(&state, &Action::SelectNext);
         }
-        // panel_selection should be 7 (first decree: Conscript Researchers)
-        assert_eq!(state.ui.panel_selection, 7);
+        // panel_selection should be 6 (first decree: Conscript Researchers)
+        assert_eq!(state.ui.panel_selection, 6);
 
         let personnel_before = state.resources.personnel;
         state = apply_action(&state, &Action::Confirm);
@@ -4354,12 +4350,12 @@ mod tests {
         state.resources.funding = 10_000.0;
         state.threat_level = crate::state::ThreatLevel::Extinction;
 
-        // Open policy panel, navigate to Sacrifice Region (index 9 = 6 regions + 1 rally + 2)
+        // Open policy panel, navigate to Sacrifice Region (index 8 = 6 regions + 2)
         state = apply_action(&state, &Action::OpenPolicy);
-        for _ in 0..9 {
+        for _ in 0..8 {
             state = apply_action(&state, &Action::SelectNext);
         }
-        assert_eq!(state.ui.panel_selection, 9);
+        assert_eq!(state.ui.panel_selection, 8);
         state = apply_action(&state, &Action::Confirm);
 
         // Should be in SelectSacrificeRegion state
