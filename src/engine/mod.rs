@@ -2227,6 +2227,50 @@ mod tests {
     }
 
     #[test]
+    fn late_game_diseases_target_vulnerable_regions() {
+        use crate::state::{ScreeningLevel, TICKS_PER_DAY};
+        // Set up: region 0 is heavily defended, region 1-5 are undefended.
+        // At late-game tick, spawned diseases should prefer undefended regions.
+        let trials = 200;
+        let mut defended_hits = 0usize;
+        let mut undefended_hits = 0usize;
+
+        for seed in 0..trials {
+            let mut state = GameState::new_default(seed as u64 + 5000);
+            state.tick = (20.0 * TICKS_PER_DAY) as u64; // day 20: targeting is active
+            // Defend region 0 heavily
+            state.policies[0].screening = ScreeningLevel::MassRapid;
+            state.regions[0].hospital_level = 2;
+            // Leave all other regions undefended (default: no screening, no hospital)
+
+            // Remove existing disease so we start clean
+            state.diseases.clear();
+            for r in &mut state.regions { r.infections.clear(); }
+
+            let mut rng = state.rng.clone();
+            if let Some((_, region_idx)) = state.spawn_disease(&mut rng) {
+                if region_idx == 0 {
+                    defended_hits += 1;
+                } else {
+                    undefended_hits += 1;
+                }
+            }
+        }
+
+        // With 6 regions, uniform would give ~33 hits to region 0 out of 200.
+        // With targeting, region 0 (defended) should get significantly fewer.
+        let defended_rate = defended_hits as f64 / trials as f64;
+        assert!(
+            defended_rate < 0.12,
+            "Defended region should be targeted less than 12% of the time: {defended_hits}/{trials} ({defended_rate:.1}%)"
+        );
+        assert!(
+            undefended_hits > defended_hits * 3,
+            "Undefended regions should be targeted much more than defended: undefended={undefended_hits}, defended={defended_hits}"
+        );
+    }
+
+    #[test]
     fn transmission_vector_affects_quarantine() {
         use crate::state::TransmissionVector;
 
