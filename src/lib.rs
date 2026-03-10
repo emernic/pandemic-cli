@@ -131,18 +131,16 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
             }
             // Toggle auto-research when browsing categories or projects
-            else if let Some(ref ui) = new.ui.research_ui.clone() {
-                let track = match ui {
-                    ResearchUiState::BrowseCategories => {
-                        match new.ui.panel_selection {
-                            0 => Some(ResearchTrack::Field),
-                            1 => Some(ResearchTrack::Applied),
-                            2 => Some(ResearchTrack::Basic),
-                            _ => None,
-                        }
-                    }
-                    ResearchUiState::BrowseProjects { track } => Some(*track),
-                    ResearchUiState::ViewActive { track, .. } => Some(*track),
+            else {
+                let track = match &new.ui.research_ui {
+                    Some(ResearchUiState::BrowseCategories) => match new.ui.panel_selection {
+                        0 => Some(ResearchTrack::Field),
+                        1 => Some(ResearchTrack::Applied),
+                        2 => Some(ResearchTrack::Basic),
+                        _ => None,
+                    },
+                    Some(ResearchUiState::BrowseProjects { track }) => Some(*track),
+                    Some(ResearchUiState::ViewActive { track, .. }) => Some(*track),
                     _ => None,
                 };
                 if let Some(track) = track {
