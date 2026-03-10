@@ -214,6 +214,12 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     medicine_idx: m_idx,
                     disease_idx: d_idx,
                 });
+                // Enable auto-deploy on first successful trial so players don't miss it.
+                // They can toggle it off in the Medicines panel [X] if they prefer manual control.
+                while state.auto_deploy.len() <= m_idx {
+                    state.auto_deploy.push(false);
+                }
+                state.auto_deploy[m_idx] = true;
                 // Human Trials decree: chance of adverse event killing infected
                 if state.enacted_decrees.authorize_human_trials {
                     let roll: f64 = rng.r#gen();

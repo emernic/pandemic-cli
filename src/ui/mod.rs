@@ -124,7 +124,7 @@ pub fn process_events(state: &mut GameState) {
                 let efficacy = state.medicines.get(*medicine_idx)
                     .map(|m| m.effective_efficacy(*disease_idx, &state.diseases) * 100.0)
                     .unwrap_or(0.0);
-                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%) — ready to deploy", med_name, disease_name, efficacy))
+                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%) — auto-deploy ON. Press [X] in Medicines to disable.", med_name, disease_name, efficacy))
             }
             GameEvent::TechUnlocked { tech } => {
                 (3, format!("TECH UNLOCKED: {} — {}", tech.name(), tech.description()))
