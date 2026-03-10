@@ -2737,7 +2737,7 @@ mod tests {
             title: "Burnout".into(),
             description: "Test".into(),
             option_a: CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "Pay $400".into(), description: "".into(),
+            option_b: CrisisOption { label: "Pay ¥400".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
             tick_created: 0,
         });

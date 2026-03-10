@@ -3433,7 +3433,7 @@ impl UiState {
                 let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
                 if state.resources.funding < deploy_cost {
                     self.status_message = Some(
-                        format!("Insufficient funds! Need ${:.0}, have ${:.0}",
+                        format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
                             deploy_cost, state.resources.funding),
                     );
                     None

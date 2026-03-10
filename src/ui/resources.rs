@@ -81,7 +81,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         },
         Span::raw("  "),
         Span::styled(
-            format!("Funds: ${:.0}", state.resources.funding),
+            format!("Funds: ¥{:.0}", state.resources.funding),
             Style::default().fg(Color::Green),
         ),
         {
@@ -95,7 +95,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ("", Color::Red)
             };
             Span::styled(
-                format!(" ({sign}${net:.0}/day)"),
+                format!(" ({sign}¥{net:.0}/day)"),
                 Style::default().fg(color),
             )
         },

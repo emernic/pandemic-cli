@@ -312,27 +312,27 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             let base_income = gross + total_penalty;
             lines.push(Line::from(vec![
                 Span::styled("  Income:   ", dim),
-                Span::styled(format!("+${:.0}/day", base_income), green),
+                Span::styled(format!("+¥{:.0}/day", base_income), green),
                 Span::styled(format!("  ({} regions)", alive_regions), dim),
             ]));
             if ban_penalty > 0.0 {
                 lines.push(Line::from(vec![
                     Span::styled("  Ban cost: ", dim),
-                    Span::styled(format!("-${:.0}/day", ban_penalty), red_style),
+                    Span::styled(format!("-¥{:.0}/day", ban_penalty), red_style),
                     Span::styled("  (halved income)", dim),
                 ]));
             }
             if trade_penalty >= 1.0 {
                 lines.push(Line::from(vec![
                     Span::styled("  Trade:    ", dim),
-                    Span::styled(format!("-${:.0}/day", trade_penalty), Style::default().fg(Color::Yellow)),
+                    Span::styled(format!("-¥{:.0}/day", trade_penalty), Style::default().fg(Color::Yellow)),
                     Span::styled("  (neighbors in crisis)", dim),
                 ]));
             }
         } else {
             lines.push(Line::from(vec![
                 Span::styled("  Income:   ", dim),
-                Span::styled(format!("+${:.0}/day", gross), green),
+                Span::styled(format!("+¥{:.0}/day", gross), green),
                 Span::styled(format!("  ({} regions)", alive_regions), dim),
             ]));
         }
@@ -341,7 +341,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         if upkeep > 0.0 {
             lines.push(Line::from(vec![
                 Span::styled("  Upkeep:   ", dim),
-                Span::styled(format!("-${:.0}/day", upkeep), red_style),
+                Span::styled(format!("-¥{:.0}/day", upkeep), red_style),
                 Span::styled(format!("  ({} personnel)", state.resources.personnel), dim),
             ]));
         }
@@ -353,16 +353,16 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
                 .count();
             lines.push(Line::from(vec![
                 Span::styled("  Policies: ", dim),
-                Span::styled(format!("-${:.0}/day", policy), red_style),
+                Span::styled(format!("-¥{:.0}/day", policy), red_style),
                 Span::styled(format!("  (in {} region{})", active_count, if active_count == 1 { "" } else { "s" }), dim),
             ]));
         }
 
         // Net line
         let (net_str, net_color) = if net >= 0.0 {
-            (format!("+${:.0}/day", net), Color::Green)
+            (format!("+¥{:.0}/day", net), Color::Green)
         } else {
-            (format!("-${:.0}/day", net.abs()), Color::Red)
+            (format!("-¥{:.0}/day", net.abs()), Color::Red)
         };
         lines.push(Line::from(vec![
             Span::styled("  ────────────────────", dim),

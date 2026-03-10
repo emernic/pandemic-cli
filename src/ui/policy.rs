@@ -76,7 +76,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         lines.push(Line::from(vec![
             Span::styled("  Policy cost: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("${:.0}/day", total_cost * TICKS_PER_DAY),
+                format!("¥{:.0}/day", total_cost * TICKS_PER_DAY),
                 Style::default().fg(Color::Yellow),
             ),
         ]));
@@ -129,7 +129,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 Style::default().fg(Color::Cyan),
             ));
             spans.push(Span::styled(
-                format!("  ${:.0}/day", cost * TICKS_PER_DAY),
+                format!("  ¥{:.0}/day", cost * TICKS_PER_DAY),
                 Style::default().fg(Color::Yellow),
             ));
         } else {
@@ -180,7 +180,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 Span::styled(format!("{}", marker), name_style),
                 Span::styled("Rally Public Support", name_style),
                 Span::styled(
-                    format!("  ${:.0}", crate::state::RALLY_COST),
+                    format!("  ¥{:.0}", crate::state::RALLY_COST),
                     if can_afford {
                         Style::default().fg(Color::Yellow)
                     } else {
@@ -203,7 +203,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
     )));
 
     let decree_descs: [String; DECREE_COUNT] = [
-        format!("+{} personnel, -${:.0}/day income (permanent)",
+        format!("+{} personnel, -¥{:.0}/day income (permanent)",
             CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
         "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
         format!("Abandon a region, +{:.0}% income from the rest (permanent)",
@@ -338,15 +338,15 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     //                   (policy_idx, name, active, cost_str, desc, personnel_needed)
     let policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
         (0, "Travel Ban", policy.travel_ban,
-         format!("${:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
+         format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
          if trade_dep { "Reduces cross-region spread, 75% income penalty" }
          else { "Reduces cross-region spread, halves income" },
          Some(TRAVEL_BAN_PERSONNEL + infra_extra)),
         (1, "Quarantine", policy.quarantine,
-         format!("${:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
+         format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
          "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra)),
         (2, "Hospital Surge", policy.hospital_surge,
-         format!("${:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL + infra_extra),
+         format!("¥{:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL + infra_extra),
          if region.has_trait(RegionTrait::StrongPublicHealth) {
              "60% lethality reduction, +25% spread (hospital exposure)"
          } else {
@@ -354,25 +354,25 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          },
          Some(HOSPITAL_SURGE_PERSONNEL + infra_extra)),
         (3, "Border Controls", policy.border_controls,
-         format!("${:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
+         format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
          "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra)),
         (4, "Water Sanitation", policy.water_sanitation,
-         format!("${:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
+         format!("¥{:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
          "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra)),
         (5, "Basic Screening", policy.screening == ScreeningLevel::Basic,
-         format!("${:.0}/day + {} pers.", SCREENING_BASIC_COST * TICKS_PER_DAY, 1 + infra_extra),
+         format!("¥{:.0}/day + {} pers.", SCREENING_BASIC_COST * TICKS_PER_DAY, 1 + infra_extra),
          "Rough infected estimates, faster detection", Some(1 + infra_extra)),
         (6, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
-         format!("${:.0}/day + {} pers.", SCREENING_ANTIGEN_COST * TICKS_PER_DAY, 2 + infra_extra),
+         format!("¥{:.0}/day + {} pers.", SCREENING_ANTIGEN_COST * TICKS_PER_DAY, 2 + infra_extra),
          "Shows infected + immune counts, good accuracy", Some(2 + infra_extra)),
         (7, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
-         format!("${:.0}/day + {} pers.", SCREENING_MASS_RAPID_COST * TICKS_PER_DAY, 4 + infra_extra),
+         format!("¥{:.0}/day + {} pers.", SCREENING_MASS_RAPID_COST * TICKS_PER_DAY, 4 + infra_extra),
          "Near-complete data, reduces spread by 25%", Some(4 + infra_extra)),
         (8, "Martial Law", policy.martial_law,
-         format!("${:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
+         format!("¥{:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
          "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra)),
         (9, "☢ Nuclear Option", policy.nuclear_annihilation,
-         format!("One-time: ${:.0}", NUCLEAR_ANNIHILATION_COST),
+         format!("One-time: ¥{:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population — stops all disease spread", None),
         (10,
          match region.hospital_level {
@@ -382,8 +382,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          },
          region.hospital_level >= 2,
          match region.hospital_level {
-             0 => format!("${:.0} + {} pers.", FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL),
-             1 => format!("${:.0} + {} pers.", MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL),
+             0 => format!("¥{:.0} + {} pers.", FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL),
+             1 => format!("¥{:.0} + {} pers.", MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL),
              _ => format!("{} pers. ongoing", MEDICAL_CENTER_PERSONNEL),
          },
          match region.hospital_level {
@@ -400,8 +400,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          },
          region.intel_level >= 2,
          match region.intel_level {
-             0 => format!("${:.0} + {} pers.", INTEL_STATION_COST, INTEL_STATION_PERSONNEL),
-             1 => format!("${:.0} + {} pers.", ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL),
+             0 => format!("¥{:.0} + {} pers.", INTEL_STATION_COST, INTEL_STATION_PERSONNEL),
+             1 => format!("¥{:.0} + {} pers.", ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL),
              _ => format!("{} pers. ongoing", ADVANCED_INTEL_PERSONNEL),
          },
          match region.intel_level {
@@ -577,7 +577,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         lines.push(Line::from(vec![
             Span::raw("      "),
             Span::styled(
-                format!("Cost: ${:.0}  →  +{:.0} loyalty", APPEASE_COST, APPEASE_LOYALTY_GAIN),
+                format!("Cost: ¥{:.0}  →  +{:.0} loyalty", APPEASE_COST, APPEASE_LOYALTY_GAIN),
                 Style::default().fg(Color::Yellow),
             ),
         ]));
