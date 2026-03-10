@@ -121,6 +121,10 @@ pub struct GameState {
     /// Prevents repeat alerts for the same threshold.
     #[serde(default)]
     pub threat_alert_level: Vec<u8>,
+    /// Named scientists on the player's roster. Each has a specialty, trait,
+    /// and status. Scientists are assigned to research projects by ID.
+    #[serde(default)]
+    pub scientists: Vec<Scientist>,
     pub ui: UiState,
 }
 
@@ -145,6 +149,16 @@ pub const HISTORY_MAX: usize = 100;
 /// Maximum concurrent field research projects. Personnel-gated: each project
 /// requires dedicated staff, so the real limit is usually personnel, not slots.
 pub const MAX_FIELD_RESEARCH: usize = 3;
+
+/// Burnout threshold: scientists on the same project for this many ticks
+/// risk burning out. 840 ticks = 7 days.
+pub const BURNOUT_THRESHOLD_TICKS: u64 = 840;
+/// Reckless scientists burn out sooner: 600 ticks = 5 days.
+pub const BURNOUT_THRESHOLD_RECKLESS: u64 = 600;
+/// Per-tick burnout probability once past the threshold (~2% per tick ≈ high daily chance).
+pub const BURNOUT_CHANCE_PER_TICK: f64 = 0.002;
+/// Duration of burnout recovery: 360 ticks = 3 days.
+pub const BURNOUT_RECOVERY_TICKS: u64 = 360;
 
 // Medicine constants.
 /// Fraction of infected treated per deployment (before efficacy modifiers).
@@ -317,6 +331,152 @@ impl ScreeningLevel {
             _ => 1.0,
         }
     }
+}
+
+/// A named scientist or field agent on the player's roster.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Scientist {
+    pub id: u64,
+    pub name: String,
+    pub specialty: Specialty,
+    pub scientist_trait: ScientistTrait,
+    pub status: ScientistStatus,
+    /// Tick when this scientist was assigned to their current project.
+    /// Used for burnout tracking.
+    #[serde(default)]
+    pub assigned_since: Option<u64>,
+}
+
+impl Scientist {
+    /// Whether this scientist can be assigned to a project right now.
+    pub fn is_available(&self) -> bool {
+        matches!(self.status, ScientistStatus::Available)
+    }
+
+    /// Whether this scientist counts toward the total headcount
+    /// (alive and not permanently removed).
+    pub fn is_alive(&self) -> bool {
+        !matches!(self.status, ScientistStatus::Dead)
+    }
+
+    /// Short display: "Dr. LastName (Specialty)"
+    pub fn short_name(&self) -> String {
+        // Extract last name (last word of full name)
+        let last = self.name.split_whitespace().last().unwrap_or(&self.name);
+        format!("Dr. {}", last)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Specialty {
+    /// Bonus on virus-related research (Identify/Study RNA/DNA virus, clinical trials for antivirals).
+    Virologist,
+    /// Bonus on bacterium-related research.
+    Bacteriologist,
+    /// Bonus on field research (identification, genomic sequencing).
+    Epidemiologist,
+    /// Bonus on clinical trials and field operations.
+    FieldAgent,
+    /// Bonus on applied research (development, manufacturing).
+    LabTechnician,
+}
+
+impl Specialty {
+    /// Whether this specialty matches the given research kind.
+    pub fn matches_research(&self, kind: &ResearchKind, diseases: &[Disease]) -> bool {
+        match self {
+            Specialty::Virologist => {
+                match kind {
+                    ResearchKind::IdentifyThreat { disease_idx }
+                    | ResearchKind::GenomicSequencing { disease_idx } => {
+                        diseases.get(*disease_idx).is_some_and(|d| {
+                            matches!(d.pathogen_type, PathogenType::RnaVirus | PathogenType::DnaVirus)
+                        })
+                    }
+                    ResearchKind::ClinicalTrial { disease_idx, .. } => {
+                        diseases.get(*disease_idx).is_some_and(|d| {
+                            matches!(d.pathogen_type, PathogenType::RnaVirus | PathogenType::DnaVirus)
+                        })
+                    }
+                    _ => false,
+                }
+            }
+            Specialty::Bacteriologist => {
+                match kind {
+                    ResearchKind::IdentifyThreat { disease_idx }
+                    | ResearchKind::GenomicSequencing { disease_idx } => {
+                        diseases.get(*disease_idx).is_some_and(|d| {
+                            matches!(d.pathogen_type, PathogenType::Bacterium)
+                        })
+                    }
+                    ResearchKind::ClinicalTrial { disease_idx, .. } => {
+                        diseases.get(*disease_idx).is_some_and(|d| {
+                            matches!(d.pathogen_type, PathogenType::Bacterium)
+                        })
+                    }
+                    _ => false,
+                }
+            }
+            Specialty::Epidemiologist => {
+                matches!(kind, ResearchKind::IdentifyThreat { .. } | ResearchKind::GenomicSequencing { .. })
+            }
+            Specialty::FieldAgent => {
+                matches!(kind, ResearchKind::ClinicalTrial { .. })
+            }
+            Specialty::LabTechnician => {
+                matches!(kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. })
+            }
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Specialty::Virologist => "Virologist",
+            Specialty::Bacteriologist => "Bacteriologist",
+            Specialty::Epidemiologist => "Epidemiologist",
+            Specialty::FieldAgent => "Field Agent",
+            Specialty::LabTechnician => "Lab Technician",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScientistTrait {
+    /// 1.15x research speed.
+    Brilliant,
+    /// 1.2x research speed, but burns out at 5 days instead of 7.
+    Reckless,
+    /// Immune to burnout.
+    Cautious,
+    /// No specialty penalty — always counts as matching.
+    Versatile,
+}
+
+impl ScientistTrait {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ScientistTrait::Brilliant => "Brilliant",
+            ScientistTrait::Reckless => "Reckless",
+            ScientistTrait::Cautious => "Cautious",
+            ScientistTrait::Versatile => "Versatile",
+        }
+    }
+
+    /// Per-scientist speed multiplier from this trait.
+    pub fn speed_multiplier(&self) -> f64 {
+        match self {
+            ScientistTrait::Brilliant => 1.15,
+            ScientistTrait::Reckless => 1.20,
+            ScientistTrait::Cautious | ScientistTrait::Versatile => 1.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScientistStatus {
+    Available,
+    BurnedOut { until_tick: u64 },
+    Dead,
 }
 
 /// Per-region policy toggles. Each costs funding (and optionally personnel) per tick.
@@ -1837,6 +1997,11 @@ pub struct ResearchProject {
     pub progress: f64,
     pub required_ticks: f64,
     pub personnel_assigned: u32,
+    /// IDs of scientists assigned to this project. When populated,
+    /// `personnel_assigned` equals `scientist_ids.len()`.
+    /// Empty in old saves and test fixtures (falls back to anonymous personnel).
+    #[serde(default)]
+    pub scientist_ids: Vec<u64>,
 }
 
 impl ResearchProject {
@@ -2042,14 +2207,56 @@ impl ResearchKind {
 }
 
 impl ResearchProject {
+    /// Create a ResearchProject for tests (no scientist assignments).
+    #[cfg(test)]
+    pub fn test(kind: ResearchKind, required_ticks: f64, personnel_assigned: u32) -> Self {
+        Self {
+            kind,
+            progress: 0.0,
+            required_ticks,
+            personnel_assigned,
+            scientist_ids: vec![],
+        }
+    }
+
     pub fn is_complete(&self) -> bool {
         self.progress >= self.required_ticks
     }
 
-    /// Speed multiplier with diminishing returns on personnel.
+    /// Speed multiplier with diminishing returns on personnel,
+    /// plus specialty and trait bonuses from assigned scientists.
     pub fn speed(&self, medicines: &[Medicine]) -> f64 {
         let (base, _, _) = self.kind.costs(medicines);
         personnel_speed(self.personnel_assigned, base)
+    }
+
+    /// Speed with scientist specialty/trait bonuses factored in.
+    /// Falls back to base speed if no scientists are assigned (old saves/tests).
+    pub fn speed_with_scientists(&self, medicines: &[Medicine], diseases: &[Disease], scientists: &[Scientist]) -> f64 {
+        let base_speed = self.speed(medicines);
+        if self.scientist_ids.is_empty() {
+            return base_speed;
+        }
+        let assigned: Vec<&Scientist> = self.scientist_ids.iter()
+            .filter_map(|id| scientists.iter().find(|s| s.id == *id))
+            .collect();
+        if assigned.is_empty() {
+            return base_speed;
+        }
+        // Specialty bonus: matched scientists contribute 1.2x, mismatched 0.9x.
+        // Versatile scientists always count as matched.
+        let mut specialty_sum = 0.0;
+        let mut trait_sum = 0.0;
+        for s in &assigned {
+            let matched = s.scientist_trait == ScientistTrait::Versatile
+                || s.specialty.matches_research(&self.kind, diseases);
+            specialty_sum += if matched { 1.2 } else { 0.9 };
+            trait_sum += s.scientist_trait.speed_multiplier();
+        }
+        let n = assigned.len() as f64;
+        let specialty_mult = specialty_sum / n;
+        let trait_mult = trait_sum / n;
+        base_speed * specialty_mult * trait_mult
     }
 }
 
@@ -2112,6 +2319,8 @@ pub enum GameEvent {
     ResearchAutoStarted { track: ResearchTrack },
     /// Personnel left due to unpaid wages (funding at $0).
     PersonnelAttrition { count: u32 },
+    /// A scientist burned out from overwork and is temporarily unavailable.
+    ScientistBurnout { scientist_name: String },
     /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
     /// from one bacterium to another.
     ResistanceTransferred {
@@ -3335,6 +3544,9 @@ impl GameState {
         });
 
         let num_diseases = diseases.len();
+        // Generate initial scientist roster
+        let scientists = Self::generate_initial_scientists(&mut rng, 20);
+
         Self {
             tick: 0,
             sim_state: SimState::Running,
@@ -3370,6 +3582,7 @@ impl GameState {
             zero_agency_ticks: 0,
             mercy_rule: false,
             threat_alert_level: vec![0; num_diseases],
+            scientists,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -3384,6 +3597,63 @@ impl GameState {
                 speed_multiplier: 1,
             },
         }
+    }
+
+    const FIRST_NAMES: &'static [&'static str] = &[
+        "Amara", "Chen", "Diego", "Elena", "Fatima", "Gideon", "Hana", "Ibrahim",
+        "Jun", "Keiko", "Lena", "Mateo", "Nia", "Omar", "Priya", "Rafael",
+        "Suki", "Takeshi", "Uma", "Viktor", "Wei", "Yara", "Zane", "Aisha",
+        "Boris", "Carmen", "Dmitri", "Elara", "Felix", "Gemma",
+    ];
+    const LAST_NAMES: &'static [&'static str] = &[
+        "Okafor", "Zhang", "Rivera", "Petrov", "Nakamura", "Johansson", "Patel",
+        "Kim", "Santos", "Mueller", "Tanaka", "Kowalski", "Hassan", "Svensson",
+        "Park", "Okonkwo", "Yamamoto", "Fischer", "Morales", "Chen",
+        "Adeyemi", "Takahashi", "Kozlov", "Reyes", "Lindqvist", "Sharma",
+        "Alvarez", "Nowak", "Nkemelu", "Watanabe",
+    ];
+
+    /// Generate initial scientist roster with diverse names, specialties, and traits.
+    fn generate_initial_scientists(rng: &mut ChaCha8Rng, count: u32) -> Vec<Scientist> {
+        use rand::seq::SliceRandom;
+        let specialties = [
+            Specialty::Virologist,
+            Specialty::Bacteriologist,
+            Specialty::Epidemiologist,
+            Specialty::FieldAgent,
+            Specialty::LabTechnician,
+        ];
+        let traits = [
+            ScientistTrait::Brilliant,
+            ScientistTrait::Reckless,
+            ScientistTrait::Cautious,
+            ScientistTrait::Versatile,
+        ];
+
+        let mut first_names: Vec<&str> = Self::FIRST_NAMES.to_vec();
+        let mut last_names: Vec<&str> = Self::LAST_NAMES.to_vec();
+        first_names.shuffle(rng);
+        last_names.shuffle(rng);
+
+        (0..count as usize).map(|i| {
+            let first = first_names[i % first_names.len()];
+            let last = last_names[i % last_names.len()];
+            // Distribute specialties evenly for the first 5, then random
+            let specialty = if i < specialties.len() {
+                specialties[i]
+            } else {
+                specialties[rng.r#gen::<usize>() % specialties.len()]
+            };
+            let scientist_trait = traits[rng.r#gen::<usize>() % traits.len()];
+            Scientist {
+                id: i as u64 + 1,
+                name: format!("{} {}", first, last),
+                specialty,
+                scientist_trait,
+                status: ScientistStatus::Available,
+                assigned_since: None,
+            }
+        }).collect()
     }
 
     pub fn total_infected(&self) -> f64 {
@@ -3494,6 +3764,81 @@ impl GameState {
 
     pub fn personnel_available(&self) -> u32 {
         self.resources.personnel.saturating_sub(self.personnel_busy())
+    }
+
+    /// Scientists currently available for assignment (not assigned, burned out, or dead).
+    pub fn available_scientists(&self) -> Vec<&Scientist> {
+        self.scientists.iter().filter(|s| s.is_available()).collect()
+    }
+
+    /// Look up a scientist by ID.
+    pub fn scientist_by_id(&self, id: u64) -> Option<&Scientist> {
+        self.scientists.iter().find(|s| s.id == id)
+    }
+
+    /// Synchronize scientist roster with personnel count.
+    /// Call after any change to `resources.personnel` to keep the roster in sync.
+    /// Adds or removes scientists as needed to match the count.
+    pub fn sync_scientists_to_personnel(&mut self) {
+        use rand::Rng;
+        let alive_count = self.scientists.iter().filter(|s| s.is_alive()).count() as u32;
+        let target = self.resources.personnel;
+        if alive_count < target {
+            // Need to generate new scientists
+            let mut next_id = self.scientists.iter().map(|s| s.id).max().unwrap_or(0) + 1;
+            let specialties = [
+                Specialty::Virologist, Specialty::Bacteriologist,
+                Specialty::Epidemiologist, Specialty::FieldAgent, Specialty::LabTechnician,
+            ];
+            let traits = [
+                ScientistTrait::Brilliant, ScientistTrait::Reckless,
+                ScientistTrait::Cautious, ScientistTrait::Versatile,
+            ];
+            for _ in 0..(target - alive_count) {
+                let first_idx = self.rng.r#gen::<usize>() % 30;
+                let last_idx = self.rng.r#gen::<usize>() % 30;
+                let first = Self::FIRST_NAMES[first_idx];
+                let last = Self::LAST_NAMES[last_idx];
+                let specialty = specialties[self.rng.r#gen::<usize>() % specialties.len()];
+                let scientist_trait = traits[self.rng.r#gen::<usize>() % traits.len()];
+                self.scientists.push(Scientist {
+                    id: next_id,
+                    name: format!("{} {}", first, last),
+                    specialty,
+                    scientist_trait,
+                    status: ScientistStatus::Available,
+                    assigned_since: None,
+                });
+                next_id += 1;
+            }
+        } else if alive_count > target {
+            // Need to remove scientists (kill available ones first)
+            let to_remove = (alive_count - target) as usize;
+            let assigned_ids = self.assigned_scientist_ids();
+            let mut removed = 0;
+            for s in &mut self.scientists {
+                if removed >= to_remove { break; }
+                if s.is_available() && !assigned_ids.contains(&s.id) {
+                    s.status = ScientistStatus::Dead;
+                    removed += 1;
+                }
+            }
+        }
+    }
+
+    /// Collect all scientist IDs currently assigned to any research project.
+    pub fn assigned_scientist_ids(&self) -> Vec<u64> {
+        let mut ids = Vec::new();
+        for p in &self.field_research {
+            ids.extend(&p.scientist_ids);
+        }
+        if let Some(p) = &self.applied_research {
+            ids.extend(&p.scientist_ids);
+        }
+        if let Some(p) = &self.basic_research {
+            ids.extend(&p.scientist_ids);
+        }
+        ids
     }
 
     pub fn total_policy_funding_cost(&self) -> f64 {

@@ -193,6 +193,9 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 (10, format!("Disease spreading to {}", region_name))
             }
+            GameEvent::ScientistBurnout { scientist_name } => {
+                (6, format!("{} burned out — unavailable for 3 days", scientist_name))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
