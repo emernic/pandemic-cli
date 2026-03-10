@@ -10,14 +10,18 @@ use crate::state::{GameState, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
-    let (title, lines) = match &state.ui.research_ui {
+    let (title, lines, selected_line) = match &state.ui.research_ui {
         Some(ResearchUiState::BrowseCategories) => render_categories(state),
         Some(ResearchUiState::BrowseProjects { track }) => render_projects(state, *track),
         Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
-            render_confirm(state, *track, *project_idx, *double_personnel)
+            let (t, l) = render_confirm(state, *track, *project_idx, *double_personnel);
+            (t, l, None)
         }
-        Some(ResearchUiState::ViewActive { track, slot_idx }) => render_active(state, *track, *slot_idx),
-        None => (" Research ".to_string(), vec![]),
+        Some(ResearchUiState::ViewActive { track, slot_idx }) => {
+            let (t, l) = render_active(state, *track, *slot_idx);
+            (t, l, None)
+        }
+        None => (" Research ".to_string(), vec![], None),
     };
 
     let block = Block::default()
@@ -25,12 +29,24 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Blue));
 
-    let widget = Paragraph::new(lines).block(block);
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = selected_line.map(|line| {
+        if line as u16 >= inner_height {
+            (line as u16).saturating_sub(inner_height * 2 / 3)
+        } else {
+            0
+        }
+    }).unwrap_or(0);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
     f.render_widget(widget, area);
 }
 
-fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
+fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
 
     let categories = [
         ("Field Research", "Identify threats, run clinical trials", ResearchTrack::Field),
@@ -39,6 +55,9 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
     ];
     for (i, (name, desc, track)) in categories.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
+        if selected {
+            selected_line = Some(lines.len());
+        }
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -86,7 +105,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>) {
         Style::default().fg(Color::DarkGray),
     )));
 
-    (" Research ".to_string(), lines)
+    (" Research ".to_string(), lines, selected_line)
 }
 
 fn track_name(track: ResearchTrack) -> &'static str {
@@ -97,8 +116,9 @@ fn track_name(track: ResearchTrack) -> &'static str {
     }
 }
 
-fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'static>>) {
+fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
     let title = match track {
         ResearchTrack::Field => " Field Research ",
         ResearchTrack::Applied => " Applied Research ",
@@ -120,6 +140,9 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
         for (i, project) in state.field_research.iter().enumerate() {
             has_selectable_items = true;
             let selected = state.ui.panel_selection == i;
+            if selected {
+                selected_line = Some(lines.len());
+            }
             let marker = if selected { "▶ " } else { "  " };
             let style = if selected {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -157,6 +180,9 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                 for (i, kind) in projects.iter().enumerate() {
                     let sel_idx = n_active + i;
                     let selected = state.ui.panel_selection == sel_idx;
+                    if selected {
+                        selected_line = Some(lines.len());
+                    }
                     let marker = if selected { "▶ " } else { "  " };
                     let style = if selected {
                         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -206,6 +232,9 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
         if let Some(project) = active {
             has_selectable_items = true;
             let selected = state.ui.panel_selection == 0;
+            if selected {
+                selected_line = Some(lines.len());
+            }
             let marker = if selected { "▶ " } else { "  " };
             let style = if selected {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -248,6 +277,9 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                 has_selectable_items = true;
                 for (i, kind) in projects.iter().enumerate() {
                     let selected = state.ui.panel_selection == i;
+                    if selected {
+                        selected_line = Some(lines.len());
+                    }
                     let marker = if selected { "▶ " } else { "  " };
                     let style = if selected {
                         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -296,7 +328,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
         )));
     }
 
-    (title.to_string(), lines)
+    (title.to_string(), lines, selected_line)
 }
 
 fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
