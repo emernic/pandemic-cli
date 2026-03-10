@@ -134,10 +134,10 @@ pub struct GameState {
     /// all regions collapsing. Used by the UI to show a distinct defeat message.
     #[serde(default)]
     pub mercy_rule: bool,
-    /// Per-disease highest threat alert level already fired (0=none, 1=1M, 2=100M, 3=1B).
+    /// Per-disease highest death milestone tier already notified (0=none, 1=1M, 2=100M, 3=1B).
     /// Prevents repeat alerts for the same threshold.
-    #[serde(default)]
-    pub threat_alert_level: Vec<u8>,
+    #[serde(default, alias = "threat_alert_level")]
+    pub death_milestone_tier: Vec<u8>,
     /// Named scientists on the player's roster. Each has a specialty, trait,
     /// and status. Scientists are assigned to research projects by ID.
     #[serde(default)]
@@ -3854,7 +3854,7 @@ impl GameState {
             auto_deploy: vec![],
             zero_agency_ticks: 0,
             mercy_rule: false,
-            threat_alert_level: vec![0; num_diseases],
+            death_milestone_tier: vec![0; num_diseases],
             scientists,
             ark_protocol: None,
             threat_level: ThreatLevel::Normal,

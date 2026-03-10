@@ -157,8 +157,8 @@ pub fn tick(state: &GameState) -> GameState {
             (3, 1_000_000_000.0),
         ];
         // Grow tracking vec if new diseases were spawned
-        while new.threat_alert_level.len() < new.diseases.len() {
-            new.threat_alert_level.push(0);
+        while new.death_milestone_tier.len() < new.diseases.len() {
+            new.death_milestone_tier.push(0);
         }
         for (d_idx, disease) in new.diseases.iter().enumerate() {
             if !disease.detected {
@@ -168,10 +168,10 @@ pub fn tick(state: &GameState) -> GameState {
                 .filter_map(|r| r.disease_state(d_idx))
                 .map(|inf| inf.dead)
                 .sum();
-            let current_level = new.threat_alert_level[d_idx];
+            let current_level = new.death_milestone_tier[d_idx];
             for &(level, threshold) in THRESHOLDS {
                 if level > current_level && deaths >= threshold {
-                    new.threat_alert_level[d_idx] = level;
+                    new.death_milestone_tier[d_idx] = level;
                     let has_medicine = new.medicines.iter().any(|m| {
                         m.unlocked && m.target_diseases.contains(&d_idx)
                     });
@@ -3967,7 +3967,7 @@ mod tests {
             assert_eq!(*disease_idx, 0);
             assert!(!has_medicine, "no medicine unlocked yet");
         }
-        assert_eq!(new_state.threat_alert_level[0], 1, "should set alert level to 1");
+        assert_eq!(new_state.death_milestone_tier[0], 1, "should set alert level to 1");
 
         // Second tick should NOT re-fire the same threshold
         let state2 = tick(&new_state);
