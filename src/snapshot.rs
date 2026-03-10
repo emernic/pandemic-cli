@@ -174,21 +174,15 @@ pub fn run_snapshot(
                         // continue (not break): subsequent key steps like --do enter can still dismiss the crisis
                     }
                     StopReason::GamePaused { event_description } => {
-                        let remaining = &steps[step_idx + 1..];
                         eprintln!(
                             "\n[Day {day_after:.1}] Game paused: {event_description}."
                         );
                         eprintln!(
-                            "Tick advancement stopped. Run with --do space (or any key) to resume."
+                            "Tick advancement stopped. Subsequent steps still fire (next --do d<N> resumes automatically)."
                         );
-                        if !remaining.is_empty() {
-                            eprintln!(
-                                "Dropped {} remaining step(s): {}",
-                                remaining.len(),
-                                remaining.join(", ")
-                            );
-                        }
-                        break;
+                        // continue (not break): subsequent steps still fire.
+                        // advance_ticks() forces SimState::Running on next call, so pauses
+                        // are purely informational — no player action needed to proceed.
                     }
                 }
             }
