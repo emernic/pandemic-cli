@@ -88,7 +88,7 @@ pub fn generate_corporations(state: &mut GameState) {
             let operating_costs = base_revenue * CORP_COST_RATIO;
             let reserves = operating_costs * CORP_STARTING_RESERVE_DAYS;
 
-            // Largest corp in each region gets a board seat
+            // First (typically largest) corp in each region gets a board seat
             let board_seat = i == 0;
 
             corps.push(Corporation {
@@ -218,7 +218,7 @@ pub(super) fn tick_corporations(state: &mut GameState) {
 }
 
 /// Board satisfaction: average health of board-seat corporations (0.0 to 1.0).
-/// Consumed by crisis system and defeat conditions (not yet wired up).
+/// See #1375 for wiring this into crisis/defeat systems.
 pub fn board_satisfaction(state: &GameState) -> f64 {
     let board_corps: Vec<&Corporation> =
         state.corporations.iter().filter(|c| c.board_seat).collect();
