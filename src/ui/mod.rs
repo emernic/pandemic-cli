@@ -168,6 +168,13 @@ pub fn process_events(state: &mut GameState) {
                 };
                 (8, format!("Auto-started {} research", track_name))
             }
+            GameEvent::MedicineAutoDeployed { medicine_idx, region_idx } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("?");
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                (8, format!("Auto-deployed {} to {}", med_name, region_name))
+            }
             GameEvent::CrisisAutoResolved => {
                 // Don't log auto-resolves — they're noise
                 continue;

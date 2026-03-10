@@ -45,6 +45,9 @@ pub fn tick(state: &GameState) -> GameState {
         new.sim_state = SimState::Paused;
     }
 
+    // Auto-deploy medicines to worst-affected regions
+    medicine::try_auto_deploy(&mut new);
+
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
 
@@ -3890,5 +3893,92 @@ mod tests {
             assert_eq!(region.cached_deaths_per_day, 0.0);
             assert!(region.days_to_collapse(false).is_none());
         }
+    }
+
+    #[test]
+    fn auto_deploy_treats_worst_region() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+
+        // Give medicine 0 unlocked status, doses, and tested against disease 0
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 1_000_000.0;
+        state.medicines[0].max_doses = 1_000_000.0;
+        state.medicines[0].tested_against = vec![0];
+        state.diseases[0].detected = true;
+
+        // Set up infections: region 0 has 100K infected, region 1 has 500K
+        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[1].get_or_create_infection(0).infected = 500_000.0;
+
+        // Enable auto-deploy for medicine 0
+        state.auto_deploy = vec![true];
+
+        let after = tick(&state);
+
+        // Should have auto-deployed (event fired)
+        let auto_deploy_events: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineAutoDeployed { .. }))
+            .collect();
+        assert_eq!(auto_deploy_events.len(), 1, "should auto-deploy exactly once per tick");
+
+        // Should target region 1 (worst infected)
+        match &auto_deploy_events[0] {
+            GameEvent::MedicineAutoDeployed { region_idx, .. } => {
+                assert_eq!(*region_idx, 1, "should deploy to worst-affected region");
+            }
+            _ => unreachable!(),
+        }
+
+        // Doses should have been consumed
+        assert!(after.medicines[0].doses < state.medicines[0].doses,
+            "doses should be consumed by auto-deploy");
+    }
+
+    #[test]
+    fn auto_deploy_skips_untested_medicine() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 1_000_000.0;
+        state.medicines[0].max_doses = 1_000_000.0;
+        // NOT tested: tested_against is empty
+        state.diseases[0].detected = true;
+
+        state.regions[0].infections[0].infected = 100_000.0;
+        state.auto_deploy = vec![true];
+
+        let after = tick(&state);
+
+        // Should NOT auto-deploy untested medicines
+        let auto_events: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineAutoDeployed { .. }))
+            .collect();
+        assert!(auto_events.is_empty(), "should not auto-deploy untested medicines");
+    }
+
+    #[test]
+    fn auto_deploy_respects_cooldown() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 1_000_000.0;
+        state.medicines[0].max_doses = 1_000_000.0;
+        state.medicines[0].tested_against = vec![0];
+        state.diseases[0].detected = true;
+
+        // Only region 0 has infections, but it's on cooldown
+        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].last_deploy_tick = Some(state.tick);
+        state.auto_deploy = vec![true];
+
+        let after = tick(&state);
+
+        let auto_events: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineAutoDeployed { .. }))
+            .collect();
+        assert!(auto_events.is_empty(), "should not deploy to region on cooldown");
     }
 }

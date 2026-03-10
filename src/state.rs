@@ -102,6 +102,10 @@ pub struct GameState {
     /// highest-priority available project (if affordable). Per-track toggle.
     #[serde(default)]
     pub auto_research: [bool; 3],
+    /// Auto-deploy: automatically deploy tested medicines to the worst-affected
+    /// region each tick cycle. Per-medicine toggle, indexed by medicine index.
+    #[serde(default)]
+    pub auto_deploy: Vec<bool>,
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -2149,6 +2153,11 @@ pub enum GameEvent {
     TechUnlocked {
         tech: BasicTech,
     },
+    /// A medicine was auto-deployed to a region.
+    MedicineAutoDeployed {
+        medicine_idx: usize,
+        region_idx: usize,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -3364,6 +3373,7 @@ impl GameState {
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_research: [false; 3],
+            auto_deploy: vec![],
             zero_agency_ticks: 0,
             mercy_rule: false,
             threat_alert_level: vec![0; num_diseases],

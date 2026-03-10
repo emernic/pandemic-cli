@@ -51,7 +51,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
 fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let unlocked: Vec<_> = state.medicines.iter().filter(|m| m.unlocked).collect();
+    let unlocked: Vec<(usize, &Medicine)> = state.medicines.iter().enumerate()
+        .filter(|(_, m)| m.unlocked).collect();
 
     if unlocked.is_empty() {
         lines.push(Line::from(Span::styled(
@@ -59,7 +60,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        for (i, med) in unlocked.iter().enumerate() {
+        for (i, &(med_idx, med)) in unlocked.iter().enumerate() {
             let selected = state.ui.panel_selection == i;
             let marker = if selected { "▶ " } else { "  " };
             let style = if selected {
@@ -68,6 +69,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
                 Style::default().fg(Color::White)
             };
 
+            let auto_on = state.auto_deploy.get(med_idx).copied().unwrap_or(false);
+            let auto_tag = if auto_on { " AUTO" } else { "" };
             let type_info = if let Some(mech) = med.mechanism {
                 format!("  ({} — {})", med.therapy_type.label(), mech.label())
             } else {
@@ -76,6 +79,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             lines.push(Line::from(vec![
                 Span::styled(format!("{}{}", marker, med.name), style),
                 Span::styled(type_info, Style::default().fg(Color::Cyan)),
+                Span::styled(auto_tag, Style::default().fg(Color::Green)),
             ]));
 
             let dc = dose_color(med);
@@ -160,7 +164,15 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        lines.push(hint_line(state, "Select", "Close"));
+        // Show auto-deploy status for selected medicine
+        let auto_status = unlocked.get(state.ui.panel_selection)
+            .and_then(|&(med_idx, _)| state.auto_deploy.get(med_idx).copied())
+            .unwrap_or(false);
+        let auto_label = if auto_status { " ON" } else { " OFF" };
+        lines.push(Line::from(Span::styled(
+            format!("  [↑/↓] Select  [Enter] Deploy  [X] Auto-deploy{}  [Esc] Close", auto_label),
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     (" Medicines ".to_string(), lines)

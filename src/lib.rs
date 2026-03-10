@@ -134,6 +134,22 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
                 *double_personnel = !*double_personnel;
             }
+            // Toggle auto-deploy when browsing medicines
+            else if new.ui.open_panel == Panel::Medicines
+                && matches!(new.ui.medicine_ui, None | Some(MedicineUiState::BrowseMedicines))
+            {
+                let unlocked: Vec<usize> = new.medicines.iter().enumerate()
+                    .filter(|(_, m)| m.unlocked)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&med_idx) = unlocked.get(new.ui.panel_selection) {
+                    // Grow auto_deploy vec if needed
+                    while new.auto_deploy.len() <= med_idx {
+                        new.auto_deploy.push(false);
+                    }
+                    new.auto_deploy[med_idx] = !new.auto_deploy[med_idx];
+                }
+            }
             // Toggle auto-research when browsing categories or projects
             else if let Some(ref ui) = new.ui.research_ui {
                 let track = match ui {
