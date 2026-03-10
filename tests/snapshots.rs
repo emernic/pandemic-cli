@@ -46,8 +46,8 @@ fn bargain_shown_for_defiant_governor() {
     // (panel viewport is small, need to move selection to bring bargain into view)
     let mut steps: Vec<String> = vec!["p".to_string(), "enter".to_string()];
     // Navigate to Bargain at display position MANAGE_BARGAIN_POS.
-    // Layout: 0..POLICY_COUNT sorted policies, POLICY_COUNT..+INFRA_ITEM_COUNT-1 infra repair,
-    //         MANAGE_APPEASE_POS Appease, MANAGE_BARGAIN_POS Bargain.
+    // Layout: MANAGE_INFRA_BASE..MANAGE_APPEASE_POS-1 = infra repair,
+    //         MANAGE_APPEASE_POS = Appease, MANAGE_BARGAIN_POS = Bargain.
     for _ in 0..MANAGE_BARGAIN_POS {
         steps.push("down".to_string());
     }

@@ -3978,9 +3978,15 @@ impl UiState {
                     // Rally Public Support
                     Some(GameCommand::RallySupport)
                 } else {
-                    // Decree selected (indices after rally).
-                    // decree_base mirrors render_browse's so_base formula: num_regions + 1 (rally).
+                    // Layout mirrors render_browse: decree_base = num_regions+1, so_base = decree_base+DECREE_COUNT.
                     let decree_base = num_regions + 1;
+                    let so_base = decree_base + DECREE_COUNT;
+                    if self.panel_selection >= so_base {
+                        // Standing order selected
+                        let kind = self.panel_selection - so_base;
+                        return Some(GameCommand::ToggleStandingOrder { kind });
+                    }
+                    // Decree selected (indices after rally).
                     let decree_idx = self.panel_selection - decree_base;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
                         // Sacrifice Region needs sub-selection — but only if threat level is met
