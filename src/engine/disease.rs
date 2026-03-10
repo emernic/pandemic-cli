@@ -143,13 +143,13 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
     }
 
     // Place initial outbreak. Targeting shifts smoothly:
-    // Day 0-15: roughly uniform → vulnerability-weighted (weak defenses attractive)
-    // Day 20-30: vulnerability → strategic importance (high population,
+    // Day 0-10: roughly uniform with vulnerability weighting (weak defenses attractive)
+    // Day 12-25: vulnerability blends into strategic importance (high population,
     //   infrastructure, active policies). The player's strongholds become
     //   the most attractive targets. The pattern feels designed, not random.
     let day = state.tick as f64 / TICKS_PER_DAY;
-    let targeting = (day / 15.0).min(1.0); // 0→1 over days 0-15
-    let strategic = ((day - 20.0) / 10.0).clamp(0.0, 1.0); // 0→1 over days 20-30
+    let targeting = (day / 10.0).min(1.0); // 0→1 over days 0-10
+    let strategic = ((day - 12.0) / 13.0).clamp(0.0, 1.0); // 0→1 over days 12-25
 
     let viable: Vec<usize> = state.regions.iter().enumerate()
         .filter(|(_, r)| !r.collapsed)
@@ -326,7 +326,8 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     // Pre-existing resistance: new diseases emerge partially resistant to
     // mechanisms the player has deployed heavily. Invisible to the player —
     // they just notice their old drugs don't work as well on new threats.
-    if day >= 20.0 {
+    // Kicks in at day 10 to create a noticeable mid-game shift.
+    if day >= 10.0 {
         seed_preexisting_resistance(state, disease_idx);
     }
 
@@ -356,8 +357,8 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 /// medicine usage without announcing it.
 fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
     let day = state.tick as f64 / TICKS_PER_DAY;
-    // Intensity ramps from 0 at day 20 to full at day 40
-    let intensity = ((day - 20.0) / 20.0).clamp(0.0, 1.0);
+    // Intensity ramps from 0 at day 10 to full at day 30
+    let intensity = ((day - 10.0) / 20.0).clamp(0.0, 1.0);
 
     // Aggregate total deployments per mechanism across all medicines
     let mut mech_deployments: HashMap<Option<MechanismOfAction>, u32> = HashMap::new();
@@ -377,14 +378,18 @@ fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
     }
 
     // For each mechanism the player has used, add proportional resistance.
-    // Cap at 0.3 (30%) — enough to be noticeable but not game-breaking.
+    // Broad-spectrum (None mechanism) caps at 50% because it's the universal
+    // tool every player deploys first. Targeted mechanisms cap at 30%.
+    // The higher BS cap creates the visible "this disease doesn't respond"
+    // moment that signals the mid-game shift.
     for (&mechanism, &count) in &mech_deployments {
         let deploy_fraction = count as f64 / max_deploys as f64;
         // Only seed resistance for heavily-used mechanisms (>30% of max)
         if deploy_fraction < 0.3 {
             continue;
         }
-        let resistance = deploy_fraction * intensity * 0.3; // max 0.3 at full intensity
+        let cap = if mechanism.is_none() { 0.5 } else { 0.3 };
+        let resistance = (deploy_fraction * intensity * cap).min(cap);
         if resistance > 0.01 {
             state.diseases[disease_idx].add_resistance(mechanism, resistance);
         }
