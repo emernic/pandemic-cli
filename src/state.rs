@@ -612,9 +612,9 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.30, // Travel Ban — restricts citizens, needs political will
     0.25, // Quarantine — restricts movement, needs political will
     0.00, // Hospital Surge — defensive infrastructure, always available
-    0.00, // Border Controls — checkpoint screening, always available
-    0.00, // Water Sanitation — public health infrastructure, always available
-    0.00, // Low Disease Screening — available immediately
+    0.05, // Border Controls — border restrictions need minimal political authority
+    0.05, // Water Sanitation — government-mandated treatment, needs minimal authority
+    0.05, // Basic Screening — mandatory disease reporting, needs minimal authority
     0.10, // Medium Disease Screening — mandatory testing, needs political will
     0.15, // High Disease Screening — mandatory mass testing, needs political will
     0.40, // Martial Law — drastic, needs high political will
@@ -622,6 +622,20 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.00, // Healthcare Investment — always available, encourages early spending
     0.00, // Intel Station — always available, encourages early investment
 ];
+
+/// Policy indices sorted by POL unlock threshold (ascending), ties broken by index.
+/// This is the canonical display ordering — both the policy renderer and the confirm
+/// handler use this to map display position → policy_idx.
+pub fn policy_display_order() -> [usize; POLICY_COUNT] {
+    let mut order: [usize; POLICY_COUNT] = std::array::from_fn(|i| i);
+    order.sort_by(|&a, &b| {
+        POLICY_POL_THRESHOLDS[a]
+            .partial_cmp(&POLICY_POL_THRESHOLDS[b])
+            .unwrap()
+            .then(a.cmp(&b))
+    });
+    order
+}
 
 /// Short display name for each policy by index. Canonical source — used by
 /// both engine (status messages) and UI (panel rendering).
@@ -3772,10 +3786,11 @@ impl UiState {
                     // Appease Governor
                     Some(GameCommand::AppeaseGovernor { region_idx })
                 } else {
-                    // Toggle policy (panel_selection matches policy_idx)
+                    // Map display position to policy_idx via sorted display order
+                    let policy_idx = policy_display_order()[self.panel_selection];
                     Some(GameCommand::TogglePolicy {
                         region_idx,
-                        policy_idx: self.panel_selection,
+                        policy_idx,
                     })
                 }
             }

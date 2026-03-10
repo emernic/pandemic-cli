@@ -382,7 +382,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     // doc in state.rs for the index mapping). Display position != policy_idx in general,
     // though currently they happen to match.
     //                   (policy_idx, name, active, cost_str, desc, personnel_needed)
-    let policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
+    let mut policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
         (0, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
          if trade_dep { "Reduces cross-region spread, 75% income penalty" }
@@ -457,6 +457,14 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          },
          None),
     ];
+
+    // Sort by POL unlock threshold (ascending), ties broken by policy_idx.
+    // This ensures the list is ordered from "available immediately" to "requires high POL".
+    // display_pos matches panel_selection; confirm handler maps back via policy_display_order().
+    policies.sort_by(|a, b| {
+        POLICY_POL_THRESHOLDS[a.0].partial_cmp(&POLICY_POL_THRESHOLDS[b.0]).unwrap()
+            .then(a.0.cmp(&b.0))
+    });
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
         let selected = state.ui.panel_selection == display_pos;
@@ -539,6 +547,9 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         let name_style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else if !*active && !can_afford_personnel {
+            // Unaffordable: mute name to match [OFF] red — player can see but can't activate
+            Style::default().fg(Color::DarkGray)
         } else {
             Style::default().fg(Color::White)
         };

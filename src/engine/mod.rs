@@ -1974,7 +1974,10 @@ mod tests {
             Some(PolicyUiState::ManagePolicies { region_idx: 4 })
         ));
 
-        // Toggle travel ban (selection 0)
+        // Navigate to Travel Ban (display position 9 after sorting by POL threshold)
+        for _ in 0..9 {
+            state = apply_action(&state, &Action::SelectNext);
+        }
         state = apply_action(&state, &Action::Confirm);
         assert!(state.policies[4].travel_ban);
 
