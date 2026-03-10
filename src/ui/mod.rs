@@ -56,20 +56,6 @@ pub fn process_events(state: &mut GameState) {
         state.ui.crisis_selection = 0;
         state.ui.crisis_auto_resolve = false;
     }
-    // Slow to 1x on critical events so the player has time to read the notification.
-    // (We no longer pause for non-crisis events — the top-right notification handles visibility.)
-    if state.events.iter().any(|e| matches!(e,
-        GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }
-        | GameEvent::ThreatEscalation { .. } | GameEvent::ThreatLevelChanged { .. }
-        | GameEvent::PathogenIdentified { .. }
-        | GameEvent::MedicineDeveloped { .. } | GameEvent::TrialCompleted { .. })
-        || state.events.iter().any(|e| matches!(e,
-            GameEvent::InfrastructureBreakpoint { threshold, .. } if *threshold <= 0.25))
-    )
-    {
-        state.ui.speed_multiplier = 1;
-    }
-
     // Build log messages for each event, then pick the best for the status bar.
     let day = ticks_to_days(state.tick as f64);
     let mut log_entries: Vec<String> = Vec::new();
@@ -196,8 +182,6 @@ pub fn process_events(state: &mut GameState) {
                 };
                 let eff_pct = (worst_eff * 100.0).round() as u32;
                 if worst_eff < 0.25 {
-                    // Critical: medicine nearly useless — slow to 1x and urgent alert
-                    state.ui.speed_multiplier = 1;
                     (2, format!("CRITICAL: {} medicine only {}% effective{}. Re-trial now!", name, eff_pct, detail))
                 } else if worst_eff < 0.50 {
                     (4, format!("WARNING: {} medicine degraded to {}% efficacy{}. Re-trial recommended.", name, eff_pct, detail))
