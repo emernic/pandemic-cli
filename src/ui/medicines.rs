@@ -21,21 +21,25 @@ fn dose_color(med: &Medicine) -> Color {
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
-    let (title, lines) = match &state.ui.medicine_ui {
+    let (title, lines, selected_line) = match &state.ui.medicine_ui {
         Some(MedicineUiState::SelectRegion { medicine_idx }) => {
             render_select_region(state, *medicine_idx)
         }
         Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
-            render_select_disease(state, *medicine_idx, *region_idx)
+            let (t, l) = render_select_disease(state, *medicine_idx, *region_idx);
+            (t, l, None)
         }
         Some(MedicineUiState::SelectTarget { medicine_idx, region_idx, disease_idx }) => {
-            render_select_target(state, *medicine_idx, *region_idx, *disease_idx)
+            let (t, l) = render_select_target(state, *medicine_idx, *region_idx, *disease_idx);
+            (t, l, None)
         }
         Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target }) => {
-            render_confirm_deploy(state, *medicine_idx, *region_idx, target)
+            let (t, l) = render_confirm_deploy(state, *medicine_idx, *region_idx, target);
+            (t, l, None)
         }
         Some(MedicineUiState::DeployResult { medicine_idx, message, adverse }) => {
-            render_deploy_result(state, *medicine_idx, message, *adverse)
+            let (t, l) = render_deploy_result(state, *medicine_idx, message, *adverse);
+            (t, l, None)
         }
         _ => render_browse(state),
     };
@@ -45,12 +49,24 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Green));
 
-    let widget = Paragraph::new(lines).block(block);
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = selected_line.map(|line| {
+        if line as u16 >= inner_height {
+            (line as u16).saturating_sub(inner_height * 2 / 3)
+        } else {
+            0
+        }
+    }).unwrap_or(0);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
     f.render_widget(widget, area);
 }
 
-fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
+fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
     let unlocked: Vec<(usize, &Medicine)> = state.medicines.iter().enumerate()
         .filter(|(_, m)| m.unlocked).collect();
 
@@ -62,6 +78,9 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
     } else {
         for (i, &(med_idx, med)) in unlocked.iter().enumerate() {
             let selected = state.ui.panel_selection == i;
+            if selected {
+                selected_line = Some(lines.len());
+            }
             let marker = if selected { "▶ " } else { "  " };
             let style = if selected {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -175,11 +194,12 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
         )));
     }
 
-    (" Medicines ".to_string(), lines)
+    (" Medicines ".to_string(), lines, selected_line)
 }
 
-fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<Line<'static>>) {
+fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
     let med = &state.medicines[medicine_idx];
 
     lines.push(Line::from(Span::styled(
@@ -192,6 +212,9 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     for (display_pos, &region_idx) in order.iter().enumerate() {
         let region = &state.regions[region_idx];
         let selected = state.ui.panel_selection == display_pos;
+        if selected {
+            selected_line = Some(lines.len());
+        }
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -240,7 +263,7 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Select", "Back"));
 
-    (format!(" Deploy: {} ", med.name), lines)
+    (format!(" Deploy: {} ", med.name), lines, selected_line)
 }
 
 fn render_select_disease(

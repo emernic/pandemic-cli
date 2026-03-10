@@ -11,6 +11,7 @@ use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
 
     if state.diseases.is_empty() {
         lines.push(Line::from(Span::styled(
@@ -20,6 +21,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     } else {
         for (i, disease) in state.diseases.iter().enumerate() {
             let selected = state.ui.panel_selection == i;
+            if selected {
+                selected_line = Some(lines.len());
+            }
             let marker = if selected { "▶ " } else { "  " };
             let style = if selected {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -193,7 +197,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red));
 
-    let widget = Paragraph::new(lines).block(block);
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = selected_line.map(|line| {
+        if line as u16 >= inner_height {
+            (line as u16).saturating_sub(inner_height * 2 / 3)
+        } else {
+            0
+        }
+    }).unwrap_or(0);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
     f.render_widget(widget, area);
 }
 
