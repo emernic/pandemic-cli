@@ -520,7 +520,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
     use crate::state::{
-        decree_display_name, DECREE_POL_THRESHOLDS,
+        decree_display_name, DECREE_THREAT_LEVELS,
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY, TICKS_PER_DAY,
         SACRIFICE_INCOME_BONUS,
     };
@@ -534,13 +534,14 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
         return (Some(format!("{} has already been enacted", decree_display_name(decree_idx))), false);
     }
 
-    // POL check
-    let pol = state.resources.political_power;
-    let threshold = DECREE_POL_THRESHOLDS[decree_idx];
-    if pol < threshold {
+    // Threat level check — decrees are gated by crisis severity, not POL.
+    let required = DECREE_THREAT_LEVELS[decree_idx];
+    if state.threat_level < required {
         return (Some(format!(
-            "{} requires {:.0}% Political Power (current: {:.0}%)",
-            decree_display_name(decree_idx), threshold * 100.0, pol * 100.0
+            "{} requires DEFCON {} ({}) — current: DEFCON {} ({})",
+            decree_display_name(decree_idx),
+            required.defcon(), required.label(),
+            state.threat_level.defcon(), state.threat_level.label()
         )), false);
     }
 
@@ -605,6 +606,8 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 1.0;
         state.resources.funding = 10_000.0;
+        // Set max threat level so decree tests aren't blocked by DEFCON gating
+        state.threat_level = crate::state::ThreatLevel::Extinction;
         state
     }
 
@@ -862,15 +865,15 @@ mod tests {
     }
 
     #[test]
-    fn decree_blocked_by_insufficient_pol() {
+    fn decree_blocked_by_insufficient_threat_level() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        state.resources.political_power = 0.10; // Below all decree thresholds
+        state.threat_level = crate::state::ThreatLevel::Normal; // Below all decree thresholds
 
         for i in 0..crate::state::DECREE_COUNT {
             let (msg, ok) = enact_decree(&mut state, i, None);
-            assert!(!ok, "decree {i} should be blocked at low POL");
-            assert!(msg.unwrap().contains("Political Power"));
+            assert!(!ok, "decree {i} should be blocked at low threat level");
+            assert!(msg.unwrap().contains("DEFCON"), "error message should mention DEFCON");
         }
     }
 

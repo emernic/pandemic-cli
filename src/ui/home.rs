@@ -1,6 +1,6 @@
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -242,10 +242,21 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             .unwrap_or("Unknown");
         format!("  Most at risk: {}", worst_region)
     };
+    let defcon_col = match state.threat_level {
+        crate::state::ThreatLevel::Normal => Color::Green,
+        crate::state::ThreatLevel::Elevated => Color::Yellow,
+        crate::state::ThreatLevel::Crisis => Color::Red,
+        crate::state::ThreatLevel::Catastrophe | crate::state::ThreatLevel::Extinction => Color::LightRed,
+    };
     lines.push(Line::from(vec![
         Span::styled("  Status: ", dim),
         Span::styled(threat_label, Style::default().fg(threat_col)),
         Span::styled(detail, dim),
+        Span::styled("  │  ", dim),
+        Span::styled(
+            format!("DEFCON-{}", state.threat_level.defcon()),
+            Style::default().fg(defcon_col).add_modifier(Modifier::BOLD),
+        ),
     ]));
 
     // ── Infection & death sparklines ──

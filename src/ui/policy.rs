@@ -19,7 +19,7 @@ use crate::state::{
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
-    DECREE_COUNT, DECREE_POL_THRESHOLDS,
+    DECREE_COUNT, DECREE_THREAT_LEVELS,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
@@ -236,8 +236,9 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             }
             lines.push(Line::from(spans));
         } else {
-            let pol_unlocked = state.resources.political_power >= DECREE_POL_THRESHOLDS[decree_idx];
-            if !pol_unlocked {
+            let required_level = DECREE_THREAT_LEVELS[decree_idx];
+            let threat_unlocked = state.threat_level >= required_level;
+            if !threat_unlocked {
                 let name_style = if selected {
                     Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
                 } else {
@@ -248,7 +249,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                     Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
                     Span::styled(name.to_string(), name_style),
                     Span::styled(
-                        format!("  (POL {:.0}%)", DECREE_POL_THRESHOLDS[decree_idx] * 100.0),
+                        format!("  (DEFCON {})", required_level.defcon()),
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]));
