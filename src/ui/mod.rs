@@ -155,6 +155,11 @@ pub fn process_events(state: &mut GameState) {
                     .unwrap_or_else(|| "?".to_string());
                 (3, format!("Interdiction complete: {} cross-region transmission eliminated", name))
             }
+            GameEvent::InfrastructureStabilized { region_idx, system } => {
+                let region = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                (3, format!("{} stabilized in {}", system.label(), region))
+            }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");

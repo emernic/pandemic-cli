@@ -342,4 +342,52 @@ mod tests {
         assert_eq!(state.regions[0].supply_lines, 0.0);
         assert_eq!(state.regions[0].civil_order, 0.0);
     }
+
+    #[test]
+    fn field_ops_appear_when_infra_degraded() {
+        use crate::state::{ResearchKind, INFRA_STRESSED};
+        let mut state = GameState::new_default(42);
+        // Infrastructure at full — no field ops should appear
+        let projects = state.available_field_projects();
+        assert!(!projects.iter().any(|p| matches!(p, ResearchKind::FieldOperations { .. })),
+            "field ops should not appear when all infra >= 50%");
+
+        // Degrade NA healthcare below stressed threshold
+        state.regions[0].healthcare_capacity = INFRA_STRESSED - 0.01;
+        let projects = state.available_field_projects();
+        let ops: Vec<_> = projects.iter()
+            .filter(|p| matches!(p, ResearchKind::FieldOperations { .. }))
+            .collect();
+        assert_eq!(ops.len(), 1, "should have exactly 1 field ops (HC in NA)");
+        assert!(matches!(ops[0],
+            ResearchKind::FieldOperations { region_idx: 0, system: InfraSystem::Healthcare }));
+    }
+
+    #[test]
+    fn field_ops_completion_restores_infrastructure() {
+        use crate::state::{ResearchKind, ResearchProject};
+        use crate::engine::research;
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+        let mut state = GameState::new_default(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        state.regions[0].healthcare_capacity = 0.10;
+        // Create a completed field ops project
+        state.field_research.push(ResearchProject {
+            kind: ResearchKind::FieldOperations {
+                region_idx: 0,
+                system: InfraSystem::Healthcare,
+            },
+            progress: 300.0, // well past required
+            required_ticks: 240.0,
+            personnel_assigned: 3,
+        });
+        research::tick_research(&mut state, &mut rng);
+        // Project should have completed and restored HC
+        assert!(state.field_research.is_empty(), "project should be consumed");
+        assert!((state.regions[0].healthcare_capacity - 0.40).abs() < 0.01,
+            "HC should be 0.10 + FIELD_OPS_RESTORE = 0.40, got {}", state.regions[0].healthcare_capacity);
+        assert!(state.events.iter().any(|e| matches!(e,
+            GameEvent::InfrastructureStabilized { region_idx: 0, system: InfraSystem::Healthcare })));
+    }
 }
