@@ -218,12 +218,10 @@ Crisis events and pause events (disease detection, collapse, breakthroughs) **in
 
 1. Tick advancement stops immediately.
 2. For crises: subsequent key steps (e.g. `--do enter`) still fire, so you can dismiss inline: `--do d60 --do enter --do d5`. Subsequent `--days` steps are skipped until the crisis is dismissed.
-3. For pause events: remaining queued steps are dropped (with a stderr message).
+3. For pause events: subsequent steps still fire. The next `--do d<N>` resumes automatically (tick advancement forces Running). A stderr message notes the pause.
 4. The rendered screen shows the current state — including the crisis popup or paused game.
 
 Game over also stops execution immediately.
-
-**Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
