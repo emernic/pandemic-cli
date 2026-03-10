@@ -1,5 +1,5 @@
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::{GameOutcome, GameState, GovernorPersonality, POLICY_COUNT, SimState};
+use pandemic_cli_lib::state::{GameOutcome, GameState, GovernorPersonality, MANAGE_BARGAIN_POS, SimState};
 
 /// Smoke test: initial screen renders without panicking and contains key UI elements.
 #[test]
@@ -45,10 +45,10 @@ fn bargain_shown_for_defiant_governor() {
     // Open policy panel for region 0, then scroll down to the bargain item
     // (panel viewport is small, need to move selection to bring bargain into view)
     let mut steps: Vec<String> = vec!["p".to_string(), "enter".to_string()];
-    // Navigate to Bargain at display position POLICY_COUNT + 4.
-    // Layout: 0..POLICY_COUNT sorted policies, POLICY_COUNT..+3 infra repair,
-    //         POLICY_COUNT+3 Appease, POLICY_COUNT+4 Bargain.
-    for _ in 0..POLICY_COUNT + 4 {
+    // Navigate to Bargain at display position MANAGE_BARGAIN_POS.
+    // Layout: 0..POLICY_COUNT sorted policies, POLICY_COUNT..+INFRA_ITEM_COUNT-1 infra repair,
+    //         MANAGE_APPEASE_POS Appease, MANAGE_BARGAIN_POS Bargain.
+    for _ in 0..MANAGE_BARGAIN_POS {
         steps.push("down".to_string());
     }
     let result = run_snapshot(state, &steps).unwrap();

@@ -610,6 +610,12 @@ pub struct RegionPolicy {
 ///   - render_manage policies vec (ui/policy.rs)
 pub const POLICY_COUNT: usize = 12;
 
+/// Number of infrastructure repair items in the ManagePolicies panel
+/// (Healthcare, Supply Lines, Civil Order). This ties the renderer and
+/// confirm handler to the same layout constant — add a new infra item here,
+/// and Appease/Bargain positions update automatically everywhere.
+pub const INFRA_ITEM_COUNT: usize = 3;
+
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
@@ -637,8 +643,8 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
 /// Both `ui/policy.rs` (render_manage) and `state.rs` (handle_policy_confirm) use
 /// these constants so the two sites stay in sync automatically.
 pub const MANAGE_INFRA_BASE: usize = POLICY_COUNT;
-pub const MANAGE_APPEASE_POS: usize = POLICY_COUNT + 3;
-pub const MANAGE_BARGAIN_POS: usize = POLICY_COUNT + 4;
+pub const MANAGE_APPEASE_POS: usize = POLICY_COUNT + INFRA_ITEM_COUNT;
+pub const MANAGE_BARGAIN_POS: usize = POLICY_COUNT + INFRA_ITEM_COUNT + 1;
 
 /// Policy indices sorted by POL unlock threshold (ascending), ties broken by index.
 /// This is the canonical display ordering — both the policy renderer and the confirm
@@ -3971,16 +3977,11 @@ impl UiState {
                 } else if self.panel_selection == num_regions {
                     // Rally Public Support
                     Some(GameCommand::RallySupport)
-                } else if self.panel_selection >= num_regions + 1 + DECREE_COUNT {
-                    // Standing order selected
-                    let kind = self.panel_selection - num_regions - 1 - DECREE_COUNT;
-                    Some(GameCommand::ToggleStandingOrder { kind })
                 } else {
                     // Decree selected (indices after rally).
-                    // display_pos = num_regions + 1 + decree_idx (see ui/policy.rs BrowseRegions renderer).
-                    // These two formulas are inverses — if new items are inserted between rally and decrees,
-                    // both sites must be updated together.
-                    let decree_idx = self.panel_selection - num_regions - 1;
+                    // decree_base mirrors render_browse's so_base formula: num_regions + 1 (rally).
+                    let decree_base = num_regions + 1;
+                    let decree_idx = self.panel_selection - decree_base;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
                         // Sacrifice Region needs sub-selection — but only if threat level is met
                         if state.threat_level >= DECREE_THREAT_LEVELS[2] {
@@ -3988,7 +3989,6 @@ impl UiState {
                             self.panel_selection = 0;
                             None
                         } else {
-                            // Insufficient threat level — route to engine so it returns the proper error message
                             Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
                         }
                     } else {
