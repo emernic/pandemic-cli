@@ -260,7 +260,7 @@ Report any problems with the playtest process itself — NOT the game, but your 
 If everything worked fine, write "No process issues." That's it. But think hard before writing that — did everything *really* work, or did you quietly work around something?
 
 ## Would You Play Again?
-At the very end of your report, after everything else, answer this question honestly: **Would you want to play again right now?** Yes or no, plus one sentence explaining why. Don't overthink it — it's a gut check. "Yes — I want to try prioritizing research over containment" or "No — I felt like I was watching numbers tick up with no agency" are both valid answers. This is the single most informative data point about whether the game is working.
+At the very end of your report, answer this question: **Would you want to play again right now?** Just yes or no. If you say yes, you'll get the opportunity to immediately start a new session and try a different strategy.
 
 ## Session Log
 Think-out-loud notes from the session, lightly cleaned up.
