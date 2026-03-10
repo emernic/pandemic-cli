@@ -331,8 +331,8 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         seed_preexisting_resistance(state, disease_idx);
     }
 
-    // Tech-aware adaptations: diseases that emerge against a capable player
-    // are designed to exploit gaps in their toolkit. The arms race is bidirectional.
+    // Mild tech-aware adaptations: new diseases reflect the player's toolkit
+    // but benefits of each tech always outweigh the adaptation penalty.
     adapt_disease_to_player_tech(state, disease_idx);
 
     // Auto-register new diseases with broad-spectrum medicines. These are
