@@ -605,7 +605,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let yield_bonus = state.manufacturing_yield_bonus();
             let actual_doses = med.max_doses * yield_bonus;
             if (yield_bonus - 1.0).abs() > 0.01 {
-                Some(format!("Produces {} doses (Europe +{:.0}%)",
+                Some(format!("Produces {} doses (+{:.0}% mfg bonus)",
                     crate::format_number(actual_doses),
                     (yield_bonus - 1.0) * 100.0))
             } else {

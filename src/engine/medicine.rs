@@ -362,7 +362,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
-            // Check funding (including Asia deployment discount)
+            // Check funding (including regional deployment discount)
             let cost = state.medicines[med_idx].deploy_cost(state.regions[region_idx].population)
                 * state.deployment_cost_bonus();
             if state.resources.funding < cost {
