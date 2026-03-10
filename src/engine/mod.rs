@@ -121,12 +121,16 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     // Mid-game disease emergence (spawns undetected — player won't see it yet).
-    // Later diseases are tougher (scaled by game day).
-    if new.tick >= EMERGENCE_MIN_TICK
-        && new.diseases.len() < MAX_DISEASES
-        && rng.r#gen::<f64>() < EMERGENCE_CHANCE_PER_TICK
+    // Later diseases are tougher (scaled by game day and player capability).
+    // The arms race is bidirectional: more player tech → faster emergence.
     {
-        new.spawn_disease_scaled(&mut rng);
+        let emergence_chance = EMERGENCE_CHANCE_PER_TICK * (1.0 + new.tech_pressure());
+        if new.tick >= EMERGENCE_MIN_TICK
+            && new.diseases.len() < MAX_DISEASES
+            && rng.r#gen::<f64>() < emergence_chance
+        {
+            new.spawn_disease_scaled(&mut rng);
+        }
     }
 
     // Disease detection — undetected diseases are revealed when enough infections are
@@ -546,6 +550,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
     use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
@@ -4745,5 +4751,98 @@ mod tests {
 
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(!ok, "bargain should fail without enough personnel");
+    }
+
+    #[test]
+    fn tech_pressure_increases_emergence_rate() {
+        use crate::state::{BasicTech, EMERGENCE_CHANCE_PER_TICK};
+        let mut state = GameState::new_default(42);
+
+        // No techs → zero pressure
+        assert_eq!(state.tech_pressure(), 0.0);
+
+        // Unlock some techs
+        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+        state.unlocked_techs.push(BasicTech::RapidSequencing);
+        let pressure = state.tech_pressure();
+        assert!(pressure > 0.0, "tech pressure should increase with unlocked techs");
+        assert!((pressure - 0.30).abs() < 0.01, "2 techs × 0.15 = 0.30, got {pressure}");
+
+        // Effective emergence chance should be higher
+        let effective_chance = EMERGENCE_CHANCE_PER_TICK * (1.0 + pressure);
+        assert!(effective_chance > EMERGENCE_CHANCE_PER_TICK);
+    }
+
+    #[test]
+    fn vaccine_platform_causes_pre_mutated_diseases() {
+        use crate::state::BasicTech;
+        use rand::SeedableRng;
+        let mut state = GameState::new_default(42);
+        state.tick = 3000; // well past emergence threshold
+        state.unlocked_techs.push(BasicTech::VaccinePlatform);
+
+        let mut rng = ChaCha8Rng::seed_from_u64(99);
+        let initial_count = state.diseases.len();
+        state.spawn_disease_scaled(&mut rng);
+
+        if state.diseases.len() > initial_count {
+            let new_d = &state.diseases[initial_count];
+            assert!(new_d.strain_generation >= 1,
+                "disease should emerge pre-mutated when player has VaccinePlatform, got gen {}",
+                new_d.strain_generation);
+        }
+    }
+
+    #[test]
+    fn pathogen_suppression_makes_diseases_deadlier() {
+        use crate::state::BasicTech;
+        use rand::SeedableRng;
+
+        // Spawn disease WITHOUT PathogenSuppression
+        let mut state1 = GameState::new_default(42);
+        state1.tick = 3000;
+        let mut rng1 = ChaCha8Rng::seed_from_u64(77);
+        let count1 = state1.diseases.len();
+        state1.spawn_disease_scaled(&mut rng1);
+
+        // Spawn disease WITH PathogenSuppression (same seed for comparable params)
+        let mut state2 = GameState::new_default(42);
+        state2.tick = 3000;
+        state2.unlocked_techs.push(BasicTech::PathogenSuppression);
+        state2.unlocked_techs.push(BasicTech::VaccinePlatform);
+        state2.unlocked_techs.push(BasicTech::CombinationTherapy);
+        let mut rng2 = ChaCha8Rng::seed_from_u64(77);
+        let count2 = state2.diseases.len();
+        state2.spawn_disease_scaled(&mut rng2);
+
+        if state1.diseases.len() > count1 && state2.diseases.len() > count2 {
+            let d1 = &state1.diseases[count1];
+            let d2 = &state2.diseases[count2];
+            assert!(d2.lethality > d1.lethality,
+                "disease with PathogenSuppression should be deadlier: {:.4} vs {:.4}",
+                d2.lethality, d1.lethality);
+        }
+    }
+
+    #[test]
+    fn quarantine_adaptation_seeded_for_new_diseases() {
+        use rand::SeedableRng;
+        let mut state = GameState::new_default(42);
+        state.tick = 3000;
+        // Activate quarantines in 3 regions
+        state.policies[0].quarantine = true;
+        state.policies[1].quarantine = true;
+        state.policies[2].quarantine = true;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(55);
+        let initial_count = state.diseases.len();
+        state.spawn_disease_scaled(&mut rng);
+
+        if state.diseases.len() > initial_count {
+            let new_d = &state.diseases[initial_count];
+            assert!(new_d.containment_adaptation > 0.0,
+                "new disease should have containment adaptation when quarantines active, got {}",
+                new_d.containment_adaptation);
+        }
     }
 }
