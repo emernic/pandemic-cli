@@ -33,15 +33,13 @@ Two things are required for this to work:
 
 Command to run (with `run_in_background: true`):
 ```bash
-unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue'
+unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' 2>&1 | tee /tmp/worker-$(date +%s).log
 ```
 
-After launching, tell the user the worker is running.
+The `tee` writes output to a timestamped file in `/tmp/` that persists after the task completes. Tell the user the worker is running and that they can find the log with:
 
-## What to Expect
-
-**Worker output is not observable while it runs.** The task output file is cleaned up before the completion notification arrives, so there is no log to read. The only way to see what a worker did is to check GitHub: recent commits to master, merged PRs, or newly removed `in-progress` labels on issues.
-
-**`-p '/pick-up-issue'` does invoke the skill.** This was verified — the worker loads the skill files and runs the full pick-up-issue loop autonomously, including claiming an issue, branching, implementing, and merging.
+```bash
+ls -lt /tmp/worker-*.log | head -1
+```
 
 The cron loop fires every 30 minutes, spawning a fresh worker each time. No further action needed from you.
