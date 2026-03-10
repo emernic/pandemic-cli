@@ -55,7 +55,8 @@ pub fn process_events(state: &mut GameState) {
         state.ui.crisis_selection = 0;
         state.ui.crisis_auto_resolve = false;
     }
-    // Reset speed display when tick() auto-paused on critical events
+    // Slow to 1x on critical events so the player has time to read the notification.
+    // (We no longer pause for non-crisis events — the top-right notification handles visibility.)
     if state.events.iter().any(|e| matches!(e,
         GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }
         | GameEvent::ThreatEscalation { .. } | GameEvent::ThreatLevelChanged { .. }
@@ -280,10 +281,9 @@ pub fn process_events(state: &mut GameState) {
         state.event_log.pop_front();
     }
 
-    // Set status bar message (add action hints for the status bar version).
-    // Only add hints when we can be sure which event type won the status bar.
+    // Update the top-right event notification area.
     if let Some((priority, msg)) = status_msg {
-        let status = match priority {
+        let notification = match priority {
             0 => format!("{}. Personnel lost.", msg),
             1 if msg.starts_with("NEW THREAT") => {
                 format!("{}! Use [R] Research to identify it.", msg)
@@ -293,7 +293,7 @@ pub fn process_events(state: &mut GameState) {
             }
             _ => msg,
         };
-        state.ui.status_message = Some(status);
+        state.ui.event_notification = Some(notification);
     }
 }
 
