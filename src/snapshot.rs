@@ -93,8 +93,12 @@ fn describe_pause_events(events: &[GameEvent]) -> String {
     let mut parts = Vec::new();
     for event in events {
         match event {
-            GameEvent::DiseaseDetected { disease_idx } => {
-                parts.push(format!("new threat detected (pathogen #{})", disease_idx + 1));
+            GameEvent::DiseaseDetected { disease_idx, silent_days } => {
+                if *silent_days > 0.5 {
+                    parts.push(format!("new threat detected (pathogen #{}, spreading {:.1} days)", disease_idx + 1, silent_days));
+                } else {
+                    parts.push(format!("new threat detected (pathogen #{})", disease_idx + 1));
+                }
             }
             GameEvent::RegionCollapsed { region_idx } => {
                 parts.push(format!("region {} collapsed", region_idx + 1));

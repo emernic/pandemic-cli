@@ -17,6 +17,8 @@ use crate::state::{
     NUCLEAR_ANNIHILATION_COST,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
+    INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
+    ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
     DECREE_COUNT, DECREE_THREAT_LEVELS,
@@ -89,7 +91,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         };
 
         let policy = state.policies.get(region_idx);
-        let has_active = policy.is_some_and(|p| p.any_active()) || region.hospital_level > 0;
+        let has_active = policy.is_some_and(|p| p.any_active()) || region.hospital_level > 0 || region.intel_level > 0;
 
         let mut spans = vec![
             Span::styled(format!("{}{:<16}", marker, region.name), style),
@@ -386,6 +388,24 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
              _ => "40% lethality reduction, +25% medicine efficacy",
          },
          None),
+        (11,
+         match region.intel_level {
+             0 => "Build Intel Station",
+             1 => "Upgrade → Advanced Intel",
+             _ => "Advanced Intel (built)",
+         },
+         region.intel_level >= 2,
+         match region.intel_level {
+             0 => format!("${:.0} + {} pers.", INTEL_STATION_COST, INTEL_STATION_PERSONNEL),
+             1 => format!("${:.0} + {} pers.", ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL),
+             _ => format!("{} pers. ongoing", ADVANCED_INTEL_PERSONNEL),
+         },
+         match region.intel_level {
+             0 => "Detects new pathogens at 3,000 local infections (vs. 10,000)",
+             1 => "Detects at 1,000 infections. Generates pre-detection briefings at 500.",
+             _ => "Early warning active. Pre-detection surveillance operational.",
+         },
+         None),
     ];
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
@@ -418,7 +438,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            lines.push(Line::from(""));
+            // No blank line after structurally-locked items to save panel space
             continue;
         }
 
@@ -455,7 +475,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            lines.push(Line::from(""));
+            // No blank line after POL-locked items to save panel space
             continue;
         }
 

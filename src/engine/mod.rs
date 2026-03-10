@@ -126,24 +126,48 @@ pub fn tick(state: &GameState) -> GameState {
         new.spawn_disease_scaled(&mut rng);
     }
 
-    // Disease detection — undetected diseases are revealed when total infected
-    // crosses the detection threshold. Better screening lowers the threshold.
-    let effective_threshold = crate::state::DETECTION_THRESHOLD
-        * new.best_screening_level().detection_multiplier();
-    for disease_idx in 0..new.diseases.len() {
-        if new.diseases[disease_idx].detected {
-            continue;
-        }
-        let total: f64 = new.regions.iter()
-            .flat_map(|r| &r.infections)
-            .filter(|inf| inf.disease_idx == disease_idx)
-            .map(|inf| inf.infected)
-            .sum();
-        if total >= effective_threshold {
-            new.diseases[disease_idx].detected = true;
-            new.events.push(GameEvent::DiseaseDetected { disease_idx });
-            // Auto-pause so the player sees the detection and can react
-            new.sim_state = SimState::Paused;
+    // Disease detection — undetected diseases are revealed when enough infections are
+    // observed. There are two detection paths:
+    // 1. Global: total infected (all regions) >= DETECTION_THRESHOLD * screening multiplier.
+    // 2. Per-region intel: if a region with an Intel Station has enough LOCAL infections,
+    //    the disease is detected early. Thresholds: Basic=3,000, Advanced=1,000.
+    {
+        let global_threshold = crate::state::DETECTION_THRESHOLD
+            * new.best_screening_level().detection_multiplier();
+        for disease_idx in 0..new.diseases.len() {
+            if new.diseases[disease_idx].detected {
+                continue;
+            }
+            let mut global_total: f64 = 0.0;
+            let mut detected = false;
+            for region in &new.regions {
+                let local: f64 = region.infections.iter()
+                    .filter(|inf| inf.disease_idx == disease_idx)
+                    .map(|inf| inf.infected)
+                    .sum();
+                global_total += local;
+                // Per-region intel detection
+                let intel_threshold = match region.intel_level {
+                    2 => 1_000.0,
+                    1 => 3_000.0,
+                    _ => f64::INFINITY, // no intel: don't trigger per-region
+                };
+                if local >= intel_threshold {
+                    detected = true;
+                }
+            }
+            if global_total >= global_threshold {
+                detected = true;
+            }
+            if detected {
+                let spawned_at = new.diseases[disease_idx].spawned_at_tick;
+                let silent_days = (new.tick.saturating_sub(spawned_at)) as f64
+                    / crate::state::TICKS_PER_DAY;
+                new.diseases[disease_idx].detected = true;
+                new.events.push(GameEvent::DiseaseDetected { disease_idx, silent_days });
+                // Auto-pause so the player sees the detection and can react
+                new.sim_state = SimState::Paused;
+            }
         }
     }
 
@@ -181,6 +205,40 @@ pub fn tick(state: &GameState) -> GameState {
                         has_medicine,
                     });
                     new.sim_state = SimState::Paused;
+                }
+            }
+        }
+    }
+
+    // Advanced Intel briefings: warn about undetected diseases before they hit detection
+    // threshold. Advanced Intel (level 2) regions alert at 500 local infections — well
+    // before the 1,000 auto-detection threshold. Fires once per disease.
+    {
+        // Grow tracking vec if new diseases were spawned
+        while new.intel_pre_detection_briefed.len() < new.diseases.len() {
+            new.intel_pre_detection_briefed.push(false);
+        }
+        for (d_idx, disease) in new.diseases.iter().enumerate() {
+            if disease.detected || new.intel_pre_detection_briefed[d_idx] {
+                continue;
+            }
+            for region in &new.regions {
+                if region.intel_level < 2 {
+                    continue;
+                }
+                let local: f64 = region.infections.iter()
+                    .filter(|inf| inf.disease_idx == d_idx)
+                    .map(|inf| inf.infected)
+                    .sum();
+                if local >= 500.0 {
+                    new.intel_pre_detection_briefed[d_idx] = true;
+                    new.events.push(GameEvent::IntelBriefing {
+                        message: format!(
+                            "INTEL: {} — anomalous hospital admissions. Possible emerging pathogen, monitoring closely.",
+                            region.name
+                        ),
+                    });
+                    break;
                 }
             }
         }
@@ -235,6 +293,7 @@ pub fn tick(state: &GameState) -> GameState {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
             new.regions[i].hospital_level = 0; // Hospital destroyed
+            new.regions[i].intel_level = 0; // Intel station destroyed
             // Clear all policies in the collapsed region
             if let Some(policy) = new.policies.get_mut(i) {
                 policy.clear_all();
@@ -1961,6 +2020,7 @@ mod tests {
             strain_generation: 3,
             sequencing_count: 0,
             detected: true,
+            spawned_at_tick: 0,
             mechanism_resistance: vec![],
             containment_adaptation: 0.0,
         }];

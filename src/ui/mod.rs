@@ -75,16 +75,24 @@ pub fn process_events(state: &mut GameState) {
                 let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
                 (0, format!("COLLAPSE: {} has fallen! {} regions remain", region_name, remaining))
             }
-            GameEvent::DiseaseDetected { disease_idx } => {
+            GameEvent::DiseaseDetected { disease_idx, silent_days } => {
                 let affected: Vec<&str> = state.regions.iter()
                     .filter(|r| r.disease_state(*disease_idx).is_some_and(|inf| inf.infected > 0.0))
                     .map(|r| r.name.as_str()).collect();
-                let msg = if affected.len() > 1 {
-                    format!("NEW THREAT detected across {} regions", affected.len())
+                let location = if affected.len() > 1 {
+                    format!("{} regions", affected.len())
                 } else {
-                    format!("NEW THREAT detected in {}", affected.first().unwrap_or(&"unknown"))
+                    affected.first().unwrap_or(&"unknown").to_string()
+                };
+                let msg = if *silent_days > 0.5 {
+                    format!("NEW THREAT detected in {} — spreading silently for {:.1} days", location, silent_days)
+                } else {
+                    format!("NEW THREAT detected in {}", location)
                 };
                 (1, msg)
+            }
+            GameEvent::IntelBriefing { message } => {
+                (3, message.clone())
             }
             GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine } => {
                 let name = state.diseases.get(*disease_idx)

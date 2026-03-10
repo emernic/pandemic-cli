@@ -508,6 +508,13 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::Green),
             ));
         }
+        if region.intel_level > 0 {
+            let intel_name = if region.intel_level >= 2 { "Adv Intel" } else { "Intel Stn" };
+            econ_spans.push(Span::styled(
+                format!("  [{}]", intel_name),
+                Style::default().fg(Color::Cyan),
+            ));
+        }
         lines.push(Line::from(econ_spans));
         // Regional traits
         if !region.traits.is_empty() {

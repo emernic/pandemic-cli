@@ -1,10 +1,12 @@
 use crate::state::{
     CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
     policy_display_name,
+    ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BORDER_CONTROLS_PERSONNEL,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
     HOSPITAL_SURGE_PERSONNEL,
+    INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     MARTIAL_LAW_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
@@ -253,6 +255,37 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 }
             } else {
                 (Some(format!("{region_name} already has a Medical Center")), false)
+            }
+        }
+        // Intel Station / Advanced Intel (11): tiered per-region surveillance infrastructure
+        11 => {
+            let region = &state.regions[region_idx];
+            if region.collapsed {
+                (Some(format!("{region_name} has collapsed — cannot build")), false)
+            } else if region.intel_level == 0 {
+                // Build Level 1: Intel Station
+                if state.resources.funding < INTEL_STATION_COST {
+                    (Some(format!("Not enough funding (need ${:.0})", INTEL_STATION_COST)), false)
+                } else if available_personnel < INTEL_STATION_PERSONNEL {
+                    (Some(format!("Need {} personnel to staff Intel Station", INTEL_STATION_PERSONNEL)), false)
+                } else {
+                    state.resources.funding -= INTEL_STATION_COST;
+                    state.regions[region_idx].intel_level = 1;
+                    (Some(format!("{region_name}: Intel Station operational — detects new pathogens at 3,000 local infections")), true)
+                }
+            } else if region.intel_level == 1 {
+                // Upgrade to Level 2: Advanced Intel
+                if state.resources.funding < ADVANCED_INTEL_COST {
+                    (Some(format!("Not enough funding (need ${:.0})", ADVANCED_INTEL_COST)), false)
+                } else if available_personnel < (ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL) {
+                    (Some(format!("Need {} more personnel for Advanced Intel", ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL)), false)
+                } else {
+                    state.resources.funding -= ADVANCED_INTEL_COST;
+                    state.regions[region_idx].intel_level = 2;
+                    (Some(format!("{region_name}: Advanced Intel operational — detects at 1,000 infections, generates briefings")), true)
+                }
+            } else {
+                (Some(format!("{region_name} already has Advanced Intel")), false)
             }
         }
         _ => (None, false),
@@ -581,6 +614,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             state.regions[r_idx].collapsed = true;
             state.regions[r_idx].collapsed_at_tick = Some(state.tick);
             state.regions[r_idx].hospital_level = 0; // Hospital destroyed
+            state.regions[r_idx].intel_level = 0; // Intel station destroyed
             // Clear policies
             if let Some(p) = state.policies.get_mut(r_idx) {
                 p.clear_all();
