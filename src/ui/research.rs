@@ -616,6 +616,18 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         ResearchKind::BasicResearch { tech } => {
             Some(tech.description().to_string())
         }
+        ResearchKind::SuppressPathogen { disease_idx } => {
+            let disease = state.diseases.get(*disease_idx)?;
+            Some(format!("Current infectivity: {:.4} → {:.4}", disease.infectivity, disease.infectivity * 0.80))
+        }
+        ResearchKind::AttenuatePathogen { disease_idx } => {
+            let disease = state.diseases.get(*disease_idx)?;
+            Some(format!("Current lethality: {:.4} → {:.4}", disease.lethality, disease.lethality * 0.70))
+        }
+        ResearchKind::InterdictPathogen { disease_idx } => {
+            let disease = state.diseases.get(*disease_idx)?;
+            Some(format!("Cross-region spread: {:.4} → 0.0000", disease.cross_region_spread))
+        }
         _ => None,
     }
 }

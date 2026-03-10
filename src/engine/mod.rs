@@ -4843,4 +4843,65 @@ mod tests {
                 new_d.containment_adaptation);
         }
     }
+
+    #[test]
+    fn directed_attenuation_makes_diseases_even_deadlier() {
+        use crate::state::BasicTech;
+        use rand::SeedableRng;
+
+        // Spawn with PathogenSuppression only
+        let mut state1 = GameState::new_default(42);
+        state1.tick = 3000;
+        state1.unlocked_techs.push(BasicTech::PathogenSuppression);
+        let mut rng1 = ChaCha8Rng::seed_from_u64(77);
+        let count1 = state1.diseases.len();
+        state1.spawn_disease_scaled(&mut rng1);
+
+        // Spawn with PathogenSuppression + DirectedAttenuation (same seed)
+        let mut state2 = GameState::new_default(42);
+        state2.tick = 3000;
+        state2.unlocked_techs.push(BasicTech::PathogenSuppression);
+        state2.unlocked_techs.push(BasicTech::DirectedAttenuation);
+        let mut rng2 = ChaCha8Rng::seed_from_u64(77);
+        let count2 = state2.diseases.len();
+        state2.spawn_disease_scaled(&mut rng2);
+
+        if state1.diseases.len() > count1 && state2.diseases.len() > count2 {
+            let d1 = &state1.diseases[count1];
+            let d2 = &state2.diseases[count2];
+            assert!(d2.lethality > d1.lethality,
+                "disease with DirectedAttenuation should be deadlier: {:.4} vs {:.4}",
+                d2.lethality, d1.lethality);
+        }
+    }
+
+    #[test]
+    fn genomic_interdiction_makes_diseases_spread_faster() {
+        use crate::state::BasicTech;
+        use rand::SeedableRng;
+
+        // Spawn without GenomicInterdiction
+        let mut state1 = GameState::new_default(42);
+        state1.tick = 3000;
+        let mut rng1 = ChaCha8Rng::seed_from_u64(77);
+        let count1 = state1.diseases.len();
+        state1.spawn_disease_scaled(&mut rng1);
+
+        // Spawn with GenomicInterdiction
+        let mut state2 = GameState::new_default(42);
+        state2.tick = 3000;
+        state2.unlocked_techs.push(BasicTech::GenomicInterdiction);
+        state2.unlocked_techs.push(BasicTech::DirectedAttenuation);
+        let mut rng2 = ChaCha8Rng::seed_from_u64(77);
+        let count2 = state2.diseases.len();
+        state2.spawn_disease_scaled(&mut rng2);
+
+        if state1.diseases.len() > count1 && state2.diseases.len() > count2 {
+            let d1 = &state1.diseases[count1];
+            let d2 = &state2.diseases[count2];
+            assert!(d2.cross_region_spread > d1.cross_region_spread,
+                "disease with GenomicInterdiction should spread faster: {:.4} vs {:.4}",
+                d2.cross_region_spread, d1.cross_region_spread);
+        }
+    }
 }

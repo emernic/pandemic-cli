@@ -36,7 +36,7 @@ Three independent tracks run simultaneously:
 
 1. **Field Research** — boots on the ground. Identify unknown threats, run clinical trials, perform genomic sequencing, train personnel. Multiple projects can run in parallel, gated by available personnel.
 2. **Applied Research** — lab work. Develop medicines, manufacture doses. One project at a time.
-3. **Basic Research** — the tech tree. Unlock new capabilities: Targeted Drug Design, Monoclonal Antibodies, Phage Therapy, Rapid Sequencing, Vaccine Platform, Resistance Surveillance, Combination Therapy, Pathogen Suppression.
+3. **Basic Research** — the tech tree. Unlock new capabilities: Targeted Drug Design, Monoclonal Antibodies, Phage Therapy, Rapid Sequencing, Vaccine Platform, Resistance Surveillance, Combination Therapy, Pathogen Suppression, Directed Attenuation, Genomic Interdiction.
 
 The pipeline for a single disease: **Unknown Threat → Identify (field) → Develop Medicine (applied) → Clinical Trial (field) → Deploy**. Each step takes time and resources. Skipping steps (deploying untested medicine) is possible but risky.
 

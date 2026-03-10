@@ -2229,6 +2229,8 @@ impl ResearchProject {
             ResearchKind::GenomicSequencing { disease_idx: d } => *d == disease_idx,
             ResearchKind::ClinicalTrial { disease_idx: d, .. } => *d == disease_idx,
             ResearchKind::SuppressPathogen { disease_idx: d } => *d == disease_idx,
+            ResearchKind::AttenuatePathogen { disease_idx: d } => *d == disease_idx,
+            ResearchKind::InterdictPathogen { disease_idx: d } => *d == disease_idx,
             ResearchKind::DevelopMedicine { .. }
             | ResearchKind::ManufactureDoses { .. }
             | ResearchKind::TrainPersonnel
@@ -2252,6 +2254,14 @@ pub enum ResearchKind {
     /// Pathogen suppression — permanently reduces a disease's infectivity by ~20%.
     /// Requires the PathogenSuppression basic tech to be unlocked.
     SuppressPathogen { disease_idx: usize },
+    /// Directed attenuation — permanently reduces a disease's lethality by ~30%.
+    /// In-situ modification of pathogen virulence factors.
+    /// Requires the DirectedAttenuation basic tech to be unlocked.
+    AttenuatePathogen { disease_idx: usize },
+    /// Genomic interdiction — permanently eliminates a disease's cross-region spread.
+    /// Disrupts pathogen transmission mechanisms at the genomic level.
+    /// Requires the GenomicInterdiction basic tech to be unlocked.
+    InterdictPathogen { disease_idx: usize },
 }
 
 /// Technology nodes in the Basic Research tech tree.
@@ -2287,6 +2297,14 @@ pub enum BasicTech {
     /// a disease's infectivity by modifying its evolutionary trajectory.
     /// Prereq: VaccinePlatform + CombinationTherapy.
     PathogenSuppression,
+    /// Unlocks directed attenuation field research: permanently reduce
+    /// a disease's lethality by modifying its virulence factors in situ.
+    /// Prereq: PathogenSuppression.
+    DirectedAttenuation,
+    /// Unlocks genomic interdiction field research: permanently eliminate
+    /// a disease's ability to spread between regions.
+    /// Prereq: DirectedAttenuation.
+    GenomicInterdiction,
 }
 
 impl BasicTech {
@@ -2301,6 +2319,8 @@ impl BasicTech {
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
             BasicTech::PathogenSuppression => "Pathogen Suppression",
+            BasicTech::DirectedAttenuation => "Directed Attenuation",
+            BasicTech::GenomicInterdiction => "Genomic Interdiction",
         }
     }
 
@@ -2315,6 +2335,8 @@ impl BasicTech {
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
             BasicTech::PathogenSuppression => "Field research to suppress pathogen spread. Each project reduces infectivity ~20%.",
+            BasicTech::DirectedAttenuation => "In-situ modification of pathogen virulence factors. Each project permanently reduces target lethality.",
+            BasicTech::GenomicInterdiction => "Disrupt pathogen transmission mechanisms at the genomic level. Eliminates cross-region spread.",
         }
     }
 
@@ -2364,6 +2386,12 @@ impl BasicTech {
                 state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
                     && state.unlocked_techs.contains(&BasicTech::CombinationTherapy)
             }
+            BasicTech::DirectedAttenuation => {
+                state.unlocked_techs.contains(&BasicTech::PathogenSuppression)
+            }
+            BasicTech::GenomicInterdiction => {
+                state.unlocked_techs.contains(&BasicTech::DirectedAttenuation)
+            }
         }
     }
 
@@ -2378,6 +2406,8 @@ impl BasicTech {
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::CombinationTherapy => "Deploy 2+ different medicines",
             BasicTech::PathogenSuppression => "Vaccine Platform + Combination Therapy",
+            BasicTech::DirectedAttenuation => "Pathogen Suppression",
+            BasicTech::GenomicInterdiction => "Directed Attenuation",
         }
     }
 
@@ -2392,6 +2422,8 @@ impl BasicTech {
             BasicTech::ResistanceSurveillance,
             BasicTech::CombinationTherapy,
             BasicTech::PathogenSuppression,
+            BasicTech::DirectedAttenuation,
+            BasicTech::GenomicInterdiction,
         ]
     }
 }
@@ -2434,8 +2466,12 @@ impl ResearchKind {
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
                 BasicTech::PathogenSuppression => (8, 480.0, 1200.0),
+                BasicTech::DirectedAttenuation => (10, 600.0, 1500.0),
+                BasicTech::GenomicInterdiction => (12, 720.0, 2000.0),
             },
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
+            ResearchKind::AttenuatePathogen { .. } => (8, 600.0, 800.0),
+            ResearchKind::InterdictPathogen { .. } => (10, 800.0, 1200.0),
         }
     }
 
@@ -2488,6 +2524,18 @@ impl ResearchKind {
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "Unknown".to_string());
                 format!("Suppress: {}", name)
+            }
+            ResearchKind::AttenuatePathogen { disease_idx } => {
+                let name = diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Attenuate: {}", name)
+            }
+            ResearchKind::InterdictPathogen { disease_idx } => {
+                let name = diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Interdict: {}", name)
             }
         }
     }
@@ -4834,6 +4882,19 @@ impl GameState {
                 d.lethality *= 1.3;
                 d.recovery_rate *= 0.8; // harder to recover from
             }
+
+            // DirectedAttenuation unlocked → diseases emerge with even higher lethality.
+            // The player can reduce lethality, so diseases compensate with more virulence.
+            if techs.contains(&BasicTech::DirectedAttenuation) {
+                d.lethality *= 1.4;
+            }
+
+            // GenomicInterdiction unlocked → diseases emerge with much higher cross-region
+            // spread. The player can eliminate transmission, so diseases spread aggressively
+            // before the player can interdict them.
+            if techs.contains(&BasicTech::GenomicInterdiction) {
+                d.cross_region_spread *= 1.6;
+            }
         }
 
         // Active quarantines → new diseases emerge with partial containment adaptation.
@@ -5030,6 +5091,31 @@ impl GameState {
             for (i, disease) in self.diseases.iter().enumerate() {
                 if disease.knowledge >= KNOWLEDGE_FULL && self.disease_has_infected(i) {
                     let kind = ResearchKind::SuppressPathogen { disease_idx: i };
+                    if !active_kinds.contains(&&kind) {
+                        projects.push(kind);
+                    }
+                }
+            }
+        }
+        // Directed Attenuation: fully known diseases, when tech is unlocked
+        if self.unlocked_techs.contains(&BasicTech::DirectedAttenuation) {
+            for (i, disease) in self.diseases.iter().enumerate() {
+                if disease.knowledge >= KNOWLEDGE_FULL && self.disease_has_infected(i) {
+                    let kind = ResearchKind::AttenuatePathogen { disease_idx: i };
+                    if !active_kinds.contains(&&kind) {
+                        projects.push(kind);
+                    }
+                }
+            }
+        }
+        // Genomic Interdiction: fully known diseases with cross-region spread, when tech is unlocked
+        if self.unlocked_techs.contains(&BasicTech::GenomicInterdiction) {
+            for (i, disease) in self.diseases.iter().enumerate() {
+                if disease.knowledge >= KNOWLEDGE_FULL
+                    && self.disease_has_infected(i)
+                    && disease.cross_region_spread > 0.0
+                {
+                    let kind = ResearchKind::InterdictPathogen { disease_idx: i };
                     if !active_kinds.contains(&&kind) {
                         projects.push(kind);
                     }
