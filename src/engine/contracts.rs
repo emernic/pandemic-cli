@@ -4,63 +4,82 @@ use rand_chacha::ChaCha8Rng;
 use crate::state::{
     FundingCondition, FundingContract, GameEvent, GameState,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
+    PATRON_SATISFACTION_WARN, PATRON_SATISFACTION_REVOKE,
+    PATRON_DEGRADE_RATE, PATRON_RECOVER_RATE,
 };
 
-/// Contract templates. Each has a unique template_id (0-based).
+/// Contract template with named patron.
+struct Template {
+    name: &'static str,
+    patron: &'static str,
+    income: f64,
+    condition: FundingCondition,
+    source: &'static str,
+}
+
+/// Contract templates. Each has a unique template_id (0-based index).
 /// Income values are per-tick (multiply by 120 for per-day).
-const TEMPLATES: &[(&str, f64, FundingCondition, &str)] = &[
+const TEMPLATES: &[Template] = &[
     // High-value: forbid powerful tools
-    (
-        "Global Trade Alliance",
-        2.5,
-        FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
-        "Shipping conglomerates require open borders.",
-    ),
-    (
-        "Civil Liberties Coalition",
-        2.0,
-        FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
-        "Human rights groups oppose forced quarantine.",
-    ),
+    Template {
+        name: "Shipping Alliance",
+        patron: "Elena Vasquez, Logistics Magnate",
+        income: 2.5,
+        condition: FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
+        source: "Open borders are non-negotiable.",
+    },
+    Template {
+        name: "Civil Liberties Fund",
+        patron: "Dr. Amara Osei, Human Rights Director",
+        income: 2.0,
+        condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
+        source: "Quarantine is imprisonment by another name.",
+    },
     // Medium-value: require commitments
-    (
-        "Pharma Research Grant",
-        1.8,
-        FundingCondition::ActiveResearch,
-        "Pharmaceutical consortium funds active research programs.",
-    ),
-    (
-        "Regional Stability Pact",
-        2.0,
-        FundingCondition::NoCollapse,
-        "International investors require all regions operational.",
-    ),
+    Template {
+        name: "Pharma Research Grant",
+        patron: "Dr. Henrik Lindqvist, Pharma Consortium",
+        income: 1.8,
+        condition: FundingCondition::ActiveResearch,
+        source: "We fund results, not bureaucracy.",
+    },
+    Template {
+        name: "Stability Investment Pact",
+        patron: "James Chen, Global Investment Fund",
+        income: 2.0,
+        condition: FundingCondition::NoCollapse,
+        source: "One region collapses, markets follow.",
+    },
     // Threshold-based: lost when situation deteriorates
-    (
-        "Media Transparency Pledge",
-        1.8,
-        FundingCondition::MaxThreatLevel { level: 3 }, // DEFCON 3 or better
-        "News networks fund coverage while crisis appears manageable.",
-    ),
-    (
-        "Population Welfare Fund",
-        1.5,
-        FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
-        "Humanitarian aid contingent on limiting casualties.",
-    ),
+    Template {
+        name: "Media Transparency Pledge",
+        patron: "Sarah Kowalski, World Press Group",
+        income: 1.8,
+        condition: FundingCondition::MaxThreatLevel { level: 3 }, // DEFCON 3 or better
+        source: "We cover crises, not catastrophes.",
+    },
+    Template {
+        name: "Population Welfare Fund",
+        patron: "Dr. Fatima Al-Rashidi, Humanitarian Aid",
+        income: 1.5,
+        condition: FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
+        source: "We exist to limit casualties. So do you.",
+    },
     // Policy-requiring: force spending
-    (
-        "Hospital Workers Union",
-        1.5,
-        FundingCondition::RequirePolicy { policy_idx: 2 }, // Hospital Surge
-        "Medical unions fund surge capacity programs.",
-    ),
-    (
-        "Border Security Consortium",
-        1.5,
-        FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
-        "Security firms subsidize border monitoring.",
-    ),
+    Template {
+        name: "Medical Workers' Compact",
+        patron: "Roberto Silva, Healthcare Union",
+        income: 1.5,
+        condition: FundingCondition::RequirePolicy { policy_idx: 2 }, // Hospital Surge
+        source: "Our people need proper surge facilities.",
+    },
+    Template {
+        name: "Border Security Contract",
+        patron: "Gen. Klaus Weber, Security Services",
+        income: 1.5,
+        condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
+        source: "Secure borders save lives.",
+    },
 ];
 
 /// Build a FundingContract from a template index, with ±20% income variance.
@@ -68,27 +87,64 @@ fn build_contract(template_id: u8, rng: &mut ChaCha8Rng) -> FundingContract {
     let t = &TEMPLATES[template_id as usize];
     let variance = 0.8 + rng.r#gen::<f64>() * 0.4; // 0.8 to 1.2
     FundingContract {
-        name: t.0.to_string(),
-        income: t.1 * variance,
-        condition: t.2.clone(),
-        source: t.3.to_string(),
+        name: t.name.to_string(),
+        patron: t.patron.to_string(),
+        income: t.income * variance,
+        condition: t.condition.clone(),
+        source: t.source.to_string(),
         template_id,
+        satisfaction: 1.0,
+        warned: false,
     }
 }
 
-/// Check active contract conditions and revoke any that are violated.
+/// Tick patron satisfaction and revoke contracts when satisfaction bottoms out.
 pub fn tick_check_contracts(state: &mut GameState) {
-    // Collect indices to revoke (can't borrow state mutably and immutably simultaneously)
-    let to_revoke: Vec<(usize, String, String)> = state.contracts.iter().enumerate()
-        .filter(|(_, c)| !c.condition.is_met(state))
-        .map(|(i, c)| (i, c.name.clone(), c.condition.description()))
+    // First pass: compute satisfaction changes (need immutable borrow for is_met)
+    let updates: Vec<(usize, bool)> = state.contracts.iter().enumerate()
+        .map(|(i, c)| (i, c.condition.is_met(state)))
         .collect();
 
+    // Second pass: apply satisfaction drift, warnings, and revocations
+    let mut to_revoke: Vec<(usize, String, String, String)> = Vec::new();
+
+    for (i, met) in &updates {
+        let c = &mut state.contracts[*i];
+        if *met {
+            c.satisfaction = (c.satisfaction + PATRON_RECOVER_RATE).min(1.0);
+            // Reset warning flag when satisfaction recovers above threshold
+            if c.satisfaction > PATRON_SATISFACTION_WARN + 0.1 {
+                c.warned = false;
+            }
+        } else {
+            c.satisfaction = (c.satisfaction - PATRON_DEGRADE_RATE).max(0.0);
+
+            // Fire warning when crossing threshold
+            if c.satisfaction <= PATRON_SATISFACTION_WARN && !c.warned {
+                c.warned = true;
+                state.events.push(GameEvent::ContractWarning {
+                    patron: c.patron.clone(),
+                    reason: c.condition.description(),
+                });
+            }
+
+            // Revoke when satisfaction bottoms out
+            if c.satisfaction <= PATRON_SATISFACTION_REVOKE {
+                to_revoke.push((
+                    *i,
+                    c.name.clone(),
+                    c.patron.clone(),
+                    c.condition.description(),
+                ));
+            }
+        }
+    }
+
     // Remove in reverse order to preserve indices
-    for (i, name, reason) in to_revoke.iter().rev() {
+    for (i, name, patron, reason) in to_revoke.iter().rev() {
         state.contracts.remove(*i);
         state.events.push(GameEvent::ContractRevoked {
-            name: name.clone(),
+            name: format!("{} pulled out: {}", patron, name),
             reason: reason.clone(),
         });
     }
@@ -169,15 +225,23 @@ mod tests {
     use super::*;
     use rand::SeedableRng;
 
-    fn make_offer(state: &mut GameState) {
-        let contract = FundingContract {
+    fn make_test_contract(condition: FundingCondition) -> FundingContract {
+        FundingContract {
             name: "Test Contract".to_string(),
+            patron: "Test Patron, Testing Dept".to_string(),
             income: 2.0,
-            condition: FundingCondition::MaxThreatLevel { level: 3 },
-            source: "Test source".to_string(),
+            condition,
+            source: "For testing.".to_string(),
             template_id: 4,
-        };
-        state.contract_offer = Some(contract);
+            satisfaction: 1.0,
+            warned: false,
+        }
+    }
+
+    fn make_offer(state: &mut GameState) {
+        state.contract_offer = Some(make_test_contract(
+            FundingCondition::MaxThreatLevel { level: 3 },
+        ));
     }
 
     #[test]
@@ -218,14 +282,16 @@ mod tests {
     #[test]
     fn accept_blocked_at_max_contracts() {
         let mut state = GameState::new_default(42);
-        // Fill to max
         for i in 0..MAX_CONTRACTS {
             state.contracts.push(FundingContract {
                 name: format!("Contract {i}"),
+                patron: format!("Patron {i}"),
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
                 source: String::new(),
                 template_id: i as u8,
+                satisfaction: 1.0,
+                warned: false,
             });
         }
         make_offer(&mut state);
@@ -233,22 +299,67 @@ mod tests {
         let (ok, msg) = accept_contract(&mut state);
         assert!(!ok);
         assert!(msg.unwrap().contains("Maximum"));
-        // Offer should still be there
         assert!(state.contract_offer.is_some());
     }
 
     #[test]
-    fn violated_contract_gets_revoked() {
+    fn satisfaction_degrades_when_condition_violated() {
         let mut state = GameState::new_default(42);
-        // Add a contract requiring DEFCON <= 3
-        state.contracts.push(FundingContract {
-            name: "Fragile Deal".to_string(),
-            income: 2.0,
-            condition: FundingCondition::MaxThreatLevel { level: 3 },
-            source: String::new(),
-            template_id: 4,
-        });
-        // Escalate threat beyond level 3 (DEFCON 2 = Catastrophe)
+        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        c.satisfaction = 1.0;
+        state.contracts.push(c);
+
+        // Escalate threat beyond level 3
+        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+
+        // Run several ticks — satisfaction should degrade but not instant-revoke
+        for _ in 0..100 {
+            tick_check_contracts(&mut state);
+        }
+        assert_eq!(state.contracts.len(), 1, "Should not be revoked after only 100 ticks");
+        assert!(state.contracts[0].satisfaction < 1.0, "Satisfaction should have dropped");
+        assert!(state.contracts[0].satisfaction > PATRON_SATISFACTION_REVOKE,
+            "Should not have hit revocation yet");
+    }
+
+    #[test]
+    fn satisfaction_recovers_when_condition_restored() {
+        let mut state = GameState::new_default(42);
+        let mut c = make_test_contract(FundingCondition::NoCollapse);
+        c.satisfaction = 0.5; // Start at warning level
+        state.contracts.push(c);
+
+        // Condition is met (no collapses) — satisfaction should recover
+        for _ in 0..600 {
+            tick_check_contracts(&mut state);
+        }
+        assert!(state.contracts[0].satisfaction > 0.5, "Satisfaction should recover");
+    }
+
+    #[test]
+    fn warning_fires_at_threshold() {
+        let mut state = GameState::new_default(42);
+        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5; // Just above warning
+        state.contracts.push(c);
+        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+
+        // One tick should push below warning threshold
+        tick_check_contracts(&mut state);
+
+        assert!(state.contracts[0].warned);
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::ContractWarning { .. })
+        ));
+    }
+
+    #[test]
+    fn revocation_at_low_satisfaction() {
+        let mut state = GameState::new_default(42);
+        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        c.satisfaction = PATRON_SATISFACTION_REVOKE + 0.0001; // Just above revocation
+        c.warned = true;
+        state.contracts.push(c);
         state.threat_level = crate::state::ThreatLevel::Catastrophe;
 
         tick_check_contracts(&mut state);
@@ -262,14 +373,18 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.contracts.push(FundingContract {
             name: "Stable Deal".to_string(),
+            patron: "Stable Patron".to_string(),
             income: 2.0,
             condition: FundingCondition::NoCollapse,
             source: String::new(),
             template_id: 3,
+            satisfaction: 1.0,
+            warned: false,
         });
-        // No regions collapsed — condition is met
         tick_check_contracts(&mut state);
         assert_eq!(state.contracts.len(), 1);
+        // Satisfaction should stay at 1.0 (capped)
+        assert!((state.contracts[0].satisfaction - 1.0).abs() < 0.001);
     }
 
     #[test]
@@ -277,15 +392,16 @@ mod tests {
         let mut state = GameState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
-        // Before threshold — no offer
         state.tick = CONTRACT_FIRST_OFFER_TICK - 1;
         tick_offer_contracts(&mut state, &mut rng);
         assert!(state.contract_offer.is_none());
 
-        // At threshold — should get an offer
         state.tick = CONTRACT_FIRST_OFFER_TICK;
         tick_offer_contracts(&mut state, &mut rng);
-        assert!(state.contract_offer.is_some(), "Should offer contract at tick {}", CONTRACT_FIRST_OFFER_TICK);
+        assert!(state.contract_offer.is_some());
+        // Verify offer has patron name
+        let offer = state.contract_offer.as_ref().unwrap();
+        assert!(!offer.patron.is_empty(), "Offer should have a patron name");
     }
 
     #[test]
@@ -297,10 +413,13 @@ mod tests {
         for i in 0..MAX_CONTRACTS {
             state.contracts.push(FundingContract {
                 name: format!("C{i}"),
+                patron: format!("Patron {i}"),
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
                 source: String::new(),
                 template_id: i as u8,
+                satisfaction: 1.0,
+                warned: false,
             });
         }
 
@@ -317,7 +436,6 @@ mod tests {
         tick_offer_contracts(&mut state, &mut rng);
         let first_offer = state.contract_offer.as_ref().unwrap().name.clone();
 
-        // Try again — should not replace existing offer
         state.tick += CONTRACT_OFFER_INTERVAL;
         tick_offer_contracts(&mut state, &mut rng);
         assert_eq!(state.contract_offer.as_ref().unwrap().name, first_offer);

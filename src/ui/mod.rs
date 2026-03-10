@@ -304,8 +304,11 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ContractOffered { name } => {
                 (5, format!("CONTRACT OFFER: {} — check Policy panel", name))
             }
+            GameEvent::ContractWarning { patron, reason } => {
+                (2, format!("PATRON WARNING: {} is unhappy — {}", patron, reason))
+            }
             GameEvent::ContractRevoked { name, reason } => {
-                (2, format!("CONTRACT REVOKED: {} — {}", name, reason))
+                (2, format!("PATRON WITHDREW: {} — {}", name, reason))
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };

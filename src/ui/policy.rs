@@ -173,15 +173,35 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         // Show active contracts (non-selectable)
         for contract in &state.contracts {
             let income_day = contract.income * TICKS_PER_DAY;
+            let sat_pct = (contract.satisfaction * 100.0) as u32;
+            let sat_color = if contract.satisfaction > 0.7 {
+                Color::Green
+            } else if contract.satisfaction > 0.5 {
+                Color::Yellow
+            } else {
+                Color::Red
+            };
+            // Show patron last name for compact display
+            let display_name = if !contract.patron.is_empty() {
+                let patron_short = contract.patron.split(',').next().unwrap_or(&contract.patron);
+                let last = patron_short.split_whitespace().last().unwrap_or(patron_short);
+                format!("{}: {}", last, contract.name)
+            } else {
+                contract.name.clone()
+            };
             let met = contract.condition.is_met(state);
-            let status_color = if met { Color::Green } else { Color::Red };
             let status = if met { "✓" } else { "✗" };
+            let status_color = if met { Color::Green } else { Color::Red };
             lines.push(Line::from(vec![
                 Span::styled("    ", Style::default()),
-                Span::styled(contract.name.clone(), Style::default().fg(Color::White)),
+                Span::styled(display_name, Style::default().fg(Color::White)),
                 Span::styled(
                     format!("  +¥{:.0}/day", income_day),
                     Style::default().fg(Color::Green),
+                ),
+                Span::styled(
+                    format!("  [{}%]", sat_pct),
+                    Style::default().fg(sat_color),
                 ),
                 Span::styled(
                     format!("  {} {}", status, contract.condition.description()),
@@ -201,18 +221,25 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             } else {
                 Style::default().fg(Color::White)
             };
+            // Show patron name prominently in offer
+            let patron_display = if !offer.patron.is_empty() {
+                offer.patron.clone()
+            } else {
+                offer.name.clone()
+            };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
                 Span::styled("NEW: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                Span::styled(offer.name.clone(), name_style),
+                Span::styled(patron_display, name_style),
                 Span::styled(
                     format!("  +¥{:.0}/day", income_day),
                     Style::default().fg(Color::Green),
                 ),
             ]));
             lines.push(Line::from(vec![
-                Span::raw("      "),
+                Span::raw("      \""),
                 Span::styled(offer.source.clone(), Style::default().fg(Color::DarkGray)),
+                Span::raw("\""),
             ]));
             lines.push(Line::from(vec![
                 Span::raw("      Condition: "),

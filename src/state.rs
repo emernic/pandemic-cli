@@ -851,18 +851,40 @@ impl FundingCondition {
     }
 }
 
+fn default_satisfaction() -> f64 {
+    1.0
+}
+
 /// A funding contract: external income with strings attached.
+/// Each contract is backed by a named patron NPC.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FundingContract {
     pub name: String,
+    /// Named NPC behind this contract (e.g., "Elena Vasquez, Logistics Magnate").
+    #[serde(default)]
+    pub patron: String,
     /// Per-tick income while contract is active.
     pub income: f64,
     pub condition: FundingCondition,
-    /// One-line flavor description of the funding source.
+    /// Patron's personality-driven explanation for the deal.
     pub source: String,
     /// Unique template index (used to avoid duplicate offers).
     pub template_id: u8,
+    /// Patron satisfaction (0.0–1.0). Degrades when condition violated, recovers when met.
+    #[serde(default = "default_satisfaction")]
+    pub satisfaction: f64,
+    /// Whether the low-satisfaction warning has fired (resets when satisfaction recovers).
+    #[serde(default)]
+    pub warned: bool,
 }
+
+/// Satisfaction thresholds and rates for the patron system.
+pub const PATRON_SATISFACTION_WARN: f64 = 0.5;
+pub const PATRON_SATISFACTION_REVOKE: f64 = 0.2;
+/// Per-tick degradation when condition is violated (~0.05/day = 16 days from 1.0 to revocation).
+pub const PATRON_DEGRADE_RATE: f64 = 0.05 / 120.0;
+/// Per-tick recovery when condition is met (~0.02/day).
+pub const PATRON_RECOVER_RATE: f64 = 0.02 / 120.0;
 
 fn format_large_number(n: f64) -> String {
     if n >= 1_000_000_000.0 {
@@ -2933,7 +2955,9 @@ pub enum GameEvent {
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
     /// A new funding contract offer is available.
     ContractOffered { name: String },
-    /// A contract was revoked because its condition was violated.
+    /// A patron is unhappy — satisfaction dropped to warning level.
+    ContractWarning { patron: String, reason: String },
+    /// A contract was revoked because patron satisfaction bottomed out.
     ContractRevoked { name: String, reason: String },
     GameOver,
     /// A crisis event appeared and needs player attention.
