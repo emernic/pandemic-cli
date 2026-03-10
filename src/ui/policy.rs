@@ -374,7 +374,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra)),
         (9, "☢ Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ¥{:.0}", NUCLEAR_ANNIHILATION_COST),
-         "Eliminate 99% of population — stops all disease spread", None),
+         "Eliminate 99% of population. Stops all disease spread.", None),
         (10,
          match region.hospital_level {
              0 => "Build Field Hospital",
@@ -436,7 +436,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
-                Span::styled("— ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  ", Style::default().fg(Color::DarkGray)),
                 Span::styled(format!("{}", name), name_style),
                 Span::styled(
                     format!("  ({})", reason),
@@ -567,7 +567,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             ),
             if !status_label.is_empty() {
                 Span::styled(
-                    format!(" — {}", status_label),
+                    format!(", {}", status_label),
                     Style::default().fg(loyalty_color).add_modifier(Modifier::BOLD),
                 )
             } else {
@@ -664,7 +664,7 @@ fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>, Op
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
-        "  ⚠ SACRIFICE REGION — THIS CANNOT BE UNDONE ⚠",
+        "  ⚠ SACRIFICE REGION: THIS CANNOT BE UNDONE ⚠",
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));

@@ -4789,7 +4789,7 @@ impl GameState {
                     let dead = region.total_dead();
                     let dead_str = format_number(dead);
                     tips.push(format!(
-                        "{} lost {dead_str} — containment policies were never activated.",
+                        "{} lost {dead_str}. Containment policies were never activated.",
                         region.name
                     ));
                 }

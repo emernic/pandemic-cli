@@ -399,7 +399,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     // Collapse banner
     if region.collapsed {
         lines.push(Line::from(Span::styled(
-            "  ██ COLLAPSED — society has broken down ██",
+            "  ██ COLLAPSED ██",
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )));
     }

@@ -125,7 +125,7 @@ pub(super) fn add_personnel(state: &mut GameState, track: ResearchTrack, slot_id
 pub(super) fn remove_personnel(state: &mut GameState, track: ResearchTrack, slot_idx: usize) -> Option<String> {
     let project = research_project_mut(state, track, slot_idx)?;
     if project.personnel_assigned <= 1 {
-        return Some("Cannot remove — at least 1 person required".to_string());
+        return Some("Cannot remove. At least 1 person required.".to_string());
     }
     // Remove the last assigned scientist (if any)
     let removed_id = project.scientist_ids.pop();
@@ -638,7 +638,7 @@ mod tests {
             1,
             "should not go below 1"
         );
-        assert!(state.ui.status_message.as_ref().unwrap().contains("at least 1"));
+        assert!(state.ui.status_message.as_ref().unwrap().contains("At least 1"));
     }
 
     #[test]

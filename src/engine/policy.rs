@@ -80,13 +80,13 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
         if policy_idx != 9 {
             let region_name = state.regions[region_idx].name.as_str();
-            return (Some(format!("{region_name} has collapsed — policies unavailable")), false);
+            return (Some(format!("{region_name} has collapsed. Policies unavailable.")), false);
         }
     }
     // Abandoned regions (Ark Protocol active, not the Ark)
     if state.is_abandoned(region_idx) {
         let region_name = state.regions[region_idx].name.as_str();
-        return (Some(format!("{region_name} abandoned — resources consolidated in the Ark")), false);
+        return (Some(format!("{region_name} abandoned. Resources consolidated in the Ark.")), false);
     }
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.clone())
@@ -116,23 +116,23 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             let (name, personnel, on_msg, off_msg) = match policy_idx {
                 0 => ("Travel Ban",
                       TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Travel Ban enacted — all cross-border movement suspended",
-                      "Travel Ban lifted — borders reopened"),
+                      "Travel Ban enacted",
+                      "Travel Ban lifted"),
                 1 => ("Quarantine",
                       QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Quarantine imposed — movement within region restricted",
+                      "Quarantine imposed",
                       "Quarantine lifted"),
                 2 => ("Hospital Surge",
                       HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Hospital Surge authorized — surge capacity activated",
+                      "Hospital Surge authorized",
                       "Hospital Surge stood down"),
                 3 => ("Border Controls",
                       BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Border Controls established — checkpoint screening active",
+                      "Border Controls established",
                       "Border Controls removed"),
                 4 => ("Water Sanitation",
                       WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Water Sanitation active — treatment protocols deployed",
+                      "Water Sanitation active",
                       "Water Sanitation suspended"),
                 _ => unreachable!(),
             };
@@ -176,7 +176,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                         ScreeningLevel::MassRapid => "near-complete data, 25% spread reduction",
                         ScreeningLevel::None => unreachable!(),
                     };
-                    (Some(format!("{region_name}: {} screening active — {tier_desc}",
+                    (Some(format!("{region_name}: {} screening active ({tier_desc})",
                         target.label())), true)
                 } else {
                     (Some(format!(
@@ -190,10 +190,10 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             let ml_personnel = MARTIAL_LAW_PERSONNEL + if low_infra { 1 } else { 0 };
             if state.policies[region_idx].martial_law {
                 state.policies[region_idx].martial_law = false;
-                (Some(format!("{region_name}: Martial Law lifted — civilian governance restored")), true)
+                (Some(format!("{region_name}: Martial Law lifted")), true)
             } else if available_personnel >= ml_personnel {
                 state.policies[region_idx].martial_law = true;
-                (Some(format!("{region_name}: Martial Law declared — adds 15% collapse resilience")), true)
+                (Some(format!("{region_name}: Martial Law declared (+15% collapse resilience)")), true)
             } else {
                 (Some(format!(
                     "Not enough personnel for martial law (need {})", ml_personnel
@@ -227,7 +227,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     inf.infected = 0.0;
                     inf.immune = 0.0;
                 }
-                (Some(format!("☢ {region_name} annihilated — {:.1}M dead. Disease eradicated.",
+                (Some(format!("☢ {region_name} annihilated. {:.1}M dead. Disease eradicated.",
                     killed / 1_000_000.0)), true)
             }
         }
@@ -235,7 +235,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         10 => {
             let region = &state.regions[region_idx];
             if region.collapsed {
-                (Some(format!("{region_name} has collapsed — cannot build")), false)
+                (Some(format!("{region_name} has collapsed. Cannot build.")), false)
             } else if region.hospital_level == 0 {
                 // Build Level 1: Field Hospital
                 if state.resources.funding < FIELD_HOSPITAL_COST {
@@ -246,7 +246,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     state.resources.funding -= FIELD_HOSPITAL_COST;
                     state.regions[region_idx].hospital_level = 1;
                     state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
-                    (Some(format!("{region_name}: Field Hospital operational — reduces mortality 25%")), true)
+                    (Some(format!("{region_name}: Field Hospital operational (reduces mortality 25%)")), true)
                 }
             } else if region.hospital_level == 1 {
                 // Upgrade to Level 2: Medical Center
@@ -258,7 +258,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     state.resources.funding -= MEDICAL_CENTER_COST;
                     state.regions[region_idx].hospital_level = 2;
                     state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
-                    (Some(format!("{region_name}: Medical Center operational — mortality -40%, medicine efficacy +25%")), true)
+                    (Some(format!("{region_name}: Medical Center operational (mortality -40%, efficacy +25%)")), true)
                 }
             } else {
                 (Some(format!("{region_name} already has a Medical Center")), false)
@@ -268,7 +268,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         11 => {
             let region = &state.regions[region_idx];
             if region.collapsed {
-                (Some(format!("{region_name} has collapsed — cannot build")), false)
+                (Some(format!("{region_name} has collapsed. Cannot build.")), false)
             } else if region.intel_level == 0 {
                 // Build Level 1: Intel Station
                 if state.resources.funding < INTEL_STATION_COST {
@@ -278,7 +278,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 } else {
                     state.resources.funding -= INTEL_STATION_COST;
                     state.regions[region_idx].intel_level = 1;
-                    (Some(format!("{region_name}: Intel Station operational — detects new pathogens at 3,000 local infections")), true)
+                    (Some(format!("{region_name}: Intel Station operational (detects new pathogens at 3,000 local infections)")), true)
                 }
             } else if region.intel_level == 1 {
                 // Upgrade to Level 2: Advanced Intel
@@ -289,7 +289,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 } else {
                     state.resources.funding -= ADVANCED_INTEL_COST;
                     state.regions[region_idx].intel_level = 2;
-                    (Some(format!("{region_name}: Advanced Intel operational — detects at 1,000 infections, generates briefings")), true)
+                    (Some(format!("{region_name}: Advanced Intel operational (detects at 1,000 infections, generates briefings)")), true)
                 }
             } else {
                 (Some(format!("{region_name} already has Advanced Intel")), false)
@@ -307,7 +307,7 @@ pub(super) fn rally_support(state: &mut GameState) -> (Option<String>, bool) {
     let cooldown = state.resources.rally_cooldown_remaining(state.tick);
     if cooldown > 0 {
         let days = cooldown as f64 / TICKS_PER_DAY;
-        return (Some(format!("Rally on cooldown — {days:.1} days remaining")), false);
+        return (Some(format!("Rally on cooldown, {days:.1} days remaining")), false);
     }
 
     if state.resources.funding < RALLY_COST {
@@ -331,7 +331,7 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
     }
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
-        return (Some(format!("{name} has collapsed — no governor to appease")), false);
+        return (Some(format!("{name} has collapsed. No governor to appease.")), false);
     }
     if state.resources.funding < APPEASE_COST {
         return (Some(format!("Not enough funding (need ¥{APPEASE_COST:.0})")), false);
@@ -341,7 +341,7 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
     gov.loyalty = (gov.loyalty + APPEASE_LOYALTY_GAIN).min(100.0);
     let name = &state.regions[region_idx].governor.name;
     let loyalty = state.regions[region_idx].governor.loyalty;
-    (Some(format!("{name} appeased — loyalty now {loyalty:.0} (-¥{APPEASE_COST:.0})")), true)
+    (Some(format!("{name} appeased. Loyalty now {loyalty:.0}. (-¥{APPEASE_COST:.0})")), true)
 }
 
 /// Personality-specific bargain with a defiant governor. Free in funding
@@ -355,7 +355,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
         return (Some(format!("{name} has collapsed")), false);
     }
     if !state.regions[region_idx].governor.is_defiant() {
-        return (Some("Governor is not defiant — no bargain needed".into()), false);
+        return (Some("Governor is not defiant. No bargain needed.".into()), false);
     }
 
     let personality = state.regions[region_idx].governor.personality;
@@ -368,7 +368,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: praised publicly — loyalty {loyalty:.0} (won't last)")), true)
+            (Some(format!("{gov_name}: praised publicly. Loyalty {loyalty:.0} (won't last).")), true)
         }
         GovernorPersonality::Blowhard => {
             // Token Concession — small funding, large loyalty gain
@@ -379,7 +379,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_BLOWHARD_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: given a token victory — loyalty {loyalty:.0}")), true)
+            (Some(format!("{gov_name}: given a token victory. Loyalty {loyalty:.0}.")), true)
         }
         GovernorPersonality::Recluse => {
             // Send a Manager — personnel cost
@@ -391,7 +391,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: manager sent — loyalty {loyalty:.0} (-{cost} personnel)")), true)
+            (Some(format!("{gov_name}: manager sent. Loyalty {loyalty:.0}. (-{cost} personnel)")), true)
         }
         GovernorPersonality::Hardliner => {
             // Grant Authority — expensive funding
@@ -402,16 +402,16 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: granted expanded authority — loyalty {loyalty:.0}")), true)
+            (Some(format!("{gov_name}: granted expanded authority. Loyalty {loyalty:.0}.")), true)
         }
         GovernorPersonality::Operative => {
-            // Income Cut — permanent skim on regional income
+            // Income Cut: permanent skim on regional income
             let gov = &mut state.regions[region_idx].governor;
             gov.income_skim += BARGAIN_OPERATIVE_INCOME_CUT;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
             let total_skim = gov.income_skim * 100.0;
-            (Some(format!("{gov_name}: cut agreed — loyalty {loyalty:.0} (now skimming {total_skim:.0}% of income)")), true)
+            (Some(format!("{gov_name}: cut agreed. Loyalty {loyalty:.0}. (now skimming {total_skim:.0}% of income)")), true)
         }
         GovernorPersonality::Mobster => {
             // Protection Money — escalating cost
@@ -425,7 +425,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             gov.bargain_count += 1;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: paid ¥{cost:.0} — loyalty {loyalty:.0}. Next time will cost more.")), true)
+            (Some(format!("{gov_name}: paid ¥{cost:.0}. Loyalty {loyalty:.0}. Next time will cost more.")), true)
         }
     }
 }
@@ -627,7 +627,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 // Doesn't actively sabotage — just doesn't enforce anything.
                 // Represented by reduced policy effectiveness (handled in Governor::policy_effectiveness)
                 // Periodic reminder to the player that this region is drifting
-                Some(format!("{gov_name} is unreachable in {region_name} — policies unenforced"))
+                Some(format!("{gov_name} is unreachable in {region_name}. Policies unenforced."))
             }
             GovernorPersonality::Hardliner => {
                 // Unilaterally activates a restrictive policy the player didn't set
@@ -673,7 +673,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 } else {
                     // Can't pay — small POL hit instead
                     state.resources.political_power = (state.resources.political_power - 0.05).max(0.0);
-                    Some(format!("{gov_name} made threats in {region_name} — international embarrassment"))
+                    Some(format!("{gov_name} made threats in {region_name}. International embarrassment."))
                 }
             }
         };
@@ -710,7 +710,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
     let required = DECREE_THREAT_LEVELS[decree_idx];
     if state.threat_level < required {
         return (Some(format!(
-            "{} requires DEFCON {} ({}) — current: DEFCON {} ({})",
+            "{} requires DEFCON {} ({}). Current: DEFCON {} ({}).",
             decree_display_name(decree_idx),
             required.defcon(), required.label(),
             state.threat_level.defcon(), state.threat_level.label()
@@ -725,7 +725,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             state.sync_scientists_to_personnel();
             let penalty_per_day = CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY;
             (Some(format!(
-                "⚠ DECREE: Conscript Researchers enacted — +{} personnel. Income reduced ¥{:.0}/day, permanently.",
+                "⚠ DECREE: Conscript Researchers enacted. +{} personnel. Income reduced ¥{:.0}/day, permanently.",
                 CONSCRIPT_PERSONNEL_GAIN, penalty_per_day
             )), true)
         }
@@ -733,7 +733,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             // Authorize Human Trials: faster clinical trials, risk of adverse events
             state.enacted_decrees.authorize_human_trials = true;
             (Some(
-                "⚠ DECREE: Human Trials authorized — clinical trials 50% faster. Adverse event risk elevated, permanently.".to_string()
+                "⚠ DECREE: Human Trials authorized. Clinical trials 50% faster. Adverse event risk elevated, permanently.".to_string()
             ), true)
         }
         2 => {
@@ -760,7 +760,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             }
             let bonus_pct = (SACRIFICE_INCOME_BONUS - 1.0) * 100.0;
             (Some(format!(
-                "⚠ DECREE: {} designated a sacrifice zone — abandoned. Remaining regions: +{:.0}% income.",
+                "⚠ DECREE: {} designated a sacrifice zone. Abandoned. Remaining regions: +{:.0}% income.",
                 region_name, bonus_pct
             )), true)
         }
