@@ -37,3 +37,11 @@ On the aesthetic/nostalgia: the TUI itself is part of this. It's not retro for r
 On the Laibach thing: this is the sharpest and most dangerous part. Overidentification — playing the role so straight, so earnestly, so *loudly* that the absurdity becomes visible without ever breaking character. The game doesn't satirize pandemic response. It *is* pandemic response, played completely straight, and the satire emerges from the player's own recognition. "Wait, this is actually what happened. This is actually how these decisions get made."
 
 So the question is: how do we build features, write events, design mechanics that create that recognition — without ever winking at the camera?
+
+---
+
+**User:** One other meta-point that distills a lot of my most ambitious intentions for this game:
+
+The 1700s were about god and what it meant to RULE. The 1800s were not about god. They were about empires, colonies, and resources. Anyone who thought it was still the 1700s thrashed themselves to pieces against the new age or was simply left to gather dust and then eventually had their head cut off when they got in the way. The 1900s were not about empires. They were about nations and ideologies. Anyone who thought it was still the 1800s thrashed themselves to pieces or was simply left to gather dust until they were shot in the head when they got in the way.
+
+What are the 2000s about? I do not think it is nations or ideologies. I think they are about **control** and power — individual power, the power of impunity and indulgence, but also literal physical electrical power and energy. Who will thrash against the new way of the world? Who will be put out to pasture? And how? This game explores all of this.
