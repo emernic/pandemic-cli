@@ -254,10 +254,10 @@ pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0007;
 pub const MAX_DISEASES: usize = 5;
 
 // Economy constants — single source of truth.
-pub const BASE_FUNDING_INCOME: f64 = 3.0;
+pub const BASE_FUNDING_INCOME: f64 = 9.0;
 /// Per-tick cost for each personnel on the roster (busy or idle).
-/// 20 personnel × 0.06 = $1.2/tick = $144/day upkeep vs $360/day gross income → ~$216/day net.
-/// Training 5 more costs $36/day (17% of net) — meaningful but not a trap.
+/// 20 personnel × 0.06 = $1.2/tick = $144/day upkeep vs ~$1080/day gross income → ~$936/day net.
+/// Training 5 more costs $36/day (~4% of net) — affordable but adds up with many hires.
 /// History: 0.10 made training a trap (50% of income); 0.03 doubled income, trivializing economy.
 pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
 /// Fraction of infected people who are too sick to contribute economically.
@@ -4603,7 +4603,7 @@ impl GameState {
             resources: Resources {
                 funding: 500.0,
                 personnel: 20,
-                political_power: 0.0,
+                political_power: 0.10,
                 pol_crisis_modifier: 0.0,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
