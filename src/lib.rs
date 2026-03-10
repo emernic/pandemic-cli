@@ -114,7 +114,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             new.ui.select_right(new.regions.len());
         }
         Action::ToggleExtra => {
-            // Toggle "Assign 2x personnel" on research confirm screen
+            // Toggle "Assign 2x personnel" on research confirm screen (pure UI state)
             if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
                 *double_personnel = !*double_personnel;
             }
@@ -127,18 +127,13 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     .map(|(i, _)| i)
                     .collect();
                 if let Some(&med_idx) = unlocked.get(new.ui.panel_selection) {
-                    // Grow auto_deploy vec if needed
-                    while new.auto_deploy.len() <= med_idx {
-                        new.auto_deploy.push(false);
-                    }
-                    new.auto_deploy[med_idx] = !new.auto_deploy[med_idx];
+                    execute_command(&mut new, &GameCommand::ToggleAutoDeploy { med_idx });
                 }
             }
             // Toggle auto-research when browsing categories or projects
-            else if let Some(ref ui) = new.ui.research_ui {
+            else if let Some(ref ui) = new.ui.research_ui.clone() {
                 let track = match ui {
                     ResearchUiState::BrowseCategories => {
-                        // Use selected category index to determine track
                         match new.ui.panel_selection {
                             0 => Some(ResearchTrack::Field),
                             1 => Some(ResearchTrack::Applied),
@@ -151,8 +146,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     _ => None,
                 };
                 if let Some(track) = track {
-                    let idx = track.index();
-                    new.auto_research[idx] = !new.auto_research[idx];
+                    execute_command(&mut new, &GameCommand::ToggleAutoResearch { track });
                 }
             }
         }
@@ -160,15 +154,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             if new.outcome == GameOutcome::Playing {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
-                    // Standing order toggles are player preference — no engine involvement.
-                    if let GameCommand::ToggleStandingOrder { kind } = cmd {
-                        match kind {
-                            0 => new.standing_orders.auto_quarantine_at_high = !new.standing_orders.auto_quarantine_at_high,
-                            1 => new.standing_orders.auto_travel_ban_at_crit = !new.standing_orders.auto_travel_ban_at_crit,
-                            _ => {}
-                        }
-                        return new;
-                    }
                     let result = execute_command(&mut new, &cmd);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {

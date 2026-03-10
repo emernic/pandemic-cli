@@ -3424,6 +3424,10 @@ pub enum GameCommand {
     RepairInfrastructure { region_idx: usize, system: InfraSystem },
     /// Toggle a standing order. Kind: 0=auto_quarantine_at_high, 1=auto_travel_ban_at_crit.
     ToggleStandingOrder { kind: usize },
+    /// Toggle auto-deploy for a specific medicine.
+    ToggleAutoDeploy { med_idx: usize },
+    /// Toggle auto-research for a specific track.
+    ToggleAutoResearch { track: ResearchTrack },
     /// Start a field operation (costs personnel and time, not money).
     StartFieldOp { kind: FieldOpKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
