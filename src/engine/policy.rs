@@ -328,16 +328,33 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
                 restriction_anger + suffering_anger
             }
             GovernorPersonality::Populist => {
-                // Hates expensive policies — loses loyalty proportional to cost
-                let cost = state.policies[i].funding_cost(&state.regions[i].traits);
-                -(cost / 1000.0) * 0.001 // ~0.12/day per $1000 spent
+                // Hates restrictive policies — extra drain on top of base policy_drain
+                let restriction_anger = -restrictive_count * 0.004; // ~0.48/day per policy (stacks with base 0.36)
+                // Happy when region is calm with no restrictions
+                let calm_bonus = if restrictive_count == 0.0 && infected <= SEVERITY_HIGH_THRESHOLD {
+                    0.003 // ~0.36/day — rewards light-touch approach
+                } else {
+                    0.0
+                };
+                restriction_anger + calm_bonus
             }
             GovernorPersonality::Technocrat => {
-                // Gains loyalty when ANY research is active
-                let research_active = !state.field_research.is_empty()
-                    || state.applied_research.is_some()
-                    || state.basic_research.is_some();
-                if research_active { 0.002 } else { -0.001 }
+                // Gains loyalty when research targets diseases in their region
+                let region_diseases: Vec<usize> = state.regions[i].infections.iter()
+                    .filter(|inf| inf.infected > 0.0)
+                    .map(|inf| inf.disease_idx)
+                    .collect();
+                let researching_region = region_diseases.iter().any(|&d_idx| {
+                    state.field_research.iter().any(|r| r.references_disease(d_idx))
+                        || state.applied_research.as_ref().is_some_and(|r| r.references_disease(d_idx))
+                });
+                // Angry when unidentified diseases exist in their region
+                let has_unidentified = region_diseases.iter().any(|&d_idx| {
+                    state.diseases.get(d_idx).is_some_and(|d| d.knowledge < crate::state::KNOWLEDGE_NAME)
+                });
+                let research_mod = if researching_region { 0.004 } else { 0.0 }; // ~0.48/day
+                let ignorance_anger = if has_unidentified { -0.004 } else { 0.0 }; // ~0.48/day
+                research_mod + ignorance_anger
             }
         };
 
@@ -915,5 +932,105 @@ mod tests {
 
         assert!(coop_cost < normal_cost,
             "cooperative governor should reduce costs: normal={normal_cost}, coop={coop_cost}");
+    }
+
+    #[test]
+    fn populist_governor_hates_restrictions() {
+        let mut state = screening_test_state();
+        state.regions[0].get_or_create_infection(0).infected = 200_000.0; // CRIT
+        state.policies[0].quarantine = true;
+        state.policies[0].travel_ban = true;
+
+        // Populist with restrictions
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Populist;
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 10) {
+            tick_governor_loyalty(&mut state);
+        }
+        let populist_loyalty = state.regions[0].governor.loyalty;
+
+        // Cooperative with same restrictions (baseline)
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Cooperative;
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 10) {
+            tick_governor_loyalty(&mut state);
+        }
+        let cooperative_loyalty = state.regions[0].governor.loyalty;
+
+        assert!(populist_loyalty < cooperative_loyalty,
+            "Populist ({populist_loyalty:.1}) should lose loyalty faster than Cooperative ({cooperative_loyalty:.1}) with restrictions");
+    }
+
+    #[test]
+    fn populist_governor_happy_without_restrictions() {
+        let mut state = screening_test_state();
+        // Low infections, no restrictions — populist's calm bonus kicks in
+        state.regions[0].get_or_create_infection(0).infected = 100.0;
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Populist;
+        state.regions[0].governor.loyalty = 50.0;
+
+        for _ in 0..(120 * 5) {
+            tick_governor_loyalty(&mut state);
+        }
+        assert!(state.regions[0].governor.loyalty > 50.0,
+            "Populist should gain loyalty with no restrictions and low infections, got {}",
+            state.regions[0].governor.loyalty);
+    }
+
+    #[test]
+    fn technocrat_governor_gains_from_targeted_research() {
+        let mut state = screening_test_state();
+        state.regions[0].get_or_create_infection(0).infected = 200_000.0;
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Technocrat;
+
+        // Without research targeting disease 0
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 10) {
+            tick_governor_loyalty(&mut state);
+        }
+        let no_research_loyalty = state.regions[0].governor.loyalty;
+
+        // With research targeting disease 0
+        state.regions[0].governor.loyalty = 70.0;
+        state.field_research.push(crate::state::ResearchProject {
+            kind: crate::state::ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 1000.0,
+            personnel_assigned: 5,
+            scientist_ids: vec![],
+        });
+        for _ in 0..(120 * 10) {
+            tick_governor_loyalty(&mut state);
+        }
+        let with_research_loyalty = state.regions[0].governor.loyalty;
+
+        assert!(with_research_loyalty > no_research_loyalty,
+            "Technocrat should have higher loyalty with targeted research ({with_research_loyalty:.1}) vs without ({no_research_loyalty:.1})");
+    }
+
+    #[test]
+    fn technocrat_angry_about_unidentified_diseases() {
+        let mut state = screening_test_state();
+        state.regions[0].get_or_create_infection(0).infected = 100.0; // low infections
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Technocrat;
+
+        // Disease not identified (knowledge < KNOWLEDGE_NAME)
+        state.diseases[0].knowledge = 0.0;
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 10) {
+            tick_governor_loyalty(&mut state);
+        }
+        let unidentified_loyalty = state.regions[0].governor.loyalty;
+
+        // Disease identified
+        state.diseases[0].knowledge = crate::state::KNOWLEDGE_NAME;
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 10) {
+            tick_governor_loyalty(&mut state);
+        }
+        let identified_loyalty = state.regions[0].governor.loyalty;
+
+        assert!(unidentified_loyalty < identified_loyalty,
+            "Technocrat should have lower loyalty with unidentified disease ({unidentified_loyalty:.1}) vs identified ({identified_loyalty:.1})");
     }
 }

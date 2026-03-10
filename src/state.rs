@@ -796,16 +796,15 @@ impl RegionTrait {
 /// Governor personality — determines how loyalty reacts to player decisions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GovernorPersonality {
-    /// Loyalty drifts up faster, starts higher. Easy to keep happy.
+    /// Passive loyalty gain. Easy to keep happy.
     Cooperative,
-    /// Loyalty drops sharply from policies that restrict their region.
-    /// Wants OTHER regions restricted, not theirs.
+    /// Extra anger from restrictions AND suffering. Hardest to manage in a crisis.
     Nationalist,
-    /// Loyalty drops from expensive policies and high spending.
-    /// Wants cost-effective solutions.
+    /// Hates restrictive policies (double penalty). Happy when region is calm
+    /// with no restrictions — rewards a light-touch approach.
     Populist,
-    /// Loyalty rises when research is active. Tolerates harsh policies
-    /// if they're backed by science.
+    /// Gains loyalty when research targets their region's diseases.
+    /// Angry when unidentified diseases exist in their region.
     Technocrat,
 }
 
