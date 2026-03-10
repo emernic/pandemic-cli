@@ -1,6 +1,7 @@
 use crate::state::{
     GameEvent, GameOutcome, GameState, ResearchKind, ResearchProject,
-    ResearchTrack, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
+    ResearchTrack, ScientistTrait, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
+    BRILLIANT_BREAKTHROUGH_CHANCE, BRILLIANT_BREAKTHROUGH_PROGRESS,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
@@ -152,6 +153,10 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     for track in [ResearchTrack::Field, ResearchTrack::Applied, ResearchTrack::Basic] {
         try_auto_start(state, track);
     }
+
+    // Brilliant breakthroughs: each Brilliant scientist on any project has a per-tick
+    // chance of a eureka moment that jumps the project forward.
+    check_breakthroughs(state, rng);
 
     // Advance all field research projects and collect completion effects
     for project in &mut state.field_research {
@@ -377,6 +382,62 @@ fn min_progression_cost(state: &GameState, exclude: ResearchTrack) -> f64 {
         }
     }
     if min_cost == f64::MAX { 0.0 } else { min_cost }
+}
+
+/// Check all active research projects for Brilliant scientist breakthroughs.
+/// Each Brilliant scientist has a per-tick chance of a eureka moment that
+/// adds bonus progress to their project.
+fn check_breakthroughs(state: &mut GameState, rng: &mut impl rand::Rng) {
+    // Collect (project_track_index, scientist_name) pairs for breakthroughs
+    // Track encoding: 0..N = field[i], N = applied, N+1 = basic
+    let field_count = state.field_research.len();
+    let mut breakthroughs: Vec<(usize, String)> = Vec::new();
+
+    // Check field projects
+    for (i, project) in state.field_research.iter().enumerate() {
+        for &sid in &project.scientist_ids {
+            if let Some(s) = state.scientists.iter().find(|s| s.id == sid) {
+                if s.scientist_trait == ScientistTrait::Brilliant && rng.r#gen::<f64>() < BRILLIANT_BREAKTHROUGH_CHANCE {
+                    breakthroughs.push((i, s.name.clone()));
+                }
+            }
+        }
+    }
+    // Check applied project
+    if let Some(project) = &state.applied_research {
+        for &sid in &project.scientist_ids {
+            if let Some(s) = state.scientists.iter().find(|s| s.id == sid) {
+                if s.scientist_trait == ScientistTrait::Brilliant && rng.r#gen::<f64>() < BRILLIANT_BREAKTHROUGH_CHANCE {
+                    breakthroughs.push((field_count, s.name.clone()));
+                }
+            }
+        }
+    }
+    // Check basic project
+    if let Some(project) = &state.basic_research {
+        for &sid in &project.scientist_ids {
+            if let Some(s) = state.scientists.iter().find(|s| s.id == sid) {
+                if s.scientist_trait == ScientistTrait::Brilliant && rng.r#gen::<f64>() < BRILLIANT_BREAKTHROUGH_CHANCE {
+                    breakthroughs.push((field_count + 1, s.name.clone()));
+                }
+            }
+        }
+    }
+
+    // Apply breakthroughs
+    for (track_idx, name) in breakthroughs {
+        let project = if track_idx < field_count {
+            state.field_research.get_mut(track_idx)
+        } else if track_idx == field_count {
+            state.applied_research.as_mut()
+        } else {
+            state.basic_research.as_mut()
+        };
+        if let Some(p) = project {
+            p.progress += BRILLIANT_BREAKTHROUGH_PROGRESS;
+            state.events.push(GameEvent::ScientistBreakthrough { scientist_name: name });
+        }
+    }
 }
 
 #[cfg(test)]

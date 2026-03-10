@@ -177,6 +177,12 @@ pub const BURNOUT_CHANCE_PER_TICK: f64 = 0.002;
 /// Duration of burnout recovery: 360 ticks = 3 days.
 pub const BURNOUT_RECOVERY_TICKS: u64 = 360;
 
+/// Per-tick chance of a Brilliant scientist having a breakthrough (~0.05% per tick ≈ ~6% per day).
+/// Adds BRILLIANT_BREAKTHROUGH_PROGRESS ticks of progress to the project.
+pub const BRILLIANT_BREAKTHROUGH_CHANCE: f64 = 0.0005;
+/// Progress bonus from a Brilliant breakthrough: 240 ticks = 2 days of base progress.
+pub const BRILLIANT_BREAKTHROUGH_PROGRESS: f64 = 240.0;
+
 /// Base per-tick infection chance for field researchers (~0.03% per tick ≈ ~3.6% per day).
 /// Scaled by global infection severity and scientist trait.
 pub const FIELD_INFECTION_CHANCE_PER_TICK: f64 = 0.0003;
@@ -2361,6 +2367,8 @@ pub enum GameEvent {
     ScientistBurnout { scientist_name: String },
     /// A scientist contracted a disease during field research.
     ScientistInfected { scientist_name: String },
+    /// A Brilliant scientist had a breakthrough, accelerating research.
+    ScientistBreakthrough { scientist_name: String },
     /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
     /// from one bacterium to another.
     ResistanceTransferred {
