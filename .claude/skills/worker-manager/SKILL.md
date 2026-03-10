@@ -63,13 +63,13 @@ This requires **two separate Bash tool calls**. Do not combine them into one com
 
 **Bash call 1** — synchronous, no `run_in_background`:
 ```bash
-echo "/tmp/worker-$(date +%s)-$$.log"
+mkdir -p .worker-logs && echo ".worker-logs/worker-$(date +%s)-$$.log"
 ```
-Read the output. That string is your log path (e.g. `/tmp/worker-1773180000-12345.log`).
+Read the output. That string is your log path (e.g. `.worker-logs/worker-1773180000-12345.log`).
 
 **Bash call 2** — with `run_in_background: true`, using the exact path from call 1:
 ```bash
-unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' --output-format stream-json --verbose 2>&1 | tee /tmp/worker-1773180000-12345.log
+unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' --output-format stream-json --verbose 2>&1 | tee .worker-logs/worker-1773180000-12345.log
 ```
 
 `--output-format stream-json --verbose` makes Claude emit each event (tool calls, assistant messages, tool results) as a newline-delimited JSON object in real time. `--verbose` is required — `stream-json` without it errors out silently. Without these flags, `-p` only outputs the final response — a one-paragraph summary at the very end of a 20-minute session.
@@ -86,12 +86,12 @@ Tell the user the worker is running and give them the exact log path to tail.
 After launching, scan the 3 most recent **previous** worker logs (skip the one just launched — it's empty) to see if the loop is healthy:
 
 ```bash
-ls -t /tmp/worker-*.log 2>/dev/null | tail -n +2 | head -3
+ls -t .worker-logs/worker-*.log 2>/dev/null | tail -n +2 | head -3
 ```
 
 For each log, read the first and last 5 lines to understand what the worker started doing and how it ended:
 ```bash
-head -5 /tmp/worker-<name>.log && echo "..." && tail -5 /tmp/worker-<name>.log
+head -5 .worker-logs/worker-<name>.log && echo "..." && tail -5 .worker-logs/worker-<name>.log
 ```
 
 Look for signs that workers are failing before doing useful work: crashing immediately, abandoning early, or ending without completing anything.
