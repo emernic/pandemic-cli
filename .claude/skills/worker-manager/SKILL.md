@@ -31,15 +31,17 @@ Two things are required for this to work:
 - `unset CLAUDECODE` — claude refuses to start inside an existing Claude Code session without this
 - `--dangerously-skip-permissions` — allows the worker to operate autonomously
 
-Command to run (with `run_in_background: true`):
+**First**, run this synchronous Bash call to get a unique log path:
 ```bash
-unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' 2>&1 | tee /tmp/worker-$(date +%s).log
+echo "/tmp/worker-$(date +%s)-$$.log"
+```
+Capture the output — that's your log path (e.g. `/tmp/worker-1773180000-12345.log`).
+
+**Then**, launch the worker with `run_in_background: true`, substituting the exact path you captured:
+```bash
+unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' 2>&1 | tee /tmp/worker-1773180000-12345.log
 ```
 
-The `tee` writes output to a timestamped file in `/tmp/` that persists after the task completes. Tell the user the worker is running and that they can find the log with:
-
-```bash
-ls -lt /tmp/worker-*.log | head -1
-```
+Tell the user the worker is running and give them the exact log path to tail.
 
 The cron loop fires every 30 minutes, spawning a fresh worker each time. No further action needed from you.
