@@ -4640,7 +4640,7 @@ impl GameState {
                 // Types the player CAN treat get lower weight; types they CAN'T get higher
                 let counter_bonus = if player_has_counter { 0.3 } else { 2.0 };
                 // Blend: uniform early, counter-weighted late
-                1.0 * (1.0 - counter_weight) + counter_bonus * counter_weight
+                (1.0 - counter_weight) + counter_bonus * counter_weight
             }).collect();
 
             let total: f64 = weights.iter().sum();
