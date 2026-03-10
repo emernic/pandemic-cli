@@ -83,6 +83,8 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
                 ResearchTrack::Applied => Color::Magenta,
                 ResearchTrack::Basic => Color::Green,
             })
+        } else if *track == ResearchTrack::Basic && state.available_basic_projects().is_empty() {
+            (" [LOCKED]".to_string(), Color::DarkGray)
         } else {
             (" [NONE]".to_string(), Color::DarkGray)
         };
