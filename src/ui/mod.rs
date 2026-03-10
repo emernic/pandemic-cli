@@ -1,6 +1,7 @@
 pub mod home;
 pub mod hotkey_bar;
 pub mod medicines;
+pub mod operations;
 pub mod policy;
 pub mod research;
 pub mod resources;
@@ -279,6 +280,9 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::PolicyAutoActivated { policy_name, .. } => {
                 (8, format!("Standing order: {policy_name} auto-activated"))
             }
+            GameEvent::FieldOpCompleted { label, result } => {
+                (3, format!("{}: {}", label, result))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
@@ -352,6 +356,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
             Panel::Research => research::render(f, split[1], state),
             Panel::Policy => policy::render(f, split[1], state),
             Panel::Scientists => scientists::render(f, split[1], state),
+            Panel::Operations => operations::render(f, split[1], state),
             panel => render_placeholder_panel(f, split[1], panel),
         }
     }

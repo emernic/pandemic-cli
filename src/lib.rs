@@ -95,6 +95,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines, new.regions.len()),
         Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy, new.regions.len()),
         Action::OpenScientists => new.ui.toggle_panel(Panel::Scientists, new.regions.len()),
+        Action::OpenOperations => new.ui.toggle_panel(Panel::Operations, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(&new.medicines, &new.diseases),
         Action::SelectNext => {

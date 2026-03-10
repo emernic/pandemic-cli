@@ -2,6 +2,7 @@ mod crisis;
 mod disease;
 mod infrastructure;
 mod medicine;
+mod operations;
 mod personnel;
 mod policy;
 mod research;
@@ -52,6 +53,9 @@ pub fn tick(state: &GameState) -> GameState {
 
     // Infrastructure degradation — hospitals overwhelm, supply lines break, civil order erodes.
     infrastructure::tick_infrastructure(&mut new);
+
+    // Field operations — recon, emergency response, infrastructure survey.
+    operations::tick_field_operations(&mut new);
 
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
@@ -571,6 +575,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         // Handled before execute_command in lib.rs — should not reach here.
         GameCommand::ToggleStandingOrder { .. } => {
             CommandResult { message: None, success: false }
+        }
+        GameCommand::StartFieldOp { kind } => {
+            let (success, msg) = operations::start_field_op(state, kind.clone());
+            CommandResult { message: msg, success }
         }
     }
 }
