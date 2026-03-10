@@ -2922,6 +2922,107 @@ mod tests {
     }
 
     #[test]
+    fn patron_demand_placate_boosts_satisfaction() {
+        use crate::state::{
+            CrisisCost, CrisisEvent, CrisisKind, CrisisOption, FundingCondition,
+            FundingContract, SimState,
+        };
+
+        let mut state = GameState::new_default(42);
+        state.sim_state = SimState::Event { was_running: true };
+        // Add a contract with low satisfaction
+        state.contracts.push(FundingContract {
+            name: "Media Transparency Pledge".to_string(),
+            patron: "Sarah Kowalski, World Press Group".to_string(),
+            income: 1.8,
+            condition: FundingCondition::MaxThreatLevel { level: 3 },
+            source: "".to_string(),
+            template_id: 4,
+            satisfaction: 0.4,
+            warned: true,
+            last_demand_tick: 0,
+        });
+
+        // Set up the patron demand crisis as active
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::PatronDemand { template_id: 4 },
+            title: "Kowalski: Demands".into(),
+            description: "Test".into(),
+            options: vec![
+                CrisisOption {
+                    label: "Placate (¥100)".into(),
+                    description: "".into(),
+                    cost: Some(CrisisCost { funding: 100.0, personnel: 0 }),
+                },
+                CrisisOption {
+                    label: "Refuse".into(),
+                    description: "".into(),
+                    cost: None,
+                },
+            ],
+            tick_created: 0,
+        });
+
+        let funding_before = state.resources.funding;
+        // Choose option 0 (placate)
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert_eq!(after.resources.funding, funding_before - 100.0);
+        // Satisfaction should have jumped by 0.25
+        assert!((after.contracts[0].satisfaction - 0.65).abs() < 0.01,
+            "Satisfaction should be ~0.65 after placating, got {}",
+            after.contracts[0].satisfaction);
+        assert!(!after.contracts[0].warned, "warned flag should reset after placate");
+    }
+
+    #[test]
+    fn patron_demand_refuse_drops_satisfaction() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, FundingCondition, FundingContract, SimState};
+
+        let mut state = GameState::new_default(42);
+        state.sim_state = SimState::Event { was_running: true };
+        state.contracts.push(FundingContract {
+            name: "Media Transparency Pledge".to_string(),
+            patron: "Sarah Kowalski, World Press Group".to_string(),
+            income: 1.8,
+            condition: FundingCondition::MaxThreatLevel { level: 3 },
+            source: "".to_string(),
+            template_id: 4,
+            satisfaction: 0.4,
+            warned: true,
+            last_demand_tick: 0,
+        });
+
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::PatronDemand { template_id: 4 },
+            title: "Kowalski: Demands".into(),
+            description: "Test".into(),
+            options: vec![
+                CrisisOption {
+                    label: "Placate".into(),
+                    description: "".into(),
+                    cost: None,
+                },
+                CrisisOption {
+                    label: "Refuse".into(),
+                    description: "".into(),
+                    cost: None,
+                },
+            ],
+            tick_created: 0,
+        });
+
+        // Select option 1 (refuse) and confirm
+        let after = apply_action(&state, &Action::SelectNext);
+        let after = apply_action(&after, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        // Satisfaction should drop by 0.15 (from 0.4 to 0.25)
+        assert!((after.contracts[0].satisfaction - 0.25).abs() < 0.01,
+            "Satisfaction should be ~0.25 after refusal, got {}",
+            after.contracts[0].satisfaction);
+    }
+
+    #[test]
     fn spacebar_blocked_during_event_state() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 

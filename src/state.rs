@@ -881,6 +881,9 @@ pub struct FundingContract {
     /// Whether the low-satisfaction warning has fired (resets when satisfaction recovers).
     #[serde(default)]
     pub warned: bool,
+    /// Tick when last patron demand crisis was generated (cooldown tracking).
+    #[serde(default)]
+    pub last_demand_tick: u64,
 }
 
 /// Satisfaction thresholds and rates for the patron system.
@@ -890,6 +893,8 @@ pub const PATRON_SATISFACTION_REVOKE: f64 = 0.2;
 pub const PATRON_DEGRADE_RATE: f64 = 0.05 / 120.0;
 /// Per-tick recovery when condition is met (~0.02/day).
 pub const PATRON_RECOVER_RATE: f64 = 0.02 / 120.0;
+/// Minimum ticks between patron demand crises from the same patron (~5 days).
+pub const PATRON_DEMAND_COOLDOWN: u64 = 600;
 
 fn format_large_number(n: f64) -> String {
     if n >= 1_000_000_000.0 {
@@ -3244,6 +3249,11 @@ pub enum CrisisKind {
     /// Congressional hearing about your handling of the crisis.
     CongressionalHearing,
 
+    // --- Patron demand crises (fired when contract satisfaction drops) ---
+
+    /// Funding patron makes demands when satisfaction drops to warning zone.
+    PatronDemand { template_id: u8 },
+
     // --- Governor defiance crises (fired when loyalty drops below threshold) ---
 
     /// Hardliner governor declares your mandate unconstitutional.
@@ -3319,6 +3329,7 @@ impl CrisisKind {
             CrisisKind::NamingRights { .. } => "naming_rights",
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
+            CrisisKind::PatronDemand { .. } => "patron_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
             CrisisKind::GovernorBlowhard { .. } => "gov_blowhard",
             CrisisKind::GovernorRecluse { .. } => "gov_recluse",

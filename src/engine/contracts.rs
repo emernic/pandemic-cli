@@ -2,10 +2,10 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    FundingCondition, FundingContract, GameEvent, GameState,
+    CrisisKind, FundingCondition, FundingContract, GameEvent, GameState,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     PATRON_SATISFACTION_WARN, PATRON_SATISFACTION_REVOKE,
-    PATRON_DEGRADE_RATE, PATRON_RECOVER_RATE,
+    PATRON_DEGRADE_RATE, PATRON_RECOVER_RATE, PATRON_DEMAND_COOLDOWN,
 };
 
 /// Contract template with named patron.
@@ -95,6 +95,7 @@ fn build_contract(template_id: u8, rng: &mut ChaCha8Rng) -> FundingContract {
         template_id,
         satisfaction: 1.0,
         warned: false,
+        last_demand_tick: 0,
     }
 }
 
@@ -126,6 +127,17 @@ pub fn tick_check_contracts(state: &mut GameState) {
                     patron: c.patron.clone(),
                     reason: c.condition.description(),
                 });
+
+                // Queue a patron demand crisis if cooldown has passed
+                let cooldown_ok = c.last_demand_tick == 0
+                    || state.tick.saturating_sub(c.last_demand_tick) >= PATRON_DEMAND_COOLDOWN;
+                if cooldown_ok {
+                    c.last_demand_tick = state.tick;
+                    state.pending_crises.push((
+                        state.tick,
+                        CrisisKind::PatronDemand { template_id: c.template_id },
+                    ));
+                }
             }
 
             // Revoke when satisfaction bottoms out
@@ -235,6 +247,7 @@ mod tests {
             template_id: 4,
             satisfaction: 1.0,
             warned: false,
+            last_demand_tick: 0,
         }
     }
 
@@ -292,6 +305,7 @@ mod tests {
                 template_id: i as u8,
                 satisfaction: 1.0,
                 warned: false,
+                last_demand_tick: 0,
             });
         }
         make_offer(&mut state);
@@ -380,6 +394,7 @@ mod tests {
             template_id: 3,
             satisfaction: 1.0,
             warned: false,
+            last_demand_tick: 0,
         });
         tick_check_contracts(&mut state);
         assert_eq!(state.contracts.len(), 1);
@@ -420,6 +435,7 @@ mod tests {
                 template_id: i as u8,
                 satisfaction: 1.0,
                 warned: false,
+                last_demand_tick: 0,
             });
         }
 
@@ -439,5 +455,62 @@ mod tests {
         state.tick += CONTRACT_OFFER_INTERVAL;
         tick_offer_contracts(&mut state, &mut rng);
         assert_eq!(state.contract_offer.as_ref().unwrap().name, first_offer);
+    }
+
+    #[test]
+    fn warning_queues_patron_demand_crisis() {
+        let mut state = GameState::new_default(42);
+        state.tick = 500;
+        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
+        state.contracts.push(c);
+        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+
+        assert!(state.pending_crises.is_empty());
+        tick_check_contracts(&mut state);
+
+        // Warning should fire AND a patron demand crisis should be queued
+        assert!(state.contracts[0].warned);
+        assert_eq!(state.pending_crises.len(), 1);
+        assert!(matches!(
+            state.pending_crises[0].1,
+            CrisisKind::PatronDemand { template_id: 4 }
+        ));
+        assert_eq!(state.contracts[0].last_demand_tick, 500);
+    }
+
+    #[test]
+    fn patron_demand_cooldown_prevents_repeat() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        // Already warned recently, satisfaction recovered and dropped again
+        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
+        c.last_demand_tick = 800; // Only 200 ticks ago, cooldown is 600
+        state.contracts.push(c);
+        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+
+        tick_check_contracts(&mut state);
+
+        // Warning fires, but no demand crisis due to cooldown
+        assert!(state.contracts[0].warned);
+        assert!(state.pending_crises.is_empty(),
+            "Patron demand should not fire within cooldown period");
+    }
+
+    #[test]
+    fn patron_demand_fires_after_cooldown_expires() {
+        let mut state = GameState::new_default(42);
+        state.tick = 1000;
+        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
+        c.last_demand_tick = 300; // 700 ticks ago, cooldown is 600
+        state.contracts.push(c);
+        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+
+        tick_check_contracts(&mut state);
+
+        assert_eq!(state.pending_crises.len(), 1);
+        assert_eq!(state.contracts[0].last_demand_tick, 1000);
     }
 }
