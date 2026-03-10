@@ -383,7 +383,6 @@ mod tests {
             doses: 1000.0,
             cost: 250.0,
             arrive_tick: state.tick + TICKS_PER_DAY as u64,
-            blocked_by_travel_ban: false,
         });
 
         let screen = render_to_string(&state);

@@ -117,7 +117,6 @@ pub(super) fn deploy_medicine(
         doses: doses_to_ship,
         cost,
         arrive_tick,
-        blocked_by_travel_ban: false,
     });
     state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
 
