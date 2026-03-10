@@ -864,10 +864,10 @@ mod tests {
     fn screening_pol_gating() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        // Low screening has 0.0 POL threshold — should work with no POL
-        state.resources.political_power = 0.0;
+        // Basic screening has 0.05 POL threshold
+        state.resources.political_power = 0.05;
         let (_, ok) = toggle_policy(&mut state, 0, 5);
-        assert!(ok, "Low screening should work at 0 POL");
+        assert!(ok, "Basic screening should work at 5% POL");
 
         // Medium requires 0.10 POL
         state.resources.political_power = 0.05;
