@@ -49,7 +49,11 @@ pub(super) fn deploy_medicine(
         DeployTarget::Treat { disease_idx } => *disease_idx,
     };
 
-    let efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
+    let mut efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
+    // Medical Center (hospital level 2) boosts medicine effectiveness
+    if state.regions[region_idx].hospital_level >= 2 {
+        efficacy = (efficacy * (1.0 + crate::state::MEDICAL_CENTER_EFFICACY_BONUS)).min(1.0);
+    }
     let vax_mult = state.vaccination_multiplier();
     let region = &mut state.regions[region_idx];
     let region_name = region.name.clone();

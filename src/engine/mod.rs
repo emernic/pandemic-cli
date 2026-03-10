@@ -231,6 +231,7 @@ pub fn tick(state: &GameState) -> GameState {
         if alive < pop * threshold {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
+            new.regions[i].hospital_level = 0; // Hospital destroyed
             // Clear all policies in the collapsed region
             if let Some(policy) = new.policies.get_mut(i) {
                 policy.clear_all();

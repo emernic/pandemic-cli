@@ -15,7 +15,8 @@ use crate::state::{
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
-    HEALTHCARE_INVESTMENT_COST,
+    FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
+    MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS,
     DECREE_COUNT, DECREE_POL_THRESHOLDS,
@@ -88,7 +89,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         };
 
         let policy = state.policies.get(region_idx);
-        let has_active = policy.is_some_and(|p| p.any_active()) || region.healthcare_invested;
+        let has_active = policy.is_some_and(|p| p.any_active()) || region.hospital_level > 0;
 
         let mut spans = vec![
             Span::styled(format!("{}{:<16}", marker, region.name), style),
@@ -105,7 +106,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 policy.is_some_and(|p| p.water_sanitation).then_some("Sanitation"),
                 policy.is_some_and(|p| p.martial_law).then_some("Martial Law"),
                 policy.is_some_and(|p| p.nuclear_annihilation).then_some("☢ NUKED"),
-                region.healthcare_invested.then_some("Healthcare"),
+                (region.hospital_level == 1).then_some("Field Hospital"),
+                (region.hospital_level >= 2).then_some("Med Center"),
             ].into_iter().flatten().collect();
             if let Some(p) = policy {
                 match p.screening {
@@ -365,9 +367,24 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         (9, "☢ Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ${:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population — stops all disease spread", None),
-        (10, "Healthcare Investment", region.healthcare_invested,
-         format!("One-time: ${:.0}", HEALTHCARE_INVESTMENT_COST),
-         "Permanent 25% lethality reduction", None),
+        (10,
+         match region.hospital_level {
+             0 => "Build Field Hospital",
+             1 => "Upgrade → Medical Center",
+             _ => "Medical Center (built)",
+         },
+         region.hospital_level >= 2,
+         match region.hospital_level {
+             0 => format!("${:.0} + {} pers.", FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL),
+             1 => format!("${:.0} + {} pers.", MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL),
+             _ => format!("{} pers. ongoing", MEDICAL_CENTER_PERSONNEL),
+         },
+         match region.hospital_level {
+             0 => "25% lethality reduction, +10 governor loyalty",
+             1 => "40% lethality reduction, +25% medicine efficacy, +10 loyalty",
+             _ => "40% lethality reduction, +25% medicine efficacy",
+         },
+         None),
     ];
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
@@ -734,6 +751,17 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                     }
                 }
                 impact_type = "infections";
+            }
+            10 => {
+                // Field Hospital / Medical Center: deaths prevented by lethality reduction
+                let reduction = match region.hospital_level {
+                    0 => 0.25, // Building Level 1
+                    1 => 0.40 - 0.25, // Upgrading from Level 1 to Level 2 (incremental)
+                    _ => return None, // Already fully built
+                };
+                let prevented = inf.infected * disease.lethality * region.healthcare_modifier * reduction;
+                total_impact += prevented;
+                impact_type = "deaths";
             }
             _ => return None,
         }

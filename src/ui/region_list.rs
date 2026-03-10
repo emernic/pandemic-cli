@@ -478,7 +478,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         } else {
             ("Strained", Color::Red)
         };
-        lines.push(Line::from(vec![
+        let mut econ_spans = vec![
             Span::styled("Economy: ", label),
             Span::styled(
                 format!("{} ({:.1}x)", income_label.0, region.income_modifier),
@@ -489,7 +489,15 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 healthcare_label.0,
                 Style::default().fg(healthcare_label.1),
             ),
-        ]));
+        ];
+        if region.hospital_level > 0 {
+            let hospital_name = if region.hospital_level >= 2 { "Med Center" } else { "Field Hospital" };
+            econ_spans.push(Span::styled(
+                format!("  [{}]", hospital_name),
+                Style::default().fg(Color::Green),
+            ));
+        }
+        lines.push(Line::from(econ_spans));
         // Regional traits
         if !region.traits.is_empty() {
             let trait_labels: Vec<&str> = region.traits.iter().map(|t| t.label()).collect();

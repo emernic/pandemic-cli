@@ -43,6 +43,23 @@ where D: Deserializer<'de> {
     }
 }
 
+/// Deserialize hospital_level: accepts old `healthcare_invested: bool` saves
+/// (true → 1, false → 0) and new `hospital_level: u8` saves.
+fn deserialize_hospital_level<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where D: Deserializer<'de> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum HospitalLevel {
+        Level(u8),
+        OldBool(bool),
+    }
+    match HospitalLevel::deserialize(deserializer)? {
+        HospitalLevel::Level(n) => Ok(n),
+        HospitalLevel::OldBool(true) => Ok(1),
+        HospitalLevel::OldBool(false) => Ok(0),
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameState {
     pub tick: u64,
@@ -222,10 +239,18 @@ pub const MARTIAL_LAW_COST: f64 = 1.5;
 pub const MARTIAL_LAW_PERSONNEL: u32 = 4;
 /// One-time funding cost for nuclear annihilation (no ongoing cost).
 pub const NUCLEAR_ANNIHILATION_COST: f64 = 200.0;
-/// One-time per-region cost to invest in healthcare infrastructure.
-/// Permanently reduces lethality by 25% in the region. Competes with
-/// research spending ($350-700) for early-game funding.
-pub const HEALTHCARE_INVESTMENT_COST: f64 = 400.0;
+/// Field Hospital (Level 1): one-time build cost per region.
+/// Reduces lethality by 25%, requires 1 ongoing personnel.
+pub const FIELD_HOSPITAL_COST: f64 = 500.0;
+/// Field Hospital ongoing personnel requirement.
+pub const FIELD_HOSPITAL_PERSONNEL: u32 = 1;
+/// Medical Center (Level 2): upgrade cost on top of Level 1.
+/// Total lethality reduction 40%, +25% medicine efficacy, requires 2 ongoing personnel.
+pub const MEDICAL_CENTER_COST: f64 = 800.0;
+/// Medical Center ongoing personnel requirement (replaces Level 1 cost).
+pub const MEDICAL_CENTER_PERSONNEL: u32 = 2;
+/// Medicine deployment effectiveness bonus in regions with Medical Center.
+pub const MEDICAL_CENTER_EFFICACY_BONUS: f64 = 0.25;
 
 /// Disease surveillance intensity. Each tier reveals different information
 /// and only Mass Rapid screening actively reduces disease spread.
@@ -564,7 +589,7 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
         7 => "Mass Screening",
         8 => "Martial Law",
         9 => "Nuclear Option",
-        10 => "Healthcare",
+        10 => "Field Hospital",
         _ => "Unknown Policy",
     }
 }
@@ -922,16 +947,17 @@ pub struct Region {
     /// Tick when this region collapsed (None if still standing).
     #[serde(default)]
     pub collapsed_at_tick: Option<u64>,
-    /// Permanent healthcare infrastructure investment. One-time purchase
-    /// that reduces disease lethality by 25% in this region.
-    #[serde(default)]
-    pub healthcare_invested: bool,
+    /// Field hospital level: 0 = none, 1 = Field Hospital (25% lethality reduction),
+    /// 2 = Medical Center (40% lethality reduction + 25% medicine efficacy bonus).
+    /// Destroyed (reset to 0) when region collapses.
+    #[serde(default, alias = "healthcare_invested", deserialize_with = "deserialize_hospital_level")]
+    pub hospital_level: u8,
     /// Per-capita income multiplier. Higher values mean this region
     /// contributes more funding per person. Default 1.0.
     #[serde(default = "default_one")]
     pub income_modifier: f64,
     /// Lethality multiplier from baseline healthcare quality. Lower = better
-    /// healthcare = fewer deaths. Stacks with `healthcare_invested`. Default 1.0.
+    /// healthcare = fewer deaths. Stacks with hospital_level. Default 1.0.
     #[serde(default = "default_one")]
     pub healthcare_modifier: f64,
     /// Tick when medicine was last deployed to this region. Used for deploy cooldown.
@@ -3384,7 +3410,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
-                healthcare_invested: false,
+                hospital_level: 0,
                 income_modifier: 1.8,     // Wealthy — major economic contributor
                 healthcare_modifier: 0.85, // Good healthcare infrastructure
                 last_deploy_tick: None,
@@ -3408,7 +3434,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
-                healthcare_invested: false,
+                hospital_level: 0,
                 income_modifier: 1.0,     // Moderate economy
                 healthcare_modifier: 0.95, // Decent healthcare
                 last_deploy_tick: None,
@@ -3432,7 +3458,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
-                healthcare_invested: false,
+                hospital_level: 0,
                 income_modifier: 1.5,     // Strong economy, hub region
                 healthcare_modifier: 0.80, // Excellent healthcare
                 last_deploy_tick: None,
@@ -3456,7 +3482,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
-                healthcare_invested: false,
+                hospital_level: 0,
                 income_modifier: 0.6,     // Lower per-capita income
                 healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
                 last_deploy_tick: None,
@@ -3480,7 +3506,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
-                healthcare_invested: false,
+                hospital_level: 0,
                 income_modifier: 0.9,     // Large but moderate per-capita
                 healthcare_modifier: 1.0,  // Baseline healthcare
                 last_deploy_tick: None,
@@ -3504,7 +3530,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
-                healthcare_invested: false,
+                hospital_level: 0,
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
                 healthcare_modifier: 0.75, // Best healthcare infrastructure
                 last_deploy_tick: None,
@@ -3814,7 +3840,12 @@ impl GameState {
                 p.personnel_cost(traits)
             })
             .sum();
-        field + applied + basic + policy
+        let hospitals: u32 = self.regions.iter().map(|r| match r.hospital_level {
+            2 => MEDICAL_CENTER_PERSONNEL,
+            1 => FIELD_HOSPITAL_PERSONNEL,
+            _ => 0,
+        }).sum();
+        field + applied + basic + policy + hospitals
     }
 
     pub fn personnel_available(&self) -> u32 {

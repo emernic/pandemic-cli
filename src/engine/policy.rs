@@ -1,9 +1,10 @@
 use crate::state::{
     CrisisKind, GameEvent, GameState, RegionPolicy, RegionTrait, ScreeningLevel, policy_display_name,
     BORDER_CONTROLS_PERSONNEL,
-    HEALTHCARE_INVESTMENT_COST,
+    FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     HOSPITAL_SURGE_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
+    MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
     QUARANTINE_PERSONNEL,
     TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL,
@@ -80,7 +81,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         5 => state.policies[region_idx].screening == ScreeningLevel::Basic,
         6 => state.policies[region_idx].screening == ScreeningLevel::Antigen,
         7 => state.policies[region_idx].screening == ScreeningLevel::MassRapid,
-        10 => state.regions[region_idx].healthcare_invested,
+        10 => state.regions[region_idx].hospital_level >= 2, // fully built = "active"
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
@@ -196,19 +197,37 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                     killed / 1_000_000.0)), true)
             }
         }
-        // Healthcare Investment (10): one-time per-region permanent upgrade
+        // Field Hospital / Medical Center (10): tiered per-region infrastructure
         10 => {
             let region = &state.regions[region_idx];
-            if region.healthcare_invested {
-                (Some(format!("{region_name} already has healthcare infrastructure")), false)
-            } else if region.collapsed {
-                (Some(format!("{region_name} has collapsed — cannot invest")), false)
-            } else if state.resources.funding < HEALTHCARE_INVESTMENT_COST {
-                (Some(format!("Not enough funding (need ${:.0})", HEALTHCARE_INVESTMENT_COST)), false)
+            if region.collapsed {
+                (Some(format!("{region_name} has collapsed — cannot build")), false)
+            } else if region.hospital_level == 0 {
+                // Build Level 1: Field Hospital
+                if state.resources.funding < FIELD_HOSPITAL_COST {
+                    (Some(format!("Not enough funding (need ${:.0})", FIELD_HOSPITAL_COST)), false)
+                } else if available_personnel < FIELD_HOSPITAL_PERSONNEL {
+                    (Some(format!("Need {} personnel to staff Field Hospital", FIELD_HOSPITAL_PERSONNEL)), false)
+                } else {
+                    state.resources.funding -= FIELD_HOSPITAL_COST;
+                    state.regions[region_idx].hospital_level = 1;
+                    state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
+                    (Some(format!("Field Hospital built in {region_name} — lethality -25%, loyalty +10")), true)
+                }
+            } else if region.hospital_level == 1 {
+                // Upgrade to Level 2: Medical Center
+                if state.resources.funding < MEDICAL_CENTER_COST {
+                    (Some(format!("Not enough funding (need ${:.0})", MEDICAL_CENTER_COST)), false)
+                } else if available_personnel < (MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL) {
+                    (Some(format!("Need {} more personnel to staff Medical Center", MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL)), false)
+                } else {
+                    state.resources.funding -= MEDICAL_CENTER_COST;
+                    state.regions[region_idx].hospital_level = 2;
+                    state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
+                    (Some(format!("Medical Center built in {region_name} — lethality -40%, medicine +25%, loyalty +10")), true)
+                }
             } else {
-                state.resources.funding -= HEALTHCARE_INVESTMENT_COST;
-                state.regions[region_idx].healthcare_invested = true;
-                (Some(format!("Healthcare infrastructure built in {region_name} — lethality reduced 25%")), true)
+                (Some(format!("{region_name} already has a Medical Center")), false)
             }
         }
         _ => (None, false),
@@ -445,6 +464,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             // Collapse the region
             state.regions[r_idx].collapsed = true;
             state.regions[r_idx].collapsed_at_tick = Some(state.tick);
+            state.regions[r_idx].hospital_level = 0; // Hospital destroyed
             // Clear policies
             if let Some(p) = state.policies.get_mut(r_idx) {
                 p.clear_all();
@@ -640,54 +660,66 @@ mod tests {
     }
 
     #[test]
-    fn healthcare_investment_reduces_lethality() {
+    fn field_hospital_reduces_lethality() {
         let mut state = screening_test_state();
-        // Set up a region with significant infections for measurable deaths
         state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.diseases[0].lethality = 0.01;
 
-        // Run without healthcare investment
         let without = tick(&state);
         let deaths_without = without.regions[0].dead;
 
-        // Now invest in healthcare
-        state.regions[0].healthcare_invested = true;
-        let with = tick(&state);
-        let deaths_with = with.regions[0].dead;
+        // Level 1: Field Hospital — 25% lethality reduction
+        state.regions[0].hospital_level = 1;
+        let with_l1 = tick(&state);
+        let deaths_l1 = with_l1.regions[0].dead;
+        let ratio_l1 = deaths_l1 / deaths_without;
+        assert!(ratio_l1 > 0.60 && ratio_l1 < 0.90,
+            "Field Hospital should reduce deaths by ~25% (ratio: {ratio_l1:.2})");
 
-        // Healthcare reduces lethality by 25%, so deaths should be ~75% of baseline
-        assert!(deaths_with < deaths_without,
-            "healthcare should reduce deaths: {deaths_with:.1} vs {deaths_without:.1}");
-        let ratio = deaths_with / deaths_without;
-        assert!(ratio > 0.60 && ratio < 0.90,
-            "healthcare should reduce deaths by ~25% (ratio: {ratio:.2})");
+        // Level 2: Medical Center — 40% lethality reduction
+        state.regions[0].hospital_level = 2;
+        let with_l2 = tick(&state);
+        let deaths_l2 = with_l2.regions[0].dead;
+        let ratio_l2 = deaths_l2 / deaths_without;
+        assert!(ratio_l2 > 0.45 && ratio_l2 < 0.75,
+            "Medical Center should reduce deaths by ~40% (ratio: {ratio_l2:.2})");
+        assert!(deaths_l2 < deaths_l1,
+            "Medical Center should save more lives than Field Hospital");
     }
 
     #[test]
-    fn healthcare_investment_toggle() {
+    fn field_hospital_build_and_upgrade() {
         let mut state = screening_test_state();
 
-        // Purchase healthcare
+        // Build Level 1: Field Hospital
         let (msg, ok) = toggle_policy(&mut state, 0, 10);
         assert!(ok, "should succeed with sufficient funds");
-        assert!(state.regions[0].healthcare_invested);
-        assert!(msg.unwrap().contains("lethality reduced"));
-        let expected_cost = state.resources.funding;
-        assert!(expected_cost < 10_000.0, "funding should be deducted");
+        assert_eq!(state.regions[0].hospital_level, 1);
+        assert!(msg.unwrap().contains("Field Hospital"));
 
-        // Try to purchase again — should fail
+        let funds_after_l1 = state.resources.funding;
+        assert!(funds_after_l1 < 10_000.0, "funding should be deducted");
+
+        // Upgrade to Level 2: Medical Center
         let (msg, ok) = toggle_policy(&mut state, 0, 10);
-        assert!(!ok, "should not purchase twice");
+        assert!(ok, "upgrade should succeed");
+        assert_eq!(state.regions[0].hospital_level, 2);
+        assert!(msg.unwrap().contains("Medical Center"));
+        assert!(state.resources.funding < funds_after_l1, "upgrade should cost funds");
+
+        // Try again — already maxed
+        let (msg, ok) = toggle_policy(&mut state, 0, 10);
+        assert!(!ok, "should not build past level 2");
         assert!(msg.unwrap().contains("already"));
     }
 
     #[test]
-    fn healthcare_blocked_for_collapsed_regions() {
+    fn field_hospital_blocked_for_collapsed_regions() {
         let mut state = screening_test_state();
         state.regions[0].collapsed = true;
 
         let (msg, ok) = toggle_policy(&mut state, 0, 10);
-        assert!(!ok, "should not invest in collapsed region");
+        assert!(!ok, "should not build in collapsed region");
         assert!(msg.unwrap().contains("collapsed"));
     }
 

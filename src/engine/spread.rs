@@ -102,8 +102,10 @@ pub(super) fn tick_spread_within(
                     };
                     lethality *= scale_policy_factor(surge_factor, gov_eff);
                 }
-                if region.healthcare_invested {
-                    lethality *= 0.75;
+                if region.hospital_level >= 2 {
+                    lethality *= 0.60; // Medical Center: 40% total lethality reduction
+                } else if region.hospital_level >= 1 {
+                    lethality *= 0.75; // Field Hospital: 25% lethality reduction
                 }
                 // Co-infection amplifies lethality (overwhelmed hospitals, immune suppression)
                 lethality *= coinfection_factor;
