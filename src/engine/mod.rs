@@ -580,6 +580,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (success, msg) = operations::start_field_op(state, kind.clone());
             CommandResult { message: msg, success }
         }
+        GameCommand::UpgradeLab => {
+            let (success, msg) = research::upgrade_lab(state);
+            CommandResult { message: msg, success }
+        }
     }
 }
 
@@ -1272,9 +1276,12 @@ mod tests {
         state = apply_action(&state, &Action::SelectNext);
         assert_eq!(state.ui.panel_selection, 2); // Basic Research
 
+        state = apply_action(&state, &Action::SelectNext);
+        assert_eq!(state.ui.panel_selection, 3); // Upgrade Lab
+
         // Can't go past last
         state = apply_action(&state, &Action::SelectNext);
-        assert_eq!(state.ui.panel_selection, 2);
+        assert_eq!(state.ui.panel_selection, 3);
 
         // Esc closes
         state = apply_action(&state, &Action::ClosePanel);
