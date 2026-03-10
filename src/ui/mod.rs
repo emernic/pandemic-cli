@@ -194,7 +194,16 @@ pub fn process_events(state: &mut GameState) {
                 } else {
                     String::new()
                 };
-                (7, format!("{} mutated{}. Efficacy {:.0}%.", name, detail, worst_eff * 100.0))
+                let eff_pct = (worst_eff * 100.0).round() as u32;
+                if worst_eff < 0.25 {
+                    // Critical: medicine nearly useless — slow to 1x and urgent alert
+                    state.ui.speed_multiplier = 1;
+                    (2, format!("CRITICAL: {} medicine only {}% effective{}. Re-trial now!", name, eff_pct, detail))
+                } else if worst_eff < 0.50 {
+                    (4, format!("WARNING: {} medicine degraded to {}% efficacy{}. Re-trial recommended.", name, eff_pct, detail))
+                } else {
+                    (7, format!("{} mutated{}. Efficacy {}%.", name, detail, eff_pct))
+                }
             }
             GameEvent::ResearchAutoStarted { track } => {
                 let track_name = match track {
