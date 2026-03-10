@@ -475,12 +475,15 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 }
             }
             GovernorPersonality::Nationalist => {
-                // Unilaterally enable border controls
-                if !state.policies[i].border_controls {
-                    state.policies[i].border_controls = true;
-                    Some(format!("{gov_name} closed borders in {region_name}"))
+                // Diverts budget to "regional priorities" — a clear funding drain
+                // (border closing was the old action but it often helped the player by
+                // containing spread; this creates the intended negative pressure)
+                let drain = (state.resources.funding * 0.08).min(250.0);
+                if drain >= 10.0 {
+                    state.resources.funding -= drain;
+                    Some(format!("{gov_name} diverted ${drain:.0} to regional programs in {region_name}"))
                 } else {
-                    None // Already closed
+                    None
                 }
             }
             GovernorPersonality::Technocrat => {
@@ -1234,16 +1237,17 @@ mod tests {
     }
 
     #[test]
-    fn nationalist_governor_closes_borders() {
+    fn nationalist_governor_diverts_funding() {
         let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
-        assert!(!state.policies[0].border_controls);
+        state.resources.funding = 1000.0;
+        let before = state.resources.funding;
 
         tick_governor_actions(&mut state);
 
-        assert!(state.policies[0].border_controls,
-            "Nationalist governor should enable border controls");
+        assert!(state.resources.funding < before,
+            "Nationalist governor should drain funding");
         assert!(state.events.iter().any(|e|
-            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("closed borders"))
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("diverted"))
         ));
     }
 
