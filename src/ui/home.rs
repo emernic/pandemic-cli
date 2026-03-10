@@ -384,6 +384,72 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
+    // ── Political Power breakdown ──
+    {
+        let pol = state.resources.political_power;
+        let target = state.pol_target();
+        // Net drift per day: (target - current) * 50%/day drift rate
+        let drift_per_day = (target - pol) * 0.50;
+
+        // Decompose target into its constituent parts
+        let initial_pop = state.initial_population();
+        let death_frac = if initial_pop > 0.0 { state.total_dead() / initial_pop } else { 0.0 };
+        let infected_frac = if initial_pop > 0.0 { state.total_infected() / initial_pop } else { 0.0 };
+        let death_component = death_frac.sqrt();
+        let infection_component = infected_frac.sqrt() * 0.4;
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("  ── POLITICAL POWER ──", cyan)));
+        lines.push(Line::from(""));
+
+        let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };
+        let (drift_str, drift_color) = if drift_per_day > 0.005 {
+            (format!("+{:.1}%/day", drift_per_day * 100.0), Color::Green)
+        } else if drift_per_day < -0.005 {
+            (format!("{:.1}%/day", drift_per_day * 100.0), Color::Red)
+        } else {
+            ("stable".to_string(), Color::DarkGray)
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled("  Current:  ", dim),
+            Span::styled(format!("{:.0}%", pol * 100.0), Style::default().fg(pol_color)),
+            Span::styled("   Target: ", dim),
+            Span::styled(format!("{:.0}%", target * 100.0), Style::default().fg(Color::White)),
+            Span::styled("   Drift: ", dim),
+            Span::styled(drift_str, Style::default().fg(drift_color)),
+        ]));
+
+        // Target breakdown: what's driving the target
+        lines.push(Line::from(vec![
+            Span::styled("  Baseline: ", dim),
+            Span::styled("+20%", Style::default().fg(Color::DarkGray)),
+            Span::styled("  (institutional mandate)", dim),
+        ]));
+        if death_component >= 0.005 {
+            lines.push(Line::from(vec![
+                Span::styled("  Deaths:   ", dim),
+                Span::styled(format!("+{:.1}%", death_component * 100.0), Style::default().fg(Color::Red)),
+                Span::styled("  (public alarm from casualties)", dim),
+            ]));
+        }
+        if infection_component >= 0.005 {
+            lines.push(Line::from(vec![
+                Span::styled("  Infected: ", dim),
+                Span::styled(format!("+{:.1}%", infection_component * 100.0), Style::default().fg(Color::Yellow)),
+                Span::styled("  (outbreak visibility)", dim),
+            ]));
+        }
+
+        // Next unlock hint
+        if let Some((name, threshold)) = state.next_pol_unlock() {
+            lines.push(Line::from(vec![
+                Span::styled("  Next:     ", dim),
+                Span::styled(format!("{} @ {:.0}%", name, threshold * 100.0), Style::default().fg(Color::DarkGray)),
+            ]));
+        }
+    }
+
     // ── Active diseases ──
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled("  ── ACTIVE THREATS ──", cyan)));
