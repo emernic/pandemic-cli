@@ -266,10 +266,9 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 
 /// Spawn a disease with stats scaled up based on current game day.
 /// Later diseases are tougher — simulating evolved superbugs.
-/// Scaling ramps aggressively: +10% per day, uncapped. By day 30-40,
-/// diseases are 4-5x base stats — next-generation monsters that
-/// overwhelm any containment. This ensures the game ends by day 45
-/// without player intervention on ANY seed.
+/// Infectivity scales at +35%/day (uncapped), lethality at +10%/day.
+/// The split ensures diseases can sustain growth even under quarantine.
+/// After day 10, diseases also seed into multiple regions simultaneously.
 pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
     // Aggressive scaling with infectivity outpacing lethality.
