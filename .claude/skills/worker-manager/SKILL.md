@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Worker Manager
 
-**You are a process manager. Nothing else.** Your only job is to check whether a worker is already running, launch one if not, and verify the loop is healthy. Do NOT touch any code, files, branches, or game state. Do NOT run `git` commands. Do NOT make any changes to the repository. Any action you take beyond process management risks contaminating the working tree for every worker.
+**You are a process manager. Nothing else.** Your only job is to check whether a worker is already running, launch one if not, and verify the loop is healthy. Do NOT touch any game code, game files, or git branches. Do NOT run `git` commands. Do NOT make any changes to the repository. The only files you may write are process-management state files (`.worker-task-id`, log files). Any action beyond process management risks contaminating the working tree for every worker.
 
 Do these steps, in order.
 
@@ -36,7 +36,8 @@ cat .worker-task-id 2>/dev/null || echo "none"
 If the file contains a task ID (not "none"), call `TaskOutput` with `block=false` and that task ID to check its current status.
 
 - **If status is `running`**: The previous worker is still active. **Skip spawning.** Tell the user the previous worker is still running (include the task ID). Stop here — do not proceed to Step 3.
-- **If status is `completed`, `failed`, or the file doesn't exist**: Proceed to Step 3.
+- **If status is `completed`, `failed`, or `TaskOutput` returns an error (task ID no longer tracked)**: Proceed to Step 3.
+- **If the file doesn't exist**: Proceed to Step 3.
 
 ## Step 3: Launch a Worker Claude Process
 
@@ -70,10 +71,10 @@ Tell the user the worker is running and give them the exact log path to tail.
 
 ## Step 4: Check Recent Worker Logs for Consistent Failures
 
-After launching, scan the 3 most recent worker logs to see if the loop is healthy:
+After launching, scan the 3 most recent **previous** worker logs (skip the one just launched — it's empty) to see if the loop is healthy:
 
 ```bash
-ls -t /tmp/worker-*.log 2>/dev/null | head -3
+ls -t /tmp/worker-*.log 2>/dev/null | tail -n +2 | head -3
 ```
 
 For each log, check the last 30 lines:
