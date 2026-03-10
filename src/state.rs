@@ -908,30 +908,45 @@ impl RegionTrait {
 
 }
 
-/// Governor personality — determines how loyalty reacts to player decisions.
+/// Governor personality — character archetypes that determine how governors
+/// behave when loyal vs defiant. Each type requires a different player response.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GovernorPersonality {
-    /// Values transparency and public accountability. Passive loyalty gain —
-    /// easy to keep happy. When disloyal, leaks internal reports to the press,
-    /// draining political power rather than disrupting operations.
-    Cooperative,
-    /// Extra anger from restrictions AND suffering. Hardest to manage in a crisis.
-    Nationalist,
-    /// Hates restrictive policies (double penalty). Happy when region is calm
-    /// with no restrictions — rewards a light-touch approach.
-    Populist,
-    /// Gains loyalty when research targets their region's diseases.
-    /// Angry when unidentified diseases exist in their region.
-    Technocrat,
+    /// Breaks things by accident. Defiance: randomly deactivates a policy or
+    /// wastes funding. Bargain: cheap (public praise) but loyalty decays fast.
+    Buffoon,
+    /// All noise. Defiance: small funding drain + alarming event messages.
+    /// The real danger is wasting resources appeasing someone who'd shut up on their own.
+    /// Bargain: small cost, large loyalty gain.
+    #[serde(alias = "Populist")]
+    Blowhard,
+    /// Absent. Defiance: doesn't sabotage — just stops enforcing. Policy effects
+    /// reduced in the region. Bargain: costs personnel (you send someone to manage).
+    #[serde(alias = "Technocrat")]
+    Recluse,
+    /// Does too much. Defiance: unilaterally activates policies the player didn't set,
+    /// costing unbudgeted personnel and funding. Bargain: give them authority (high cost).
+    #[serde(alias = "Nationalist")]
+    Hardliner,
+    /// Competent and helpful, always skimming. When loyal, policies more effective.
+    /// When defiant, continuous funding drain that grows over time.
+    /// Bargain: permanent cut of regional income.
+    #[serde(alias = "Cooperative")]
+    Operative,
+    /// Everything escalates. Defiance: periodic lump-sum demands that increase each time.
+    /// Bargain: pure money, most expensive, gets worse over time.
+    Mobster,
 }
 
 impl GovernorPersonality {
     pub fn label(&self) -> &'static str {
         match self {
-            GovernorPersonality::Cooperative => "Cooperative",
-            GovernorPersonality::Nationalist => "Nationalist",
-            GovernorPersonality::Populist => "Populist",
-            GovernorPersonality::Technocrat => "Technocrat",
+            GovernorPersonality::Buffoon => "Buffoon",
+            GovernorPersonality::Blowhard => "Blowhard",
+            GovernorPersonality::Recluse => "Recluse",
+            GovernorPersonality::Hardliner => "Hardliner",
+            GovernorPersonality::Operative => "Operative",
+            GovernorPersonality::Mobster => "Mobster",
         }
     }
 }
@@ -952,6 +967,12 @@ pub struct Governor {
     /// Tick when the governor last took an autonomous defiance action.
     #[serde(default)]
     pub last_action_tick: u64,
+    /// Mobster: how many times the player has bargained (escalates cost).
+    #[serde(default)]
+    pub bargain_count: u32,
+    /// Operative: fraction of regional income being skimmed (accumulates with bargains).
+    #[serde(default)]
+    pub income_skim: f64,
 }
 
 /// Global threat level (DEFCON-style). Computed from game state metrics each tick.
@@ -1027,16 +1048,22 @@ pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
 
 /// Bargain loyalty gains by personality.
 pub const BARGAIN_LOYALTY_GAIN: f64 = 20.0;
-/// Technocrat bargain gives extra loyalty (research partnership is valuable).
-pub const BARGAIN_TECHNOCRAT_LOYALTY_GAIN: f64 = 25.0;
-/// Nationalist bargain cost: personnel permanently reassigned to regional control.
-pub const BARGAIN_NATIONALIST_PERSONNEL_COST: u32 = 2;
-/// Populist bargain cost: fraction of POL surrendered.
-pub const BARGAIN_POPULIST_POL_FRACTION: f64 = 0.15;
-/// Technocrat bargain cost: extra ticks added to current applied research.
-pub const BARGAIN_TECHNOCRAT_RESEARCH_TICKS: f64 = 150.0;
-/// Cooperative bargain cost: loyalty drained from all other governors.
-pub const BARGAIN_COOPERATIVE_LOYALTY_DRAIN: f64 = 5.0;
+/// Blowhard bargain: large loyalty gain (they're easy to please).
+pub const BARGAIN_BLOWHARD_LOYALTY_GAIN: f64 = 30.0;
+/// Buffoon bargain cost: small POL cost (public praise).
+pub const BARGAIN_BUFFOON_POL_COST: f64 = 0.05;
+/// Buffoon loyalty decay rate: loyalty drops faster after bargain (~1.5/day extra).
+pub const BARGAIN_BUFFOON_DECAY_EXTRA: f64 = 0.0125;
+/// Blowhard bargain cost: small funding cost.
+pub const BARGAIN_BLOWHARD_FUNDING_COST: f64 = 100.0;
+/// Recluse bargain cost: personnel (you send someone to physically manage).
+pub const BARGAIN_RECLUSE_PERSONNEL_COST: u32 = 2;
+/// Hardliner bargain cost: high funding (give them authority).
+pub const BARGAIN_HARDLINER_FUNDING_COST: f64 = 400.0;
+/// Operative bargain cost: fraction of regional income permanently skimmed.
+pub const BARGAIN_OPERATIVE_INCOME_CUT: f64 = 0.10;
+/// Mobster bargain base cost: pure funding, escalates each time.
+pub const BARGAIN_MOBSTER_BASE_COST: f64 = 200.0;
 
 impl Governor {
     /// Returns true if this governor is defiant (loyalty below threshold).
@@ -1135,10 +1162,12 @@ pub struct Region {
 fn default_governor() -> Governor {
     Governor {
         name: "Unknown".into(),
-        personality: GovernorPersonality::Cooperative,
+        personality: GovernorPersonality::Operative,
         loyalty: 70.0,
         defiance_crisis_fired: false,
         last_action_tick: 0,
+        bargain_count: 0,
+        income_skim: 0.0,
     }
 }
 
@@ -2907,14 +2936,22 @@ pub enum CrisisKind {
 
     // --- Governor defiance crises (fired when loyalty drops below threshold) ---
 
-    /// Nationalist governor closes borders, blocks medicine deployment.
-    GovernorNationalist { region_idx: usize },
-    /// Populist governor incites public revolt, suspends all policies.
-    GovernorPopulist { region_idx: usize },
-    /// Technocrat governor demands peer review, blocks low-efficacy medicines.
-    GovernorTechnocrat { region_idx: usize },
-    /// Cooperative governor leaks to media, damages political power.
-    GovernorCooperative { region_idx: usize },
+    /// Hardliner governor declares your mandate unconstitutional.
+    #[serde(alias = "GovernorNationalist")]
+    GovernorHardliner { region_idx: usize },
+    /// Blowhard governor makes noise — mostly hollow threats.
+    #[serde(alias = "GovernorPopulist")]
+    GovernorBlowhard { region_idx: usize },
+    /// Recluse governor stops responding — region drifts.
+    #[serde(alias = "GovernorTechnocrat")]
+    GovernorRecluse { region_idx: usize },
+    /// Operative governor starts skimming openly.
+    #[serde(alias = "GovernorCooperative")]
+    GovernorOperative { region_idx: usize },
+    /// Buffoon governor causes accidental damage.
+    GovernorBuffoon { region_idx: usize },
+    /// Mobster governor escalates demands.
+    GovernorMobster { region_idx: usize },
 
     // --- Endgame crisis types ---
 
@@ -2972,10 +3009,12 @@ impl CrisisKind {
             CrisisKind::NamingRights { .. } => "naming_rights",
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
-            CrisisKind::GovernorNationalist { .. } => "gov_nationalist",
-            CrisisKind::GovernorPopulist { .. } => "gov_populist",
-            CrisisKind::GovernorTechnocrat { .. } => "gov_technocrat",
-            CrisisKind::GovernorCooperative { .. } => "gov_cooperative",
+            CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
+            CrisisKind::GovernorBlowhard { .. } => "gov_blowhard",
+            CrisisKind::GovernorRecluse { .. } => "gov_recluse",
+            CrisisKind::GovernorOperative { .. } => "gov_operative",
+            CrisisKind::GovernorBuffoon { .. } => "gov_buffoon",
+            CrisisKind::GovernorMobster { .. } => "gov_mobster",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
             CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
@@ -3786,10 +3825,12 @@ impl GameState {
                 connections: vec![1, 2],
                 governor: Governor {
                     name: "Gov. Torres".into(),
-                    personality: GovernorPersonality::Nationalist,
+                    personality: GovernorPersonality::Hardliner,
                     loyalty: 65.0,
                     defiance_crisis_fired: false,
                     last_action_tick: 0,
+                    bargain_count: 0,
+                    income_skim: 0.0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
@@ -3812,10 +3853,12 @@ impl GameState {
                 connections: vec![0, 3],
                 governor: Governor {
                     name: "Gov. Vasquez".into(),
-                    personality: GovernorPersonality::Populist,
+                    personality: GovernorPersonality::Blowhard,
                     loyalty: 70.0,
                     defiance_crisis_fired: false,
                     last_action_tick: 0,
+                    bargain_count: 0,
+                    income_skim: 0.0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
@@ -3838,10 +3881,12 @@ impl GameState {
                 connections: vec![0, 3, 4],
                 governor: Governor {
                     name: "Gov. Lindqvist".into(),
-                    personality: GovernorPersonality::Technocrat,
+                    personality: GovernorPersonality::Operative,
                     loyalty: 75.0,
                     defiance_crisis_fired: false,
                     last_action_tick: 0,
+                    bargain_count: 0,
+                    income_skim: 0.0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
@@ -3864,10 +3909,12 @@ impl GameState {
                 connections: vec![1, 2, 4],
                 governor: Governor {
                     name: "Gov. Okonkwo".into(),
-                    personality: GovernorPersonality::Populist,
+                    personality: GovernorPersonality::Buffoon,
                     loyalty: 60.0,
                     defiance_crisis_fired: false,
                     last_action_tick: 0,
+                    bargain_count: 0,
+                    income_skim: 0.0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
@@ -3890,10 +3937,12 @@ impl GameState {
                 connections: vec![2, 3, 5],
                 governor: Governor {
                     name: "Gov. Chen".into(),
-                    personality: GovernorPersonality::Cooperative,
+                    personality: GovernorPersonality::Recluse,
                     loyalty: 70.0,
                     defiance_crisis_fired: false,
                     last_action_tick: 0,
+                    bargain_count: 0,
+                    income_skim: 0.0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
@@ -3916,10 +3965,12 @@ impl GameState {
                 connections: vec![4],
                 governor: Governor {
                     name: "Gov. Whitfield".into(),
-                    personality: GovernorPersonality::Nationalist,
+                    personality: GovernorPersonality::Mobster,
                     loyalty: 75.0,
                     defiance_crisis_fired: false,
                     last_action_tick: 0,
+                    bargain_count: 0,
+                    income_skim: 0.0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
@@ -4575,10 +4626,8 @@ impl GameState {
         if region.collapsed || !region.governor.is_defiant() {
             return false;
         }
-        match region.governor.personality {
-            GovernorPersonality::Technocrat => self.applied_research.is_some(),
-            _ => true,
-        }
+        // All personality types can always bargain when defiant
+        true
     }
 
     /// Current POL drift target based on severity, time, and active policies.
