@@ -630,6 +630,25 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (success, msg) = research::upgrade_lab(state);
             CommandResult { message: msg, success }
         }
+        GameCommand::CycleDeployPriority { region_idx } => {
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                if region.collapsed {
+                    CommandResult { message: Some("Region has collapsed".to_string()), success: false }
+                } else {
+                    let old = region.deploy_priority;
+                    region.deploy_priority = old.next();
+                    CommandResult {
+                        message: Some(format!(
+                            "{} deployment priority: {}",
+                            region.name, region.deploy_priority.label()
+                        )),
+                        success: true,
+                    }
+                }
+            } else {
+                CommandResult { message: None, success: false }
+            }
+        }
     }
 }
 
@@ -4955,6 +4974,74 @@ mod tests {
             .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
             .collect();
         assert!(shipped.is_empty(), "should not deploy to region on cooldown");
+    }
+
+    #[test]
+    fn auto_deploy_prefers_high_priority_over_worse_infected() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 1_000_000.0;
+        state.medicines[0].max_doses = 1_000_000.0;
+        state.medicines[0].tested_against = vec![0];
+        state.diseases[0].detected = true;
+
+        // Region 0: 100K infected, HIGH priority
+        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].deploy_priority = crate::state::RegionPriority::High;
+
+        // Region 1: 500K infected, NORMAL priority
+        state.regions[1].get_or_create_infection(0).infected = 500_000.0;
+
+        state.auto_deploy = vec![true];
+        let after = tick(&state);
+
+        let shipped: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
+            .collect();
+        assert_eq!(shipped.len(), 1);
+        match &shipped[0] {
+            GameEvent::MedicineShipped { region_idx, .. } => {
+                assert_eq!(*region_idx, 0,
+                    "should deploy to HIGH priority region despite fewer infected");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn auto_deploy_skips_cutoff_regions() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 5000.0;
+
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 1_000_000.0;
+        state.medicines[0].max_doses = 1_000_000.0;
+        state.medicines[0].tested_against = vec![0];
+        state.diseases[0].detected = true;
+
+        // Region 0: 500K infected but CUT OFF
+        state.regions[0].infections[0].infected = 500_000.0;
+        state.regions[0].deploy_priority = crate::state::RegionPriority::CutOff;
+
+        // Region 1: 100K infected, NORMAL
+        state.regions[1].get_or_create_infection(0).infected = 100_000.0;
+
+        state.auto_deploy = vec![true];
+        let after = tick(&state);
+
+        let shipped: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
+            .collect();
+        assert_eq!(shipped.len(), 1);
+        match &shipped[0] {
+            GameEvent::MedicineShipped { region_idx, .. } => {
+                assert_eq!(*region_idx, 1,
+                    "should skip CUT OFF region and deploy to next best");
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[test]

@@ -565,14 +565,16 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
 ///
 /// Layout: [0..POLICY_COUNT) = policy toggles in display order,
 ///         [MANAGE_INFRA_BASE..+3) = infrastructure repair (HC, SL, CO),
+///         MANAGE_PRIORITY_POS = Deployment Priority cycle,
 ///         MANAGE_APPEASE_POS = Appease Governor,
 ///         MANAGE_BARGAIN_POS = Bargain (only when governor is defiant).
 ///
 /// Both `ui/policy.rs` (render_manage) and `state.rs` (handle_policy_confirm) use
 /// these constants so the two sites stay in sync automatically.
 pub const MANAGE_INFRA_BASE: usize = POLICY_COUNT;
-pub const MANAGE_APPEASE_POS: usize = POLICY_COUNT + INFRA_ITEM_COUNT;
-pub const MANAGE_BARGAIN_POS: usize = POLICY_COUNT + INFRA_ITEM_COUNT + 1;
+pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT + INFRA_ITEM_COUNT;
+pub const MANAGE_APPEASE_POS: usize = MANAGE_PRIORITY_POS + 1;
+pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 
 /// Policy indices sorted by POL unlock threshold (ascending), ties broken by index.
 /// This is the canonical display ordering — both the policy renderer and the confirm
@@ -935,6 +937,53 @@ pub struct Resources {
     pub last_funding_warning_tick: u64,
 }
 
+
+/// Deployment priority for a region. Controls auto-deploy targeting order
+/// and is visible in the policy panel for strategic allocation decisions.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegionPriority {
+    /// Auto-deploy serves this region before Normal/Low regions.
+    High,
+    /// Default priority.
+    #[default]
+    Normal,
+    /// Auto-deploy serves this region after High/Normal regions.
+    Low,
+    /// Auto-deploy skips this region entirely. Manual deploy still works.
+    CutOff,
+}
+
+impl RegionPriority {
+    /// Numeric rank for sorting (lower = higher priority).
+    pub fn rank(self) -> u8 {
+        match self {
+            Self::High => 0,
+            Self::Normal => 1,
+            Self::Low => 2,
+            Self::CutOff => 3,
+        }
+    }
+
+    /// Short label for UI display.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::High => "HIGH",
+            Self::Normal => "NORMAL",
+            Self::Low => "LOW",
+            Self::CutOff => "CUT OFF",
+        }
+    }
+
+    /// Cycle to next priority level.
+    pub fn next(self) -> Self {
+        match self {
+            Self::High => Self::Normal,
+            Self::Normal => Self::Low,
+            Self::Low => Self::CutOff,
+            Self::CutOff => Self::High,
+        }
+    }
+}
 
 /// Regional traits that make each region play differently.
 /// Each region has 1-2 traits that modify policy costs, spread rates, or resilience.
@@ -1396,6 +1445,10 @@ pub struct Region {
     /// At 0: all policies disabled, spread rate +50%.
     #[serde(default = "default_one")]
     pub civil_order: f64,
+    /// Deployment priority for auto-deploy targeting. High regions are served
+    /// first, CutOff regions are skipped entirely.
+    #[serde(default)]
+    pub deploy_priority: RegionPriority,
     /// Permanent resilience bonus for supply lines (0.0-0.75). Reduces supply line
     /// degradation rate. Stacks from Supply Reinforcement operations.
     #[serde(default)]
@@ -3223,6 +3276,8 @@ pub enum GameCommand {
     StartFieldOp { kind: FieldOpKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
+    /// Cycle a region's deployment priority (High → Normal → Low → CutOff → High).
+    CycleDeployPriority { region_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -4176,7 +4231,10 @@ impl UiState {
                 } else if self.panel_selection == MANAGE_APPEASE_POS {
                     // Appease Governor
                     Some(GameCommand::AppeaseGovernor { region_idx })
-                } else if self.panel_selection >= MANAGE_INFRA_BASE {
+                } else if self.panel_selection == MANAGE_PRIORITY_POS {
+                    // Cycle deployment priority
+                    Some(GameCommand::CycleDeployPriority { region_idx })
+                } else if self.panel_selection >= MANAGE_INFRA_BASE && self.panel_selection < MANAGE_PRIORITY_POS {
                     // Repair infrastructure (MANAGE_INFRA_BASE=HC, +1=SL, +2=CO)
                     let system = match self.panel_selection - MANAGE_INFRA_BASE {
                         0 => InfraSystem::Healthcare,
@@ -4484,6 +4542,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                deploy_priority: RegionPriority::Normal,
                 supply_resilience: 0.0,
                 civil_resilience: 0.0,
                 emergency_response_until: None,
@@ -4521,6 +4580,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                deploy_priority: RegionPriority::Normal,
                 supply_resilience: 0.0,
                 civil_resilience: 0.0,
                 emergency_response_until: None,
@@ -4558,6 +4618,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                deploy_priority: RegionPriority::Normal,
                 supply_resilience: 0.0,
                 civil_resilience: 0.0,
                 emergency_response_until: None,
@@ -4595,6 +4656,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                deploy_priority: RegionPriority::Normal,
                 supply_resilience: 0.0,
                 civil_resilience: 0.0,
                 emergency_response_until: None,
@@ -4632,6 +4694,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                deploy_priority: RegionPriority::Normal,
                 supply_resilience: 0.0,
                 civil_resilience: 0.0,
                 emergency_response_until: None,
@@ -4669,6 +4732,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                deploy_priority: RegionPriority::Normal,
                 supply_resilience: 0.0,
                 civil_resilience: 0.0,
                 emergency_response_until: None,

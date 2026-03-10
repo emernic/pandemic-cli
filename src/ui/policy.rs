@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
+    GameState, PolicyUiState, RegionPriority, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL, HOSPITAL_SURGE_SPREAD_FACTOR,
@@ -26,7 +26,7 @@ use crate::state::{
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
-    MANAGE_INFRA_BASE, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
+    MANAGE_INFRA_BASE, MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
@@ -111,6 +111,17 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         let mut spans = vec![
             Span::styled(format!("{}{:<16}", marker, region.name), style),
         ];
+
+        // Show deployment priority tag when not default
+        if region.deploy_priority != RegionPriority::Normal {
+            let (tag, tag_color) = match region.deploy_priority {
+                RegionPriority::High => ("▲ ", Color::Green),
+                RegionPriority::Low => ("▼ ", Color::DarkGray),
+                RegionPriority::CutOff => ("✗ ", Color::Red),
+                RegionPriority::Normal => unreachable!(),
+            };
+            spans.push(Span::styled(tag, Style::default().fg(tag_color)));
+        }
 
         if has_active {
             let traits = region.traits.as_slice();
@@ -675,6 +686,41 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             }
             lines.push(Line::from(""));
         }
+    }
+
+    // Deployment Priority toggle (MANAGE_PRIORITY_POS)
+    if !region.collapsed {
+        let selected = state.ui.panel_selection == MANAGE_PRIORITY_POS;
+        if selected { selected_line = Some(lines.len()); }
+        let marker = if selected { "▶ " } else { "  " };
+        let name_style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let priority = region.deploy_priority;
+        let priority_color = match priority {
+            RegionPriority::High => Color::Green,
+            RegionPriority::Normal => Color::White,
+            RegionPriority::Low => Color::DarkGray,
+            RegionPriority::CutOff => Color::Red,
+        };
+        lines.push(Line::from(vec![
+            Span::styled(marker.to_string(), name_style),
+            Span::styled("Deploy Priority: ", name_style),
+            Span::styled(
+                format!("[{}]", priority.label()),
+                Style::default().fg(priority_color).add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("      "),
+            Span::styled(
+                "Controls auto-deploy targeting order",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        lines.push(Line::from(""));
     }
 
     // Appease Governor action (after repair actions)

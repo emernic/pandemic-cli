@@ -332,9 +332,12 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             continue;
         }
 
-        // Find the region with the highest infected count for any tested target disease,
-        // where cooldown is clear and region isn't collapsed
+        // Find the best region to deploy to, respecting deployment priority.
+        // Higher priority regions (High > Normal > Low) are served first.
+        // CutOff regions are skipped entirely.
+        // Within a priority tier, the region with the most infected wins.
         let mut best_region: Option<usize> = None;
+        let mut best_priority: u8 = u8::MAX;
         let mut best_infected: f64 = 0.0;
         let mut best_disease_idx: usize = 0;
 
@@ -342,6 +345,11 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             if region.collapsed {
                 continue;
             }
+            let priority = region.deploy_priority;
+            if priority == crate::state::RegionPriority::CutOff {
+                continue;
+            }
+            let rank = priority.rank();
             for &d_idx in &tested {
                 if region.deploy_cooldown_remaining(state.tick, d_idx) > 0 {
                     continue;
@@ -349,7 +357,9 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 let infected = region.disease_state(d_idx)
                     .map(|inf| inf.infected)
                     .unwrap_or(0.0);
-                if infected > best_infected {
+                // Prefer higher priority (lower rank), then most infected
+                if rank < best_priority || (rank == best_priority && infected > best_infected) {
+                    best_priority = rank;
                     best_infected = infected;
                     best_region = Some(r_idx);
                     best_disease_idx = d_idx;
