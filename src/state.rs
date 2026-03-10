@@ -3093,8 +3093,7 @@ pub struct CrisisEvent {
     pub kind: CrisisKind,
     pub title: String,
     pub description: String,
-    pub option_a: CrisisOption,
-    pub option_b: CrisisOption,
+    pub options: Vec<CrisisOption>,
     pub tick_created: u64,
 }
 
