@@ -1635,7 +1635,7 @@ mod tests {
                         let eff = med.effective_efficacy(d_idx, &state.diseases);
                         let is_targeted = med.therapy_type != crate::state::TherapyType::BroadSpectrum;
                         // Prefer targeted medicines; among same type, prefer higher efficacy
-                        if is_targeted && !best_is_targeted || (is_targeted == best_is_targeted && eff > best_eff) {
+                        if (is_targeted && !best_is_targeted) || (is_targeted == best_is_targeted && eff > best_eff) {
                             best_eff = eff;
                             best_med = Some(med_idx);
                             best_is_targeted = is_targeted;
