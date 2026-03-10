@@ -434,7 +434,7 @@ pub fn tick(state: &GameState) -> GameState {
             .is_some_and(|c| matches!(c.kind, CrisisKind::ArkProtocol { .. }));
         if collapsed_count >= 2 && !surviving.is_empty() && !already_pending && !already_cooldown && !already_active {
             // Score by survival fraction (alive / population) so devastated regions
-            // are not recommended as the Ark even if they have a large raw population.
+            // are not recommended even if they have a large raw population.
             let survival_fraction = |idx: usize| {
                 let r = &new.regions[idx];
                 r.alive() / (r.population as f64).max(1.0)

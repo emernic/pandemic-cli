@@ -224,7 +224,7 @@ fn render_region_box(
     let pop = region.population as f64;
 
     let threat = if is_ark {
-        ("ARK", Color::Cyan)
+        ("HQ", Color::Cyan)
     } else if is_abandoned {
         ("GONE", Color::DarkGray)
     } else if region.collapsed {
@@ -241,7 +241,7 @@ fn render_region_box(
         ("OK", Color::DarkGray)
     };
 
-    // Collapsed (but not the Ark) = information blackout
+    // Collapsed (but not the consolidated HQ) = information blackout
     let info_blackout = region.collapsed && !is_ark;
 
     let name_style = if info_blackout {
@@ -352,7 +352,7 @@ fn render_region_box(
         }
         let sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
 
-        // Collapsed regions (not the Ark): all grey — information blackout, keep texture only
+        // Collapsed regions (not consolidated HQ): all grey — information blackout, keep texture only
         let (sus_color, inf_color, imm_color) = if info_blackout {
             (Color::DarkGray, Color::DarkGray, Color::DarkGray)
         } else {
