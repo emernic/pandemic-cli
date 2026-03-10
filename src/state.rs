@@ -1376,6 +1376,13 @@ pub struct Disease {
     /// sharing that mechanism. Broad-spectrum drugs (mechanism=None) track separately.
     #[serde(default)]
     pub mechanism_resistance: Vec<ResistanceEntry>,
+    /// How much this disease has adapted to containment measures (quarantine, travel bans).
+    /// 0.0 = no adaptation, 1.0 = fully adapted (containment half as effective).
+    /// Builds when disease has active infections in contained regions; decays when
+    /// containment is lifted. Creates pressure to rotate strategies rather than
+    /// relying on quarantine forever.
+    #[serde(default)]
+    pub containment_adaptation: f64,
 }
 
 /// Resistance level for a specific mechanism of action against a disease.
@@ -1478,6 +1485,7 @@ impl Disease {
             sequencing_count: 0,
             detected: true, // callers override to false for new diseases
             mechanism_resistance: vec![],
+            containment_adaptation: 0.0,
         }
     }
 }
@@ -2352,6 +2360,12 @@ pub enum GameEvent {
     MedicineAutoDeployed {
         medicine_idx: usize,
         region_idx: usize,
+    },
+    /// A disease has adapted to containment measures — quarantine/travel ban less effective.
+    ContainmentAdaptation {
+        disease_idx: usize,
+        /// Adaptation level (0.0–1.0) at the time of the event.
+        level: f64,
     },
 }
 
