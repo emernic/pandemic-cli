@@ -214,8 +214,9 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     medicine_idx: m_idx,
                     disease_idx: d_idx,
                 });
-                // Enable auto-deploy on first successful trial so players don't miss it.
-                // They can toggle it off in the Medicines panel [X] if they prefer manual control.
+                // Enable auto-deploy when a trial succeeds so players discover the feature.
+                // Idempotent — safe to set on re-trials (mutation catch-up). Players can
+                // disable it in the Medicines panel [X] if they prefer manual control.
                 while state.auto_deploy.len() <= m_idx {
                     state.auto_deploy.push(false);
                 }
@@ -740,6 +741,31 @@ mod tests {
             state.medicines[0].strain_generations[0] >= 3,
             "clinical trial should update strain calibration"
         );
+    }
+
+    #[test]
+    fn clinical_trial_enables_auto_deploy() {
+        let mut state = GameState::new_default(42);
+        state.medicines[0].unlocked = true;
+
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
+            progress: 24.0,
+            required_ticks: 25.0,
+            personnel_assigned: 5,
+            scientist_ids: vec![],
+        }];
+
+        // auto_deploy should be false/absent before trial completes
+        assert!(!state.auto_deploy.get(0).copied().unwrap_or(false),
+            "auto_deploy should be off before trial");
+
+        state = tick(&state);
+
+        assert!(state.medicines[0].tested_against.contains(&0),
+            "medicine should be tested after trial");
+        assert!(state.auto_deploy.get(0).copied().unwrap_or(false),
+            "auto_deploy should be enabled automatically after trial completes");
     }
 
     #[test]
