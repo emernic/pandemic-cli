@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, ThreatLevel, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, ThreatLevel, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days, grid_reading_order};
 use crate::format_number;
 
 /// Returns the height this bar needs: 4 rows (stats + income + research + border).
@@ -147,15 +147,25 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]);
 
-    // Income breakdown: show per-region contribution so players know where money comes from
+    // Income breakdown: show per-region contribution in map grid order (left→right, top→bottom)
+    // so players can visually associate each entry with the corresponding region on the map.
+    // Shows gross income (before personnel/policy costs) — the net is shown as (+¥N/day) above.
     let income_line = {
         let breakdown = state.per_region_income_breakdown();
-        let mut spans: Vec<Span> = vec![Span::styled("Income: ", Style::default().fg(Color::DarkGray))];
-        for (i, (region_idx, income_per_day)) in breakdown.iter().enumerate() {
+        // Index the breakdown by region_idx for fast lookup
+        let mut by_region = vec![0.0f64; state.regions.len()];
+        for &(idx, income) in &breakdown {
+            by_region[idx] = income;
+        }
+        let display_order = grid_reading_order(state.regions.len());
+        // Label as "Gross income" to distinguish from the net (+¥N/day) shown on line 1
+        let mut spans: Vec<Span> = vec![Span::styled("Gross income: ", Style::default().fg(Color::DarkGray))];
+        for (i, region_idx) in display_order.iter().enumerate() {
             if i > 0 {
                 spans.push(Span::styled("  ", Style::default().fg(Color::DarkGray)));
             }
             let region = &state.regions[*region_idx];
+            let income_per_day = by_region[*region_idx];
             // Abbreviate: first letter of each word (e.g. "North America" → "NA", "Asia" → "AS")
             let abbrev: String = region.name.split_whitespace()
                 .map(|w| w.chars().next().unwrap_or('?'))
