@@ -1,16 +1,18 @@
 use rand::Rng;
 
 use crate::state::{
-    DeployTarget, GameEvent, GameOutcome, GameState, RegionDiseaseState,
+    DeployTarget, GameEvent, GameOutcome, GameState, RegionDiseaseState, Shipment,
+    SHIPPING_TICKS,
 };
 
-/// Execute medicine deployment: deduct funds, apply doses (with adverse effect
-/// roll for untested medicines). Pure game logic — does NOT modify UI state.
+/// Dispatch a medicine shipment: deduct funds and doses, create in-transit
+/// shipment. Effects apply when the shipment arrives (1 day later).
+/// Pure game logic — does NOT modify UI state.
 ///
 /// Returns (success, message, adverse):
-/// - `success`: true if deployment was attempted (maps to CommandResult.success)
+/// - `success`: true if dispatch was attempted
 /// - `message`: status feedback to display (if any)
-/// - `adverse`: true if an adverse reaction occurred
+/// - `adverse`: always false at dispatch (adverse check happens on delivery)
 pub(super) fn deploy_medicine(
     state: &mut GameState,
     medicine_idx: usize,
@@ -41,6 +43,7 @@ pub(super) fn deploy_medicine(
     let med = &state.medicines[medicine_idx];
     let cost = med.deploy_cost(state.regions[region_idx].population);
     let med_name = med.name.clone();
+    let region_name = state.regions[region_idx].name.clone();
 
     if state.resources.funding < cost {
         return (false, Some(insufficient_funds_message(cost, state.resources.funding)), false);
@@ -54,72 +57,167 @@ pub(super) fn deploy_medicine(
         DeployTarget::Treat { disease_idx } => *disease_idx,
     };
 
-    let mut efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
-    // Medical Center (hospital level 2) boosts medicine effectiveness
-    if state.regions[region_idx].hospital_level >= 2 {
-        efficacy = (efficacy * (1.0 + crate::state::MEDICAL_CENTER_EFFICACY_BONUS)).min(1.0);
-    }
+    // Estimate how many doses to dispatch based on current population
+    let efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
     let vax_mult = state.vaccination_multiplier();
-    let region = &mut state.regions[region_idx];
-    let region_name = region.name.clone();
+    let region = &state.regions[region_idx];
     let pop = region.population as f64;
-
-    // Look up existing infection state (don't create yet — avoid ghost entries)
     let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
     let infected = existing.map(|i| i.infected).unwrap_or(0.0);
     let dead = region.dead;
     let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
-    let is_tested = state.medicines[medicine_idx]
-        .tested_against
-        .contains(&disease_idx);
-
-    let (mut msg, adverse) = match target {
+    let doses_to_ship = match &target {
         DeployTarget::Vaccinate { .. } => {
             let susceptible = (pop - infected - dead - immune).max(0.0);
-            let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
-            if actual > 0.0 {
-                let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
-                let inf = region.get_or_create_infection(disease_idx);
-                apply_immune_and_deaths(inf, actual, adverse_deaths);
-                region.dead += adverse_deaths;
-                deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
-                build_resistance(state, medicine_idx, disease_idx, false);
-                (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse_deaths, efficacy), adverse)
-            } else {
-                (format!("No susceptible population in {region_name}"), false)
-            }
+            state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult)
         }
         DeployTarget::Treat { .. } => {
-            let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
-            if actual > 0.0 {
-                let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
-                let inf = region.get_or_create_infection(disease_idx);
-                inf.infected -= actual;
-                apply_immune_and_deaths(inf, actual, adverse_deaths);
-                region.dead += adverse_deaths;
-                deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
-                build_resistance(state, medicine_idx, disease_idx, true);
-                (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse_deaths, efficacy), adverse)
-            } else {
-                (format!("No infected population in {region_name}"), false)
-            }
+            state.medicines[medicine_idx].estimate_treatment(infected, efficacy)
         }
     };
 
-    // Warn if resistance is building — the player needs to know their medicine
-    // is becoming less effective so they can research alternatives.
-    if let Some(disease) = state.diseases.get(disease_idx) {
-        let mech = state.medicines[medicine_idx].mechanism;
-        let res_factor = disease.resistance_factor(mech);
-        if res_factor < 0.5 {
-            msg += " \u{26a0} HIGH RESISTANCE — consider alternative therapy";
-        } else if res_factor < 0.7 {
-            msg += " \u{26a0} Resistance building — efficacy declining";
-        }
+    if doses_to_ship <= 0.0 {
+        return match target {
+            DeployTarget::Vaccinate { .. } => (false, Some(format!("No susceptible population in {region_name}")), false),
+            DeployTarget::Treat { .. } => (false, Some(format!("No infected population in {region_name}")), false),
+        };
     }
 
-    (true, Some(msg), adverse)
+    // Deduct cost and doses
+    state.resources.funding -= cost;
+    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - doses_to_ship).max(0.0);
+    state.medicines[medicine_idx].deployed_count += 1;
+    state.regions[region_idx].last_deploy_tick = Some(state.tick);
+
+    // Create the shipment
+    let arrive_tick = state.tick + SHIPPING_TICKS;
+    state.pending_shipments.push(Shipment {
+        medicine_idx,
+        region_idx,
+        target,
+        doses: doses_to_ship,
+        arrive_tick,
+        blocked_by_travel_ban: false,
+    });
+    state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx });
+
+    let doses_str = crate::format_number(doses_to_ship);
+    let msg = format!(
+        "Shipped {doses_str} doses of {med_name} to {region_name} (-${cost:.0}) — arriving in 1 day"
+    );
+    (true, Some(msg), false)
+}
+
+/// Process arriving shipments. Called each tick. Delivers doses that have
+/// arrived, blocks on travel bans, and discards shipments to collapsed regions.
+pub(super) fn tick_shipments(state: &mut GameState) {
+    let mut i = 0;
+    while i < state.pending_shipments.len() {
+        let shipment = &state.pending_shipments[i];
+        let med_idx = shipment.medicine_idx;
+        let reg_idx = shipment.region_idx;
+
+        // Discard if region collapsed or abandoned
+        let region_gone = state.regions.get(reg_idx)
+            .map(|r| r.collapsed)
+            .unwrap_or(true)
+            || state.is_abandoned(reg_idx);
+        if region_gone {
+            state.pending_shipments.remove(i);
+            continue;
+        }
+
+        if state.tick < state.pending_shipments[i].arrive_tick {
+            i += 1;
+            continue;
+        }
+
+        // Check travel ban
+        let has_travel_ban = state.policies.get(reg_idx)
+            .map(|p| p.travel_ban)
+            .unwrap_or(false);
+        if has_travel_ban {
+            if !state.pending_shipments[i].blocked_by_travel_ban {
+                state.pending_shipments[i].blocked_by_travel_ban = true;
+                let event = GameEvent::ShipmentBlocked { medicine_idx: med_idx, region_idx: reg_idx };
+                state.events.push(event);
+            }
+            // Retry next day
+            state.pending_shipments[i].arrive_tick = state.tick + crate::state::TICKS_PER_DAY as u64;
+            i += 1;
+            continue;
+        }
+
+        // Deliver the shipment
+        let shipment = state.pending_shipments.remove(i);
+        deliver_shipment(state, &shipment);
+        // don't increment i — the vec shifted
+    }
+}
+
+/// Apply a shipment's effects to the game state (treatment or vaccination).
+fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
+    let med_idx = shipment.medicine_idx;
+    let reg_idx = shipment.region_idx;
+
+    let Some(medicine) = state.medicines.get(med_idx) else { return; };
+    if !medicine.unlocked { return; }
+
+    let disease_idx = match &shipment.target {
+        DeployTarget::Vaccinate { disease_idx } => *disease_idx,
+        DeployTarget::Treat { disease_idx } => *disease_idx,
+    };
+
+    let mut efficacy = state.medicines[med_idx].effective_efficacy(disease_idx, &state.diseases);
+    if state.regions[reg_idx].hospital_level >= 2 {
+        efficacy = (efficacy * (1.0 + crate::state::MEDICAL_CENTER_EFFICACY_BONUS)).min(1.0);
+    }
+    let vax_mult = state.vaccination_multiplier();
+    let region = &state.regions[reg_idx];
+    let pop = region.population as f64;
+    let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+    let infected = existing.map(|i| i.infected).unwrap_or(0.0);
+    let dead = region.dead;
+    let immune = existing.map(|i| i.immune).unwrap_or(0.0);
+
+    let is_tested = state.medicines[med_idx].tested_against.contains(&disease_idx);
+
+    let adverse = match &shipment.target {
+        DeployTarget::Vaccinate { .. } => {
+            let susceptible = (pop - infected - dead - immune).max(0.0);
+            // Cap at shipped doses
+            let actual = state.medicines[med_idx]
+                .estimate_vaccination(susceptible, efficacy, vax_mult)
+                .min(shipment.doses);
+            if actual <= 0.0 { return; }
+            let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
+            let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
+            apply_immune_and_deaths(inf, actual, adverse_deaths);
+            state.regions[reg_idx].dead += adverse_deaths;
+            build_resistance(state, med_idx, disease_idx, false);
+            adverse
+        }
+        DeployTarget::Treat { .. } => {
+            let actual = state.medicines[med_idx]
+                .estimate_treatment(infected, efficacy)
+                .min(shipment.doses);
+            if actual <= 0.0 { return; }
+            let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
+            let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
+            inf.infected -= actual;
+            apply_immune_and_deaths(inf, actual, adverse_deaths);
+            state.regions[reg_idx].dead += adverse_deaths;
+            build_resistance(state, med_idx, disease_idx, true);
+            adverse
+        }
+    };
+
+    state.events.push(GameEvent::ShipmentDelivered {
+        medicine_idx: med_idx,
+        region_idx: reg_idx,
+        adverse,
+    });
 }
 
 /// Roll for adverse reaction on untested medicines.
@@ -151,13 +249,6 @@ fn apply_immune_and_deaths(
     }
 }
 
-/// Deduct funds, doses, increment deploy count, and start region cooldown.
-fn deduct_deploy_costs(state: &mut GameState, medicine_idx: usize, region_idx: usize, cost: f64, actual: f64) {
-    state.resources.funding -= cost;
-    state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - actual).max(0.0);
-    state.medicines[medicine_idx].deployed_count += 1;
-    state.regions[region_idx].last_deploy_tick = Some(state.tick);
-}
 
 /// Build resistance from deployment pressure. Treatment creates much more
 /// selection pressure than vaccination. Broad-spectrum drugs build resistance
@@ -271,17 +362,3 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
     }
 }
 
-fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse_deaths: f64, efficacy: f64) -> String {
-    let doses_str = crate::format_number(doses);
-    let eff_note = if efficacy < 1.0 {
-        format!(" ({:.0}% efficacy)", efficacy * 100.0)
-    } else {
-        String::new()
-    };
-    if adverse_deaths > 0.0 {
-        let killed = crate::format_number(adverse_deaths);
-        format!("{action} {doses_str} in {region} with {med}{eff_note} (-${cost:.0}) -- ADVERSE REACTION: {killed} died")
-    } else {
-        format!("{action} {doses_str} in {region} with {med}{eff_note} (-${cost:.0})")
-    }
-}

@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, grid_reading_order, KNOWLEDGE_NAME};
+use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -172,6 +172,36 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             }
 
             lines.push(Line::from(detail_spans));
+
+            // Show pending shipments for this medicine
+            let shipments: Vec<_> = state.pending_shipments.iter()
+                .filter(|s| s.medicine_idx == med_idx)
+                .collect();
+            for s in &shipments {
+                let region_name = state.regions.get(s.region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                let doses_str = format_number(s.doses);
+                if s.blocked_by_travel_ban {
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(
+                            format!("⚠ {doses_str} → {region_name} BLOCKED (travel ban)"),
+                            Style::default().fg(Color::Red),
+                        ),
+                    ]));
+                } else {
+                    let ticks_left = s.arrive_tick.saturating_sub(state.tick);
+                    let days_left = ticks_left as f64 / TICKS_PER_DAY;
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(
+                            format!("→ {doses_str} en route to {region_name} ({days_left:.1}d)"),
+                            Style::default().fg(Color::Cyan),
+                        ),
+                    ]));
+                }
+            }
+
             lines.push(Line::from(""));
         }
     }
@@ -580,7 +610,7 @@ fn render_deploy_result(
     state: &GameState,
     medicine_idx: usize,
     message: &str,
-    adverse: bool,
+    _adverse: bool,
 ) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let med_name = state.medicines.get(medicine_idx)
@@ -588,33 +618,10 @@ fn render_deploy_result(
         .unwrap_or("Unknown");
 
     lines.push(Line::from(""));
-
-    if adverse {
-        lines.push(Line::from(Span::styled(
-            "  ⚠ ADVERSE REACTION ⚠",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )));
-        lines.push(Line::from(""));
-    }
-
-    // Split the message at " -- " to separate the deploy info from adverse details
-    let parts: Vec<&str> = message.splitn(2, " -- ").collect();
-
-    // Main deploy info
     lines.push(Line::from(Span::styled(
-        format!("  {}", parts[0]),
-        Style::default().fg(if adverse { Color::Yellow } else { Color::Green }),
+        format!("  {}", message),
+        Style::default().fg(Color::Green),
     )));
-
-    // Adverse detail on its own line if present
-    if let Some(adverse_detail) = parts.get(1) {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            format!("  {}", adverse_detail),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )));
-    }
-
     lines.push(Line::from(""));
 
     // Show updated medicine state
@@ -641,10 +648,5 @@ fn render_deploy_result(
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Continue", "Back"));
 
-    let title = if adverse {
-        format!(" ⚠ {} — Adverse Reaction ", med_name)
-    } else {
-        format!(" ✓ {} — Deployed ", med_name)
-    };
-    (title, lines)
+    (format!(" ✓ {} — Dispatched ", med_name), lines)
 }

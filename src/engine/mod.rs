@@ -53,6 +53,9 @@ pub fn tick(state: &GameState) -> GameState {
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new);
 
+    // Process arriving medicine shipments
+    medicine::tick_shipments(&mut new);
+
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
 
@@ -548,6 +551,7 @@ mod tests {
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
+            med.doses = med.max_doses;
         }
     }
 
@@ -812,35 +816,29 @@ mod tests {
             Some(MedicineUiState::SelectTarget { .. })
         ));
         let funding_before = state.resources.funding;
-        let efficacy = state.medicines[0].effective_efficacy(0, &state.diseases);
-        let region = &state.regions[0];
-        let inf_state = region.infections.iter().find(|i| i.disease_idx == 0);
-        let infected = inf_state.map(|i| i.infected).unwrap_or(0.0);
-        let immune = inf_state.map(|i| i.immune).unwrap_or(0.0);
-        let susceptible = (region.population as f64 - infected - region.dead - immune).max(0.0);
-        let target_vaccinated = susceptible * crate::state::VACCINATION_FRACTION * efficacy;
-        let expected_immune = target_vaccinated.min(state.medicines[0].doses);
-        let deploy_cost = state.medicines[0].deploy_cost(region.population);
+        let deploy_cost = state.medicines[0].deploy_cost(state.regions[0].population);
+        let doses_before = state.medicines[0].doses;
         state = apply_action(&state, &Action::Confirm);
-        // Computed outputs: cost deducted, immunity applied proportionally
-        assert_eq!(state.resources.funding, funding_before - deploy_cost);
-        let na_inf = state.regions[0]
-            .infections
-            .iter()
-            .find(|i| i.disease_idx == 0)
-            .unwrap();
-        assert_eq!(na_inf.immune, expected_immune);
-        // With 500M pop and 2% fraction, target = ~10M. With 100M doses available,
-        // doses are not the bottleneck — proportional vaccination determines the count.
-        assert!(expected_immune <= 100_000_000.0, "vaccination should be capped by dose supply");
+        // Dispatch deducts cost and doses immediately, creates a pending shipment
+        assert_eq!(state.resources.funding, funding_before - deploy_cost, "cost deducted on dispatch");
+        assert!(state.medicines[0].doses < doses_before, "doses deducted on dispatch");
+        assert_eq!(state.pending_shipments.len(), 1, "should have one pending shipment");
         assert!(matches!(
             state.ui.medicine_ui,
-            Some(MedicineUiState::DeployResult { medicine_idx: 0, adverse: false, .. })
+            Some(MedicineUiState::DeployResult { medicine_idx: 0, .. })
         ));
-        // DeployResult should contain the feedback message
+        // DeployResult should describe the dispatch
         if let Some(MedicineUiState::DeployResult { message, .. }) = &state.ui.medicine_ui {
-            assert!(message.contains("Protected"), "message should mention protection: {message}");
+            assert!(message.contains("Shipped"), "message should mention shipment: {message}");
         }
+        // Advance time and deliver — immune should increase
+        let immune_before = state.regions[0].infections.iter()
+            .find(|i| i.disease_idx == 0).map(|i| i.immune).unwrap_or(0.0);
+        state.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut state);
+        let immune_after = state.regions[0].infections.iter()
+            .find(|i| i.disease_idx == 0).map(|i| i.immune).unwrap_or(0.0);
+        assert!(immune_after > immune_before, "immune should increase after delivery: {immune_before} -> {immune_after}");
     }
 
     #[test]
@@ -864,32 +862,27 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // select region
         state = apply_action(&state, &Action::SelectNext); // switch from vaccinate to treat
         let funding_before = state.resources.funding;
-        state = apply_action(&state, &Action::Confirm); // deploy
+        state = apply_action(&state, &Action::Confirm); // dispatch shipment
+
+        // Dispatch: cost deducted, doses deducted, pending shipment created
+        let deploy_cost = state.medicines[0].deploy_cost(state.regions[ri].population);
+        assert_eq!(state.resources.funding, funding_before - deploy_cost);
+        assert!(
+            state.medicines[0].doses < state.medicines[0].max_doses,
+            "doses should have been deducted on dispatch"
+        );
+        assert_eq!(state.pending_shipments.len(), 1, "should have one pending shipment");
+
+        // Deliver the shipment
+        state.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut state);
 
         let infected_after = state.regions[ri].disease_state(0).unwrap().infected;
         assert!(
             infected_after < infected_before,
-            "treatment should reduce infected: {} -> {}",
+            "treatment should reduce infected after delivery: {} -> {}",
             infected_before,
             infected_after
-        );
-        let deploy_cost = state.medicines[0].deploy_cost(state.regions[ri].population);
-        assert_eq!(state.resources.funding, funding_before - deploy_cost);
-        // Treatment is proportional — treats TREATMENT_FRACTION * efficacy of infected
-        let treated = infected_before - infected_after;
-        assert!(
-            treated > 0.0,
-            "should have treated some people"
-        );
-        assert!(
-            state.medicines[0].doses < state.medicines[0].max_doses,
-            "doses should have been depleted after deployment"
-        );
-        // Doses consumed = people treated
-        assert!(
-            (state.medicines[0].max_doses - state.medicines[0].doses - treated).abs() < 1.0,
-            "doses depleted ({}) should equal people treated ({})",
-            state.medicines[0].max_doses - state.medicines[0].doses, treated
         );
     }
 
@@ -1036,6 +1029,7 @@ mod tests {
     fn unlock_untested(state: &mut GameState) {
         for med in &mut state.medicines {
             med.unlocked = true;
+            med.doses = med.max_doses;
         }
     }
 
@@ -2077,14 +2071,17 @@ mod tests {
         let initial_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
         assert!((initial_res - 1.0).abs() < 0.001, "should start with no resistance");
 
-        // Deploy treatment multiple times (clear cooldown between deploys)
-        for _ in 0..10 {
+        // Deploy treatment multiple times (clear cooldown between deploys, deliver each shipment)
+        for i in 0..10usize {
             if let Some(inf) = state.regions[0].infections.iter_mut().find(|i| i.disease_idx == disease_idx) {
                 inf.infected = 100_000.0;
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick = None;
             let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget::Treat { disease_idx });
+            // Advance time to deliver this shipment
+            state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
+            medicine::tick_shipments(&mut state);
         }
 
         let after_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
@@ -2100,13 +2097,16 @@ mod tests {
         state.medicines[bs_idx].doses = 1_000_000_000.0;
         state.medicines[bs_idx].max_doses = 1_000_000_000.0;
 
-        for _ in 0..10 {
+        let base_tick = state.tick;
+        for i in 0..10usize {
             if let Some(inf) = state.regions[0].infections.iter_mut().find(|i| i.disease_idx == disease_idx) {
                 inf.infected = 100_000.0;
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick = None;
             let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget::Treat { disease_idx });
+            state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
+            medicine::tick_shipments(&mut state);
         }
 
         let bs_res = state.medicines[bs_idx].resistance_factor(disease_idx, &state.diseases);
@@ -4060,7 +4060,7 @@ mod tests {
         let treat = DeployTarget::Treat { disease_idx };
         let (nav, msg, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav, "first deploy should succeed");
-        assert!(msg.unwrap().contains("Treated"), "should show treatment message");
+        assert!(msg.unwrap().contains("Shipped"), "should show shipment message");
 
         // Region should now have a cooldown set
         assert!(state.regions[0].last_deploy_tick.is_some());
@@ -4078,7 +4078,7 @@ mod tests {
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
         let (nav3, msg3, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav3, "deploy after cooldown should succeed");
-        assert!(msg3.unwrap().contains("Treated"));
+        assert!(msg3.unwrap().contains("Shipped"));
 
         // Different region should still be deployable (cooldown is per-region)
         state.tick = 0;

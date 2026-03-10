@@ -183,7 +183,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                (8, format!("Auto-deployed {} to {}", med_name, region_name))
+                (8, format!("Auto-shipped {} to {} — arriving in 1 day", med_name, region_name))
             }
             GameEvent::ContainmentAdaptation { disease_idx, level } => {
                 let name = state.diseases.get(*disease_idx)
@@ -229,6 +229,31 @@ pub fn process_events(state: &mut GameState) {
             }
             GameEvent::ThreatLevelChanged { to, .. } => {
                 (1, format!("DEFCON {} — Threat level: {}", to.defcon(), to.label()))
+            }
+            GameEvent::MedicineShipped { medicine_idx, region_idx } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("?");
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                (9, format!("Shipment of {} en route to {} — arrives in 1 day", med_name, region_name))
+            }
+            GameEvent::ShipmentBlocked { medicine_idx, region_idx } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("?");
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                (4, format!("⚠ {} shipment blocked at {} — travel ban in effect. Lift ban to deliver.", med_name, region_name))
+            }
+            GameEvent::ShipmentDelivered { medicine_idx, region_idx, adverse } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("?");
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                if *adverse {
+                    (3, format!("⚠ {} delivered to {} — ADVERSE REACTION reported", med_name, region_name))
+                } else {
+                    (9, format!("{} delivered to {}", med_name, region_name))
+                }
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };

@@ -123,6 +123,9 @@ pub struct GameState {
     /// region each tick cycle. Per-medicine toggle, indexed by medicine index.
     #[serde(default)]
     pub auto_deploy: Vec<bool>,
+    /// Medicine shipments in transit. Created on deploy; effects apply on arrival.
+    #[serde(default)]
+    pub pending_shipments: Vec<Shipment>,
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
@@ -1689,6 +1692,9 @@ pub const MERCY_RULE_TICKS: u64 = 600;
 /// Deploy cooldown per region in ticks (2 days). Healthcare systems need
 /// time to distribute and administer doses.
 pub const DEPLOY_COOLDOWN_TICKS: u64 = 240;
+/// Shipping delay in ticks (1 day). Deployed medicine takes this long to
+/// arrive at the destination region before taking effect.
+pub const SHIPPING_TICKS: u64 = 120;
 /// Cost to rally public support (boost POL).
 pub const RALLY_COST: f64 = 300.0;
 /// POL gain from a single rally (+5%).
@@ -1993,7 +1999,23 @@ pub struct Medicine {
     pub deployed_count: u32,
 }
 
-/// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
+//// A medicine deployment in transit to a region. Created when the player
+/// dispatches doses; takes effect when `arrive_tick` is reached.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Shipment {
+    pub medicine_idx: usize,
+    pub region_idx: usize,
+    pub target: DeployTarget,
+    /// Physical doses on the truck (deducted from inventory at dispatch).
+    pub doses: f64,
+    /// Tick when this shipment next attempts delivery.
+    pub arrive_tick: u64,
+    /// True when a travel ban is currently blocking delivery.
+    #[serde(default)]
+    pub blocked_by_travel_ban: bool,
+}
+
+// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeployTarget {
     Vaccinate { disease_idx: usize },
@@ -2027,7 +2049,7 @@ impl Medicine {
                     mechanism: None,
                     target_diseases: vec![disease_idx],
                     cost: 50.0,
-                    doses: 100_000_000.0,
+                    doses: 0.0,
                     max_doses: 100_000_000.0,
                     unlocked: false,
                     tested_against: vec![],
@@ -2045,7 +2067,7 @@ impl Medicine {
                 mechanism: Some(mech),
                 target_diseases: vec![disease_idx],
                 cost: mech.deploy_cost(),
-                doses,
+                doses: 0.0,
                 max_doses: doses,
                 unlocked: false,
                 tested_against: vec![],
@@ -2620,6 +2642,22 @@ pub enum GameEvent {
     MedicineAutoDeployed {
         medicine_idx: usize,
         region_idx: usize,
+    },
+    /// A medicine shipment was dispatched and is in transit.
+    MedicineShipped {
+        medicine_idx: usize,
+        region_idx: usize,
+    },
+    /// A shipment was blocked by a travel ban on arrival.
+    ShipmentBlocked {
+        medicine_idx: usize,
+        region_idx: usize,
+    },
+    /// A shipment delivered and doses took effect.
+    ShipmentDelivered {
+        medicine_idx: usize,
+        region_idx: usize,
+        adverse: bool,
     },
     /// A disease has adapted to containment measures — quarantine/travel ban less effective.
     ContainmentAdaptation {
@@ -3859,7 +3897,7 @@ impl GameState {
             mechanism: None,
             target_diseases: all_disease_indices,
             cost: 100.0,
-            doses: 200_000_000.0,
+            doses: 0.0,
             max_doses: 200_000_000.0,
             unlocked: false,
             tested_against: vec![],
@@ -3903,6 +3941,7 @@ impl GameState {
             history: vec![],
             auto_research: [false; 3],
             auto_deploy: vec![],
+            pending_shipments: vec![],
             zero_agency_ticks: 0,
             mercy_rule: false,
             death_milestone_tier: vec![0; num_diseases],
@@ -4732,8 +4771,9 @@ impl GameState {
         let no_research = self.field_research.is_empty()
             && self.applied_research.is_none()
             && self.basic_research.is_none();
-        // No medicine doses to deploy
-        let no_doses = self.medicines.iter().all(|m| m.doses <= 0.0);
+        // No medicine doses to deploy and no shipments in transit
+        let no_doses = self.medicines.iter().all(|m| m.doses <= 0.0)
+            && self.pending_shipments.is_empty();
 
         broke && no_research && no_doses
     }
