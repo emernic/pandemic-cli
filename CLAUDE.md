@@ -376,6 +376,7 @@ The user switches between many terminal tabs. They need to instantly see what wa
 
 ## Conventions
 
+- **No backwards compatibility concerns.** This game is not deployed in the wild. Save files are deleted between playtests by both humans and AI agents. Do NOT keep deprecated fields, variants, or `#[serde(default)]` annotations "for save file compatibility." If a field is unused, delete it. If a struct changes shape, just change it. The `#[serde(default)]` and `#[serde(alias)]` infrastructure is there so we CAN handle compatibility later when the game ships. Until then, dead fields kept "for compat" are pure complexity waste.
 - **When in doubt, Google it.** Do not guess about tool behavior, API syntax, library features, or Claude Code capabilities (hooks, skills, settings, etc.). These change frequently. A quick web search takes seconds; confidently stating something wrong wastes everyone's time. This applies especially to Claude Code's own documentation — always verify rather than assume.
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
 - Diseases use vec index, not an id field (`RegionInfection.disease_idx`)

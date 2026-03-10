@@ -2480,10 +2480,6 @@ pub struct Shipment {
     pub cost: f64,
     /// Tick when this shipment next attempts delivery.
     pub arrive_tick: u64,
-    /// Deprecated: travel bans no longer block medicine shipments.
-    /// Kept for save file compatibility.
-    #[serde(default)]
-    pub blocked_by_travel_ban: bool,
 }
 
 // What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
@@ -3175,11 +3171,6 @@ pub enum GameEvent {
         medicine_idx: usize,
         region_idx: usize,
         doses: f64,
-    },
-    /// Deprecated: travel bans no longer block shipments. Kept for save compat.
-    ShipmentBlocked {
-        medicine_idx: usize,
-        region_idx: usize,
     },
     /// A shipment delivered and doses took effect.
     /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare).

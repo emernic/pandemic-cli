@@ -258,13 +258,6 @@ pub fn process_events(state: &mut GameState) {
                 };
                 (9, msg)
             }
-            GameEvent::ShipmentBlocked { medicine_idx, region_idx } => {
-                let med_name = state.medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str()).unwrap_or("?");
-                let region_name = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("?");
-                (4, format!("⚠ {} shipment blocked at {} (travel ban)", med_name, region_name))
-            }
             GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
