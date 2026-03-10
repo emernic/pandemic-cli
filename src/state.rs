@@ -2925,6 +2925,9 @@ pub enum GameEvent {
     CrisisAutoResolved { message: String },
     /// A research project was auto-started because auto-research is on.
     ResearchAutoStarted { track: ResearchTrack },
+    /// A research completion on one track unlocked a project on another track.
+    /// Notifies the player to start the next pipeline step manually.
+    ResearchHandoff { message: String },
     /// Personnel left due to unpaid wages (funding at $0).
     PersonnelAttrition { count: u32 },
     /// Bacterial horizontal gene transfer — broad-spectrum resistance spread

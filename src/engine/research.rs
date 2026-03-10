@@ -205,6 +205,20 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     // Auto-start next field project if any completed and auto is on
     if !completed_fields.is_empty() {
         try_auto_start(state, ResearchTrack::Field);
+        // Notify player if field completions unlocked Applied research options
+        if state.applied_research.is_none() {
+            if let Some(kind) = state.available_applied_projects().iter()
+                .find(|p| matches!(p, ResearchKind::DevelopMedicine { .. }))
+            {
+                if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
+                    let name = state.medicines.get(*medicine_idx)
+                        .map(|m| m.name.as_str()).unwrap_or("medicine");
+                    state.events.push(GameEvent::ResearchHandoff {
+                        message: format!("{} development available — open Applied Research [R]", name),
+                    });
+                }
+            }
+        }
     }
     if let Some(ref mut project) = state.applied_research {
         let speed = project.speed(&state.medicines);
@@ -224,6 +238,16 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                         .collect();
                 }
                 state.events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
+                // Notify about clinical trial availability on Field track
+                let has_trial_available = state.available_field_projects().iter()
+                    .any(|p| matches!(p, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == m_idx));
+                if has_trial_available && state.field_research_has_capacity() {
+                    let name = state.medicines.get(m_idx)
+                        .map(|m| m.name.as_str()).unwrap_or("medicine");
+                    state.events.push(GameEvent::ResearchHandoff {
+                        message: format!("{} needs clinical trial — open Field Research [R]", name),
+                    });
+                }
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
                 let m_idx = *medicine_idx;
@@ -1355,5 +1379,61 @@ mod tests {
         assert!(msg.is_some(), "upgrade should return a message");
         assert_eq!(s.lab_level, 1);
         assert!((s.resources.funding - (1000.0 - LAB_LEVEL_1_COST)).abs() < 0.01);
+    }
+
+    #[test]
+    fn handoff_notification_after_identification() {
+        use crate::state::GameEvent;
+        let mut state = GameState::new_default(42);
+        // Start identify on disease 0
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::Confirm); // Field Research
+        state = apply_action(&state, &Action::Confirm); // Select Identify
+        state = apply_action(&state, &Action::Confirm); // Confirm start
+        assert!(!state.field_research.is_empty());
+
+        // Advance to completion, checking events each tick (clone-and-mutate means
+        // events are only on the state returned by the tick that generated them)
+        let mut found_handoff = false;
+        for _ in 0..200 {
+            state = tick(&state);
+            if state.events.iter().any(|e|
+                matches!(e, GameEvent::ResearchHandoff { message } if message.contains("development available"))
+            ) {
+                found_handoff = true;
+            }
+        }
+        assert!(state.diseases[0].knowledge >= 0.5, "Disease should be identified");
+        assert!(found_handoff, "Should notify about medicine development after identification");
+    }
+
+    #[test]
+    fn handoff_notification_after_medicine_developed() {
+        use crate::state::GameEvent;
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = 1.0;
+        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
+
+        // Start develop medicine on applied track
+        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::SelectNext); // Applied
+        state = apply_action(&state, &Action::Confirm);
+        state = apply_action(&state, &Action::Confirm); // Select first project
+        state = apply_action(&state, &Action::Confirm); // Confirm
+        assert!(state.applied_research.is_some(),
+            "Applied research should start. UI state: {:?}", state.ui.research_ui);
+
+        // Advance to completion, checking events each tick
+        let mut found_handoff = false;
+        for _ in 0..600 {
+            state = tick(&state);
+            if state.events.iter().any(|e|
+                matches!(e, GameEvent::ResearchHandoff { message } if message.contains("clinical trial"))
+            ) {
+                found_handoff = true;
+            }
+        }
+        assert!(state.medicines.iter().any(|m| m.unlocked), "Medicine should be developed");
+        assert!(found_handoff, "Should notify about clinical trial after medicine development");
     }
 }

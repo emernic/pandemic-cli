@@ -204,7 +204,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let field_auto = if state.auto_research[ResearchTrack::Field.index()] { "Field(A): " } else { "Field: " };
         spans.push(Span::styled(field_auto, Style::default().fg(Color::DarkGray)));
         if state.field_research.is_empty() {
-            spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+            let has_field_projects = !state.available_field_projects().is_empty();
+            if has_field_projects {
+                spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
+            } else {
+                spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+            }
         } else {
             for (i, project) in state.field_research.iter().enumerate() {
                 if i > 0 {
@@ -233,7 +238,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Style::default().fg(color),
                 ));
             } else {
-                spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+                // Check if there are available projects the player could start
+                let has_actionable = state.available_projects(track).iter()
+                    .any(|p| !matches!(p, ResearchKind::TrainPersonnel));
+                if has_actionable {
+                    spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
+                } else {
+                    spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
+                }
             }
         }
 
