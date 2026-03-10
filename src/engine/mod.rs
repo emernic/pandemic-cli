@@ -1996,7 +1996,7 @@ mod tests {
 
     #[test]
     fn travel_ban_does_not_block_medicine_shipments() {
-        use crate::state::{DeployTarget, SHIPPING_TICKS};
+        use crate::state::DeployTarget;
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.push(0);
