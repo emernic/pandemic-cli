@@ -2668,6 +2668,7 @@ pub enum Panel {
     Research,
     Medicines,
     Policy,
+    Scientists,
     Help,
 }
 
@@ -2966,6 +2967,10 @@ impl UiState {
                 }
                 None => 0,
             },
+            Panel::Scientists => state.scientists.iter()
+                .filter(|s| s.is_alive())
+                .count()
+                .saturating_sub(1),
             _ => 0,
         }
     }

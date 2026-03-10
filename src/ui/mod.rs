@@ -4,6 +4,7 @@ pub mod medicines;
 pub mod policy;
 pub mod research;
 pub mod resources;
+pub mod scientists;
 pub mod threats;
 pub mod region_list;
 
@@ -287,6 +288,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
             Panel::Medicines => medicines::render(f, split[1], state),
             Panel::Research => research::render(f, split[1], state),
             Panel::Policy => policy::render(f, split[1], state),
+            Panel::Scientists => scientists::render(f, split[1], state),
             panel => render_placeholder_panel(f, split[1], panel),
         }
     }
