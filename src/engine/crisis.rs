@@ -512,7 +512,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     label: format!("Close borders (−{}% POL)", pol_pct),
                     description: if *wave >= 3 {
                         format!(
-                            "Seal the borders. {:.0}M die in the open. The international community is watching.",
+                            "Seal the borders. {:.0}M die in the open.",
                             survivors_m * 0.20,
                         )
                     } else {
@@ -1422,7 +1422,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      They're threatening to freeze your accounts and block supply chains.".into(),
                 options: vec![ CrisisOption {
                     label: "Accept sanctions".into(),
-                    description: format!("Lose ¥{funding_loss:.0} and international standing"),
+                    description: format!("Lose ¥{funding_loss:.0} and −10% political power"),
                     cost: None,
                 },
                  CrisisOption {
