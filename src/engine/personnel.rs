@@ -4,7 +4,7 @@ use rand_chacha::ChaCha8Rng;
 use crate::state::{
     GameEvent, GameState, ResearchKind, Scientist, ScientistStatus, ScientistTrait,
     BURNOUT_CHANCE_PER_TICK, BURNOUT_RECOVERY_TICKS, BURNOUT_THRESHOLD_RECKLESS,
-    BURNOUT_THRESHOLD_TICKS,
+    BURNOUT_THRESHOLD_TICKS, FIELD_INFECTION_CHANCE_PER_TICK, FIELD_INFECTION_RECOVERY_TICKS,
 };
 
 /// Pick the best available scientists for a research project.
@@ -64,13 +64,16 @@ pub(super) fn release_scientists(state: &mut GameState, ids: &[u64]) {
 pub(super) fn tick_personnel(state: &mut GameState, rng: &mut ChaCha8Rng) {
     let tick = state.tick;
 
-    // Recover burned-out scientists
+    // Recover burned-out and infected scientists
     for s in &mut state.scientists {
-        if let ScientistStatus::BurnedOut { until_tick } = s.status {
-            if tick >= until_tick {
-                s.status = ScientistStatus::Available;
-                s.assigned_since = None;
+        match s.status {
+            ScientistStatus::BurnedOut { until_tick } | ScientistStatus::Infected { until_tick } => {
+                if tick >= until_tick {
+                    s.status = ScientistStatus::Available;
+                    s.assigned_since = None;
+                }
             }
+            _ => {}
         }
     }
 
@@ -112,6 +115,49 @@ pub(super) fn tick_personnel(state: &mut GameState, rng: &mut ChaCha8Rng) {
 
         // Remove burned-out scientist from their research project
         remove_from_projects(state, *id);
+    }
+
+    // Field infection risk: scientists on field research can contract diseases.
+    // Chance scales with global infection severity.
+    let field_scientist_ids: Vec<u64> = state.field_research.iter()
+        .flat_map(|p| p.scientist_ids.iter().copied())
+        .collect();
+
+    if !field_scientist_ids.is_empty() {
+        let total_infected: f64 = state.regions.iter()
+            .flat_map(|r| &r.infections)
+            .map(|inf| inf.infected)
+            .sum();
+        // Scale: at 100K infected full base rate, caps at 3x
+        let severity_mult = (total_infected / 100_000.0).clamp(0.1, 3.0);
+
+        let mut infected_ids = Vec::new();
+        for &sid in &field_scientist_ids {
+            let s = match state.scientists.iter().find(|s| s.id == sid) {
+                Some(s) if s.is_available() => s,
+                _ => continue,
+            };
+            // Trait modifier: Reckless 2x risk, Cautious 0.25x risk
+            let trait_mult = match s.scientist_trait {
+                ScientistTrait::Reckless => 2.0,
+                ScientistTrait::Cautious => 0.25,
+                _ => 1.0,
+            };
+            let chance = FIELD_INFECTION_CHANCE_PER_TICK * severity_mult * trait_mult;
+            if rng.r#gen::<f64>() < chance {
+                infected_ids.push(sid);
+            }
+        }
+
+        for id in &infected_ids {
+            if let Some(s) = state.scientists.iter_mut().find(|s| s.id == *id) {
+                let name = s.name.clone();
+                s.status = ScientistStatus::Infected { until_tick: tick + FIELD_INFECTION_RECOVERY_TICKS };
+                s.assigned_since = None;
+                state.events.push(GameEvent::ScientistInfected { scientist_name: name });
+            }
+            remove_from_projects(state, *id);
+        }
     }
 }
 

@@ -203,6 +203,9 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ScientistBurnout { scientist_name } => {
                 (6, format!("{} burned out — unavailable for 3 days", scientist_name))
             }
+            GameEvent::ScientistInfected { scientist_name } => {
+                (5, format!("{} contracted disease in the field — unavailable for 4 days", scientist_name))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
