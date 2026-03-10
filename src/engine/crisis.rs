@@ -1301,73 +1301,76 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let placate_cost = scaled_cost(state, 0.15, 100.0, 600.0);
 
             let (description, placate_desc) = match template_id {
-                // Elena Vasquez — Shipping Alliance (forbid travel ban)
+                // Liang Wei — Shipping Lane Guarantee (forbid travel ban)
                 0 => (
                     format!(
-                        "{} is threatening to reroute her fleet. \
-                         She wants the travel restrictions lifted.",
+                        "{} says three of his container ships are sitting idle. \
+                         He wants travel restrictions lifted or he pulls funding.",
                         short_name,
                     ),
-                    "Compensate her logistics costs. Buys time, not compliance.".to_string(),
+                    "Pay his port fees and rerouting costs. Buys time.".to_string(),
                 ),
-                // Dr. Amara Osei — Civil Liberties Fund (forbid quarantine)
+                // Viktor Saldanha — Saldanha Hospitality Fund (forbid quarantine)
                 1 => (
                     format!(
-                        "{} has sent a formal rebuke. Her donors are pressuring her \
+                        "{} is on the phone. His lawyers are drafting a withdrawal \
                          over the quarantine measures.",
                         short_name,
                     ),
-                    "Fund a public relations campaign on her behalf. Buys time.".to_string(),
+                    "Cover his property insurance premiums. Buys time.".to_string(),
                 ),
-                // Dr. Henrik Lindqvist — Pharma Research Grant (active research)
+                // Ines Caron — Helion Research Partnership (active research)
                 2 => (
                     format!(
-                        "{} wants to see active research. His consortium does not fund idle labs.",
+                        "{} wants to see lab activity. Helion does not pay for empty workbenches.",
                         short_name,
                     ),
-                    "Send him a progress report and consulting fee. Buys time.".to_string(),
+                    "Send her a progress report with billable hours. Buys time.".to_string(),
                 ),
-                // James Chen — Stability Investment Pact (no collapse)
+                // Marcus Holt — Holt Stability Fund (no collapse)
                 3 => (
                     format!(
-                        "{} is watching the collapse numbers. His fund managers want assurances.",
+                        "{} is watching the markets. His fund lost 8% this week \
+                         and he wants assurances.",
                         short_name,
                     ),
-                    "Provide financial guarantees to his investors. Buys time.".to_string(),
+                    "Provide his analysts with regional stability projections. Buys time.".to_string(),
                 ),
-                // Sarah Kowalski — Media Transparency Pledge (max threat 3)
+                // David Okafor — Pinnacle Confidence Fund (max threat 3)
                 4 => (
                     format!(
-                        "{} says her editors won't cover a catastrophe. The threat level is too high \
-                         for continued partnership.",
+                        "{} says bookings are down 60%. The threat level needs to \
+                         come down or he walks.",
                         short_name,
                     ),
-                    "Offer her an exclusive briefing. Buys time.".to_string(),
+                    "Buy ad space through his media channels. Buys time.".to_string(),
                 ),
-                // Dr. Fatima Al-Rashidi — Population Welfare Fund (max deaths)
+                // Riko Tanaka — Pacific Mutual Actuarial Pact (max deaths)
                 5 => (
                     format!(
-                        "{} is demanding accountability. The death toll has exceeded \
-                         what her organization can publicly support.",
+                        "{} says the actuarial tables are breaking. Pacific Mutual \
+                         cannot sustain this payout rate.",
                         short_name,
                     ),
-                    "Fund an emergency relief package through her organization. Buys time.".to_string(),
+                    "Co-sign a reinsurance arrangement. Buys time.".to_string(),
                 ),
-                // Roberto Silva — Medical Workers' Compact (require hospital surge)
+                // Margaret Aldridge — Aldridge Equipment Lease (require hospital surge)
                 6 => (
                     format!(
-                        "{} says his members are not seeing the surge facilities they were promised.",
+                        "{} is not seeing the surge orders she was promised. \
+                         Her warehouses are full of equipment nobody is buying.",
                         short_name,
                     ),
-                    "Pay hazard bonuses to his union members. Buys time.".to_string(),
+                    "Place a partial equipment order from her inventory. Buys time.".to_string(),
                 ),
-                // Gen. Klaus Weber — Border Security Contract (require border controls)
+                // Col. Raymond Cross — Aegis Border Contract (require border controls)
                 7 => (
                     format!(
-                        "{} wants to see border controls enforced. His contract is contingent on it.",
+                        "{} wants border controls enforced. His personnel are \
+                         deployed and billing.",
                         short_name,
                     ),
-                    "Fund additional security personnel for his operations. Buys time.".to_string(),
+                    "Pay his standby deployment fees. Buys time.".to_string(),
                 ),
                 _ => (
                     format!("{} is unhappy with your performance.", short_name),
