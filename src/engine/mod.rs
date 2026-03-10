@@ -39,7 +39,7 @@ pub fn tick(state: &GameState) -> GameState {
     research::tick_research(&mut new, &mut rng);
 
     // Scientist burnout and recovery
-    personnel::tick_personnel(&mut new);
+    personnel::tick_personnel(&mut new, &mut rng);
 
     // Auto-pause on major research breakthroughs so the player sees the good news
     if new.events.iter().any(|e| matches!(e,
@@ -76,7 +76,6 @@ pub fn tick(state: &GameState) -> GameState {
             let lost = (new.resources.attrition_accum as u32).min(new.personnel_available());
             new.resources.personnel = new.resources.personnel.saturating_sub(lost);
             new.resources.attrition_accum -= lost as f64;
-            new.sync_scientists_to_personnel();
             new.events.push(GameEvent::PersonnelAttrition { count: lost });
         }
     } else {
@@ -102,7 +101,6 @@ pub fn tick(state: &GameState) -> GameState {
             let gained = new.resources.personnel_accum as u32;
             new.resources.personnel += gained;
             new.resources.personnel_accum -= gained as f64;
-            new.sync_scientists_to_personnel();
         }
     }
 
@@ -212,6 +210,12 @@ pub fn tick(state: &GameState) -> GameState {
     }
 
     new.rng = rng;
+
+    // Sync scientist roster with personnel count. Done here (after RNG write-back)
+    // so that any personnel changes earlier in tick() are reflected, and sync's
+    // RNG draws are properly recorded in new.rng.
+    new.sync_scientists_to_personnel();
+
     new.tick += 1;
 
     // Check regional collapse

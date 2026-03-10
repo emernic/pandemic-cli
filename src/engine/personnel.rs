@@ -1,4 +1,5 @@
 use rand::Rng;
+use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
     GameEvent, GameState, ResearchKind, Scientist, ScientistStatus, ScientistTrait,
@@ -60,7 +61,7 @@ pub(super) fn release_scientists(state: &mut GameState, ids: &[u64]) {
 }
 
 /// Tick: check for burnout on long-assigned scientists, and recover burned-out ones.
-pub(super) fn tick_personnel(state: &mut GameState) {
+pub(super) fn tick_personnel(state: &mut GameState, rng: &mut ChaCha8Rng) {
     let tick = state.tick;
 
     // Recover burned-out scientists
@@ -92,7 +93,7 @@ pub(super) fn tick_personnel(state: &mut GameState) {
                 BURNOUT_THRESHOLD_TICKS
             };
             if tick.saturating_sub(since) >= threshold {
-                let roll: f64 = state.rng.r#gen::<f64>();
+                let roll: f64 = rng.r#gen::<f64>();
                 if roll < BURNOUT_CHANCE_PER_TICK {
                     burnout_ids.push(s.id);
                 }
