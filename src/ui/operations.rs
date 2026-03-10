@@ -193,8 +193,7 @@ fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &st
         let marker = if is_selected { "▸ " } else { "  " };
         let highlight = if is_selected { Color::Yellow } else { Color::White };
 
-        let total_infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
-        let infected_str = crate::format_number(total_infected);
+        let infected_str = crate::format_number(region.estimated_infected);
 
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(Color::Yellow)),

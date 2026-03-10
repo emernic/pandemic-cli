@@ -385,8 +385,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     )));
     lines.push(Line::from(""));
 
-    let visibility = state.screening_visibility(region_idx);
-    let infected = region.screened_infected(&state.diseases, visibility);
+    let infected = region.screened_infected();
     let dead = region.detected_dead(&state.diseases);
     lines.push(Line::from(vec![
         Span::raw("  "),

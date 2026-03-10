@@ -253,8 +253,7 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
         };
 
         // Show region stats: population, screened infected, total dead (detected only)
-        let visibility = state.screening_visibility(region_idx);
-        let infected = region.screened_infected(&state.diseases, visibility);
+        let infected = region.screened_infected();
         let dead = region.detected_dead(&state.diseases);
 
         let cooldown = region.deploy_cooldown_remaining(state.tick);
