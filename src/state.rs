@@ -3252,6 +3252,8 @@ pub enum GameEvent {
     /// A region's society has collapsed — too many deaths.
     RegionCollapsed {
         region_idx: usize,
+        /// Number of personnel lost due to the collapse (0 if none were available).
+        personnel_lost: u32,
     },
     /// Post-collapse secondary deaths (starvation, violence, infrastructure breakdown).
     /// Fires once per day per collapsed region so the event log isn't spammed.

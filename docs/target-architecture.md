@@ -104,7 +104,7 @@ Each subsystem module follows the same pattern:
 
 **Game-rule transitions live in the engine:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `crisis::activate_crisis()` sets `active_crisis` and `sim_state = Event { was_running }`. Exception: collapse-triggered refugee crises are set inline in `tick()` directly (bypassing `activate_crisis()`). Disease detection no longer pauses the simulation; it fires a `DiseaseDetected` event shown in the top-right notification area. When a crisis is resolved, `crisis::resolve_crisis()` restores `sim_state` from `Event { was_running }` back to Running or Paused. The engine owns the full lifecycle — entry and exit. The UI layer does not touch `sim_state`.
 
-**UI responses live in `ui::process_events()`:** After each tick, the game loop calls `process_events()` to handle UI-specific reactions (close panels on game-over, reset crisis selection) and format events into status messages. It does not mutate `sim_state`, `outcome`, or other game-rule state.
+**UI responses live in `ui::process_events()`:** After each tick, the game loop calls `process_events()` to handle UI-specific reactions (close panels on game-over, reset crisis selection) and format events into status messages. It does not mutate `sim_state`, `outcome`, or other game-rule state. It also performs noise-reduction filtering — for example, `DiseaseMutated` events are suppressed when no player medicine is affected by the mutation, since there is nothing actionable to show.
 
 When adding new event types: game-rule transitions go in `tick()`. Presentation responses go in `process_events()`.
 
@@ -112,7 +112,7 @@ When adding new event types: game-rule transitions go in `tick()`. Presentation 
 
 There are two distinct pipelines for player-visible messages, each serving a different purpose:
 
-1. **Tick-time events** → `GameEvent` enum → `ui::process_events()` → event log + status bar. These are asynchronous notifications (disease detected, shipment delivered, region collapsed). They need priority ordering, log persistence, and may trigger UI state changes (panel resets, speed changes).
+1. **Tick-time events** → `GameEvent` enum → `ui::process_events()` → event log + status bar. These are asynchronous notifications (disease detected, shipment delivered, region collapsed). They need priority ordering, log persistence, and may trigger UI state changes (panel resets). Some events produce an enriched notification for the top-right status area that includes contextual action hints (e.g., "Use [R] Research"); the event log always receives the plain message without hints.
 
 2. **Command responses** → `CommandResult.message` → `status_message`. These are synchronous feedback to a player action (deployed medicine, started research, toggled policy). Formatted directly in engine command handlers. Shown once in the status bar, not logged.
 
