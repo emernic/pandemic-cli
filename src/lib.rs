@@ -105,7 +105,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             new.ui.select_next(new.regions.len(), max);
         }
         Action::SelectPrev => {
-            new.ui.select_prev(new.regions.len());
+            let max = new.ui.panel_selection_max(&new);
+            new.ui.select_prev(new.regions.len(), max);
         }
         Action::SelectLeft => {
             new.ui.select_left(new.regions.len());

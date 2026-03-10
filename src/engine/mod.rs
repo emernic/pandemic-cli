@@ -837,18 +837,12 @@ mod tests {
             s = apply_action(&s, &Action::SelectNext);
         }
         assert_eq!(s.ui.panel_selection, max_sel);
-        // Can't go past the last item
+        // Wraps from last to first
         let s = apply_action(&s, &Action::SelectNext);
-        assert_eq!(s.ui.panel_selection, max_sel);
-        // Navigate back to start
-        let mut s = s;
-        for _ in 0..max_sel {
-            s = apply_action(&s, &Action::SelectPrev);
-        }
         assert_eq!(s.ui.panel_selection, 0);
-        // Can't go below 0
+        // Wraps from first to last
         let s = apply_action(&s, &Action::SelectPrev);
-        assert_eq!(s.ui.panel_selection, 0);
+        assert_eq!(s.ui.panel_selection, max_sel);
     }
 
     #[test]
@@ -1352,9 +1346,9 @@ mod tests {
         state = apply_action(&state, &Action::SelectNext);
         assert_eq!(state.ui.panel_selection, 3); // Upgrade Lab
 
-        // Can't go past last
+        // Wraps from last to first
         state = apply_action(&state, &Action::SelectNext);
-        assert_eq!(state.ui.panel_selection, 3);
+        assert_eq!(state.ui.panel_selection, 0);
 
         // Esc closes
         state = apply_action(&state, &Action::ClosePanel);
