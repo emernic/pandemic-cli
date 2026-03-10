@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState, RegionPolicy, RegionTrait, ScreeningLevel, policy_display_name,
+    CrisisKind, GameEvent, GameState, RegionPolicy, RegionTrait, ScreeningLevel, policy_display_name,
     BORDER_CONTROLS_PERSONNEL,
     HEALTHCARE_INVESTMENT_COST,
     HOSPITAL_SURGE_PERSONNEL,
@@ -294,7 +294,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
 
         // Severity drain: governors react to infection levels using the
         // shared severity thresholds (CRIT/HIGH/MOD) from state.rs.
-        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
+        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD, GOVERNOR_DEFIANCE_THRESHOLD};
         let severity_drain = if infected > SEVERITY_CRIT_THRESHOLD {
             -0.008 // CRIT: ~0.96/day
         } else if infected > SEVERITY_HIGH_THRESHOLD {
@@ -342,7 +342,26 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         };
 
         let total_drift = base_drift + severity_drain + death_drain + policy_drain + personality_mod;
-        state.regions[i].governor.loyalty = (current + total_drift).clamp(0.0, 100.0);
+        let new_loyalty = (current + total_drift).clamp(0.0, 100.0);
+        state.regions[i].governor.loyalty = new_loyalty;
+
+        // Fire a personality-specific crisis when loyalty first drops below defiance threshold
+        if new_loyalty < GOVERNOR_DEFIANCE_THRESHOLD && !state.regions[i].governor.defiance_crisis_fired {
+            state.regions[i].governor.defiance_crisis_fired = true;
+            let kind = match personality {
+                GovernorPersonality::Cooperative => CrisisKind::GovernorCooperative { region_idx: i },
+                GovernorPersonality::Nationalist => CrisisKind::GovernorNationalist { region_idx: i },
+                GovernorPersonality::Populist => CrisisKind::GovernorPopulist { region_idx: i },
+                GovernorPersonality::Technocrat => CrisisKind::GovernorTechnocrat { region_idx: i },
+            };
+            // Schedule for immediate activation (current tick)
+            state.pending_crises.push((state.tick, kind));
+        }
+
+        // Reset the flag when loyalty recovers above defiance threshold
+        if new_loyalty >= GOVERNOR_DEFIANCE_THRESHOLD && state.regions[i].governor.defiance_crisis_fired {
+            state.regions[i].governor.defiance_crisis_fired = false;
+        }
     }
 }
 
