@@ -4295,7 +4295,12 @@ impl GameState {
             idx
         };
 
-        // Place initial outbreak in a random non-collapsed region (prefer viable targets)
+        // Place initial outbreak. Late-game diseases prefer vulnerable regions:
+        // weak screening, no hospital, high existing infection load.
+        // Early-game uses roughly uniform selection.
+        let day = self.tick as f64 / TICKS_PER_DAY;
+        let targeting = (day / 15.0).min(1.0); // 0.0 at day 0, 1.0 at day 15+
+
         let viable: Vec<usize> = self.regions.iter().enumerate()
             .filter(|(_, r)| !r.collapsed)
             .map(|(i, _)| i)
@@ -4303,7 +4308,39 @@ impl GameState {
         let region_idx = if viable.is_empty() {
             rng.r#gen::<usize>() % self.regions.len()
         } else {
-            viable[rng.r#gen::<usize>() % viable.len()]
+            // Score each region's vulnerability (higher = more attractive target)
+            let weights: Vec<f64> = viable.iter().map(|&i| {
+                let base = 1.0; // everyone has a chance
+                let screening_vuln = match self.policies[i].screening {
+                    ScreeningLevel::None => 3.0,
+                    ScreeningLevel::Basic => 2.0,
+                    ScreeningLevel::Antigen => 1.0,
+                    ScreeningLevel::MassRapid => 0.5,
+                };
+                let hospital_vuln = match self.regions[i].hospital_level {
+                    0 => 2.0,
+                    1 => 1.0,
+                    _ => 0.5, // Medical Center
+                };
+                let infection_load = self.regions[i].total_infected().min(100_000.0) / 100_000.0;
+
+                // Blend: uniform early, vulnerability-weighted late
+                let vuln = screening_vuln + hospital_vuln + infection_load * 2.0;
+                base + targeting * vuln
+            }).collect();
+
+            // Weighted random selection
+            let total: f64 = weights.iter().sum();
+            let mut roll = rng.r#gen::<f64>() * total;
+            let mut chosen = viable[0];
+            for (j, &w) in weights.iter().enumerate() {
+                roll -= w;
+                if roll <= 0.0 {
+                    chosen = viable[j];
+                    break;
+                }
+            }
+            chosen
         };
         let initial_infected = 500.0 + rng.r#gen::<f64>() * 2_000.0;
         self.regions[region_idx].infections.push(RegionDiseaseState {
