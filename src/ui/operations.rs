@@ -40,7 +40,8 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     let mut row = 0;
 
     // Active operations
-    if !state.field_operations.is_empty() {
+    let has_active = !state.field_operations.is_empty() || !state.crisis_operations.is_empty();
+    if has_active {
         lines.push(Line::from(Span::styled(
             "  Active Operations",
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
@@ -82,6 +83,17 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
                 ),
             ]));
             row += 1;
+        }
+        for op in &state.crisis_operations {
+            let days_left = op.ticks_remaining / TICKS_PER_DAY;
+            lines.push(Line::from(vec![
+                Span::styled("  ", Style::default()),
+                Span::styled(&op.label, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!(" ({:.1}d left, {} personnel tied up)", days_left, op.personnel),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
         }
         lines.push(Line::raw(""));
     }

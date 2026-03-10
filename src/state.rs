@@ -165,6 +165,10 @@ pub struct GameState {
     /// These cost personnel and time, not money.
     #[serde(default)]
     pub field_operations: Vec<FieldOperation>,
+    /// Crisis response operations: temporary personnel commitments from crisis resolutions.
+    /// Personnel are returned automatically when the operation completes.
+    #[serde(default)]
+    pub crisis_operations: Vec<CrisisOperation>,
     /// Count of pathogen suppression operations completed (field research).
     #[serde(default)]
     pub pathogens_suppressed: u32,
@@ -3389,6 +3393,11 @@ pub enum GameEvent {
         label: String,
         result: String,
     },
+    /// A crisis response team returned — personnel freed.
+    CrisisTeamReturned {
+        label: String,
+        personnel: u32,
+    },
 }
 
 /// Automation rules that fire during tick when conditions are met.
@@ -3479,12 +3488,28 @@ pub struct CrisisOption {
 }
 
 /// Resources required to select a crisis option.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CrisisCost {
     #[serde(default)]
     pub funding: f64,
     #[serde(default)]
     pub personnel: u32,
+    /// If Some, personnel are tied up in a temporary operation for this many days
+    /// and returned when it completes. If None, personnel are permanently deducted.
+    #[serde(default)]
+    pub operation_days: Option<f64>,
+    /// Label shown in the event log when the temporary operation completes.
+    #[serde(default)]
+    pub operation_label: Option<String>,
+}
+
+/// A temporary crisis response operation that ties up personnel for a set duration.
+/// When the timer expires, the personnel are automatically returned.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CrisisOperation {
+    pub label: String,
+    pub personnel: u32,
+    pub ticks_remaining: f64,
 }
 
 impl CrisisCost {
@@ -5046,6 +5071,7 @@ impl GameState {
             auto_deploy: vec![],
             standing_orders: StandingOrders::default(),
             field_operations: vec![],
+            crisis_operations: vec![],
             pending_shipments: vec![],
             zero_agency_ticks: 0,
             mercy_rule: false,
@@ -5244,7 +5270,8 @@ impl GameState {
             _ => 0,
         }).sum();
         let ops: u32 = self.field_operations.iter().map(|op| op.personnel).sum();
-        field + applied + basic + policy + hospitals + intel + ops
+        let crisis_ops: u32 = self.crisis_operations.iter().map(|op| op.personnel).sum();
+        field + applied + basic + policy + hospitals + intel + ops + crisis_ops
     }
 
     pub fn personnel_available(&self) -> u32 {
