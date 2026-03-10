@@ -687,7 +687,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
     use crate::state::{
-        decree_display_name, DECREE_THREAT_LEVELS,
+        decree_display_name, decree_unlocked,
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY, TICKS_PER_DAY,
         SACRIFICE_INCOME_BONUS,
     };
@@ -701,14 +701,11 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
         return (Some(format!("{} has already been enacted", decree_display_name(decree_idx))), false);
     }
 
-    // Threat level check — decrees are gated by crisis severity, not POL.
-    let required = DECREE_THREAT_LEVELS[decree_idx];
-    if state.threat_level < required {
+    // Severity check: decrees require sufficiently dire conditions to justify them.
+    if !decree_unlocked(state, decree_idx) {
         return (Some(format!(
-            "{} requires DEFCON {} ({}). Current: DEFCON {} ({}).",
+            "{} requires a more severe crisis before it can be enacted.",
             decree_display_name(decree_idx),
-            required.defcon(), required.label(),
-            state.threat_level.defcon(), state.threat_level.label()
         )), false);
     }
 
@@ -944,8 +941,17 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 1.0;
         state.resources.funding = 10_000.0;
-        // Set max threat level so decree tests aren't blocked by DEFCON gating
-        state.threat_level = crate::state::ThreatLevel::Extinction;
+        // Unlock all decrees by satisfying every severity threshold:
+        // - 3 collapses → unlocks decrees 2,4,5
+        // - 600K infected across 2 regions → unlocks decree 0 (500K+ infected)
+        //   and provides 2 CRIT regions → unlocks decrees 1,3
+        // We collapse regions 3-5 and infect regions 0,1 to avoid breaking tests
+        // that operate on early regions.
+        state.regions[3].collapsed = true;
+        state.regions[4].collapsed = true;
+        state.regions[5].collapsed = true;
+        state.regions[0].get_or_create_infection(0).infected = 300_000.0;
+        state.regions[1].get_or_create_infection(0).infected = 300_000.0;
         state
     }
 
@@ -1242,15 +1248,15 @@ mod tests {
     }
 
     #[test]
-    fn decree_blocked_by_insufficient_threat_level() {
+    fn decree_blocked_by_insufficient_severity() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        state.threat_level = crate::state::ThreatLevel::Normal; // Below all decree thresholds
+        // Fresh game: no deaths, no collapses — all decrees should be locked
 
         for i in 0..crate::state::DECREE_COUNT {
             let (msg, ok) = enact_decree(&mut state, i, None);
-            assert!(!ok, "decree {i} should be blocked at low threat level");
-            assert!(msg.unwrap().contains("DEFCON"), "error message should mention DEFCON");
+            assert!(!ok, "decree {i} should be blocked when severity is low");
+            assert!(msg.unwrap().contains("more severe crisis"), "error message should mention severity");
         }
     }
 
@@ -1835,9 +1841,12 @@ mod tests {
         // Set up disease parameters
         state.diseases[0].infectivity = 1.0;
         state.diseases[0].cross_region_spread = 0.5;
-        // Set up population/deaths
+        // Reset deaths but collapse 3 regions to keep decree 5 unlocked
         for region in &mut state.regions {
             region.dead = 0.0;
+        }
+        for i in 3..6 {
+            state.regions[i].collapsed = true;
         }
         let total_alive_before: f64 = state.regions.iter()
             .filter(|r| !r.collapsed)

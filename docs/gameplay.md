@@ -68,14 +68,14 @@ Policy costs scale with regional traits and governor cooperation.
 
 ### Emergency Decrees
 
-Irreversible global decisions unlocked at higher DEFCON levels. Each escalation gives the player new tools — but the tools get heavier.
+Irreversible global decisions unlocked as the crisis worsens. Each one gives the player new tools, but the tools get heavier.
 
-- **Conscript Researchers** (DEFCON 4) — more personnel, permanently reduced income
-- **Authorize Human Trials** (DEFCON 3) — faster clinical trials, risk of adverse events
-- **Suspend Regional Authority** (DEFCON 3) — neutralize all governors, no defiance or cooperation
-- **Sacrifice Region** (DEFCON 2) — abandon a region to boost income from the rest
-- **Fortify Region** (DEFCON 2) — restore one region's infrastructure, penalize all others
-- **Emergency Countermeasure** (DEFCON 1) — reduce all disease infectivity and spread, at the cost of immediate civilian casualties
+- **Conscript Researchers** (500K+ infected) — more personnel, permanently reduced income
+- **Authorize Human Trials** (50M+ dead or 2+ critical regions) — faster clinical trials, risk of adverse events
+- **Suspend Regional Authority** (50M+ dead or 2+ critical regions) — neutralize all governors, no defiance or cooperation
+- **Sacrifice Region** (region collapsed or 500M+ dead) — abandon a region to boost income from the rest
+- **Fortify Region** (region collapsed or 500M+ dead) — restore one region's infrastructure, penalize all others
+- **Emergency Countermeasure** (3+ regions collapsed or 2B+ dead) — reduce all disease infectivity and spread, at the cost of immediate civilian casualties
 
 These are one-way doors. The game doesn't tell you whether they were worth it.
 

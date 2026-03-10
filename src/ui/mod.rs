@@ -239,9 +239,6 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::GovernorAction { description, .. } => {
                 (4, description.clone())
             }
-            GameEvent::ThreatLevelChanged { to, .. } => {
-                (1, format!("DEFCON {}: Threat level {}", to.defcon(), to.label()))
-            }
             GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");

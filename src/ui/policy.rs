@@ -21,7 +21,7 @@ use crate::state::{
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
-    DECREE_COUNT, DECREE_THREAT_LEVELS,
+    DECREE_COUNT, decree_unlocked,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
@@ -279,9 +279,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             }
             lines.push(Line::from(spans));
         } else {
-            let required_level = DECREE_THREAT_LEVELS[decree_idx];
-            let threat_unlocked = state.threat_level >= required_level;
-            if !threat_unlocked {
+            let unlocked = decree_unlocked(state, decree_idx);
+            if !unlocked {
                 let name_style = if selected {
                     Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
                 } else {
@@ -292,7 +291,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                     Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
                     Span::styled(name.to_string(), name_style),
                     Span::styled(
-                        format!("  (DEFCON {})", required_level.defcon()),
+                        "  (crisis insufficient)",
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]));

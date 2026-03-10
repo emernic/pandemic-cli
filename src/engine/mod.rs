@@ -467,21 +467,6 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Compute global threat level (DEFCON) and fire events on transitions.
-    // Must run after collapse checks since collapsed regions affect DEFCON.
-    {
-        let new_level = new.compute_threat_level();
-        if new_level != new.threat_level {
-            let old = new.threat_level;
-            new.threat_level = new_level;
-            // Only fire events for escalation (getting worse), not de-escalation
-            if new_level > old {
-                new.events.push(GameEvent::ThreatLevelChanged { from: old, to: new_level });
-                // No pause — DEFCON escalation shows in the top-right notification area.
-            }
-        }
-    }
-
     // Check defeat condition (only while still playing).
     // There is no victory — you lose eventually. The question is when.
     if new.outcome == GameOutcome::Playing {
@@ -3273,7 +3258,7 @@ mod tests {
             name: "Media Transparency Pledge".to_string(),
             patron: "Sarah Kowalski, World Press Group".to_string(),
             income: 1.8,
-            condition: FundingCondition::MaxThreatLevel { level: 3 },
+            condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
             source: "".to_string(),
             template_id: 4,
             satisfaction: 0.4,
@@ -3323,7 +3308,7 @@ mod tests {
             name: "Media Transparency Pledge".to_string(),
             patron: "Sarah Kowalski, World Press Group".to_string(),
             income: 1.8,
-            condition: FundingCondition::MaxThreatLevel { level: 3 },
+            condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
             source: "".to_string(),
             template_id: 4,
             satisfaction: 0.4,
@@ -4779,7 +4764,9 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 1.0;
         state.resources.funding = 10_000.0;
-        state.threat_level = crate::state::ThreatLevel::Extinction;
+        // Unlock all decrees: collapse regions 3-5 + set 600K infected on region 0
+        for i in 3..6 { state.regions[i].collapsed = true; }
+        state.regions[0].get_or_create_infection(0).infected = 600_000.0;
 
         // Open policy panel, navigate past 6 regions to first decree
         state = apply_action(&state, &Action::OpenPolicy);
@@ -4802,7 +4789,9 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 1.0;
         state.resources.funding = 10_000.0;
-        state.threat_level = crate::state::ThreatLevel::Extinction;
+        // Unlock all decrees: collapse regions 3-5 + set 600K infected on region 0
+        for i in 3..6 { state.regions[i].collapsed = true; }
+        state.regions[0].get_or_create_infection(0).infected = 600_000.0;
 
         // Open policy panel, navigate to Sacrifice Region (index 8 = 6 regions + 2)
         state = apply_action(&state, &Action::OpenPolicy);
@@ -5361,78 +5350,25 @@ mod tests {
     }
 
     #[test]
-    fn threat_level_escalates_with_game_state() {
-        use crate::state::{ThreatLevel, RegionDiseaseState, SEVERITY_CRIT_THRESHOLD};
-
-        let mut state = GameState::new_default(42);
-        // Normal at start
-        assert_eq!(state.compute_threat_level(), ThreatLevel::Normal);
-
-        // Elevated: 500K+ infected
-        state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 600_000.0, dead: 0.0, immune: 0.0,
-        }];
-        assert_eq!(state.compute_threat_level(), ThreatLevel::Elevated);
-
-        // Crisis: 2+ regions at CRIT (100K+ infected each)
-        state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: SEVERITY_CRIT_THRESHOLD + 1.0, dead: 0.0, immune: 0.0,
-        }];
-        state.regions[1].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: SEVERITY_CRIT_THRESHOLD + 1.0, dead: 0.0, immune: 0.0,
-        }];
-        assert_eq!(state.compute_threat_level(), ThreatLevel::Crisis);
-
-        // Catastrophe: 1 region collapsed
-        state.regions[0].collapsed = true;
-        assert_eq!(state.compute_threat_level(), ThreatLevel::Catastrophe);
-
-        // Extinction: 3+ regions collapsed
-        state.regions[1].collapsed = true;
-        state.regions[2].collapsed = true;
-        assert_eq!(state.compute_threat_level(), ThreatLevel::Extinction);
-    }
-
-    #[test]
-    fn threat_level_transition_fires_event_without_pausing() {
-        use crate::state::{ThreatLevel, RegionDiseaseState, GameEvent, SimState};
-
-        let mut state = GameState::new_default(42);
-        // Set up enough infected to trigger DEFCON 4 on next tick
-        state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 600_000.0, dead: 0.0, immune: 0.0,
-        }];
-        state.diseases[0].detected = true;
-        state.sim_state = SimState::Running;
-        assert_eq!(state.threat_level, ThreatLevel::Normal);
-
-        let after = tick(&state);
-        assert_eq!(after.threat_level, ThreatLevel::Elevated);
-        assert!(after.events.iter().any(|e| matches!(e,
-            GameEvent::ThreatLevelChanged { from: ThreatLevel::Normal, to: ThreatLevel::Elevated }
-        )), "should fire ThreatLevelChanged event");
-        // Non-crisis events no longer pause — DEFCON changes show in the notification area
-        assert!(after.sim_state.is_running(), "DEFCON transition should not pause the game");
-    }
-
-    #[test]
-    fn decree_gated_by_threat_level_not_pol() {
-        use crate::state::ThreatLevel;
+    fn decree_gated_by_crisis_severity() {
+        use crate::state::{decree_unlocked, RegionDiseaseState};
 
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        state.resources.political_power = 1.0; // Max POL
-        state.threat_level = ThreatLevel::Normal; // But low threat
+        state.resources.political_power = 1.0;
 
-        // Should be blocked despite high POL
+        // Fresh game: all decrees locked despite high POL
         let (msg, ok) = policy::enact_decree(&mut state, 0, None);
-        assert!(!ok, "decree should be blocked at DEFCON-5 even with max POL");
-        assert!(msg.unwrap().contains("DEFCON"));
+        assert!(!ok, "decree should be blocked when severity is low");
+        assert!(msg.unwrap().contains("more severe crisis"));
 
-        // Set threat to Elevated — Conscript Researchers should now work
-        state.threat_level = ThreatLevel::Elevated;
+        // Add 600K infected to unlock Conscript Researchers (decree 0)
+        state.regions[0].infections = vec![RegionDiseaseState {
+            disease_idx: 0, infected: 600_000.0, dead: 0.0, immune: 0.0,
+        }];
+        assert!(decree_unlocked(&state, 0), "decree 0 should unlock at 500K+ infected");
         let (_, ok) = policy::enact_decree(&mut state, 0, None);
-        assert!(ok, "decree should be available at DEFCON-4");
+        assert!(ok, "decree should be available with sufficient severity");
         assert!(state.enacted_decrees.conscript_researchers);
     }
 
