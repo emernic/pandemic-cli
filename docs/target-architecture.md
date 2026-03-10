@@ -43,12 +43,12 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 6. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
 7. Resource income (funding), personnel upkeep, attrition
 8. Political power drift, POL-based personnel gain
-9. Scientist roster sync (after RNG write-back)
-10. Disease emergence (mid-game new threats)
-11. Disease detection
-12. `crisis::generate_crisis()` — random crisis events
-13. Regional collapse
-14. Win/lose conditions
+9. Disease emergence (mid-game new threats)
+10. Disease detection, threat escalation alerts
+11. Scheduled follow-up crises + `crisis::generate_crisis()`
+12. *RNG write-back* + scientist roster sync
+13. Regional collapse (may trigger refugee crisis)
+14. Win/lose conditions + mercy rule
 
 After each tick, the game loop calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
