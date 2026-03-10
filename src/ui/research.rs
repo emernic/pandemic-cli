@@ -429,7 +429,7 @@ fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (S
             ),
             Span::raw(format!(" {:.0}%", pct)),
         ]));
-        let speed = project.speed(&state.medicines);
+        let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
         let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
@@ -447,6 +447,25 @@ fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (S
                 Style::default().fg(speed_color),
             ),
         ]));
+
+        // Show assigned scientists by name
+        if !project.scientist_ids.is_empty() {
+            lines.push(Line::from(""));
+            for sid in &project.scientist_ids {
+                if let Some(scientist) = state.scientists.iter().find(|s| s.id == *sid) {
+                    let trait_label = scientist.scientist_trait.label();
+                    let spec_label = scientist.specialty.label();
+                    let matched = scientist.scientist_trait == crate::state::ScientistTrait::Versatile
+                        || scientist.specialty.matches_research(&project.kind, &state.diseases);
+                    let match_color = if matched { Color::Green } else { Color::DarkGray };
+                    lines.push(Line::from(vec![
+                        Span::styled(format!("    {} ", scientist.short_name()), Style::default().fg(Color::White)),
+                        Span::styled(format!("{}", spec_label), Style::default().fg(match_color)),
+                        Span::styled(format!(" [{}]", trait_label), Style::default().fg(Color::Yellow)),
+                    ]));
+                }
+            }
+        }
 
         // Personnel adjustment controls
         if !project.is_complete() {
