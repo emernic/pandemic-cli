@@ -40,7 +40,7 @@ The engine is a module directory. `mod.rs` is the orchestrator — it owns `tick
 
 ```
 engine/
-  mod.rs       — tick() orchestrator, execute_command() dispatcher, win/lose/collapse checks
+  mod.rs       — tick() orchestrator, execute_command() dispatcher, defeat/collapse checks
   research.rs  — start_research(), add/remove_personnel(), tick_research()
   medicine.rs  — deploy_medicine() and dose/efficacy calculations
   policy.rs    — toggle_policy(), tick_enforce_costs()
@@ -86,7 +86,7 @@ tick() in engine/mod.rs:
   6. Disease emergence (mid-game new threats)
   7. crisis::generate_crisis()       — random crisis events
   8. Regional collapse checks
-  9. Win/lose condition checks
+  9. Defeat condition checks
   10. History recording (sparkline data)
 ```
 
@@ -134,7 +134,7 @@ src/
     crisis.rs      — Crisis event generation + resolution
   ui/
     mod.rs         — Layout orchestration, panel routing, process_events()
-    home.rs        — Game over / victory screen
+    home.rs        — Defeat screen
     region_list.rs — World map grid with connections
     threats.rs     — Disease info panel
     medicines.rs   — Medicine deployment wizard

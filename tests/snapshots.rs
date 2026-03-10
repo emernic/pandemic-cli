@@ -23,7 +23,7 @@ fn after_ticks() {
     assert!(result.screen.contains("Infected:"), "missing infected count");
 }
 
-/// Smoke test: game over screen renders with victory/defeat panel.
+/// Smoke test: game over screen renders with defeat panel.
 #[test]
 fn game_over_defeat() {
     let mut state = GameState::new_default(42);

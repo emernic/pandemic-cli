@@ -161,7 +161,7 @@ If the issue has a "Possible Solution" section, read it for context but do NOT f
 
 2. **Play the game yourself.** Run snapshot commands to see what the player actually experiences in this area. Not one command — play through the relevant flow. If it's about medicines, actually do the research→develop→deploy pipeline. If it's about saves, test loading and saving. See what happens.
 
-3. **Map the interactions.** Ask yourself: what other systems does this touch? If you change X, what happens to Y and Z? A dose scaling change affects game balance, economy, win/lose conditions, and the usefulness of the entire research pipeline. A save path change affects every agent, every playtest, and every human player. Write down the systems involved so you don't miss one.
+3. **Map the interactions.** Ask yourself: what other systems does this touch? If you change X, what happens to Y and Z? A dose scaling change affects game balance, economy, defeat conditions, and the usefulness of the entire research pipeline. A save path change affects every agent, every playtest, and every human player. Write down the systems involved so you don't miss one.
 
 4. **Check the design docs.** Read `docs/target-architecture.md`, `docs/gameplay.md`, and `docs/architecture.md` if they're relevant to what you're changing. They may contain context that changes your approach.
 

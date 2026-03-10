@@ -64,7 +64,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 Example: if the game lasts 5 minutes when it should last an hour, that's a P0 that warps all balance feedback. "Dose scaling feels off" and "funding piles up" are balance opinions formed in a 5-minute game — they might be completely wrong at the right time scale. Flag the duration as P0, and note that your balance feedback is suspect because of it.
 
-But **still file genuinely independent issues** you find along the way. A real bug (victory fires with infected > 0), a real UX problem (no feedback when toggling policies), a real clarity issue (vaccination vs treatment is confusing) — these are valid regardless of game duration. Don't throw those away just because there's a bigger problem.
+But **still file genuinely independent issues** you find along the way. A real bug (defeat triggers at the wrong time), a real UX problem (no feedback when toggling policies), a real clarity issue (vaccination vs treatment is confusing) — these are valid regardless of game duration. Don't throw those away just because there's a bigger problem.
 
 **The key distinction:** Is your feedback *about the balance/pacing* (downstream of the root cause) or *about something that's broken independent of balance* (a real issue on its own)? File the latter freely. Flag the former as potentially suspect.
 
