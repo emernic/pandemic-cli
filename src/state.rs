@@ -1486,9 +1486,8 @@ impl Region {
 
     /// Screened infection count: the player's estimated total infected for this region.
     /// This is a lagged, convergence-based estimate — NOT a simple multiplier.
-    /// The `_diseases` and `_visibility` args are kept for call-site compatibility
-    /// but ignored; the estimate is maintained by tick_screening() in the engine.
-    pub fn screened_infected(&self, _diseases: &[Disease], _visibility: f64) -> f64 {
+    /// The estimate is maintained by tick_screening() in the engine.
+    pub fn screened_infected(&self) -> f64 {
         self.estimated_infected
     }
 
@@ -4542,6 +4541,10 @@ impl GameState {
             immune: 0.0,
         });
         regions[region_idx].dead = dead;
+        // Seed the initial estimate — organic reporting catches roughly 15% of cases
+        // at the time the player takes over. Without this, the first frame shows
+        // "Infected: ~0" despite the briefing saying there's an active outbreak.
+        regions[region_idx].estimated_infected = infected * ScreeningLevel::None.visibility_rate();
 
         // --- Generate medicines to match diseases ---
         // Two targeted medicines per non-prion disease (different mechanisms),

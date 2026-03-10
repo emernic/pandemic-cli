@@ -205,7 +205,7 @@ fn render_region_box(
         return;
     }
 
-    let infected = region.screened_infected(diseases, visibility);
+    let infected = region.screened_infected();
     let immune = if shows_immune { region.detected_immune(diseases) } else { 0.0 };
     let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
@@ -411,7 +411,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     let pop = region.population as f64;
     let visibility = state.screening_visibility(idx);
-    let infected = region.screened_infected(&state.diseases, visibility);
+    let infected = region.screened_infected();
     let shows_immune = state.screening_shows_immune(idx);
     let immune = if shows_immune { region.detected_immune(&state.diseases) } else { 0.0 };
     let dead = region.detected_dead(&state.diseases);
