@@ -3332,10 +3332,15 @@ impl UiState {
                     // Decree selected (indices after rally)
                     let decree_idx = self.panel_selection - num_regions - 1;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
-                        // Sacrifice Region needs sub-selection
-                        self.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
-                        self.panel_selection = 0;
-                        None
+                        // Sacrifice Region needs sub-selection — but only if POL threshold is met
+                        if state.resources.political_power >= DECREE_POL_THRESHOLDS[2] {
+                            self.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
+                            self.panel_selection = 0;
+                            None
+                        } else {
+                            // Insufficient POL — route to engine so it returns the proper error message
+                            Some(GameCommand::EnactDecree { decree_idx: 2, region_idx: None })
+                        }
                     } else {
                         Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
                     }
