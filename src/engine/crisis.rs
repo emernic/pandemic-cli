@@ -1481,12 +1481,15 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
+            let active_count = state.regions.iter().enumerate()
+                .filter(|(i, r)| !r.collapsed && !state.is_abandoned(*i))
+                .count();
             CrisisEvent {
                 title: "Emergency Consolidation".into(),
                 description: format!(
                     "{} regions lost. Remaining personnel are overextended across {} active sites. \
                      Recommend pulling all operations back to {}.",
-                    collapsed_count, 6 - collapsed_count, region_name,
+                    collapsed_count, active_count, region_name,
                 ),
                 options: vec![ CrisisOption {
                     label: format!("Consolidate in {}", region_name),
