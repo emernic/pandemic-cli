@@ -302,22 +302,33 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let green = Style::default().fg(Color::Green);
         let red_style = Style::default().fg(Color::Red);
 
-        // Income line — show travel ban penalty separately when active
+        // Income line — show travel ban and trade penalties separately when active
         let alive_regions = state.regions.iter().filter(|r| !r.collapsed).count();
         let ban_penalty = state.travel_ban_income_penalty() * TICKS_PER_DAY;
-        if ban_penalty > 0.0 {
+        let trade_penalty = state.trade_income_penalty() * TICKS_PER_DAY;
+        let total_penalty = ban_penalty + trade_penalty;
+        if total_penalty > 0.0 {
             // Show the pre-penalty income so the player can see the true cost
-            let base_income = gross + ban_penalty;
+            let base_income = gross + total_penalty;
             lines.push(Line::from(vec![
                 Span::styled("  Income:   ", dim),
                 Span::styled(format!("+${:.0}/day", base_income), green),
                 Span::styled(format!("  ({} regions)", alive_regions), dim),
             ]));
-            lines.push(Line::from(vec![
-                Span::styled("  Ban cost: ", dim),
-                Span::styled(format!("-${:.0}/day", ban_penalty), red_style),
-                Span::styled("  (halved income)", dim),
-            ]));
+            if ban_penalty > 0.0 {
+                lines.push(Line::from(vec![
+                    Span::styled("  Ban cost: ", dim),
+                    Span::styled(format!("-${:.0}/day", ban_penalty), red_style),
+                    Span::styled("  (halved income)", dim),
+                ]));
+            }
+            if trade_penalty >= 1.0 {
+                lines.push(Line::from(vec![
+                    Span::styled("  Trade:    ", dim),
+                    Span::styled(format!("-${:.0}/day", trade_penalty), Style::default().fg(Color::Yellow)),
+                    Span::styled("  (neighbors in crisis)", dim),
+                ]));
+            }
         } else {
             lines.push(Line::from(vec![
                 Span::styled("  Income:   ", dim),

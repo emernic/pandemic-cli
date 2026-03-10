@@ -268,6 +268,11 @@ pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
 /// 70% are incapacitated (hospitalized, quarantined, bedridden); 30% are mild/asymptomatic.
 pub const INFECTED_INCAPACITATION_RATE: f64 = 0.7;
 pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
+/// Fraction of regional income that depends on connected neighbors' economic health.
+/// Domestic = (1 - TRADE_INCOME_FRACTION), Trade = TRADE_INCOME_FRACTION × avg(neighbor health).
+/// Set to 0.25: a region with all neighbors healthy gets full income, but if all neighbors
+/// collapse, it loses 25% of income even if healthy itself.
+pub const TRADE_INCOME_FRACTION: f64 = 0.25;
 pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
@@ -4202,7 +4207,44 @@ impl GameState {
         BASE_FUNDING_INCOME * region_share * healthy_frac * region.income_modifier
     }
 
+    /// Economic health factor for a region (0.0 = collapsed, up to 1.0 = fully healthy).
+    /// Used by neighbors to compute trade income. Accounts for both active infections
+    /// and cumulative deaths — a region that lost 30% of its population is economically
+    /// devastated even if current infections are low.
+    fn region_economic_health(region: &Region) -> f64 {
+        if region.collapsed {
+            return 0.0;
+        }
+        let pop = region.population as f64;
+        if pop <= 0.0 {
+            return 0.0;
+        }
+        let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
+        let infected_frac = infected / pop;
+        let death_frac = region.dead / pop;
+        // Active infections are weighted more heavily (immediate economic disruption)
+        // Deaths reflect permanent economic damage
+        let damage = infected_frac * 3.0 + death_frac * 2.0;
+        (1.0 - damage).clamp(0.1, 1.0)
+    }
+
+    /// Average economic health of a region's connected neighbors (0.0 to 1.0).
+    fn neighbor_trade_health(&self, region_idx: usize) -> f64 {
+        let connections = &self.regions[region_idx].connections;
+        if connections.is_empty() {
+            return 1.0; // No neighbors = no trade dependency
+        }
+        let sum: f64 = connections
+            .iter()
+            .map(|&n| Self::region_economic_health(&self.regions[n]))
+            .sum();
+        sum / connections.len() as f64
+    }
+
     /// Estimated funding income per tick, based on current population health and policies.
+    /// Each region's income has two components:
+    /// - Domestic (75%): depends only on the region's own health
+    /// - Trade (25%): depends on the average health of connected neighbors
     pub fn funding_income_rate(&self) -> f64 {
         let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
         if total_pop <= 0.0 {
@@ -4224,7 +4266,11 @@ impl GameState {
             } else {
                 1.0
             };
-            income += base * travel_ban_factor;
+            let after_ban = base * travel_ban_factor;
+            // Split into domestic + trade components
+            let domestic = after_ban * (1.0 - TRADE_INCOME_FRACTION);
+            let trade = after_ban * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+            income += domestic + trade;
         }
         // Decree modifiers
         if self.enacted_decrees.sacrificed_region.is_some() {
@@ -4234,6 +4280,35 @@ impl GameState {
             income = (income - CONSCRIPT_INCOME_PENALTY).max(0.0);
         }
         income
+    }
+
+    /// Trade income lost per tick due to neighbor health degradation.
+    /// Returns the difference between max possible trade income and actual trade income.
+    pub fn trade_income_penalty(&self) -> f64 {
+        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
+        if total_pop <= 0.0 {
+            return 0.0;
+        }
+        let mut penalty = 0.0;
+        for (i, region) in self.regions.iter().enumerate() {
+            if region.collapsed {
+                continue;
+            }
+            let base = Self::region_base_income(region, total_pop);
+            let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
+                if region.has_trait(RegionTrait::TradeDependent) {
+                    TRADE_DEPENDENT_INCOME_FACTOR
+                } else {
+                    TRAVEL_BAN_INCOME_PENALTY
+                }
+            } else {
+                1.0
+            };
+            let after_ban = base * travel_ban_factor;
+            let trade_loss = after_ban * TRADE_INCOME_FRACTION * (1.0 - self.neighbor_trade_health(i));
+            penalty += trade_loss;
+        }
+        penalty
     }
 
     /// Income lost per tick due to travel ban penalties (halved region contributions).
