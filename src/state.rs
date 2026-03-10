@@ -4256,73 +4256,89 @@ impl GameState {
         broke && no_research && no_doses
     }
 
-    /// Generate strategic tips based on what the player did (or didn't do) before defeat.
-    /// Returns up to 2 actionable tips, most impactful first.
+    /// Generate debrief-style tips referencing what actually happened in this run.
+    /// Returns up to 2 tips, most impactful first.
     pub fn defeat_tips(&self) -> Vec<String> {
         let mut tips = Vec::new();
 
-        // Check if any diseases were never identified
         let unidentified = self.diseases.iter()
             .filter(|d| d.knowledge < KNOWLEDGE_NAME)
             .count();
-        if unidentified == self.diseases.len() {
-            tips.push(
-                "You never identified any threats. Use [R] Research → Field Research → Identify to learn about diseases."
-                    .to_string(),
-            );
+        let total_diseases = self.diseases.len();
+
+        // Unidentified diseases — reference the count
+        if unidentified == total_diseases {
+            tips.push(format!(
+                "{total_diseases} pathogen{} active, none identified. Can't develop medicine for what you don't understand.",
+                if total_diseases == 1 { "" } else { "s" }
+            ));
         } else if unidentified > 0 {
             tips.push(format!(
-                "{} of {} threats were never identified. Identifying threats unlocks medicine development.",
-                unidentified,
-                self.diseases.len()
+                "{unidentified} of {total_diseases} pathogens never identified. Unidentified threats can't be treated."
             ));
         }
 
-        // Check if medicines were developed but never deployed
-        let unlocked_meds = self.medicines.iter().filter(|m| m.unlocked).count();
-        let deployed_any = self.medicines.iter().any(|m| m.unlocked && m.deployed_count > 0);
-        if unlocked_meds > 0 && !deployed_any {
-            tips.push(
-                "You developed medicines but never deployed them. Use [M] Medicines to protect or treat regions."
-                    .to_string(),
-            );
-        } else if unlocked_meds == 0 && unidentified < self.diseases.len() {
-            // Identified threats but never developed medicine
-            if !self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign) {
-                tips.push(
-                    "Research Targeted Drug Design in [R] Basic Research to unlock targeted medicine development."
-                        .to_string(),
-                );
-            } else {
-                tips.push(
-                    "You identified threats but never developed a medicine. Use Applied Research to develop treatments."
-                        .to_string(),
-                );
-            }
+        // Developed but never deployed — reference the specific medicine
+        let undeployed: Vec<&Medicine> = self.medicines.iter()
+            .filter(|m| m.unlocked && m.deployed_count == 0)
+            .collect();
+        if !undeployed.is_empty() && tips.len() < 2 {
+            let name = &undeployed[0].name;
+            tips.push(format!(
+                "{name} was developed but never deployed."
+            ));
+        } else if self.medicines.iter().all(|m| !m.unlocked) && unidentified < total_diseases && tips.len() < 2 {
+            // Identified but never developed any medicine
+            tips.push("Identified threats but never developed a medicine. The research pipeline stalled.".to_string());
         }
 
-        // Check if policies were ever used
+        // No policies used — reference the worst-hit region
         let any_policy_active = self.policies.iter().any(|p| p.any_active());
         if !any_policy_active && tips.len() < 2 {
-            // Find the worst-hit region
-            let worst_region = self.regions.iter()
+            let worst = self.regions.iter()
                 .max_by(|a, b| a.total_dead().partial_cmp(&b.total_dead()).unwrap());
-            if let Some(region) = worst_region {
+            if let Some(region) = worst {
                 if region.total_dead() > 0.0 {
+                    let dead = region.total_dead();
+                    let dead_str = if dead >= 999_999_500.0 {
+                        format!("{:.1}B", dead / 1_000_000_000.0)
+                    } else if dead >= 999_950.0 {
+                        format!("{:.1}M", dead / 1_000_000.0)
+                    } else if dead >= 999.5 {
+                        format!("{:.1}K", dead / 1_000.0)
+                    } else {
+                        format!("{:.0}", dead)
+                    };
                     tips.push(format!(
-                        "{} lost the most lives. Travel bans [P] can slow spread between regions.",
+                        "{} lost {dead_str} — containment policies were never activated.",
                         region.name
                     ));
                 }
             }
         }
 
-        // If no specific tips, give a general one
+        // First collapse timing — useful when player made it reasonably far
+        if tips.len() < 2 {
+            let first_collapse = self.regions.iter()
+                .filter_map(|r| r.collapsed_at_tick)
+                .min();
+            if let Some(tick) = first_collapse {
+                let day = tick as f64 / TICKS_PER_DAY;
+                let first_region = self.regions.iter()
+                    .find(|r| r.collapsed_at_tick == Some(tick));
+                if let Some(region) = first_region {
+                    tips.push(format!(
+                        "{} collapsed first on day {day:.1}. Earlier intervention there might have bought time.",
+                        region.name
+                    ));
+                }
+            }
+        }
+
+        // Fallback — reference something specific about the run
         if tips.is_empty() {
-            tips.push(
-                "Try acting faster — research, develop, and deploy medicines before infections spread."
-                    .to_string(),
-            );
+            let days = self.tick as f64 / TICKS_PER_DAY;
+            tips.push(format!("Lasted {days:.1} days. Faster research and deployment is key."));
         }
 
         tips.truncate(2);
