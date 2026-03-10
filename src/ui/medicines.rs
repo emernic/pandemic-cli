@@ -284,6 +284,15 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
                 Style::default().fg(Color::Yellow),
             ));
         }
+        let eff = region.delivery_efficiency();
+        if eff < 0.90 {
+            spans.push(Span::raw("  "));
+            let eff_color = if eff < 0.50 { Color::Red } else { Color::Yellow };
+            spans.push(Span::styled(
+                format!("{:.0}% eff", eff * 100.0),
+                Style::default().fg(eff_color),
+            ));
+        }
         lines.push(Line::from(spans));
     }
 

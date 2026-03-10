@@ -123,8 +123,14 @@ pub(super) fn deploy_medicine(
 
     let doses_str = crate::format_number(doses_to_ship);
     let days = (SHIPPING_TICKS as f64 * supply_mult) / crate::state::TICKS_PER_DAY;
+    let efficiency = state.regions[region_idx].delivery_efficiency();
+    let eff_warning = if efficiency < 0.90 {
+        format!(" ({:.0}% delivery efficiency)", efficiency * 100.0)
+    } else {
+        String::new()
+    };
     let msg = format!(
-        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}). Arriving in {days:.0} day{}.", if days > 1.5 { "s" } else { "" }
+        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}). Arriving in {days:.0} day{}.{eff_warning}", if days > 1.5 { "s" } else { "" }
     );
     (true, Some(msg))
 }
@@ -177,6 +183,11 @@ pub(super) fn tick_shipments(state: &mut GameState) {
 }
 
 /// Apply a shipment's effects to the game state (treatment or vaccination).
+///
+/// Delivery efficiency is based on regional infrastructure: supply lines
+/// determine how many doses physically arrive, healthcare capacity determines
+/// how many can be administered. These multiply, so degraded regions receive
+/// far fewer effective doses. Wasted doses are lost permanently.
 fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
     let med_idx = shipment.medicine_idx;
     let reg_idx = shipment.region_idx;
@@ -188,6 +199,11 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
         DeployTarget::Vaccinate { disease_idx } => *disease_idx,
         DeployTarget::Treat { disease_idx } => *disease_idx,
     };
+
+    // Infrastructure bottlenecks: supply lines × healthcare capacity
+    let efficiency = state.regions[reg_idx].delivery_efficiency();
+    let effective_doses = shipment.doses * efficiency;
+    if effective_doses <= 0.0 { return; }
 
     let mut efficacy = state.medicines[med_idx].effective_efficacy(disease_idx, &state.diseases);
     if state.regions[reg_idx].hospital_level >= 2 {
@@ -206,10 +222,10 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
     let adverse = match &shipment.target {
         DeployTarget::Vaccinate { .. } => {
             let susceptible = (pop - infected - dead - immune).max(0.0);
-            // Cap at shipped doses
+            // Cap at effective doses (after infrastructure losses)
             let actual = state.medicines[med_idx]
                 .estimate_vaccination(susceptible, efficacy, vax_mult)
-                .min(shipment.doses);
+                .min(effective_doses);
             if actual <= 0.0 { return; }
             let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
             let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
@@ -221,7 +237,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
         DeployTarget::Treat { .. } => {
             let actual = state.medicines[med_idx]
                 .estimate_treatment(infected, efficacy)
-                .min(shipment.doses);
+                .min(effective_doses);
             if actual <= 0.0 { return; }
             let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
             let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
@@ -238,6 +254,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
         region_idx: reg_idx,
         doses: shipment.doses,
         adverse,
+        efficiency,
     });
 }
 

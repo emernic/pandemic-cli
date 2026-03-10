@@ -265,7 +265,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 (4, format!("⚠ {} shipment blocked at {} (travel ban)", med_name, region_name))
             }
-            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse } => {
+            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
@@ -273,6 +273,9 @@ pub fn process_events(state: &mut GameState) {
                 let dose_str = format_number(*doses);
                 if *adverse {
                     (3, format!("⚠ {dose_str} doses of {med_name} delivered to {region_name}. ADVERSE REACTION reported."))
+                } else if *efficiency < 0.90 {
+                    let eff_pct = (*efficiency * 100.0) as u32;
+                    (6, format!("{med_name} delivered to {region_name}, {dose_str} doses ({eff_pct}% effective, infrastructure degraded)"))
                 } else {
                     (9, format!("{med_name} delivered to {region_name}, {dose_str} doses administered"))
                 }
