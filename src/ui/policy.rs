@@ -28,7 +28,7 @@ use crate::ui::hint_line;
 use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
-    let (title, lines) = match &state.ui.policy_ui {
+    let (title, lines, selected_line) = match &state.ui.policy_ui {
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             render_manage(state, *region_idx)
         }
@@ -43,11 +43,25 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Magenta));
 
-    let widget = Paragraph::new(lines).block(block);
+    // Scroll to keep the selected item visible. The panel's inner height
+    // is area.height minus 2 (top + bottom border).
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = selected_line.map(|line| {
+        if line as u16 >= inner_height {
+            // Keep selected item ~1/3 from bottom so context is visible above
+            (line as u16).saturating_sub(inner_height * 2 / 3)
+        } else {
+            0
+        }
+    }).unwrap_or(0);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
     f.render_widget(widget, area);
 }
 
-fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
+fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
 
     let total_cost = state.total_policy_funding_cost();
@@ -258,11 +272,12 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>) {
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Select", "Close"));
 
-    (" Policy ".to_string(), lines)
+    (" Policy ".to_string(), lines, None)
 }
 
-fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'static>>) {
+fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
     let region = &state.regions[region_idx];
     let policy = state.policies.get(region_idx).cloned().unwrap_or_default();
 
@@ -357,6 +372,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
         let selected = state.ui.panel_selection == display_pos;
+        if selected { selected_line = Some(lines.len()); }
         let marker = if selected { "▶ " } else { "  " };
 
         // Collapsed regions: only nuclear annihilation (idx 9) is available
@@ -474,6 +490,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     if !region.collapsed {
         let appease_pos = POLICY_COUNT;
         let selected = state.ui.panel_selection == appease_pos;
+        if selected { selected_line = Some(lines.len()); }
         let gov = &region.governor;
         let marker = if selected { "▶ " } else { "  " };
         let name_style = if selected {
@@ -527,10 +544,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
     lines.push(hint_line(state, "Toggle", "Back"));
 
-    (format!(" Policy: {} ", region.name), lines)
+    (format!(" Policy: {} ", region.name), lines, selected_line)
 }
 
-fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>) {
+fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
@@ -576,7 +593,7 @@ fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>) {
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Sacrifice", "Cancel"));
 
-    (" ⚠ Sacrifice Region ".to_string(), lines)
+    (" ⚠ Sacrifice Region ".to_string(), lines, None)
 }
 
 /// Generate an effectiveness hint line for transmission-sensitive policies.
