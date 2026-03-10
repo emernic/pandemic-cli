@@ -26,9 +26,10 @@ use crate::state::{
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
     POLICY_COUNT, APPEASE_COST, APPEASE_LOYALTY_GAIN,
-    BARGAIN_LOYALTY_GAIN, BARGAIN_TECHNOCRAT_LOYALTY_GAIN,
-    BARGAIN_NATIONALIST_PERSONNEL_COST, BARGAIN_POPULIST_POL_FRACTION,
-    BARGAIN_TECHNOCRAT_RESEARCH_TICKS, BARGAIN_COOPERATIVE_LOYALTY_DRAIN,
+    BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
+    BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
+    BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
+    BARGAIN_OPERATIVE_INCOME_CUT, BARGAIN_MOBSTER_BASE_COST,
     GovernorPersonality,
 };
 use crate::ui::hint_line;
@@ -596,26 +597,40 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             };
 
             let (bargain_name, cost_desc, loyalty_gain) = match gov.personality {
-                GovernorPersonality::Nationalist => (
-                    "Regional Priority",
-                    format!("-{} personnel", BARGAIN_NATIONALIST_PERSONNEL_COST),
+                GovernorPersonality::Buffoon => (
+                    "Public Praise",
+                    format!("-{:.0}% POL", BARGAIN_BUFFOON_POL_COST * 100.0),
                     BARGAIN_LOYALTY_GAIN,
                 ),
-                GovernorPersonality::Populist => (
-                    "Public Concession",
-                    format!("-{:.0}% POL", BARGAIN_POPULIST_POL_FRACTION * 100.0),
+                GovernorPersonality::Blowhard => (
+                    "Token Concession",
+                    format!("-¥{:.0}", BARGAIN_BLOWHARD_FUNDING_COST),
+                    BARGAIN_BLOWHARD_LOYALTY_GAIN,
+                ),
+                GovernorPersonality::Recluse => (
+                    "Send Manager",
+                    format!("-{} personnel", BARGAIN_RECLUSE_PERSONNEL_COST),
                     BARGAIN_LOYALTY_GAIN,
                 ),
-                GovernorPersonality::Technocrat => (
-                    "Research Oversight",
-                    format!("+{:.1} day delay to applied research", BARGAIN_TECHNOCRAT_RESEARCH_TICKS / TICKS_PER_DAY),
-                    BARGAIN_TECHNOCRAT_LOYALTY_GAIN,
-                ),
-                GovernorPersonality::Cooperative => (
-                    "Joint Briefing",
-                    format!("-{:.0} loyalty to other governors", BARGAIN_COOPERATIVE_LOYALTY_DRAIN),
+                GovernorPersonality::Hardliner => (
+                    "Grant Authority",
+                    format!("-¥{:.0}", BARGAIN_HARDLINER_FUNDING_COST),
                     BARGAIN_LOYALTY_GAIN,
                 ),
+                GovernorPersonality::Operative => (
+                    "Income Cut",
+                    format!("-{:.0}% of regional income", BARGAIN_OPERATIVE_INCOME_CUT * 100.0),
+                    BARGAIN_LOYALTY_GAIN,
+                ),
+                GovernorPersonality::Mobster => {
+                    let count = gov.bargain_count;
+                    let cost = BARGAIN_MOBSTER_BASE_COST * 2.0_f64.powi(count as i32);
+                    (
+                        "Protection Money",
+                        format!("-¥{:.0}", cost),
+                        BARGAIN_LOYALTY_GAIN,
+                    )
+                }
             };
 
             lines.push(Line::from(vec![

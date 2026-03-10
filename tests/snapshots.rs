@@ -39,8 +39,8 @@ fn game_over_defeat() {
 #[test]
 fn bargain_shown_for_defiant_governor() {
     let mut state = GameState::new_default(42);
-    // Force Nationalist governor to be defiant
-    state.regions[0].governor.personality = GovernorPersonality::Nationalist;
+    // Force Hardliner governor to be defiant
+    state.regions[0].governor.personality = GovernorPersonality::Hardliner;
     state.regions[0].governor.loyalty = 20.0;
     // Open policy panel for region 0, then scroll down to the bargain item
     // (panel viewport is small, need to move selection to bring bargain into view)
@@ -50,6 +50,6 @@ fn bargain_shown_for_defiant_governor() {
         steps.push("down".to_string());
     }
     let result = run_snapshot(state, &steps).unwrap();
-    assert!(result.screen.contains("Bargain: Regional Priority"), "missing bargain option for defiant Nationalist");
+    assert!(result.screen.contains("Bargain: Grant Authority"), "missing bargain option for defiant Hardliner");
     assert!(result.screen.contains("DEFIANT"), "missing DEFIANT label");
 }

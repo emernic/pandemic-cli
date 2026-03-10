@@ -2,9 +2,13 @@ use crate::state::{
     CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
     policy_display_name,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
-    BARGAIN_COOPERATIVE_LOYALTY_DRAIN, BARGAIN_LOYALTY_GAIN,
-    BARGAIN_NATIONALIST_PERSONNEL_COST, BARGAIN_POPULIST_POL_FRACTION,
-    BARGAIN_TECHNOCRAT_LOYALTY_GAIN, BARGAIN_TECHNOCRAT_RESEARCH_TICKS,
+    BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_LOYALTY_GAIN,
+    BARGAIN_BUFFOON_POL_COST,
+    BARGAIN_HARDLINER_FUNDING_COST,
+    BARGAIN_LOYALTY_GAIN,
+    BARGAIN_MOBSTER_BASE_COST,
+    BARGAIN_OPERATIVE_INCOME_CUT,
+    BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
@@ -358,59 +362,70 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
     let gov_name = state.regions[region_idx].governor.name.clone();
 
     match personality {
-        GovernorPersonality::Nationalist => {
-            let cost = BARGAIN_NATIONALIST_PERSONNEL_COST;
+        GovernorPersonality::Buffoon => {
+            // Public Praise — cheap POL cost, loyalty decays fast (tracked in tick)
+            state.resources.political_power = (state.resources.political_power - BARGAIN_BUFFOON_POL_COST).max(0.0);
+            let gov = &mut state.regions[region_idx].governor;
+            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
+            let loyalty = gov.loyalty;
+            (Some(format!("{gov_name}: praised publicly — loyalty {loyalty:.0} (won't last)")), true)
+        }
+        GovernorPersonality::Blowhard => {
+            // Token Concession — small funding, large loyalty gain
+            if state.resources.funding < BARGAIN_BLOWHARD_FUNDING_COST {
+                return (Some(format!("Not enough funding (need ¥{BARGAIN_BLOWHARD_FUNDING_COST:.0})")), false);
+            }
+            state.resources.funding -= BARGAIN_BLOWHARD_FUNDING_COST;
+            let gov = &mut state.regions[region_idx].governor;
+            gov.loyalty = (gov.loyalty + BARGAIN_BLOWHARD_LOYALTY_GAIN).min(100.0);
+            let loyalty = gov.loyalty;
+            (Some(format!("{gov_name}: given a token victory — loyalty {loyalty:.0}")), true)
+        }
+        GovernorPersonality::Recluse => {
+            // Send a Manager — personnel cost
+            let cost = BARGAIN_RECLUSE_PERSONNEL_COST;
             if state.resources.personnel < cost {
                 return (Some(format!("Not enough personnel (need {cost})")), false);
             }
             state.resources.personnel -= cost;
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = state.regions[region_idx].governor.loyalty;
-            (Some(format!(
-                "{gov_name}: Regional Priority accepted — loyalty {loyalty:.0} (-{cost} personnel)"
-            )), true)
+            let loyalty = gov.loyalty;
+            (Some(format!("{gov_name}: manager sent — loyalty {loyalty:.0} (-{cost} personnel)")), true)
         }
-        GovernorPersonality::Populist => {
-            let pol_loss = state.resources.political_power * BARGAIN_POPULIST_POL_FRACTION;
-            state.resources.political_power -= pol_loss;
+        GovernorPersonality::Hardliner => {
+            // Grant Authority — expensive funding
+            if state.resources.funding < BARGAIN_HARDLINER_FUNDING_COST {
+                return (Some(format!("Not enough funding (need ¥{BARGAIN_HARDLINER_FUNDING_COST:.0})")), false);
+            }
+            state.resources.funding -= BARGAIN_HARDLINER_FUNDING_COST;
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = state.regions[region_idx].governor.loyalty;
-            (Some(format!(
-                "{gov_name}: Public Concession accepted — loyalty {loyalty:.0} (-{:.0}% POL)",
-                BARGAIN_POPULIST_POL_FRACTION * 100.0
-            )), true)
+            let loyalty = gov.loyalty;
+            (Some(format!("{gov_name}: granted expanded authority — loyalty {loyalty:.0}")), true)
         }
-        GovernorPersonality::Technocrat => {
-            if let Some(ref mut project) = state.applied_research {
-                project.required_ticks += BARGAIN_TECHNOCRAT_RESEARCH_TICKS;
-                let gov = &mut state.regions[region_idx].governor;
-                gov.loyalty = (gov.loyalty + BARGAIN_TECHNOCRAT_LOYALTY_GAIN).min(100.0);
-                let loyalty = state.regions[region_idx].governor.loyalty;
-                let delay_days = BARGAIN_TECHNOCRAT_RESEARCH_TICKS / TICKS_PER_DAY;
-                (Some(format!(
-                    "{gov_name}: Research Oversight accepted — loyalty {loyalty:.0} (+{delay_days:.1} day delay to applied research)"
-                )), true)
-            } else {
-                (Some("No active applied research — bargain unavailable".into()), false)
-            }
-        }
-        GovernorPersonality::Cooperative => {
-            // Drain loyalty from all other non-collapsed governors
-            for (i, region) in state.regions.iter_mut().enumerate() {
-                if i != region_idx && !region.collapsed {
-                    region.governor.loyalty =
-                        (region.governor.loyalty - BARGAIN_COOPERATIVE_LOYALTY_DRAIN).max(0.0);
-                }
-            }
+        GovernorPersonality::Operative => {
+            // Income Cut — permanent skim on regional income
             let gov = &mut state.regions[region_idx].governor;
+            gov.income_skim += BARGAIN_OPERATIVE_INCOME_CUT;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = state.regions[region_idx].governor.loyalty;
-            (Some(format!(
-                "{gov_name}: Joint Briefing accepted — loyalty {loyalty:.0} (other governors -{:.0} loyalty)",
-                BARGAIN_COOPERATIVE_LOYALTY_DRAIN
-            )), true)
+            let loyalty = gov.loyalty;
+            let total_skim = gov.income_skim * 100.0;
+            (Some(format!("{gov_name}: cut agreed — loyalty {loyalty:.0} (now skimming {total_skim:.0}% of income)")), true)
+        }
+        GovernorPersonality::Mobster => {
+            // Protection Money — escalating cost
+            let count = state.regions[region_idx].governor.bargain_count;
+            let cost = BARGAIN_MOBSTER_BASE_COST * 2.0_f64.powi(count as i32);
+            if state.resources.funding < cost {
+                return (Some(format!("Not enough funding (need ¥{cost:.0})")), false);
+            }
+            state.resources.funding -= cost;
+            let gov = &mut state.regions[region_idx].governor;
+            gov.bargain_count += 1;
+            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
+            let loyalty = gov.loyalty;
+            (Some(format!("{gov_name}: paid ¥{cost:.0} — loyalty {loyalty:.0}. Next time will cost more.")), true)
         }
     }
 }
@@ -468,47 +483,48 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
 
         // Personality modifiers
         let personality_mod = match personality {
-            GovernorPersonality::Cooperative => 0.002, // passive loyalty gain (~0.24/day)
-            GovernorPersonality::Nationalist => {
-                // Angry about both restrictions AND suffering in their region
-                let restriction_anger = -restrictive_count * 0.003;
-                let suffering_anger = if infected > SEVERITY_CRIT_THRESHOLD {
-                    -0.006 // extra CRIT penalty (~0.72/day)
-                } else if infected > SEVERITY_HIGH_THRESHOLD {
-                    -0.003 // extra HIGH penalty (~0.36/day)
-                } else {
-                    0.0
-                };
-                restriction_anger + suffering_anger
+            GovernorPersonality::Buffoon => {
+                // Small passive decay — they forget promises quickly.
+                -0.001 // ~0.12/day passive decay
             }
-            GovernorPersonality::Populist => {
-                // Hates restrictive policies — extra drain on top of base policy_drain
-                let restriction_anger = -restrictive_count * 0.006; // ~0.72/day per policy (stacks with base 0.6)
-                // Happy when region is calm with no restrictions
+            GovernorPersonality::Blowhard => {
+                // Hates restrictive policies — extra drain. Happy when things are calm.
+                let restriction_anger = -restrictive_count * 0.004;
                 let calm_bonus = if restrictive_count == 0.0 && infected <= SEVERITY_HIGH_THRESHOLD {
-                    0.003 // ~0.36/day — rewards light-touch approach
+                    0.003
                 } else {
                     0.0
                 };
                 restriction_anger + calm_bonus
             }
-            GovernorPersonality::Technocrat => {
-                // Gains loyalty when research targets diseases in their region
-                let region_diseases: Vec<usize> = state.regions[i].infections.iter()
-                    .filter(|inf| inf.infected > 0.0)
-                    .map(|inf| inf.disease_idx)
-                    .collect();
-                let researching_region = region_diseases.iter().any(|&d_idx| {
-                    state.field_research.iter().any(|r| r.references_disease(d_idx))
-                        || state.applied_research.as_ref().is_some_and(|r| r.references_disease(d_idx))
-                });
-                // Angry when unidentified diseases exist in their region
-                let has_unidentified = region_diseases.iter().any(|&d_idx| {
-                    state.diseases.get(d_idx).is_some_and(|d| d.knowledge < crate::state::KNOWLEDGE_NAME)
-                });
-                let research_mod = if researching_region { 0.004 } else { 0.0 }; // ~0.48/day
-                let ignorance_anger = if has_unidentified { -0.004 } else { 0.0 }; // ~0.48/day
-                research_mod + ignorance_anger
+            GovernorPersonality::Recluse => {
+                // Doesn't care much about anything. Low drift in any direction.
+                // Slightly annoyed by attention (policies = someone's paying attention)
+                -restrictive_count * 0.001
+            }
+            GovernorPersonality::Hardliner => {
+                // Angry about both restrictions AND suffering — hardest to manage.
+                let restriction_anger = -restrictive_count * 0.002;
+                let suffering_anger = if infected > SEVERITY_CRIT_THRESHOLD {
+                    -0.004
+                } else if infected > SEVERITY_HIGH_THRESHOLD {
+                    -0.002
+                } else {
+                    0.0
+                };
+                restriction_anger + suffering_anger
+            }
+            GovernorPersonality::Operative => {
+                // Passive loyalty gain when being paid (income_skim > 0).
+                // Otherwise neutral.
+                let skim = state.regions[i].governor.income_skim;
+                if skim > 0.0 { 0.002 } else { 0.0 }
+            }
+            GovernorPersonality::Mobster => {
+                // Loyalty decays constantly — always wants more money.
+                // Decays faster the more bargains you've made (addiction escalation).
+                let count = state.regions[i].governor.bargain_count as f64;
+                -0.002 * (1.0 + count * 0.5) // ~0.24/day base, grows with each bargain
             }
         };
 
@@ -520,10 +536,12 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         if new_loyalty < GOVERNOR_DEFIANCE_THRESHOLD && !state.regions[i].governor.defiance_crisis_fired {
             state.regions[i].governor.defiance_crisis_fired = true;
             let kind = match personality {
-                GovernorPersonality::Cooperative => CrisisKind::GovernorCooperative { region_idx: i },
-                GovernorPersonality::Nationalist => CrisisKind::GovernorNationalist { region_idx: i },
-                GovernorPersonality::Populist => CrisisKind::GovernorPopulist { region_idx: i },
-                GovernorPersonality::Technocrat => CrisisKind::GovernorTechnocrat { region_idx: i },
+                GovernorPersonality::Buffoon => CrisisKind::GovernorBuffoon { region_idx: i },
+                GovernorPersonality::Blowhard => CrisisKind::GovernorBlowhard { region_idx: i },
+                GovernorPersonality::Recluse => CrisisKind::GovernorRecluse { region_idx: i },
+                GovernorPersonality::Hardliner => CrisisKind::GovernorHardliner { region_idx: i },
+                GovernorPersonality::Operative => CrisisKind::GovernorOperative { region_idx: i },
+                GovernorPersonality::Mobster => CrisisKind::GovernorMobster { region_idx: i },
             };
             // Schedule for immediate activation (current tick)
             state.pending_crises.push((state.tick, kind));
@@ -560,59 +578,102 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
         let region_name = state.regions[i].name.clone();
 
         let action_desc = match personality {
-            GovernorPersonality::Populist => {
-                // Lift the first active restrictive policy
+            GovernorPersonality::Buffoon => {
+                // Accidentally breaks a random policy or wastes funding
                 let policy = &state.policies[i];
-                let active: Vec<&str> = [
+                let active_policies: Vec<&str> = [
                     (policy.travel_ban, "travel_ban"),
                     (policy.quarantine, "quarantine"),
-                    (policy.martial_law, "martial_law"),
+                    (policy.hospital_surge, "hospital_surge"),
                     (policy.border_controls, "border_controls"),
                 ].iter()
                     .filter(|(active, _)| *active)
                     .map(|(_, name)| *name)
                     .collect();
-                if let Some(&target) = active.first() {
+                if !active_policies.is_empty() {
+                    // Pick a random policy to accidentally disable
+                    let idx = (tick as usize) % active_policies.len();
+                    let target = active_policies[idx];
                     let label = match target {
                         "travel_ban" => { state.policies[i].travel_ban = false; "Travel Ban" }
                         "quarantine" => { state.policies[i].quarantine = false; "Quarantine" }
-                        "martial_law" => { state.policies[i].martial_law = false; "Martial Law" }
+                        "hospital_surge" => { state.policies[i].hospital_surge = false; "Hospital Surge" }
                         "border_controls" => { state.policies[i].border_controls = false; "Border Controls" }
                         _ => unreachable!(),
                     };
-                    Some(format!("{gov_name} lifted {label} in {region_name}"))
+                    Some(format!("{gov_name} accidentally cancelled {label} in {region_name}"))
                 } else {
-                    None // No restrictive policies to lift
+                    // No policies to break — waste some funding instead
+                    let waste = (state.resources.funding * 0.05).min(150.0);
+                    if waste >= 10.0 {
+                        state.resources.funding -= waste;
+                        Some(format!("{gov_name} misspent ¥{waste:.0} on a publicity stunt in {region_name}"))
+                    } else {
+                        None
+                    }
                 }
             }
-            GovernorPersonality::Nationalist => {
-                // Diverts budget to "regional priorities" — a clear funding drain
-                // (border closing was the old action but it often helped the player by
-                // containing spread; this creates the intended negative pressure)
-                let drain = (state.resources.funding * 0.08).min(250.0);
+            GovernorPersonality::Blowhard => {
+                // Small funding drain + alarming messages (mostly hollow)
+                let drain = (state.resources.funding * 0.03).min(100.0);
+                if drain >= 5.0 {
+                    state.resources.funding -= drain;
+                    Some(format!("{gov_name} demanded ¥{drain:.0} for \"emergency PR\" in {region_name}"))
+                } else {
+                    None
+                }
+            }
+            GovernorPersonality::Recluse => {
+                // Doesn't actively sabotage — just doesn't enforce anything.
+                // Represented by reduced policy effectiveness (handled in Governor::policy_effectiveness)
+                // Periodic reminder to the player that this region is drifting
+                Some(format!("{gov_name} is unreachable in {region_name} — policies unenforced"))
+            }
+            GovernorPersonality::Hardliner => {
+                // Unilaterally activates a restrictive policy the player didn't set
+                let policy = &state.policies[i];
+                let inactive: Vec<&str> = [
+                    (!policy.quarantine, "quarantine"),
+                    (!policy.border_controls, "border_controls"),
+                    (!policy.martial_law, "martial_law"),
+                ].iter()
+                    .filter(|(inactive, _)| *inactive)
+                    .map(|(_, name)| *name)
+                    .collect();
+                if let Some(&target) = inactive.first() {
+                    let label = match target {
+                        "quarantine" => { state.policies[i].quarantine = true; "Quarantine" }
+                        "border_controls" => { state.policies[i].border_controls = true; "Border Controls" }
+                        "martial_law" => { state.policies[i].martial_law = true; "Martial Law" }
+                        _ => unreachable!(),
+                    };
+                    Some(format!("{gov_name} imposed {label} in {region_name} without authorization"))
+                } else {
+                    None // All restrictive policies already active
+                }
+            }
+            GovernorPersonality::Operative => {
+                // Continuous funding drain that grows over time
+                let skim = state.regions[i].governor.income_skim;
+                let drain = (state.resources.funding * (0.05 + skim)).min(300.0);
                 if drain >= 10.0 {
                     state.resources.funding -= drain;
-                    Some(format!("{gov_name} diverted ¥{drain:.0} to regional programs in {region_name}"))
+                    Some(format!("{gov_name} siphoned ¥{drain:.0} from operations in {region_name}"))
                 } else {
                     None
                 }
             }
-            GovernorPersonality::Technocrat => {
-                // Steal 1 personnel for "independent research"
-                if state.resources.personnel > 1 {
-                    state.resources.personnel -= 1;
-                    Some(format!("{gov_name} reassigned a researcher in {region_name}"))
+            GovernorPersonality::Mobster => {
+                // Lump-sum demands that increase each time
+                let count = state.regions[i].governor.bargain_count;
+                let demand = 100.0 * 2.0_f64.powi(count as i32);
+                if state.resources.funding >= demand {
+                    state.resources.funding -= demand;
+                    Some(format!("{gov_name} extorted ¥{demand:.0} from {region_name}"))
                 } else {
-                    None
-                }
-            }
-            GovernorPersonality::Cooperative => {
-                // Files formal objection through official channels — small POL drain
-                if state.resources.political_power > 0.0 {
+                    // Can't pay — small POL hit instead
                     state.resources.political_power = (state.resources.political_power - 0.05).max(0.0);
-                    Some(format!("{gov_name} filed a formal objection in {region_name}"))
-                } else {
-                    None
+                    Some(format!("{gov_name} made threats in {region_name} — international embarrassment"))
                 }
             }
         };
@@ -1158,28 +1219,28 @@ mod tests {
     }
 
     #[test]
-    fn nationalist_governor_drops_faster_than_cooperative() {
+    fn hardliner_governor_drops_faster_than_operative() {
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 200_000.0;
 
-        // Test Nationalist
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Nationalist;
+        // Test Hardliner — angry about both restrictions AND suffering
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Hardliner;
         state.regions[0].governor.loyalty = 70.0;
         for _ in 0..(120 * 15) {
             tick_governor_loyalty(&mut state);
         }
-        let nationalist_loyalty = state.regions[0].governor.loyalty;
+        let hardliner_loyalty = state.regions[0].governor.loyalty;
 
-        // Test Cooperative
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Cooperative;
+        // Test Operative — neutral when no income skim
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
         state.regions[0].governor.loyalty = 70.0;
         for _ in 0..(120 * 15) {
             tick_governor_loyalty(&mut state);
         }
-        let cooperative_loyalty = state.regions[0].governor.loyalty;
+        let operative_loyalty = state.regions[0].governor.loyalty;
 
-        assert!(nationalist_loyalty < cooperative_loyalty,
-            "Nationalist ({nationalist_loyalty:.1}) should lose loyalty faster than Cooperative ({cooperative_loyalty:.1}) in a CRIT region");
+        assert!(hardliner_loyalty < operative_loyalty,
+            "Hardliner ({hardliner_loyalty:.1}) should lose loyalty faster than Operative ({operative_loyalty:.1}) in a CRIT region");
     }
 
     #[test]
@@ -1216,103 +1277,97 @@ mod tests {
     }
 
     #[test]
-    fn populist_governor_hates_restrictions() {
+    fn blowhard_governor_hates_restrictions() {
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 200_000.0; // CRIT
         state.policies[0].quarantine = true;
         state.policies[0].travel_ban = true;
 
-        // Populist with restrictions
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Populist;
+        // Blowhard with restrictions — extra drain
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Blowhard;
         state.regions[0].governor.loyalty = 70.0;
         for _ in 0..(120 * 10) {
             tick_governor_loyalty(&mut state);
         }
-        let populist_loyalty = state.regions[0].governor.loyalty;
+        let blowhard_loyalty = state.regions[0].governor.loyalty;
 
-        // Cooperative with same restrictions (baseline)
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Cooperative;
+        // Operative with same restrictions (baseline — neutral personality mod)
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
         state.regions[0].governor.loyalty = 70.0;
         for _ in 0..(120 * 10) {
             tick_governor_loyalty(&mut state);
         }
-        let cooperative_loyalty = state.regions[0].governor.loyalty;
+        let operative_loyalty = state.regions[0].governor.loyalty;
 
-        assert!(populist_loyalty < cooperative_loyalty,
-            "Populist ({populist_loyalty:.1}) should lose loyalty faster than Cooperative ({cooperative_loyalty:.1}) with restrictions");
+        assert!(blowhard_loyalty < operative_loyalty,
+            "Blowhard ({blowhard_loyalty:.1}) should lose loyalty faster than Operative ({operative_loyalty:.1}) with restrictions");
     }
 
     #[test]
-    fn populist_governor_happy_without_restrictions() {
+    fn blowhard_governor_happy_without_restrictions() {
         let mut state = screening_test_state();
-        // Low infections, no restrictions — populist's calm bonus kicks in
+        // Low infections, no restrictions — blowhard's calm bonus kicks in
         state.regions[0].get_or_create_infection(0).infected = 100.0;
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Populist;
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Blowhard;
         state.regions[0].governor.loyalty = 50.0;
 
         for _ in 0..(120 * 5) {
             tick_governor_loyalty(&mut state);
         }
         assert!(state.regions[0].governor.loyalty > 50.0,
-            "Populist should gain loyalty with no restrictions and low infections, got {}",
+            "Blowhard should gain loyalty with no restrictions and low infections, got {}",
             state.regions[0].governor.loyalty);
     }
 
     #[test]
-    fn technocrat_governor_gains_from_targeted_research() {
+    fn mobster_loyalty_decays_faster_with_bargains() {
         let mut state = screening_test_state();
-        state.regions[0].get_or_create_infection(0).infected = 200_000.0;
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Technocrat;
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Mobster;
 
-        // Without research targeting disease 0
+        // No bargains — base decay
         state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.bargain_count = 0;
         for _ in 0..(120 * 10) {
             tick_governor_loyalty(&mut state);
         }
-        let no_research_loyalty = state.regions[0].governor.loyalty;
+        let no_bargain_loyalty = state.regions[0].governor.loyalty;
 
-        // With research targeting disease 0
+        // After 3 bargains — faster decay
         state.regions[0].governor.loyalty = 70.0;
-        state.field_research.push(crate::state::ResearchProject {
-            kind: crate::state::ResearchKind::IdentifyThreat { disease_idx: 0 },
-            progress: 0.0,
-            required_ticks: 1000.0,
-            personnel_assigned: 5,
-            scientist_ids: vec![],
-        });
+        state.regions[0].governor.bargain_count = 3;
         for _ in 0..(120 * 10) {
             tick_governor_loyalty(&mut state);
         }
-        let with_research_loyalty = state.regions[0].governor.loyalty;
+        let many_bargain_loyalty = state.regions[0].governor.loyalty;
 
-        assert!(with_research_loyalty > no_research_loyalty,
-            "Technocrat should have higher loyalty with targeted research ({with_research_loyalty:.1}) vs without ({no_research_loyalty:.1})");
+        assert!(many_bargain_loyalty < no_bargain_loyalty,
+            "Mobster with 3 bargains ({many_bargain_loyalty:.1}) should decay faster than with 0 ({no_bargain_loyalty:.1})");
     }
 
     #[test]
-    fn technocrat_angry_about_unidentified_diseases() {
+    fn operative_gains_loyalty_when_skimming() {
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 100.0; // low infections
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Technocrat;
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
 
-        // Disease not identified (knowledge < KNOWLEDGE_NAME)
-        state.diseases[0].knowledge = 0.0;
-        state.regions[0].governor.loyalty = 70.0;
+        // Without income skim — neutral
+        state.regions[0].governor.income_skim = 0.0;
+        state.regions[0].governor.loyalty = 50.0;
         for _ in 0..(120 * 10) {
             tick_governor_loyalty(&mut state);
         }
-        let unidentified_loyalty = state.regions[0].governor.loyalty;
+        let no_skim_loyalty = state.regions[0].governor.loyalty;
 
-        // Disease identified
-        state.diseases[0].knowledge = crate::state::KNOWLEDGE_NAME;
-        state.regions[0].governor.loyalty = 70.0;
+        // With income skim — passive loyalty gain
+        state.regions[0].governor.income_skim = 0.10;
+        state.regions[0].governor.loyalty = 50.0;
         for _ in 0..(120 * 10) {
             tick_governor_loyalty(&mut state);
         }
-        let identified_loyalty = state.regions[0].governor.loyalty;
+        let skim_loyalty = state.regions[0].governor.loyalty;
 
-        assert!(unidentified_loyalty < identified_loyalty,
-            "Technocrat should have lower loyalty with unidentified disease ({unidentified_loyalty:.1}) vs identified ({identified_loyalty:.1})");
+        assert!(skim_loyalty > no_skim_loyalty,
+            "Operative with income skim ({skim_loyalty:.1}) should have higher loyalty than without ({no_skim_loyalty:.1})");
     }
 
     // --- Governor autonomous action tests ---
@@ -1327,92 +1382,115 @@ mod tests {
     }
 
     #[test]
-    fn populist_governor_lifts_restrictive_policy() {
-        let mut state = defiant_governor_state(GovernorPersonality::Populist);
+    fn buffoon_governor_breaks_policy() {
+        let mut state = defiant_governor_state(GovernorPersonality::Buffoon);
         state.policies[0].border_controls = true;
 
         tick_governor_actions(&mut state);
 
+        // Buffoon should accidentally disable the active policy
         assert!(!state.policies[0].border_controls,
-            "Populist governor should lift border controls");
+            "Buffoon governor should accidentally cancel a policy");
         assert!(state.events.iter().any(|e|
-            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("lifted"))
-        ), "should emit GovernorAction event about lifting a policy");
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("accidentally cancelled"))
+        ));
     }
 
     #[test]
-    fn populist_governor_no_action_without_restrictive_policies() {
-        let mut state = defiant_governor_state(GovernorPersonality::Populist);
-        // No restrictive policies active
-
-        tick_governor_actions(&mut state);
-
-        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
-            "Populist with no restrictive policies should take no action");
-    }
-
-    #[test]
-    fn nationalist_governor_diverts_funding() {
-        let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
+    fn blowhard_governor_drains_funding() {
+        let mut state = defiant_governor_state(GovernorPersonality::Blowhard);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
         tick_governor_actions(&mut state);
 
         assert!(state.resources.funding < before,
-            "Nationalist governor should drain funding");
+            "Blowhard governor should drain funding for PR");
         assert!(state.events.iter().any(|e|
-            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("diverted"))
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("emergency PR"))
         ));
     }
 
     #[test]
-    fn technocrat_governor_steals_personnel() {
-        let mut state = defiant_governor_state(GovernorPersonality::Technocrat);
-        let before = state.resources.personnel;
+    fn recluse_governor_sends_message_only() {
+        let mut state = defiant_governor_state(GovernorPersonality::Recluse);
+        let funding_before = state.resources.funding;
+        let personnel_before = state.resources.personnel;
 
         tick_governor_actions(&mut state);
 
-        assert_eq!(state.resources.personnel, before - 1,
-            "Technocrat governor should steal 1 personnel");
+        // Recluse doesn't actively sabotage — just sends a message
+        assert_eq!(state.resources.funding, funding_before);
+        assert_eq!(state.resources.personnel, personnel_before);
         assert!(state.events.iter().any(|e|
-            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("reassigned"))
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("unreachable"))
         ));
     }
 
     #[test]
-    fn cooperative_governor_drains_political_power() {
-        let mut state = defiant_governor_state(GovernorPersonality::Cooperative);
-        state.resources.political_power = 0.50;
+    fn hardliner_governor_imposes_policy() {
+        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
+        assert!(!state.policies[0].quarantine);
 
         tick_governor_actions(&mut state);
 
-        assert!(state.resources.political_power < 0.50,
-            "Cooperative governor should drain political power");
+        assert!(state.policies[0].quarantine,
+            "Hardliner governor should unilaterally impose a restrictive policy");
         assert!(state.events.iter().any(|e|
-            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("objection"))
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("imposed"))
+        ));
+    }
+
+    #[test]
+    fn operative_governor_siphons_funding() {
+        let mut state = defiant_governor_state(GovernorPersonality::Operative);
+        state.resources.funding = 1000.0;
+        let before = state.resources.funding;
+
+        tick_governor_actions(&mut state);
+
+        assert!(state.resources.funding < before,
+            "Operative governor should siphon funding");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("siphoned"))
+        ));
+    }
+
+    #[test]
+    fn mobster_governor_extorts_funding() {
+        let mut state = defiant_governor_state(GovernorPersonality::Mobster);
+        state.resources.funding = 1000.0;
+        let before = state.resources.funding;
+
+        tick_governor_actions(&mut state);
+
+        assert!(state.resources.funding < before,
+            "Mobster governor should extort funding");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("extorted"))
         ));
     }
 
     #[test]
     fn governor_actions_respect_cooldown() {
-        let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
+        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.last_action_tick = state.tick; // just acted
 
         tick_governor_actions(&mut state);
 
-        assert!(!state.policies[0].border_controls,
+        // Should not act when on cooldown
+        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
             "Governor should not act when still on cooldown");
     }
 
     #[test]
     fn governor_actions_only_fire_when_defiant() {
-        let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
+        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.loyalty = 50.0; // above threshold
 
         tick_governor_actions(&mut state);
 
-        assert!(!state.policies[0].border_controls,
+        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
             "Governor above defiance threshold should not act");
     }
 }
