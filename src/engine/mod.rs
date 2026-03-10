@@ -630,14 +630,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (success, msg) = research::upgrade_lab(state);
             CommandResult { message: msg, success }
         }
-        GameCommand::AcceptContract => {
-            let (success, msg) = contracts::accept_contract(state);
-            CommandResult { message: msg, success }
-        }
-        GameCommand::RejectContract => {
-            let (success, msg) = contracts::reject_contract(state);
-            CommandResult { message: msg, success }
-        }
     }
 }
 
@@ -4713,6 +4705,8 @@ mod tests {
         use crate::state::CRISIS_MIN_GAP;
         let mut state = GameState::new_default(42);
         state.tick = 500;
+        // Prevent contract offer from generating during this test
+        state.last_contract_offer_tick = state.tick;
         // Simulate a recently resolved crisis
         state.last_crisis_resolved_tick = state.tick - 10; // Only 10 ticks ago
         state.pending_crises.push((state.tick, CrisisKind::PublicInquiry));
