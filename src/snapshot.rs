@@ -101,16 +101,19 @@ fn advance_ticks(state: &mut GameState, n: u64) {
     }
 }
 
-/// Auto-resolve a crisis by picking the cheapest affordable option.
-/// Tries option A first, then option B if A is unaffordable.
+/// Auto-resolve a crisis by picking the least disruptive affordable option.
+/// Prefers option B (usually "pay to preserve status quo") when affordable,
+/// falls back to option A (always free, but often destructive — removes
+/// policies, loses doses, etc.) when B can't be afforded.
 /// Prints a summary line to stderr so playtesters can see what happened.
 fn auto_resolve_crisis(state: &mut GameState) {
-    // Try option A (index 0) first, fall back to option B (index 1)
+    // Prefer B (paid/preserve) over A (free/destructive).
+    // Crisis invariant: A is always free, B may have a cost.
     let (choice, title, option_label) = if let Some(crisis) = &state.active_crisis {
-        if crisis.option_a.cost.as_ref().map_or(true, |c| c.affordable(state)) {
-            (0, crisis.title.clone(), crisis.option_a.label.clone())
-        } else {
+        if crisis.option_b.cost.as_ref().map_or(true, |c| c.affordable(state)) {
             (1, crisis.title.clone(), crisis.option_b.label.clone())
+        } else {
+            (0, crisis.title.clone(), crisis.option_a.label.clone())
         }
     } else {
         return;
@@ -289,6 +292,70 @@ mod tests {
         // Threats panel should be open (key was not eaten).
         assert!(result.screen.contains("Threats"),
             "threats panel should be open — key should not be eaten by crisis");
+    }
+
+    #[test]
+    fn auto_resolve_prefers_option_b_when_affordable() {
+        use crate::state::{CrisisEvent, CrisisOption, CrisisCost, CrisisKind};
+
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        // Inject a crisis where A is destructive (free) and B costs money
+        state.active_crisis = Some(CrisisEvent {
+            title: "Test Crisis".into(),
+            description: "A test".into(),
+            option_a: CrisisOption {
+                label: "Accept losses".into(),
+                description: "Destructive free option".into(),
+                cost: None,
+            },
+            option_b: CrisisOption {
+                label: "Pay to preserve".into(),
+                description: "Costs $200".into(),
+                cost: Some(CrisisCost { funding: 200.0, personnel: 0 }),
+            },
+            kind: CrisisKind::MediaPanic, // any kind works
+            tick_created: 0,
+        });
+        state.sim_state = crate::state::SimState::Running;
+
+        // Auto-resolve should pick B (pay $200) not A (free destructive)
+        auto_resolve_crisis(&mut state);
+        assert!(state.active_crisis.is_none(), "crisis should be resolved");
+        assert!(state.resources.funding < 1000.0,
+            "should have spent money on option B, not taken free option A");
+    }
+
+    #[test]
+    fn auto_resolve_falls_back_to_a_when_b_unaffordable() {
+        use crate::state::{CrisisEvent, CrisisOption, CrisisCost, CrisisKind};
+
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 50.0; // can't afford B
+        state.active_crisis = Some(CrisisEvent {
+            title: "Test Crisis".into(),
+            description: "A test".into(),
+            option_a: CrisisOption {
+                label: "Accept losses".into(),
+                description: "Free option".into(),
+                cost: None,
+            },
+            option_b: CrisisOption {
+                label: "Pay to preserve".into(),
+                description: "Costs $200".into(),
+                cost: Some(CrisisCost { funding: 200.0, personnel: 0 }),
+            },
+            kind: CrisisKind::MediaPanic,
+            tick_created: 0,
+        });
+        state.sim_state = crate::state::SimState::Running;
+
+        let funding_before = state.resources.funding;
+        auto_resolve_crisis(&mut state);
+        assert!(state.active_crisis.is_none(), "crisis should be resolved");
+        // Should NOT have lost money since A is free
+        assert!((state.resources.funding - funding_before).abs() < 0.01,
+            "should have taken free option A when B unaffordable");
     }
 
     #[test]
