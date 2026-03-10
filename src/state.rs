@@ -3177,10 +3177,6 @@ pub enum GameCommand {
     StartFieldOp { kind: FieldOpKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
-    /// Accept the current funding contract offer.
-    AcceptContract,
-    /// Reject (dismiss) the current funding contract offer.
-    RejectContract,
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3282,8 +3278,11 @@ pub enum CrisisKind {
     /// Congressional hearing about your handling of the crisis.
     CongressionalHearing,
 
-    // --- Patron demand crises (fired when contract satisfaction drops) ---
+    // --- Patron/contract crises ---
 
+    /// A funding patron offers a new contract. Interrupts gameplay so the player
+    /// must accept or reject the terms. Replaces the old policy-panel-only flow.
+    ContractOffer { template_id: u8 },
     /// Funding patron makes demands when satisfaction drops to warning zone.
     PatronDemand { template_id: u8 },
 
@@ -3362,6 +3361,7 @@ impl CrisisKind {
             CrisisKind::NamingRights { .. } => "naming_rights",
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
+            CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::PatronDemand { .. } => "patron_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
             CrisisKind::GovernorBlowhard { .. } => "gov_blowhard",
@@ -3730,10 +3730,8 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions,
-                    // (optional: +1 contract offer), decrees, standing orders (2 items)
-                    let contract_items = if state.contract_offer.is_some() { 1 } else { 0 };
-                    state.regions.len() + contract_items + DECREE_COUNT + 2 - 1
+                    // Items: 0..regions-1 = regions, decrees, standing orders (2 items)
+                    state.regions.len() + DECREE_COUNT + 2 - 1
                 }
                 // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
@@ -4085,13 +4083,7 @@ impl UiState {
                     }
                     None
                 } else {
-                    let contract_items = if state.contract_offer.is_some() { 1 } else { 0 };
-                    let contract_pos = num_regions;
-                    if contract_items > 0 && self.panel_selection == contract_pos {
-                        return Some(GameCommand::AcceptContract);
-                    }
-                    // Layout: decree_base = regions + contract_items
-                    let decree_base = num_regions + contract_items;
+                    let decree_base = num_regions;
                     let so_base = decree_base + DECREE_COUNT;
                     if self.panel_selection >= so_base {
                         // Standing order selected

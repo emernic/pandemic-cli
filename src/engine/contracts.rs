@@ -200,15 +200,21 @@ pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
         return;
     }
 
+    let template_id = contract.template_id;
     state.events.push(GameEvent::ContractOffered {
         name: contract.name.clone(),
     });
     state.contract_offer = Some(contract);
     state.last_contract_offer_tick = state.tick;
+
+    // Queue a crisis-style interrupt so the player must respond to the offer.
+    // Fires on the same tick (pending_crises check runs after this function).
+    state.pending_crises.push((state.tick, CrisisKind::ContractOffer { template_id }));
 }
 
 /// Accept the current contract offer. Returns (success, message).
-pub fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
+/// Called from crisis resolution (ContractOffer) and unit tests.
+pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
     if let Some(contract) = state.contract_offer.take() {
         if state.contracts.len() >= MAX_CONTRACTS {
             state.contract_offer = Some(contract);
@@ -224,7 +230,7 @@ pub fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
 }
 
 /// Reject (dismiss) the current contract offer.
-pub fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
+pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
     if state.contract_offer.take().is_some() {
         (true, Some("Contract offer dismissed.".to_string()))
     } else {
@@ -512,5 +518,62 @@ mod tests {
 
         assert_eq!(state.pending_crises.len(), 1);
         assert_eq!(state.contracts[0].last_demand_tick, 1000);
+    }
+
+    #[test]
+    fn offer_queues_crisis_interrupt() {
+        let mut state = GameState::new_default(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        state.tick = CONTRACT_FIRST_OFFER_TICK;
+
+        assert!(state.pending_crises.is_empty());
+        tick_offer_contracts(&mut state, &mut rng);
+
+        assert!(state.contract_offer.is_some(), "offer should be stored");
+        assert_eq!(state.pending_crises.len(), 1, "should queue a crisis");
+        assert!(matches!(
+            state.pending_crises[0].1,
+            CrisisKind::ContractOffer { .. }
+        ));
+    }
+
+    #[test]
+    fn contract_crisis_accept_adds_to_contracts() {
+        use crate::engine::crisis;
+        let mut state = GameState::new_default(42);
+        make_offer(&mut state);
+        let offer_name = state.contract_offer.as_ref().unwrap().name.clone();
+
+        // Build and activate the crisis
+        let crisis_event = crisis::build_crisis_event(
+            &state,
+            CrisisKind::ContractOffer { template_id: 4 },
+        );
+        state.active_crisis = Some(crisis_event);
+
+        // Resolve with option 0 (accept)
+        let msg = crisis::resolve_crisis(&mut state, 0);
+        assert!(msg.contains("Accepted"), "msg: {msg}");
+        assert!(state.contract_offer.is_none(), "offer should be consumed");
+        assert_eq!(state.contracts.len(), 1);
+        assert_eq!(state.contracts[0].name, offer_name);
+    }
+
+    #[test]
+    fn contract_crisis_decline_clears_offer() {
+        use crate::engine::crisis;
+        let mut state = GameState::new_default(42);
+        make_offer(&mut state);
+
+        let crisis_event = crisis::build_crisis_event(
+            &state,
+            CrisisKind::ContractOffer { template_id: 4 },
+        );
+        state.active_crisis = Some(crisis_event);
+
+        let msg = crisis::resolve_crisis(&mut state, 1);
+        assert!(msg.contains("dismissed"), "msg: {msg}");
+        assert!(state.contract_offer.is_none(), "offer should be cleared");
+        assert!(state.contracts.is_empty());
     }
 }

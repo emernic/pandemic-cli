@@ -155,7 +155,6 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
 
     // Funding Contracts section
     let num_regions = state.regions.len();
-    let contract_items: usize = if state.contract_offer.is_some() { 1 } else { 0 };
     {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
@@ -163,14 +162,14 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
         )));
 
-        if state.contracts.is_empty() && state.contract_offer.is_none() {
+        if state.contracts.is_empty() {
             lines.push(Line::from(Span::styled(
                 "      No active contracts",
                 Style::default().fg(Color::DarkGray),
             )));
         }
 
-        // Show active contracts (non-selectable)
+        // Show active contracts (non-selectable, informational only)
         for contract in &state.contracts {
             let income_day = contract.income * TICKS_PER_DAY;
             let sat_pct = (contract.satisfaction * 100.0) as u32;
@@ -209,54 +208,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 ),
             ]));
         }
-
-        // Show contract offer (selectable)
-        if let Some(offer) = &state.contract_offer {
-            let offer_pos = num_regions;
-            let selected = state.ui.panel_selection == offer_pos;
-            let marker = if selected { "▶ " } else { "  " };
-            let income_day = offer.income * TICKS_PER_DAY;
-            let name_style = if selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            // Show patron name prominently in offer
-            let patron_display = if !offer.patron.is_empty() {
-                offer.patron.clone()
-            } else {
-                offer.name.clone()
-            };
-            lines.push(Line::from(vec![
-                Span::styled(format!("{}", marker), name_style),
-                Span::styled("NEW: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                Span::styled(patron_display, name_style),
-                Span::styled(
-                    format!("  +¥{:.0}/day", income_day),
-                    Style::default().fg(Color::Green),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("      \""),
-                Span::styled(offer.source.clone(), Style::default().fg(Color::DarkGray)),
-                Span::raw("\""),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("      Condition: "),
-                Span::styled(
-                    offer.condition.description(),
-                    Style::default().fg(Color::Cyan),
-                ),
-                Span::styled(
-                    "  [Enter] Accept  [X] Reject",
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
     }
 
     // Emergency Decrees section
-    let decree_base = num_regions + contract_items;
+    let decree_base = num_regions;
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  ─── EMERGENCY DECREES ───",

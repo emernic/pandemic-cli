@@ -1260,6 +1260,39 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::ContractOffer { .. } => {
+            let offer = state.contract_offer.as_ref();
+            let patron_name = offer.map(|c| c.patron.as_str()).unwrap_or("Unknown Patron");
+            let short_name = patron_name.split(',').next().unwrap_or(patron_name);
+            let income_day = offer.map(|c| c.income * TICKS_PER_DAY).unwrap_or(0.0);
+            let condition_desc = offer.map(|c| c.condition.description()).unwrap_or_default();
+            let source = offer.map(|c| c.source.as_str()).unwrap_or("");
+            let contract_name = offer.map(|c| c.name.as_str()).unwrap_or("Contract");
+
+            CrisisEvent {
+                title: format!("{}: Proposal", short_name),
+                description: format!(
+                    "{} is offering a funding contract: {}. \
+                     Income: +¥{:.0}/day. \"{}\"\n\
+                     Condition: {}",
+                    patron_name, contract_name, income_day, source, condition_desc,
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: format!("Accept (+¥{:.0}/day)", income_day),
+                        description: format!("Sign the {}. Income starts immediately.", contract_name),
+                        cost: None,
+                    },
+                    CrisisOption {
+                        label: "Decline".into(),
+                        description: format!("Turn down {}. No penalty.", short_name),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::PatronDemand { template_id } => {
             let contract = state.contracts.iter()
                 .find(|c| c.template_id == *template_id);
@@ -2351,6 +2384,17 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 region.governor.loyalty = (region.governor.loyalty + 10.0).min(100.0);
             }
             "Delegation sent. Governor engaged. Policy enforcement resuming.".into()
+        }
+
+        // --- Contract offer resolutions ---
+
+        (CrisisKind::ContractOffer { .. }, 0) => {
+            let (_, msg) = super::contracts::accept_contract(state);
+            msg.unwrap_or_else(|| "Contract offer expired.".into())
+        }
+        (CrisisKind::ContractOffer { .. }, _) => {
+            let (_, msg) = super::contracts::reject_contract(state);
+            msg.unwrap_or_else(|| "Contract offer declined.".into())
         }
 
         // --- Patron demand resolutions ---
