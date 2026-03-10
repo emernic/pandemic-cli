@@ -923,9 +923,6 @@ pub struct Resources {
     /// this directly, so POL hits take real time to recover from.
     #[serde(default)]
     pub political_power: f64,
-    /// Legacy: old saves may include this field. Not used in game logic.
-    #[serde(default, skip_serializing)]
-    pub pol_crisis_modifier: f64,
     /// Fractional accumulator for POL-based personnel gains.
     #[serde(default)]
     pub personnel_accum: f64,
@@ -4820,7 +4817,6 @@ impl GameState {
                 funding: 500.0,
                 personnel: 20,
                 political_power: 0.20,
-                pol_crisis_modifier: 0.0,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_funding_warning_tick: 0,
