@@ -334,6 +334,20 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     // are designed to exploit gaps in their toolkit. The arms race is bidirectional.
     adapt_disease_to_player_tech(state, disease_idx, rng);
 
+    // Auto-register new diseases with broad-spectrum medicines. These are
+    // known drug classes that work against any pathogen type, so they don't
+    // need per-disease clinical trials.
+    for med in &mut state.medicines {
+        if med.therapy_type == TherapyType::BroadSpectrum {
+            if !med.target_diseases.contains(&disease_idx) {
+                med.target_diseases.push(disease_idx);
+            }
+            if !med.tested_against.contains(&disease_idx) {
+                med.tested_against.push(disease_idx);
+            }
+        }
+    }
+
     Some(result)
 }
 

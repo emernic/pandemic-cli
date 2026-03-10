@@ -919,7 +919,7 @@ mod tests {
             Some(MedicineUiState::SelectTarget { .. })
         ));
         let funding_before = state.resources.funding;
-        let deploy_cost = state.medicines[0].deploy_cost(state.regions[0].population)
+        let deploy_cost = state.medicines[0].deploy_cost()
             * state.deployment_cost_bonus();
         let doses_before = state.medicines[0].doses;
         state = apply_action(&state, &Action::Confirm);
@@ -969,7 +969,7 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // dispatch shipment
 
         // Dispatch: cost deducted, doses deducted, pending shipment created
-        let deploy_cost = state.medicines[0].deploy_cost(state.regions[ri].population)
+        let deploy_cost = state.medicines[0].deploy_cost()
             * state.deployment_cost_bonus();
         assert_eq!(state.resources.funding, funding_before - deploy_cost);
         assert!(
@@ -1022,7 +1022,7 @@ mod tests {
     fn medicine_insufficient_funds() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
-        state.resources.funding = 50.0;
+        state.resources.funding = 5.0; // Below flat deploy cost of 10.0
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
@@ -1046,7 +1046,7 @@ mod tests {
     fn untested_medicine_insufficient_funds_skips_warning() {
         let mut state = GameState::new_default(42);
         unlock_untested(&mut state);
-        state.resources.funding = 50.0; // Not enough for any medicine
+        state.resources.funding = 5.0; // Below flat deploy cost of 10.0
         state = apply_action(&state, &Action::OpenMedicines);
         state = apply_action(&state, &Action::Confirm); // select medicine
         state = apply_action(&state, &Action::Confirm); // select region
@@ -1495,6 +1495,143 @@ mod tests {
     }
 
     #[test]
+    fn competent_play_extends_survival() {
+        // A player who uses research + policies + medicine should survive
+        // significantly longer than passive play. The three pillars work
+        // together: quarantine slows spread, research develops medicines,
+        // treatment reduces infected population.
+        use crate::state::{ResearchTrack, ResearchKind, DeployTarget};
+
+        fn simulate_competent(seed: u64) -> f64 {
+            let mut state = GameState::new_default(seed);
+            let max_ticks = 100 * TICKS_PER_DAY as u64;
+            let mut total_deploys = 0u32;
+            for _ in 0..max_ticks {
+                state = tick(&state);
+                if state.active_crisis.is_some() {
+                    use crate::state::SimState;
+                    state.active_crisis = None;
+                    state.sim_state = SimState::Running;
+                }
+                if state.outcome != GameOutcome::Playing { break; }
+
+                // --- RESEARCH: all three tracks ---
+                // Keep research running to maintain agency and develop medicines.
+                // Only start new projects if we can afford them without going broke.
+                for track in [ResearchTrack::Field, ResearchTrack::Applied, ResearchTrack::Basic] {
+                    let is_active = match track {
+                        ResearchTrack::Field => !state.field_research.is_empty(),
+                        ResearchTrack::Applied => state.applied_research.is_some(),
+                        ResearchTrack::Basic => state.basic_research.is_some(),
+                    };
+                    if is_active { continue; }
+                    let projects = state.available_projects(track);
+                    if projects.is_empty() { continue; }
+                    let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
+                        ResearchKind::DevelopMedicine { .. } => 0,
+                        ResearchKind::ManufactureDoses { .. } => 0,
+                        ResearchKind::IdentifyThreat { .. } => 1,
+                        ResearchKind::ClinicalTrial { .. } => 2,
+                        ResearchKind::GenomicSequencing { .. } => 3,
+                        _ => 4,
+                    });
+                    if let Some((idx, kind)) = best {
+                        let (_, _, cost_funding) = kind.costs(&state.medicines);
+                        // Keep a funding buffer to avoid draining to zero.
+                        // Research starts once income builds up enough.
+                        if state.resources.funding >= cost_funding + 200.0 {
+                            execute_command(&mut state, &GameCommand::StartResearch {
+                                track, project_idx: idx, double_personnel: false,
+                            });
+                        }
+                    }
+                }
+
+                // --- MEDICINE: vaccinate ALL diseases in every region ---
+                // Vaccination permanently reduces the susceptible pool, slowing
+                // exponential growth. More impactful than treatment long-term.
+                let min_funding = 200.0;
+                for r_idx in 0..state.regions.len() {
+                    if state.regions[r_idx].collapsed { continue; }
+                    if state.resources.funding < min_funding { break; }
+                    for d_idx in 0..state.diseases.len() {
+                        if state.resources.funding < min_funding { break; }
+                        let mut best_med: Option<usize> = None;
+                        let mut best_eff = 0.0f64;
+                        for med_idx in 0..state.medicines.len() {
+                            let med = &state.medicines[med_idx];
+                            if !med.unlocked || med.doses <= 0.0 { continue; }
+                            if !med.tested_against.contains(&d_idx) { continue; }
+                            let eff = med.effective_efficacy(d_idx, &state.diseases);
+                            if eff > best_eff {
+                                best_eff = eff;
+                                best_med = Some(med_idx);
+                            }
+                        }
+                        let Some(med_idx) = best_med else { continue; };
+                        let target = DeployTarget::Vaccinate { disease_idx: d_idx };
+                        let result = execute_command(&mut state, &GameCommand::DeployMedicine {
+                            medicine_idx: med_idx,
+                            region_idx: r_idx,
+                            target,
+                        });
+                        if result.success { total_deploys += 1; }
+                    }
+                }
+            }
+            let day = state.tick as f64 / TICKS_PER_DAY;
+            let quarantine_count: usize = state.policies.iter().filter(|p| p.quarantine).count();
+            eprintln!("  seed {seed}: {day:.1}d, {total_deploys} deploys, quarantine={quarantine_count}, dead={:.0}, funds={:.0}",
+                state.total_dead(), state.resources.funding);
+            day
+        }
+
+        fn simulate_passive(seed: u64) -> f64 {
+            let mut state = GameState::new_default(seed);
+            let max_ticks = 100 * TICKS_PER_DAY as u64;
+            for _ in 0..max_ticks {
+                state = tick(&state);
+                if state.active_crisis.is_some() {
+                    use crate::state::SimState;
+                    state.active_crisis = None;
+                    state.sim_state = SimState::Running;
+                }
+                if state.outcome != GameOutcome::Playing { break; }
+            }
+            state.tick as f64 / TICKS_PER_DAY
+        }
+
+        // Paired comparison: same seed, active vs passive.
+        // This isolates the effect of player actions from seed-specific variability.
+        let seeds: Vec<u64> = (0..20).collect();
+        let pairs: Vec<(f64, f64)> = seeds.iter().map(|s| {
+            (simulate_competent(*s), simulate_passive(*s))
+        }).collect();
+        let improvements: Vec<f64> = pairs.iter()
+            .map(|(a, p)| a / p)
+            .collect();
+        let mut sorted_improvements = improvements.clone();
+        sorted_improvements.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let median_improvement = sorted_improvements[sorted_improvements.len() / 2];
+
+        // At least half of seeds should show the active player surviving longer
+        let better_count = pairs.iter().filter(|(a, p)| a > p).count();
+
+        eprintln!("Paired results ({better_count}/{} seeds active > passive):", seeds.len());
+        for (i, (a, p)) in pairs.iter().enumerate() {
+            let ratio = a / p;
+            eprintln!("  seed {i}: active={a:.1}d passive={p:.1}d ratio={ratio:.2}");
+        }
+        eprintln!("Median improvement ratio: {median_improvement:.2}");
+
+        assert!(median_improvement >= 1.05,
+            "Median paired improvement is {median_improvement:.2}x (expected >=1.05x). \
+             Player actions aren't meaningful enough. \
+             {better_count}/{} seeds show improvement.",
+            seeds.len());
+    }
+
+    #[test]
     fn no_collapse_before_day_3_without_intervention() {
         // First collapse should not occur before day 3, giving players
         // minimum time for initial decisions. With aggressive disease
@@ -1582,7 +1719,7 @@ mod tests {
         state.resources.funding = 0.0;
         // High personnel count = high upkeep that exceeds income
         state.resources.personnel = 150;
-        state.medicines.iter_mut().for_each(|m| m.doses = 0.0);
+        state.medicines.iter_mut().for_each(|m| { m.doses = 0.0; m.unlocked = false; });
         state.field_research.clear();
         state.applied_research = None;
         state.basic_research = None;
@@ -2201,7 +2338,7 @@ mod tests {
                 inf.infected = 100_000.0;
             }
             state.resources.funding = 1_000_000.0;
-            state.regions[0].last_deploy_tick = None;
+            state.regions[0].last_deploy_tick.clear();
             let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget::Treat { disease_idx });
             // Advance time to deliver this shipment
             state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
@@ -2227,7 +2364,7 @@ mod tests {
                 inf.infected = 100_000.0;
             }
             state.resources.funding = 1_000_000.0;
-            state.regions[0].last_deploy_tick = None;
+            state.regions[0].last_deploy_tick.clear();
             let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget::Treat { disease_idx });
             state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             medicine::tick_shipments(&mut state);
@@ -4353,8 +4490,8 @@ mod tests {
         assert!(nav, "first deploy should succeed");
         assert!(msg.unwrap().contains("Shipped"), "should show shipment message");
 
-        // Region should now have a cooldown set
-        assert!(state.regions[0].last_deploy_tick.is_some());
+        // Region should now have a cooldown set for this disease
+        assert!(state.regions[0].last_deploy_tick.contains_key(&disease_idx));
 
         // Second deploy at same tick should be blocked
         state.resources.funding = 1_000_000.0;
@@ -4371,9 +4508,9 @@ mod tests {
         assert!(nav3, "deploy after cooldown should succeed");
         assert!(msg3.unwrap().contains("Shipped"));
 
-        // Different region should still be deployable (cooldown is per-region)
+        // Different region should still be deployable (cooldown is per-region-per-disease)
         state.tick = 0;
-        state.regions[0].last_deploy_tick = Some(0);
+        state.regions[0].last_deploy_tick.insert(disease_idx, 0);
         state.regions[1].get_or_create_infection(disease_idx).infected = 50_000.0;
         state.resources.funding = 1_000_000.0;
         let (nav4, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone());
@@ -4404,7 +4541,7 @@ mod tests {
 
         if let Some(GameEvent::ThreatEscalation { disease_idx, has_medicine, .. }) = escalation {
             assert_eq!(*disease_idx, 0);
-            assert!(!has_medicine, "no medicine unlocked yet");
+            assert!(has_medicine, "broad-spectrum starts unlocked and targets all diseases");
         }
         assert_eq!(new_state.death_milestone_tier[0], 1, "should set alert level to 1");
 
@@ -4706,7 +4843,7 @@ mod tests {
 
         // Only region 0 has infections, but it's on cooldown
         state.regions[0].infections[0].infected = 100_000.0;
-        state.regions[0].last_deploy_tick = Some(state.tick);
+        state.regions[0].last_deploy_tick.insert(0, state.tick);
         state.auto_deploy = vec![true];
 
         let after = tick(&state);

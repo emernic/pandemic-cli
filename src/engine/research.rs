@@ -1397,6 +1397,13 @@ mod tests {
     fn handoff_notification_after_identification() {
         use crate::state::GameEvent;
         let mut state = GameState::new_default(42);
+        // Reset broad-spectrum to locked so identification can trigger the handoff
+        for med in &mut state.medicines {
+            if med.therapy_type == crate::state::TherapyType::BroadSpectrum {
+                med.unlocked = false;
+                med.doses = 0.0;
+            }
+        }
         // Start identify on disease 0
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Field Research

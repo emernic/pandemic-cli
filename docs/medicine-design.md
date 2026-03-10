@@ -34,7 +34,7 @@ Effective doses = `doses × therapy_efficacy × strain_efficacy × cross_reactiv
 |---|---|---|---|---|
 | Antiviral | 1.0 | 0.8 | 0.1 | 0.0 |
 | Antibiotic | 0.1 | 0.1 | 1.0 | 0.0 |
-| BroadSpectrum | 0.5 | 0.5 | 0.5 | 0.1 |
+| BroadSpectrum | 0.7 | 0.7 | 0.7 | 0.1 |
 
 ### Strain Drift
 
@@ -113,11 +113,11 @@ Two targeted medicines per non-prion disease (different mechanisms of action) + 
 |---|---|---|---|---|---|---|
 | Polymerase-A | Antiviral | PolymeraseInhibitor | Rapid | Disease 0 | $75 | 50M |
 | Protease-A | Antiviral | ProteaseInhibitor | Standard | Disease 0 | $35 | 150M |
-| Broad-Spectrum | BroadSpectrum | None | — | All | $100 | 200M |
+| Broad-Spectrum | BroadSpectrum | None | — | All | $10 | 2B |
 
 (Example for a starting RNA virus. Bacteria get bacterial mechanisms like CellWall/Ribosome instead.)
 
-All start locked. Research costs depend on variant:
+Broad-spectrum starts **unlocked and tested** against all diseases. It's the player's immediate (but weaker) tool from day 1. Targeted medicines start locked and require research. Research costs depend on variant:
 - **Rapid (single target):** 2 personnel, 120 ticks, $300 — fast crisis response, fewer doses
 - **Standard (single target):** 4 personnel, 280 ticks, $700 — slower but more doses, cheaper deployment
 - **Broad (2+ targets):** 10 personnel, 400 ticks, $1000 — covers all diseases
