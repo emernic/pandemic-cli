@@ -224,7 +224,7 @@ pub const FIELD_INFECTION_RECOVERY_TICKS: u64 = 480;
 pub const TREATMENT_FRACTION: f64 = 0.5;
 /// Fraction of susceptible population vaccinated per deployment (before efficacy).
 /// Vaccination is proportional like treatment — each deploy protects a meaningful
-/// fraction, making repeated deployments build toward herd immunity.
+/// fraction, making repeated deployments build toward population immunity.
 pub const VACCINATION_FRACTION: f64 = 0.02;
 
 /// Efficacy multiplier when deploying a medicine against a disease it wasn't

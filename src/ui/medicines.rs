@@ -448,7 +448,7 @@ fn render_select_target(
         if !empty {
             let pct = if susceptible > 0.0 { will_vaccinate / susceptible * 100.0 } else { 0.0 };
             lines.push(Line::from(Span::styled(
-                format!("    {:.1}% of susceptible — deploy repeatedly to build herd immunity", pct),
+                format!("    {:.1}% of susceptible — deploy repeatedly to build population immunity", pct),
                 Style::default().fg(Color::DarkGray),
             )));
         }
