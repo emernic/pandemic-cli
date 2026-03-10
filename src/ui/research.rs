@@ -90,7 +90,13 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
             if all_unlocked {
                 (" [COMPLETE]".to_string(), Color::Green)
             } else {
-                (" [LOCKED]".to_string(), Color::DarkGray)
+                // Find the first unmet tech and show its prereq as a hint
+                let hint = crate::state::BasicTech::all()
+                    .iter()
+                    .find(|t| !state.unlocked_techs.contains(t))
+                    .map(|t| format!(" [LOCKED] — {} to unlock {}", t.prereq_description(), t.name()))
+                    .unwrap_or_else(|| " [LOCKED]".to_string());
+                (hint, Color::DarkGray)
             }
         } else {
             (" [NONE]".to_string(), Color::DarkGray)
