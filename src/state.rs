@@ -2934,6 +2934,10 @@ pub enum CrisisKind {
     MilitaryOverreach,
     /// Follow-up to DataLeak (Suppress): cover-up exposed, inquiry demanded.
     PublicInquiry,
+    /// Follow-up to MediaPanic (Ignore): misinformation degrades screening.
+    Infodemic { region_idx: usize },
+    /// Follow-up to VaccineDispute (Credit one side): losing side retaliates.
+    SanctionsThreat { funding_loss: f64 },
 }
 
 impl CrisisKind {
@@ -2978,6 +2982,8 @@ impl CrisisKind {
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::MilitaryOverreach => "military_overreach",
             CrisisKind::PublicInquiry => "public_inquiry",
+            CrisisKind::Infodemic { .. } => "infodemic",
+            CrisisKind::SanctionsThreat { .. } => "sanctions",
         }
     }
 }

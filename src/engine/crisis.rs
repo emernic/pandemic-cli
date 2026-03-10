@@ -1,8 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, SimState,
-    CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
+    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, ScreeningLevel,
+    SimState, CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
 /// Scale a dollar amount relative to current funding.
@@ -1243,6 +1243,54 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::Infodemic { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            CrisisEvent {
+                title: "Infodemic".into(),
+                description: format!(
+                    "Misinformation from the earlier media panic has taken root in {region_name}. \
+                     Health workers report residents hiding symptoms and refusing screening."),
+                option_a: CrisisOption {
+                    label: "Accept reduced visibility".into(),
+                    description: format!("Screening downgraded in {region_name}"),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Counter-information campaign".into(),
+                    description: "Maintain screening, but it takes resources".into(),
+                    cost: Some(CrisisCost {
+                        funding: scaled_cost(state, 0.15, 100.0, 500.0),
+                        personnel: 1,
+                    }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::SanctionsThreat { funding_loss } => {
+            CrisisEvent {
+                title: "Sanctions Threat".into(),
+                description:
+                    "The superpower you sided against in the vaccine dispute is retaliating. \
+                     They're threatening to freeze your international accounts and block supply chains.".into(),
+                option_a: CrisisOption {
+                    label: "Accept sanctions".into(),
+                    description: format!("Lose ¥{funding_loss:.0} and international standing"),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: "Diplomatic back-channel".into(),
+                    description: "Negotiate privately — costs resources but preserves trade".into(),
+                    cost: Some(CrisisCost {
+                        funding: scaled_cost(state, 0.20, 150.0, 600.0),
+                        personnel: 2,
+                    }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
     };
     // INVARIANT: option_a must always be free so the player is never softlocked.
     debug_assert!(event.option_a.cost.is_none(),
@@ -1333,7 +1381,20 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::PersonnelCrisis { amount }, 0) => {
             state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
-            format!("Lost {} personnel to burnout", amount)
+            // If personnel drops below what active research requires, cancel the
+            // most recent field research — not enough staff to sustain it.
+            let research_demand: u32 =
+                state.field_research.iter().map(|p| p.personnel_assigned).sum::<u32>()
+                + state.applied_research.as_ref().map_or(0, |p| p.personnel_assigned)
+                + state.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
+            if research_demand > state.resources.personnel
+                && state.field_research.pop().is_some()
+            {
+                format!("Lost {} personnel to burnout — field research cancelled, not enough staff",
+                    amount)
+            } else {
+                format!("Lost {} personnel to burnout", amount)
+            }
         }
         (CrisisKind::PersonnelCrisis { .. }, _) => {
             "Retention bonuses paid — staff morale restored".into()
@@ -1470,9 +1531,21 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::MediaPanic, 0) => {
-            // Ignore media — lose POL
+            // Ignore media — lose POL + schedule infodemic follow-up
             state.resources.political_power -= 0.08;
-            "Media panic continues unchecked — public confidence dropping".into()
+            // Pick the most-infected non-collapsed region for the infodemic
+            let target = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .max_by(|(_, a), (_, b)| {
+                    let a_inf: f64 = a.infections.iter().map(|i| i.infected).sum();
+                    let b_inf: f64 = b.infections.iter().map(|i| i.infected).sum();
+                    a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
+            "Media panic continues unchecked — misinformation spreading".into()
         }
         (CrisisKind::MediaPanic, _) => {
             // Press conference — gain POL (costs already deducted)
@@ -1510,10 +1583,24 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Fast-tracked {} treatment — deployed at reduced efficacy", name)
         }
 
-        (CrisisKind::VaccineHesitancy { .. }, 0) => {
-            // Mandate — lose POL
+        (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
+            // Mandate — lose POL + governor loyalty drops + possible nationalist rebellion
             state.resources.political_power -= 0.10;
-            "Vaccine mandate imposed — effective but deeply unpopular".into()
+            let mut governor_rebels = false;
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.loyalty = (region.governor.loyalty - 15.0).max(0.0);
+                // If loyalty drops below 30, governor may rebel against federal overreach
+                if region.governor.loyalty < 30.0 {
+                    governor_rebels = true;
+                }
+            }
+            if governor_rebels {
+                let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
+                state.pending_crises.push((followup_tick, CrisisKind::GovernorNationalist { region_idx: *region_idx }));
+                "Vaccine mandate imposed — governor furious, threatening to defy federal authority".into()
+            } else {
+                "Vaccine mandate imposed — effective but deeply resented".into()
+            }
         }
         (CrisisKind::VaccineHesitancy { region_idx }, _) => {
             // Education campaign — costs already deducted, gain POL
@@ -1614,10 +1701,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Declined the billionaire's offer — team morale intact".into()
         }
         (CrisisKind::BillionaireOffer { reward, personnel_loss }, _) => {
-            // Accept — gain funding, lose personnel
+            // Accept — gain funding, lose personnel, basic research disrupted
             state.resources.funding += reward;
             state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
-            format!("Accepted the deal — ¥{:.0} received, but {} researchers quit in protest",
+            // Billionaire's team redirected basic research priorities — 2 days of progress lost
+            if let Some(proj) = &mut state.basic_research {
+                let loss = 2.0 * TICKS_PER_DAY as f64;
+                proj.progress = (proj.progress - loss).max(0.0);
+            }
+            format!("Accepted the deal — ¥{:.0} received, {} researchers quit, basic research disrupted",
                 reward, personnel_loss)
         }
 
@@ -1656,10 +1748,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Stayed neutral — both superpowers cut ¥{:.0} in aid", neutral_loss)
         }
         (CrisisKind::VaccineDispute { credit_gain, .. }, _) => {
-            // Credit one side — gain funding, lose POL
+            // Credit one side — gain funding, lose POL, schedule retaliation
             state.resources.funding += credit_gain;
             state.resources.political_power -= 0.15;
-            format!("Picked a side — ¥{:.0} from the winner, furious allies of the loser", credit_gain)
+            let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
+            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss }));
+            format!("Picked a side — ¥{:.0} from the winner. The loser won't forget this.", credit_gain)
         }
 
         // --- Dark comedy event resolutions ---
@@ -1910,6 +2005,37 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Stonewall — massive POL loss
             state.resources.political_power -= 0.20;
             "Stonewalled the inquiry — public outrage intensifies".into()
+        }
+
+        (CrisisKind::Infodemic { region_idx }, 0) => {
+            // Accept reduced visibility — downgrade screening by one level
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            if let Some(policy) = state.policies.get_mut(*region_idx) {
+                policy.screening = match policy.screening {
+                    ScreeningLevel::MassRapid => ScreeningLevel::Antigen,
+                    ScreeningLevel::Antigen => ScreeningLevel::Basic,
+                    ScreeningLevel::Basic | ScreeningLevel::None => ScreeningLevel::None,
+                };
+            }
+            format!("Screening downgraded in {} — misinformation too entrenched to fight", region_name)
+        }
+        (CrisisKind::Infodemic { region_idx }, _) => {
+            // Counter-information campaign — costs already deducted, screening maintained
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            format!("Counter-information campaign in {} — screening maintained", region_name)
+        }
+
+        (CrisisKind::SanctionsThreat { funding_loss }, 0) => {
+            // Accept sanctions — lose funding + POL hit
+            state.resources.funding = (state.resources.funding - funding_loss).max(0.0);
+            state.resources.political_power -= 0.10;
+            format!("Sanctions imposed — ¥{:.0} frozen. International standing damaged.", funding_loss)
+        }
+        (CrisisKind::SanctionsThreat { .. }, _) => {
+            // Diplomatic back-channel — costs already deducted, trade preserved
+            "Back-channel negotiations successful — sanctions averted".into()
         }
     };
     // Clamp POL after crisis modifications
