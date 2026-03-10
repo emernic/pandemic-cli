@@ -78,8 +78,9 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
             return StopReason::CrisisStarted;
         }
 
-        // Pause event (disease detection, collapse, breakthrough, etc.):
-        // stop and show the paused screen.
+        // Pause state: stop and show the screen. Currently this path is only
+        // reached if future code adds a new SimState::Paused transition during ticks
+        // (game over sets Paused but is caught above by outcome check).
         if state.sim_state == SimState::Paused {
             let description = describe_pause_events(&state.events);
             return StopReason::GamePaused { event_description: description };
