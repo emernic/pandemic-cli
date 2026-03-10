@@ -25,17 +25,23 @@ Tell the user what you found and what you did (created a new cron, or found an e
 
 ## Step 2: Launch a Worker Claude Process
 
-Launch a new Claude process **in the background** — not a sub-agent. Use the `Bash` tool with `run_in_background: true` so it detaches and runs independently. The process needs `CLAUDECODE` unset to avoid the nested-session guard, and `--dangerously-skip-permissions` to operate autonomously.
+Launch a new Claude process **in the background** — not a sub-agent. Use the `Bash` tool with `run_in_background: true` so it detaches and runs independently.
 
-```
-Bash(
-  command="unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue'",
-  run_in_background=true
-)
+Two things are required for this to work:
+- `unset CLAUDECODE` — claude refuses to start inside an existing Claude Code session without this
+- `--dangerously-skip-permissions` — allows the worker to operate autonomously
+
+Command to run (with `run_in_background: true`):
+```bash
+unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue'
 ```
 
 After launching, tell the user the worker is running.
 
-## That's It
+## What to Expect
 
-You're done. The cron loop ensures a fresh worker-manager call every 30 minutes, and the worker process is now independently picking up and completing a GitHub issue. No further action needed from you.
+**Worker output is not observable while it runs.** The task output file is cleaned up before the completion notification arrives, so there is no log to read. The only way to see what a worker did is to check GitHub: recent commits to master, merged PRs, or newly removed `in-progress` labels on issues.
+
+**`-p '/pick-up-issue'` does invoke the skill.** This was verified — the worker loads the skill files and runs the full pick-up-issue loop autonomously, including claiming an issue, branching, implementing, and merging.
+
+The cron loop fires every 30 minutes, spawning a fresh worker each time. No further action needed from you.
