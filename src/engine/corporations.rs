@@ -217,14 +217,8 @@ pub(super) fn tick_corporations(state: &mut GameState) {
     }
 }
 
-/// Compute total corporate tax contribution per tick (replaces old region_base_income).
-/// Used by GameState::funding_income_rate().
-pub fn corporate_income_per_tick(state: &GameState) -> f64 {
-    state.corporations.iter().map(|c| c.tax_contribution()).sum()
-}
-
-/// Board satisfaction: average reserves fraction of board-seat corporations (0.0 to 1.0).
-/// When this drops too low, the player faces consequences.
+/// Board satisfaction: average health of board-seat corporations (0.0 to 1.0).
+/// Consumed by crisis system and defeat conditions (not yet wired up).
 pub fn board_satisfaction(state: &GameState) -> f64 {
     let board_corps: Vec<&Corporation> =
         state.corporations.iter().filter(|c| c.board_seat).collect();
