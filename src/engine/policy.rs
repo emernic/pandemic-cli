@@ -1,7 +1,9 @@
 use crate::state::{
-    CrisisKind, GameEvent, GameState, RegionTrait, ScreeningLevel, policy_display_name,
+    CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
+    policy_display_name,
     BORDER_CONTROLS_PERSONNEL,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
+    GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
     HOSPITAL_SURGE_PERSONNEL,
     MARTIAL_LAW_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
@@ -336,7 +338,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
 
         // Severity drain: governors react to infection levels using the
         // shared severity thresholds (CRIT/HIGH/MOD) from state.rs.
-        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD, GOVERNOR_DEFIANCE_THRESHOLD};
+        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
         let severity_drain = if infected > SEVERITY_CRIT_THRESHOLD {
             -0.008 // CRIT: ~0.96/day
         } else if infected > SEVERITY_HIGH_THRESHOLD {
@@ -354,7 +356,6 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         let policy_drain = -restrictive_count * 0.003; // ~0.36/day per policy
 
         // Personality modifiers
-        use crate::state::GovernorPersonality;
         let personality_mod = match personality {
             GovernorPersonality::Cooperative => 0.002, // passive loyalty gain (~0.24/day)
             GovernorPersonality::Nationalist => {
@@ -420,6 +421,94 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         // Reset the flag when loyalty recovers above defiance threshold
         if new_loyalty >= GOVERNOR_DEFIANCE_THRESHOLD && state.regions[i].governor.defiance_crisis_fired {
             state.regions[i].governor.defiance_crisis_fired = false;
+        }
+    }
+}
+
+/// Tick autonomous governor actions. Defiant governors periodically act against
+/// the player based on personality. Called from tick().
+pub(super) fn tick_governor_actions(state: &mut GameState) {
+    let tick = state.tick;
+    let num_regions = state.regions.len();
+
+    for i in 0..num_regions {
+        if state.regions[i].collapsed {
+            continue;
+        }
+        let gov = &state.regions[i].governor;
+        if gov.loyalty >= GOVERNOR_DEFIANCE_THRESHOLD {
+            continue;
+        }
+        // Check cooldown
+        if tick.saturating_sub(gov.last_action_tick) < GOVERNOR_ACTION_INTERVAL {
+            continue;
+        }
+
+        let personality = gov.personality;
+        let gov_name = gov.name.clone();
+        let region_name = state.regions[i].name.clone();
+
+        let action_desc = match personality {
+            GovernorPersonality::Populist => {
+                // Lift the first active restrictive policy
+                let policy = &state.policies[i];
+                let active: Vec<&str> = [
+                    (policy.travel_ban, "travel_ban"),
+                    (policy.quarantine, "quarantine"),
+                    (policy.martial_law, "martial_law"),
+                    (policy.border_controls, "border_controls"),
+                ].iter()
+                    .filter(|(active, _)| *active)
+                    .map(|(_, name)| *name)
+                    .collect();
+                if let Some(&target) = active.first() {
+                    let label = match target {
+                        "travel_ban" => { state.policies[i].travel_ban = false; "Travel Ban" }
+                        "quarantine" => { state.policies[i].quarantine = false; "Quarantine" }
+                        "martial_law" => { state.policies[i].martial_law = false; "Martial Law" }
+                        "border_controls" => { state.policies[i].border_controls = false; "Border Controls" }
+                        _ => unreachable!(),
+                    };
+                    Some(format!("{gov_name} lifted {label} in {region_name}"))
+                } else {
+                    None // No restrictive policies to lift
+                }
+            }
+            GovernorPersonality::Nationalist => {
+                // Unilaterally enable border controls
+                if !state.policies[i].border_controls {
+                    state.policies[i].border_controls = true;
+                    Some(format!("{gov_name} closed borders in {region_name}"))
+                } else {
+                    None // Already closed
+                }
+            }
+            GovernorPersonality::Technocrat => {
+                // Steal 1 personnel for "independent research"
+                if state.resources.personnel > 1 {
+                    state.resources.personnel -= 1;
+                    Some(format!("{gov_name} reassigned a researcher in {region_name}"))
+                } else {
+                    None
+                }
+            }
+            GovernorPersonality::Cooperative => {
+                // Leak to media — small POL drain
+                if state.resources.political_power > 0.0 {
+                    state.resources.political_power = (state.resources.political_power - 0.03).max(0.0);
+                    Some(format!("{gov_name} leaked reports to media in {region_name}"))
+                } else {
+                    None
+                }
+            }
+        };
+
+        if let Some(desc) = action_desc {
+            state.regions[i].governor.last_action_tick = tick;
+            state.events.push(GameEvent::GovernorAction {
+                region_idx: i,
+                description: desc,
+            });
         }
     }
 }
@@ -1106,5 +1195,105 @@ mod tests {
 
         assert!(unidentified_loyalty < identified_loyalty,
             "Technocrat should have lower loyalty with unidentified disease ({unidentified_loyalty:.1}) vs identified ({identified_loyalty:.1})");
+    }
+
+    // --- Governor autonomous action tests ---
+
+    fn defiant_governor_state(personality: GovernorPersonality) -> GameState {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.personality = personality;
+        state.regions[0].governor.loyalty = 20.0; // well below defiance threshold (40)
+        state.regions[0].governor.last_action_tick = 0;
+        state.tick = GOVERNOR_ACTION_INTERVAL + 1; // past cooldown
+        state
+    }
+
+    #[test]
+    fn populist_governor_lifts_restrictive_policy() {
+        let mut state = defiant_governor_state(GovernorPersonality::Populist);
+        state.policies[0].border_controls = true;
+
+        tick_governor_actions(&mut state);
+
+        assert!(!state.policies[0].border_controls,
+            "Populist governor should lift border controls");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("lifted"))
+        ), "should emit GovernorAction event about lifting a policy");
+    }
+
+    #[test]
+    fn populist_governor_no_action_without_restrictive_policies() {
+        let mut state = defiant_governor_state(GovernorPersonality::Populist);
+        // No restrictive policies active
+
+        tick_governor_actions(&mut state);
+
+        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
+            "Populist with no restrictive policies should take no action");
+    }
+
+    #[test]
+    fn nationalist_governor_closes_borders() {
+        let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
+        assert!(!state.policies[0].border_controls);
+
+        tick_governor_actions(&mut state);
+
+        assert!(state.policies[0].border_controls,
+            "Nationalist governor should enable border controls");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("closed borders"))
+        ));
+    }
+
+    #[test]
+    fn technocrat_governor_steals_personnel() {
+        let mut state = defiant_governor_state(GovernorPersonality::Technocrat);
+        let before = state.resources.personnel;
+
+        tick_governor_actions(&mut state);
+
+        assert_eq!(state.resources.personnel, before - 1,
+            "Technocrat governor should steal 1 personnel");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("reassigned"))
+        ));
+    }
+
+    #[test]
+    fn cooperative_governor_drains_political_power() {
+        let mut state = defiant_governor_state(GovernorPersonality::Cooperative);
+        state.resources.political_power = 0.50;
+
+        tick_governor_actions(&mut state);
+
+        assert!(state.resources.political_power < 0.50,
+            "Cooperative governor should drain political power");
+        assert!(state.events.iter().any(|e|
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("leaked"))
+        ));
+    }
+
+    #[test]
+    fn governor_actions_respect_cooldown() {
+        let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
+        state.regions[0].governor.last_action_tick = state.tick; // just acted
+
+        tick_governor_actions(&mut state);
+
+        assert!(!state.policies[0].border_controls,
+            "Governor should not act when still on cooldown");
+    }
+
+    #[test]
+    fn governor_actions_only_fire_when_defiant() {
+        let mut state = defiant_governor_state(GovernorPersonality::Nationalist);
+        state.regions[0].governor.loyalty = 50.0; // above threshold
+
+        tick_governor_actions(&mut state);
+
+        assert!(!state.policies[0].border_controls,
+            "Governor above defiance threshold should not act");
     }
 }

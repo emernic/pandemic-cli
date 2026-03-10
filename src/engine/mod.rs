@@ -59,6 +59,9 @@ pub fn tick(state: &GameState) -> GameState {
     // Governor loyalty drift — reacts to policies, deaths, and personality.
     policy::tick_governor_loyalty(&mut new);
 
+    // Governor autonomous actions — defiant governors act against the player.
+    policy::tick_governor_actions(&mut new);
+
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;

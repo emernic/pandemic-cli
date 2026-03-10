@@ -875,6 +875,9 @@ pub struct Governor {
     /// Reset when loyalty recovers above defiance threshold.
     #[serde(default)]
     pub defiance_crisis_fired: bool,
+    /// Tick when the governor last took an autonomous defiance action.
+    #[serde(default)]
+    pub last_action_tick: u64,
 }
 
 /// Infection count thresholds for region severity levels.
@@ -895,6 +898,8 @@ pub const GOVERNOR_COOPERATION_COST_MULT: f64 = 0.8;
 pub const APPEASE_COST: f64 = 200.0;
 /// Loyalty gain from appease action.
 pub const APPEASE_LOYALTY_GAIN: f64 = 15.0;
+/// Ticks between autonomous governor defiance actions (~2 days).
+pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
 
 impl Governor {
     /// Returns true if this governor is defiant (loyalty below threshold).
@@ -991,6 +996,7 @@ fn default_governor() -> Governor {
         personality: GovernorPersonality::Cooperative,
         loyalty: 70.0,
         defiance_crisis_fired: false,
+        last_action_tick: 0,
     }
 }
 
@@ -2472,6 +2478,11 @@ pub enum GameEvent {
     ArkProtocolActivated {
         region_idx: usize,
     },
+    /// A defiant governor took an autonomous action.
+    GovernorAction {
+        region_idx: usize,
+        description: String,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -3485,6 +3496,7 @@ impl GameState {
                     personality: GovernorPersonality::Nationalist,
                     loyalty: 65.0,
                     defiance_crisis_fired: false,
+                    last_action_tick: 0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
@@ -3509,6 +3521,7 @@ impl GameState {
                     personality: GovernorPersonality::Populist,
                     loyalty: 70.0,
                     defiance_crisis_fired: false,
+                    last_action_tick: 0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
@@ -3533,6 +3546,7 @@ impl GameState {
                     personality: GovernorPersonality::Technocrat,
                     loyalty: 75.0,
                     defiance_crisis_fired: false,
+                    last_action_tick: 0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
@@ -3557,6 +3571,7 @@ impl GameState {
                     personality: GovernorPersonality::Populist,
                     loyalty: 60.0,
                     defiance_crisis_fired: false,
+                    last_action_tick: 0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
@@ -3581,6 +3596,7 @@ impl GameState {
                     personality: GovernorPersonality::Cooperative,
                     loyalty: 70.0,
                     defiance_crisis_fired: false,
+                    last_action_tick: 0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
@@ -3605,6 +3621,7 @@ impl GameState {
                     personality: GovernorPersonality::Nationalist,
                     loyalty: 75.0,
                     defiance_crisis_fired: false,
+                    last_action_tick: 0,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
