@@ -445,7 +445,12 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     lines.push(Line::from(""));
 
     let defeat_msg = if state.mercy_rule {
-        "  No funding, no research, no medicine. The pandemic runs its course.".to_string()
+        let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
+        if collapsed >= 4 {
+            format!("  {collapsed} of {} regions lost. No viable research remains.", state.regions.len())
+        } else {
+            "  No funding, no research, no medicine. The pandemic runs its course.".to_string()
+        }
     } else {
         let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
         format!("  All {collapsed} regions collapsed. Global health infrastructure has ceased to function.")
