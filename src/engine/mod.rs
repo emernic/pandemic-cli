@@ -342,7 +342,7 @@ pub fn tick(state: &GameState) -> GameState {
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
 
             // Apply network disruption to connected non-collapsed regions.
-            // Policy costs +30%, medicine deploy costs +50% for 10 days.
+            // Medicine deployment costs +50% for 10 days (see DISRUPTION_MEDICINE_COST_MULT).
             let disruption_end = new.tick + COLLAPSE_DISRUPTION_TICKS;
             let connected: Vec<usize> = new.regions[i].connections.clone();
             for &c in &connected {
