@@ -269,7 +269,8 @@ fn render_region_box(
             )));
         } else {
             let mut stats = Vec::new();
-            stats.push(Span::styled("Inf ", Style::default().fg(Color::Red)));
+            let inf_label = if visibility < 1.0 { "Inf~ " } else { "Inf " };
+            stats.push(Span::styled(inf_label, Style::default().fg(Color::Red)));
             stats.push(Span::styled(
                 format_number(infected),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
@@ -409,7 +410,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled(format_number(pop), val),
         Span::styled("  Alive ", label),
         Span::styled(format_number(alive), Style::default().fg(Color::Green)),
-        Span::styled("  Infected ", label),
+        Span::styled(if visibility < 1.0 { "  Infected~ " } else { "  Infected " }, label),
         Span::styled(format_number(infected), Style::default().fg(Color::Red)),
     ];
     if shows_immune {
