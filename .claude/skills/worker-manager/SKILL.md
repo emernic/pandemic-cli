@@ -59,7 +59,7 @@ Two things are required for this to work:
 
 This requires **two separate Bash tool calls**. Do not combine them into one command.
 
-**⚠️ Why two calls?** The first call runs synchronously so you can read its output and know the exact log path. If you combine both into one command, you'll never see the path — it gets swallowed into the background process — and you'll have no way to tell the user where to find the logs. Multiple workers run concurrently; guessing or globbing won't work.
+**⚠️ Why two calls?** The first call runs synchronously so you can read its output and know the exact log path. If you combine both into one command, you'll never see the path — it gets swallowed into the background process — and you'll have no way to tell the user where to find the logs. Multiple past worker logs may exist; guessing or globbing the path won't work.
 
 **Bash call 1** — synchronous, no `run_in_background`:
 ```bash
