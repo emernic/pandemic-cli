@@ -160,6 +160,12 @@ pub const BURNOUT_CHANCE_PER_TICK: f64 = 0.002;
 /// Duration of burnout recovery: 360 ticks = 3 days.
 pub const BURNOUT_RECOVERY_TICKS: u64 = 360;
 
+/// Base per-tick infection chance for field researchers (~0.03% per tick ≈ ~3.6% per day).
+/// Scaled by global infection severity and scientist trait.
+pub const FIELD_INFECTION_CHANCE_PER_TICK: f64 = 0.0003;
+/// Duration of field infection recovery: 480 ticks = 4 days.
+pub const FIELD_INFECTION_RECOVERY_TICKS: u64 = 480;
+
 // Medicine constants.
 /// Fraction of infected treated per deployment (before efficacy modifiers).
 /// Treatment is proportional — scales with infection size instead of fixed dose count.
@@ -476,6 +482,8 @@ impl ScientistTrait {
 pub enum ScientistStatus {
     Available,
     BurnedOut { until_tick: u64 },
+    /// Contracted a disease during field research. Temporarily unavailable.
+    Infected { until_tick: u64 },
     Dead,
 }
 
@@ -2325,6 +2333,8 @@ pub enum GameEvent {
     PersonnelAttrition { count: u32 },
     /// A scientist burned out from overwork and is temporarily unavailable.
     ScientistBurnout { scientist_name: String },
+    /// A scientist contracted a disease during field research.
+    ScientistInfected { scientist_name: String },
     /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
     /// from one bacterium to another.
     ResistanceTransferred {
