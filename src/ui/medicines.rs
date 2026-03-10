@@ -31,8 +31,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(MedicineUiState::SelectTarget { medicine_idx, region_idx, disease_idx }) => {
             render_select_target(state, *medicine_idx, *region_idx, *disease_idx)
         }
-        Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
-            render_confirm_deploy(state, *medicine_idx, *region_idx, *target_selection)
+        Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target }) => {
+            render_confirm_deploy(state, *medicine_idx, *region_idx, target)
         }
         Some(MedicineUiState::DeployResult { medicine_idx, message, adverse }) => {
             render_deploy_result(state, *medicine_idx, message, *adverse)
@@ -483,23 +483,21 @@ fn render_confirm_deploy(
     state: &GameState,
     medicine_idx: usize,
     region_idx: usize,
-    target_selection: usize,
+    target: &DeployTarget,
 ) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let med = &state.medicines[medicine_idx];
     let region = &state.regions[region_idx];
-    let target = med.decode_deploy_target(target_selection, &state.diseases);
 
-    let (action_desc, disease_name) = match &target {
-        Some(DeployTarget::Vaccinate { disease_idx }) => {
+    let (action_desc, disease_name) = match target {
+        DeployTarget::Vaccinate { disease_idx } => {
             let name = state.diseases[*disease_idx].display_name(*disease_idx);
             (format!("Protect {} against {}", region.name, name), name)
         }
-        Some(DeployTarget::Treat { disease_idx }) => {
+        DeployTarget::Treat { disease_idx } => {
             let name = state.diseases[*disease_idx].display_name(*disease_idx);
             (format!("Treat {} in {}", name, region.name), name)
         }
-        None => ("Deploy".to_string(), "Unknown".to_string()),
     };
 
     lines.push(Line::from(""));

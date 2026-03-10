@@ -15,7 +15,7 @@ pub(super) fn deploy_medicine(
     state: &mut GameState,
     medicine_idx: usize,
     region_idx: usize,
-    target_selection: usize,
+    target: DeployTarget,
 ) -> (bool, Option<String>, bool) {
     // Block after game over
     if state.outcome != GameOutcome::Playing {
@@ -36,86 +36,81 @@ pub(super) fn deploy_medicine(
     let med = &state.medicines[medicine_idx];
     let cost = med.deploy_cost(state.regions[region_idx].population);
     let med_name = med.name.clone();
-    let target = med.decode_deploy_target(target_selection, &state.diseases);
 
-    if let Some(target) = target {
-        if state.resources.funding < cost {
-            return (false, Some(insufficient_funds_message(cost, state.resources.funding)), false);
-        }
-        if state.medicines[medicine_idx].doses <= 0.0 {
-            return (false, Some(format!("No doses remaining for {med_name} — manufacture more via Research")), false);
-        }
-
-        let disease_idx = match &target {
-            DeployTarget::Vaccinate { disease_idx } => *disease_idx,
-            DeployTarget::Treat { disease_idx } => *disease_idx,
-        };
-
-        let efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
-        let vax_mult = state.vaccination_multiplier();
-        let region = &mut state.regions[region_idx];
-        let region_name = region.name.clone();
-        let pop = region.population as f64;
-
-        // Look up existing infection state (don't create yet — avoid ghost entries)
-        let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
-        let infected = existing.map(|i| i.infected).unwrap_or(0.0);
-        let dead = region.dead;
-        let immune = existing.map(|i| i.immune).unwrap_or(0.0);
-
-        let is_tested = state.medicines[medicine_idx]
-            .tested_against
-            .contains(&disease_idx);
-
-        let (mut msg, adverse) = match target {
-            DeployTarget::Vaccinate { .. } => {
-                let susceptible = (pop - infected - dead - immune).max(0.0);
-                let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
-                if actual > 0.0 {
-                    let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
-                    let inf = region.get_or_create_infection(disease_idx);
-                    apply_immune_and_deaths(inf, actual, adverse_deaths);
-                    region.dead += adverse_deaths;
-                    deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
-                    build_resistance(state, medicine_idx, disease_idx, false);
-                    (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse_deaths, efficacy), adverse)
-                } else {
-                    (format!("No susceptible population in {region_name}"), false)
-                }
-            }
-            DeployTarget::Treat { .. } => {
-                let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
-                if actual > 0.0 {
-                    let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
-                    let inf = region.get_or_create_infection(disease_idx);
-                    inf.infected -= actual;
-                    apply_immune_and_deaths(inf, actual, adverse_deaths);
-                    region.dead += adverse_deaths;
-                    deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
-                    build_resistance(state, medicine_idx, disease_idx, true);
-                    (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse_deaths, efficacy), adverse)
-                } else {
-                    (format!("No infected population in {region_name}"), false)
-                }
-            }
-        };
-
-        // Warn if resistance is building — the player needs to know their medicine
-        // is becoming less effective so they can research alternatives.
-        if let Some(disease) = state.diseases.get(disease_idx) {
-            let mech = state.medicines[medicine_idx].mechanism;
-            let res_factor = disease.resistance_factor(mech);
-            if res_factor < 0.5 {
-                msg += " \u{26a0} HIGH RESISTANCE — consider alternative therapy";
-            } else if res_factor < 0.7 {
-                msg += " \u{26a0} Resistance building — efficacy declining";
-            }
-        }
-
-        return (true, Some(msg), adverse);
+    if state.resources.funding < cost {
+        return (false, Some(insufficient_funds_message(cost, state.resources.funding)), false);
+    }
+    if state.medicines[medicine_idx].doses <= 0.0 {
+        return (false, Some(format!("No doses remaining for {med_name} — manufacture more via Research")), false);
     }
 
-    (false, None, false)
+    let disease_idx = match &target {
+        DeployTarget::Vaccinate { disease_idx } => *disease_idx,
+        DeployTarget::Treat { disease_idx } => *disease_idx,
+    };
+
+    let efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
+    let vax_mult = state.vaccination_multiplier();
+    let region = &mut state.regions[region_idx];
+    let region_name = region.name.clone();
+    let pop = region.population as f64;
+
+    // Look up existing infection state (don't create yet — avoid ghost entries)
+    let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+    let infected = existing.map(|i| i.infected).unwrap_or(0.0);
+    let dead = region.dead;
+    let immune = existing.map(|i| i.immune).unwrap_or(0.0);
+
+    let is_tested = state.medicines[medicine_idx]
+        .tested_against
+        .contains(&disease_idx);
+
+    let (mut msg, adverse) = match target {
+        DeployTarget::Vaccinate { .. } => {
+            let susceptible = (pop - infected - dead - immune).max(0.0);
+            let actual = state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult);
+            if actual > 0.0 {
+                let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
+                let inf = region.get_or_create_infection(disease_idx);
+                apply_immune_and_deaths(inf, actual, adverse_deaths);
+                region.dead += adverse_deaths;
+                deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
+                build_resistance(state, medicine_idx, disease_idx, false);
+                (deploy_feedback(&med_name, &region_name, "Protected", actual, cost, adverse_deaths, efficacy), adverse)
+            } else {
+                (format!("No susceptible population in {region_name}"), false)
+            }
+        }
+        DeployTarget::Treat { .. } => {
+            let actual = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
+            if actual > 0.0 {
+                let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
+                let inf = region.get_or_create_infection(disease_idx);
+                inf.infected -= actual;
+                apply_immune_and_deaths(inf, actual, adverse_deaths);
+                region.dead += adverse_deaths;
+                deduct_deploy_costs(state, medicine_idx, region_idx, cost, actual);
+                build_resistance(state, medicine_idx, disease_idx, true);
+                (deploy_feedback(&med_name, &region_name, "Treated", actual, cost, adverse_deaths, efficacy), adverse)
+            } else {
+                (format!("No infected population in {region_name}"), false)
+            }
+        }
+    };
+
+    // Warn if resistance is building — the player needs to know their medicine
+    // is becoming less effective so they can research alternatives.
+    if let Some(disease) = state.diseases.get(disease_idx) {
+        let mech = state.medicines[medicine_idx].mechanism;
+        let res_factor = disease.resistance_factor(mech);
+        if res_factor < 0.5 {
+            msg += " \u{26a0} HIGH RESISTANCE — consider alternative therapy";
+        } else if res_factor < 0.7 {
+            msg += " \u{26a0} Resistance building — efficacy declining";
+        }
+    }
+
+    (true, Some(msg), adverse)
 }
 
 /// Roll for adverse reaction on untested medicines.
@@ -252,17 +247,10 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
-            // Compute target_selection for treatment: deployable diseases come first
-            // as vaccinate options, then treatment options. Treatment index = n + position.
-            let n = deployable.len();
-            let target_selection = if let Some(pos) = deployable.iter().position(|&d| d == best_disease_idx) {
-                n + pos // Treatment target
-            } else {
-                continue;
-            };
+            let target = DeployTarget::Treat { disease_idx: best_disease_idx };
 
             let (success, _msg, _adverse) = deploy_medicine(
-                state, med_idx, region_idx, target_selection,
+                state, med_idx, region_idx, target,
             );
             if success {
                 state.events.push(GameEvent::MedicineAutoDeployed {

@@ -370,10 +370,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         GameCommand::DeployMedicine {
             medicine_idx,
             region_idx,
-            target_selection,
+            target,
         } => {
             let (success, msg, adverse) =
-                medicine::deploy_medicine(state, *medicine_idx, *region_idx, *target_selection);
+                medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone());
             CommandResult { message: msg, success, adverse }
         }
         GameCommand::StartResearch { track, project_idx, double_personnel } => {
@@ -419,7 +419,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{CrisisKind, GameState, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
+    use crate::state::{CrisisKind, DeployTarget, GameState, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -1960,7 +1960,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick = None;
-            let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1); // target_selection 1 = Treat
+            let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget::Treat { disease_idx });
         }
 
         let after_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
@@ -1982,7 +1982,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick = None;
-            let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, 1);
+            let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget::Treat { disease_idx });
         }
 
         let bs_res = state.medicines[bs_idx].resistance_factor(disease_idx, &state.diseases);
@@ -3653,7 +3653,8 @@ mod tests {
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
 
         // First deploy should succeed
-        let (nav, msg, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
+        let treat = DeployTarget::Treat { disease_idx };
+        let (nav, msg, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav, "first deploy should succeed");
         assert!(msg.unwrap().contains("Treated"), "should show treatment message");
 
@@ -3663,7 +3664,7 @@ mod tests {
         // Second deploy at same tick should be blocked
         state.resources.funding = 1_000_000.0;
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
-        let (nav2, msg2, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
+        let (nav2, msg2, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(!nav2, "second deploy should be blocked by cooldown");
         assert!(msg2.unwrap().contains("cooldown"), "should mention cooldown");
 
@@ -3671,7 +3672,7 @@ mod tests {
         state.tick = crate::state::DEPLOY_COOLDOWN_TICKS + 1;
         state.resources.funding = 1_000_000.0;
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
-        let (nav3, msg3, _) = medicine::deploy_medicine(&mut state, med_idx, 0, 1);
+        let (nav3, msg3, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav3, "deploy after cooldown should succeed");
         assert!(msg3.unwrap().contains("Treated"));
 
@@ -3680,7 +3681,7 @@ mod tests {
         state.regions[0].last_deploy_tick = Some(0);
         state.regions[1].get_or_create_infection(disease_idx).infected = 50_000.0;
         state.resources.funding = 1_000_000.0;
-        let (nav4, _, _) = medicine::deploy_medicine(&mut state, med_idx, 1, 1);
+        let (nav4, _, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone());
         assert!(nav4, "deploying to different region should work during cooldown");
     }
 
