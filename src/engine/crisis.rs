@@ -2377,8 +2377,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     };
     // Clamp POL after crisis modifications
     state.resources.political_power = state.resources.political_power.clamp(0.0, 1.0);
-    // Keep scientist roster in sync with personnel count changes
-    state.sync_scientists_to_personnel();
     // Restore sim state from Event mode. When the player manually resolves a crisis,
     // sim_state is Event { was_running }. We restore Running or Paused here so callers
     // don't need to know about this hidden rule. In the auto-resolve path (called from
