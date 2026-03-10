@@ -3396,16 +3396,17 @@ impl UiState {
                     // regions+DECREE_COUNT+1..regions+DECREE_COUNT+2 = standing orders (2 items)
                     state.regions.len() + 1 + DECREE_COUNT + 2 - 1
                 }
-                // Policies (0..POLICY_COUNT-1) + Appease Governor (POLICY_COUNT)
-                // + Bargain (POLICY_COUNT+1, only when defiant & available)
-                // Appease is hidden for collapsed regions, so max is one less.
+                // Policies (0..POLICY_COUNT-1) + Repair HC/SL/CO (POLICY_COUNT..POLICY_COUNT+2)
+                // + Appease Governor (POLICY_COUNT+3)
+                // + Bargain (POLICY_COUNT+4, only when defiant & available)
+                // Repair/Appease are hidden for collapsed regions, so max is one less.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
                     if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
                         POLICY_COUNT - 1
                     } else if state.bargain_available(*region_idx) {
-                        POLICY_COUNT + 1
+                        POLICY_COUNT + 4
                     } else {
-                        POLICY_COUNT
+                        POLICY_COUNT + 3
                     }
                 }
                 Some(PolicyUiState::SelectSacrificeRegion) => {
@@ -3752,12 +3753,20 @@ impl UiState {
                 }
             }
             Some(PolicyUiState::ManagePolicies { region_idx }) => {
-                if self.panel_selection == POLICY_COUNT + 1 {
-                    // Bargain with Governor (below Appease, only when defiant)
+                if self.panel_selection == POLICY_COUNT + 4 {
+                    // Bargain with Governor (only when defiant)
                     Some(GameCommand::BargainWithGovernor { region_idx })
-                } else if self.panel_selection == POLICY_COUNT {
+                } else if self.panel_selection == POLICY_COUNT + 3 {
                     // Appease Governor
                     Some(GameCommand::AppeaseGovernor { region_idx })
+                } else if self.panel_selection >= POLICY_COUNT {
+                    // Repair infrastructure (POLICY_COUNT=HC, +1=SL, +2=CO)
+                    let system = match self.panel_selection - POLICY_COUNT {
+                        0 => InfraSystem::Healthcare,
+                        1 => InfraSystem::SupplyLines,
+                        _ => InfraSystem::CivilOrder,
+                    };
+                    Some(GameCommand::RepairInfrastructure { region_idx, system })
                 } else {
                     // Toggle policy (panel_selection matches policy_idx)
                     Some(GameCommand::TogglePolicy {

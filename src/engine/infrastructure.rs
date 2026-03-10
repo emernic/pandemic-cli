@@ -1,7 +1,6 @@
 use crate::state::{
-    GameEvent, GameState, InfraSystem, INFRA_CRITICAL, INFRA_REPAIR_COST, INFRA_STRESSED,
+    GameEvent, GameState, InfraSystem, INFRA_CRITICAL, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
-    SUPPLY_REPAIR_COST,
 };
 
 /// Tick infrastructure degradation for all regions. Called once per tick.
