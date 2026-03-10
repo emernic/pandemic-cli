@@ -1916,5 +1916,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     state.resources.political_power = state.resources.political_power.clamp(0.0, 1.0);
     // Keep scientist roster in sync with personnel count changes
     state.sync_scientists_to_personnel();
+    // Restore sim state from Event mode. When the player manually resolves a crisis,
+    // sim_state is Event { was_running }. We restore Running or Paused here so callers
+    // don't need to know about this hidden rule. In the auto-resolve path (called from
+    // activate_crisis() before sim_state is set to Event), this is a no-op.
+    if let SimState::Event { was_running } = state.sim_state {
+        state.sim_state = if was_running { SimState::Running } else { SimState::Paused };
+    }
     msg
 }

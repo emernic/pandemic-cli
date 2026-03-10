@@ -58,10 +58,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
-                // Restore pre-event sim state
-                if let SimState::Event { was_running } = new.sim_state {
-                    new.sim_state = if was_running { SimState::Running } else { SimState::Paused };
-                }
+                // sim_state restoration (Event → Running/Paused) happens inside
+                // crisis::resolve_crisis() — no post-processing needed here.
             }
             Action::Quit => {} // Still allow quit
             _ => {} // Block all other actions during crisis (including TogglePause)
