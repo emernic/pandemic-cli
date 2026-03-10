@@ -291,6 +291,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     // ── Budget breakdown ──
     {
         let gross = state.funding_income_rate() * TICKS_PER_DAY;
+        let contract_income = state.contract_income_rate() * TICKS_PER_DAY;
+        let regional_income = gross - contract_income;
         let upkeep = state.personnel_upkeep_rate() * TICKS_PER_DAY;
         let policy = state.total_policy_funding_cost() * TICKS_PER_DAY;
         let net = gross - upkeep - policy;
@@ -309,7 +311,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let total_penalty = ban_penalty + trade_penalty;
         if total_penalty > 0.0 {
             // Show the pre-penalty income so the player can see the true cost
-            let base_income = gross + total_penalty;
+            let base_income = regional_income + total_penalty;
             lines.push(Line::from(vec![
                 Span::styled("  Income:   ", dim),
                 Span::styled(format!("+¥{:.0}/day", base_income), green),
@@ -332,8 +334,17 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         } else {
             lines.push(Line::from(vec![
                 Span::styled("  Income:   ", dim),
-                Span::styled(format!("+¥{:.0}/day", gross), green),
+                Span::styled(format!("+¥{:.0}/day", regional_income), green),
                 Span::styled(format!("  ({} regions)", alive_regions), dim),
+            ]));
+        }
+
+        // Contract income line
+        if contract_income > 0.0 {
+            lines.push(Line::from(vec![
+                Span::styled("  Contracts:", dim),
+                Span::styled(format!("+¥{:.0}/day", contract_income), green),
+                Span::styled(format!("  ({} active)", state.contracts.len()), dim),
             ]));
         }
 

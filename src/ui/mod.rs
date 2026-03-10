@@ -298,6 +298,12 @@ pub fn process_events(state: &mut GameState) {
                 (2, format!("Network disruption: supply routes through {} severed — {} medicine deployment +50% for 10 days",
                     collapsed, disrupted))
             }
+            GameEvent::ContractOffered { name } => {
+                (5, format!("CONTRACT OFFER: {} — check Policy panel", name))
+            }
+            GameEvent::ContractRevoked { name, reason } => {
+                (2, format!("CONTRACT REVOKED: {} — {}", name, reason))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

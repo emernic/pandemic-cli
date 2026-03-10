@@ -134,6 +134,17 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     new.auto_deploy[med_idx] = !new.auto_deploy[med_idx];
                 }
             }
+            // Reject contract offer when in Policy browse and positioned on the offer
+            else if new.ui.open_panel == Panel::Policy
+                && matches!(new.ui.policy_ui, Some(PolicyUiState::BrowseRegions))
+                && new.contract_offer.is_some()
+            {
+                let contract_pos = new.regions.len() + 1;
+                if new.ui.panel_selection == contract_pos {
+                    let result = execute_command(&mut new, &GameCommand::RejectContract);
+                    new.ui.status_message = result.message;
+                }
+            }
             // Toggle auto-research when browsing categories or projects
             else if let Some(ref ui) = new.ui.research_ui {
                 let track = match ui {

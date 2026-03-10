@@ -355,7 +355,7 @@ mod tests {
     use crate::apply_action;
     use crate::engine::tick;
     use crate::state::{
-        GameOutcome, GameState, ResearchKind, ResearchProject, ResearchTrack, ResearchUiState,
+        GameOutcome, GameState, ResearchKind, ResearchProject, ResearchTrack,
     };
 
     #[test]

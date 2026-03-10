@@ -1,3 +1,4 @@
+pub(crate) mod contracts;
 mod crisis;
 mod disease;
 mod infrastructure;
@@ -65,6 +66,10 @@ pub fn tick(state: &GameState) -> GameState {
 
     // Standing orders — auto-enable policies when severity thresholds are crossed.
     policy::tick_standing_orders(&mut new);
+
+    // Funding contracts — check conditions (revoke violators), offer new contracts.
+    contracts::tick_check_contracts(&mut new);
+    contracts::tick_offer_contracts(&mut new, &mut rng);
 
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
@@ -618,13 +623,20 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (success, msg) = research::upgrade_lab(state);
             CommandResult { message: msg, success }
         }
+        GameCommand::AcceptContract => {
+            let (success, msg) = contracts::accept_contract(state);
+            CommandResult { message: msg, success }
+        }
+        GameCommand::RejectContract => {
+            let (success, msg) = contracts::reject_contract(state);
+            CommandResult { message: msg, success }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
@@ -2446,7 +2458,7 @@ mod tests {
 
     #[test]
     fn early_game_diseases_have_no_preexisting_resistance() {
-        use crate::state::{MechanismOfAction, TICKS_PER_DAY};
+        use crate::state::TICKS_PER_DAY;
         let mut state = GameState::new_default(42);
         state.tick = (5.0 * TICKS_PER_DAY) as u64; // day 5: before threshold
 
@@ -5112,7 +5124,7 @@ mod tests {
 
     #[test]
     fn counter_capability_biases_pathogen_type() {
-        use crate::state::{TherapyType, Medicine};
+        use crate::state::TherapyType;
         use rand::SeedableRng;
 
         // Run many spawns with deployed antiviral medicines and count pathogen types
