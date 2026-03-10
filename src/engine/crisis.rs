@@ -1645,6 +1645,82 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::BoardDemand { severity } => {
+            let satisfaction = crate::engine::corporations::board_satisfaction(state);
+            let placate_cost = if *severity >= 1 {
+                scaled_cost(state, 0.25, 200.0, 1000.0)
+            } else {
+                scaled_cost(state, 0.15, 100.0, 600.0)
+            };
+
+            // Find the most distressed board-seat corporation for flavor text
+            let worst_board_corp = state.corporations.iter()
+                .filter(|c| c.board_seat && !c.bankrupt)
+                .min_by(|a, b| a.reserves_fraction().partial_cmp(&b.reserves_fraction()).unwrap_or(std::cmp::Ordering::Equal));
+            let corp_name = worst_board_corp.map(|c| c.name.as_str()).unwrap_or("The board");
+
+            if *severity >= 1 {
+                // Ultimatum: board satisfaction below 0.3
+                CrisisEvent {
+                    title: "Board Ultimatum".into(),
+                    description: format!(
+                        "{corp_name} has called an emergency board session. \
+                         Corporate revenues are at {:.0}% of baseline. \
+                         The board is threatening to pull funding unless conditions improve.",
+                        satisfaction * 100.0,
+                    ),
+                    options: vec![
+                        CrisisOption {
+                            label: "Lift all restrictions".into(),
+                            description: "Disable quarantine and border controls globally. Board backs down.".into(),
+                            cost: None,
+                        },
+                        CrisisOption {
+                            label: format!("Emergency bailout (¥{placate_cost:.0})"),
+                            description: "Inject cash into board-seat corporations. Buys time.".into(),
+                            cost: Some(CrisisCost { funding: placate_cost, personnel: 0 }),
+                        },
+                        CrisisOption {
+                            label: "Refuse".into(),
+                            description: "Board slashes your operating budget. Lose 15% political power.".into(),
+                            cost: None,
+                        },
+                    ],
+                    kind,
+                    tick_created: tick,
+                }
+            } else {
+                // Standard demand: board satisfaction below 0.5
+                CrisisEvent {
+                    title: "Board Concerns".into(),
+                    description: format!(
+                        "{corp_name} is leading a push on the board. \
+                         Corporate revenues are down and your containment policies are getting the blame. \
+                         Board satisfaction at {:.0}%.",
+                        satisfaction * 100.0,
+                    ),
+                    options: vec![
+                        CrisisOption {
+                            label: "Ease restrictions".into(),
+                            description: "Lift quarantine and border controls in the worst corporate region.".into(),
+                            cost: None,
+                        },
+                        CrisisOption {
+                            label: format!("Concession payment (¥{placate_cost:.0})"),
+                            description: "Inject cash into board-seat corporations. Buys time.".into(),
+                            cost: Some(CrisisCost { funding: placate_cost, personnel: 0 }),
+                        },
+                        CrisisOption {
+                            label: "Stand firm".into(),
+                            description: "Ignore the board. Lose 10% political power.".into(),
+                            cost: None,
+                        },
+                    ],
+                    kind,
+                    tick_created: tick,
+                }
+            }
+        }
     };
     // INVARIANT: at least one option must be free so the player is never softlocked.
     debug_assert!(event.options.iter().any(|o| o.cost.is_none()),
@@ -2621,6 +2697,71 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::SanctionsThreat { .. }, _) => {
             // Diplomatic back-channel — costs already deducted, trade preserved
             "Back-channel negotiations successful. Sanctions averted.".into()
+        }
+
+        // --- Board demand crises ---
+
+        (CrisisKind::BoardDemand { severity }, 0) => {
+            // Comply: lift restrictive policies
+            if *severity >= 1 {
+                // Ultimatum: lift ALL quarantines and border controls
+                for p in state.policies.iter_mut() {
+                    p.quarantine = false;
+                    p.border_controls = false;
+                }
+                "All quarantines and border controls lifted. Disease will spread unchecked.".into()
+            } else {
+                // Standard: lift restrictions in the worst corporate region
+                let worst_region = state.corporations.iter()
+                    .filter(|c| c.board_seat && !c.bankrupt)
+                    .min_by(|a, b| a.reserves_fraction().partial_cmp(&b.reserves_fraction())
+                        .unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|c| c.region_idx);
+                if let Some(r_idx) = worst_region {
+                    if let Some(p) = state.policies.get_mut(r_idx) {
+                        let had_quarantine = p.quarantine;
+                        let had_border = p.border_controls;
+                        p.quarantine = false;
+                        p.border_controls = false;
+                        let name = state.regions.get(r_idx)
+                            .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                        if had_quarantine || had_border {
+                            format!("Restrictions lifted in {name}. Corporate pressure eased.")
+                        } else {
+                            // Region had no restrictions — board still mollified
+                            // (their complaint was about conditions, not specific policies)
+                            format!("Concessions made in {name}. Board backs down.")
+                        }
+                    } else {
+                        "Board pressure noted.".into()
+                    }
+                } else {
+                    "Board pressure noted.".into()
+                }
+            }
+        }
+        (CrisisKind::BoardDemand { severity }, 1) => {
+            // Placate: pay bailout (cost already deducted), boost reserves of struggling corps
+            let boost_amount = if *severity >= 1 { 0.3 } else { 0.2 };
+            for c in state.corporations.iter_mut().filter(|c| c.board_seat && !c.bankrupt) {
+                let boost = c.max_reserves * boost_amount;
+                c.reserves = (c.reserves + boost).min(c.max_reserves);
+            }
+            if *severity >= 1 {
+                "Emergency bailout distributed. Board-seat corporations stabilized.".into()
+            } else {
+                "Corporate relief package distributed. Board satisfied for now.".into()
+            }
+        }
+        (CrisisKind::BoardDemand { severity }, _) => {
+            // Refuse: lose political power
+            let pol_loss = if *severity >= 1 { 0.15 } else { 0.10 };
+            state.resources.political_power -= pol_loss;
+            if *severity >= 1 {
+                "Board defied. Corporate confidence plummets. Expect funding consequences.".into()
+            } else {
+                "Board overruled. Corporate frustration grows.".into()
+            }
         }
     };
     // Clamp POL after crisis modifications

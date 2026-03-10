@@ -190,6 +190,9 @@ pub struct GameState {
     /// Regional corporations. 3 per region (18 total). Source of player income.
     #[serde(default)]
     pub corporations: Vec<Corporation>,
+    /// Tick when the last board demand crisis fired (cooldown tracking).
+    #[serde(default)]
+    pub last_board_demand_tick: u64,
     pub ui: UiState,
 }
 
@@ -3577,6 +3580,12 @@ pub enum CrisisKind {
     Infodemic { region_idx: usize },
     /// Follow-up to VaccineDispute (Credit one side): losing side retaliates.
     SanctionsThreat { funding_loss: f64 },
+
+    // --- Corporate crises ---
+
+    /// Board of directors demands action when board satisfaction drops too low.
+    /// `severity` 0 = warning demand (satisfaction < 0.5), 1 = ultimatum (< 0.3).
+    BoardDemand { severity: u8 },
 }
 
 impl CrisisKind {
@@ -3627,6 +3636,7 @@ impl CrisisKind {
             CrisisKind::PublicInquiry => "public_inquiry",
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
+            CrisisKind::BoardDemand { .. } => "board_demand",
         }
     }
 }
@@ -5008,6 +5018,7 @@ impl GameState {
             contract_offer: None,
             last_contract_offer_tick: 0,
             corporations: Vec::new(),
+            last_board_demand_tick: 0,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
