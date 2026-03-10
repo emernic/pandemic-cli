@@ -41,11 +41,14 @@ pub(super) fn start_research(state: &mut GameState, track: ResearchTrack, projec
             )));
         }
         state.resources.funding -= funding_cost;
-        // Human Trials decree: clinical trials complete faster
-        let effective_duration = if matches!(kind, ResearchKind::ClinicalTrial { .. })
-            && state.enacted_decrees.authorize_human_trials
-        {
-            duration * crate::state::HUMAN_TRIALS_SPEED
+        // Clinical trial speed modifiers: Human Trials decree + Oceania specialization
+        let effective_duration = if matches!(kind, ResearchKind::ClinicalTrial { .. }) {
+            let mut d = duration;
+            if state.enacted_decrees.authorize_human_trials {
+                d *= crate::state::HUMAN_TRIALS_SPEED;
+            }
+            d *= state.clinical_trial_bonus();
+            d
         } else {
             duration
         };
@@ -80,9 +83,10 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     let lab_mult = state.lab_speed_multiplier();
 
     // Advance all field research projects and collect completion effects
+    let field_bonus = state.field_research_bonus();
     for project in &mut state.field_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult;
+        project.progress += speed * lab_mult * field_bonus;
     }
     // Process completions (drain_filter pattern via retain)
     let mut completed_fields: Vec<ResearchProject> = Vec::new();
@@ -220,9 +224,10 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             }
         }
     }
+    let applied_bonus = state.applied_research_bonus();
     if let Some(ref mut project) = state.applied_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult;
+        project.progress += speed * lab_mult * applied_bonus;
     }
     if state.applied_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.applied_research.take().unwrap();
@@ -251,8 +256,9 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
                 let m_idx = *medicine_idx;
+                let mfg_bonus = state.manufacturing_yield_bonus();
                 if let Some(medicine) = state.medicines.get_mut(m_idx) {
-                    medicine.doses = medicine.max_doses;
+                    medicine.doses = medicine.max_doses * mfg_bonus;
                 }
             }
             ResearchKind::TrainPersonnel => {
@@ -262,9 +268,10 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
         }
         try_auto_start(state, ResearchTrack::Applied);
     }
+    let basic_bonus = state.basic_research_bonus();
     if let Some(ref mut project) = state.basic_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult;
+        project.progress += speed * lab_mult * basic_bonus;
     }
     if state.basic_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.basic_research.take().unwrap();
@@ -482,11 +489,13 @@ mod tests {
             personnel_assigned: 10, // 2x base (5) — peak of diminishing returns
         }];
 
+        let field_bonus = state.field_research_bonus();
         state = tick(&state);
-        // At 2x ratio, diminishing returns gives 1.5x speed
+        // At 2x ratio, diminishing returns gives 1.5x speed (* field bonus from SA)
+        let expected = 1.5 * field_bonus;
         assert!(
-            (state.field_research.first().unwrap().progress - 1.5).abs() < 0.01,
-            "2x personnel should give 1.5x speed (diminishing returns), got {}",
+            (state.field_research.first().unwrap().progress - expected).abs() < 0.01,
+            "2x personnel should give 1.5x speed * field bonus, got {}",
             state.field_research.first().unwrap().progress
         );
     }
@@ -503,10 +512,12 @@ mod tests {
             personnel_assigned: 15, // 3x base (5)
         }];
 
+        let field_bonus = state.field_research_bonus();
         state = tick(&state);
+        let expected = 1.0 * field_bonus;
         assert!(
-            (state.field_research.first().unwrap().progress - 1.0).abs() < 0.01,
-            "3x personnel should give 1.0x speed (negative returns), got {}",
+            (state.field_research.first().unwrap().progress - expected).abs() < 0.01,
+            "3x personnel should give 1.0x speed * field bonus, got {}",
             state.field_research.first().unwrap().progress
         );
     }
@@ -685,9 +696,10 @@ mod tests {
         state = tick(&state);
 
         assert!(state.applied_research.is_none(), "project should be complete");
+        let expected_doses = state.medicines[0].max_doses * state.manufacturing_yield_bonus();
         assert_eq!(
-            state.medicines[0].doses, state.medicines[0].max_doses,
-            "doses should be restored to max"
+            state.medicines[0].doses, expected_doses,
+            "doses should be restored to max * manufacturing bonus"
         );
     }
 
@@ -1435,5 +1447,82 @@ mod tests {
         }
         assert!(state.medicines.iter().any(|m| m.unlocked), "Medicine should be developed");
         assert!(found_handoff, "Should notify about clinical trial after medicine development");
+    }
+
+    #[test]
+    fn regional_specialization_collapse_removes_field_bonus() {
+        // SA (idx 1) provides +20% field research speed. Collapsing it removes the bonus.
+        let mut state = GameState::new_default(42);
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 1000.0,
+            personnel_assigned: 5,
+        }];
+
+        // Tick with SA intact: field bonus = 1.2
+        let after_bonus = tick(&state);
+        let progress_with_bonus = after_bonus.field_research[0].progress;
+
+        // Collapse SA and tick again from scratch
+        state.field_research[0].progress = 0.0;
+        state.regions[1].collapsed = true;
+        let after_no_bonus = tick(&state);
+        let progress_without_bonus = after_no_bonus.field_research[0].progress;
+
+        assert!(
+            progress_with_bonus > progress_without_bonus,
+            "field research should be faster with SA intact: {} vs {}",
+            progress_with_bonus, progress_without_bonus
+        );
+        // The ratio should be 1.2x
+        let ratio = progress_with_bonus / progress_without_bonus;
+        assert!(
+            (ratio - 1.2).abs() < 0.01,
+            "SA bonus should be exactly 1.2x, got {:.3}x",
+            ratio
+        );
+    }
+
+    #[test]
+    fn manufacturing_yield_bonus_produces_extra_doses() {
+        // Europe (idx 2) gives +20% manufacturing yield.
+        let mut state = GameState::new_default(42);
+        for med in &mut state.medicines {
+            med.unlocked = true;
+            med.tested_against = med.target_diseases.clone();
+        }
+        let max_doses = state.medicines[0].max_doses;
+        state.medicines[0].doses = 0.0;
+
+        // Complete a manufacture project
+        state.applied_research = Some(ResearchProject {
+            kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
+            progress: 14.0,
+            required_ticks: 15.0,
+            personnel_assigned: 3,
+        });
+        let after = tick(&state);
+        assert_eq!(
+            after.medicines[0].doses,
+            max_doses * 1.2,
+            "Europe bonus should give 120% of max doses"
+        );
+
+        // Collapse Europe: should get exactly max_doses
+        state.regions[2].collapsed = true;
+        state.medicines[0].doses = 0.0;
+        state.applied_research = Some(ResearchProject {
+            kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
+            progress: 14.0,
+            required_ticks: 15.0,
+            personnel_assigned: 3,
+        });
+        let after_collapsed = tick(&state);
+        assert_eq!(
+            after_collapsed.medicines[0].doses,
+            max_doses,
+            "without Europe, doses should equal max_doses"
+        );
     }
 }

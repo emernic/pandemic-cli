@@ -53,7 +53,7 @@ pub(super) fn deploy_medicine(
     } else {
         1.0
     };
-    let cost = base_cost * disruption_mult;
+    let cost = base_cost * disruption_mult * state.deployment_cost_bonus();
     let med_name = med.name.clone();
     let region_name = state.regions[region_idx].name.clone();
 
@@ -362,8 +362,9 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
-            // Check funding
-            let cost = state.medicines[med_idx].deploy_cost(state.regions[region_idx].population);
+            // Check funding (including regional deployment discount)
+            let cost = state.medicines[med_idx].deploy_cost(state.regions[region_idx].population)
+                * state.deployment_cost_bonus();
             if state.resources.funding < cost {
                 continue;
             }
