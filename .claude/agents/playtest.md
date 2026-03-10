@@ -149,6 +149,8 @@ SEED=$((RANDOM * RANDOM))
 
 Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel), `up`/`down` (navigate lists), `enter` (confirm/select).
 
+**Crisis events are a core part of the game.** When a crisis fires, it interrupts `--days` advancement — the log will say when and why. You MUST engage with it: read the options on screen, navigate with `up`/`down` if needed, confirm with `enter`. Crises are not bugs or nuisances to complain about. They are the game. Treat them as a real player would: read the situation, decide, act. You can dismiss inline (`--do d10 --do enter --do d5`) or in a follow-up invocation.
+
 **Region connections** (the ASCII map shows these as lines between boxes, but they're hard to parse visually as an LLM — here's the canonical list):
 - North America ↔ South America, Europe
 - South America ↔ North America (refugium — only one connection)

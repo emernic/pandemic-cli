@@ -61,6 +61,9 @@ enum StopReason {
 /// This mirrors interactive mode: crises and events interrupt progression
 /// and require player input before play can continue.
 fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
+    if state.active_crisis.is_some() {
+        return StopReason::CrisisStarted; // Don't advance even one tick with a pending crisis
+    }
     state.sim_state = SimState::Running;
     for _ in 0..n {
         *state = tick(state);
@@ -119,9 +122,11 @@ fn describe_pause_events(events: &[GameEvent]) -> String {
 /// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
 ///
 /// Snapshot mode mirrors interactive mode exactly:
-/// - Crisis events interrupt tick advancement and require player input.
-/// - Pause events (disease detection, collapse, breakthroughs) also interrupt.
-/// - When an event interrupts, remaining queued steps are dropped.
+/// - Crisis events interrupt tick advancement. Subsequent key steps still fire
+///   (so `--do d60 --do enter --do d5` works inline). Subsequent --days steps
+///   are skipped until the crisis is dismissed.
+/// - Pause events (disease detection, collapse, breakthroughs) also interrupt
+///   and drop remaining queued steps.
 ///
 /// The rendered output shows whatever state the game is in when execution stops.
 ///
@@ -150,7 +155,6 @@ pub fn run_snapshot(
                 }
             }
             SnapshotStep::Ticks(n) => {
-                let day_before = state.tick as f64 / crate::state::TICKS_PER_DAY;
                 let stop = advance_ticks(&mut state, n);
                 let day_after = state.tick as f64 / crate::state::TICKS_PER_DAY;
                 match stop {
@@ -158,24 +162,17 @@ pub fn run_snapshot(
                         // Continue processing remaining steps (or break on game over above).
                     }
                     StopReason::CrisisStarted => {
-                        let remaining = &steps[step_idx + 1..];
+                        let day = day_after;
                         eprintln!(
-                            "\n[Day {day_after:.1}] A CRISIS EVENT has fired. Tick advancement stopped (was at day {day_before:.1})."
+                            "\n[Day {day:.1}] A CRISIS EVENT has fired. Tick advancement stopped."
                         );
                         eprintln!(
                             "NOTE: Crisis events are a key part of gameplay. They present real decisions with lasting consequences."
                         );
                         eprintln!(
-                            "Dismiss the crisis with --do enter (or --do up/down to change selection first), then continue."
+                            "Dismiss with --do enter (or --do up/down to change selection first). Subsequent key steps in this invocation still fire."
                         );
-                        if !remaining.is_empty() {
-                            eprintln!(
-                                "Dropped {} remaining step(s): {}",
-                                remaining.len(),
-                                remaining.join(", ")
-                            );
-                        }
-                        break;
+                        // continue (not break): subsequent key steps like --do enter can still dismiss the crisis
                     }
                     StopReason::GamePaused { event_description } => {
                         let remaining = &steps[step_idx + 1..];
