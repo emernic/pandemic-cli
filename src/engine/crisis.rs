@@ -519,7 +519,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::DataLeak => {
             CrisisEvent {
                 title: "Research Data Leaked".into(),
-                description: "Classified research data has been leaked to the press.".into(),
+                description: "Classified research data has been leaked through anonymous channels.".into(),
                 option_a: CrisisOption {
                     label: "Go transparent".into(),
                     description: "Lose 2 days of research progress, gain +5% POL".into(),
@@ -597,7 +597,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 option_b: {
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
-                        label: format!("Press conference (¥{:.0}, 1 personnel)", cost),
+                        label: format!("Public address (¥{:.0}, 1 personnel)", cost),
                         description: "Calm the panic, gain +5% POL".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 1 }),
                     }
@@ -1079,7 +1079,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "The military you cooperated with is now classifying your pathogen data. \
                      Generals want to weaponize your findings. Civilian researchers are locked out.".into(),
                 option_a: CrisisOption {
-                    label: "Go to the press (−10% POL)".into(),
+                    label: "Leak it publicly (−10% POL)".into(),
                     description: "Public scandal forces military to back down, but damages your credibility".into(),
                     cost: None,
                 },
@@ -1101,7 +1101,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: format!("{} — Accidental Catastrophe", gov_name),
                 description: format!(
-                    "{gov_name} held a press conference in {region_name} and accidentally \
+                    "{gov_name} issued a public statement in {region_name} and accidentally \
                      announced that the pandemic is over. Crowds are celebrating in the streets."),
                 option_a: CrisisOption {
                     label: "Damage control".into(),
@@ -1110,7 +1110,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: format!("Emergency correction (¥{cost:.0})"),
-                    description: "Pay for an immediate media campaign to undo the damage".into(),
+                    description: "Pay for an immediate public correction".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
@@ -1268,9 +1268,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Cover-Up Exposed".into(),
                 description:
-                    "The data leak you suppressed has been uncovered by investigative journalists. \
-                     \"PANDEMIC AGENCY HIDING RESEARCH FAILURES\" — the headlines are devastating. \
-                     A full public inquiry is now demanded.".into(),
+                    "The data leak you suppressed has been exposed through unauthorized public channels. \
+                     Internal records are circulating. A full public inquiry is now demanded.".into(),
                 option_a: CrisisOption {
                     label: "Full transparency now".into(),
                     description: "Lose 3 days research progress, gain +10% POL for honesty".into(),
@@ -1291,7 +1290,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Infodemic".into(),
                 description: format!(
-                    "Misinformation from the earlier media panic has taken root in {region_name}. \
+                    "Misinformation from the earlier public panic has taken root in {region_name}. \
                      Health workers report residents hiding symptoms and refusing screening."),
                 option_a: CrisisOption {
                     label: "Accept reduced visibility".into(),
@@ -1587,12 +1586,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 .unwrap_or(0);
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
-            "Media panic continues unchecked — misinformation spreading".into()
+            "Public panic continues unchecked — misinformation spreading".into()
         }
         (CrisisKind::MediaPanic, _) => {
             // Press conference — gain POL (costs already deducted)
             state.resources.political_power += 0.05;
-            "Press conference calmed the panic — confidence restored".into()
+            "Public address calmed the panic — confidence restored".into()
         }
 
         (CrisisKind::TrialShortcut { .. }, 0) => {
@@ -1966,13 +1965,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::GovernorBuffoon { .. }, _) => {
             // Emergency correction — costs already deducted
-            "Media campaign corrected the record. Damage contained.".into()
+            "Public correction issued. Damage contained.".into()
         }
 
         (CrisisKind::GovernorBlowhard { .. }, 0) => {
             // Ignore it — small POL loss, noise dies down
             state.resources.political_power -= 0.05;
-            "Ignored the broadcast. The news cycle moved on.".into()
+            "Ignored the broadcast. The accusations faded.".into()
         }
         (CrisisKind::GovernorBlowhard { .. }, _) => {
             // Counter-broadcast — costs already deducted, gain POL
