@@ -4331,15 +4331,7 @@ impl GameState {
             if let Some(region) = worst {
                 if region.total_dead() > 0.0 {
                     let dead = region.total_dead();
-                    let dead_str = if dead >= 999_999_500.0 {
-                        format!("{:.1}B", dead / 1_000_000_000.0)
-                    } else if dead >= 999_950.0 {
-                        format!("{:.1}M", dead / 1_000_000.0)
-                    } else if dead >= 999.5 {
-                        format!("{:.1}K", dead / 1_000.0)
-                    } else {
-                        format!("{:.0}", dead)
-                    };
+                    let dead_str = format_number(dead);
                     tips.push(format!(
                         "{} lost {dead_str} — containment policies were never activated.",
                         region.name
@@ -4572,6 +4564,23 @@ impl GameState {
         projects
     }
 
+}
+
+/// Format a number for display: 1234 → "1.2K", 1234567 → "1.2M", etc.
+pub fn format_number(n: f64) -> String {
+    let abs = n.abs();
+    if abs < 0.5 {
+        return "0".to_string();
+    }
+    if abs >= 999_999_500.0 {
+        format!("{:.1}B", n / 1_000_000_000.0)
+    } else if abs >= 999_950.0 {
+        format!("{:.1}M", n / 1_000_000.0)
+    } else if abs >= 999.5 {
+        format!("{:.1}K", n / 1_000.0)
+    } else {
+        format!("{:.0}", n)
+    }
 }
 
 #[cfg(test)]
