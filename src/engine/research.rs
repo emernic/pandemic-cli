@@ -257,8 +257,8 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             ResearchKind::SuppressPathogen { disease_idx } => {
                 let d_idx = *disease_idx;
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
-                    // Permanently reduce infectivity by 20%
                     disease.infectivity *= 0.80;
+                    state.pathogens_suppressed += 1;
                     let name = disease.display_name(d_idx);
                     state.event_log.push_back((
                         state.tick as f64 / crate::state::TICKS_PER_DAY,
@@ -269,8 +269,8 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             ResearchKind::AttenuatePathogen { disease_idx } => {
                 let d_idx = *disease_idx;
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
-                    // Permanently reduce lethality by 30%
                     disease.lethality *= 0.70;
+                    state.pathogens_attenuated += 1;
                     let name = disease.display_name(d_idx);
                     state.event_log.push_back((
                         state.tick as f64 / crate::state::TICKS_PER_DAY,
@@ -281,8 +281,8 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             ResearchKind::InterdictPathogen { disease_idx } => {
                 let d_idx = *disease_idx;
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
-                    // Permanently eliminate cross-region spread
                     disease.cross_region_spread = 0.0;
+                    state.pathogens_interdicted += 1;
                     let name = disease.display_name(d_idx);
                     state.event_log.push_back((
                         state.tick as f64 / crate::state::TICKS_PER_DAY,
@@ -1425,6 +1425,7 @@ mod tests {
             (reduced - expected).abs() < 0.001,
             "infectivity should drop by 20%: original={original_infectivity:.4}, expected={expected:.4}, got={reduced:.4}"
         );
+        assert_eq!(state.pathogens_suppressed, 1, "suppression counter should increment");
     }
 
     #[test]
@@ -1494,6 +1495,7 @@ mod tests {
             (reduced - expected).abs() < 0.001,
             "lethality should drop by 30%: original={original_lethality:.4}, expected={expected:.4}, got={reduced:.4}"
         );
+        assert_eq!(state.pathogens_attenuated, 1, "attenuation counter should increment");
     }
 
     #[test]
@@ -1525,5 +1527,6 @@ mod tests {
             "cross-region spread should be eliminated, got {}",
             state.diseases[0].cross_region_spread
         );
+        assert_eq!(state.pathogens_interdicted, 1, "interdiction counter should increment");
     }
 }

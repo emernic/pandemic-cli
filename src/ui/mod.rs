@@ -223,12 +223,21 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ThreatLevelChanged { to, .. } => {
                 (1, format!("DEFCON {} — Threat level: {}", to.defcon(), to.label()))
             }
-            GameEvent::MedicineShipped { medicine_idx, region_idx } => {
+            GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                (9, format!("Shipment of {} en route to {} — arrives in 1 day", med_name, region_name))
+                let dose_str = format_number(*doses);
+                let pop = state.regions.get(*region_idx)
+                    .map(|r| r.population as f64).unwrap_or(1.0);
+                let coverage = *doses / pop * 100.0;
+                let msg = if coverage >= 50.0 {
+                    format!("{dose_str} doses of {med_name} dispatched to {region_name} — {coverage:.0}% population coverage")
+                } else {
+                    format!("{dose_str} doses of {med_name} en route to {region_name}")
+                };
+                (9, msg)
             }
             GameEvent::ShipmentBlocked { medicine_idx, region_idx } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -237,15 +246,16 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 (4, format!("⚠ {} shipment blocked at {} — travel ban in effect. Lift ban to deliver.", med_name, region_name))
             }
-            GameEvent::ShipmentDelivered { medicine_idx, region_idx, adverse } => {
+            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
+                let dose_str = format_number(*doses);
                 if *adverse {
-                    (3, format!("⚠ {} delivered to {} — ADVERSE REACTION reported", med_name, region_name))
+                    (3, format!("⚠ {dose_str} doses of {med_name} delivered to {region_name} — ADVERSE REACTION reported"))
                 } else {
-                    (9, format!("{} delivered to {}", med_name, region_name))
+                    (9, format!("{med_name} delivered to {region_name} — {dose_str} doses administered"))
                 }
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
@@ -661,6 +671,57 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
             stat_label,
         ),
     ]));
+
+    // Biological footprint — what the player actually did
+    let total_deployments: u32 = state.medicines.iter().map(|m| m.deployed_count).sum();
+    let interventions = state.pathogens_suppressed + state.pathogens_attenuated + state.pathogens_interdicted;
+    if total_deployments > 0 || interventions > 0 {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ── Mission Report ──",
+            Style::default().fg(Color::Cyan),
+        )));
+        lines.push(Line::from(""));
+
+        lines.push(Line::from(vec![
+            Span::styled("  Deployments:    ", stat_label),
+            Span::styled(format!("{total_deployments}"), stat_value),
+            Span::styled(
+                format!("  ({} total doses)", format_number(state.total_doses_deployed)),
+                stat_label,
+            ),
+        ]));
+
+        let coverage_pct = if initial_pop > 0.0 {
+            state.total_doses_deployed / initial_pop * 100.0
+        } else { 0.0 };
+        lines.push(Line::from(vec![
+            Span::styled("  Coverage:       ", stat_label),
+            Span::styled(
+                format!("{coverage_pct:.1}% of global population"),
+                if coverage_pct >= 100.0 { Style::default().fg(Color::Yellow) } else { stat_value },
+            ),
+        ]));
+
+        if state.pathogens_suppressed > 0 {
+            lines.push(Line::from(vec![
+                Span::styled("  Suppressed:     ", stat_label),
+                Span::styled(format!("{} pathogens", state.pathogens_suppressed), stat_value),
+            ]));
+        }
+        if state.pathogens_attenuated > 0 {
+            lines.push(Line::from(vec![
+                Span::styled("  Attenuated:     ", stat_label),
+                Span::styled(format!("{} pathogens", state.pathogens_attenuated), stat_value),
+            ]));
+        }
+        if state.pathogens_interdicted > 0 {
+            lines.push(Line::from(vec![
+                Span::styled("  Interdicted:    ", stat_label),
+                Span::styled(format!("{} pathogens", state.pathogens_interdicted), stat_value),
+            ]));
+        }
+    }
 
     // Strategic tips
     let tips = state.defeat_tips();
