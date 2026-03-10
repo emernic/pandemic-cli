@@ -311,6 +311,13 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ContractRevoked { name, reason } => {
                 (2, format!("PATRON WITHDREW: {} — {}", name, reason))
             }
+            GameEvent::CorporationBankrupt { corp_idx, region_idx } => {
+                let corp_name = state.corporations.get(*corp_idx)
+                    .map(|c| c.name.as_str()).unwrap_or("Unknown");
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                (1, format!("BANKRUPT: {} ({}) has failed", corp_name, region_name))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

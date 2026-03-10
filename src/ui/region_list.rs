@@ -684,6 +684,56 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
+    // Corporations headquartered in this region
+    {
+        let corps = state.region_corporations(idx);
+        if !corps.is_empty() && lines.len() < inner.height as usize {
+            for corp in &corps {
+                if lines.len() >= inner.height as usize { break; }
+                let (status, status_color) = if corp.bankrupt {
+                    ("BANKRUPT", Color::Red)
+                } else if corp.reserves_fraction() < 0.25 {
+                    ("FAILING", Color::Red)
+                } else if corp.reserves_fraction() < 0.50 {
+                    ("STRESSED", Color::Yellow)
+                } else {
+                    ("OK", Color::Green)
+                };
+                let profit = corp.daily_profit();
+                let profit_str = if corp.bankrupt {
+                    String::new()
+                } else if profit >= 0.0 {
+                    format!("  +¥{:.0}/d", profit)
+                } else {
+                    format!("  ¥{:.0}/d", profit)
+                };
+                let board_marker = if corp.board_seat { " ★" } else { "" };
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("  {:<20}", corp.name),
+                        Style::default().fg(if corp.bankrupt { Color::DarkGray } else { Color::White }),
+                    ),
+                    Span::styled(
+                        format!("{:<11}", corp.sector.label()),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        status,
+                        Style::default().fg(status_color),
+                    ),
+                    Span::styled(
+                        profit_str,
+                        Style::default().fg(if profit >= 0.0 { Color::Green } else { Color::Red }),
+                    ),
+                    Span::styled(
+                        board_marker,
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]));
+            }
+        }
+    }
+
     // Co-infection warning (only show detected diseases — don't leak undetected info)
     {
         let coinfection_count = region.infections.iter()

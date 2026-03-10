@@ -191,6 +191,9 @@ pub struct GameState {
     /// Tick when the last contract was offered (for spacing offers).
     #[serde(default)]
     pub last_contract_offer_tick: u64,
+    /// Regional corporations. 3 per region (18 total). Source of player income.
+    #[serde(default)]
+    pub corporations: Vec<Corporation>,
     pub ui: UiState,
 }
 
@@ -901,6 +904,194 @@ pub const PATRON_DEGRADE_RATE: f64 = 0.05 / 120.0;
 pub const PATRON_RECOVER_RATE: f64 = 0.02 / 120.0;
 /// Minimum ticks between patron demand crises from the same patron (~5 days).
 pub const PATRON_DEMAND_COOLDOWN: u64 = 600;
+
+// Corporation system — regional economic entities.
+// Each region hosts 3 corporations from different sectors. Their financial health
+// depends on workforce availability, infrastructure, and player policy choices.
+// Corporate tax revenue is the primary source of player income.
+
+/// Economic sector determining a corporation's sensitivities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CorporationSector {
+    /// Power generation, grid infrastructure. Hurt by infrastructure collapse.
+    Energy,
+    /// Shipping, autonomous freight. Hurt by travel restrictions.
+    Logistics,
+    /// Pharmaceuticals, genomics. Benefits from healthcare spending.
+    Biotech,
+    /// Resource extraction, materials. Workforce-dependent.
+    Mining,
+    /// Communications, data centers. Hurt by civil order collapse.
+    DataInfra,
+    /// Robotics, manufacturing, AI systems. Partially pandemic-resistant.
+    Automation,
+}
+
+impl CorporationSector {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Energy => "Energy",
+            Self::Logistics => "Logistics",
+            Self::Biotech => "Biotech",
+            Self::Mining => "Mining",
+            Self::DataInfra => "Data/Infra",
+            Self::Automation => "Automation",
+        }
+    }
+
+    /// How much workforce loss (from infection/death) reduces revenue.
+    /// 0.0 = immune to workforce loss, 1.0 = fully proportional.
+    pub fn workforce_sensitivity(&self) -> f64 {
+        match self {
+            Self::Energy => 0.4,      // Automated, fewer workers needed
+            Self::Logistics => 0.5,   // Partially automated freight
+            Self::Biotech => 0.7,     // Skilled workers hard to replace
+            Self::Mining => 0.8,      // Labor-intensive
+            Self::DataInfra => 0.3,   // Mostly automated
+            Self::Automation => 0.2,  // Robots don't get sick
+        }
+    }
+
+    /// Revenue multiplier when travel ban is active in the region.
+    pub fn travel_ban_factor(&self) -> f64 {
+        match self {
+            Self::Energy => 0.85,     // Local operations, mild impact
+            Self::Logistics => 0.30,  // Devastating — core business is movement
+            Self::Biotech => 0.70,    // Supply chain disruption
+            Self::Mining => 0.60,     // Can't ship product
+            Self::DataInfra => 0.90,  // Data travels on wires
+            Self::Automation => 0.75, // Parts supply affected
+        }
+    }
+
+    /// Revenue multiplier when quarantine is active in the region.
+    pub fn quarantine_factor(&self) -> f64 {
+        match self {
+            Self::Energy => 0.90,     // Essential service, keeps running
+            Self::Logistics => 0.60,  // Restricted movement hurts
+            Self::Biotech => 0.85,    // Labs still operate
+            Self::Mining => 0.70,     // Workers can't get to sites
+            Self::DataInfra => 0.95,  // Remote operations fine
+            Self::Automation => 0.85, // Factories still run
+        }
+    }
+
+    /// Revenue multiplier when border controls are active.
+    pub fn border_controls_factor(&self) -> f64 {
+        match self {
+            Self::Energy => 0.95,
+            Self::Logistics => 0.70,  // International shipping slowed
+            Self::Biotech => 0.90,
+            Self::Mining => 0.80,     // Export friction
+            Self::DataInfra => 0.95,
+            Self::Automation => 0.85,
+        }
+    }
+
+    /// Revenue multiplier when hospital surge is active (some sectors benefit).
+    pub fn hospital_surge_factor(&self) -> f64 {
+        match self {
+            Self::Energy => 1.0,
+            Self::Logistics => 1.05,  // Medical supply contracts
+            Self::Biotech => 1.15,    // Increased demand for their products
+            Self::Mining => 1.0,
+            Self::DataInfra => 1.05,  // Health data infrastructure
+            Self::Automation => 1.0,
+        }
+    }
+
+    /// How much healthcare_capacity degradation affects this sector.
+    /// Applied as: 1.0 - (1.0 - hc) * sensitivity
+    pub fn healthcare_sensitivity(&self) -> f64 {
+        match self {
+            Self::Energy => 0.3,
+            Self::Logistics => 0.4,
+            Self::Biotech => 0.8,     // Depends on healthcare infrastructure
+            Self::Mining => 0.5,
+            Self::DataInfra => 0.2,
+            Self::Automation => 0.2,
+        }
+    }
+
+    /// How much supply_lines degradation affects this sector.
+    pub fn supply_line_sensitivity(&self) -> f64 {
+        match self {
+            Self::Energy => 0.6,      // Needs fuel/parts
+            Self::Logistics => 0.9,   // IS the supply line
+            Self::Biotech => 0.5,     // Lab supplies
+            Self::Mining => 0.7,      // Equipment, export routes
+            Self::DataInfra => 0.3,   // Needs some physical infra
+            Self::Automation => 0.5,  // Parts supply
+        }
+    }
+
+    /// How much civil_order degradation affects this sector.
+    pub fn civil_order_sensitivity(&self) -> f64 {
+        match self {
+            Self::Energy => 0.5,      // Infrastructure target
+            Self::Logistics => 0.4,   // Route safety
+            Self::Biotech => 0.3,     // Secure facilities
+            Self::Mining => 0.6,      // Remote sites vulnerable
+            Self::DataInfra => 0.7,   // Cables get cut, towers get looted
+            Self::Automation => 0.4,  // Factories targeted
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Corporation {
+    pub name: String,
+    pub sector: CorporationSector,
+    pub region_idx: usize,
+    /// Revenue per day at full health (before condition modifiers).
+    pub base_revenue: f64,
+    /// Current revenue per day (after all modifiers). Updated each tick.
+    pub revenue: f64,
+    /// Fixed operating costs per day.
+    pub operating_costs: f64,
+    /// Cash reserves. Depleted when revenue < costs.
+    pub reserves: f64,
+    /// Starting reserves (for display as percentage).
+    pub max_reserves: f64,
+    /// Permanently failed. Revenue goes to 0, never recovers.
+    pub bankrupt: bool,
+    /// Tick when bankruptcy occurred.
+    pub bankrupt_at_tick: Option<u64>,
+    /// Whether this corporation's leader sits on the NWHO board.
+    pub board_seat: bool,
+}
+
+impl Corporation {
+    /// Current daily profit (revenue minus costs). Negative means burning reserves.
+    pub fn daily_profit(&self) -> f64 {
+        if self.bankrupt { return 0.0; }
+        self.revenue - self.operating_costs
+    }
+
+    /// Reserves as a fraction of max (0.0 to 1.0).
+    pub fn reserves_fraction(&self) -> f64 {
+        if self.max_reserves <= 0.0 { return 0.0; }
+        (self.reserves / self.max_reserves).clamp(0.0, 1.0)
+    }
+
+    /// Per-tick tax contribution to the player's income.
+    pub fn tax_contribution(&self) -> f64 {
+        if self.bankrupt { return 0.0; }
+        self.revenue / TICKS_PER_DAY * CORPORATE_TAX_RATE
+    }
+}
+
+/// Fraction of corporate revenue collected as tax (player income).
+/// Calibrated so total corporate tax ≈ old BASE_FUNDING_INCOME at full health.
+pub const CORPORATE_TAX_RATE: f64 = 0.15;
+
+/// Days of operating costs a corporation starts with in reserves.
+/// At 30 days, a corp with zero revenue survives ~1 month.
+pub const CORP_STARTING_RESERVE_DAYS: f64 = 30.0;
+
+/// Operating costs as a fraction of base revenue.
+/// At 0.65, corps need ~35% revenue to break even.
+pub const CORP_COST_RATIO: f64 = 0.65;
 
 fn format_large_number(n: f64) -> String {
     if n >= 1_000_000_000.0 {
@@ -3098,6 +3289,8 @@ pub enum GameEvent {
     ContractWarning { patron: String, reason: String },
     /// A contract was revoked because patron satisfaction bottomed out.
     ContractRevoked { name: String, reason: String },
+    /// A corporation went bankrupt (permanent).
+    CorporationBankrupt { corp_idx: usize, region_idx: usize },
     GameOver,
     /// A crisis event appeared and needs player attention.
     CrisisStarted,
@@ -4858,6 +5051,7 @@ impl GameState {
             contracts: Vec::new(),
             contract_offer: None,
             last_contract_offer_tick: 0,
+            corporations: Vec::new(),
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -4886,6 +5080,11 @@ impl GameState {
 
     pub fn total_immune(&self) -> f64 {
         self.regions.iter().map(|r| r.total_immune()).sum()
+    }
+
+    /// Get corporations headquartered in a given region.
+    pub fn region_corporations(&self, region_idx: usize) -> Vec<&Corporation> {
+        self.corporations.iter().filter(|c| c.region_idx == region_idx).collect()
     }
 
     /// Compute the current threat level from game state metrics.
@@ -5149,31 +5348,51 @@ impl GameState {
         sum / connections.len() as f64
     }
 
-    /// Estimated funding income per tick, based on current population health and policies.
-    /// Each region's income has two components:
-    /// - Domestic (75%): depends only on the region's own health
-    /// - Trade (25%): depends on the average health of connected neighbors
+    /// Estimated funding income per tick, based on corporate tax and contracts.
+    ///
+    /// Corporate tax revenue from each region's corporations (already accounts for
+    /// workforce health, infrastructure, and policy effects). Governor skim and
+    /// inter-region trade modifiers apply on top.
+    ///
+    /// Falls back to the pre-corporation formula if no corporations exist (backwards compat).
     pub fn funding_income_rate(&self) -> f64 {
         let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
         if total_pop <= 0.0 {
             return 0.0;
         }
-        let mut income = 0.0;
-        for (i, region) in self.regions.iter().enumerate() {
-            // Collapsed regions contribute nothing — society has broken down
-            if region.collapsed {
-                continue;
+        let mut income = if self.corporations.is_empty() {
+            // Fallback: old abstract formula (for saves without corporations)
+            let mut inc = 0.0;
+            for (i, region) in self.regions.iter().enumerate() {
+                if region.collapsed { continue; }
+                let base = Self::region_base_income(region, total_pop);
+                let after_ban = base * self.region_travel_ban_factor(i, region);
+                let skim_factor = 1.0 - region.governor.income_skim;
+                let after_skim = after_ban * skim_factor;
+                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+                inc += domestic + trade;
             }
-            let base = Self::region_base_income(region, total_pop);
-            let after_ban = base * self.region_travel_ban_factor(i, region);
-            // Governor income skim — Operative bargains permanently reduce regional income
-            let skim_factor = 1.0 - region.governor.income_skim;
-            let after_skim = after_ban * skim_factor;
-            // Split into domestic + trade components
-            let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-            let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-            income += domestic + trade;
-        }
+            inc
+        } else {
+            // Corporate income: sum tax contributions per region, apply skim + trade
+            let mut inc = 0.0;
+            for (i, region) in self.regions.iter().enumerate() {
+                if region.collapsed { continue; }
+                let region_corp_tax: f64 = self.corporations.iter()
+                    .filter(|c| c.region_idx == i)
+                    .map(|c| c.tax_contribution())
+                    .sum();
+                // Governor income skim
+                let skim_factor = 1.0 - region.governor.income_skim;
+                let after_skim = region_corp_tax * skim_factor;
+                // Domestic + trade split
+                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+                inc += domestic + trade;
+            }
+            inc
+        };
         // Decree modifiers
         if self.enacted_decrees.sacrificed_region.is_some() {
             income *= SACRIFICE_INCOME_BONUS;
@@ -5205,6 +5424,16 @@ impl GameState {
         for (i, region) in self.regions.iter().enumerate() {
             let raw = if region.collapsed {
                 0.0
+            } else if !self.corporations.is_empty() {
+                let region_corp_tax: f64 = self.corporations.iter()
+                    .filter(|c| c.region_idx == i)
+                    .map(|c| c.tax_contribution())
+                    .sum();
+                let skim_factor = 1.0 - region.governor.income_skim;
+                let after_skim = region_corp_tax * skim_factor;
+                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+                domestic + trade
             } else {
                 let base = Self::region_base_income(region, total_pop);
                 let after_ban = base * self.region_travel_ban_factor(i, region);
