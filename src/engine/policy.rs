@@ -496,8 +496,9 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         // Personality modifiers
         let personality_mod = match personality {
             GovernorPersonality::Buffoon => {
-                // Small passive decay — they forget promises quickly.
-                -0.001 // ~0.12/day passive decay
+                // High passive decay — they forget promises quickly.
+                // Loyalty from cheap bribes fades in 2-3 weeks; player needs to re-engage.
+                -0.005 // ~0.6/day passive decay
             }
             GovernorPersonality::Blowhard => {
                 // Hates restrictive policies — extra drain. Happy when things are calm.
