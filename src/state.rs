@@ -472,9 +472,9 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.30, // Travel Ban — restricts citizens, needs political will
     0.25, // Quarantine — restricts movement, needs political will
     0.00, // Hospital Surge — defensive infrastructure, always available
-    0.05, // Border Controls — border restrictions need minimal political authority
-    0.05, // Water Sanitation — government-mandated treatment, needs minimal authority
-    0.05, // Basic Screening — mandatory disease reporting, needs minimal authority
+    0.00, // Border Controls — basic containment, always available (costs personnel + funding)
+    0.00, // Water Sanitation — basic public health, always available (costs personnel + funding)
+    0.00, // Basic Screening — disease reporting, always available (costs personnel + funding)
     0.10, // Medium Disease Screening — mandatory testing, needs political will
     0.15, // High Disease Screening — mandatory mass testing, needs political will
     0.40, // Martial Law — drastic, needs high political will
