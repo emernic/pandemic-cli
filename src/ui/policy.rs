@@ -44,10 +44,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             render_manage(state, *region_idx)
         }
         Some(PolicyUiState::SelectSacrificeRegion) => {
-            render_region_select(state, "SACRIFICE REGION", "sacrifice")
+            render_region_select(state, "SACRIFICE REGION", "sacrifice",
+                &format!("Region will be abandoned. Others: +{:.0}% income.",
+                    (SACRIFICE_INCOME_BONUS - 1.0) * 100.0))
         }
         Some(PolicyUiState::SelectFortifyRegion) => {
-            render_region_select(state, "FORTIFY REGION", "fortify")
+            render_region_select(state, "FORTIFY REGION", "fortify",
+                &format!("Region infrastructure restored to 100%. Others: -{:.0}% infra.",
+                    FORTIFY_INFRA_PENALTY * 100.0))
         }
         _ => render_browse(state),
     };
@@ -794,7 +798,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     (format!(" Policy: {} ", region.name), lines, selected_line)
 }
 
-fn render_region_select(state: &GameState, title: &str, action: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_region_select(state: &GameState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
@@ -803,7 +807,7 @@ fn render_region_select(state: &GameState, title: &str, action: &str) -> (String
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  Select a region:",
+        format!("  {}", description),
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
