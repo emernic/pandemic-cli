@@ -181,25 +181,15 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 let region_name = state.regions.get(s.region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 let doses_str = format_number(s.doses);
-                if s.blocked_by_travel_ban {
-                    lines.push(Line::from(vec![
-                        Span::raw("    "),
-                        Span::styled(
-                            format!("⚠ {doses_str} → {region_name} BLOCKED (travel ban)"),
-                            Style::default().fg(Color::Red),
-                        ),
-                    ]));
-                } else {
-                    let ticks_left = s.arrive_tick.saturating_sub(state.tick);
-                    let days_left = ticks_left as f64 / TICKS_PER_DAY;
-                    lines.push(Line::from(vec![
-                        Span::raw("    "),
-                        Span::styled(
-                            format!("→ {doses_str} en route to {region_name} ({days_left:.1}d)"),
-                            Style::default().fg(Color::Cyan),
-                        ),
-                    ]));
-                }
+                let ticks_left = s.arrive_tick.saturating_sub(state.tick);
+                let days_left = ticks_left as f64 / TICKS_PER_DAY;
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!("→ {doses_str} en route to {region_name} ({days_left:.1}d)"),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]));
             }
 
             lines.push(Line::from(""));

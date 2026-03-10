@@ -2480,7 +2480,8 @@ pub struct Shipment {
     pub cost: f64,
     /// Tick when this shipment next attempts delivery.
     pub arrive_tick: u64,
-    /// True when a travel ban is currently blocking delivery.
+    /// Deprecated: travel bans no longer block medicine shipments.
+    /// Kept for save file compatibility.
     #[serde(default)]
     pub blocked_by_travel_ban: bool,
 }
@@ -3175,7 +3176,7 @@ pub enum GameEvent {
         region_idx: usize,
         doses: f64,
     },
-    /// A shipment was blocked by a travel ban on arrival.
+    /// Deprecated: travel bans no longer block shipments. Kept for save compat.
     ShipmentBlocked {
         medicine_idx: usize,
         region_idx: usize,
