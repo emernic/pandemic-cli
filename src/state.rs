@@ -3669,17 +3669,41 @@ impl GameState {
     /// Uses screened values consistently (both current and historical are
     /// player-visible estimates, not ground truth).
     pub fn infection_trend(&self) -> Option<f64> {
-        // Look back ~1 day (120 ticks / HISTORY_INTERVAL = 24 entries)
-        let lookback = (TICKS_PER_DAY as usize) / (HISTORY_INTERVAL as usize);
-        if self.history.len() < lookback {
-            return None;
-        }
+        let lookback = self.trend_lookback()?;
         let past = &self.history[self.history.len() - lookback];
         if past.screened_infected < 100.0 {
             return None; // too few infections to show a meaningful trend
         }
         let current = self.total_infected_screened();
         Some(current / past.screened_infected)
+    }
+
+    /// Death trend: new deaths in last day vs the day before that.
+    /// Returns None if not enough history. > 1.0 means accelerating, < 1.0 decelerating.
+    pub fn death_trend(&self) -> Option<f64> {
+        let lookback = self.trend_lookback()?;
+        if self.history.len() < lookback * 2 {
+            return None;
+        }
+        let now_dead = self.total_dead_detected();
+        let one_day_ago = &self.history[self.history.len() - lookback];
+        let two_days_ago = &self.history[self.history.len() - lookback * 2];
+        let recent_deaths = now_dead - one_day_ago.detected_dead;
+        let prior_deaths = one_day_ago.detected_dead - two_days_ago.detected_dead;
+        if prior_deaths < 100.0 {
+            return None;
+        }
+        Some(recent_deaths / prior_deaths)
+    }
+
+    /// Lookback entries for ~1 day of history. None if insufficient data.
+    fn trend_lookback(&self) -> Option<usize> {
+        let lookback = (TICKS_PER_DAY as usize) / (HISTORY_INTERVAL as usize);
+        if self.history.len() < lookback {
+            None
+        } else {
+            Some(lookback)
+        }
     }
 
     /// Whether a specific disease has any active infections globally.
