@@ -3339,7 +3339,7 @@ impl UiState {
                             None
                         } else {
                             // Insufficient POL — route to engine so it returns the proper error message
-                            Some(GameCommand::EnactDecree { decree_idx: 2, region_idx: None })
+                            Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
                         }
                     } else {
                         Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
