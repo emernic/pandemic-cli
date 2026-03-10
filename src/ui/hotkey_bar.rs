@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, MedicineUiState, Panel};
+use crate::state::{GameOutcome, GameState, Panel};
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let hotkeys = vec![
@@ -87,13 +87,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         }
         GameOutcome::Playing => {
             if let Some(msg) = &state.ui.status_message {
-                let is_adverse = matches!(
-                    state.ui.medicine_ui,
-                    Some(MedicineUiState::DeployResult { adverse: true, .. })
-                );
                 lines.push(Line::from(Span::styled(
                     msg.as_str(),
-                    Style::default().fg(if is_adverse { Color::Red } else { Color::Yellow }),
+                    Style::default().fg(Color::Yellow),
                 )));
             }
         }

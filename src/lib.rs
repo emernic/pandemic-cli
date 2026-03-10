@@ -185,7 +185,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             new.ui.medicine_ui = Some(MedicineUiState::DeployResult {
                                 medicine_idx: *medicine_idx,
                                 message: msg,
-                                adverse: result.adverse,
                             });
                             new.ui.panel_selection = 0;
                         }

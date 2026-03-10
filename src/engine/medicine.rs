@@ -9,36 +9,37 @@ use crate::state::{
 /// shipment. Effects apply when the shipment arrives (1 day later).
 /// Pure game logic — does NOT modify UI state.
 ///
-/// Returns (success, message, adverse):
+/// Returns (success, message):
 /// - `success`: true if dispatch was attempted
 /// - `message`: status feedback to display (if any)
-/// - `adverse`: always false at dispatch (adverse check happens on delivery)
+///
+/// Adverse reactions are checked at delivery time (see `deliver_shipment`).
 pub(super) fn deploy_medicine(
     state: &mut GameState,
     medicine_idx: usize,
     region_idx: usize,
     target: DeployTarget,
-) -> (bool, Option<String>, bool) {
+) -> (bool, Option<String>) {
     // Block after game over
     if state.outcome != GameOutcome::Playing {
-        return (false, None, false);
+        return (false, None);
     }
     // Block deployment to collapsed regions
     if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} has collapsed — deployment impossible")), false);
+        return (false, Some(format!("{region_name} has collapsed — deployment impossible")));
     }
     // Block deployment to abandoned regions (Ark Protocol)
     if state.is_abandoned(region_idx) {
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} abandoned — deploy to the Ark instead")), false);
+        return (false, Some(format!("{region_name} abandoned — deploy to the Ark instead")));
     }
     // Block deployment during cooldown
     let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick);
     if cooldown > 0 {
         let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} on cooldown — {days:.1} days remaining")), false);
+        return (false, Some(format!("{region_name} on cooldown — {days:.1} days remaining")));
     }
     let med = &state.medicines[medicine_idx];
     let cost = med.deploy_cost(state.regions[region_idx].population);
@@ -46,10 +47,10 @@ pub(super) fn deploy_medicine(
     let region_name = state.regions[region_idx].name.clone();
 
     if state.resources.funding < cost {
-        return (false, Some(insufficient_funds_message(cost, state.resources.funding)), false);
+        return (false, Some(insufficient_funds_message(cost, state.resources.funding)));
     }
     if state.medicines[medicine_idx].doses <= 0.0 {
-        return (false, Some(format!("No doses remaining for {med_name} — manufacture more via Research")), false);
+        return (false, Some(format!("No doses remaining for {med_name} — manufacture more via Research")));
     }
 
     let disease_idx = match &target {
@@ -79,8 +80,8 @@ pub(super) fn deploy_medicine(
 
     if doses_to_ship <= 0.0 {
         return match target {
-            DeployTarget::Vaccinate { .. } => (false, Some(format!("No susceptible population in {region_name}")), false),
-            DeployTarget::Treat { .. } => (false, Some(format!("No infected population in {region_name}")), false),
+            DeployTarget::Vaccinate { .. } => (false, Some(format!("No susceptible population in {region_name}"))),
+            DeployTarget::Treat { .. } => (false, Some(format!("No infected population in {region_name}"))),
         };
     }
 
@@ -107,7 +108,7 @@ pub(super) fn deploy_medicine(
     let msg = format!(
         "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}) — arriving in 1 day"
     );
-    (true, Some(msg), false)
+    (true, Some(msg))
 }
 
 /// Process arriving shipments. Called each tick. Delivers doses that have
@@ -350,7 +351,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
 
             let target = DeployTarget::Treat { disease_idx: best_disease_idx };
 
-            let (success, _msg, _adverse) = deploy_medicine(
+            let (success, _msg) = deploy_medicine(
                 state, med_idx, region_idx, target,
             );
             if success {

@@ -2957,7 +2957,7 @@ pub enum MedicineUiState {
     SelectTarget { medicine_idx: usize, region_idx: usize, disease_idx: usize },
     ConfirmDeploy { medicine_idx: usize, region_idx: usize, target: DeployTarget },
     /// Shown after a deployment completes, displaying the result prominently.
-    DeployResult { medicine_idx: usize, message: String, adverse: bool },
+    DeployResult { medicine_idx: usize, message: String },
 }
 
 /// Policy panel UI state machine.

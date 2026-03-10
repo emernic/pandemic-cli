@@ -37,8 +37,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let (t, l) = render_confirm_deploy(state, *medicine_idx, *region_idx, target);
             (t, l, None)
         }
-        Some(MedicineUiState::DeployResult { medicine_idx, message, adverse }) => {
-            let (t, l) = render_deploy_result(state, *medicine_idx, message, *adverse);
+        Some(MedicineUiState::DeployResult { medicine_idx, message }) => {
+            let (t, l) = render_deploy_result(state, *medicine_idx, message);
             (t, l, None)
         }
         _ => render_browse(state),
@@ -610,7 +610,6 @@ fn render_deploy_result(
     state: &GameState,
     medicine_idx: usize,
     message: &str,
-    _adverse: bool,
 ) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let med_name = state.medicines.get(medicine_idx)
