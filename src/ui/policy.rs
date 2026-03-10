@@ -383,16 +383,18 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
     // doc in state.rs for the index mapping). Display position != policy_idx (sorted
     // by POL threshold via policy_display_order()).
-    //                   (policy_idx, name, active, cost_str, desc, personnel_needed)
-    let policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
+    // tick_cost: per-tick ongoing funding cost (0.0 for one-time purchases like hospitals/intel).
+    // Used to mute policies when funding ≤ 0 — the engine suspends ongoing-cost policies at that point.
+    //                   (policy_idx, name, active, cost_str, desc, personnel_needed, tick_cost)
+    let policies: Vec<(usize, &str, bool, String, &str, Option<u32>, f64)> = vec![
         (0, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
          if trade_dep { "Reduces cross-region spread, 75% income penalty" }
          else { "Reduces cross-region spread, halves income" },
-         Some(TRAVEL_BAN_PERSONNEL + infra_extra)),
+         Some(TRAVEL_BAN_PERSONNEL + infra_extra), tb_cost),
         (1, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
-         "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra)),
+         "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST),
         (2, "Hospital Surge", policy.hospital_surge,
          format!("¥{:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL + infra_extra),
          if region.has_trait(RegionTrait::StrongPublicHealth) {
@@ -400,28 +402,28 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          } else {
              "Halves lethality, +25% spread (hospital exposure)"
          },
-         Some(HOSPITAL_SURGE_PERSONNEL + infra_extra)),
+         Some(HOSPITAL_SURGE_PERSONNEL + infra_extra), HOSPITAL_SURGE_COST),
         (3, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
-         "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra)),
+         "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST),
         (4, "Water Sanitation", policy.water_sanitation,
          format!("¥{:.0}/day + {} pers.", WATER_SANITATION_COST * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
-         "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra)),
+         "Halves waterborne spread within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra), WATER_SANITATION_COST),
         (5, "Basic Screening", policy.screening == ScreeningLevel::Basic,
          format!("¥{:.0}/day + {} pers.", SCREENING_BASIC_COST * TICKS_PER_DAY, 1 + infra_extra),
-         "Rough infected estimates, faster detection", Some(1 + infra_extra)),
+         "Rough infected estimates, faster detection", Some(1 + infra_extra), SCREENING_BASIC_COST),
         (6, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
          format!("¥{:.0}/day + {} pers.", SCREENING_ANTIGEN_COST * TICKS_PER_DAY, 2 + infra_extra),
-         "Shows infected + immune counts, good accuracy", Some(2 + infra_extra)),
+         "Shows infected + immune counts, good accuracy", Some(2 + infra_extra), SCREENING_ANTIGEN_COST),
         (7, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
          format!("¥{:.0}/day + {} pers.", SCREENING_MASS_RAPID_COST * TICKS_PER_DAY, 4 + infra_extra),
-         "Near-complete data, reduces spread by 25%", Some(4 + infra_extra)),
+         "Near-complete data, reduces spread by 25%", Some(4 + infra_extra), SCREENING_MASS_RAPID_COST),
         (8, "Martial Law", policy.martial_law,
          format!("¥{:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
-         "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra)),
+         "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra), MARTIAL_LAW_COST),
         (9, "☢ Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ¥{:.0}", NUCLEAR_ANNIHILATION_COST),
-         "Eliminate 99% of population. Stops all disease spread.", None),
+         "Eliminate 99% of population. Stops all disease spread.", None, 0.0),
         (10,
          match region.hospital_level {
              0 => "Build Field Hospital",
@@ -439,7 +441,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
              1 => "40% lethality reduction, +25% medicine efficacy, +10 loyalty",
              _ => "40% lethality reduction, +25% medicine efficacy",
          },
-         None),
+         None, 0.0),
         (11,
          match region.intel_level {
              0 => "Build Intel Station",
@@ -457,14 +459,14 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
              1 => "Detects at 1,000 infections. Generates pre-detection briefings at 500.",
              _ => "Early warning active. Pre-detection surveillance operational.",
          },
-         None),
+         None, 0.0),
     ];
 
     // Reorder by canonical display order (POL threshold ascending, ties by index).
     // display_pos == panel_selection; confirm handler maps back via policy_display_order().
     let policies: Vec<_> = policy_display_order().iter().map(|&idx| policies[idx].clone()).collect();
 
-    for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
+    for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed, tick_cost)) in policies.iter().enumerate() {
         let selected = state.ui.panel_selection == display_pos;
         if selected { selected_line = Some(lines.len()); }
         let marker = if selected { "▶ " } else { "  " };
@@ -514,6 +516,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             })
             .unwrap_or(true);
 
+        // Policies with ongoing funding costs will be immediately suspended by the engine
+        // when funding ≤ 0. Mute them so the player knows enabling them achieves nothing.
+        let can_afford_funding = *active || *tick_cost == 0.0 || state.resources.funding > 0.0;
+        let can_afford = can_afford_personnel && can_afford_funding;
+
         if !*active && !pol_unlocked {
             // Locked by POL — show as unavailable
             let threshold = POLICY_POL_THRESHOLDS[*policy_idx];
@@ -537,7 +544,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         let status_style = if *active {
             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
-        } else if can_afford_personnel {
+        } else if can_afford {
             Style::default().fg(Color::DarkGray)
         } else {
             Style::default().fg(Color::Red)
@@ -545,8 +552,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         let name_style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else if !*active && !can_afford_personnel {
-            // Unaffordable: mute name to match [OFF] red — player can see but can't activate
+        } else if !*active && !can_afford {
+            // Unaffordable: mute name — player can see but enabling achieves nothing
             Style::default().fg(Color::DarkGray)
         } else {
             Style::default().fg(Color::White)
