@@ -1631,7 +1631,7 @@ mod tests {
         // Fill up to MAX_DISEASES
         while state.diseases.len() < MAX_DISEASES {
             let mut rng = state.rng.clone();
-            state.spawn_disease(&mut rng);
+            disease::spawn_disease(&mut state, &mut rng);
             state.rng = rng;
         }
         assert_eq!(state.diseases.len(), MAX_DISEASES);
@@ -2234,14 +2234,14 @@ mod tests {
         while state.diseases.len() < MAX_DISEASES {
             use rand::SeedableRng;
             let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(99);
-            state.spawn_disease(&mut rng);
+            disease::spawn_disease(&mut state, &mut rng);
         }
         assert_eq!(state.diseases.len(), MAX_DISEASES);
 
         // Attempting another spawn should return None
         use rand::SeedableRng;
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(99);
-        assert!(state.spawn_disease(&mut rng).is_none());
+        assert!(disease::spawn_disease(&mut state, &mut rng).is_none());
     }
 
     #[test]
@@ -2252,7 +2252,7 @@ mod tests {
             let mut state = GameState::new_default(seed);
             while state.diseases.len() < MAX_DISEASES {
                 let mut rng = state.rng.clone();
-                state.spawn_disease(&mut rng);
+                disease::spawn_disease(&mut state, &mut rng);
                 state.rng = rng;
             }
             let mut counts = std::collections::HashMap::new();
@@ -2289,7 +2289,7 @@ mod tests {
             let mut rng = state.rng.clone();
             // Remove existing disease so spawn works clean
             state.diseases.clear();
-            if let Some((idx, _)) = state.spawn_disease(&mut rng) {
+            if let Some((idx, _)) = disease::spawn_disease(&mut state, &mut rng) {
                 match state.diseases[idx].pathogen_type {
                     PathogenType::Fungus | PathogenType::Prion => early_deadly += 1,
                     _ => {}
@@ -2302,7 +2302,7 @@ mod tests {
             state2.tick = (30.0 * TICKS_PER_DAY) as u64;
             state2.diseases.clear();
             let mut rng2 = state2.rng.clone();
-            if let Some((idx, _)) = state2.spawn_disease(&mut rng2) {
+            if let Some((idx, _)) = disease::spawn_disease(&mut state2, &mut rng2) {
                 match state2.diseases[idx].pathogen_type {
                     PathogenType::Fungus | PathogenType::Prion => late_deadly += 1,
                     _ => {}
@@ -2445,7 +2445,7 @@ mod tests {
             for r in &mut state.regions { r.infections.clear(); }
 
             let mut rng = state.rng.clone();
-            if let Some((_, region_idx)) = state.spawn_disease(&mut rng) {
+            if let Some((_, region_idx)) = disease::spawn_disease(&mut state, &mut rng) {
                 if region_idx == 0 {
                     defended_hits += 1;
                 } else {
