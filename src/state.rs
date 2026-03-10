@@ -1403,45 +1403,62 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned for aggressive pacing: median defeat ~day 20
-    /// without intervention, absolute maximum day 45 on any seed.
-    /// Late-game diseases scale uncapped via spawn_disease_scaled.
+    /// Stat ranges tuned so total collapse occurs by day 45 without intervention.
+    /// HARD REQUIREMENT: every seed must lose by day 45 with no player action.
+    /// The enforcing test is `game_is_lost_within_45_days_without_intervention`.
+    /// If it starts failing, increase infectivity — do NOT relax the test.
+    ///
+    /// Design principle: long infectious period (8–15 days) with near-zero natural
+    /// recovery. This lets the epidemic sweep through each region's full population
+    /// before burning out. A short infectious period (high per-tick lethality+recovery)
+    /// causes epidemic burnout after infecting only a small fraction of the population.
+    /// Do NOT copy the naive approach of increasing per-tick lethality to "speed up"
+    /// deaths — it makes the overall death toll LOWER by shortening infectious period.
+    ///
+    /// IFR = lethality / (lethality + recovery) ≈ 85–95% across all types.
+    /// R0 = infectivity / (lethality + recovery) ≈ 6–15 depending on type.
+    /// Attack rate ≈ 99%+ given high R0. Total deaths ≈ 85–95% of population.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast spreader, high lethality.
+            // RNA viruses: fast spreader, near-total lethality.
+            // Infectious period ≈ 12–15 days, R0 ≈ 8–14, IFR ≈ 87–92%.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.020, 0.035),
-                lethality: (0.008, 0.015),
-                recovery: (0.0008, 0.0014),
-                cross_region: (0.010, 0.018),
+                infectivity: (0.008, 0.013),
+                lethality: (0.00055, 0.00100),
+                recovery: (0.00006, 0.00015),
+                cross_region: (0.006, 0.012),
             },
-            // DNA viruses: moderate spread, very high lethality, slow recovery.
+            // DNA viruses: slightly slower spread, extremely high lethality.
+            // Infectious period ≈ 13–17 days, R0 ≈ 7–12, IFR ≈ 88–94%.
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.016, 0.028),
-                lethality: (0.012, 0.020),
-                recovery: (0.0004, 0.0008),
-                cross_region: (0.008, 0.015),
+                infectivity: (0.006, 0.010),
+                lethality: (0.00050, 0.00090),
+                recovery: (0.00004, 0.00010),
+                cross_region: (0.005, 0.010),
             },
-            // Bacteria: moderate spread, moderate lethality.
+            // Bacteria: broad reach, high lethality, minimal recovery.
+            // Infectious period ≈ 10–14 days, R0 ≈ 6–10, IFR ≈ 80–90%.
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.016, 0.025),
-                lethality: (0.006, 0.012),
-                recovery: (0.0006, 0.0012),
-                cross_region: (0.008, 0.015),
+                infectivity: (0.006, 0.009),
+                lethality: (0.00050, 0.00090),
+                recovery: (0.00010, 0.00020),
+                cross_region: (0.004, 0.008),
             },
-            // Fungi: slow-growing, high lethality, very low natural recovery.
+            // Fungi: slower growth, very high lethality, almost no natural recovery.
+            // Infectious period ≈ 12–18 days, R0 ≈ 5–9, IFR ≈ 82–92%.
             PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.010, 0.018),
-                lethality: (0.010, 0.016),
-                recovery: (0.0002, 0.0005),
-                cross_region: (0.006, 0.012),
+                infectivity: (0.004, 0.007),
+                lethality: (0.00045, 0.00080),
+                recovery: (0.00005, 0.00015),
+                cross_region: (0.003, 0.007),
             },
-            // Prions: slow but devastating, extreme lethality, almost no recovery.
+            // Prions: slowest spread, near-certain death once infected.
+            // Infectious period ≈ 15–25 days, R0 ≈ 5–9, IFR ≈ 91–97%.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.010, 0.020),
-                lethality: (0.018, 0.030),
-                recovery: (0.0001, 0.0003),
-                cross_region: (0.006, 0.012),
+                infectivity: (0.004, 0.008),
+                lethality: (0.00060, 0.00120),
+                recovery: (0.00003, 0.00006),
+                cross_region: (0.003, 0.006),
             },
         }
     }
