@@ -53,7 +53,9 @@ pub fn process_events(state: &mut GameState) {
     }
     // Reset speed display when tick() auto-paused on critical events
     if state.events.iter().any(|e| matches!(e,
-        GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. } | GameEvent::ThreatEscalation { .. }))
+        GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }
+        | GameEvent::ThreatEscalation { .. } | GameEvent::PathogenIdentified { .. }
+        | GameEvent::MedicineDeveloped { .. } | GameEvent::TrialCompleted { .. }))
     {
         state.ui.speed_multiplier = 1;
     }
@@ -99,6 +101,32 @@ pub fn process_events(state: &mut GameState) {
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "?".to_string());
                 (3, format!("ADVERSE EVENT: {} trial killed {:.0} patients", name, deaths))
+            }
+            GameEvent::PathogenIdentified { disease_idx } => {
+                let d = state.diseases.get(*disease_idx);
+                let name = d.map(|d| d.name.clone()).unwrap_or_else(|| "?".to_string());
+                let ptype = d.map(|d| d.pathogen_type.label()).unwrap_or("Unknown");
+                let transmission = d.map(|d| d.transmission.label()).unwrap_or("Unknown");
+                (1, format!("IDENTIFIED: {} — {} / {} transmission", name, ptype, transmission))
+            }
+            GameEvent::MedicineDeveloped { medicine_idx } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("Unknown");
+                (2, format!("BREAKTHROUGH: {} developed — ready for clinical trials", med_name))
+            }
+            GameEvent::TrialCompleted { medicine_idx, disease_idx } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("?");
+                let disease_name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                let efficacy = state.medicines.get(*medicine_idx)
+                    .map(|m| m.effective_efficacy(*disease_idx, &state.diseases) * 100.0)
+                    .unwrap_or(0.0);
+                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%) — ready to deploy", med_name, disease_name, efficacy))
+            }
+            GameEvent::TechUnlocked { tech } => {
+                (3, format!("TECH UNLOCKED: {} — {}", tech.name(), tech.description()))
             }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
@@ -177,11 +205,14 @@ pub fn process_events(state: &mut GameState) {
         state.event_log.pop_front();
     }
 
-    // Set status bar message (add action hints for the status bar version)
+    // Set status bar message (add action hints for the status bar version).
+    // Only add hints when we can be sure which event type won the status bar.
     if let Some((priority, msg)) = status_msg {
         let status = match priority {
             0 => format!("{}. Personnel lost.", msg),
-            1 => format!("{}! Use [R] Research to identify it.", msg),
+            1 if msg.starts_with("NEW THREAT") => {
+                format!("{}! Use [R] Research to identify it.", msg)
+            }
             10 if !state.policies.iter().any(|p| p.any_active()) => {
                 format!("{}! Use [P] Policy to contain.", msg)
             }
