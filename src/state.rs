@@ -1639,10 +1639,6 @@ pub struct Medicine {
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
-    /// Legacy field, kept for save file compatibility. Previously distinguished
-    /// rapid vs standard variants; now mechanism properties drive all costs.
-    #[serde(default)]
-    pub rapid: bool,
 }
 
 /// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
@@ -1685,7 +1681,6 @@ impl Medicine {
                     tested_against: vec![],
                     strain_generations: vec![],
                     deployed_count: 0,
-                    rapid: false,
                 }];
             }
         };
@@ -1704,7 +1699,6 @@ impl Medicine {
                 tested_against: vec![],
                 strain_generations: vec![],
                 deployed_count: 0,
-                rapid: false,
             }
         }).collect()
     }
@@ -3338,7 +3332,6 @@ impl GameState {
             tested_against: vec![],
             strain_generations: vec![],
             deployed_count: 0,
-            rapid: false,
         });
 
         let num_diseases = diseases.len();
