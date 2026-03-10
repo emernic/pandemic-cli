@@ -1,6 +1,6 @@
 ---
 name: worker-manager
-description: Manage the background worker pool — ensure the recurring cron loop is running and launch a new worker Claude process to pick up an issue.
+description: Manage the background worker — ensure the recurring cron loop is running and launch a new worker Claude process to pick up an issue.
 disable-model-invocation: true
 ---
 
@@ -26,7 +26,7 @@ If the file contains a task ID (not "none"), call `TaskOutput` with `block=false
 
 ## Step 2: Create a Fresh Branch for the Worker
 
-The worker needs a clean branch to work on. Create one off `origin/master`:
+Master changes frequently. Checking out the latest `origin/master` ensures the worker launches with up-to-date skill files (including `/pick-up-issue`). The worker will create its own issue branch from here.
 
 ```bash
 git fetch origin && git checkout -b worker-$(date +%s) origin/master
