@@ -1204,16 +1204,23 @@ pub const OP_SURVEY_TICKS: f64 = 240.0; // 2 days
 pub const OP_SURVEY_REPAIR: f64 = 0.15; // restores 15%
 
 /// Supply Chain Reinforcement: funded investment to bolster supply lines in a region.
+/// Restores supply lines AND adds permanent resilience (reduces degradation rate).
 pub const OP_SUPPLY_PERSONNEL: u32 = 2;
 pub const OP_SUPPLY_TICKS: f64 = 360.0; // 3 days
 pub const OP_SUPPLY_COST: f64 = 800.0;
 pub const OP_SUPPLY_RESTORE: f64 = 0.20; // restores 20%
+pub const OP_SUPPLY_RESILIENCE: f64 = 0.25; // +25% degradation resistance per deployment
 
 /// Civil Order Stabilization: funded operation to shore up civil order in a region.
+/// Restores civil order AND adds permanent resilience (reduces degradation rate).
 pub const OP_CIVIL_PERSONNEL: u32 = 1;
 pub const OP_CIVIL_TICKS: f64 = 240.0; // 2 days
 pub const OP_CIVIL_COST: f64 = 600.0;
 pub const OP_CIVIL_RESTORE: f64 = 0.15; // restores 15%
+pub const OP_CIVIL_RESILIENCE: f64 = 0.25; // +25% degradation resistance per deployment
+
+/// Maximum resilience bonus from infrastructure investment (caps stacking).
+pub const MAX_INFRA_RESILIENCE: f64 = 0.75; // 75% max degradation reduction
 
 /// What kind of field operation is being conducted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1389,6 +1396,14 @@ pub struct Region {
     /// At 0: all policies disabled, spread rate +50%.
     #[serde(default = "default_one")]
     pub civil_order: f64,
+    /// Permanent resilience bonus for supply lines (0.0-0.75). Reduces supply line
+    /// degradation rate. Stacks from Supply Reinforcement operations.
+    #[serde(default)]
+    pub supply_resilience: f64,
+    /// Permanent resilience bonus for civil order (0.0-0.75). Reduces civil order
+    /// degradation rate. Stacks from Civil Stabilization operations.
+    #[serde(default)]
+    pub civil_resilience: f64,
     /// Tick at which an emergency response effect expires. While active,
     /// lethality in this region is reduced by OP_EMERGENCY_LETHALITY_MULT.
     #[serde(default)]
@@ -4469,6 +4484,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4504,6 +4521,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4539,6 +4558,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4574,6 +4595,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4609,6 +4632,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
@@ -4644,6 +4669,8 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                supply_resilience: 0.0,
+                civil_resilience: 0.0,
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,

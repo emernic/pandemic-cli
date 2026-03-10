@@ -1,7 +1,8 @@
 use crate::state::{
     FieldOpKind, FieldOperation, GameEvent, GameOutcome, GameState, InfraSystem,
-    KNOWLEDGE_NAME, OP_EMERGENCY_EFFECT_TICKS, OP_EMERGENCY_LETHALITY_MULT,
-    OP_RECON_KNOWLEDGE, OP_SURVEY_REPAIR, OP_SUPPLY_RESTORE, OP_CIVIL_RESTORE,
+    KNOWLEDGE_NAME, MAX_INFRA_RESILIENCE, OP_EMERGENCY_EFFECT_TICKS,
+    OP_EMERGENCY_LETHALITY_MULT, OP_RECON_KNOWLEDGE, OP_SURVEY_REPAIR,
+    OP_SUPPLY_RESTORE, OP_SUPPLY_RESILIENCE, OP_CIVIL_RESTORE, OP_CIVIL_RESILIENCE,
 };
 
 /// Start a field operation. Validates personnel availability and target.
@@ -180,27 +181,31 @@ fn complete_operation(state: &mut GameState, op: &FieldOperation) {
         }
         FieldOpKind::SupplyChainReinforcement { region_idx } => {
             let r_idx = *region_idx;
-            let old_val = state.regions.get(r_idx)
-                .map(|r| r.supply_lines).unwrap_or(1.0);
             if let Some(region) = state.regions.get_mut(r_idx) {
                 region.supply_lines = (region.supply_lines + OP_SUPPLY_RESTORE).min(1.0);
+                region.supply_resilience = (region.supply_resilience + OP_SUPPLY_RESILIENCE).min(MAX_INFRA_RESILIENCE);
             }
-            let new_pct = ((old_val + OP_SUPPLY_RESTORE).min(1.0) * 100.0) as u32;
+            let new_pct = state.regions.get(r_idx)
+                .map(|r| (r.supply_lines * 100.0) as u32).unwrap_or(0);
+            let res_pct = state.regions.get(r_idx)
+                .map(|r| (r.supply_resilience * 100.0) as u32).unwrap_or(0);
             let name = state.regions.get(r_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            ("Supply Reinforcement".to_string(), format!("{}: supply lines restored to {}%", name, new_pct))
+            ("Supply Reinforcement".to_string(), format!("{}: supply lines {}%, resilience {}%", name, new_pct, res_pct))
         }
         FieldOpKind::CivilOrderStabilization { region_idx } => {
             let r_idx = *region_idx;
-            let old_val = state.regions.get(r_idx)
-                .map(|r| r.civil_order).unwrap_or(1.0);
             if let Some(region) = state.regions.get_mut(r_idx) {
                 region.civil_order = (region.civil_order + OP_CIVIL_RESTORE).min(1.0);
+                region.civil_resilience = (region.civil_resilience + OP_CIVIL_RESILIENCE).min(MAX_INFRA_RESILIENCE);
             }
-            let new_pct = ((old_val + OP_CIVIL_RESTORE).min(1.0) * 100.0) as u32;
+            let new_pct = state.regions.get(r_idx)
+                .map(|r| (r.civil_order * 100.0) as u32).unwrap_or(0);
+            let res_pct = state.regions.get(r_idx)
+                .map(|r| (r.civil_resilience * 100.0) as u32).unwrap_or(0);
             let name = state.regions.get(r_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            ("Civil Stabilization".to_string(), format!("{}: civil order restored to {}%", name, new_pct))
+            ("Civil Stabilization".to_string(), format!("{}: civil order {}%, resilience {}%", name, new_pct, res_pct))
         }
     };
 
@@ -286,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn supply_reinforcement_restores_supply_lines_and_costs_funding() {
+    fn supply_reinforcement_restores_and_adds_resilience() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 2000.0;
         state.regions[0].supply_lines = 0.50;
@@ -306,10 +311,12 @@ mod tests {
         assert_eq!(state.field_operations.len(), 0);
         assert!((state.regions[0].supply_lines - 0.70).abs() < 0.01,
             "supply lines should be restored by 20%: got {}", state.regions[0].supply_lines);
+        assert!((state.regions[0].supply_resilience - 0.25).abs() < 0.01,
+            "should gain 25% supply resilience: got {}", state.regions[0].supply_resilience);
     }
 
     #[test]
-    fn civil_stabilization_restores_civil_order() {
+    fn civil_stabilization_restores_and_adds_resilience() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 2000.0;
         state.regions[0].civil_order = 0.40;
@@ -327,6 +334,8 @@ mod tests {
         assert_eq!(state.field_operations.len(), 0);
         assert!((state.regions[0].civil_order - 0.55).abs() < 0.01,
             "civil order should be restored by 15%: got {}", state.regions[0].civil_order);
+        assert!((state.regions[0].civil_resilience - 0.25).abs() < 0.01,
+            "should gain 25% civil resilience: got {}", state.regions[0].civil_resilience);
     }
 
     #[test]

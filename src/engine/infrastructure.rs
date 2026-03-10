@@ -85,7 +85,9 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_supply = state.regions[i].supply_lines;
-        let new_supply = (old_supply + death_drain + travel_ban_drain + natural_supply_recovery)
+        // Supply resilience reduces degradation (from reinforcement operations)
+        let supply_drain = (death_drain + travel_ban_drain) * (1.0 - state.regions[i].supply_resilience);
+        let new_supply = (old_supply + supply_drain + natural_supply_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].supply_lines = new_supply;
         emit_breakpoint_events(state, i, InfraSystem::SupplyLines, old_supply, new_supply);
@@ -127,8 +129,10 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_civil = state.regions[i].civil_order;
-        let new_civil = (old_civil + civil_death_drain + restriction_drain
-            + healthcare_cascade + natural_civil_recovery)
+        // Civil resilience reduces degradation (from stabilization operations)
+        let civil_drain = (civil_death_drain + restriction_drain + healthcare_cascade)
+            * (1.0 - state.regions[i].civil_resilience);
+        let new_civil = (old_civil + civil_drain + natural_civil_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].civil_order = new_civil;
         emit_breakpoint_events(state, i, InfraSystem::CivilOrder, old_civil, new_civil);
@@ -389,5 +393,56 @@ mod tests {
             "HC should be 0.10 + FIELD_OPS_RESTORE = 0.40, got {}", state.regions[0].healthcare_capacity);
         assert!(state.events.iter().any(|e| matches!(e,
             GameEvent::InfrastructureStabilized { region_idx: 0, system: InfraSystem::Healthcare })));
+    }
+
+    #[test]
+    fn supply_resilience_reduces_degradation() {
+        let mut state = GameState::new_default(42);
+        let pop = state.regions[0].population as f64;
+        state.regions[0].dead = pop * 0.06; // >5% dead, triggers fast drain
+
+        // Baseline: no resilience
+        let mut baseline = state.clone();
+        for _ in 0..(120 * 5) {
+            tick_infrastructure(&mut baseline);
+        }
+        let supply_no_resilience = baseline.regions[0].supply_lines;
+
+        // With 50% supply resilience
+        state.regions[0].supply_resilience = 0.50;
+        for _ in 0..(120 * 5) {
+            tick_infrastructure(&mut state);
+        }
+        let supply_with_resilience = state.regions[0].supply_lines;
+
+        assert!(supply_with_resilience > supply_no_resilience,
+            "supply resilience should slow degradation: {} vs {}",
+            supply_with_resilience, supply_no_resilience);
+    }
+
+    #[test]
+    fn civil_resilience_reduces_degradation() {
+        let mut state = GameState::new_default(42);
+        let pop = state.regions[0].population as f64;
+        state.regions[0].dead = pop * 0.06;
+        state.policies[0].quarantine = true;
+
+        // Baseline: no resilience
+        let mut baseline = state.clone();
+        for _ in 0..(120 * 5) {
+            tick_infrastructure(&mut baseline);
+        }
+        let civil_no_resilience = baseline.regions[0].civil_order;
+
+        // With 50% civil resilience
+        state.regions[0].civil_resilience = 0.50;
+        for _ in 0..(120 * 5) {
+            tick_infrastructure(&mut state);
+        }
+        let civil_with_resilience = state.regions[0].civil_order;
+
+        assert!(civil_with_resilience > civil_no_resilience,
+            "civil resilience should slow degradation: {} vs {}",
+            civil_with_resilience, civil_no_resilience);
     }
 }

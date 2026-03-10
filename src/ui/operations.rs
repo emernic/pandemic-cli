@@ -95,8 +95,8 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         ("Recon Mission", "Identify unknown pathogen", OP_RECON_PERSONNEL, OP_RECON_TICKS, None),
         ("Emergency Response", "Reduce lethality in a region", OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS, None),
         ("Infra Survey", "Repair worst infrastructure", OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS, None),
-        ("Supply Reinforcement", "Bolster supply lines in a region", OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, Some(OP_SUPPLY_COST)),
-        ("Civil Stabilization", "Shore up civil order in a region", OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, Some(OP_CIVIL_COST)),
+        ("Supply Reinforcement", "Restore supply lines + permanent resilience", OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, Some(OP_SUPPLY_COST)),
+        ("Civil Stabilization", "Restore civil order + permanent resilience", OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, Some(OP_CIVIL_COST)),
     ];
 
     let available = state.personnel_available();
@@ -214,11 +214,21 @@ fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &st
         let detail_str = match &detail {
             Some(InfraDetail::SupplyLines) => {
                 let pct = (region.supply_lines * 100.0) as u32;
-                format!("  (supply lines: {}%)", pct)
+                let res = (region.supply_resilience * 100.0) as u32;
+                if res > 0 {
+                    format!("  (supply: {}%, resilience: {}%)", pct, res)
+                } else {
+                    format!("  (supply lines: {}%)", pct)
+                }
             }
             Some(InfraDetail::CivilOrder) => {
                 let pct = (region.civil_order * 100.0) as u32;
-                format!("  (civil order: {}%)", pct)
+                let res = (region.civil_resilience * 100.0) as u32;
+                if res > 0 {
+                    format!("  (civil order: {}%, resilience: {}%)", pct, res)
+                } else {
+                    format!("  (civil order: {}%)", pct)
+                }
             }
             None => {
                 let infected_str = crate::format_number(region.estimated_infected);
