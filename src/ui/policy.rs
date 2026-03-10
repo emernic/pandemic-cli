@@ -31,6 +31,7 @@ use crate::state::{
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
     BARGAIN_OPERATIVE_INCOME_CUT, BARGAIN_MOBSTER_BASE_COST,
     GovernorPersonality,
+    InfraSystem, INFRA_REPAIR_COST, SUPPLY_REPAIR_COST,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -574,9 +575,68 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         lines.push(Line::from(""));
     }
 
-    // Appease Governor action (after all policies)
+    // Infrastructure repair actions (POLICY_COUNT, +1, +2)
     if !region.collapsed {
-        let appease_pos = POLICY_COUNT;
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ─── INFRASTRUCTURE REPAIR ───",
+            Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+        )));
+
+        let repair_items = [
+            (InfraSystem::Healthcare, region.healthcare_capacity, INFRA_REPAIR_COST),
+            (InfraSystem::SupplyLines, region.supply_lines, SUPPLY_REPAIR_COST),
+            (InfraSystem::CivilOrder, region.civil_order, INFRA_REPAIR_COST),
+        ];
+
+        for (i, (system, current, cost)) in repair_items.iter().enumerate() {
+            let display_pos = POLICY_COUNT + i;
+            let selected = state.ui.panel_selection == display_pos;
+            if selected { selected_line = Some(lines.len()); }
+            let marker = if selected { "▶ " } else { "  " };
+            let pct = (current * 100.0).round() as u32;
+            let (level_label, level_color) = if *current >= 0.99 {
+                ("OK ", Color::Green)
+            } else if *current > 0.50 {
+                ("LOW", Color::Yellow)
+            } else if *current > 0.0 {
+                ("CRIT", Color::Red)
+            } else {
+                ("FAIL", Color::Red)
+            };
+            let name_style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let already_full = *current >= 0.99;
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}", marker), name_style),
+                Span::styled(format!("Repair {:<16}", system.label()), name_style),
+                Span::styled(format!("{pct:3}% "), Style::default().fg(level_color)),
+                Span::styled(format!("[{level_label}]"), Style::default().fg(level_color).add_modifier(Modifier::BOLD)),
+            ]));
+            if already_full {
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled("Already at full capacity", Style::default().fg(Color::DarkGray)),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled(
+                        format!("+25% capacity  ¥{cost:.0}", ),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]));
+            }
+            lines.push(Line::from(""));
+        }
+    }
+
+    // Appease Governor action (after repair actions)
+    if !region.collapsed {
+        let appease_pos = POLICY_COUNT + 3;
         let selected = state.ui.panel_selection == appease_pos;
         if selected { selected_line = Some(lines.len()); }
         let gov = &region.governor;
@@ -631,7 +691,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         // Bargain option (below Appease, only when governor is defiant and bargain available)
         if state.bargain_available(region_idx) {
-            let bargain_pos = POLICY_COUNT + 1;
+            let bargain_pos = POLICY_COUNT + 4;
             let selected = state.ui.panel_selection == bargain_pos;
             if selected { selected_line = Some(lines.len()); }
             let marker = if selected { "▶ " } else { "  " };
