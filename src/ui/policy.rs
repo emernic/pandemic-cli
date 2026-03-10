@@ -206,7 +206,82 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         }
     }
 
+    // Funding Contracts section
+    let contract_items: usize = if state.contract_offer.is_some() { 1 } else { 0 };
+    {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ─── FUNDING CONTRACTS ───",
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        )));
+
+        if state.contracts.is_empty() && state.contract_offer.is_none() {
+            lines.push(Line::from(Span::styled(
+                "      No active contracts",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
+        // Show active contracts (non-selectable)
+        for contract in &state.contracts {
+            let income_day = contract.income * TICKS_PER_DAY;
+            let met = contract.condition.is_met(state);
+            let status_color = if met { Color::Green } else { Color::Red };
+            let status = if met { "✓" } else { "✗" };
+            lines.push(Line::from(vec![
+                Span::styled("    ", Style::default()),
+                Span::styled(contract.name.clone(), Style::default().fg(Color::White)),
+                Span::styled(
+                    format!("  +¥{:.0}/day", income_day),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::styled(
+                    format!("  {} {}", status, contract.condition.description()),
+                    Style::default().fg(status_color),
+                ),
+            ]));
+        }
+
+        // Show contract offer (selectable)
+        if let Some(offer) = &state.contract_offer {
+            let offer_pos = num_regions + 1;
+            let selected = state.ui.panel_selection == offer_pos;
+            let marker = if selected { "▶ " } else { "  " };
+            let income_day = offer.income * TICKS_PER_DAY;
+            let name_style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}", marker), name_style),
+                Span::styled("NEW: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(offer.name.clone(), name_style),
+                Span::styled(
+                    format!("  +¥{:.0}/day", income_day),
+                    Style::default().fg(Color::Green),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(offer.source.clone(), Style::default().fg(Color::DarkGray)),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("      Condition: "),
+                Span::styled(
+                    offer.condition.description(),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::styled(
+                    "  [Enter] Accept  [X] Reject",
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+    }
+
     // Emergency Decrees section
+    let decree_base = num_regions + 1 + contract_items;
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  ─── EMERGENCY DECREES ───",
@@ -229,7 +304,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
     ];
 
     for decree_idx in 0..DECREE_COUNT {
-        let display_pos = num_regions + 1 + decree_idx;
+        let display_pos = decree_base + decree_idx;
         let selected = state.ui.panel_selection == display_pos;
         let marker = if selected { "▶ " } else { "  " };
         let enacted = state.enacted_decrees.is_enacted(decree_idx);
@@ -300,7 +375,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
     }
 
     // Standing orders section
-    let so_base = num_regions + 1 + DECREE_COUNT;
+    let so_base = decree_base + DECREE_COUNT;
     let standing_orders = [
         (
             state.standing_orders.auto_quarantine_at_high,

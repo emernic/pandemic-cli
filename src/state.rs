@@ -178,6 +178,15 @@ pub struct GameState {
     /// Built via the Research panel. Each level multiplies all research progress rates.
     #[serde(default)]
     pub lab_level: u8,
+    /// Active funding contracts providing conditional income.
+    #[serde(default)]
+    pub contracts: Vec<FundingContract>,
+    /// Pending contract offer (accept/reject via Policy panel). None if no offer.
+    #[serde(default)]
+    pub contract_offer: Option<FundingContract>,
+    /// Tick when the last contract was offered (for spacing offers).
+    #[serde(default)]
+    pub last_contract_offer_tick: u64,
     pub ui: UiState,
 }
 
@@ -229,10 +238,10 @@ pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0020;
 pub const MAX_DISEASES: usize = 8;
 
 // Economy constants — single source of truth.
-pub const BASE_FUNDING_INCOME: f64 = 9.0;
+pub const BASE_FUNDING_INCOME: f64 = 5.4;
 /// Per-tick cost for each personnel on the roster (busy or idle).
-/// 20 personnel × 0.06 = $1.2/tick = $144/day upkeep vs ~$1080/day gross income → ~$936/day net.
-/// Training 5 more costs $36/day (~4% of net) — affordable but adds up with many hires.
+/// 20 personnel × 0.06 = $1.2/tick = $144/day upkeep vs ~$648/day base income.
+/// With 2 contracts (~¥360/day), gross ~¥1008/day → ~¥864/day net.
 /// History: 0.10 made training a trap (50% of income); 0.03 doubled income, trivializing economy.
 pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
 /// Fraction of infected people who are too sick to contribute economically.
@@ -301,6 +310,13 @@ pub const COLLAPSE_DEATH_RATE: f64 = 0.05;
 /// modern infrastructure.
 pub const COLLAPSE_SUBSISTENCE_FLOOR: f64 = 0.02;
 
+/// Maximum active funding contracts.
+pub const MAX_CONTRACTS: usize = 3;
+/// Ticks between contract offers (~5 days).
+pub const CONTRACT_OFFER_INTERVAL: u64 = 600;
+/// Tick when the first contract offer appears (~1 day).
+pub const CONTRACT_FIRST_OFFER_TICK: u64 = 120;
+
 /// Research Lab upgrade costs (one-time, no ongoing personnel cost).
 /// Level 1 (Enhanced Sequencing Lab): +30% research speed.
 /// Level 2 (Advanced Genomics Center): +60% research speed.
@@ -309,7 +325,7 @@ pub const LAB_LEVEL_2_COST: f64 = 300.0;
 
 /// Disease surveillance intensity. Each tier reveals different information
 /// and only Mass Rapid screening actively reduces disease spread.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub enum ScreeningLevel {
     #[default]
     None,
@@ -630,6 +646,18 @@ impl RegionPolicy {
         n
     }
 
+    /// Whether a policy (by index) is currently active. Handles both boolean
+    /// policies and screening tiers.
+    pub fn is_active(&self, policy_idx: usize) -> bool {
+        match policy_idx {
+            0..=4 | 8 | 9 => self.get_bool(policy_idx),
+            5 => self.screening >= ScreeningLevel::Basic,
+            6 => self.screening >= ScreeningLevel::Antigen,
+            7 => self.screening >= ScreeningLevel::MassRapid,
+            _ => false,
+        }
+    }
+
     pub fn clear_all(&mut self) {
         self.travel_ban = false;
         self.quarantine = false;
@@ -723,6 +751,95 @@ pub fn decree_display_name(decree_idx: usize) -> &'static str {
         4 => "Fortify Region",
         5 => "Emergency Countermeasure",
         _ => "Unknown Decree",
+    }
+}
+
+/// A condition attached to a funding contract. Checked each tick.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum FundingCondition {
+    /// A specific policy must NOT be active in any region.
+    ForbidPolicy { policy_idx: usize },
+    /// A specific policy must be active in at least one region.
+    RequirePolicy { policy_idx: usize },
+    /// DEFCON must not exceed this level (lower number = more restrictive).
+    MaxThreatLevel { level: u8 },
+    /// Total global deaths must stay below this threshold.
+    MaxDeaths { threshold: f64 },
+    /// All regions must remain standing (revoked on first collapse).
+    NoCollapse,
+    /// Must have at least one active research project on any track.
+    ActiveResearch,
+}
+
+impl FundingCondition {
+    pub fn description(&self) -> String {
+        match self {
+            Self::ForbidPolicy { policy_idx } => {
+                format!("Do not use {}", policy_display_name(*policy_idx))
+            }
+            Self::RequirePolicy { policy_idx } => {
+                format!("Maintain {} in at least one region", policy_display_name(*policy_idx))
+            }
+            Self::MaxThreatLevel { level } => {
+                format!("Keep DEFCON at {} or below", level)
+            }
+            Self::MaxDeaths { threshold } => {
+                format!("Global deaths below {}", format_large_number(*threshold))
+            }
+            Self::NoCollapse => "No region may collapse".to_string(),
+            Self::ActiveResearch => "Maintain active research at all times".to_string(),
+        }
+    }
+
+    /// Check whether this condition is currently satisfied.
+    pub fn is_met(&self, state: &GameState) -> bool {
+        match self {
+            Self::ForbidPolicy { policy_idx } => {
+                !state.policies.iter().any(|p| p.is_active(*policy_idx))
+            }
+            Self::RequirePolicy { policy_idx } => {
+                state.policies.iter().any(|p| p.is_active(*policy_idx))
+            }
+            Self::MaxThreatLevel { level } => {
+                state.threat_level.defcon() >= *level // defcon 5 > defcon 1
+            }
+            Self::MaxDeaths { threshold } => {
+                state.total_dead() < *threshold
+            }
+            Self::NoCollapse => {
+                !state.regions.iter().any(|r| r.collapsed)
+            }
+            Self::ActiveResearch => {
+                !state.field_research.is_empty()
+                    || state.applied_research.is_some()
+                    || state.basic_research.is_some()
+            }
+        }
+    }
+}
+
+/// A funding contract: external income with strings attached.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FundingContract {
+    pub name: String,
+    /// Per-tick income while contract is active.
+    pub income: f64,
+    pub condition: FundingCondition,
+    /// One-line flavor description of the funding source.
+    pub source: String,
+    /// Unique template index (used to avoid duplicate offers).
+    pub template_id: u8,
+}
+
+fn format_large_number(n: f64) -> String {
+    if n >= 1_000_000_000.0 {
+        format!("{:.1}B", n / 1_000_000_000.0)
+    } else if n >= 1_000_000.0 {
+        format!("{:.0}M", n / 1_000_000.0)
+    } else if n >= 1_000.0 {
+        format!("{:.0}K", n / 1_000.0)
+    } else {
+        format!("{:.0}", n)
     }
 }
 
@@ -2796,6 +2913,10 @@ pub enum GameEvent {
     },
     /// The game just ended (defeat). UI should pause and close panels.
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
+    /// A new funding contract offer is available.
+    ContractOffered { name: String },
+    /// A contract was revoked because its condition was violated.
+    ContractRevoked { name: String, reason: String },
     GameOver,
     /// A crisis event appeared and needs player attention.
     CrisisStarted,
@@ -2969,6 +3090,10 @@ pub enum GameCommand {
     StartFieldOp { kind: FieldOpKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
+    /// Accept the current funding contract offer.
+    AcceptContract,
+    /// Reject (dismiss) the current funding contract offer.
+    RejectContract,
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3509,9 +3634,10 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions, regions = rally, regions+1..regions+DECREE_COUNT = decrees,
-                    // regions+DECREE_COUNT+1..regions+DECREE_COUNT+2 = standing orders (2 items)
-                    state.regions.len() + 1 + DECREE_COUNT + 2 - 1
+                    // Items: 0..regions-1 = regions, regions = rally,
+                    // (optional: +1 contract offer), decrees, standing orders (2 items)
+                    let contract_items = if state.contract_offer.is_some() { 1 } else { 0 };
+                    state.regions.len() + 1 + contract_items + DECREE_COUNT + 2 - 1
                 }
                 // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
@@ -3866,8 +3992,13 @@ impl UiState {
                     // Rally Public Support
                     Some(GameCommand::RallySupport)
                 } else {
-                    // Layout mirrors render_browse: decree_base = num_regions+1, so_base = decree_base+DECREE_COUNT.
-                    let decree_base = num_regions + 1;
+                    let contract_items = if state.contract_offer.is_some() { 1 } else { 0 };
+                    let contract_pos = num_regions + 1;
+                    if contract_items > 0 && self.panel_selection == contract_pos {
+                        return Some(GameCommand::AcceptContract);
+                    }
+                    // Layout: decree_base = rally + 1 + contract_items
+                    let decree_base = num_regions + 1 + contract_items;
                     let so_base = decree_base + DECREE_COUNT;
                     if self.panel_selection >= so_base {
                         // Standing order selected
@@ -4460,6 +4591,9 @@ impl GameState {
             pathogens_attenuated: 0,
             pathogens_interdicted: 0,
             lab_level: 0,
+            contracts: Vec::new(),
+            contract_offer: None,
+            last_contract_offer_tick: 0,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -4768,7 +4902,14 @@ impl GameState {
         if self.enacted_decrees.conscript_researchers {
             income = (income - CONSCRIPT_INCOME_PENALTY).max(0.0);
         }
-        income
+        // Contract income — fixed, not affected by population health
+        let contract_income: f64 = self.contracts.iter().map(|c| c.income).sum();
+        income + contract_income
+    }
+
+    /// Per-tick income from active contracts alone (for UI breakdown).
+    pub fn contract_income_rate(&self) -> f64 {
+        self.contracts.iter().map(|c| c.income).sum()
     }
 
     /// Per-region income contribution per day (after all modifiers including decrees).
