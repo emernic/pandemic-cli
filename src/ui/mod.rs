@@ -104,7 +104,7 @@ pub fn process_events(state: &mut GameState) {
                 } else {
                     format!("NEW THREAT detected in {}", location)
                 };
-                let notification = format!("{}! Use [R] Research to identify it.", msg);
+                let notification = format!("{}! Use [R] Research to identify it.", msg.trim_end_matches('.'));
                 (1, msg, notification)
             }
             GameEvent::IntelBriefing { message } => {
