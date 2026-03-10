@@ -5045,6 +5045,81 @@ mod tests {
     }
 
     #[test]
+    fn degraded_infrastructure_reduces_delivery_effectiveness() {
+        // When infrastructure is degraded, fewer doses take effect on delivery.
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        // Advance to get some infected
+        for _ in 0..20 {
+            state = tick(&state);
+        }
+
+        let ri = primary_outbreak_region(&state);
+        let infected = state.regions[ri].disease_state(0).unwrap().infected;
+        assert!(infected > 100.0, "need infected to test treatment");
+
+        // Baseline: full infrastructure, deploy and deliver
+        let mut baseline = state.clone();
+        let target = crate::state::DeployTarget::Treat { disease_idx: 0 };
+        medicine::deploy_medicine(&mut baseline, 0, ri, target.clone());
+        assert_eq!(baseline.pending_shipments.len(), 1);
+        baseline.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut baseline);
+        let infected_full_infra = baseline.regions[ri].disease_state(0).unwrap().infected;
+
+        // Degraded: 50% supply lines, 50% healthcare = 25% efficiency
+        let mut degraded = state.clone();
+        degraded.regions[ri].supply_lines = 0.50;
+        degraded.regions[ri].healthcare_capacity = 0.50;
+        let target = crate::state::DeployTarget::Treat { disease_idx: 0 };
+        medicine::deploy_medicine(&mut degraded, 0, ri, target);
+        assert_eq!(degraded.pending_shipments.len(), 1);
+        degraded.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut degraded);
+        let infected_degraded = degraded.regions[ri].disease_state(0).unwrap().infected;
+
+        // With degraded infrastructure, more infected should remain (fewer doses effective)
+        assert!(
+            infected_degraded > infected_full_infra,
+            "degraded infra should leave more infected: degraded={:.0} vs full={:.0}",
+            infected_degraded, infected_full_infra
+        );
+    }
+
+    #[test]
+    fn delivery_efficiency_shown_in_shipped_event() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        for _ in 0..20 {
+            state = tick(&state);
+        }
+        let ri = primary_outbreak_region(&state);
+
+        // Degrade infrastructure
+        state.regions[ri].supply_lines = 0.60;
+        state.regions[ri].healthcare_capacity = 0.70;
+
+        let target = crate::state::DeployTarget::Treat { disease_idx: 0 };
+        medicine::deploy_medicine(&mut state, 0, ri, target);
+        state.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut state);
+
+        // Check that the delivered event contains the efficiency
+        let delivered = state.events.iter().find(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
+        assert!(delivered.is_some(), "should have a ShipmentDelivered event");
+        match delivered.unwrap() {
+            GameEvent::ShipmentDelivered { efficiency, .. } => {
+                let expected = 0.60 * 0.70; // 0.42
+                assert!(
+                    (*efficiency - expected).abs() < 0.01,
+                    "efficiency should be supply_lines * healthcare: got {efficiency}, expected {expected}"
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
     fn containment_adaptation_builds_under_quarantine() {
         let mut state = GameState::new_default(42);
         // Set up: disease 0 in region 0 with quarantine active

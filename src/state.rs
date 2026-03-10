@@ -1568,6 +1568,14 @@ impl Region {
         }
     }
 
+    /// Fraction of shipped doses that are effectively delivered and administered.
+    /// Supply lines determine how many doses physically arrive (logistics).
+    /// Healthcare capacity determines how many arriving doses can be administered (staff/facilities).
+    /// These are independent sequential bottlenecks, so they multiply.
+    pub fn delivery_efficiency(&self) -> f64 {
+        self.supply_lines * self.healthcare_capacity
+    }
+
     /// True if ANY disease in this region has an active deploy cooldown.
     pub fn any_deploy_cooldown(&self, current_tick: u64) -> bool {
         self.last_deploy_tick.values().any(|&t| {
@@ -3173,11 +3181,13 @@ pub enum GameEvent {
         region_idx: usize,
     },
     /// A shipment delivered and doses took effect.
+    /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare).
     ShipmentDelivered {
         medicine_idx: usize,
         region_idx: usize,
         doses: f64,
         adverse: bool,
+        efficiency: f64,
     },
     /// A disease has adapted to containment measures — quarantine/travel ban less effective.
     ContainmentAdaptation {
