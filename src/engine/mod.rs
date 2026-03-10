@@ -13,7 +13,7 @@ use rand::Rng;
 use crate::state::{
     CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
-    CRISIS_INTERVAL, CRISIS_MIN_TICK,
+    CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
 };
@@ -288,9 +288,14 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Enforce minimum gap between consecutive crises to prevent spam.
+    // Gap check is skipped if no crisis has ever been resolved (tick 0 = no prior crisis).
+    let crisis_gap_ok = new.last_crisis_resolved_tick == 0
+        || new.tick.saturating_sub(new.last_crisis_resolved_tick) >= CRISIS_MIN_GAP;
+
     // Fire scheduled follow-up crises (from previous crisis choices).
     // These take priority over random crisis generation.
-    if new.active_crisis.is_none() {
+    if new.active_crisis.is_none() && crisis_gap_ok {
         if let Some(idx) = new.pending_crises.iter().position(|&(tick, _)| tick <= new.tick) {
             let (_, kind) = new.pending_crises.remove(idx);
             let crisis = crisis::build_crisis_event(&new, kind);
@@ -307,6 +312,7 @@ pub fn tick(state: &GameState) -> GameState {
         (base * 0.5_f64.powf(day / 15.0)).max(360.0)
     };
     if new.active_crisis.is_none()
+        && crisis_gap_ok
         && new.tick >= CRISIS_MIN_TICK
         && rng.r#gen::<f64>() < 1.0 / crisis_interval
     {
@@ -360,9 +366,9 @@ pub fn tick(state: &GameState) -> GameState {
                 }
             }
 
-            // Trigger refugee crisis toward a non-collapsed neighbor (if any).
-            // Overrides any active crisis — collapse is a major event and its
-            // refugee consequence must not be silently lost.
+            // Schedule refugee crisis toward a non-collapsed neighbor (if any).
+            // Queued as pending so it respects the minimum gap between crises,
+            // preventing collapse cascades from drowning the player in popups.
             let neighbors: Vec<usize> = new.regions[i].connections.iter()
                 .filter(|&&c| !new.regions[c].collapsed)
                 .copied()
@@ -375,10 +381,8 @@ pub fn tick(state: &GameState) -> GameState {
             if let Some(to) = to {
                 let wave = new.regions.iter().filter(|r| r.collapsed).count() as u8;
                 let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to, wave };
-                // Overrides any active crisis — collapse takes priority.
-                // activate_crisis() handles auto-resolve preferences like all other crisis types.
-                let crisis_event = crisis::build_crisis_event(&new, kind);
-                crisis::activate_crisis(&mut new, crisis_event);
+                // Schedule immediately (fires when gap allows).
+                new.pending_crises.push((new.tick, kind));
             } else {
                 // No uncollapsed neighbors — no refugee destination.
                 // Game is nearly over; notification area will show the collapse.
@@ -3312,7 +3316,7 @@ mod tests {
     }
 
     #[test]
-    fn collapse_triggers_refugee_crisis_immediately() {
+    fn collapse_triggers_refugee_crisis() {
         let mut state = GameState::new_default(42);
         // Push region 0 right to the edge of collapse
         let threshold = state.regions[0].collapse_threshold;
@@ -3322,31 +3326,35 @@ mod tests {
         state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
         // Ensure no other crisis is active
         assert!(state.active_crisis.is_none());
-        // Tick should trigger collapse AND refugee crisis
+        // First tick triggers collapse and queues refugee crisis as pending
         let after = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        assert!(after.active_crisis.is_some(), "refugee crisis should fire immediately");
-        assert_eq!(after.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS");
-        assert!(matches!(after.sim_state, SimState::Event { .. }),
-            "sim state should be Event (not just Paused)");
+        assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
+            "refugee crisis should be queued as pending");
+        // Second tick fires the pending refugee crisis
+        let after2 = tick(&after);
+        assert!(after2.active_crisis.is_some(), "refugee crisis should fire on next tick");
+        assert_eq!(after2.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS");
     }
 
     #[test]
-    fn collapse_refugee_crisis_overrides_active_crisis() {
+    fn collapse_queues_refugee_crisis_when_crisis_active() {
         let mut state = GameState::new_default(42);
         // Push region 0 right to the edge of collapse
         let threshold = state.regions[0].collapse_threshold;
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
         state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
-        // Pre-load an active crisis (simulating a random crisis on the same tick)
+        // Pre-load an active crisis
         state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
         assert!(state.active_crisis.is_some());
-        // Tick should trigger collapse and OVERRIDE the existing crisis
+        // Tick should trigger collapse but NOT override — queue as pending instead
         let after = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        assert_eq!(after.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS",
-            "refugee crisis must override any existing crisis on collapse");
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Research Data Leaked",
+            "existing crisis should NOT be overridden");
+        assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
+            "refugee crisis should be queued as pending");
     }
 
     #[test]
@@ -3360,17 +3368,19 @@ mod tests {
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
         state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
+        // First tick: collapse queues refugee crisis as pending
         let after = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        // With auto-resolve set, the refugee crisis should fire and resolve immediately
-        assert!(after.active_crisis.is_none(),
-            "refugee crisis should be auto-resolved, not left pending");
-        assert!(!matches!(after.sim_state, SimState::Event { .. }),
-            "game should not be paused after auto-resolve");
-        assert!(after.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })),
+        assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
+            "refugee crisis should be pending after collapse");
+        // Second tick: pending crisis fires and auto-resolves
+        let after2 = tick(&after);
+        assert!(after2.active_crisis.is_none(),
+            "refugee crisis should be auto-resolved, not left active");
+        assert!(after2.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })),
             "CrisisAutoResolved event should be emitted");
         // POL should be lower (option 1 = close borders = POL loss)
-        assert!(after.resources.political_power < 0.80,
+        assert!(after2.resources.political_power < 0.80,
             "closing borders should drain political power");
     }
 
@@ -4455,6 +4465,28 @@ mod tests {
         let after = tick(&state);
         assert!(after.active_crisis.is_none(), "should not fire yet");
         assert_eq!(after.pending_crises.len(), 1, "should still be pending");
+    }
+
+    #[test]
+    fn crisis_min_gap_prevents_rapid_succession() {
+        use crate::state::CRISIS_MIN_GAP;
+        let mut state = GameState::new_default(42);
+        state.tick = 500;
+        // Simulate a recently resolved crisis
+        state.last_crisis_resolved_tick = state.tick - 10; // Only 10 ticks ago
+        state.pending_crises.push((state.tick, CrisisKind::PublicInquiry));
+        let after = tick(&state);
+        // Should NOT fire — gap not met
+        assert!(after.active_crisis.is_none(),
+            "pending crisis should not fire within CRISIS_MIN_GAP of last resolution");
+        assert_eq!(after.pending_crises.len(), 1, "should still be pending");
+
+        // Now advance past the gap
+        let mut state2 = after;
+        state2.tick = state2.last_crisis_resolved_tick + CRISIS_MIN_GAP;
+        let after2 = tick(&state2);
+        assert!(after2.active_crisis.is_some(),
+            "pending crisis should fire after gap is met");
     }
 
     #[test]

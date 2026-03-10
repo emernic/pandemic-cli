@@ -1479,6 +1479,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
     // Record cooldown for this crisis type
     state.crisis_cooldowns.insert(crisis.kind.tag().to_string(), state.tick);
+    // Record resolution tick for minimum gap enforcement
+    state.last_crisis_resolved_tick = state.tick;
 
     // Deduct costs generically from the chosen option (affordability was
     // already checked in apply_action before we get here).

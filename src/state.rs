@@ -111,6 +111,10 @@ pub struct GameState {
     /// (fire_at_tick, crisis_kind). Checked every tick; fires when due.
     #[serde(default)]
     pub pending_crises: Vec<(u64, CrisisKind)>,
+    /// Tick when the last crisis was resolved. Used to enforce a minimum gap
+    /// between consecutive crises so they don't become white noise.
+    #[serde(default)]
+    pub last_crisis_resolved_tick: u64,
     /// Auto-resolve preferences: crisis tag → choice index (0 = A, 1 = B).
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
@@ -3339,6 +3343,9 @@ pub const CRISIS_MIN_TICK: u64 = 360;
 pub const CRISIS_INTERVAL: u64 = 840;
 /// Minimum ticks before the same crisis type can repeat (~15 days).
 pub const CRISIS_TYPE_COOLDOWN: u64 = 1800;
+/// Minimum ticks between any two consecutive crises (~1.5 days).
+/// Prevents crisis spam during collapse cascades and late-game.
+pub const CRISIS_MIN_GAP: u64 = 180;
 
 /// Total infected across all regions at which a disease is detected by health systems.
 /// Below this, the disease spreads silently and is invisible to the player.
@@ -4624,6 +4631,7 @@ impl GameState {
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
             pending_crises: vec![],
+            last_crisis_resolved_tick: 0,
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_research: [false; 3],
