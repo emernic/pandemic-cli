@@ -2175,6 +2175,58 @@ mod tests {
     }
 
     #[test]
+    fn late_game_diseases_shift_toward_deadly_types() {
+        use crate::state::{PathogenType, TICKS_PER_DAY};
+        // Spawn many diseases at day 0 and day 30, compare type distributions.
+        let mut early_deadly = 0usize; // fungus + prion
+        let mut late_deadly = 0usize;
+        let trials = 200;
+
+        for seed in 0..trials {
+            // Early game (day 0)
+            let mut state = GameState::new_default(seed);
+            state.tick = 0;
+            let mut rng = state.rng.clone();
+            // Remove existing disease so spawn works clean
+            state.diseases.clear();
+            if let Some((idx, _)) = state.spawn_disease(&mut rng) {
+                match state.diseases[idx].pathogen_type {
+                    PathogenType::Fungus | PathogenType::Prion => early_deadly += 1,
+                    _ => {}
+                }
+            }
+            state.rng = rng;
+
+            // Late game (day 30)
+            let mut state2 = GameState::new_default(seed + 1000);
+            state2.tick = (30.0 * TICKS_PER_DAY) as u64;
+            state2.diseases.clear();
+            let mut rng2 = state2.rng.clone();
+            if let Some((idx, _)) = state2.spawn_disease(&mut rng2) {
+                match state2.diseases[idx].pathogen_type {
+                    PathogenType::Fungus | PathogenType::Prion => late_deadly += 1,
+                    _ => {}
+                }
+            }
+        }
+
+        // Late game should produce significantly more fungi/prions than early game.
+        // Early: ~1/8 base pool entries are fungus (12.5%), prion 5% = ~17%
+        // Late: ~3/7 base pool entries are fungus (43%), prion 25% = ~55%
+        assert!(
+            late_deadly > early_deadly,
+            "Late-game should produce more fungi/prions: early={early_deadly}/{trials}, late={late_deadly}/{trials}"
+        );
+        // Sanity check: early shouldn't be zero (fungus is still possible)
+        // and late should be meaningfully high
+        assert!(
+            late_deadly as f64 / trials as f64 > 0.30,
+            "Late-game fungi/prion rate should be >30%: {}/{trials}",
+            late_deadly
+        );
+    }
+
+    #[test]
     fn transmission_vector_affects_quarantine() {
         use crate::state::TransmissionVector;
 
