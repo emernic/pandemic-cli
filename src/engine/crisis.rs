@@ -1096,18 +1096,18 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.10, 80.0, 400.0);
             CrisisEvent {
-                title: format!("{}: Sovereignty Dispute", gov_name),
+                title: format!("{}: False All-Clear", gov_name),
                 description: format!(
-                    "{gov_name} issued a public statement in {region_name} and accidentally \
-                     announced that the pandemic is over. Crowds are celebrating in the streets."),
+                    "{gov_name} officially declared the pandemic over in {region_name}. \
+                     The announcement is incorrect. Civilians are abandoning health protocols."),
                 option_a: CrisisOption {
                     label: "Damage control".into(),
-                    description: "Lose 1 day research progress untangling the mess".into(),
+                    description: "Lose 1 day research progress correcting the record".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: format!("Federal override (¥{:.0})", cost),
-                    description: "Maintain operations. Governor will resent it.".into(),
+                    label: format!("Emergency correction (¥{:.0})", cost),
+                    description: "Broadcast a formal correction. Limits behavioral relapse.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
@@ -1121,10 +1121,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.10, 80.0, 400.0);
             CrisisEvent {
-                title: format!("{}: General Strike", gov_name),
+                title: format!("{}: Baseless Accusations", gov_name),
                 description: format!(
-                    "{gov_name} went on live broadcast accusing your agency of incompetence \
-                     in {region_name}. The charges are mostly baseless."),
+                    "{gov_name} publicly accused your agency of incompetence in {region_name}. \
+                     The charges are unsubstantiated."),
                 option_a: CrisisOption {
                     label: "Ignore it".into(),
                     description: "Small POL loss. The noise will die down.".into(),
@@ -1145,10 +1145,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let gov_name = state.regions.get(*region_idx)
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
-                title: format!("{}: Methodology Review", gov_name),
+                title: format!("{}: Non-Cooperation", gov_name),
                 description: format!(
-                    "{gov_name} has stopped returning calls. Policy enforcement in {region_name} \
-                     has ground to a halt. Your field teams are operating without local support."),
+                    "{gov_name} has gone dark. Policy enforcement in {region_name} has stalled. \
+                     Field teams are operating without local authorization."),
                 option_a: CrisisOption {
                     label: "Work around them".into(),
                     description: format!("Policy effectiveness reduced in {} until loyalty recovers", region_name),
@@ -1193,18 +1193,18 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.15, 100.0, 600.0);
             CrisisEvent {
-                title: format!("{}: Formal Complaint", gov_name),
+                title: format!("{}: Financial Misconduct", gov_name),
                 description: format!(
-                    "{gov_name} has stopped hiding the embezzlement. Your field staff know. \
-                     If you don't act, they'll assume you're complicit."),
+                    "{gov_name} is embezzling operational funds in the region. \
+                     Your field staff are aware. Inaction signals complicity."),
                 option_a: CrisisOption {
                     label: "Look the other way".into(),
                     description: "Lose 15% POL. Your staff lose respect.".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: format!("Commission a response (¥{:.0})", cost),
-                    description: "Formally counter the complaint. Limits political damage.".into(),
+                    label: format!("Audit (¥{:.0})", cost),
+                    description: "Trigger a financial audit. Reduces skim rate.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
