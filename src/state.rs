@@ -839,7 +839,9 @@ impl RegionTrait {
 /// Governor personality — determines how loyalty reacts to player decisions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GovernorPersonality {
-    /// Passive loyalty gain. Easy to keep happy.
+    /// Values transparency and public accountability. Passive loyalty gain —
+    /// easy to keep happy. When disloyal, leaks internal reports to the press,
+    /// draining political power rather than disrupting operations.
     Cooperative,
     /// Extra anger from restrictions AND suffering. Hardest to manage in a crisis.
     Nationalist,
