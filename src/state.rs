@@ -470,7 +470,7 @@ pub struct RegionPolicy {
     /// Blocks 90% of cross-region spread to/from this region.
     /// Also halves the region's contribution to funding income.
     pub travel_ban: bool,
-    /// Reduces infection rate within the region (35–65% depending on transmission vector).
+    /// Reduces infection rate within the region (20–65% depending on transmission vector).
     pub quarantine: bool,
     /// Halves lethality in the region.
     pub hospital_surge: bool,
@@ -505,7 +505,7 @@ pub struct RegionPolicy {
 /// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
 ///   0 = Travel Ban        5 = Basic Screening     8 = Martial Law
 ///   1 = Quarantine         6 = Antigen Screening   9 = Nuclear Annihilation
-///   2 = Hospital Surge     7 = Mass Rapid Screen  10 = Healthcare Investment
+///   2 = Hospital Surge     7 = Mass Rapid Screen  10 = Field Hospital
 ///   3 = Border Controls
 ///   4 = Water Sanitation
 ///
@@ -548,7 +548,7 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.15, // Mass Rapid Screening — mandatory mass testing, needs political will
     0.40, // Martial Law — drastic, needs high political will
     0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
-    0.00, // Healthcare Investment — always available, encourages early spending
+    0.15, // Field Hospital — institutional build, needs authority (especially per user)
     0.00, // Intel Station — always available, encourages early investment
 ];
 

@@ -2048,8 +2048,8 @@ mod tests {
             Some(PolicyUiState::ManagePolicies { region_idx: 4 })
         ));
 
-        // Navigate to Travel Ban (display position 7 after sorting by POL threshold)
-        for _ in 0..7 {
+        // Navigate to Travel Ban (display position 6 after sorting by POL threshold)
+        for _ in 0..6 {
             state = apply_action(&state, &Action::SelectNext);
         }
         state = apply_action(&state, &Action::Confirm);
