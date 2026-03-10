@@ -75,7 +75,7 @@ Agent(subagent_type=playtest, prompt=...)
 - What to focus on (vary this — rotate through the focus areas below)
 - Remind it to write the log to `./playtests/`
 - **Include the navigation instructions below verbatim** — the playtest agent needs them
-- **Ask "Would you play again?"** — at the end of their report, the agent must answer yes or no to whether they'd want to play again right now. Tell them that if they say yes, they'll get to immediately start a new session with a different strategy. This is baked into the playtest agent's report template, but reinforce it in your prompt.
+- **Ask "Do you want to play again?"** — at the end of their report, the agent must answer yes or no. Tell them that if they say yes, they'll get to immediately start a new session with a different strategy. **Do NOT actually let them play again** — this is just to measure whether they would. Record their answer in your summary and move on to triage.
 
 **The game is designed to be unwinnable.** Survival/endurance challenge. 20+ days decent, 40+ good, 100+ exceptional. Do NOT file issues about "can't win." DO file issues about the experience — was losing interesting? Were there meaningful decisions?
 
@@ -174,7 +174,7 @@ Not "what number should be different." Not "what modifier should be added." What
 ### Existing Issues Confirmed
 - #XXX — <title> (only if < 2 prior confirmations)
 
-### Would Play Again?
+### Play Again?
 <Yes/No from the playtest agent's report — this is a key signal>
 
 ### Key Themes
