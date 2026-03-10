@@ -1089,6 +1089,10 @@ fn default_one() -> f64 {
     1.0
 }
 
+fn default_one_u8() -> u8 {
+    1
+}
+
 fn default_collapse_threshold() -> f64 {
     0.50
 }
@@ -2702,7 +2706,8 @@ pub enum CrisisKind {
     /// Mutation surge — pay to gain knowledge or let it drift.
     MutationSurge { disease_idx: usize },
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
-    RefugeeWave { from_region: usize, to_region: usize },
+    /// `wave` counts how many regions have collapsed so far (1 on first collapse).
+    RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
     /// Research data leaked — go transparent or suppress.
     DataLeak,
     /// Untested drugs on the black market — confiscate or allow.
