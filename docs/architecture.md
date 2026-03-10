@@ -42,9 +42,12 @@ The engine is a module directory. `mod.rs` is the orchestrator — it owns `tick
 engine/
   mod.rs       — tick() orchestrator, execute_command() dispatcher, defeat/collapse checks
   research.rs  — start_research(), add/remove_personnel(), tick_research()
-  medicine.rs  — deploy_medicine() and dose/efficacy calculations
-  policy.rs    — toggle_policy(), tick_enforce_costs()
-  crisis.rs    — generate_crisis(), resolve_crisis()
+  medicine.rs  — deploy_medicine(), tick_shipments(), try_auto_deploy()
+  policy.rs    — toggle_policy(), tick_enforce_costs(), tick_governor_loyalty()
+  crisis.rs    — generate_crisis(), activate_crisis(), resolve_crisis()
+  spread.rs    — tick_spread_within(), tick_spread_cross_region(), tick_mutation()
+  disease.rs   — spawn_disease_scaled() (mid-game new threat emergence)
+  personnel.rs — scientist assignment, burnout, recovery tick
 ```
 
 Each subsystem module exposes `pub(super)` functions in two categories:
@@ -52,7 +55,7 @@ Each subsystem module exposes `pub(super)` functions in two categories:
 - **Tick helpers** — called from `tick()` each simulation step (e.g., `tick_research()`, `tick_enforce_costs()`). These advance ongoing processes.
 - **Command handlers** — called from `execute_command()` when the player acts (e.g., `start_research()`, `deploy_medicine()`). These handle one-shot player decisions.
 
-Subsystem modules depend only on `state.rs`, never on each other or on UI. Disease spread and mutation logic still lives inline in `tick()` in mod.rs.
+Subsystem modules depend only on `state.rs`, never on each other or on UI.
 
 ### How to add a new game system
 
@@ -78,16 +81,23 @@ keypress
 
 ```
 tick() in engine/mod.rs:
-  1. Disease spread (within-region, cross-region)
-  2. Disease mutation
-  3. research::tick_research()       — advance/complete research projects
-  4. policy::tick_enforce_costs()    — suspend unaffordable policies, deduct costs
-  5. Resource income (funding)
-  6. Disease emergence (mid-game new threats)
-  7. crisis::generate_crisis()       — random crisis events
-  8. Regional collapse checks
-  9. Defeat condition checks
-  10. History recording (sparkline data)
+  1.  spread::tick_spread_within()     — within-region disease transmission
+  2.  spread::tick_spread_cross_region() — inter-region spread via connections
+  3.  spread::tick_mutation()          — disease strain evolution
+  4.  research::tick_research()        — advance/complete research projects
+  5.  personnel::tick_personnel()      — scientist burnout and recovery
+  6.  medicine::try_auto_deploy()      — auto-deploy triggered by trial completions
+  7.  medicine::tick_shipments()       — deliver in-transit medicine shipments
+  8.  policy::tick_enforce_costs()     — suspend unaffordable policies, deduct costs
+  9.  policy::tick_governor_loyalty()  — governor loyalty drift
+  10. policy::tick_governor_actions()  — defiant governor consequences
+  11. Resource income, personnel upkeep, political power drift
+  12. Disease detection, threat escalation
+  13. Scheduled follow-up crises + crisis::generate_crisis()
+  14. RNG write-back + scientist roster sync
+  15. Regional collapse checks (may trigger crisis)
+  16. Defeat conditions + mercy rule
+  17. History recording (sparkline data)
 ```
 
 ## State
@@ -129,9 +139,12 @@ src/
   engine/
     mod.rs         — tick() orchestrator, execute_command() dispatcher
     research.rs    — Research project commands + tick completion
-    medicine.rs    — Medicine deployment logic
-    policy.rs      — Policy toggle + per-tick cost enforcement
+    medicine.rs    — Medicine deployment + shipment delivery + auto-deploy
+    policy.rs      — Policy toggle, decrees, governor actions, per-tick costs
     crisis.rs      — Crisis event generation + resolution
+    spread.rs      — Within-region spread, cross-region spread, mutation
+    disease.rs     — Disease emergence (spawning new threats mid-game)
+    personnel.rs   — Scientist assignment, burnout, recovery
   ui/
     mod.rs         — Layout orchestration, panel routing, process_events()
     home.rs        — Defeat screen
@@ -142,4 +155,5 @@ src/
     policy.rs      — Policy management panel
     resources.rs   — Header status bar
     hotkey_bar.rs  — Footer hotkey legend + status messages
+    scientists.rs  — Scientists roster panel
 ```
