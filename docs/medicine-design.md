@@ -30,11 +30,12 @@ struct Medicine {
 
 Effective doses = `doses × therapy_efficacy × strain_efficacy × cross_reactive_penalty`. Doses deplete with each deployment — the number of people actually treated is subtracted from the medicine's dose supply. When doses reach 0, the medicine cannot be deployed until more are manufactured via an applied research project (ManufactureDoses: 3 personnel, 120 ticks).
 
-| TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Prion |
-|---|---|---|---|---|
-| Antiviral | 1.0 | 0.8 | 0.1 | 0.0 |
-| Antibiotic | 0.1 | 0.1 | 1.0 | 0.0 |
-| BroadSpectrum | 0.7 | 0.7 | 0.7 | 0.1 |
+| TherapyType / PathogenType | RnaVirus | DnaVirus | Bacterium | Fungus | Prion |
+|---|---|---|---|---|---|
+| Antiviral | 1.0 | 0.8 | 0.1 | 0.1 | 0.0 |
+| Antibiotic | 0.1 | 0.1 | 1.0 | 0.1 | 0.0 |
+| Antifungal | 0.1 | 0.1 | 0.1 | 1.0 | 0.0 |
+| BroadSpectrum | 0.5 | 0.5 | 0.5 | 0.5 | 0.1 |
 
 ### Strain Drift
 
@@ -113,7 +114,7 @@ Two targeted medicines per non-prion disease (different mechanisms of action) + 
 |---|---|---|---|---|---|---|
 | Polymerase-A | Antiviral | PolymeraseInhibitor | Rapid | Disease 0 | $75 | 50M |
 | Protease-A | Antiviral | ProteaseInhibitor | Standard | Disease 0 | $35 | 150M |
-| Broad-Spectrum | BroadSpectrum | None | — | All | $10 | 2B |
+| Broad-Spectrum | BroadSpectrum | None | — | All | $10 | 500M |
 
 (Example for a starting RNA virus. Bacteria get bacterial mechanisms like CellWall/Ribosome instead.)
 
