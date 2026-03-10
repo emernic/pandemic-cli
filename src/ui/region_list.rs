@@ -319,21 +319,21 @@ fn render_region_box(
         }
         let sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
 
-        let segments: [(usize, Color); 4] = [
-            (sus_w, Color::Cyan),
-            (inf_w, Color::Red),
-            (imm_w, Color::Green),
-            (dead_w, Color::DarkGray),
+        let segments: [(usize, Color, &str); 4] = [
+            (sus_w, Color::Cyan, "█"),
+            (inf_w, Color::Red, "▓"),
+            (imm_w, Color::Green, "▒"),
+            (dead_w, Color::DarkGray, "░"),
         ];
 
         let mut spans = Vec::new();
-        for (width, color) in segments {
+        for (width, color, ch) in segments {
             if width > 0 {
-                spans.push(Span::styled("█".repeat(width), Style::default().fg(color)));
+                spans.push(Span::styled(ch.repeat(width), Style::default().fg(color)));
             }
         }
         // Fill remaining with healthy (if rounding left gaps)
-        let total: usize = segments.iter().map(|(w, _)| w).sum();
+        let total: usize = segments.iter().map(|(w, _, _)| w).sum();
         if total < bar_w {
             let remaining = bar_w - total;
             spans.push(Span::styled("█".repeat(remaining), Style::default().fg(Color::Cyan)));
