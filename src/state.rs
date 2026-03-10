@@ -1416,7 +1416,7 @@ pub struct Disease {
     #[serde(default)]
     pub sequencing_count: u32,
     /// Whether this disease has been detected by global health systems.
-    /// Undetected diseases spread silently — the player sees only "?" in the threats panel.
+    /// Undetected diseases spread silently — the player sees "Unknown pathogen (undetected)" in the threats panel.
     #[serde(default = "default_true")]
     pub detected: bool,
     /// Per-mechanism resistance levels. When a medicine with mechanism X is deployed
