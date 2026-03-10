@@ -259,8 +259,8 @@ Report any problems with the playtest process itself — NOT the game, but your 
 
 If everything worked fine, write "No process issues." That's it. But think hard before writing that — did everything *really* work, or did you quietly work around something?
 
-## Would You Play Again?
-At the very end of your report, answer this question: **Would you want to play again right now?** Just yes or no. If you say yes, you'll get the opportunity to immediately start a new session and try a different strategy.
+## Do You Want to Play Again?
+At the very end of your report, answer this question: **Do you want to play again?** Just yes or no. If you say yes, you'll get the opportunity to immediately start a new session and try a different strategy.
 
 ## Session Log
 Think-out-loud notes from the session, lightly cleaned up.
