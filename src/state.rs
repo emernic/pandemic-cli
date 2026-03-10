@@ -1461,31 +1461,90 @@ impl PathogenType {
     }
 
     /// Name pools for procedural disease name generation.
-    pub fn name_pool(&self) -> &'static [&'static str] {
+    /// Generate a procedurally constructed name for a pathogen of this type.
+    /// Uses a single u64 split across component indices, giving hundreds of unique
+    /// combinations per pathogen type without consuming extra RNG calls.
+    /// Each pathogen type has a distinct naming convention.
+    pub fn generate_name(&self, seed: u64) -> String {
+        // Split the 64-bit seed into independent parts for each component.
+        // High 32 bits → first component, low 32 bits → second component,
+        // low 16 bits → optional third component (prions only).
+        let hi = (seed >> 32) as usize;
+        let lo = (seed & 0xFFFF_FFFF) as usize;
+        let lo16 = (seed & 0xFFFF) as usize;
         match self {
-            PathogenType::RnaVirus => &[
-                "CORVID", "H7N3 Avian Flu", "Marburg-X", "Nipah-7",
-                "Zika Variant C", "RSV-Delta", "MERS-CoV-3", "Hantavirus Sigma",
-                "Rift Valley Fever X", "Lassa-9", "Dengue-Phi",
-            ],
-            PathogenType::DnaVirus => &[
-                "Variola Nova", "Monkeypox-Zeta", "Adeno-X47", "Herpes-Omega",
-                "Papilloma-R3", "Mimivirus Delta", "Baculovirus-H",
-            ],
-            PathogenType::Bacterium => &[
-                "Yersinia-Omega", "Vibrio Fortis", "Mycobacterium Sigma",
-                "Burkholderia-X", "Clostridium Rex", "Rickettsia Tau",
-                "Streptococcus Phi", "Klebsiella Nova",
-            ],
-            PathogenType::Fungus => &[
-                "Candida Omega", "Aspergillus Rex", "Cryptococcus Sigma",
-                "Mucor-X", "Trichophyton Nova", "Coccidioides Tau",
-                "Histoplasma Delta",
-            ],
-            PathogenType::Prion => &[
-                "PrP-Sigma Fold", "TSE-7 Variant", "Kuru-X Prion",
-                "CJD-Delta", "Fatal Insomnia Tau", "BSE-Omega",
-            ],
+            PathogenType::RnaVirus => {
+                const FAMILIES: &[&str] = &[
+                    "Corvid", "Nipah", "Marburg", "Lassa", "Hanta", "Dengue", "MERS",
+                    "RSV", "CCHF", "Ebola", "Metapneumo", "Enterovirus", "Rotavirus",
+                    "Norovirus", "West Nile", "Chikungunya", "Zika", "Rift Valley",
+                    "Mayaro", "Oropouche", "Junin", "Machupo", "Sabia", "Guanarito",
+                ];
+                const STRAINS: &[&str] = &[
+                    "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta",
+                    "Theta", "Iota", "Kappa", "Lambda", "Mu", "Sigma", "Tau", "Phi",
+                    "Chi", "Psi", "Omega", "Rho", "X7", "R5", "N9", "C3", "T4",
+                ];
+                format!("{}-{}", FAMILIES[hi % FAMILIES.len()], STRAINS[lo % STRAINS.len()])
+            }
+            PathogenType::DnaVirus => {
+                const FAMILIES: &[&str] = &[
+                    "Variola", "Monkeypox", "Adeno", "Herpes", "Papilloma", "Mimivirus",
+                    "Cytomegalo", "Parvovirus", "Kaposi", "Molluscum", "Orthopox",
+                    "Iridovirus", "Polyomavirus", "Bocavirus", "Gyrovirus",
+                    "Circovirus", "Torque-Teno", "Anellovirus", "Amdoparvovirus", "Densovirus",
+                ];
+                const CODES: &[&str] = &[
+                    "X47", "R3", "N9", "T7", "A4", "B6", "D2", "E8", "F1", "G5",
+                    "H3", "K9", "M7", "P4", "Q2", "S6", "T3", "V8", "W5", "Z1",
+                ];
+                format!("{}-{}", FAMILIES[hi % FAMILIES.len()], CODES[lo % CODES.len()])
+            }
+            PathogenType::Bacterium => {
+                const GENERA: &[&str] = &[
+                    "Yersinia", "Vibrio", "Mycobacterium", "Burkholderia", "Clostridium",
+                    "Rickettsia", "Streptococcus", "Klebsiella", "Pseudomonas", "Acinetobacter",
+                    "Enterococcus", "Salmonella", "Shigella", "Listeria", "Brucella",
+                    "Legionella", "Francisella", "Helicobacter", "Campylobacter", "Borrelia",
+                    "Treponema", "Bartonella", "Coxiella", "Ehrlichia", "Leptospira",
+                ];
+                const DESIGNATORS: &[&str] = &[
+                    "Omega", "Sigma", "Alpha", "Phi", "Delta", "Beta", "Gamma",
+                    "Tau", "Rho", "Psi", "Zeta", "Epsilon", "Kappa", "Lambda",
+                    "Mu", "Nu", "Xi", "Pi", "Upsilon", "Chi",
+                ];
+                format!("{}-{}", GENERA[hi % GENERA.len()], DESIGNATORS[lo % DESIGNATORS.len()])
+            }
+            PathogenType::Fungus => {
+                const GENERA: &[&str] = &[
+                    "Candida", "Aspergillus", "Cryptococcus", "Mucor", "Trichophyton",
+                    "Coccidioides", "Histoplasma", "Fusarium", "Sporothrix", "Paracoccidioides",
+                    "Blastomyces", "Pneumocystis", "Alternaria", "Exserohilum", "Scedosporium",
+                    "Saksenaea", "Cunninghamella", "Rhizopus", "Lomentospora", "Apophysomyces",
+                ];
+                const MODIFIERS: &[&str] = &[
+                    "Omega", "Rex", "Nova", "Sigma", "Alpha", "Beta", "Delta", "Phi",
+                    "Tau", "Rho", "Prime", "Variant-C", "Auris", "Tropicalis", "Glabrata",
+                ];
+                format!("{} {}", GENERA[hi % GENERA.len()], MODIFIERS[lo % MODIFIERS.len()])
+            }
+            PathogenType::Prion => {
+                const TYPES: &[&str] = &[
+                    "PrP", "TSE", "CJD", "BSE", "GSS", "FFI", "CWD", "Scrapie",
+                    "sCJD", "vCJD", "gCJD", "fCJD", "sMM", "sMV",
+                ];
+                const DESIGNATORS: &[&str] = &[
+                    "Sigma", "Tau", "Delta", "Omega", "Alpha", "Beta",
+                    "Epsilon", "Rho", "Xi", "Psi", "Lambda", "Kappa",
+                ];
+                const NOUNS: &[&str] = &[
+                    "Fold", "Variant", "Strain", "Form", "Type", "Isoform",
+                ];
+                format!("{}-{} {}",
+                    TYPES[hi % TYPES.len()],
+                    DESIGNATORS[lo % DESIGNATORS.len()],
+                    NOUNS[lo16 % NOUNS.len()])
+            }
         }
     }
 
@@ -1714,16 +1773,9 @@ impl Disease {
         used_names: &[String],
         toughness_bias: bool,
     ) -> Disease {
-        let pool = pathogen_type.name_pool();
-        let available: Vec<_> = pool.iter()
-            .filter(|n| !used_names.contains(&n.to_string()))
-            .collect();
-        let name = if available.is_empty() {
-            format!("Pathogen-{}", used_names.len() + 1)
-        } else {
-            let idx = rng.r#gen::<usize>() % available.len();
-            available[idx].to_string()
-        };
+        // Generate name seed FIRST — consumes exactly 1 RNG call, same position as the
+        // old name_pool() index draw. Stats use subsequent RNG values, preserving alignment.
+        let name_seed: u64 = rng.r#gen();
 
         let ranges = pathogen_type.stat_ranges();
         let range_val = |rng: &mut ChaCha8Rng, (lo, hi): (f64, f64)| -> f64 {
@@ -1738,14 +1790,28 @@ impl Disease {
             if bias { biased_val(rng, range) } else { range_val(rng, range) }
         };
 
+        let transmission = pathogen_type.random_transmission(rng);
+        let infectivity = stat(rng, ranges.infectivity, toughness_bias);
+        let lethality = stat(rng, ranges.lethality, toughness_bias);
+        let cross_region_spread = range_val(rng, ranges.cross_region);
+        let recovery_rate = range_val(rng, ranges.recovery);
+
+        // Use pre-generated seed to build name — no additional RNG calls.
+        // Combine seed with attempt index for variation across retries.
+        // Combination space is ~300–1000 per pathogen type, so collisions are rare.
+        let name = (0u64..20)
+            .map(|i| pathogen_type.generate_name(name_seed.wrapping_add(i)))
+            .find(|n| !used_names.contains(n))
+            .unwrap_or_else(|| format!("Pathogen-{}", used_names.len() + 1));
+
         Disease {
             name,
             pathogen_type,
-            transmission: pathogen_type.random_transmission(rng),
-            infectivity: stat(rng, ranges.infectivity, toughness_bias),
-            lethality: stat(rng, ranges.lethality, toughness_bias),
-            cross_region_spread: range_val(rng, ranges.cross_region),
-            recovery_rate: range_val(rng, ranges.recovery),
+            transmission,
+            infectivity,
+            lethality,
+            cross_region_spread,
+            recovery_rate,
             knowledge: 0.0,
             strain_generation: 0,
             sequencing_count: 0,
