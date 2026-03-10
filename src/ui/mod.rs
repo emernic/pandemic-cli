@@ -445,9 +445,15 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     lines.push(Line::from(""));
 
     let defeat_msg = if state.mercy_rule {
-        "  Your organization has run out of resources. The pandemic will run its course."
+        let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
+        if collapsed >= 4 {
+            format!("  {collapsed} of {} regions lost. No viable research remains.", state.regions.len())
+        } else {
+            "  No funding, no research, no medicine. The pandemic runs its course.".to_string()
+        }
     } else {
-        "  Humanity has fallen. Too many lives were lost."
+        let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
+        format!("  All {collapsed} regions collapsed. Global health infrastructure has ceased to function.")
     };
     lines.push(Line::from(Span::styled(
         defeat_msg,
@@ -616,7 +622,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     if !tips.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  ── What to try next time ──",
+            "  ── Debrief ──",
             Style::default().fg(Color::Yellow),
         )));
         lines.push(Line::from(""));
