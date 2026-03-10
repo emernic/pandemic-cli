@@ -83,20 +83,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                 ]
             }
-            ScientistStatus::Dead => vec![
-                Span::styled("    Dead", Style::default().fg(Color::DarkGray)),
-            ],
+            ScientistStatus::Dead => unreachable!("filtered by is_alive()"),
         };
         lines.push(Line::from(status_spans));
     }
 
     // Summary line at bottom
     let total = alive_scientists.len();
+    let assigned_ids = state.assigned_scientist_ids();
     let available = alive_scientists.iter()
-        .filter(|s| s.is_available() && !state.assigned_scientist_ids().contains(&s.id))
+        .filter(|s| s.is_available() && !assigned_ids.contains(&s.id))
         .count();
     let assigned = alive_scientists.iter()
-        .filter(|s| s.is_available() && state.assigned_scientist_ids().contains(&s.id))
+        .filter(|s| s.is_available() && assigned_ids.contains(&s.id))
         .count();
     let unavailable = total - available - assigned;
 
