@@ -410,9 +410,9 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
     )));
     lines.push(Line::from(""));
 
-    let options = [&crisis.option_a, &crisis.option_b];
-    let labels = ["A", "B"];
-    for (i, (option, label)) in options.iter().zip(labels.iter()).enumerate() {
+    let labels = ["A", "B", "C", "D", "E", "F"];
+    for (i, option) in crisis.options.iter().enumerate() {
+        let label = labels.get(i).unwrap_or(&"?");
         let affordable = option.cost.as_ref().map_or(true, |c| c.affordable(state));
         let marker = if selection == i { "▶ " } else { "  " };
 

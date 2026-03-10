@@ -23,10 +23,17 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     if new.active_crisis.is_some() {
         match action {
             Action::SelectNext | Action::SelectRight => {
-                new.ui.crisis_selection = 1;
+                let max = new.active_crisis.as_ref()
+                    .map(|c| c.options.len().saturating_sub(1))
+                    .unwrap_or(0);
+                if new.ui.crisis_selection < max {
+                    new.ui.crisis_selection += 1;
+                }
             }
             Action::SelectPrev | Action::SelectLeft => {
-                new.ui.crisis_selection = 0;
+                if new.ui.crisis_selection > 0 {
+                    new.ui.crisis_selection -= 1;
+                }
             }
             Action::ToggleExtra => {
                 new.ui.crisis_auto_resolve = !new.ui.crisis_auto_resolve;
@@ -34,11 +41,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             Action::Confirm => {
                 let choice = new.ui.crisis_selection;
                 // Check if the selected option is affordable
-                let option = if choice == 0 {
-                    &new.active_crisis.as_ref().unwrap().option_a
-                } else {
-                    &new.active_crisis.as_ref().unwrap().option_b
-                };
+                let option = &new.active_crisis.as_ref().unwrap().options[choice];
                 if let Some(cost) = &option.cost {
                     if !cost.affordable(&new) {
                         new.ui.status_message = Some("Not enough resources".into());
@@ -275,8 +278,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
-            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
+             CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -299,8 +303,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
-            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
+             CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -325,8 +330,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
-            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
+             CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -348,8 +354,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
-            option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
+             CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            ],
             tick_created: 0,
         });
 

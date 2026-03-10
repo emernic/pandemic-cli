@@ -2719,8 +2719,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 300.0, personnel: 3 },
             title: "Test Crisis".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "A".into(), cost: None },
-            option_b: CrisisOption { label: "B".into(), description: "B".into(), cost: None },
+            options: vec![ CrisisOption { label: "A".into(), description: "A".into(), cost: None },
+             CrisisOption { label: "B".into(), description: "B".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -2745,8 +2746,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "RP".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
+             CrisisOption { label: "RP".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -2762,8 +2764,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "Personnel".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
+             CrisisOption { label: "Personnel".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::SelectNext); // select option B
@@ -2783,9 +2786,10 @@ mod tests {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Burnout".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "Pay ¥400".into(), description: "".into(),
+            options: vec![ CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
+             CrisisOption { label: "Pay ¥400".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
+            ],
             tick_created: 0,
         });
 
@@ -2812,8 +2816,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -2834,8 +2839,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -2855,8 +2861,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
 
@@ -2891,8 +2898,9 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
             title: "Test".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
         state.sim_state = SimState::Event { was_running: true };
@@ -2971,16 +2979,17 @@ mod tests {
             kind: CrisisKind::LabAccident { targets_basic: false },
             title: "Lab Accident".into(),
             description: "Test".into(),
-            option_a: CrisisOption {
+            options: vec![ CrisisOption {
                 label: "Evacuate".into(),
                 description: "Lose research".into(),
                 cost: None,
             },
-            option_b: CrisisOption {
+             CrisisOption {
                 label: "Contain".into(),
                 description: "Save research".into(),
                 cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
             },
+            ],
             tick_created: 0,
         });
 
@@ -3012,16 +3021,17 @@ mod tests {
             kind: CrisisKind::LabAccident { targets_basic: true },
             title: "Lab Accident".into(),
             description: "Test".into(),
-            option_a: CrisisOption {
+            options: vec![ CrisisOption {
                 label: "Evacuate".into(),
                 description: "Lose research".into(),
                 cost: None,
             },
-            option_b: CrisisOption {
+             CrisisOption {
                 label: "Contain".into(),
                 description: "Save research".into(),
                 cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
             },
+            ],
             tick_created: 0,
         });
 
@@ -3053,16 +3063,17 @@ mod tests {
             kind: CrisisKind::LabAccident { targets_basic: false },
             title: "Lab Accident".into(),
             description: "Test".into(),
-            option_a: CrisisOption {
+            options: vec![ CrisisOption {
                 label: "Evacuate".into(),
                 description: "Lose research".into(),
                 cost: None,
             },
-            option_b: CrisisOption {
+             CrisisOption {
                 label: "Contain".into(),
                 description: "Save research".into(),
                 cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
             },
+            ],
             tick_created: 0,
         });
 
@@ -3085,8 +3096,9 @@ mod tests {
             kind,
             title: "Test Crisis".into(),
             description: "Test".into(),
-            option_a: CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
             tick_created: 0,
         });
     }
@@ -3117,9 +3129,10 @@ mod tests {
             kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
             title: "T".into(),
             description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 300.0, personnel: 0 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3148,9 +3161,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::PoliticalPressure { region_idx: 0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 500.0, personnel: 0 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3178,9 +3192,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::MutationSurge { disease_idx: 0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 300.0, personnel: 0 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3368,9 +3383,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::QuarantineRiot { region_idx: 0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 0.0, personnel: 2 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3399,9 +3415,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::MediaPanic,
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 300.0, personnel: 1 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3453,9 +3470,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::VaccineHesitancy { region_idx: 0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3484,9 +3502,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::CorruptOfficial { stolen: 300.0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 0.0, personnel: 2 }) },
+            ],
             tick_created: 0,
         });
         let before_personnel = state.resources.personnel;
@@ -3635,9 +3654,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::WHOEvacuation { aid_loss: 150.0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 800.0, personnel: 3 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
@@ -3668,9 +3688,10 @@ mod tests {
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::WarlordDemand { region_idx: 0 },
             title: "T".into(), description: "T".into(),
-            option_a: crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-            option_b: crate::state::CrisisOption { label: "B".into(), description: "".into(),
+            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
+             crate::state::CrisisOption { label: "B".into(), description: "".into(),
                 cost: Some(CrisisCost { funding: 500.0, personnel: 0 }) },
+            ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
