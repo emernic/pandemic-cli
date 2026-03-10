@@ -235,11 +235,11 @@ pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 /// Gives the player time to identify disease 0 and start the research pipeline.
 pub const EMERGENCE_MIN_TICK: u64 = 600;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 4 days → relentless pressure throughout the game.
-/// Combined with spawn_disease_scaled, late-game diseases are monsters.
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0020;
+/// ~1 new disease every 7 days → steady pressure without overwhelming the
+/// research pipeline (which takes 7-10 days per disease).
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0012;
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 8;
+pub const MAX_DISEASES: usize = 5;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.4;
