@@ -451,11 +451,11 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         // shared severity thresholds (CRIT/HIGH/MOD) from state.rs.
         use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
         let severity_drain = if infected > SEVERITY_CRIT_THRESHOLD {
-            -0.008 // CRIT: ~0.96/day
+            -0.015 // CRIT: ~1.8/day — mid-game defiance in ~14 days at this level
         } else if infected > SEVERITY_HIGH_THRESHOLD {
-            -0.004 // HIGH: ~0.48/day
+            -0.008 // HIGH: ~0.96/day
         } else if infected > SEVERITY_MOD_THRESHOLD {
-            -0.001 // MOD: ~0.12/day
+            -0.002 // MOD: ~0.24/day
         } else {
             0.0
         };
@@ -464,18 +464,18 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         let death_drain = -death_frac * 0.03; // ~0.036/day at 1% dead, ~0.36/day at 10%
 
         // Policy pressure: each restrictive policy drains loyalty
-        let policy_drain = -restrictive_count * 0.003; // ~0.36/day per policy
+        let policy_drain = -restrictive_count * 0.005; // ~0.6/day per policy
 
         // Personality modifiers
         let personality_mod = match personality {
             GovernorPersonality::Cooperative => 0.002, // passive loyalty gain (~0.24/day)
             GovernorPersonality::Nationalist => {
                 // Angry about both restrictions AND suffering in their region
-                let restriction_anger = -restrictive_count * 0.002;
+                let restriction_anger = -restrictive_count * 0.003;
                 let suffering_anger = if infected > SEVERITY_CRIT_THRESHOLD {
-                    -0.004 // extra CRIT penalty (~0.48/day)
+                    -0.006 // extra CRIT penalty (~0.72/day)
                 } else if infected > SEVERITY_HIGH_THRESHOLD {
-                    -0.002 // extra HIGH penalty (~0.24/day)
+                    -0.003 // extra HIGH penalty (~0.36/day)
                 } else {
                     0.0
                 };
@@ -483,7 +483,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
             }
             GovernorPersonality::Populist => {
                 // Hates restrictive policies — extra drain on top of base policy_drain
-                let restriction_anger = -restrictive_count * 0.004; // ~0.48/day per policy (stacks with base 0.36)
+                let restriction_anger = -restrictive_count * 0.006; // ~0.72/day per policy (stacks with base 0.6)
                 // Happy when region is calm with no restrictions
                 let calm_bonus = if restrictive_count == 0.0 && infected <= SEVERITY_HIGH_THRESHOLD {
                     0.003 // ~0.36/day — rewards light-touch approach
