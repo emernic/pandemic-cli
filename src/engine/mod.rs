@@ -10,7 +10,8 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState, COLLAPSE_DISRUPTION_TICKS,
+    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
+    COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
@@ -370,6 +371,34 @@ pub fn tick(state: &GameState) -> GameState {
             } else {
                 // No uncollapsed neighbors — no refugee destination.
                 // Game is nearly over; notification area will show the collapse.
+            }
+        }
+    }
+
+    // Post-collapse secondary deaths: starvation, violence, infrastructure breakdown.
+    // 5% of alive per day until population hits 2% subsistence floor.
+    for i in 0..new.regions.len() {
+        if !new.regions[i].collapsed {
+            continue;
+        }
+        let pop = new.regions[i].population as f64;
+        let floor = pop * COLLAPSE_SUBSISTENCE_FLOOR;
+        let alive = new.regions[i].alive();
+        if alive <= floor {
+            continue;
+        }
+        let deaths_this_tick = (alive * COLLAPSE_DEATH_RATE / TICKS_PER_DAY)
+            .min(alive - floor);
+        if deaths_this_tick > 0.0 {
+            new.regions[i].dead += deaths_this_tick;
+            new.regions[i].collapse_deaths += deaths_this_tick;
+            // Log once per day (on the tick boundary)
+            if new.tick % (TICKS_PER_DAY as u64) == 0 {
+                let daily_deaths = deaths_this_tick * TICKS_PER_DAY;
+                new.events.push(GameEvent::CollapseSecondaryDeaths {
+                    region_idx: i,
+                    deaths: daily_deaths,
+                });
             }
         }
     }
@@ -5180,6 +5209,63 @@ mod tests {
         let boosted_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure() + wave_boost);
         assert!(boosted_chance > normal_chance * 3.0,
             "wave-boosted chance should be significantly higher: normal={normal_chance}, boosted={boosted_chance}");
+    }
+
+    #[test]
+    fn collapsed_regions_suffer_secondary_deaths() {
+        let mut state = GameState::new_default(42);
+        // Manually collapse region 0 with some deaths
+        let pop = state.regions[0].population as f64;
+        state.regions[0].dead = pop * 0.50; // 50% dead (past the 45% threshold)
+        state.regions[0].collapsed = true;
+        state.regions[0].collapsed_at_tick = Some(0);
+
+        let alive_before = state.regions[0].alive();
+        assert!(alive_before > 0.0);
+
+        // Run one day worth of ticks
+        let mut s = state.clone();
+        for _ in 0..(TICKS_PER_DAY as u64) {
+            s = tick(&s);
+        }
+
+        let alive_after = s.regions[0].alive();
+        let secondary = s.regions[0].collapse_deaths;
+
+        // Should have lost ~5% of alive population
+        let expected_loss = alive_before * COLLAPSE_DEATH_RATE;
+        assert!(secondary > expected_loss * 0.8, "Expected ~{expected_loss:.0} secondary deaths, got {secondary:.0}");
+        assert!(secondary < expected_loss * 1.2, "Too many secondary deaths: {secondary:.0} vs expected ~{expected_loss:.0}");
+        assert!(alive_after < alive_before, "Alive should decrease: {alive_before:.0} -> {alive_after:.0}");
+    }
+
+    #[test]
+    fn collapse_deaths_stop_at_subsistence_floor() {
+        let mut state = GameState::new_default(42);
+        let pop = state.regions[0].population as f64;
+        let floor = pop * COLLAPSE_SUBSISTENCE_FLOOR;
+
+        // Remove all infections so only secondary deaths occur
+        state.regions[0].infections.clear();
+        state.diseases.clear();
+
+        // Set region just above the floor
+        state.regions[0].dead = pop - floor - 100.0;
+        state.regions[0].collapsed = true;
+        state.regions[0].collapsed_at_tick = Some(0);
+
+        let alive_before = state.regions[0].alive();
+        assert!(alive_before > floor);
+        assert!(alive_before < floor + 200.0);
+
+        // Run many ticks — should not go below floor
+        let mut s = state.clone();
+        for _ in 0..(TICKS_PER_DAY as u64 * 10) {
+            s = tick(&s);
+        }
+
+        let alive_after = s.regions[0].alive();
+        assert!(alive_after >= floor - 1.0, "Alive {alive_after:.0} fell below floor {floor:.0}");
     }
 
 }

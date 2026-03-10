@@ -293,6 +293,13 @@ pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 pub const COLLAPSE_DISRUPTION_TICKS: u64 = 1200;
 /// Medicine deployment cost multiplier for regions disrupted by a neighboring collapse.
 pub const DISRUPTION_MEDICINE_COST_MULT: f64 = 1.5;
+/// Post-collapse secondary death rate: fraction of alive population lost per day
+/// to starvation, violence, and infrastructure breakdown.
+pub const COLLAPSE_DEATH_RATE: f64 = 0.05;
+/// Subsistence floor: collapse deaths stop when population falls to this fraction
+/// of the original. Represents survivors who can sustain themselves without
+/// modern infrastructure.
+pub const COLLAPSE_SUBSISTENCE_FLOOR: f64 = 0.02;
 
 /// Research Lab upgrade costs (one-time, no ongoing personnel cost).
 /// Level 1 (Enhanced Sequencing Lab): +30% research speed.
@@ -1133,6 +1140,11 @@ pub struct Region {
     /// Tick when this region collapsed (None if still standing).
     #[serde(default)]
     pub collapsed_at_tick: Option<u64>,
+    /// Cumulative deaths from post-collapse secondary causes (starvation, violence,
+    /// lack of medical care). These are included in `dead` but not in any
+    /// `RegionDiseaseState.dead`, making the gap visible to the player.
+    #[serde(default)]
+    pub collapse_deaths: f64,
     /// Field hospital level: 0 = none, 1 = Field Hospital (25% lethality reduction),
     /// 2 = Medical Center (40% lethality reduction + 25% medicine efficacy bonus).
     /// Destroyed (reset to 0) when region collapses.
@@ -2770,6 +2782,12 @@ pub enum GameEvent {
     RegionCollapsed {
         region_idx: usize,
     },
+    /// Post-collapse secondary deaths (starvation, violence, infrastructure breakdown).
+    /// Fires once per day per collapsed region so the event log isn't spammed.
+    CollapseSecondaryDeaths {
+        region_idx: usize,
+        deaths: f64,
+    },
     /// A non-collapsed region is now suffering network disruption from a neighboring collapse.
     /// Policy costs +30%, medicine deployment costs +50% for 10 days.
     NetworkDisruption {
@@ -4146,6 +4164,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                collapse_deaths: 0.0,
                 hospital_level: 0,
                 intel_level: 0,
                 income_modifier: 1.8,     // Wealthy — major economic contributor
@@ -4179,6 +4198,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                collapse_deaths: 0.0,
                 hospital_level: 0,
                 intel_level: 0,
                 income_modifier: 1.0,     // Moderate economy
@@ -4212,6 +4232,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                collapse_deaths: 0.0,
                 hospital_level: 0,
                 intel_level: 0,
                 income_modifier: 1.5,     // Strong economy, hub region
@@ -4245,6 +4266,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                collapse_deaths: 0.0,
                 hospital_level: 0,
                 intel_level: 0,
                 income_modifier: 0.6,     // Lower per-capita income
@@ -4278,6 +4300,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                collapse_deaths: 0.0,
                 hospital_level: 0,
                 intel_level: 0,
                 income_modifier: 0.9,     // Large but moderate per-capita
@@ -4311,6 +4334,7 @@ impl GameState {
                 dead: 0.0,
                 collapsed: false,
                 collapsed_at_tick: None,
+                collapse_deaths: 0.0,
                 hospital_level: 0,
                 intel_level: 0,
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
@@ -4592,13 +4616,18 @@ impl GameState {
             .unwrap_or_default()
     }
 
-    /// Total dead from detected diseases only (for UI display).
+    /// Total dead from detected diseases plus post-collapse secondary deaths (for UI display).
+    /// Excludes deaths from undetected diseases (player doesn't know about those yet).
     pub fn total_dead_detected(&self) -> f64 {
-        self.regions.iter()
+        let disease_dead: f64 = self.regions.iter()
             .flat_map(|r| &r.infections)
             .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
             .map(|inf| inf.dead)
-            .sum()
+            .sum();
+        let collapse_dead: f64 = self.regions.iter()
+            .map(|r| r.collapse_deaths)
+            .sum();
+        disease_dead + collapse_dead
     }
 
     pub fn personnel_busy(&self) -> u32 {
