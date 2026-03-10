@@ -259,11 +259,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
                     disease.infectivity *= 0.80;
                     state.pathogens_suppressed += 1;
-                    let name = disease.display_name(d_idx);
-                    state.event_log.push_back((
-                        state.tick as f64 / crate::state::TICKS_PER_DAY,
-                        format!("Suppression complete: {name} infectivity reduced 20%"),
-                    ));
+                    state.events.push(GameEvent::PathogenSuppressed { disease_idx: d_idx });
                 }
             }
             ResearchKind::AttenuatePathogen { disease_idx } => {
@@ -271,11 +267,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
                     disease.lethality *= 0.70;
                     state.pathogens_attenuated += 1;
-                    let name = disease.display_name(d_idx);
-                    state.event_log.push_back((
-                        state.tick as f64 / crate::state::TICKS_PER_DAY,
-                        format!("Attenuation complete: {name} lethality reduced 30%"),
-                    ));
+                    state.events.push(GameEvent::PathogenAttenuated { disease_idx: d_idx });
                 }
             }
             ResearchKind::InterdictPathogen { disease_idx } => {
@@ -283,11 +275,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
                     disease.cross_region_spread = 0.0;
                     state.pathogens_interdicted += 1;
-                    let name = disease.display_name(d_idx);
-                    state.event_log.push_back((
-                        state.tick as f64 / crate::state::TICKS_PER_DAY,
-                        format!("Interdiction complete: {name} cross-region transmission eliminated"),
-                    ));
+                    state.events.push(GameEvent::PathogenInterdicted { disease_idx: d_idx });
                 }
             }
             _ => {}

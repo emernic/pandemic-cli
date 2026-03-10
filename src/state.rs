@@ -2778,6 +2778,18 @@ pub enum GameEvent {
     TechUnlocked {
         tech: BasicTech,
     },
+    /// Suppression research complete — pathogen infectivity permanently reduced.
+    PathogenSuppressed {
+        disease_idx: usize,
+    },
+    /// Attenuation research complete — pathogen lethality permanently reduced.
+    PathogenAttenuated {
+        disease_idx: usize,
+    },
+    /// Interdiction research complete — cross-region transmission eliminated.
+    PathogenInterdicted {
+        disease_idx: usize,
+    },
     /// A medicine shipment was dispatched and is in transit.
     MedicineShipped {
         medicine_idx: usize,
