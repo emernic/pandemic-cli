@@ -27,8 +27,11 @@ NEVER check or set GitHub assignees. Always filter by the `in-progress` label.
 gh issue list --state open --search "-label:in-progress" --json number,title,labels,createdAt
 ```
 
-Selection criteria (in priority order):
-1. **Priority labels** — P0-critical > P1-high > P2-medium > P3-low > unlabeled.
+Selection criteria (in STRICT priority order):
+
+**⚠️ P0-critical issues are MANDATORY FIRST. This is non-negotiable.** If there are ANY open P0-critical issues without the `in-progress` label, you MUST pick one of them. Do not skip P0 issues because they're investigate issues, because they're "not code changes," because they seem ambiguous, or for any other reason. P0 means P0. The entire point of having priority labels is that they override personal preference. If you find yourself reaching for a P1 or P2 issue while P0s exist, stop and pick the P0.
+
+1. **Priority labels** — P0-critical > P1-high > P2-medium > P3-low > unlabeled. **Higher priority ALWAYS wins.** A P0 investigate issue takes precedence over a P1 enhancement. A P1 bug takes precedence over a P2 design issue. No exceptions.
 2. **Playtest confirmation count** — among equal-priority issues, prefer issues that have been confirmed by multiple independent playtests. Look for 👍 reactions and comments starting with "**Playtest confirmation**". An issue confirmed by 3+ playtests is a stronger signal than one filed by a single session. These are real, repeatedly-observed problems.
 3. **Infrastructure first** — among equal-priority issues, prefer issues that affect the development/testing pipeline over game features. Broken playtests, save file corruption, snapshot mode bugs, build issues, and skill/docs inaccuracies ripple through everything — every other agent's work quality depends on these systems being solid. A playtest bug that causes bad issue reports is worse than a missing game feature.
 4. **Age** — older issues first, all else being equal. Issues that have been sitting in the backlog longest are the ones nobody picks up. That's exactly why YOU should pick them up. Sort by `createdAt` ascending and default to the oldest available issue unless a higher-priority one exists.
