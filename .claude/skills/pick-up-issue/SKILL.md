@@ -6,6 +6,8 @@ disable-model-invocation: false
 
 # Pick Up Issue
 
+**ONE ISSUE PER LOOP. This is non-negotiable.** You pick up exactly one issue, you investigate it deeply, you do the work fully and completely, you merge the PR, you close the issue, and THEN you are done. You do not batch-process multiple issues. You do not claim issues "as a group." You do not speed-run closures. One loop = one issue = full attention.
+
 You are picking up a GitHub issue to work on. This process ensures no two agents work on the same issue and that the issue is properly tracked through completion.
 
 ## How We Track Issue Ownership
