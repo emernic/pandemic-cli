@@ -31,13 +31,17 @@ Two things are required for this to work:
 - `unset CLAUDECODE` — claude refuses to start inside an existing Claude Code session without this
 - `--dangerously-skip-permissions` — allows the worker to operate autonomously
 
-**First**, run this synchronous Bash call to get a unique log path:
+This requires **two separate Bash tool calls**. Do not combine them into one command.
+
+**⚠️ Why two calls?** The first call runs synchronously so you can read its output and know the exact log path. If you combine both into one command, you'll never see the path — it gets swallowed into the background process — and you'll have no way to tell the user where to find the logs. Multiple workers run concurrently; guessing or globbing won't work.
+
+**Bash call 1** — synchronous, no `run_in_background`:
 ```bash
 echo "/tmp/worker-$(date +%s)-$$.log"
 ```
-Capture the output — that's your log path (e.g. `/tmp/worker-1773180000-12345.log`).
+Read the output. That string is your log path (e.g. `/tmp/worker-1773180000-12345.log`).
 
-**Then**, launch the worker with `run_in_background: true`, substituting the exact path you captured:
+**Bash call 2** — with `run_in_background: true`, using the exact path from call 1:
 ```bash
 unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' 2>&1 | tee /tmp/worker-1773180000-12345.log
 ```
