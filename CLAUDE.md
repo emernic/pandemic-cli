@@ -214,7 +214,7 @@ This eliminates the need for save files in simple multi-step tests. For longer s
 
 ### Snapshot mode crisis handling
 
-Crisis events are always auto-resolved during snapshot mode (picks cheapest affordable option, prefers option A). This ensures `--do` step sequences run to completion without desynchronizing due to random crises. Auto-resolved crises are logged to stderr so playtest agents can see what happened.
+Crisis events are always auto-resolved during snapshot mode. The auto-resolver prefers option B (usually "pay to preserve status quo") when affordable, and falls back to option A (always free, but often destructive — removes policies, loses doses, etc.) when B can't be afforded. This minimizes strategic disruption from random crises. Auto-resolved crises are logged to stderr so playtest agents can see what happened.
 
 Game over always stops execution immediately.
 
