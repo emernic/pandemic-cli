@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, ResearchKind, ScientistStatus, ScientistTrait, KNOWLEDGE_NAME, TICKS_PER_DAY,
+    GameState, ScientistStatus, ScientistTrait, TICKS_PER_DAY,
 };
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -136,58 +136,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 fn find_assignment(state: &GameState, scientist_id: u64) -> Option<String> {
     for p in &state.field_research {
         if p.scientist_ids.contains(&scientist_id) {
-            return Some(format_kind(&p.kind, state));
+            return Some(p.kind.display_label(&state.diseases, &state.medicines));
         }
     }
     if let Some(p) = &state.applied_research {
         if p.scientist_ids.contains(&scientist_id) {
-            return Some(format_kind(&p.kind, state));
+            return Some(p.kind.display_label(&state.diseases, &state.medicines));
         }
     }
     if let Some(p) = &state.basic_research {
         if p.scientist_ids.contains(&scientist_id) {
-            return Some(format_kind(&p.kind, state));
+            return Some(p.kind.display_label(&state.diseases, &state.medicines));
         }
     }
     None
-}
-
-/// Format a ResearchKind for display.
-fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
-    match kind {
-        ResearchKind::IdentifyThreat { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            let verb = if state.diseases.get(*disease_idx)
-                .is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME) { "Study" } else { "Identify" };
-            format!("{}: {}", verb, name)
-        }
-        ResearchKind::DevelopMedicine { medicine_idx } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str()).unwrap_or("Unknown");
-            format!("Develop: {}", name)
-        }
-        ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
-            let med = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str()).unwrap_or("Unknown");
-            let dis = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Trial: {} vs {}", med, dis)
-        }
-        ResearchKind::ManufactureDoses { medicine_idx } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str()).unwrap_or("Unknown");
-            format!("Manufacture: {}", name)
-        }
-        ResearchKind::GenomicSequencing { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Sequencing: {}", name)
-        }
-        ResearchKind::TrainPersonnel => "Train Personnel".into(),
-        ResearchKind::BasicResearch { tech } => format!("Research: {}", tech.name()),
-    }
 }
