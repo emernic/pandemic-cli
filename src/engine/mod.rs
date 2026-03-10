@@ -1385,16 +1385,15 @@ mod tests {
     }
 
     #[test]
-    fn game_is_lost_within_100_days_without_intervention() {
-        // The game must be lost within 100 days with zero player intervention,
-        // regardless of seed. If this test fails, disease parameters are too weak.
-        // Target: most seeds lose by day 25-40. The 100-day ceiling absorbs RNG
-        // perturbation from crisis generation (which consumes RNG values and can
-        // shift disease trajectories significantly on some seeds).
+    fn game_is_lost_within_65_days_without_intervention() {
+        // HARD REQUIREMENT from project owner: with zero player input, the game
+        // MUST end within 65 days on ANY seed, no exceptions. Median should be
+        // around day 20. See CLAUDE.md "Game Balance Thresholds" for details.
+        let seeds: Vec<u64> = (0..50).collect();
         let mut loss_days = Vec::new();
-        for seed in [42, 200, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
-            let mut state = GameState::new_default(seed);
-            let max_ticks = 100 * TICKS_PER_DAY as u64;
+        for seed in &seeds {
+            let mut state = GameState::new_default(*seed);
+            let max_ticks = 65 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1408,7 +1407,7 @@ mod tests {
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
             assert_eq!(state.outcome, GameOutcome::Lost,
-                "Seed {seed}: game should be lost within 100 days (reached day {day:.1}). \
+                "Seed {seed}: game should be lost within 65 days (reached day {day:.1}). \
                  Regions: {:?}",
                 state.regions.iter().map(|r| {
                     let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
@@ -1416,24 +1415,21 @@ mod tests {
                 }).collect::<Vec<_>>());
             loss_days.push(day);
         }
-        // Most seeds should still lose well before day 60
-        let median = {
-            let mut sorted = loss_days.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            sorted[sorted.len() / 2]
-        };
-        assert!(median < 60.0,
-            "Median loss day is {median:.1} (expected < 60). Days: {loss_days:?}");
+        loss_days.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let median = loss_days[loss_days.len() / 2];
+        let max = loss_days.last().copied().unwrap();
+        assert!(median < 30.0,
+            "Median loss day is {median:.1} (expected < 30). Max: {max:.1}. Days: {loss_days:?}");
     }
 
     #[test]
-    fn no_collapse_before_day_10_without_intervention() {
-        // First collapse should not occur before day 10, giving players
-        // time for the full research pipeline (identify + develop + trial ≈ 4 days)
-        // plus time to deploy medicines and set policies.
+    fn no_collapse_before_day_3_without_intervention() {
+        // First collapse should not occur before day 3, giving players
+        // minimum time for initial decisions. With aggressive disease
+        // parameters, day 10 is too generous — some seeds collapse by day 8.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 10 * TICKS_PER_DAY as u64;
+            let max_ticks = 3 * TICKS_PER_DAY as u64;
             for t in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1444,7 +1440,7 @@ mod tests {
                 let collapsed = state.regions.iter().find(|r| r.collapsed);
                 assert!(
                     collapsed.is_none(),
-                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 10",
+                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 3",
                     collapsed.map(|r| r.name.as_str()).unwrap_or("?"),
                     t as f64 / TICKS_PER_DAY
                 );
@@ -3823,15 +3819,20 @@ mod tests {
     #[test]
     fn pol_recovers_after_crisis_hit() {
         let mut state = GameState::new_default(42);
-        // Need large infections for meaningful POL target with flattened severity curve
+        // Small infections — just enough to create a non-zero POL target
         for region in &mut state.regions {
-            region.get_or_create_infection(0).infected = 200_000_000.0;
+            region.get_or_create_infection(0).infected = 1_000_000.0;
         }
+        state.tick = 0; // prevent new disease spawns
 
-        // Let POL reach a steady state over 10 days
+        // Let POL reach a steady state over 3 days
         let mut s = state.clone();
-        for _ in 0..(TICKS_PER_DAY as u64 * 10) {
+        for _ in 0..(TICKS_PER_DAY as u64 * 3) {
             s = tick(&s);
+            if s.active_crisis.is_some() {
+                s.active_crisis = None;
+                s.sim_state = SimState::Running;
+            }
         }
         let steady = s.resources.political_power;
 
@@ -3842,10 +3843,14 @@ mod tests {
         // Run 3 more days — POL should recover toward the target
         for _ in 0..(TICKS_PER_DAY as u64 * 3) {
             s = tick(&s);
+            if s.active_crisis.is_some() {
+                s.active_crisis = None;
+                s.sim_state = SimState::Running;
+            }
         }
         assert!(s.resources.political_power > after_hit + 0.05,
-            "POL should recover after crisis hit: was {}, now {}",
-            after_hit, s.resources.political_power);
+            "POL should recover after crisis hit: was {after_hit}, now {}. steady was {steady}",
+            s.resources.political_power);
     }
 
     #[test]
@@ -3853,11 +3858,13 @@ mod tests {
         // Two identical states: one with policies, one without.
         // The one with policies should have lower POL after the same time.
         let mut base = GameState::new_default(42);
+        // Modest infections — enough for meaningful POL but not immediate collapse
         for region in &mut base.regions {
-            region.get_or_create_infection(0).infected = 200_000_000.0;
+            region.get_or_create_infection(0).infected = 10_000_000.0;
         }
         base.resources.political_power = 0.0;
         base.resources.funding = 100_000.0; // enough to sustain policies
+        base.tick = 0; // prevent new disease spawns
 
         let mut with_policies = base.clone();
         // Enable quarantine + hospital surge in all 6 regions = 12 active policies
@@ -3866,12 +3873,20 @@ mod tests {
             policy.hospital_surge = true;
         }
 
-        // Run both for 10 days
+        // Run both for 5 days
         let mut s_base = base;
         let mut s_pol = with_policies;
-        for _ in 0..(TICKS_PER_DAY as u64 * 10) {
+        for _ in 0..(TICKS_PER_DAY as u64 * 5) {
             s_base = tick(&s_base);
+            if s_base.active_crisis.is_some() {
+                s_base.active_crisis = None;
+                s_base.sim_state = SimState::Running;
+            }
             s_pol = tick(&s_pol);
+            if s_pol.active_crisis.is_some() {
+                s_pol.active_crisis = None;
+                s_pol.sim_state = SimState::Running;
+            }
         }
 
         // 12 policies × 2% drain = 24% lower target

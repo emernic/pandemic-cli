@@ -6,7 +6,7 @@ You run a global health defense agency in a world that has already seen what bio
 
 Real-time with pause. TUI. Deterministic simulation via seeded RNG.
 
-**The game is unwinnable.** There is no victory screen. This is a survival challenge — the goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-20 days. A competent player survives around 40 days. Surviving past 100 days should be essentially impossible. The question is never *if* you lose, but *when* and *how many* you save before you do.
+**The game is unwinnable.** There is no victory screen. This is a survival challenge — the goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-30 days (median ~15, never past 65). A competent player survives around 40 days. Surviving past 100 days should be essentially impossible. The question is never *if* you lose, but *when* and *how many* you save before you do.
 
 ## The Arc
 

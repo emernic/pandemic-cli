@@ -266,24 +266,32 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 
 /// Spawn a disease with stats scaled up based on current game day.
 /// Later diseases are tougher — simulating evolved superbugs.
-/// Scaling: +5% per day elapsed, capped at 3x base stats.
+/// Scaling ramps aggressively: +10% per day, uncapped. By day 30-40,
+/// diseases are 4-5x base stats — next-generation monsters that
+/// overwhelm any containment. This ensures the game ends by day 45
+/// without player intervention on ANY seed.
 pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
-    let scale = (1.0 + day * 0.05).min(3.0);
+    // Aggressive scaling with infectivity outpacing lethality.
+    // Infectivity must stay high enough that R > 1 even under quarantine
+    // (which halves infectivity). If lethality scales as fast as infectivity,
+    // diseases kill themselves — infected die before spreading.
+    // Day 10: inf 4.5x/leth 2x, Day 20: 8x/3x, Day 30: 11.5x/4x
+    let inf_scale = 1.0 + day * 0.35;
+    let leth_scale = 1.0 + day * 0.10;
 
     let result = spawn_disease(state, rng)?;
     let (disease_idx, _) = result;
 
     // Boost the newly spawned disease's stats
     let d = &mut state.diseases[disease_idx];
-    d.infectivity *= scale;
-    d.lethality *= scale;
-    d.cross_region_spread *= scale;
+    d.infectivity *= inf_scale;
+    d.lethality *= leth_scale;
+    d.cross_region_spread *= inf_scale;
     // Don't scale recovery — harder diseases should be harder to recover from
 
-    // Late-game optimization: diseases shift toward Contact transmission
-    // (hardest to contain with travel bans, 95% blocked vs 90% airborne)
-    // and concentrate their spread within regions rather than across them.
+    // Late-game diseases shift toward Contact transmission (hardest to
+    // contain) and get an extra lethality boost on top of the base scaling.
     let optimization = ((day - 15.0) / 15.0).clamp(0.0, 1.0); // 0 at day 15, 1 at day 30
     if optimization > 0.0 {
         let d = &mut state.diseases[disease_idx];
@@ -291,9 +299,31 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         if rng.r#gen::<f64>() < optimization * 0.5 {
             d.transmission = TransmissionVector::Contact;
         }
-        // Concentrate: reduce cross-region spread, boost lethality
-        d.cross_region_spread *= 1.0 - optimization * 0.3; // up to 30% less spread
-        d.lethality *= 1.0 + optimization * 0.2; // up to 20% more lethal
+        // Extra lethality boost for late-game diseases
+        d.lethality *= 1.0 + optimization * 0.5; // up to 50% more lethal on top of scaling
+    }
+
+    // Multi-region seeding: after day 10, new diseases emerge simultaneously
+    // in additional non-collapsed regions. Simulates evolved pathogens that
+    // have already spread globally before detection. By day 25, every viable
+    // region gets seeded — quarantine can't stop what's already everywhere.
+    // Seed counts scale aggressively with the day to overcome quarantine.
+    let multi_seed = ((day - 10.0) / 15.0).clamp(0.0, 1.0); // 0 at day 10, 1 at day 25
+    if multi_seed > 0.0 {
+        let (_, primary_region) = result;
+        let viable: Vec<usize> = state.regions.iter().enumerate()
+            .filter(|(i, r)| !r.collapsed && *i != primary_region)
+            .map(|(i, _)| i)
+            .collect();
+        // Seed count scales with day^2 to ensure late-game diseases hit hard
+        // Day 15: ~2k, Day 25: ~10k, Day 35: ~25k, Day 50: ~50k
+        let base_seed = 500.0 + day * day * 20.0;
+        for &region_idx in &viable {
+            if rng.r#gen::<f64>() < multi_seed {
+                let seed_count = base_seed + rng.r#gen::<f64>() * base_seed;
+                state.regions[region_idx].get_or_create_infection(disease_idx).infected += seed_count;
+            }
+        }
     }
 
     // Pre-existing resistance: new diseases emerge partially resistant to
