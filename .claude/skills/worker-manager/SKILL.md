@@ -79,12 +79,12 @@ After launching, scan the 3 most recent **previous** worker logs (skip the one j
 ls -t /tmp/worker-*.log 2>/dev/null | tail -n +2 | head -3
 ```
 
-For each log, check the last 30 lines:
+For each log, read the first and last 5 lines to understand what the worker started doing and how it ended:
 ```bash
-tail -30 /tmp/worker-<name>.log
+head -5 /tmp/worker-<name>.log && echo "..." && tail -5 /tmp/worker-<name>.log
 ```
 
-The log is newline-delimited JSON, but keywords like "Abandoning", "gave up", "bad branch", "permission" appear as literal strings inside the JSON values — plain `grep` works fine. Look for signs that workers are failing before doing useful work: giving up because the branch was in a bad state, failing to claim any issue, hitting permission errors, or abandoning immediately after starting.
+Look for signs that workers are failing before doing useful work: crashing immediately, abandoning early, or ending without completing anything.
 
 **If 3 or more consecutive recent workers show this pattern:**
 1. Cancel the cron: use `CronDelete` to remove the `/worker-manager` cron job.
