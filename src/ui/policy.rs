@@ -279,8 +279,53 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         }
     }
 
+    // Standing orders section
+    let so_base = num_regions + 1 + DECREE_COUNT;
+    let standing_orders = [
+        (
+            state.standing_orders.auto_quarantine_at_high,
+            "Auto-Quarantine at HIGH",
+            "Auto-enable Quarantine when region exceeds 10K infected",
+        ),
+        (
+            state.standing_orders.auto_travel_ban_at_crit,
+            "Auto-Travel-Ban at CRIT",
+            "Auto-enable Travel Ban when region exceeds 100K infected",
+        ),
+    ];
+
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select", "Close"));
+    lines.push(Line::from(Span::styled(
+        "  ─── STANDING ORDERS ───",
+        Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+    )));
+
+    for (i, (enabled, name, desc)) in standing_orders.iter().enumerate() {
+        let display_pos = so_base + i;
+        let selected = state.ui.panel_selection == display_pos;
+        let marker = if selected { "▶ " } else { "  " };
+        let name_style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let (status, status_color) = if *enabled {
+            (" ON", Color::Green)
+        } else {
+            (" OFF", Color::DarkGray)
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{}{}", marker, name), name_style),
+            Span::styled(status, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("      "),
+            Span::styled(desc.to_string(), Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(hint_line(state, "Select / Toggle", "Close"));
 
     (" Policy ".to_string(), lines, None)
 }

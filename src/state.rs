@@ -123,6 +123,9 @@ pub struct GameState {
     /// region each tick cycle. Per-medicine toggle, indexed by medicine index.
     #[serde(default)]
     pub auto_deploy: Vec<bool>,
+    /// Standing orders: automation rules that fire during tick when conditions are met.
+    #[serde(default)]
+    pub standing_orders: StandingOrders,
     /// Medicine shipments in transit. Created on deploy; effects apply on arrival.
     #[serde(default)]
     pub pending_shipments: Vec<Shipment>,
@@ -2819,6 +2822,21 @@ pub enum GameEvent {
         /// The breakpoint crossed: 0.50 (stressed) or 0.25 (critical) or 0.0 (failed)
         threshold: f64,
     },
+    /// A standing order automatically activated a policy.
+    PolicyAutoActivated {
+        region_idx: usize,
+        policy_name: String,
+    },
+}
+
+/// Automation rules that fire during tick when conditions are met.
+/// Each field is a global toggle; when enabled, the rule applies to all regions.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct StandingOrders {
+    /// Auto-enable Quarantine when a region's infections exceed the HIGH threshold (10K).
+    pub auto_quarantine_at_high: bool,
+    /// Auto-enable Travel Ban when a region's infections exceed the CRIT threshold (100K).
+    pub auto_travel_ban_at_crit: bool,
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -2872,6 +2890,8 @@ pub enum GameCommand {
     BargainWithGovernor { region_idx: usize },
     /// Repair regional infrastructure. system: 0=healthcare, 1=supply_lines, 2=civil_order.
     RepairInfrastructure { region_idx: usize, system: InfraSystem },
+    /// Toggle a standing order. Kind: 0=auto_quarantine_at_high, 1=auto_travel_ban_at_crit.
+    ToggleStandingOrder { kind: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3372,8 +3392,9 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions, regions = rally, regions+1..regions+DECREE_COUNT = decrees
-                    state.regions.len() + 1 + DECREE_COUNT - 1
+                    // Items: 0..regions-1 = regions, regions = rally, regions+1..regions+DECREE_COUNT = decrees,
+                    // regions+DECREE_COUNT+1..regions+DECREE_COUNT+2 = standing orders (2 items)
+                    state.regions.len() + 1 + DECREE_COUNT + 2 - 1
                 }
                 // Policies (0..POLICY_COUNT-1) + Appease Governor (POLICY_COUNT)
                 // + Bargain (POLICY_COUNT+1, only when defiant & available)
@@ -3708,6 +3729,10 @@ impl UiState {
                 } else if self.panel_selection == num_regions {
                     // Rally Public Support
                     Some(GameCommand::RallySupport)
+                } else if self.panel_selection >= num_regions + 1 + DECREE_COUNT {
+                    // Standing order selected
+                    let kind = self.panel_selection - num_regions - 1 - DECREE_COUNT;
+                    Some(GameCommand::ToggleStandingOrder { kind })
                 } else {
                     // Decree selected (indices after rally)
                     let decree_idx = self.panel_selection - num_regions - 1;
@@ -4144,6 +4169,7 @@ impl GameState {
             history: vec![],
             auto_research: [false; 3],
             auto_deploy: vec![],
+            standing_orders: StandingOrders::default(),
             pending_shipments: vec![],
             zero_agency_ticks: 0,
             mercy_rule: false,
