@@ -448,7 +448,7 @@ fn render_select_target(
         if !empty {
             let pct = if susceptible > 0.0 { will_vaccinate / susceptible * 100.0 } else { 0.0 };
             lines.push(Line::from(Span::styled(
-                format!("    {:.1}% of susceptible. Deploy repeatedly to build herd immunity.", pct),
+                format!("    {:.1}% of susceptible", pct),
                 Style::default().fg(Color::DarkGray),
             )));
         }
@@ -489,7 +489,7 @@ fn render_select_target(
         if !empty {
             let pct = if infected > 0.0 { will_treat / infected * 100.0 } else { 0.0 };
             lines.push(Line::from(Span::styled(
-                format!("    {:.0}% of infected. Reduces deaths and spread.", pct),
+                format!("    {:.0}% of infected", pct),
                 Style::default().fg(Color::DarkGray),
             )));
         }
@@ -506,7 +506,7 @@ fn render_select_target(
     ]));
     if strain_outdated {
         lines.push(Line::from(Span::styled(
-            format!("  Strain outdated ({:.0}% match, re-trial to update)", strain_eff * 100.0),
+            format!("  Strain outdated ({:.0}% match)", strain_eff * 100.0),
             Style::default().fg(Color::Yellow),
         )));
     }
