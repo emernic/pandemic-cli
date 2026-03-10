@@ -500,6 +500,8 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [R] Research panel"),
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),
+            Line::from("  [S] Scientists panel"),
+            Line::from("  [O] Field operations"),
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [Z] Speed up (1x→2x→4x→6x, pause resets)"),
             Line::from("  [X] Auto-resolve crisis (toggle during event)"),

@@ -112,6 +112,16 @@ The cascade is what makes this system work. Healthcare fails → more deaths →
 
 Regions **collapse** when deaths exceed their threshold (typically 45-85% of population). Collapse is permanent — policies clear, refugees flee to neighbors (spreading disease), personnel are lost. When all six regions collapse, the game is over.
 
+### Field Operations
+
+Personnel-based missions that cost time and people, not money. Accessed via the `[O]` Operations panel.
+
+- **Recon Mission** (2 personnel, 1.5 days) — partially identifies an unknown pathogen, adding 25% knowledge. Faster than waiting for field research but ties up personnel.
+- **Emergency Response** (3 personnel, 1 day to deploy) — reduces lethality by 25% in a target region for 3 days. Buys time when a region is spiraling.
+- **Infrastructure Survey** (2 personnel, 2 days) — repairs the worst infrastructure system in a region by 15%. Cheaper than the ¥200 policy repair but slower and limited to one system.
+
+Operations create a personnel-vs-money trade-off: you can spend funding on policies and repairs, or spend personnel on field ops. With 20 starting personnel also needed for research and hospitals, committing 2-3 to a field op is a real cost.
+
 ### Game Over
 
 Two loss conditions:
