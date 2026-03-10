@@ -189,6 +189,9 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             } else {
                 contract.name.clone()
             };
+            let met = contract.condition.is_met(state);
+            let status = if met { "✓" } else { "✗" };
+            let status_color = if met { Color::Green } else { Color::Red };
             lines.push(Line::from(vec![
                 Span::styled("    ", Style::default()),
                 Span::styled(display_name, Style::default().fg(Color::White)),
@@ -199,6 +202,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 Span::styled(
                     format!("  [{}%]", sat_pct),
                     Style::default().fg(sat_color),
+                ),
+                Span::styled(
+                    format!("  {} {}", status, contract.condition.description()),
+                    Style::default().fg(status_color),
                 ),
             ]));
         }
