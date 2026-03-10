@@ -397,10 +397,9 @@ fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
 }
 
 /// Adapt a newly spawned disease to the player's current technological
-/// capabilities. New diseases reflect the selective pressure of the
-/// player's toolkit: if you use vaccines heavily, new pathogens emerge
-/// with some drift. If you suppress lethality, new ones are slightly
-/// more virulent.
+/// capabilities. New diseases reflect the player's unlocked techs:
+/// VaccinePlatform causes +1 strain drift, PathogenSuppression and
+/// DirectedAttenuation cause slight lethality increases, etc.
 ///
 /// DESIGN PRINCIPLE: adaptations must be mild enough that the player
 /// always feels NET stronger after unlocking a tech. A tech that costs
@@ -534,17 +533,18 @@ mod tests {
         state2.unlocked_techs = vec![BasicTech::RapidSequencing];
         let seq_result = spawn_disease(&mut state2, &mut rng2);
 
-        if let (Some((bi, _)), Some((si, _))) = (base_result, seq_result) {
-            let base_d = &state.diseases[bi];
-            let seq_d = &state2.diseases[si];
-            assert_eq!(
-                base_d.cross_region_spread, seq_d.cross_region_spread,
-                "RapidSequencing should not affect cross-region spread"
-            );
-            assert_eq!(
-                base_d.lethality, seq_d.lethality,
-                "RapidSequencing should not affect lethality"
-            );
-        }
+        let (Some((bi, _)), Some((si, _))) = (base_result, seq_result) else {
+            panic!("spawn_disease should succeed for both baseline and RapidSequencing");
+        };
+        let base_d = &state.diseases[bi];
+        let seq_d = &state2.diseases[si];
+        assert_eq!(
+            base_d.cross_region_spread, seq_d.cross_region_spread,
+            "RapidSequencing should not affect cross-region spread"
+        );
+        assert_eq!(
+            base_d.lethality, seq_d.lethality,
+            "RapidSequencing should not affect lethality"
+        );
     }
 }
