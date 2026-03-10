@@ -13,6 +13,16 @@ fn scaled_cost(state: &GameState, fraction: f64, min: f64, max: f64) -> f64 {
     (raw / 10.0).round() * 10.0
 }
 
+/// POL cost for closing borders on a refugee wave (escalates with each collapse).
+fn refugee_pol_cost(wave: u8) -> f64 {
+    match wave {
+        1 => 0.15,
+        2 => 0.20,
+        3 => 0.25,
+        _ => 0.30,
+    }
+}
+
 /// Generate a crisis event based on current game state. Returns None if no
 /// suitable crisis can be generated (e.g., no valid targets for any crisis type).
 pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<CrisisEvent> {
@@ -441,7 +451,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
 
         // --- New crisis types ---
 
-        CrisisKind::RefugeeWave { from_region, to_region } => {
+        CrisisKind::RefugeeWave { from_region, to_region, wave } => {
             let from_name = state.regions.get(*from_region)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let to_name = state.regions.get(*to_region)
@@ -449,27 +459,57 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let survivors = state.regions.get(*from_region)
                 .map(|r| r.alive()).unwrap_or(0.0);
             let survivors_m = survivors / 1_000_000.0;
-            CrisisEvent {
-                title: "REFUGEE CRISIS".into(),
-                description: format!(
-                    "{} has fallen. {:.0}M survivors are fleeing toward {}. \
-                     Disease carriers among them WILL spread infection.",
+
+            let description = match wave {
+                1 => format!(
+                    "{} has collapsed. {:.0}M survivors are moving toward {}. \
+                     Disease carriers among them will spread the outbreak.",
                     from_name, survivors_m, to_name,
                 ),
+                2 => format!(
+                    "A second collapse. {} — {:.0}M survivors en route to {}. \
+                     Intake capacity is already strained from the first wave.",
+                    from_name, survivors_m, to_name,
+                ),
+                3 => format!(
+                    "{} has collapsed. {:.0}M additional survivors moving toward {}. \
+                     Receiving systems are overwhelmed — three regions down.",
+                    from_name, survivors_m, to_name,
+                ),
+                _ => format!(
+                    "{} has fallen — collapse number {}. \
+                     {:.0}M survivors have nowhere to go.",
+                    from_name, wave, survivors_m,
+                ),
+            };
+
+            let pol_cost = refugee_pol_cost(*wave);
+            let pol_pct = (pol_cost * 100.0).round() as u32;
+
+            CrisisEvent {
+                title: "REFUGEE CRISIS".into(),
+                description,
                 option_a: CrisisOption {
                     label: "Open borders".into(),
                     description: format!(
-                        "Accept {:.0}M refugees into {}. Population rises, infections spread. But you save lives.",
+                        "Accept {:.0}M refugees into {}. Population rises, infections spread.",
                         survivors_m, to_name,
                     ),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: "Close borders (−15% POL)".into(),
-                    description: format!(
-                        "Seal the borders. Millions die at the gates. {} stays clean. The world watches.",
-                        to_name,
-                    ),
+                    label: format!("Close borders (−{}% POL)", pol_pct),
+                    description: if *wave >= 3 {
+                        format!(
+                            "Seal the borders. {:.0}M die in the open. The international community is watching.",
+                            survivors_m * 0.20,
+                        )
+                    } else {
+                        format!(
+                            "Seal the borders. Millions die at the gates. {} stays clean.",
+                            to_name,
+                        )
+                    },
                     cost: None, // POL cost applied in resolve
                 },
                 kind,
@@ -1321,7 +1361,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         // --- New crisis resolutions ---
 
-        (CrisisKind::RefugeeWave { from_region, to_region }, 0) => {
+        (CrisisKind::RefugeeWave { from_region, to_region, .. }, 0) => {
             // Open borders — refugees arrive with their diseases.
             // Transfer surviving population and all infections/immune to destination.
             let from_name = state.regions.get(*from_region)
@@ -1348,8 +1388,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("{:.0}M refugees from {} accepted into {} — population surging, infections spreading",
                 survivors_m, from_name, to_name)
         }
-        (CrisisKind::RefugeeWave { from_region, .. }, _) => {
-            // Close borders — refugees die at the gates, POL tanks.
+        (CrisisKind::RefugeeWave { from_region, wave, .. }, _) => {
+            // Close borders — refugees die at the gates, POL tanks (scaled by wave).
             let from_name = state.regions.get(*from_region)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             let survivors = state.regions.get(*from_region)
@@ -1357,7 +1397,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // 20% of refugees perish (added to the collapsed region's death toll)
             let border_deaths = survivors * 0.20;
             state.regions[*from_region].dead += border_deaths;
-            state.resources.political_power = (state.resources.political_power - 0.15).max(0.0);
+            let pol_cost = refugee_pol_cost(*wave);
+            state.resources.political_power = (state.resources.political_power - pol_cost).max(0.0);
             let deaths_m = border_deaths / 1_000_000.0;
             format!("Borders closed. {:.0}M dead at the gates of {}. The world is horrified.",
                 deaths_m, from_name)

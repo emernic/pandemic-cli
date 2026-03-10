@@ -258,7 +258,8 @@ pub fn tick(state: &GameState) -> GameState {
                 neighbors.first().copied()
             };
             if let Some(to) = to {
-                let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to };
+                let wave = new.regions.iter().filter(|r| r.collapsed).count() as u8;
+                let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to, wave };
                 new.active_crisis = Some(crisis::build_crisis_event(&new, kind));
                 new.sim_state = SimState::Event {
                     was_running: new.sim_state.is_running(),
@@ -3090,7 +3091,7 @@ mod tests {
         let dest_infected_before = state.regions[1].infections
             .iter().find(|i| i.disease_idx == 0)
             .map(|i| i.infected).unwrap_or(0.0);
-        setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 0);
+        setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         // Population should increase by survivor count
         assert_eq!(after.regions[1].population, dest_pop_before + survivors as u64,
@@ -3110,7 +3111,7 @@ mod tests {
         state.regions[0].collapsed = true;
         let dead_before = state.regions[0].dead;
         let survivors_before = state.regions[0].alive();
-        setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1 }, 1);
+        setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }, 1);
         let after = apply_action(&state, &Action::Confirm);
         // 15% POL loss
         assert!((after.resources.political_power - 0.35).abs() < 0.001,
