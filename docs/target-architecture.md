@@ -38,13 +38,17 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 1. Disease spread (within-region, cross-region)
 2. Disease mutation
 3. `research::tick_research()` — advance/complete research projects
-4. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
-5. Resource income (funding)
-6. Disease emergence (mid-game new threats)
-7. `crisis::generate_crisis()` — random crisis events
-8. Regional collapse
-9. Win/lose conditions
-10. History recording
+4. `personnel::tick_personnel()` — scientist burnout and recovery
+5. Auto-pause on research breakthroughs + `medicine::try_auto_deploy()`
+6. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
+7. Resource income (funding), personnel upkeep, attrition
+8. Political power drift, POL-based personnel gain
+9. Scientist roster sync (after RNG write-back)
+10. Disease emergence (mid-game new threats)
+11. Disease detection
+12. `crisis::generate_crisis()` — random crisis events
+13. Regional collapse
+14. Win/lose conditions
 
 After each tick, the game loop calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
