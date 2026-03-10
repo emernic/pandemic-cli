@@ -4198,7 +4198,7 @@ impl UiState {
                         let kind = self.panel_selection - so_base;
                         return Some(GameCommand::ToggleStandingOrder { kind });
                     }
-                    // Decree selected (indices after rally).
+                    // Decree selected.
                     let decree_idx = self.panel_selection - decree_base;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
                         // Sacrifice Region needs sub-selection — but only if threat level is met
