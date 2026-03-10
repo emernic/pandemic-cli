@@ -552,7 +552,7 @@ impl RegionPolicy {
             }
         }
         let scr_cost = self.screening.funding_cost();
-        if scr_cost > 0.0 { costs.push((5, scr_cost)); }
+        if scr_cost > 0.0 { costs.push((POLICY_IDX_SCREENING_BASE, scr_cost)); }
         costs
     }
 
