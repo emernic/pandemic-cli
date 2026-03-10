@@ -2106,6 +2106,7 @@ impl ResearchProject {
             ResearchKind::IdentifyThreat { disease_idx: d } => *d == disease_idx,
             ResearchKind::GenomicSequencing { disease_idx: d } => *d == disease_idx,
             ResearchKind::ClinicalTrial { disease_idx: d, .. } => *d == disease_idx,
+            ResearchKind::SuppressPathogen { disease_idx: d } => *d == disease_idx,
             ResearchKind::DevelopMedicine { .. }
             | ResearchKind::ManufactureDoses { .. }
             | ResearchKind::TrainPersonnel
@@ -2126,6 +2127,9 @@ pub enum ResearchKind {
     TrainPersonnel,
     /// Basic research — unlocks a technology in the tech tree.
     BasicResearch { tech: BasicTech },
+    /// Pathogen suppression — permanently reduces a disease's infectivity by ~20%.
+    /// Requires the PathogenSuppression basic tech to be unlocked.
+    SuppressPathogen { disease_idx: usize },
 }
 
 /// Technology nodes in the Basic Research tech tree.
@@ -2157,6 +2161,10 @@ pub enum BasicTech {
     /// protocols make it harder for pathogens to evolve resistance.
     /// Prereq: deploy 2+ different medicines.
     CombinationTherapy,
+    /// Unlocks pathogen suppression field research: permanently reduce
+    /// a disease's infectivity by modifying its evolutionary trajectory.
+    /// Prereq: VaccinePlatform + CombinationTherapy.
+    PathogenSuppression,
 }
 
 impl BasicTech {
@@ -2170,6 +2178,7 @@ impl BasicTech {
             BasicTech::VaccinePlatform => "Vaccine Platform",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
+            BasicTech::PathogenSuppression => "Pathogen Suppression",
         }
     }
 
@@ -2183,6 +2192,7 @@ impl BasicTech {
             BasicTech::VaccinePlatform => "3x preventive vaccination effectiveness",
             BasicTech::ResistanceSurveillance => "Reveals drug resistance levels and trends",
             BasicTech::CombinationTherapy => "Halves resistance buildup from deployments",
+            BasicTech::PathogenSuppression => "Unlocks suppression research: reduce infectivity ~20%",
         }
     }
 
@@ -2228,6 +2238,10 @@ impl BasicTech {
                     .count();
                 distinct_deployed >= 2
             }
+            BasicTech::PathogenSuppression => {
+                state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
+                    && state.unlocked_techs.contains(&BasicTech::CombinationTherapy)
+            }
         }
     }
 
@@ -2241,6 +2255,7 @@ impl BasicTech {
             BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::CombinationTherapy => "Deploy 2+ different medicines",
+            BasicTech::PathogenSuppression => "Vaccine Platform + Combination Therapy",
         }
     }
 
@@ -2254,6 +2269,7 @@ impl BasicTech {
             BasicTech::VaccinePlatform,
             BasicTech::ResistanceSurveillance,
             BasicTech::CombinationTherapy,
+            BasicTech::PathogenSuppression,
         ]
     }
 }
@@ -2295,7 +2311,9 @@ impl ResearchKind {
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
+                BasicTech::PathogenSuppression => (8, 480.0, 1200.0),
             },
+            ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
         }
     }
 
@@ -2343,6 +2361,12 @@ impl ResearchKind {
             }
             ResearchKind::TrainPersonnel => format!("Train Personnel (+{})", TRAIN_PERSONNEL_BATCH),
             ResearchKind::BasicResearch { tech } => tech.name().to_string(),
+            ResearchKind::SuppressPathogen { disease_idx } => {
+                let name = diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Suppress: {}", name)
+            }
         }
     }
 }
@@ -4609,6 +4633,17 @@ impl GameState {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
                 if !active_kinds.contains(&&kind) {
                     projects.push(kind);
+                }
+            }
+        }
+        // Pathogen Suppression: fully known diseases, when tech is unlocked
+        if self.unlocked_techs.contains(&BasicTech::PathogenSuppression) {
+            for (i, disease) in self.diseases.iter().enumerate() {
+                if disease.knowledge >= KNOWLEDGE_FULL && self.disease_has_infected(i) {
+                    let kind = ResearchKind::SuppressPathogen { disease_idx: i };
+                    if !active_kinds.contains(&&kind) {
+                        projects.push(kind);
+                    }
                 }
             }
         }

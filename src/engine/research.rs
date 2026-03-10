@@ -254,6 +254,18 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     disease.sequencing_count += 1;
                 }
             }
+            ResearchKind::SuppressPathogen { disease_idx } => {
+                let d_idx = *disease_idx;
+                if let Some(disease) = state.diseases.get_mut(d_idx) {
+                    // Permanently reduce infectivity by 20%
+                    disease.infectivity *= 0.80;
+                    let name = disease.display_name(d_idx);
+                    state.event_log.push_back((
+                        state.tick as f64 / crate::state::TICKS_PER_DAY,
+                        format!("Suppression complete: {name} infectivity reduced 20%"),
+                    ));
+                }
+            }
             _ => {}
         }
     }
