@@ -297,9 +297,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Supply Chain Disruption".into(),
                 description: format!(
-                    "A logistics failure has compromised the supply chain for {}. \
-                     {} doses are at risk of spoilage.",
-                    med_name, crate::format_number(loss),
+                    "Cold chain failure en route — {} doses of {} are at risk of spoilage.",
+                    crate::format_number(loss), med_name,
                 ),
                 option_a: CrisisOption {
                     label: "Accept losses".into(),
@@ -310,7 +309,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency reroute (${:.0})", cost),
-                        description: "Pay to save the supply".into(),
+                        description: "Rerouted. Full shipment preserved.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -335,7 +334,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.10, 80.0, 400.0);
                     CrisisOption {
                         label: format!("Emergency containment (${:.0}, 3 personnel)", cost),
-                        description: "Spend resources to save the project".into(),
+                        description: "Breach contained. Research continues.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 3 }),
                     }
                 },
@@ -362,7 +361,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.25, 150.0, 800.0);
                     CrisisOption {
                         label: format!("Resist (${:.0})", cost),
-                        description: "Pay to maintain quarantine".into(),
+                        description: "Quarantine holds.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -386,7 +385,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: format!("Retention bonus (${:.0})", retention_cost),
-                    description: "Pay to retain staff".into(),
+                    description: "Staff stays.".into(),
                     cost: Some(CrisisCost { funding: retention_cost, personnel: 0 }),
                 },
                 kind,
@@ -396,8 +395,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::InternationalAid { funding, personnel } => {
             CrisisEvent {
                 title: "International Aid Package".into(),
-                description: "The WHO is offering an emergency aid package. \
-                    Choose how to allocate the support.".into(),
+                description: "The WHO is offering an emergency aid package.".into(),
                 option_a: CrisisOption {
                     label: format!("Emergency funding (+${:.0})", funding),
                     description: "Direct financial support".into(),
@@ -432,7 +430,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency analysis (${:.0})", cost),
-                        description: "Gain +0.15 knowledge of this pathogen".into(),
+                        description: "Genomic data reduces treatment drift on this strain.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -481,9 +479,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::DataLeak => {
             CrisisEvent {
                 title: "Research Data Leaked".into(),
-                description: "Classified research data has been leaked to the press. \
-                    Going transparent costs time but builds trust. Suppressing it saves time \
-                    but erodes public confidence.".into(),
+                description: "Classified research data has been leaked to the press.".into(),
                 option_a: CrisisOption {
                     label: "Go transparent".into(),
                     description: "Lose 2 days of research progress, gain +5% POL".into(),
@@ -504,9 +500,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Black Market Drugs".into(),
                 description: format!(
-                    "Desperate people in {} are buying untested drugs on the black market. \
-                     Confiscating them saves lives from adverse reactions but leaves them \
-                     without any treatment.",
+                    "Desperate people in {} are buying untested drugs on the black market.",
                     region_name,
                 ),
                 option_a: CrisisOption {
@@ -554,8 +548,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Media Firestorm".into(),
                 description: "Sensationalized news coverage is causing mass panic. \
-                    People are hoarding supplies and ignoring health guidelines. \
-                    You can hold a press conference to calm things, or focus on the real work.".into(),
+                    People are hoarding supplies and ignoring health guidelines.".into(),
                 option_a: CrisisOption {
                     label: "Ignore it — focus on the crisis".into(),
                     description: "−8% POL as public confidence erodes".into(),
@@ -583,9 +576,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Pressure to Skip Trials".into(),
                 description: format!(
-                    "Politicians are demanding you skip clinical trials for {} ({} treatment). \
-                     Fast-tracking clears the medicine for use immediately but at reduced efficacy. \
-                     Maintaining standards delays availability but ensures full potency.",
+                    "Politicians are demanding you skip clinical trials for {} ({} treatment).",
                     disease_name, med_name,
                 ),
                 option_a: CrisisOption {
@@ -608,9 +599,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Vaccine Hesitancy".into(),
                 description: format!(
-                    "Anti-vaccine sentiment is spreading in {}. People are refusing treatment. \
-                     A mandate is free but authoritarian. An education campaign costs money but \
-                     builds trust.",
+                    "Anti-vaccine sentiment is spreading in {}. People are refusing treatment.",
                     region_name,
                 ),
                 option_a: CrisisOption {
@@ -661,9 +650,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Superpower Demands Research".into(),
                 description: format!(
-                    "A powerful nation is demanding access to your research data on {}. \
-                     Sharing helps global coordination but gives away your advantage. \
-                     Refusing protects your work but costs foreign aid.",
+                    "A powerful nation is demanding access to your research data on {}.",
                     disease_name,
                 ),
                 option_a: CrisisOption {
@@ -710,9 +697,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Whistleblower: Drug Side Effects".into(),
                 description: format!(
-                    "A researcher is reporting that {} has unreported side effects. \
-                     Halting deployment protects patients but wastes doses. \
-                     Continuing saves more lives overall but risks adverse reactions.",
+                    "A researcher has flagged undisclosed side effects in {}.",
                     med_name,
                 ),
                 option_a: CrisisOption {
@@ -733,8 +718,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Military Threatens Takeover".into(),
                 description: "Generals are threatening to seize control of the pandemic response, \
-                    citing your agency's declining public support. You can cooperate and cede some \
-                    authority, or resist and fight for independence.".into(),
+                    citing your agency's declining public support.".into(),
                 option_a: CrisisOption {
                     label: "Cooperate".into(),
                     description: format!("Cede {} personnel to military, gain +15% POL", cooperate_loss),
@@ -762,8 +746,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 title: "Doomsday Cult Blockade".into(),
                 description: format!(
                     "A doomsday cult in {} has blockaded supply routes, claiming the pandemic \
-                     is divine punishment. They want a global broadcast to spread their message. \
-                     You can give them airtime or send in the police.",
+                     is divine punishment. They want a global broadcast to spread their message.",
                     region_name,
                 ),
                 option_a: CrisisOption {
@@ -808,8 +791,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "WHO Headquarters Evacuated".into(),
                 description: "A disease outbreak has forced WHO headquarters in Geneva to evacuate. \
-                    Global coordination is collapsing. You can take over coordination (expensive) \
-                    or let each region fend for itself.".into(),
+                    Global coordination is collapsing.".into(),
                 option_a: CrisisOption {
                     label: "Let regions go independent".into(),
                     description: format!("Lose ${:.0} in aid income, −5% POL", aid_loss),
@@ -1055,8 +1037,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 title: "Military Seizes Research".into(),
                 description:
                     "The military you cooperated with is now classifying your pathogen data. \
-                     Generals want to weaponize your findings. Civilian researchers are locked out. \
-                     You can go to the press or comply.".into(),
+                     Generals want to weaponize your findings. Civilian researchers are locked out.".into(),
                 option_a: CrisisOption {
                     label: "Go to the press (−10% POL)".into(),
                     description: "Public scandal forces military to back down, but damages your credibility".into(),
