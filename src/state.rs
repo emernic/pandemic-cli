@@ -158,10 +158,6 @@ pub struct GameState {
     /// Contains the index of the consolidated HQ region, or None if not active.
     #[serde(default)]
     pub ark_protocol: Option<usize>,
-    /// Current global threat level (DEFCON-style). Computed each tick from game
-    /// state metrics. Gates Emergency Decrees and displayed in the status bar.
-    #[serde(default)]
-    pub threat_level: ThreatLevel,
     /// Cumulative doses deployed across all medicines and regions.
     #[serde(default)]
     pub total_doses_deployed: f64,
@@ -808,8 +804,6 @@ pub enum FundingCondition {
     ForbidPolicy { policy_idx: usize },
     /// A specific policy must be active in at least one region.
     RequirePolicy { policy_idx: usize },
-    /// DEFCON must not exceed this level (lower number = more restrictive).
-    MaxThreatLevel { level: u8 },
     /// Total global deaths must stay below this threshold.
     MaxDeaths { threshold: f64 },
     /// All regions must remain standing (revoked on first collapse).
@@ -827,9 +821,6 @@ impl FundingCondition {
             Self::RequirePolicy { policy_idx } => {
                 format!("Maintain {} in at least one region", policy_display_name(*policy_idx))
             }
-            Self::MaxThreatLevel { level } => {
-                format!("Keep DEFCON at {} or below", level)
-            }
             Self::MaxDeaths { threshold } => {
                 format!("Global deaths below {}", format_large_number(*threshold))
             }
@@ -846,9 +837,6 @@ impl FundingCondition {
             }
             Self::RequirePolicy { policy_idx } => {
                 state.policies.iter().any(|p| p.is_active(*policy_idx))
-            }
-            Self::MaxThreatLevel { level } => {
-                state.threat_level.defcon() >= *level // defcon 5 > defcon 1
             }
             Self::MaxDeaths { threshold } => {
                 state.total_dead() < *threshold
@@ -1277,58 +1265,32 @@ pub struct Governor {
     pub income_skim: f64,
 }
 
-/// Global threat level (DEFCON-style). Computed from game state metrics each tick.
-/// Higher severity = lower number. Gates Emergency Decrees.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum ThreatLevel {
-    /// DEFCON 5: Starting state. No significant threat detected.
-    #[default]
-    Normal,
-    /// DEFCON 4: Elevated. Disease spreading significantly.
-    Elevated,
-    /// DEFCON 3: Crisis. Major casualties, multiple regions threatened.
-    Crisis,
-    /// DEFCON 2: Catastrophe. Regions collapsing, massive death toll.
-    Catastrophe,
-    /// DEFCON 1: Extinction. Humanity's survival at stake.
-    Extinction,
-}
+/// Check whether a decree is unlocked based on current crisis severity.
+/// Decrees become available when conditions are dire enough to justify them.
+pub fn decree_unlocked(state: &GameState, decree_idx: usize) -> bool {
+    let total_infected = state.total_infected();
+    let total_dead = state.total_dead();
+    let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
+    let crit_count = state.regions.iter()
+        .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
+        .count();
 
-impl ThreatLevel {
-    /// DEFCON number (5 = safest, 1 = worst).
-    pub fn defcon(&self) -> u8 {
-        match self {
-            ThreatLevel::Normal => 5,
-            ThreatLevel::Elevated => 4,
-            ThreatLevel::Crisis => 3,
-            ThreatLevel::Catastrophe => 2,
-            ThreatLevel::Extinction => 1,
-        }
-    }
-
-    /// Short label for display.
-    pub fn label(&self) -> &'static str {
-        match self {
-            ThreatLevel::Normal => "NORMAL",
-            ThreatLevel::Elevated => "ELEVATED",
-            ThreatLevel::Crisis => "CRISIS",
-            ThreatLevel::Catastrophe => "CATASTROPHE",
-            ThreatLevel::Extinction => "EXTINCTION",
-        }
+    match decree_idx {
+        // Conscript Researchers: 500K+ infected OR 100K+ dead
+        0 => total_infected >= 500_000.0 || total_dead >= 100_000.0,
+        // Authorize Human Trials: 50M+ dead OR 2+ regions at CRIT severity
+        1 => total_dead >= 50_000_000.0 || crit_count >= 2,
+        // Sacrifice Region: any region collapsed OR 500M+ dead
+        2 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
+        // Suspend Regional Authority: 50M+ dead OR 2+ regions at CRIT severity
+        3 => total_dead >= 50_000_000.0 || crit_count >= 2,
+        // Fortify Region: any region collapsed OR 500M+ dead
+        4 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
+        // Emergency Countermeasure: 3+ regions collapsed OR 2B+ dead
+        5 => collapsed_count >= 3 || total_dead >= 2_000_000_000.0,
+        _ => false,
     }
 }
-
-/// Minimum DEFCON level (threat level) required for each decree.
-/// Replaces POL-based gating so powerful tools arrive when the crisis justifies them,
-/// not after a slowly-drifting political metric crosses a threshold.
-pub const DECREE_THREAT_LEVELS: [ThreatLevel; DECREE_COUNT] = [
-    ThreatLevel::Elevated,    // Conscript Researchers — DEFCON 4
-    ThreatLevel::Crisis,      // Authorize Human Trials — DEFCON 3
-    ThreatLevel::Catastrophe, // Sacrifice Region — DEFCON 2
-    ThreatLevel::Crisis,      // Suspend Regional Authority — DEFCON 3
-    ThreatLevel::Catastrophe, // Fortify Region — DEFCON 2
-    ThreatLevel::Extinction,  // Emergency Countermeasure — DEFCON 1
-];
 
 /// Infection count thresholds for region severity levels.
 /// Used by both the UI (status labels) and the engine (governor loyalty drift).
@@ -3386,11 +3348,6 @@ pub enum GameEvent {
         region_idx: usize,
         description: String,
     },
-    /// Global threat level changed (DEFCON transition). Auto-pauses the game.
-    ThreatLevelChanged {
-        from: ThreatLevel,
-        to: ThreatLevel,
-    },
     /// Infrastructure dropped below a breakpoint threshold.
     InfrastructureBreakpoint {
         region_idx: usize,
@@ -4394,8 +4351,8 @@ impl UiState {
                     // Decree selected.
                     let decree_idx = self.panel_selection - decree_base;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
-                        // Sacrifice Region needs sub-selection — but only if threat level is met
-                        if state.threat_level >= DECREE_THREAT_LEVELS[2] {
+                        // Sacrifice Region needs sub-selection — but only if unlocked
+                        if decree_unlocked(state, 2) {
                             self.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
                             self.panel_selection = 0;
                             None
@@ -4404,7 +4361,7 @@ impl UiState {
                         }
                     } else if decree_idx == 4 && !state.enacted_decrees.is_enacted(4) {
                         // Fortify Region needs sub-selection
-                        if state.threat_level >= DECREE_THREAT_LEVELS[4] {
+                        if decree_unlocked(state, 4) {
                             self.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
                             self.panel_selection = 0;
                             None
@@ -5042,7 +4999,6 @@ impl GameState {
             death_milestone_tier: vec![0; num_diseases],
             intel_pre_detection_briefed: vec![false; num_diseases],
             ark_protocol: None,
-            threat_level: ThreatLevel::Normal,
             total_doses_deployed: 0.0,
             pathogens_suppressed: 0,
             pathogens_attenuated: 0,
@@ -5087,35 +5043,6 @@ impl GameState {
         self.corporations.iter().filter(|c| c.region_idx == region_idx).collect()
     }
 
-    /// Compute the current threat level from game state metrics.
-    /// This is a pure function — it doesn't read `self.threat_level`,
-    /// it computes what the level SHOULD be right now.
-    pub fn compute_threat_level(&self) -> ThreatLevel {
-        let total_infected = self.total_infected();
-        let total_dead = self.total_dead();
-        let collapsed_count = self.regions.iter().filter(|r| r.collapsed).count();
-        let crit_count = self.regions.iter()
-            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
-            .count();
-
-        // DEFCON 1: 3+ regions collapsed OR 2B+ dead
-        if collapsed_count >= 3 || total_dead >= 2_000_000_000.0 {
-            return ThreatLevel::Extinction;
-        }
-        // DEFCON 2: any region collapsed OR 500M+ dead
-        if collapsed_count >= 1 || total_dead >= 500_000_000.0 {
-            return ThreatLevel::Catastrophe;
-        }
-        // DEFCON 3: 50M+ dead OR 2+ regions at CRIT severity
-        if total_dead >= 50_000_000.0 || crit_count >= 2 {
-            return ThreatLevel::Crisis;
-        }
-        // DEFCON 4: 500K+ infected OR 100K+ dead
-        if total_infected >= 500_000.0 || total_dead >= 100_000.0 {
-            return ThreatLevel::Elevated;
-        }
-        ThreatLevel::Normal
-    }
 
     /// Infection trend: ratio of current screened infected to ~1 day ago.
     /// Returns None if not enough history. > 1.0 means growing, < 1.0 shrinking.

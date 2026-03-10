@@ -5,7 +5,7 @@ Inverse Plague Inc. — a real-time-with-pause strategy game where you defend hu
 You run the N.W.H.O. (New World Health Organization), managing six global regions as diseases emerge, mutate, and spread. The game is unwinnable — diseases will eventually overwhelm you. A good run lasts about 40 days.
 
 ```
- RUNNING   Day: 12.4  DEFCON-3  POL: 38%  Funds: ¥2,140 (+¥312/day)  Personnel: 14  Infected: ~8.2M ▲  Dead: 1.4M
+ RUNNING   Day: 12.4  POL: 38%  Funds: ¥2,140 (+¥312/day)  Personnel: 14  Infected: ~8.2M ▲  Dead: 1.4M
  Field: ▶ Ehrlichia-Delta [Trial]  │  Applied: ▶ Anti-Staph IV [Manufacture]  │  Basic: ▶ Rapid Sequencing
  ──────────────────────────────────────────────────────────────────────────────────────────────────────
  ╔════════════════════════╗   ┌────────────────────────┐   ┌────────────────────────┐

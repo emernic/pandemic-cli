@@ -55,7 +55,7 @@ const TEMPLATES: &[Template] = &[
         name: "Pinnacle Confidence Fund",
         patron: "David Okafor, Pinnacle Entertainment",
         income: 1.8,
-        condition: FundingCondition::MaxThreatLevel { level: 3 }, // DEFCON 3 or better
+        condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 }, // under 50M dead
         source: "Nobody spends money when they think they're dying.",
     },
     Template {
@@ -259,7 +259,7 @@ mod tests {
 
     fn make_offer(state: &mut GameState) {
         state.contract_offer = Some(make_test_contract(
-            FundingCondition::MaxThreatLevel { level: 3 },
+            FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
         ));
     }
 
@@ -325,12 +325,12 @@ mod tests {
     #[test]
     fn satisfaction_degrades_when_condition_violated() {
         let mut state = GameState::new_default(42);
-        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = 1.0;
         state.contracts.push(c);
 
         // Escalate threat beyond level 3
-        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+        state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         // Run several ticks — satisfaction should degrade but not instant-revoke
         for _ in 0..100 {
@@ -359,10 +359,10 @@ mod tests {
     #[test]
     fn warning_fires_at_threshold() {
         let mut state = GameState::new_default(42);
-        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5; // Just above warning
         state.contracts.push(c);
-        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+        state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         // One tick should push below warning threshold
         tick_check_contracts(&mut state);
@@ -376,11 +376,11 @@ mod tests {
     #[test]
     fn revocation_at_low_satisfaction() {
         let mut state = GameState::new_default(42);
-        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = PATRON_SATISFACTION_REVOKE + 0.0001; // Just above revocation
         c.warned = true;
         state.contracts.push(c);
-        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+        state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         tick_check_contracts(&mut state);
 
@@ -467,10 +467,10 @@ mod tests {
     fn warning_queues_patron_demand_crisis() {
         let mut state = GameState::new_default(42);
         state.tick = 500;
-        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
         state.contracts.push(c);
-        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+        state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         assert!(state.pending_crises.is_empty());
         tick_check_contracts(&mut state);
@@ -489,12 +489,12 @@ mod tests {
     fn patron_demand_cooldown_prevents_repeat() {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
-        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         // Already warned recently, satisfaction recovered and dropped again
         c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
         c.last_demand_tick = 800; // Only 200 ticks ago, cooldown is 600
         state.contracts.push(c);
-        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+        state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         tick_check_contracts(&mut state);
 
@@ -508,11 +508,11 @@ mod tests {
     fn patron_demand_fires_after_cooldown_expires() {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
-        let mut c = make_test_contract(FundingCondition::MaxThreatLevel { level: 3 });
+        let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
         c.last_demand_tick = 300; // 700 ticks ago, cooldown is 600
         state.contracts.push(c);
-        state.threat_level = crate::state::ThreatLevel::Catastrophe;
+        state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         tick_check_contracts(&mut state);
 
