@@ -3232,8 +3232,11 @@ impl UiState {
                 if region_idx < state.regions.len() {
                     let med = &state.medicines[medicine_idx];
                     let deployable = med.deployable_diseases(&state.diseases);
-                    if deployable.len() == 1 {
-                        // Single-target: skip disease selection
+                    let has_known_incompatible = state.diseases.iter().enumerate()
+                        .any(|(i, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME && !deployable.contains(&i));
+                    if deployable.len() == 1 && !has_known_incompatible {
+                        // Only one deployable disease and no incompatible ones to explain:
+                        // skip disease selection to save the player a step.
                         self.medicine_ui = Some(MedicineUiState::SelectTarget {
                             medicine_idx,
                             region_idx,

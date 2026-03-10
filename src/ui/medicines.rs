@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, grid_reading_order};
+use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, grid_reading_order, KNOWLEDGE_NAME};
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -314,6 +314,25 @@ fn render_select_disease(
                 Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
             ),
         ]));
+    }
+
+    // Show incompatible diseases grayed out so the player understands why they can't be targeted.
+    let incompatible: Vec<usize> = state.diseases.iter().enumerate()
+        .filter(|(i, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME && !deployable.contains(i))
+        .map(|(i, _)| i)
+        .collect();
+    if !incompatible.is_empty() {
+        lines.push(Line::from(""));
+        for &disease_idx in &incompatible {
+            let name = state.diseases[disease_idx].display_name(disease_idx);
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {}", name), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" ({} — incompatible)", med.therapy_type.label()),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
     }
 
     lines.push(Line::from(""));
