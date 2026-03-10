@@ -589,6 +589,7 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
     }
 
     let region = &state.regions[region_idx];
+    let gov_eff = region.policy_effectiveness();
 
     // Collect detected diseases with active infections in this region
     let active_diseases: Vec<(String, TransmissionVector)> = region
@@ -618,25 +619,26 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
 
         let (label, color) = match policy_idx {
             0 => { // Travel Ban
-                let reduction = (1.0 - vector.travel_ban_factor()) * 100.0;
+                let reduction = (1.0 - vector.travel_ban_factor()) * gov_eff * 100.0;
                 let color = if reduction >= 80.0 { Color::Green } else { Color::Yellow };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
             1 => { // Quarantine
-                let reduction = (1.0 - vector.quarantine_factor()) * 100.0;
+                let reduction = (1.0 - vector.quarantine_factor()) * gov_eff * 100.0;
                 let color = if reduction >= 50.0 { Color::Green }
                     else if reduction >= 30.0 { Color::Yellow }
                     else { Color::Red };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
             2 => { // Hospital Surge — universal +25% spread
-                let increase = (HOSPITAL_SURGE_SPREAD_FACTOR - 1.0) * 100.0;
+                let increase = (HOSPITAL_SURGE_SPREAD_FACTOR - 1.0) * gov_eff * 100.0;
                 (format!("{name} ({}, +{increase:.0}% spread!)", vector.label()), Color::Red)
             }
             4 => { // Water Sanitation
                 match vector {
                     TransmissionVector::Waterborne => {
-                        (format!("{name} (waterborne, -50%)"), Color::Green)
+                        let reduction = 0.5 * gov_eff * 100.0;
+                        (format!("{name} (waterborne, -{reduction:.0}%)"), Color::Green)
                     }
                     _ => {
                         (format!("{name} ({}, no effect)", vector.label()), Color::DarkGray)
@@ -660,6 +662,7 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
     if pop <= 0.0 {
         return None;
     }
+    let gov_eff = region.policy_effectiveness();
 
     // Collect impact across all active detected diseases in this region
     let mut total_impact: f64 = 0.0;
@@ -689,14 +692,14 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 // Quarantine: infections prevented = infected × infectivity × (1 - factor) × susceptible/pop
                 if susceptible > 0.0 {
                     let factor = disease.transmission.quarantine_factor();
-                    let prevented = inf.infected * disease.infectivity * (1.0 - factor) * (susceptible / pop);
+                    let prevented = inf.infected * disease.infectivity * (1.0 - factor) * gov_eff * (susceptible / pop);
                     total_impact += prevented;
                 }
                 impact_type = "infections";
             }
             2 => {
                 // Hospital Surge: deaths prevented = infected × lethality × 0.5
-                let prevented = inf.infected * disease.lethality * 0.5;
+                let prevented = inf.infected * disease.lethality * 0.5 * gov_eff;
                 total_impact += prevented;
                 impact_type = "deaths";
             }
@@ -709,7 +712,7 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 if susceptible > 0.0 {
                     let factor = disease.transmission.water_sanitation_factor();
                     if factor < 1.0 {
-                        let prevented = inf.infected * disease.infectivity * (1.0 - factor) * (susceptible / pop);
+                        let prevented = inf.infected * disease.infectivity * (1.0 - factor) * gov_eff * (susceptible / pop);
                         total_impact += prevented;
                     }
                 }
