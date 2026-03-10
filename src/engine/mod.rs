@@ -354,7 +354,7 @@ pub fn tick(state: &GameState) -> GameState {
             // Personnel loss: staff in the collapsed region are lost
             let lost_personnel = 2u32.min(new.resources.personnel);
             new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
-            new.events.push(GameEvent::RegionCollapsed { region_idx: i });
+            new.events.push(GameEvent::RegionCollapsed { region_idx: i, personnel_lost: lost_personnel });
 
             // Apply network disruption to connected non-collapsed regions.
             // Medicine deployment costs +50% for 10 days (see DISRUPTION_MEDICINE_COST_MULT).
