@@ -84,7 +84,14 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
                 ResearchTrack::Basic => Color::Green,
             })
         } else if *track == ResearchTrack::Basic && state.available_basic_projects().is_empty() {
-            (" [LOCKED]".to_string(), Color::DarkGray)
+            let all_unlocked = crate::state::BasicTech::all()
+                .iter()
+                .all(|t| state.unlocked_techs.contains(t));
+            if all_unlocked {
+                (" [COMPLETE]".to_string(), Color::Green)
+            } else {
+                (" [LOCKED]".to_string(), Color::DarkGray)
+            }
         } else {
             (" [NONE]".to_string(), Color::DarkGray)
         };
