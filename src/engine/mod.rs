@@ -11,7 +11,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
+    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState, COLLAPSE_DISRUPTION_TICKS,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
@@ -340,6 +340,23 @@ pub fn tick(state: &GameState) -> GameState {
             new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
             new.sync_scientists_to_personnel();
             new.events.push(GameEvent::RegionCollapsed { region_idx: i });
+
+            // Apply network disruption to connected non-collapsed regions.
+            // Policy costs +30%, medicine deploy costs +50% for 10 days.
+            let disruption_end = new.tick + COLLAPSE_DISRUPTION_TICKS;
+            let connected: Vec<usize> = new.regions[i].connections.clone();
+            for &c in &connected {
+                if !new.regions[c].collapsed {
+                    // Extend disruption if already active; otherwise set it fresh.
+                    new.regions[c].disrupted_until = Some(
+                        new.regions[c].disrupted_until.map_or(disruption_end, |t| t.max(disruption_end))
+                    );
+                    new.events.push(GameEvent::NetworkDisruption {
+                        disrupted_region_idx: c,
+                        collapsed_region_idx: i,
+                    });
+                }
+            }
 
             // Trigger refugee crisis toward a non-collapsed neighbor (if any).
             // Overrides any active crisis — collapse is a major event and its
