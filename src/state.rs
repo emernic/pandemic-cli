@@ -820,6 +820,9 @@ pub struct Resources {
     /// Tick when the player last rallied public support. Used for cooldown.
     #[serde(default)]
     pub last_rally_tick: Option<u64>,
+    /// Tick when a FundingWarning event was last emitted. Prevents log spam.
+    #[serde(default)]
+    pub last_funding_warning_tick: u64,
 }
 
 impl Resources {
@@ -4096,6 +4099,7 @@ impl GameState {
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_rally_tick: None,
+                last_funding_warning_tick: 0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             enacted_decrees: EnactedDecrees::default(),

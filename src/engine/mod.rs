@@ -111,10 +111,14 @@ pub fn tick(state: &GameState) -> GameState {
     // Low funding warning: warn when net burn rate will exhaust funds within half a day
     // (60 ticks). At 1x speed (500ms/tick), this gives ~30 seconds of real-time warning.
     // Only warn if there are active policies that could actually be suspended.
+    // Rate-limited to once per day to prevent log spam during extended low-funds periods.
     let total_costs = policy_cost + upkeep;
     let net_burn = total_costs - funding_income;
-    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 60.0 {
+    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 60.0
+        && new.tick.saturating_sub(new.resources.last_funding_warning_tick) >= TICKS_PER_DAY as u64
+    {
         new.events.push(GameEvent::FundingWarning);
+        new.resources.last_funding_warning_tick = new.tick;
     }
 
     // Mid-game disease emergence (spawns undetected — player won't see it yet).
@@ -1911,6 +1915,8 @@ mod tests {
         // Funding must be ≥ policy_cost (4.0) to avoid auto-suspension, but
         // < net_burn * 60 (~126) so the runway warning fires.
         state.resources.funding = 5.0;
+        // Start at a realistic tick so the rate limit (once per day) allows firing.
+        state.tick = TICKS_PER_DAY as u64;
         state = tick(&state);
         assert!(
             state.events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
