@@ -110,7 +110,7 @@ Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rus
 
 ### ⚠️ THIS GAME IS UNWINNABLE — THIS IS AN AXIOM, NOT A DESIGN CHOICE
 
-**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-30 days (median ~15, never past 65). Don't make balance changes that trivialize the challenge.
+**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 14-45 days (median ~18, never past 45). Don't make balance changes that trivialize the challenge.
 
 ## Game Inspirations
 
@@ -162,8 +162,8 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 **These come directly from the project owner. They are non-negotiable. Do not weaken diseases.**
 
 Hard requirements for zero player input (no buttons pressed at all):
-- **65 days absolute maximum** — 100% of seeds must lose by day 65, no exceptions
-- **~10-20 day median loss** (all regions collapse) without player intervention
+- **45 days absolute maximum** — 100% of seeds must lose by day 45, no exceptions
+- **~15-20 day median loss** (all regions collapse) without player intervention
 - **Some seeds lost by day 10** — early bad luck is expected and correct
 - **First collapse no earlier than day 3** — players need minimum time for initial decisions
 
@@ -175,7 +175,7 @@ These are not 20th century diseases. These are superbugs resulting from varying 
 
 **CRITICAL: Do NOT increase per-tick lethality or recovery to "speed up" deaths.** A high per-tick lethality+recovery shortens the infectious period, causing epidemic burnout after infecting only a small fraction of each region. The right approach is LOW per-tick lethality/recovery (8–15 day infectious period) with HIGH infectivity. See `PathogenType::stat_ranges()` comment in state.rs for the full explanation.
 
-The `game_is_lost_within_65_days_without_intervention` test enforces the 65-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 30, something is wrong.
+The `game_is_lost_within_45_days_without_intervention` test enforces the 45-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 35, something is wrong.
 
 **Governor-imposed policies (quarantine, border controls, martial law) are GOOD and should stay.** They create interesting dynamics. If policies are keeping the game alive too long, the answer is MORE lethal diseases, not weaker governors.
 
