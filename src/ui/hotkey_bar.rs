@@ -73,10 +73,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines = Vec::new();
     match &state.outcome {
         GameOutcome::Lost => {
+            let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
             let msg = if state.mercy_rule {
-                "Out of resources. The pandemic will run its course."
+                "Out of resources. The pandemic will run its course.".to_string()
             } else {
-                "Humanity has fallen. Too many lives were lost."
+                format!("All {collapsed} regions collapsed.")
             };
             lines.push(Line::from(Span::styled(
                 msg,
