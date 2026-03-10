@@ -460,6 +460,15 @@ pub struct RegionPolicy {
 ///   - render_manage policies vec (ui/policy.rs)
 pub const POLICY_COUNT: usize = 12;
 
+/// Policy index for Nuclear Annihilation. Special-cased in UI (☢ icon) and engine
+/// (allowed in collapsed regions when all other policies are unavailable).
+pub const POLICY_IDX_NUCLEAR: usize = 9;
+
+/// Policy index for the first (Basic) screening tier. The three screening tiers occupy
+/// indices POLICY_IDX_SCREENING_BASE through POLICY_IDX_SCREENING_BASE + 2
+/// (Basic / Med / Mass Screening), all backed by the single `screening` enum field.
+pub const POLICY_IDX_SCREENING_BASE: usize = 5;
+
 /// Number of infrastructure repair items in the ManagePolicies panel
 /// (Healthcare, Supply Lines, Civil Order). This ties the renderer and
 /// confirm handler to the same layout constant — add a new infra item here,
@@ -543,7 +552,7 @@ impl RegionPolicy {
             }
         }
         let scr_cost = self.screening.funding_cost();
-        if scr_cost > 0.0 { costs.push((5, scr_cost)); }
+        if scr_cost > 0.0 { costs.push((POLICY_IDX_SCREENING_BASE, scr_cost)); }
         costs
     }
 
