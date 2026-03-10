@@ -8,6 +8,9 @@ use ratatui::{
 
 use crate::state::{
     GameState, KNOWLEDGE_NAME, OpsUiState, TICKS_PER_DAY,
+    OP_RECON_PERSONNEL, OP_RECON_TICKS,
+    OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS,
+    OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS,
 };
 use super::hint_line;
 
@@ -76,18 +79,20 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     )));
 
-    let ops = [
-        ("Recon Mission", "Identify unknown pathogen", "2 personnel, 1.5 days"),
-        ("Emergency Response", "Reduce lethality in a region", "3 personnel, 1 day"),
-        ("Infra Survey", "Repair worst infrastructure", "2 personnel, 2 days"),
+    let ops: [(&str, &str, u32, f64); 3] = [
+        ("Recon Mission", "Identify unknown pathogen", OP_RECON_PERSONNEL, OP_RECON_TICKS),
+        ("Emergency Response", "Reduce lethality in a region", OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS),
+        ("Infra Survey", "Repair worst infrastructure", OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS),
     ];
 
     let available = state.personnel_available();
 
-    for (name, desc, cost) in &ops {
+    for (name, desc, personnel, ticks) in &ops {
         let is_selected = row == selected;
         let marker = if is_selected { "▸ " } else { "  " };
         let highlight = if is_selected { Color::Yellow } else { Color::White };
+        let days = *ticks / TICKS_PER_DAY;
+        let cost = format!("{} personnel, {:.1} days", personnel, days);
 
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(Color::Yellow)),
@@ -99,7 +104,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
         lines.push(Line::from(vec![
             Span::raw("    "),
-            Span::styled(*cost, Style::default().fg(Color::DarkGray)),
+            Span::styled(cost, Style::default().fg(Color::DarkGray)),
         ]));
         row += 1;
     }
