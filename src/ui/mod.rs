@@ -310,6 +310,14 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::FieldOpCompleted { label, result } => {
                 (3, format!("{}: {}", label, result))
             }
+            GameEvent::NetworkDisruption { disrupted_region_idx, collapsed_region_idx } => {
+                let disrupted = state.regions.get(*disrupted_region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                let collapsed = state.regions.get(*collapsed_region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                (2, format!("Network disruption: supply routes through {} severed — {} medicine deployment +50% for 10 days",
+                    collapsed, disrupted))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

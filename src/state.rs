@@ -314,6 +314,11 @@ pub const ADVANCED_INTEL_COST: f64 = 150.0;
 /// Advanced Intel ongoing personnel requirement (replaces Level 1 cost).
 pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 
+/// Ticks a neighboring-collapse disruption lasts (10 days).
+pub const COLLAPSE_DISRUPTION_TICKS: u64 = 1200;
+/// Medicine deployment cost multiplier for regions disrupted by a neighboring collapse.
+pub const DISRUPTION_MEDICINE_COST_MULT: f64 = 1.5;
+
 /// Research Lab upgrade costs (one-time, no ongoing personnel cost).
 /// Level 1 (Enhanced Sequencing Lab): +30% research speed.
 /// Level 2 (Advanced Genomics Center): +60% research speed.
@@ -1324,6 +1329,11 @@ pub struct Region {
     /// lethality in this region is reduced by OP_EMERGENCY_LETHALITY_MULT.
     #[serde(default)]
     pub emergency_response_until: Option<u64>,
+    /// Tick until which this region suffers network disruption from a neighboring collapse.
+    /// While active: +30% policy costs, +50% medicine deployment costs.
+    /// Multiple collapses extend the duration (last-collapse-wins on end tick).
+    #[serde(default)]
+    pub disrupted_until: Option<u64>,
     /// Cached recent death rate (deaths per day), updated once per day
     /// by the tick function. Used for the time-to-collapse estimate.
     #[serde(skip)]
@@ -1363,6 +1373,11 @@ fn default_collapse_threshold() -> f64 {
 impl Region {
     pub fn has_trait(&self, t: RegionTrait) -> bool {
         self.traits.contains(&t)
+    }
+
+    /// True if this region is currently experiencing network disruption.
+    pub fn is_disrupted(&self, current_tick: u64) -> bool {
+        self.disrupted_until.map_or(false, |t| t > current_tick)
     }
 
     pub fn alive(&self) -> f64 {
@@ -2934,6 +2949,12 @@ pub enum GameEvent {
     RegionCollapsed {
         region_idx: usize,
     },
+    /// A non-collapsed region is now suffering network disruption from a neighboring collapse.
+    /// Policy costs +30%, medicine deployment costs +50% for 10 days.
+    NetworkDisruption {
+        disrupted_region_idx: usize,
+        collapsed_region_idx: usize,
+    },
     /// The game just ended (defeat). UI should pause and close panels.
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
     GameOver,
@@ -4335,6 +4356,7 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 emergency_response_until: None,
+                disrupted_until: None,
             },
             Region {
                 name: "South America".into(),
@@ -4367,6 +4389,7 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 emergency_response_until: None,
+                disrupted_until: None,
             },
             Region {
                 name: "Europe".into(),
@@ -4399,6 +4422,7 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 emergency_response_until: None,
+                disrupted_until: None,
             },
             Region {
                 name: "Africa".into(),
@@ -4431,6 +4455,7 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 emergency_response_until: None,
+                disrupted_until: None,
             },
             Region {
                 name: "Asia".into(),
@@ -4463,6 +4488,7 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 emergency_response_until: None,
+                disrupted_until: None,
             },
             Region {
                 name: "Oceania".into(),
@@ -4495,6 +4521,7 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 emergency_response_until: None,
+                disrupted_until: None,
             },
         ];
 
