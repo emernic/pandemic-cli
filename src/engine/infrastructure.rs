@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState, INFRA_CRITICAL, INFRA_REPAIR_COST, INFRA_STRESSED,
+    GameEvent, GameState, InfraSystem, INFRA_CRITICAL, INFRA_REPAIR_COST, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
     SUPPLY_REPAIR_COST,
 };
@@ -60,7 +60,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             + hospital_building_recovery + natural_healthcare_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].healthcare_capacity = new_healthcare;
-        emit_breakpoint_events(state, i, "healthcare", old_healthcare, new_healthcare);
+        emit_breakpoint_events(state, i, InfraSystem::Healthcare, old_healthcare, new_healthcare);
 
         // --- Supply Lines ---
         // Degrades from death rate and travel bans
@@ -89,7 +89,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         let new_supply = (old_supply + death_drain + travel_ban_drain + natural_supply_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].supply_lines = new_supply;
-        emit_breakpoint_events(state, i, "supply_lines", old_supply, new_supply);
+        emit_breakpoint_events(state, i, InfraSystem::SupplyLines, old_supply, new_supply);
 
         // --- Civil Order ---
         // Degrades from deaths, restrictive policies, and healthcare collapse
@@ -132,7 +132,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             + healthcare_cascade + natural_civil_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].civil_order = new_civil;
-        emit_breakpoint_events(state, i, "civil_order", old_civil, new_civil);
+        emit_breakpoint_events(state, i, InfraSystem::CivilOrder, old_civil, new_civil);
     }
 }
 
@@ -140,7 +140,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
 fn emit_breakpoint_events(
     state: &mut GameState,
     region_idx: usize,
-    system: &str,
+    system: InfraSystem,
     old: f64,
     new: f64,
 ) {
@@ -149,7 +149,7 @@ fn emit_breakpoint_events(
         if old > threshold && new <= threshold {
             state.events.push(GameEvent::InfrastructureBreakpoint {
                 region_idx,
-                system: system.to_string(),
+                system,
                 threshold,
             });
         }
@@ -160,7 +160,7 @@ fn emit_breakpoint_events(
 pub(super) fn repair_infrastructure(
     state: &mut GameState,
     region_idx: usize,
-    system: u8,
+    system: InfraSystem,
 ) -> (Option<String>, bool) {
     if region_idx >= state.regions.len() {
         return (None, false);
@@ -169,15 +169,15 @@ pub(super) fn repair_infrastructure(
         return (Some(format!("{} has collapsed", state.regions[region_idx].name)), false);
     }
 
-    let (system_name, current, cost) = match system {
-        0 => ("Healthcare", state.regions[region_idx].healthcare_capacity, INFRA_REPAIR_COST),
-        1 => ("Supply Lines", state.regions[region_idx].supply_lines, SUPPLY_REPAIR_COST),
-        2 => ("Civil Order", state.regions[region_idx].civil_order, INFRA_REPAIR_COST),
-        _ => return (None, false),
+    let current = match system {
+        InfraSystem::Healthcare => state.regions[region_idx].healthcare_capacity,
+        InfraSystem::SupplyLines => state.regions[region_idx].supply_lines,
+        InfraSystem::CivilOrder => state.regions[region_idx].civil_order,
     };
+    let cost = system.repair_cost();
 
     if current >= 0.99 {
-        return (Some(format!("{system_name} already at full capacity")), false);
+        return (Some(format!("{} already at full capacity", system.label())), false);
     }
 
     if state.resources.funding < cost {
@@ -186,17 +186,16 @@ pub(super) fn repair_infrastructure(
 
     state.resources.funding -= cost;
     let restored = match system {
-        0 => &mut state.regions[region_idx].healthcare_capacity,
-        1 => &mut state.regions[region_idx].supply_lines,
-        2 => &mut state.regions[region_idx].civil_order,
-        _ => unreachable!(),
+        InfraSystem::Healthcare => &mut state.regions[region_idx].healthcare_capacity,
+        InfraSystem::SupplyLines => &mut state.regions[region_idx].supply_lines,
+        InfraSystem::CivilOrder => &mut state.regions[region_idx].civil_order,
     };
     *restored = (*restored + 0.25).min(1.0);
     let new_pct = (*restored * 100.0) as u32;
     let region_name = &state.regions[region_idx].name;
 
     (
-        Some(format!("{region_name}: {system_name} repaired to {new_pct}% (¥{cost:.0})")),
+        Some(format!("{region_name}: {} repaired to {new_pct}% (¥{cost:.0})", system.label())),
         true,
     )
 }
@@ -305,8 +304,8 @@ mod tests {
         }
 
         assert!(state.events.iter().any(|e| matches!(e,
-            GameEvent::InfrastructureBreakpoint { system, threshold, .. }
-            if system == "healthcare" && (*threshold - 0.50).abs() < 0.01
+            GameEvent::InfrastructureBreakpoint { system: InfraSystem::Healthcare, threshold, .. }
+            if (*threshold - 0.50).abs() < 0.01
         )), "should fire STRESSED breakpoint event");
     }
 
@@ -316,7 +315,7 @@ mod tests {
         state.regions[0].healthcare_capacity = 0.30;
         state.resources.funding = 1000.0;
 
-        let (msg, ok) = repair_infrastructure(&mut state, 0, 0);
+        let (msg, ok) = repair_infrastructure(&mut state, 0, InfraSystem::Healthcare);
         assert!(ok);
         assert!(msg.unwrap().contains("repaired"));
         assert!((state.regions[0].healthcare_capacity - 0.55).abs() < 0.01);
@@ -329,7 +328,7 @@ mod tests {
         state.regions[0].healthcare_capacity = 0.30;
         state.resources.funding = 100.0;
 
-        let (_, ok) = repair_infrastructure(&mut state, 0, 0);
+        let (_, ok) = repair_infrastructure(&mut state, 0, InfraSystem::Healthcare);
         assert!(!ok);
     }
 
