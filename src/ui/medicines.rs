@@ -113,7 +113,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             let mut detail_spans = vec![
                 Span::raw("    "),
                 Span::styled(
-                    format!("${:.0}+", med.cost),
+                    format!("¥{:.0}+", med.cost),
                     Style::default().fg(Color::Yellow),
                 ),
                 Span::raw("  "),
@@ -523,13 +523,13 @@ fn render_select_target(
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("${:.0}", deploy_cost),
+            format!("¥{:.0}", deploy_cost),
             Style::default().fg(Color::Yellow),
         ),
         Span::raw("    "),
         Span::styled("Funding: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("${:.0}", state.resources.funding),
+            format!("¥{:.0}", state.resources.funding),
             Style::default().fg(if state.resources.funding >= deploy_cost {
                 Color::Green
             } else {
@@ -639,7 +639,7 @@ fn render_deploy_result(
         lines.push(Line::from(vec![
             Span::styled("  Funding: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("${:.0}", state.resources.funding),
+                format!("¥{:.0}", state.resources.funding),
                 Style::default().fg(Color::Yellow),
             ),
         ]));

@@ -104,7 +104,7 @@ pub(super) fn deploy_medicine(
 
     let doses_str = crate::format_number(doses_to_ship);
     let msg = format!(
-        "Shipped {doses_str} doses of {med_name} to {region_name} (-${cost:.0}) — arriving in 1 day"
+        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}) — arriving in 1 day"
     );
     (true, Some(msg), false)
 }
@@ -276,7 +276,7 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
 }
 
 pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
-    format!("Insufficient funds! Need ${cost:.0}, have ${have:.0}")
+    format!("Insufficient funds! Need ¥{cost:.0}, have ¥{have:.0}")
 }
 
 /// Auto-deploy medicines to the worst-affected regions. Called once per tick.

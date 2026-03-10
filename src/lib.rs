@@ -268,7 +268,7 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
             option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
             tick_created: 0,
         });
@@ -292,7 +292,7 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
             option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
             tick_created: 0,
         });
@@ -318,7 +318,7 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
             option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
             tick_created: 0,
         });
@@ -341,7 +341,7 @@ mod tests {
             kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
-            option_a: CrisisOption { label: "Take funding".into(), description: "Get $500".into(), cost: None },
+            option_a: CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
             option_b: CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
             tick_created: 0,
         });

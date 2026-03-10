@@ -214,7 +214,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                     let (personnel, ticks, funding) = state.effective_costs(kind);
                     lines.push(Line::from(vec![
                         Span::raw("    "),
-                        Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
+                        Span::styled(format!("¥{:.0}", funding), Style::default().fg(Color::Yellow)),
                         Span::raw("  "),
                         Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
                         Span::raw("  "),
@@ -311,7 +311,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                     let (personnel, ticks, funding) = state.effective_costs(kind);
                     lines.push(Line::from(vec![
                         Span::raw("    "),
-                        Span::styled(format!("${:.0}", funding), Style::default().fg(Color::Yellow)),
+                        Span::styled(format!("¥{:.0}", funding), Style::default().fg(Color::Yellow)),
                         Span::raw("  "),
                         Span::styled(format!("{} personnel", personnel), Style::default().fg(Color::Cyan)),
                         Span::raw("  "),
@@ -370,11 +370,11 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::raw("  Cost: "),
-            Span::styled(format!("${:.0}", funding), Style::default().fg(
+            Span::styled(format!("¥{:.0}", funding), Style::default().fg(
                 if has_funding { Color::Green } else { Color::Red }
             )),
             Span::styled(
-                format!("  (have ${:.0})", state.resources.funding),
+                format!("  (have ¥{:.0})", state.resources.funding),
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
@@ -587,7 +587,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         }
         ResearchKind::TrainPersonnel => {
             let added_upkeep = TRAIN_PERSONNEL_BATCH as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
-            Some(format!("Current: {} personnel (+${:.0}/day upkeep after)",
+            Some(format!("Current: {} personnel (+¥{:.0}/day upkeep after)",
                 state.resources.personnel, added_upkeep))
         }
         ResearchKind::IdentifyThreat { disease_idx } => {

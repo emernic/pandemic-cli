@@ -203,7 +203,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if !state.regions[region_idx].collapsed {
                 (Some("Nuclear annihilation is only available for collapsed regions".to_string()), false)
             } else if state.resources.funding < NUCLEAR_ANNIHILATION_COST {
-                (Some(format!("Not enough funding (need ${:.0})", NUCLEAR_ANNIHILATION_COST)), false)
+                (Some(format!("Not enough funding (need ¥{:.0})", NUCLEAR_ANNIHILATION_COST)), false)
             } else {
                 // Deduct one-time cost
                 state.resources.funding -= NUCLEAR_ANNIHILATION_COST;
@@ -235,7 +235,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if region.hospital_level == 0 {
                 // Build Level 1: Field Hospital
                 if state.resources.funding < FIELD_HOSPITAL_COST {
-                    (Some(format!("Not enough funding (need ${:.0})", FIELD_HOSPITAL_COST)), false)
+                    (Some(format!("Not enough funding (need ¥{:.0})", FIELD_HOSPITAL_COST)), false)
                 } else if available_personnel < FIELD_HOSPITAL_PERSONNEL {
                     (Some(format!("Need {} personnel to staff Field Hospital", FIELD_HOSPITAL_PERSONNEL)), false)
                 } else {
@@ -247,7 +247,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if region.hospital_level == 1 {
                 // Upgrade to Level 2: Medical Center
                 if state.resources.funding < MEDICAL_CENTER_COST {
-                    (Some(format!("Not enough funding (need ${:.0})", MEDICAL_CENTER_COST)), false)
+                    (Some(format!("Not enough funding (need ¥{:.0})", MEDICAL_CENTER_COST)), false)
                 } else if available_personnel < (MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL) {
                     (Some(format!("Need {} more personnel to staff Medical Center", MEDICAL_CENTER_PERSONNEL - FIELD_HOSPITAL_PERSONNEL)), false)
                 } else {
@@ -268,7 +268,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if region.intel_level == 0 {
                 // Build Level 1: Intel Station
                 if state.resources.funding < INTEL_STATION_COST {
-                    (Some(format!("Not enough funding (need ${:.0})", INTEL_STATION_COST)), false)
+                    (Some(format!("Not enough funding (need ¥{:.0})", INTEL_STATION_COST)), false)
                 } else if available_personnel < INTEL_STATION_PERSONNEL {
                     (Some(format!("Need {} personnel to staff Intel Station", INTEL_STATION_PERSONNEL)), false)
                 } else {
@@ -279,7 +279,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if region.intel_level == 1 {
                 // Upgrade to Level 2: Advanced Intel
                 if state.resources.funding < ADVANCED_INTEL_COST {
-                    (Some(format!("Not enough funding (need ${:.0})", ADVANCED_INTEL_COST)), false)
+                    (Some(format!("Not enough funding (need ¥{:.0})", ADVANCED_INTEL_COST)), false)
                 } else if available_personnel < (ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL) {
                     (Some(format!("Need {} more personnel for Advanced Intel", ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL)), false)
                 } else {
@@ -307,7 +307,7 @@ pub(super) fn rally_support(state: &mut GameState) -> (Option<String>, bool) {
     }
 
     if state.resources.funding < RALLY_COST {
-        return (Some(format!("Not enough funding (need ${RALLY_COST:.0})")), false);
+        return (Some(format!("Not enough funding (need ¥{RALLY_COST:.0})")), false);
     }
 
     state.resources.funding -= RALLY_COST;
@@ -330,14 +330,14 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
         return (Some(format!("{name} has collapsed — no governor to appease")), false);
     }
     if state.resources.funding < APPEASE_COST {
-        return (Some(format!("Not enough funding (need ${APPEASE_COST:.0})")), false);
+        return (Some(format!("Not enough funding (need ¥{APPEASE_COST:.0})")), false);
     }
     state.resources.funding -= APPEASE_COST;
     let gov = &mut state.regions[region_idx].governor;
     gov.loyalty = (gov.loyalty + APPEASE_LOYALTY_GAIN).min(100.0);
     let name = &state.regions[region_idx].governor.name;
     let loyalty = state.regions[region_idx].governor.loyalty;
-    (Some(format!("{name} appeased — loyalty now {loyalty:.0} (-${APPEASE_COST:.0})")), true)
+    (Some(format!("{name} appeased — loyalty now {loyalty:.0} (-¥{APPEASE_COST:.0})")), true)
 }
 
 /// Personality-specific bargain with a defiant governor. Free in funding
@@ -592,7 +592,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 let drain = (state.resources.funding * 0.08).min(250.0);
                 if drain >= 10.0 {
                     state.resources.funding -= drain;
-                    Some(format!("{gov_name} diverted ${drain:.0} to regional programs in {region_name}"))
+                    Some(format!("{gov_name} diverted ¥{drain:.0} to regional programs in {region_name}"))
                 } else {
                     None
                 }
@@ -664,7 +664,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             state.sync_scientists_to_personnel();
             let penalty_per_day = CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY;
             (Some(format!(
-                "⚠ DECREE: Conscript Researchers enacted — +{} personnel. Income reduced ${:.0}/day, permanently.",
+                "⚠ DECREE: Conscript Researchers enacted — +{} personnel. Income reduced ¥{:.0}/day, permanently.",
                 CONSCRIPT_PERSONNEL_GAIN, penalty_per_day
             )), true)
         }
@@ -796,7 +796,7 @@ mod tests {
     #[test]
     fn screening_suspension_when_funding_runs_out() {
         let mut state = screening_test_state();
-        state.policies[0].screening = ScreeningLevel::MassRapid; // $0.6/tick
+        state.policies[0].screening = ScreeningLevel::MassRapid; // ¥0.6/tick
         // Set funding just below screening cost so it gets suspended
         state.resources.funding = 0.3;
         // Clear infections so tick doesn't muddy funding math
@@ -813,7 +813,7 @@ mod tests {
     #[test]
     fn screening_cost_vs_boolean_policy_suspension_order() {
         let mut state = screening_test_state();
-        // Set up: High screening ($0.6/tick) + quarantine ($0.6/tick) = $1.2/tick
+        // Set up: High screening (¥0.6/tick) + quarantine (¥0.6/tick) = ¥1.2/tick
         state.policies[0].screening = ScreeningLevel::MassRapid;
         state.policies[0].quarantine = true;
         // Enough for one but not both
@@ -821,7 +821,7 @@ mod tests {
         for r in &mut state.regions { r.infections.clear(); }
 
         state = tick(&state);
-        // Both cost $0.6; one should be suspended. The enforcement loop finds
+        // Both cost ¥0.6; one should be suspended. The enforcement loop finds
         // whichever it encounters first at the max cost — just verify one survived.
         let screening_alive = state.policies[0].screening != ScreeningLevel::None;
         let quarantine_alive = state.policies[0].quarantine;
