@@ -1642,7 +1642,7 @@ pub struct Medicine {
 }
 
 /// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeployTarget {
     Vaccinate { disease_idx: usize },
     Treat { disease_idx: usize },
@@ -1795,20 +1795,6 @@ impl Medicine {
         therapy_efficacy * mechanism_eff * strain_eff * cross_reactive * resistance
     }
 
-    /// Decode a UI selection index into a deploy target.
-    /// Indices 0..n are vaccinate options, n..2n are treat options.
-    /// Uses deployable_diseases (primary + cross-reactive) for the full target list.
-    pub fn decode_deploy_target(&self, selection: usize, diseases: &[Disease]) -> Option<DeployTarget> {
-        let targets = self.deployable_diseases(diseases);
-        let n = targets.len();
-        if selection < n {
-            Some(DeployTarget::Vaccinate { disease_idx: targets[selection] })
-        } else if selection < 2 * n {
-            Some(DeployTarget::Treat { disease_idx: targets[selection - n] })
-        } else {
-            None
-        }
-    }
 }
 
 /// Which research track a project belongs to.
@@ -2169,7 +2155,7 @@ pub enum GameCommand {
     DeployMedicine {
         medicine_idx: usize,
         region_idx: usize,
-        target_selection: usize,
+        target: DeployTarget,
     },
     StartResearch {
         track: ResearchTrack,
@@ -2386,7 +2372,7 @@ pub enum MedicineUiState {
     SelectDisease { medicine_idx: usize, region_idx: usize },
     /// Choose vaccinate (0) or treat (1) for the selected disease.
     SelectTarget { medicine_idx: usize, region_idx: usize, disease_idx: usize },
-    ConfirmDeploy { medicine_idx: usize, region_idx: usize, target_selection: usize },
+    ConfirmDeploy { medicine_idx: usize, region_idx: usize, target: DeployTarget },
     /// Shown after a deployment completes, displaying the result prominently.
     DeployResult { medicine_idx: usize, message: String, adverse: bool },
 }
@@ -2515,15 +2501,10 @@ impl UiState {
                         self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
                         self.panel_selection = 0;
                     }
-                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target_selection }) => {
-                        let med = &medicines[medicine_idx];
-                        // Reconstruct disease_idx and action from target_selection
-                        let deployable = med.deployable_diseases(diseases);
-                        let n = deployable.len();
-                        let (disease_idx, action) = if target_selection < n {
-                            (deployable[target_selection], 0)
-                        } else {
-                            (deployable[target_selection - n], 1)
+                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target }) => {
+                        let (disease_idx, action) = match target {
+                            DeployTarget::Vaccinate { disease_idx } => (disease_idx, 0),
+                            DeployTarget::Treat { disease_idx } => (disease_idx, 1),
                         };
                         self.medicine_ui = Some(MedicineUiState::SelectTarget {
                             medicine_idx,
@@ -2854,51 +2835,46 @@ impl UiState {
             }) => {
                 let med = &state.medicines[medicine_idx];
                 // panel_selection: 0 = vaccinate, 1 = treat
-                let deployable = med.deployable_diseases(&state.diseases);
-                let pos = deployable.iter().position(|&d| d == disease_idx);
-                let target_selection = match pos {
-                    Some(p) => p + self.panel_selection * deployable.len(),
-                    None => return None,
+                let target = if self.panel_selection == 0 {
+                    DeployTarget::Vaccinate { disease_idx }
+                } else {
+                    DeployTarget::Treat { disease_idx }
                 };
-                if med.decode_deploy_target(target_selection, &state.diseases).is_some() {
-                    let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
-                    if state.resources.funding < deploy_cost {
-                        self.status_message = Some(
-                            format!("Insufficient funds! Need ${:.0}, have ${:.0}",
-                                deploy_cost, state.resources.funding),
-                        );
+                let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
+                if state.resources.funding < deploy_cost {
+                    self.status_message = Some(
+                        format!("Insufficient funds! Need ${:.0}, have ${:.0}",
+                            deploy_cost, state.resources.funding),
+                    );
+                    None
+                } else {
+                    let is_tested = med.tested_against.contains(&disease_idx);
+
+                    if !is_tested {
+                        self.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
+                            medicine_idx,
+                            region_idx,
+                            target: target.clone(),
+                        });
                         None
                     } else {
-                        let is_tested = med.tested_against.contains(&disease_idx);
-
-                        if !is_tested {
-                            self.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
-                                medicine_idx,
-                                region_idx,
-                                target_selection,
-                            });
-                            None
-                        } else {
-                            Some(GameCommand::DeployMedicine {
-                                medicine_idx,
-                                region_idx,
-                                target_selection,
-                            })
-                        }
+                        Some(GameCommand::DeployMedicine {
+                            medicine_idx,
+                            region_idx,
+                            target,
+                        })
                     }
-                } else {
-                    None
                 }
             }
             Some(MedicineUiState::ConfirmDeploy {
                 medicine_idx,
                 region_idx,
-                target_selection,
+                target,
             }) => {
                 Some(GameCommand::DeployMedicine {
                     medicine_idx,
                     region_idx,
-                    target_selection,
+                    target,
                 })
             }
             Some(MedicineUiState::DeployResult { medicine_idx, .. }) => {
