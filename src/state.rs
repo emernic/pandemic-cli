@@ -1682,7 +1682,7 @@ impl TherapyType {
 /// mechanism; broad-spectrum medicines do not. Future resistance systems will track
 /// resistance per mechanism — overusing one mechanism builds resistance to all drugs
 /// sharing it, creating pressure to diversify treatment strategies.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MechanismOfAction {
     // Bacterial mechanisms
     /// Beta-lactams: disrupt cell wall synthesis (e.g., penicillin, cephalosporins).
@@ -4384,7 +4384,54 @@ impl GameState {
         d.cross_region_spread *= scale;
         // Don't scale recovery — harder diseases should be harder to recover from
 
+        // Pre-existing resistance: new diseases emerge partially resistant to
+        // mechanisms the player has deployed heavily. Invisible to the player —
+        // they just notice their old drugs don't work as well on new threats.
+        if day >= 20.0 {
+            self.seed_preexisting_resistance(disease_idx);
+        }
+
         Some(result)
+    }
+
+    /// Pre-seed a newly spawned disease with resistance to mechanisms the player
+    /// has deployed most. Simulates evolutionary pressure from the player's
+    /// medicine usage without announcing it.
+    fn seed_preexisting_resistance(&mut self, disease_idx: usize) {
+        let day = self.tick as f64 / TICKS_PER_DAY;
+        // Intensity ramps from 0 at day 20 to full at day 40
+        let intensity = ((day - 20.0) / 20.0).clamp(0.0, 1.0);
+
+        // Aggregate total deployments per mechanism across all medicines
+        let mut mech_deployments: HashMap<Option<MechanismOfAction>, u32> = HashMap::new();
+        for med in &self.medicines {
+            if med.deployed_count > 0 {
+                *mech_deployments.entry(med.mechanism).or_insert(0) += med.deployed_count;
+            }
+        }
+
+        if mech_deployments.is_empty() {
+            return;
+        }
+
+        let max_deploys = *mech_deployments.values().max().unwrap_or(&0);
+        if max_deploys == 0 {
+            return;
+        }
+
+        // For each mechanism the player has used, add proportional resistance.
+        // Cap at 0.3 (30%) — enough to be noticeable but not game-breaking.
+        for (&mechanism, &count) in &mech_deployments {
+            let deploy_fraction = count as f64 / max_deploys as f64;
+            // Only seed resistance for heavily-used mechanisms (>30% of max)
+            if deploy_fraction < 0.3 {
+                continue;
+            }
+            let resistance = deploy_fraction * intensity * 0.3; // max 0.3 at full intensity
+            if resistance > 0.01 {
+                self.diseases[disease_idx].add_resistance(mechanism, resistance);
+            }
+        }
     }
 
     /// Whether any tested/unlocked medicines targeting this disease have fallen behind
