@@ -387,3 +387,4 @@ The user switches between many terminal tabs. They need to instantly see what wa
   ```
   Local `master` may be checked out in another worktree, which blocks `git checkout master`.
 - **Never use `gh pr merge --delete-branch`** — it tries to `git checkout master` locally, which fails because master is checked out in another worktree. Use `gh pr merge --squash` instead. Remote branches are auto-deleted on merge (repo setting enabled).
+- **After a force push, wait before merging** — `gh pr merge` immediately after `git push --force-with-lease` will fail with "not mergeable" because GitHub hasn't re-evaluated the branch yet. Add `sleep 8` between the push and the merge call.
