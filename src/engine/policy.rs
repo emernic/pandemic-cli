@@ -607,10 +607,10 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 }
             }
             GovernorPersonality::Cooperative => {
-                // Leak to media — small POL drain
+                // Files formal objection through official channels — small POL drain
                 if state.resources.political_power > 0.0 {
-                    state.resources.political_power = (state.resources.political_power - 0.03).max(0.0);
-                    Some(format!("{gov_name} leaked reports to media in {region_name}"))
+                    state.resources.political_power = (state.resources.political_power - 0.05).max(0.0);
+                    Some(format!("{gov_name} filed a formal objection in {region_name}"))
                 } else {
                     None
                 }
@@ -1390,7 +1390,7 @@ mod tests {
         assert!(state.resources.political_power < 0.50,
             "Cooperative governor should drain political power");
         assert!(state.events.iter().any(|e|
-            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("leaked"))
+            matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("objection"))
         ));
     }
 
