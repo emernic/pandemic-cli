@@ -351,15 +351,8 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
 
             let target = DeployTarget::Treat { disease_idx: best_disease_idx };
 
-            let (success, _msg) = deploy_medicine(
-                state, med_idx, region_idx, target,
-            );
-            if success {
-                state.events.push(GameEvent::MedicineAutoDeployed {
-                    medicine_idx: med_idx,
-                    region_idx,
-                });
-            }
+            // deploy_medicine() fires MedicineShipped on success
+            deploy_medicine(state, med_idx, region_idx, target);
         }
     }
 }

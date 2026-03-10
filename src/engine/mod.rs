@@ -4346,15 +4346,15 @@ mod tests {
 
         let after = tick(&state);
 
-        // Should have auto-deployed (event fired)
-        let auto_deploy_events: Vec<_> = after.events.iter()
-            .filter(|e| matches!(e, GameEvent::MedicineAutoDeployed { .. }))
+        // Should have auto-deployed (MedicineShipped fires on success)
+        let shipped_events: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
             .collect();
-        assert_eq!(auto_deploy_events.len(), 1, "should auto-deploy exactly once per tick");
+        assert_eq!(shipped_events.len(), 1, "should auto-deploy exactly once per tick");
 
         // Should target region 1 (worst infected)
-        match &auto_deploy_events[0] {
-            GameEvent::MedicineAutoDeployed { region_idx, .. } => {
+        match &shipped_events[0] {
+            GameEvent::MedicineShipped { region_idx, .. } => {
                 assert_eq!(*region_idx, 1, "should deploy to worst-affected region");
             }
             _ => unreachable!(),
@@ -4382,10 +4382,10 @@ mod tests {
         let after = tick(&state);
 
         // Should NOT auto-deploy untested medicines
-        let auto_events: Vec<_> = after.events.iter()
-            .filter(|e| matches!(e, GameEvent::MedicineAutoDeployed { .. }))
+        let shipped: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
             .collect();
-        assert!(auto_events.is_empty(), "should not auto-deploy untested medicines");
+        assert!(shipped.is_empty(), "should not auto-deploy untested medicines");
     }
 
     #[test]
@@ -4406,10 +4406,10 @@ mod tests {
 
         let after = tick(&state);
 
-        let auto_events: Vec<_> = after.events.iter()
-            .filter(|e| matches!(e, GameEvent::MedicineAutoDeployed { .. }))
+        let shipped: Vec<_> = after.events.iter()
+            .filter(|e| matches!(e, GameEvent::MedicineShipped { .. }))
             .collect();
-        assert!(auto_events.is_empty(), "should not deploy to region on cooldown");
+        assert!(shipped.is_empty(), "should not deploy to region on cooldown");
     }
 
     #[test]

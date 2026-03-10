@@ -2654,11 +2654,6 @@ pub enum GameEvent {
     TechUnlocked {
         tech: BasicTech,
     },
-    /// A medicine was auto-deployed to a region.
-    MedicineAutoDeployed {
-        medicine_idx: usize,
-        region_idx: usize,
-    },
     /// A medicine shipment was dispatched and is in transit.
     MedicineShipped {
         medicine_idx: usize,
