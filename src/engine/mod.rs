@@ -345,11 +345,10 @@ pub fn tick(state: &GameState) -> GameState {
             if let Some(to) = to {
                 let wave = new.regions.iter().filter(|r| r.collapsed).count() as u8;
                 let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to, wave };
-                new.active_crisis = Some(crisis::build_crisis_event(&new, kind));
-                new.sim_state = SimState::Event {
-                    was_running: new.sim_state.is_running(),
-                };
-                new.events.push(GameEvent::CrisisStarted);
+                // Overrides any active crisis — collapse takes priority.
+                // activate_crisis() handles auto-resolve preferences like all other crisis types.
+                let crisis_event = crisis::build_crisis_event(&new, kind);
+                crisis::activate_crisis(&mut new, crisis_event);
             } else {
                 // No uncollapsed neighbors — no refugee destination.
                 // Game is nearly over; notification area will show the collapse.
@@ -3246,6 +3245,31 @@ mod tests {
         assert!(after.regions[0].collapsed, "region should collapse");
         assert_eq!(after.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS",
             "refugee crisis must override any existing crisis on collapse");
+    }
+
+    #[test]
+    fn refugee_wave_auto_resolves_with_saved_preference() {
+        let mut state = GameState::new_default(42);
+        // Player has previously chosen to always close borders (option 1)
+        state.auto_resolve_crises.insert("refugee".to_string(), 1);
+        state.resources.political_power = 0.80;
+        // Push region 0 to collapse on the next tick
+        let threshold = state.regions[0].collapse_threshold;
+        let pop = state.regions[0].population as f64;
+        state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
+        state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
+        let after = tick(&state);
+        assert!(after.regions[0].collapsed, "region should collapse");
+        // With auto-resolve set, the refugee crisis should fire and resolve immediately
+        assert!(after.active_crisis.is_none(),
+            "refugee crisis should be auto-resolved, not left pending");
+        assert!(!matches!(after.sim_state, SimState::Event { .. }),
+            "game should not be paused after auto-resolve");
+        assert!(after.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)),
+            "CrisisAutoResolved event should be emitted");
+        // POL should be lower (option 1 = close borders = POL loss)
+        assert!(after.resources.political_power < 0.80,
+            "closing borders should drain political power");
     }
 
     #[test]
