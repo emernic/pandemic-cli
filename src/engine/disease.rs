@@ -271,13 +271,12 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 /// After day 10, diseases also seed into multiple regions simultaneously.
 pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
-    // Aggressive scaling with infectivity outpacing lethality.
-    // Infectivity must stay high enough that R > 1 even under quarantine
-    // (which halves infectivity). If lethality scales as fast as infectivity,
-    // diseases kill themselves — infected die before spreading.
-    // Day 10: inf 4.5x/leth 2x, Day 20: 8x/3x, Day 30: 11.5x/4x
-    let inf_scale = 1.0 + day * 0.35;
-    let leth_scale = 1.0 + day * 0.10;
+    // Scaling with infectivity outpacing lethality. Infectivity must stay
+    // high enough that R > 1 even under quarantine. Reduced from 0.35/0.10
+    // to give the research pipeline time to compete with disease spread.
+    // Day 10: inf 3.0x/leth 1.7x, Day 20: 5.0x/2.4x, Day 30: 7.0x/3.1x
+    let inf_scale = 1.0 + day * 0.20;
+    let leth_scale = 1.0 + day * 0.07;
 
     let result = spawn_disease(state, rng)?;
     let (disease_idx, _) = result;
@@ -302,12 +301,11 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         d.lethality *= 1.0 + optimization * 0.5; // up to 50% more lethal on top of scaling
     }
 
-    // Multi-region seeding: after day 10, new diseases emerge simultaneously
-    // in additional non-collapsed regions. Simulates evolved pathogens that
-    // have already spread globally before detection. By day 25, every viable
-    // region gets seeded — quarantine can't stop what's already everywhere.
-    // Seed counts scale aggressively with the day to overcome quarantine.
-    let multi_seed = ((day - 10.0) / 15.0).clamp(0.0, 1.0); // 0 at day 10, 1 at day 25
+    // Multi-region seeding: after day 15, new diseases emerge simultaneously
+    // in additional non-collapsed regions. Pushed from day 10 to day 15 to
+    // give containment policies a window to matter before seeding makes them moot.
+    // By day 30, every viable region gets seeded.
+    let multi_seed = ((day - 15.0) / 15.0).clamp(0.0, 1.0); // 0 at day 15, 1 at day 30
     if multi_seed > 0.0 {
         let (_, primary_region) = result;
         let viable: Vec<usize> = state.regions.iter().enumerate()
@@ -315,7 +313,7 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
             .map(|(i, _)| i)
             .collect();
         // Seed count scales with day^2 to ensure late-game diseases hit hard
-        // Day 15: ~2k, Day 25: ~10k, Day 35: ~25k, Day 50: ~50k
+        // Day 20: ~4.5k, Day 30: ~13.5k, Day 40: ~25.5k
         let base_seed = 500.0 + day * day * 20.0;
         for &region_idx in &viable {
             if rng.r#gen::<f64>() < multi_seed {

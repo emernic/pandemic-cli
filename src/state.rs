@@ -235,11 +235,11 @@ pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 /// Gives the player time to identify disease 0 and start the research pipeline.
 pub const EMERGENCE_MIN_TICK: u64 = 600;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 4 days → relentless pressure throughout the game.
-/// Combined with spawn_disease_scaled, late-game diseases are monsters.
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0020;
+/// ~1 new disease every 7 days → steady pressure without overwhelming the
+/// research pipeline (which takes 7-10 days per disease).
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0012;
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 8;
+pub const MAX_DISEASES: usize = 5;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.4;
@@ -1616,45 +1616,41 @@ impl PathogenType {
     /// Attack rate ≈ 99%+ given high R0. Total deaths ≈ 85–95% of population.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast spreader, near-total lethality.
-            // Infectious period ≈ 12–15 days, R0 ≈ 8–14, IFR ≈ 87–92%.
+            // RNA viruses: fast spreader, high lethality.
+            // Base doubling time ~1.3 days (unscaled). Scaling accelerates later.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.008, 0.013),
-                lethality: (0.00055, 0.00100),
+                infectivity: (0.004, 0.007),
+                lethality: (0.00040, 0.00070),
                 recovery: (0.00006, 0.00015),
-                cross_region: (0.006, 0.012),
-            },
-            // DNA viruses: slightly slower spread, extremely high lethality.
-            // Infectious period ≈ 13–17 days, R0 ≈ 7–12, IFR ≈ 88–94%.
-            PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.006, 0.010),
-                lethality: (0.00050, 0.00090),
-                recovery: (0.00004, 0.00010),
-                cross_region: (0.005, 0.010),
-            },
-            // Bacteria: broad reach, high lethality, minimal recovery.
-            // Infectious period ≈ 10–14 days, R0 ≈ 6–10, IFR ≈ 80–90%.
-            PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.006, 0.009),
-                lethality: (0.00050, 0.00090),
-                recovery: (0.00010, 0.00020),
                 cross_region: (0.004, 0.008),
             },
-            // Fungi: slower growth, very high lethality, almost no natural recovery.
-            // Infectious period ≈ 12–18 days, R0 ≈ 5–9, IFR ≈ 82–92%.
-            PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.004, 0.007),
-                lethality: (0.00045, 0.00080),
-                recovery: (0.00005, 0.00015),
+            // DNA viruses: moderate spread, high lethality.
+            PathogenType::DnaVirus => DiseaseStatRanges {
+                infectivity: (0.003, 0.006),
+                lethality: (0.00035, 0.00065),
+                recovery: (0.00004, 0.00010),
                 cross_region: (0.003, 0.007),
             },
-            // Prions: slowest spread, near-certain death once infected.
-            // Infectious period ≈ 15–25 days, R0 ≈ 5–9, IFR ≈ 91–97%.
-            PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.004, 0.008),
-                lethality: (0.00060, 0.00120),
-                recovery: (0.00003, 0.00006),
+            // Bacteria: broad reach, moderate lethality, some recovery.
+            PathogenType::Bacterium => DiseaseStatRanges {
+                infectivity: (0.003, 0.005),
+                lethality: (0.00035, 0.00060),
+                recovery: (0.00010, 0.00020),
                 cross_region: (0.003, 0.006),
+            },
+            // Fungi: slower growth, high lethality, almost no natural recovery.
+            PathogenType::Fungus => DiseaseStatRanges {
+                infectivity: (0.002, 0.004),
+                lethality: (0.00030, 0.00055),
+                recovery: (0.00005, 0.00015),
+                cross_region: (0.002, 0.005),
+            },
+            // Prions: slowest spread, near-certain death once infected.
+            PathogenType::Prion => DiseaseStatRanges {
+                infectivity: (0.002, 0.005),
+                lethality: (0.00045, 0.00090),
+                recovery: (0.00003, 0.00006),
+                cross_region: (0.002, 0.004),
             },
         }
     }
@@ -2044,7 +2040,7 @@ pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
 pub const MERCY_RULE_TICKS: u64 = 600;
 /// Deploy cooldown per region in ticks (2 days). Healthcare systems need
 /// time to distribute and administer doses.
-pub const DEPLOY_COOLDOWN_TICKS: u64 = 240;
+pub const DEPLOY_COOLDOWN_TICKS: u64 = 120;
 /// Shipping delay in ticks (1 day). Deployed medicine takes this long to
 /// arrive at the destination region before taking effect.
 pub const SHIPPING_TICKS: u64 = 120;
