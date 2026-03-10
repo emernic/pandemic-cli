@@ -163,8 +163,8 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 
 Hard requirements for zero player input (no buttons pressed at all):
 - **45 days absolute maximum** — 100% of seeds must lose by day 45, no exceptions
-- **~20-30 day median loss** without intervention
-- **Some seeds lost by day 10** — early bad luck is expected and correct
+- **~15-20 day median loss** without intervention (currently ~17.5 days across 50 seeds)
+- **Some seeds lost before day 15** — early bad luck is expected and correct
 - **First collapse no earlier than day 3** — players need minimum time for initial decisions
 
 Hard requirements for active play:
