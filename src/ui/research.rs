@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{GameState, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -601,8 +601,24 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             if disease.knowledge >= KNOWLEDGE_NAME {
                 // Already identified — explain what further study unlocks
                 let has_targeted_tech = state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign);
+                // Broad-spectrum targets all diseases — it's unlockable once ANY disease
+                // reaches KNOWLEDGE_FOR_MEDICINE. Don't mislead player about this disease
+                // "unlocking" broad-spectrum if it's already available or developed.
+                let broad_already_available = state.medicines.iter().any(|m| {
+                    m.therapy_type == TherapyType::BroadSpectrum
+                        && (m.unlocked
+                            || m.target_diseases.iter().any(|&d_idx| {
+                                state.diseases.get(d_idx).map_or(false, |d| {
+                                    d.knowledge >= KNOWLEDGE_FOR_MEDICINE
+                                })
+                            }))
+                });
                 let next = if disease.knowledge < KNOWLEDGE_FOR_MEDICINE {
-                    "Unlocks broad-spectrum medicine development"
+                    if broad_already_available {
+                        "Targeted medicine requires full study — keep studying"
+                    } else {
+                        "Unlocks broad-spectrum medicine development"
+                    }
                 } else if disease.knowledge < KNOWLEDGE_FULL {
                     if has_targeted_tech {
                         "Unlocks targeted medicine development"
