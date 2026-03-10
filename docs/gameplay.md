@@ -2,31 +2,124 @@
 
 ## Concept
 
-Inverse Plague Inc. You're the global health defense in a sci-fi future, not the disease. Real-time with pause strategy.
+You run a global health defense agency in a world that has already seen what biological threats can do. This is not the first pandemic. It's not even the second. The institutions you work through were built in response to earlier crises — crises that reshaped the world order. You are the current director of the N.W.H.O., replacing someone who was removed for inaction.
 
-**The game is designed to be unwinnable** — a survival/endurance challenge like a roguelike. Diseases will eventually overwhelm the player. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends around day 35-45. A competent player should survive significantly longer through research, medicine, and policies. Surviving past 100 days should be essentially impossible. There is no win condition.
+Real-time with pause. TUI. Deterministic simulation via seeded RNG.
 
-## Threats
+**The game is unwinnable.** There is no victory screen. This is a survival challenge — the goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-20 days. A competent player survives around 40 days. Surviving past 100 days should be essentially impossible. The question is never *if* you lose, but *when* and *how many* you save before you do.
 
-Multiple diseases run concurrently. Procedurally generated from:
-- **Zoonotic spillovers** — animal reservoir jumps
-- **Endemic mutations** — existing managed diseases evolve resistance or new transmission
-- **Engineered releases** — bioweapons, lab accidents
-- **Exotic/alien** — novel biology that breaks normal rules
+## The Arc
 
-Diseases have traits you must identify and counter: transmission vectors, incubation, mortality, mutation rate, drug resistance mechanisms, etc.
+The game has an arc that the player discovers by playing, not by being told.
 
-## Player Actions
+**Early game (days 1-10)** feels like pandemic response. A disease appears. You research it, identify it, develop treatments. You set policies — quarantines, screening, travel bans. You manage governors. You deploy medicines. The systems are familiar. This is what public health looks like.
 
-- Research countermeasures (gene therapies, cell-based treatments, vaccines, antivirals)
-- Deploy interventions to regions (treatments, quarantines, surveillance)
-- Allocate resources (funding, lab capacity, personnel)
-- Intelligence/early detection
+**Mid game (days 10-30)** introduces pressure from every direction simultaneously. Multiple diseases. Governors defying your directives. Funding sources with agendas. Infrastructure degrading. Crisis events that chain into worse crises based on your earlier choices. The player is no longer just fighting disease — they're fighting the systems they operate through.
 
-## Tone
+**Late game (days 30+)** should feel different from the early game in ways the player can't quite articulate. The threats are more precise. The tools are more powerful but feel less like medicine. The decisions are bigger but the options are narrower. The game never comments on this shift. It just happens.
 
-Hard sci-fi. The biology should feel real enough that a molecular biologist would enjoy it. No magic—just speculative but plausible science.
+## Core Systems
 
-## Scenarios
+### Diseases
 
-Procedural generation is the default, but pre-built starting scenarios can set up specific challenges.
+Multiple concurrent diseases, procedurally generated. Each has:
+- **Pathogen type**: RNA Virus, DNA Virus, Bacterium, Fungus, Prion — each with different mutation rates and treatment requirements
+- **Transmission vector**: Airborne, Waterborne, Contact — each countered by different policies
+- **Parameters**: infectivity, lethality, recovery rate, cross-region spread rate
+- **Mutation**: diseases mutate over time, drifting away from your medicine calibrations. Genomic sequencing slows this. The arms race between your medicines and their mutations is a core tension.
+
+New diseases emerge throughout the game. The emergence rate scales with time.
+
+### Research Pipeline
+
+Three independent tracks run simultaneously:
+
+1. **Field Research** — boots on the ground. Identify unknown threats, run clinical trials, perform genomic sequencing, train personnel. Multiple projects can run in parallel, gated by available personnel.
+2. **Applied Research** — lab work. Develop medicines, manufacture doses. One project at a time.
+3. **Basic Research** — the tech tree. Unlock new capabilities: Targeted Drug Design, Monoclonal Antibodies, Phage Therapy, Rapid Sequencing, Vaccine Platform, Resistance Surveillance, Combination Therapy, Pathogen Suppression.
+
+The pipeline for a single disease: **Unknown Threat → Identify (field) → Develop Medicine (applied) → Clinical Trial (field) → Deploy**. Each step takes time and resources. Skipping steps (deploying untested medicine) is possible but risky.
+
+### Medicines
+
+Medicines have a therapy type (Antiviral, Antibiotic, Antifungal, Broad Spectrum) and a mechanism of action (9 types, from fast/cheap to slow/expensive/durable). Efficacy depends on:
+- Therapy-pathogen match
+- Mechanism effectiveness
+- Strain calibration (drift from mutation reduces efficacy — re-trial to recalibrate)
+- Drug resistance (builds per mechanism with repeated deployment)
+- Whether the medicine has been clinically tested against this disease
+
+Deployment options: **Treat** (reduce infected population) or **Vaccinate** (build immunity in susceptible population). Doses are finite and must be manufactured.
+
+### Policies
+
+10 regional policies, toggled per-region. Each costs funding and personnel:
+- **Travel Ban** — blocks 90% cross-region spread but halves regional income
+- **Quarantine** — halves infection rate within region
+- **Hospital Surge** — halves lethality, boosts medicine efficacy
+- **Border Controls** — lighter version of travel ban (50% cross-region reduction)
+- **Water Sanitation** — halves waterborne disease spread
+- **Disease Screening** — tiered (Basic → Antigen → Mass Rapid), affects disease detection visibility
+- **Resilience** — lowers collapse threshold
+- **Martial Law** — heavy-handed control, high cost
+- **Medical Center** — permanent infrastructure upgrade (Field Hospital → Medical Center)
+- **Nuclear Annihilation** — last resort for collapsed regions
+
+Policy costs scale with regional traits and governor cooperation.
+
+### Emergency Decrees
+
+Irreversible global decisions unlocked at higher threat levels:
+- **Conscript Researchers** — more personnel, permanently reduced income
+- **Authorize Human Trials** — faster clinical trials, risk of adverse events
+- **Sacrifice Region** — abandon a region to boost income from the rest
+
+These are one-way doors. The game doesn't tell you whether they were worth it.
+
+### Governors
+
+Each region has a governor with a name, personality, and loyalty score.
+
+**Personalities**: Cooperative, Nationalist, Populist, Technocrat. Each reacts differently to your policies and the regional situation. A Populist hates lockdowns. A Nationalist wants resources focused locally. A Technocrat respects research but demands consent.
+
+**Loyalty** drifts continuously based on regional conditions, your policy choices, and personality. High loyalty means cheaper policies and cooperation. Low loyalty means defiance — governors can lift your quarantines, block your research, or demand military escalation. You can appease them with money, but you can't control them.
+
+### Crises
+
+Random events that pause the game and demand a decision. Two options, each with trade-offs. ~30 distinct types covering supply disruptions, political pressure, staff burnout, media firestorms, corruption, military interference, and more.
+
+Crises chain: your choices create follow-up crises. Tolerate black market drugs and counterfeit medicines appear. Cooperate with the military and they classify your research. Ignore corruption and it becomes an embezzlement ring. The player builds their own disaster through individually reasonable decisions.
+
+### Resources
+
+Three currencies:
+- **Funding** — income degrades as global death toll rises. Spent on policies, research, crisis resolution, deployments.
+- **Personnel** — finite workforce. Assigned to research projects and policy enforcement. Lost to attrition, crises, burnout.
+- **Political Power (POL)** — public mandate. Drifts toward a severity-based target. Gates emergency decrees. Generates personnel slowly.
+
+### Regions
+
+Six regions: North America, Europe, Asia, South America, Africa, Oceania. Connected in a geographic graph. Each has population, traits (Trade-Dependent, Dense Urban, Island Geography, Low Infrastructure, Strong Public Health, Resilient Population), a governor, and active policies.
+
+Regions **collapse** when deaths exceed their threshold (typically 45-85% of population). Collapse is permanent — policies clear, refugees flee to neighbors (spreading disease), personnel are lost. When all six regions collapse, the game is over.
+
+### Game Over
+
+Two loss conditions:
+1. **All regions collapsed** — immediate defeat
+2. **Mercy rule** — if the player has zero agency (no funding, no research, no deployable medicine) for several consecutive days, the game ends rather than forcing a slow, helpless decline
+
+The defeat screen shows duration, death toll, collapse timeline, pathogen report, score, and strategic tips specific to what happened in that run.
+
+## What the Game Is Not
+
+- **Not Plague Inc.** You're defending, not attacking. But more importantly: Plague Inc. is a puzzle game where you optimize a single disease against a static world. This game is about managing cascading systems that interact in emergent ways.
+- **Not a tower defense game.** You don't place defenses and watch. You make decisions under uncertainty with incomplete information, through institutions and people you don't fully control.
+- **Not a lesson.** The game doesn't teach you about pandemics. It puts you in a situation and lets you draw your own conclusions from what happens.
+
+## Design Priorities
+
+1. **Interesting decisions under pressure.** Every action should have a meaningful trade-off. If there's a clearly correct choice, the design is wrong.
+2. **Emergent complexity from simple systems.** Individual mechanics should be straightforward. The complexity comes from their interactions — mutation pressure drives re-trials which consume research capacity which leaves new threats unidentified which causes governor loyalty to drop which causes policy defiance which accelerates spread.
+3. **The game should feel different at day 30 than at day 1.** Not because the rules changed, but because the situation has evolved in ways that create qualitatively different decisions.
+4. **Respect the player's intelligence.** Don't explain. Don't editorialize. Show the situation, give the tools, let the player act.
