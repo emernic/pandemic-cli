@@ -1384,17 +1384,27 @@ mod tests {
             "regions should collapse at different times, got {:?}", ticks);
     }
 
+    // ⚠️  HARD REQUIREMENT — DO NOT WEAKEN THIS TEST. EVER.
+    //
+    // This test enforces a direct user requirement: with zero player intervention,
+    // every seed must reach GameOutcome::Lost (all regions collapsed) within 45 days.
+    // If this test fails, disease parameters are too weak — increase lethality and
+    // infectivity in PathogenType::stat_ranges(). Do NOT raise the day ceiling or
+    // add seeds to skip. Do NOT comment it out. Do NOT add `#[ignore]`.
+    //
+    // The game is supposed to be an urgent survival challenge. Players should feel
+    // genuine pressure from day 1. A permissive disease gives the player no reason
+    // to do anything, and the whole game falls apart. The 45-day ceiling is the
+    // minimum required for the game to feel threatening.
+    //
+    // See also: CLAUDE.md "Game Balance Thresholds — DO NOT NERF DISEASES",
+    // PathogenType::stat_ranges() comment in state.rs.
     #[test]
-    fn game_is_lost_within_100_days_without_intervention() {
-        // The game must be lost within 100 days with zero player intervention,
-        // regardless of seed. If this test fails, disease parameters are too weak.
-        // Target: most seeds lose by day 25-40. The 100-day ceiling absorbs RNG
-        // perturbation from crisis generation (which consumes RNG values and can
-        // shift disease trajectories significantly on some seeds).
+    fn game_is_lost_within_45_days_without_intervention() {
         let mut loss_days = Vec::new();
         for seed in [42, 200, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 100 * TICKS_PER_DAY as u64;
+            let max_ticks = 45 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1408,22 +1418,23 @@ mod tests {
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
             assert_eq!(state.outcome, GameOutcome::Lost,
-                "Seed {seed}: game should be lost within 100 days (reached day {day:.1}). \
-                 Regions: {:?}",
+                "Seed {seed}: game should be lost within 45 days (reached day {day:.1}). \
+                 Regions: {:?}. If this fails, increase disease lethality/infectivity — \
+                 do NOT raise the ceiling.",
                 state.regions.iter().map(|r| {
                     let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
                     (r.name.clone(), r.collapsed, format!("{pct:.1}% dead"))
                 }).collect::<Vec<_>>());
             loss_days.push(day);
         }
-        // Most seeds should still lose well before day 60
         let median = {
             let mut sorted = loss_days.clone();
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
             sorted[sorted.len() / 2]
         };
-        assert!(median < 60.0,
-            "Median loss day is {median:.1} (expected < 60). Days: {loss_days:?}");
+        assert!(median < 35.0,
+            "Median loss day is {median:.1} (expected < 35). Days: {loss_days:?}. \
+             Disease parameters are too weak — increase lethality/infectivity.");
     }
 
     #[test]
@@ -5141,4 +5152,5 @@ mod tests {
         assert!(boosted_chance > normal_chance * 3.0,
             "wave-boosted chance should be significantly higher: normal={normal_chance}, boosted={boosted_chance}");
     }
+
 }

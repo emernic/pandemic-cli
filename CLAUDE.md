@@ -110,7 +110,7 @@ Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rus
 
 ### ⚠️ THIS GAME IS UNWINNABLE — THIS IS AN AXIOM, NOT A DESIGN CHOICE
 
-**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-20 days. Don't make balance changes that trivialize the challenge.
+**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 15-45 days. Don't make balance changes that trivialize the challenge.
 
 ## Game Inspirations
 
@@ -161,13 +161,11 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 
 These are hard requirements. If your changes violate any of these, your balance is wrong:
 
-- **20 days max without intervention** (100% of seeds must lose by day 20)
-- **Sometimes lost within 10 days** without intervention (some seeds)
-- **~40 day median** for a decently competent player
-- **100 days = absolute maximum** — surviving past 100 days should be essentially impossible
-- **First collapse no earlier than day 3** — players need minimum time for initial decisions
+- **45 days max without intervention** (100% of seeds must lose by day 45, median under 35)
+- **First collapse no earlier than day 10** — players need minimum time for initial decisions
+- **First collapse no earlier than day 3** — absolute minimum even for bad seeds
 
-The game must be threatening. Diseases must kill fast enough that players feel genuine pressure from day 1. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse. The `game_is_lost_within_20_days_without_intervention` test enforces the 20-day deadline across 10 seeds.
+The game must be threatening. Diseases must kill fast enough that players feel genuine pressure from day 1. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse. The `game_is_lost_within_45_days_without_intervention` test enforces the 45-day deadline across 10 seeds.
 
 ### Navigation Convention — Left/Right Always Controls Regions
 
