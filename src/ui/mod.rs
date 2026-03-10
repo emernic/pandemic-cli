@@ -369,6 +369,10 @@ pub fn process_events(state: &mut GameState) {
                 let msg = format!("BANKRUPT: {} ({}) has failed", corp_name, region_name);
                 (1, msg.clone(), msg)
             }
+            GameEvent::CrisisTeamReturned { label, personnel } => {
+                let msg = format!("{} returned ({} personnel freed)", label, personnel);
+                (3, msg.clone(), msg)
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

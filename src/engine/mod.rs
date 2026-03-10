@@ -56,6 +56,9 @@ pub fn tick(state: &GameState) -> GameState {
     // Field operations — recon, emergency response, infrastructure survey.
     operations::tick_field_operations(&mut new);
 
+    // Crisis operations — temporary personnel commitments from crisis resolutions.
+    crisis::tick_crisis_operations(&mut new);
+
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
 
@@ -3193,7 +3196,7 @@ mod tests {
             description: "Test".into(),
             options: vec![ CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
              CrisisOption { label: "Pay ¥400".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 400.0, personnel: 0, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -3287,7 +3290,7 @@ mod tests {
                 CrisisOption {
                     label: "Placate (¥100)".into(),
                     description: "".into(),
-                    cost: Some(CrisisCost { funding: 100.0, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: 100.0, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
                     label: "Refuse".into(),
@@ -3492,7 +3495,7 @@ mod tests {
              CrisisOption {
                 label: "Contain".into(),
                 description: "Save research".into(),
-                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
+                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3, ..Default::default() }),
             },
             ],
             tick_created: 0,
@@ -3533,7 +3536,7 @@ mod tests {
              CrisisOption {
                 label: "Contain".into(),
                 description: "Save research".into(),
-                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
+                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3, ..Default::default() }),
             },
             ],
             tick_created: 0,
@@ -3574,7 +3577,7 @@ mod tests {
              CrisisOption {
                 label: "Contain".into(),
                 description: "Save research".into(),
-                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3 }),
+                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3, ..Default::default() }),
             },
             ],
             tick_created: 0,
@@ -3634,7 +3637,7 @@ mod tests {
             description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 300.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 300.0, personnel: 0, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -3666,7 +3669,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 500.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 500.0, personnel: 0, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -3697,7 +3700,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 300.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 300.0, personnel: 0, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -3893,7 +3896,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 0.0, personnel: 2 }) },
+                cost: Some(CrisisCost { funding: 0.0, personnel: 2, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -3925,7 +3928,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 300.0, personnel: 1 }) },
+                cost: Some(CrisisCost { funding: 300.0, personnel: 1, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -3980,7 +3983,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 400.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 400.0, personnel: 0, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -4012,7 +4015,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 0.0, personnel: 2 }) },
+                cost: Some(CrisisCost { funding: 0.0, personnel: 2, ..Default::default() }) },
             ],
             tick_created: 0,
         });
@@ -4164,13 +4167,71 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 800.0, personnel: 3 }) },
+                cost: Some(CrisisCost { funding: 800.0, personnel: 3, ..Default::default() }) },
             ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.political_power - (before_pol + 0.10)).abs() < 0.001,
             "option B should gain 0.10 POL modifier");
+    }
+
+    #[test]
+    fn crisis_temporary_operation_ties_up_personnel_and_returns_them() {
+        use crate::state::{CrisisCost, CrisisEvent, CrisisKind, CrisisOption, TICKS_PER_DAY};
+
+        let mut state = GameState::new_default(42);
+        let before_personnel = state.resources.personnel;
+
+        // Set up a crisis with a 2-day temporary operation cost
+        state.sim_state = crate::state::SimState::Event { was_running: true };
+        state.ui.crisis_selection = 0;
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::MediaPanic,
+            title: "T".into(),
+            description: "T".into(),
+            options: vec![CrisisOption {
+                label: "Deploy team".into(),
+                description: "Test temp op".into(),
+                cost: Some(CrisisCost {
+                    funding: 0.0,
+                    personnel: 2,
+                    operation_days: Some(2.0),
+                    operation_label: Some("Test Team".to_string()),
+                }),
+            }],
+            tick_created: 0,
+        });
+
+        let after = apply_action(&state, &Action::Confirm);
+
+        // Personnel should NOT be permanently deducted
+        assert_eq!(after.resources.personnel, before_personnel,
+            "temporary op should not permanently deduct personnel");
+
+        // A crisis operation should be created
+        assert_eq!(after.crisis_operations.len(), 1,
+            "a crisis operation should be active");
+        assert_eq!(after.crisis_operations[0].personnel, 2);
+        assert_eq!(after.crisis_operations[0].label, "Test Team");
+
+        // Personnel should show as unavailable
+        assert_eq!(after.personnel_available(), before_personnel - 2,
+            "personnel should be unavailable while in crisis op");
+
+        // After 2 days of ticking, operation completes and personnel return
+        let mut state2 = after;
+        let ticks_needed = (2.0 * TICKS_PER_DAY).ceil() as u32;
+        for _ in 0..ticks_needed {
+            state2 = tick(&state2);
+        }
+        assert_eq!(state2.crisis_operations.len(), 0,
+            "crisis operation should complete after duration");
+        assert_eq!(state2.personnel_available(), before_personnel,
+            "personnel should be returned after operation completes");
+        assert!(state2.events.iter().any(|e| matches!(e,
+            crate::state::GameEvent::CrisisTeamReturned { personnel: 2, .. }
+        )), "should fire CrisisTeamReturned event");
     }
 
     #[test]
@@ -4198,7 +4259,7 @@ mod tests {
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 500.0, personnel: 0 }) },
+                cost: Some(CrisisCost { funding: 500.0, personnel: 0, ..Default::default() }) },
             ],
             tick_created: 0,
         });

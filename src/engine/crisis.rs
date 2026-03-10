@@ -388,7 +388,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Emergency reroute (¥{:.0})", cost),
                         description: "Rerouted. Full shipment preserved.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 ],
@@ -412,9 +412,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  {
                     let cost = scaled_cost(state, 0.10, 80.0, 400.0);
                     CrisisOption {
-                        label: format!("Emergency containment (¥{:.0}, 3 personnel)", cost),
-                        description: "Breach contained. Research continues.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 3 }),
+                        label: format!("Emergency containment (¥{:.0}, 3 personnel for 2d)", cost),
+                        description: "Breach contained. Research continues. Team returns in 2 days.".into(),
+                        cost: Some(CrisisCost {
+                            funding: cost,
+                            personnel: 3,
+                            operation_days: Some(2.0),
+                            operation_label: Some("Containment Team".to_string()),
+                        }),
                     }
                 },
                 CrisisOption {
@@ -447,7 +452,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Resist (¥{:.0})", cost),
                         description: "Quarantine holds.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 ],
@@ -472,7 +477,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Retention bonus (¥{:.0})", retention_cost),
                     description: "Workers stay.".into(),
-                    cost: Some(CrisisCost { funding: retention_cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: retention_cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -519,7 +524,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Emergency analysis (¥{:.0})", cost),
                         description: "Current strain sequenced. Pathogen knowledge updated.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 ],
@@ -647,7 +652,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Confiscate (¥{:.0})", cost),
                         description: "Seize the drugs. No treatment available for them.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 ],
@@ -671,9 +676,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Deploy military (−15% POL, 2 personnel)".into(),
-                    description: "Maintain quarantine by force".into(),
-                    cost: Some(CrisisCost { funding: 0.0, personnel: 2 }),
+                    label: "Deploy military (−15% POL, 2 personnel for 2d)".into(),
+                    description: "Maintain quarantine by force. Troops return in 2 days.".into(),
+                    cost: Some(CrisisCost {
+                        funding: 0.0,
+                        personnel: 2,
+                        operation_days: Some(2.0),
+                        operation_label: Some("Security Detail".to_string()),
+                    }),
                 },
                 CrisisOption {
                     label: "Wait it out".into(),
@@ -698,9 +708,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  {
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
-                        label: format!("Restore comms infrastructure (¥{:.0}, 1 personnel)", cost),
-                        description: "Stabilize reporting systems, gain +5% POL".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 1 }),
+                        label: format!("Restore comms infrastructure (¥{:.0}, 1 personnel for 2d)", cost),
+                        description: "Stabilize reporting systems, gain +5% POL. Tech team returns in 2 days.".into(),
+                        cost: Some(CrisisCost {
+                            funding: cost,
+                            personnel: 1,
+                            operation_days: Some(2.0),
+                            operation_label: Some("Comms Team".to_string()),
+                        }),
                     }
                 },
                 ],
@@ -757,7 +772,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Incentive program (¥{:.0})", cost),
                         description: format!("Buy cooperation in {}, gain +5% POL", region_name),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 CrisisOption {
@@ -785,9 +800,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Investigate (2 personnel)".into(),
-                    description: format!("Recover ¥{:.0}, divert 2 staff to audit", stolen),
-                    cost: Some(CrisisCost { funding: 0.0, personnel: 2 }),
+                    label: "Investigate (2 personnel for 3d)".into(),
+                    description: format!("Recover ¥{:.0}, divert 2 staff to audit. Auditors return in 3 days.", stolen),
+                    cost: Some(CrisisCost {
+                        funding: 0.0,
+                        personnel: 2,
+                        operation_days: Some(3.0),
+                        operation_label: Some("Audit Team".to_string()),
+                    }),
                 },
                 ],
                 kind,
@@ -812,7 +832,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: "Refuse".into(),
                     description: format!("Keep your data, lose ¥{:.0} in foreign aid", refuse_cost),
-                    cost: Some(CrisisCost { funding: *refuse_cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: *refuse_cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -888,7 +908,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Resist (¥{:.0})", cost),
                         description: "Pay to fight the takeover, keep your team".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 CrisisOption {
@@ -922,9 +942,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  {
                     let cost = scaled_cost(state, 0.20, 120.0, 700.0);
                     CrisisOption {
-                        label: format!("Clear by force (¥{:.0}, 2 personnel)", cost),
-                        description: "Enforce access to supply routes".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 2 }),
+                        label: format!("Clear by force (¥{:.0}, 2 personnel for 2d)", cost),
+                        description: "Enforce access to supply routes. Escort returns in 2 days.".into(),
+                        cost: Some(CrisisCost {
+                            funding: cost,
+                            personnel: 2,
+                            operation_days: Some(2.0),
+                            operation_label: Some("Escort Detail".to_string()),
+                        }),
                     }
                 },
                 CrisisOption {
@@ -971,9 +996,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  {
                     let cost = scaled_cost(state, 0.40, 250.0, 1500.0);
                     CrisisOption {
-                        label: format!("Take over coordination (¥{:.0}, 3 personnel)", cost),
-                        description: "Expensive, but gain +10% POL and maintain global response".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 3 }),
+                        label: format!("Take over coordination (¥{:.0}, 3 personnel for 5d)", cost),
+                        description: "Expensive, but gain +10% POL and maintain global response. Coordination team returns in 5 days.".into(),
+                        cost: Some(CrisisCost {
+                            funding: cost,
+                            personnel: 3,
+                            operation_days: Some(5.0),
+                            operation_label: Some("Coordination Team".to_string()),
+                        }),
                     }
                 },
                 CrisisOption {
@@ -1006,7 +1036,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Pay tribute (¥{:.0})", cost),
                         description: format!("Medical access restored in {}", region_name),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 ],
@@ -1107,7 +1137,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Investigate (¥{:.0})", cost),
                     description: "50% chance of a 2-day research breakthrough.".into(),
-                    cost: Some(CrisisCost { funding: *cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: *cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1157,7 +1187,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: "Appeal".into(),
                     description: "Same cost, less political damage. −3% POL.".into(),
-                    cost: Some(CrisisCost { funding: *fine, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: *fine, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1184,9 +1214,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: format!("Crackdown (¥{:.0}, 2 personnel)", crackdown_cost),
-                    description: "Raid supply chains and shut down counterfeiters".into(),
-                    cost: Some(CrisisCost { funding: crackdown_cost, personnel: 2 }),
+                    label: format!("Crackdown (¥{:.0}, 2 personnel for 2d)", crackdown_cost),
+                    description: "Raid supply chains and shut down counterfeiters. Agents return in 2 days.".into(),
+                    cost: Some(CrisisCost {
+                        funding: crackdown_cost,
+                        personnel: 2,
+                        operation_days: Some(2.0),
+                        operation_label: Some("Enforcement Team".to_string()),
+                    }),
                 },
                 ],
                 kind,
@@ -1212,7 +1247,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Buy them off (¥{:.0})", buyoff),
                     description: "They keep what they stole".into(),
-                    cost: Some(CrisisCost { funding: buyoff, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: buyoff, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
                     label: "Tolerate the drain".into(),
@@ -1239,7 +1274,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Legal challenge (¥{:.0})", resist_cost),
                     description: "Expensive but preserves civilian control".into(),
-                    cost: Some(CrisisCost { funding: resist_cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: resist_cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
                     label: "Accept the classification".into(),
@@ -1270,7 +1305,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Emergency correction (¥{:.0})", cost),
                     description: "Broadcast a formal correction. Limits behavioral relapse.".into(),
-                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1296,7 +1331,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Counter-broadcast (¥{cost:.0})"),
                     description: "Respond publicly. Costs money but shuts them up.".into(),
-                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1319,9 +1354,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Send a delegation".into(),
-                    description: "Send staff to manage directly. Costs personnel.".into(),
-                    cost: Some(CrisisCost { funding: 0.0, personnel: 2 }),
+                    label: "Send a delegation (2 personnel for 4d)".into(),
+                    description: "Send staff to manage directly. Delegation returns in 4 days.".into(),
+                    cost: Some(CrisisCost {
+                        funding: 0.0,
+                        personnel: 2,
+                        operation_days: Some(4.0),
+                        operation_label: Some("Diplomatic Delegation".to_string()),
+                    }),
                 },
                 ],
                 kind,
@@ -1453,7 +1493,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: format!("Placate (¥{:.0})", placate_cost),
                         description: placate_desc,
-                        cost: Some(CrisisCost { funding: placate_cost, personnel: 0 }),
+                        cost: Some(CrisisCost { funding: placate_cost, personnel: 0, ..Default::default() }),
                     },
                     CrisisOption {
                         label: "Refuse".into(),
@@ -1484,7 +1524,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Federal override (¥{cost:.0})"),
                     description: "Maintain operations. Governor will resent it.".into(),
-                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
                     label: "Ignore the dispute".into(),
@@ -1513,7 +1553,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Audit (¥{:.0})", cost),
                     description: "Trigger a financial audit. Reduces skim rate.".into(),
-                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1538,7 +1578,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: format!("Pay ¥{demand:.0}"),
                     description: "They'll leave you alone. For now.".into(),
-                    cost: Some(CrisisCost { funding: demand, personnel: 0 }),
+                    cost: Some(CrisisCost { funding: demand, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1567,7 +1607,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: "Continue as-is".into(),
                     description: "Stay spread thin. Lose personnel and funding to overextension.".into(),
-                    cost: Some(CrisisCost { funding: 150.0, personnel: 3 }),
+                    cost: Some(CrisisCost { funding: 150.0, personnel: 3, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -1609,11 +1649,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Restore screening infrastructure".into(),
-                    description: "Maintain screening, but it takes resources".into(),
+                    label: "Restore screening infrastructure (1 personnel for 2d)".into(),
+                    description: "Maintain screening. Field team returns in 2 days.".into(),
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.15, 100.0, 500.0),
                         personnel: 1,
+                        operation_days: Some(2.0),
+                        operation_label: Some("Screening Team".to_string()),
                     }),
                 },
                 ],
@@ -1633,11 +1675,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Diplomatic back-channel".into(),
-                    description: "Costs resources but preserves trade".into(),
+                    label: "Diplomatic back-channel (2 personnel for 3d)".into(),
+                    description: "Costs resources but preserves trade. Envoys return in 3 days.".into(),
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.20, 150.0, 600.0),
                         personnel: 2,
+                        operation_days: Some(3.0),
+                        operation_label: Some("Diplomatic Envoys".to_string()),
                     }),
                 },
                 ],
@@ -1678,7 +1722,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         CrisisOption {
                             label: format!("Emergency bailout (¥{placate_cost:.0})"),
                             description: "Inject cash into board-seat corporations. Buys time.".into(),
-                            cost: Some(CrisisCost { funding: placate_cost, personnel: 0 }),
+                            cost: Some(CrisisCost { funding: placate_cost, personnel: 0, ..Default::default() }),
                         },
                         CrisisOption {
                             label: "Refuse".into(),
@@ -1708,7 +1752,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         CrisisOption {
                             label: format!("Concession payment (¥{placate_cost:.0})"),
                             description: "Inject cash into board-seat corporations. Buys time.".into(),
-                            cost: Some(CrisisCost { funding: placate_cost, personnel: 0 }),
+                            cost: Some(CrisisCost { funding: placate_cost, personnel: 0, ..Default::default() }),
                         },
                         CrisisOption {
                             label: "Stand firm".into(),
@@ -1753,6 +1797,23 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
     }
 }
 
+/// Tick all active crisis operations. Complete ones that expire and return their personnel.
+pub(super) fn tick_crisis_operations(state: &mut GameState) {
+    let mut i = 0;
+    while i < state.crisis_operations.len() {
+        state.crisis_operations[i].ticks_remaining -= 1.0;
+        if state.crisis_operations[i].ticks_remaining <= 0.0 {
+            let op = state.crisis_operations.remove(i);
+            state.events.push(crate::state::GameEvent::CrisisTeamReturned {
+                label: op.label,
+                personnel: op.personnel,
+            });
+        } else {
+            i += 1;
+        }
+    }
+}
+
 /// Apply the chosen crisis resolution. Returns a status message.
 pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     let crisis = match state.active_crisis.take() {
@@ -1770,7 +1831,22 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     let option = &crisis.options[choice];
     if let Some(cost) = &option.cost {
         state.resources.funding -= cost.funding;
-        state.resources.personnel = state.resources.personnel.saturating_sub(cost.personnel);
+        if cost.personnel > 0 {
+            if let Some(days) = cost.operation_days {
+                // Create a temporary operation — personnel are tied up and returned later
+                let label = cost.operation_label.clone()
+                    .unwrap_or_else(|| "Crisis Response".to_string());
+                let ticks = days * crate::state::TICKS_PER_DAY;
+                state.crisis_operations.push(crate::state::CrisisOperation {
+                    label,
+                    personnel: cost.personnel,
+                    ticks_remaining: ticks,
+                });
+            } else {
+                // Permanent personnel loss
+                state.resources.personnel = state.resources.personnel.saturating_sub(cost.personnel);
+            }
+        }
     }
 
     let msg = match (&crisis.kind, choice) {
