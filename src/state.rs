@@ -4624,7 +4624,39 @@ impl GameState {
                 PathogenType::Prion,
             ];
         }
-        let pathogen_type = types[rng.r#gen::<usize>() % types.len()];
+        // Counter-capability selection: bias toward types the player can't treat.
+        // Ramps smoothly from day 10, fully active by day 25.
+        let counter_weight = ((day - 10.0) / 15.0).clamp(0.0, 1.0);
+        let pathogen_type = if counter_weight > 0.0 && types.len() > 1 {
+            // Check which therapy types the player has deployed
+            let deployed_therapies: Vec<TherapyType> = self.medicines.iter()
+                .filter(|m| m.deployed_count > 0)
+                .map(|m| m.therapy_type)
+                .collect();
+
+            let weights: Vec<f64> = types.iter().map(|t| {
+                let matched_therapy = t.matched_therapy();
+                let player_has_counter = deployed_therapies.contains(&matched_therapy);
+                // Types the player CAN treat get lower weight; types they CAN'T get higher
+                let counter_bonus = if player_has_counter { 0.3 } else { 2.0 };
+                // Blend: uniform early, counter-weighted late
+                1.0 * (1.0 - counter_weight) + counter_bonus * counter_weight
+            }).collect();
+
+            let total: f64 = weights.iter().sum();
+            let mut roll = rng.r#gen::<f64>() * total;
+            let mut chosen = types[0];
+            for (j, &w) in weights.iter().enumerate() {
+                roll -= w;
+                if roll <= 0.0 {
+                    chosen = types[j];
+                    break;
+                }
+            }
+            chosen
+        } else {
+            types[rng.r#gen::<usize>() % types.len()]
+        };
 
         let used_names: Vec<String> = self.diseases.iter().map(|d| d.name.clone()).collect();
 
@@ -4681,11 +4713,14 @@ impl GameState {
             idx
         };
 
-        // Place initial outbreak. Late-game diseases prefer vulnerable regions:
-        // weak screening, no hospital, high existing infection load.
-        // Early-game uses roughly uniform selection.
+        // Place initial outbreak. Targeting shifts smoothly:
+        // Day 0-15: roughly uniform → vulnerability-weighted (weak defenses attractive)
+        // Day 20-30: vulnerability → strategic importance (high population,
+        //   infrastructure, active policies). The player's strongholds become
+        //   the most attractive targets. The pattern feels designed, not random.
         let day = self.tick as f64 / TICKS_PER_DAY;
-        let targeting = (day / 15.0).min(1.0); // 0.0 at day 0, 1.0 at day 15+
+        let targeting = (day / 15.0).min(1.0); // 0→1 over days 0-15
+        let strategic = ((day - 20.0) / 10.0).clamp(0.0, 1.0); // 0→1 over days 20-30
 
         let viable: Vec<usize> = self.regions.iter().enumerate()
             .filter(|(_, r)| !r.collapsed)
@@ -4694,9 +4729,10 @@ impl GameState {
         let region_idx = if viable.is_empty() {
             rng.r#gen::<usize>() % self.regions.len()
         } else {
-            // Score each region's vulnerability (higher = more attractive target)
             let weights: Vec<f64> = viable.iter().map(|&i| {
-                let base = 1.0; // everyone has a chance
+                let base = 1.0;
+
+                // Vulnerability score (mid-game): weak defenses are attractive
                 let screening_vuln = match self.policies[i].screening {
                     ScreeningLevel::None => 3.0,
                     ScreeningLevel::Basic => 2.0,
@@ -4706,13 +4742,26 @@ impl GameState {
                 let hospital_vuln = match self.regions[i].hospital_level {
                     0 => 2.0,
                     1 => 1.0,
-                    _ => 0.5, // Medical Center
+                    _ => 0.5,
                 };
                 let infection_load = self.regions[i].total_infected().min(100_000.0) / 100_000.0;
-
-                // Blend: uniform early, vulnerability-weighted late
                 let vuln = screening_vuln + hospital_vuln + infection_load * 2.0;
-                base + targeting * vuln
+
+                // Strategic importance score (late-game): the player's strongholds
+                // are attractive — high population, infrastructure, active investment.
+                let pop_importance = self.regions[i].population as f64 / 1e9;
+                let infrastructure = self.regions[i].hospital_level as f64 * 1.5;
+                let active_policies = [
+                    self.policies[i].travel_ban,
+                    self.policies[i].quarantine,
+                    self.policies[i].border_controls,
+                    self.policies[i].hospital_surge,
+                ].iter().filter(|&&b| b).count() as f64;
+                let strategic_value = pop_importance * 2.0 + infrastructure + active_policies;
+
+                // Blend: uniform → vulnerability → strategic importance
+                let directional = vuln * (1.0 - strategic) + strategic_value * strategic;
+                base + targeting * directional
             }).collect();
 
             // Weighted random selection
