@@ -331,6 +331,9 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
     if region_idx >= state.regions.len() {
         return (None, false);
     }
+    if state.enacted_decrees.suspend_regional_authority {
+        return (Some("Regional authority suspended. Governors are under central command.".to_string()), false);
+    }
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
         return (Some(format!("{name} has collapsed. No governor to appease.")), false);
@@ -351,6 +354,9 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
 pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
     if region_idx >= state.regions.len() {
         return (None, false);
+    }
+    if state.enacted_decrees.suspend_regional_authority {
+        return (Some("Regional authority suspended. Governors are under central command.".to_string()), false);
     }
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
