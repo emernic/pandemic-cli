@@ -209,6 +209,11 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ScientistBreakthrough { scientist_name } => {
                 (3, format!("{} had a breakthrough — research accelerated", scientist_name))
             }
+            GameEvent::ArkProtocolActivated { region_idx } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                (1, format!("⚠ ARK PROTOCOL — all resources consolidated in {}", region_name))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
@@ -447,7 +452,9 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
-    let defeat_msg = if state.mercy_rule {
+    let defeat_msg = if state.ark_protocol.is_some() {
+        "  The Ark has fallen. Humanity's last refuge could not hold.".to_string()
+    } else if state.mercy_rule {
         let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
         if collapsed >= 4 {
             format!("  {collapsed} of {} regions lost. No viable research remains.", state.regions.len())

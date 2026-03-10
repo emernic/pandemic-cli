@@ -26,6 +26,11 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} has collapsed — deployment impossible")), false);
     }
+    // Block deployment to abandoned regions (Ark Protocol)
+    if state.is_abandoned(region_idx) {
+        let region_name = &state.regions[region_idx].name;
+        return (false, Some(format!("{region_name} abandoned — deploy to the Ark instead")), false);
+    }
     // Block deployment during cooldown
     let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick);
     if cooldown > 0 {

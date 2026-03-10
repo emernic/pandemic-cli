@@ -72,6 +72,11 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             return (Some(format!("{region_name} has collapsed — policies unavailable")), false);
         }
     }
+    // Abandoned regions (Ark Protocol active, not the Ark)
+    if state.is_abandoned(region_idx) {
+        let region_name = state.regions[region_idx].name.as_str();
+        return (Some(format!("{region_name} abandoned — resources consolidated in the Ark")), false);
+    }
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.clone())
         .unwrap_or_else(|| "Unknown".to_string());

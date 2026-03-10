@@ -156,7 +156,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let selected = idx == state.ui.map_selection;
         let visibility = state.screening_visibility(idx);
         let shows_immune = state.screening_shows_immune(idx);
-        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune);
+        let is_ark = state.ark_protocol == Some(idx);
+        let is_abandoned = state.is_abandoned(idx);
+        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned);
     }
 
     // Detail panel below the grid for the selected region
@@ -176,8 +178,12 @@ fn render_region_box(
     diseases: &[crate::state::Disease],
     visibility: f64,
     shows_immune: bool,
+    is_ark: bool,
+    is_abandoned: bool,
 ) {
-    let border_color = if selected {
+    let border_color = if is_ark {
+        Color::Cyan
+    } else if selected {
         Color::Yellow
     } else {
         Color::DarkGray
@@ -204,7 +210,11 @@ fn render_region_box(
     let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
 
-    let threat = if region.collapsed {
+    let threat = if is_ark {
+        ("ARK", Color::Cyan)
+    } else if is_abandoned {
+        ("GONE", Color::DarkGray)
+    } else if region.collapsed {
         ("FELL", Color::Red)
     } else if infected > SEVERITY_CRIT_THRESHOLD {
         ("CRIT", Color::Red)

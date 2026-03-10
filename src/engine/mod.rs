@@ -267,6 +267,44 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Schedule Ark Protocol when 2+ regions have collapsed and it hasn't fired yet.
+    // Scheduled as a pending crisis so it fires after the immediate RefugeeWave.
+    if new.ark_protocol.is_none() {
+        let collapsed_count = new.regions.iter().filter(|r| r.collapsed).count();
+        let surviving: Vec<usize> = new.regions.iter().enumerate()
+            .filter(|(_, r)| !r.collapsed)
+            .map(|(i, _)| i)
+            .collect();
+        let already_pending = new.pending_crises.iter()
+            .any(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
+        let already_cooldown = new.crisis_cooldowns.contains_key("ark_protocol");
+        let already_active = new.active_crisis.as_ref()
+            .is_some_and(|c| matches!(c.kind, CrisisKind::ArkProtocol { .. }));
+        if collapsed_count >= 2 && !surviving.is_empty() && !already_pending && !already_cooldown && !already_active {
+            let best = surviving.iter()
+                .copied()
+                .max_by(|&a, &b| {
+                    new.regions[a].alive()
+                        .partial_cmp(&new.regions[b].alive())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(surviving[0]);
+            // Schedule 10 ticks from now so RefugeeWave fires first
+            new.pending_crises.push((new.tick + 10, CrisisKind::ArkProtocol { region_idx: best }));
+        }
+    }
+
+    // Ark Protocol enforcement: keep non-Ark regions stripped of policies.
+    // Policies can't be re-enabled (toggle_policy blocks it), but this
+    // catches any edge cases like crisis resolutions that toggle policies.
+    if let Some(ark_idx) = new.ark_protocol {
+        for (i, policy) in new.policies.iter_mut().enumerate() {
+            if i != ark_idx && !new.regions[i].collapsed {
+                policy.clear_all();
+            }
+        }
+    }
+
     // Check defeat condition (only while still playing).
     // There is no victory — you lose eventually. The question is when.
     if new.outcome == GameOutcome::Playing {
@@ -4068,5 +4106,96 @@ mod tests {
         // With adaptation, quarantine is weaker → more infections
         assert!(adapted > baseline,
             "adapted disease should spread more under quarantine: adapted={} baseline={}", adapted, baseline);
+    }
+
+    #[test]
+    fn ark_protocol_schedules_when_two_regions_collapse() {
+        let mut state = GameState::new_default(42);
+        // Collapse regions 0 and 1
+        for idx in [0, 1] {
+            let pop = state.regions[idx].population as f64;
+            let threshold = state.regions[idx].collapse_threshold;
+            state.regions[idx].dead = pop * (1.0 - threshold) + 1.0;
+            state.regions[idx].get_or_create_infection(0).dead = state.regions[idx].dead;
+            state.regions[idx].collapsed = true;
+        }
+        // Clear any crisis state from previous ticks
+        state.active_crisis = None;
+        state.pending_crises.clear();
+        state.crisis_cooldowns.clear();
+        state.sim_state = SimState::Running;
+
+        let after = tick(&state);
+
+        // Should have scheduled an ArkProtocol pending crisis
+        let ark_pending = after.pending_crises.iter()
+            .find(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
+        assert!(ark_pending.is_some(), "should schedule Ark Protocol when 2+ regions collapse");
+
+        // Should pick the surviving region with highest alive population
+        if let Some((_, CrisisKind::ArkProtocol { region_idx })) = ark_pending {
+            assert!(!after.regions[*region_idx].collapsed,
+                "Ark target should be a surviving region");
+            // Verify it picked the best surviving region (highest alive)
+            let best_alive = after.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, r)| (i, r.alive()))
+                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            assert_eq!(Some(*region_idx), best_alive.map(|(i, _)| i),
+                "should pick surviving region with highest alive population");
+        }
+    }
+
+    #[test]
+    fn ark_protocol_accept_sets_state_and_clears_policies() {
+        let mut state = GameState::new_default(42);
+        // Enable some policies in region 1 and 2
+        state.policies[1].quarantine = true;
+        state.policies[2].travel_ban = true;
+        state.policies[3].border_controls = true;
+        // Collapse regions 0 and 4 so Ark on region 2 makes sense
+        state.regions[0].collapsed = true;
+        state.regions[4].collapsed = true;
+
+        // Set up Ark Protocol crisis targeting region 2, select option A (accept)
+        setup_crisis(&mut state, CrisisKind::ArkProtocol { region_idx: 2 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+
+        // Ark Protocol should be active on region 2
+        assert_eq!(after.ark_protocol, Some(2));
+        // Non-Ark, non-collapsed regions should have all policies cleared
+        assert!(!after.policies[1].quarantine, "non-Ark region policies should be cleared");
+        assert!(!after.policies[3].border_controls, "non-Ark region policies should be cleared");
+        // ArkProtocolActivated event should be emitted
+        assert!(after.events.iter().any(|e|
+            matches!(e, GameEvent::ArkProtocolActivated { region_idx: 2 })));
+    }
+
+    #[test]
+    fn ark_protocol_blocks_policy_and_medicine_in_abandoned_regions() {
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        detect_all_diseases(&mut state);
+        state.ark_protocol = Some(0); // North America is the Ark
+
+        // Try toggling policy in region 1 (abandoned)
+        let (msg, success) = policy::toggle_policy(&mut state, 1, 0); // travel ban
+        assert!(!success, "should block policy toggle in abandoned region");
+        assert!(msg.unwrap().contains("abandoned"));
+
+        // Try deploying medicine to region 1 (abandoned)
+        let (success, msg, _) = medicine::deploy_medicine(
+            &mut state, 0, 1, DeployTarget::Treat { disease_idx: 0 },
+        );
+        assert!(!success, "should block medicine deployment to abandoned region");
+        assert!(msg.unwrap().contains("abandoned"));
+
+        // Same actions should work on the Ark region (region 0)
+        let (msg, success) = policy::toggle_policy(&mut state, 0, 0);
+        // May fail for other reasons (cost, etc.) but NOT because of abandonment
+        if !success {
+            assert!(!msg.unwrap().contains("abandoned"),
+                "Ark region should not be blocked by abandonment");
+        }
     }
 }
