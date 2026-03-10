@@ -53,17 +53,16 @@ Deployment options: **Treat** (reduce infected population) or **Vaccinate** (bui
 
 ### Policies
 
-10 regional policies, toggled per-region. Each costs funding and personnel:
+Regional policies, toggled per-region. Each costs funding and personnel:
 - **Travel Ban** — blocks 90% cross-region spread but halves regional income
 - **Quarantine** — halves infection rate within region
 - **Hospital Surge** — halves lethality, boosts medicine efficacy
 - **Border Controls** — lighter version of travel ban (50% cross-region reduction)
 - **Water Sanitation** — halves waterborne disease spread
 - **Disease Screening** — tiered (Basic → Antigen → Mass Rapid), affects disease detection visibility
-- **Resilience** — lowers collapse threshold
-- **Martial Law** — heavy-handed control, high cost
-- **Medical Center** — permanent infrastructure upgrade (Field Hospital → Medical Center)
-- **Nuclear Annihilation** — last resort for collapsed regions
+- **Martial Law** — heavy-handed control, reduces collapse threshold, high cost
+- **Field Hospital / Medical Center** — permanent infrastructure upgrade (two tiers: Field Hospital reduces lethality, Medical Center adds medicine efficacy bonus)
+- **Nuclear Option** — last resort for collapsed regions
 
 Policy costs scale with regional traits and governor cooperation.
 
