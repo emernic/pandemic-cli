@@ -47,7 +47,7 @@ Pacing is the hardest thing to get right and the easiest to get wrong. You're ch
 The player needs to know their choices matter. You're checking:
 - **Can I see the effect of my actions?** If I deploy medicine to a region, does the infection curve visibly change? If I quarantine a region, can I see the spread slowing? Invisible effects are the same as no effects.
 - **Is feedback timely?** If I make a decision and don't see the result for 2 days, the connection between cause and effect is lost. The player won't learn from their choices because they can't attribute outcomes to decisions.
-- **Are there clear signals for success and failure?** Not just "you won" or "you lost" — ongoing signals. "This region is getting worse." "This disease is under control." "Your resources are running low." The player should always know roughly how they're doing.
+- **Are there clear signals for how you're doing?** Not just "game over" — ongoing signals. "This region is getting worse." "This disease is under control." "Your resources are running low." The player should always know roughly how they're doing.
 - **Does the game communicate urgency?** When something needs attention, does the player know? A disease spreading exponentially in a region you haven't looked at should somehow surface — not buried behind two panel navigations.
 
 ### Difficulty and Challenge

@@ -48,7 +48,7 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 11. Scheduled follow-up crises + `crisis::generate_crisis()`
 12. *RNG write-back* + scientist roster sync
 13. Regional collapse (may trigger refugee crisis)
-14. Win/lose conditions + mercy rule
+14. Defeat conditions + mercy rule
 
 After each tick, the game loop calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
@@ -87,7 +87,7 @@ Each subsystem module follows the same pattern:
 
 ### What stays in mod.rs
 
-`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. So does logic that spans multiple subsystems or doesn't belong to any single one: disease spread, mutation, win/lose checks, regional collapse, disease emergence, history recording. If any of these grow large enough to warrant extraction, they follow the same subsystem pattern.
+`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. So does logic that spans multiple subsystems or doesn't belong to any single one: disease spread, mutation, defeat checks, regional collapse, disease emergence, history recording. If any of these grow large enough to warrant extraction, they follow the same subsystem pattern.
 
 ## Event System
 

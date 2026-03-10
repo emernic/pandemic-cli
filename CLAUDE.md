@@ -108,7 +108,9 @@ Concrete examples of what to watch for:
 
 Inverse Plague Inc. — defend humanity against diseases in a sci-fi future. Rust + ratatui TUI.
 
-**There is no win condition.** The game is a survival/endurance challenge — diseases will eventually overwhelm the player. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-20 days. Don't make balance changes that trivialize the challenge.
+### ⚠️ THIS GAME IS UNWINNABLE — THIS IS AN AXIOM, NOT A DESIGN CHOICE
+
+**There is no win condition. There will never be a win condition. Do not add one. Do not add anything that implies one.** This is a survival/endurance challenge like a roguelike — diseases will eventually overwhelm the player. The only end state is defeat. The goal is to last as long as possible and save as many lives as you can. Without intervention, the game ends within 10-20 days. Don't make balance changes that trivialize the challenge.
 
 ## Game Inspirations
 

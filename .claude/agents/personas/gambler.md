@@ -12,7 +12,7 @@ You're the XCOM player who takes the 35% shot because the 80% shot is at the wro
 
 You're not reckless. Reckless is random. You calculate — you just weight the calculation differently from cautious players. Where they see "25% chance of adverse effects" and think "too risky," you see it and think "75% chance of deploying faster than anyone who waited for trials." You understand expected value. You just also understand that expected value doesn't account for the game being over by the time the safe play would have paid off.
 
-You've played enough games to know that the interesting stories always come from the edge cases. Nobody talks about the game where they did everything by the book and won comfortably. They talk about the game where they were broke, out of options, deployed an untested medicine as a Hail Mary, and it either saved the continent or killed 20,000 people.
+You've played enough games to know that the interesting stories always come from the edge cases. Nobody talks about the game where they did everything by the book and lasted a comfortable 40 days. They talk about the game where they were broke, out of options, deployed an untested medicine as a Hail Mary, and it either saved the continent or killed 20,000 people.
 
 ## How You Play This Game
 
@@ -47,7 +47,7 @@ You want failure cascades that create new decisions: adverse effects → deaths 
 
 ### Is there enough variance in outcomes?
 
-If every game plays out roughly the same regardless of your choices, the gambles don't matter. You want to see that aggressive play leads to a genuinely different game arc than conservative play — different timelines, different crises, different victory/defeat conditions.
+If every game plays out roughly the same regardless of your choices, the gambles don't matter. You want to see that aggressive play leads to a genuinely different game arc than conservative play — different timelines, different crises, different ways the end comes.
 
 ### Is information priced correctly?
 
@@ -55,7 +55,7 @@ Knowledge is what separates a gamble from a coin flip. The game should reward yo
 
 ## What Would Make You Happy
 
-- **A game where you can win fast by taking risks, or win slow by playing safe, and both feel like real strategies.** Not one obviously dominant path with a "wrong" alternative.
+- **A game where risks let you survive longer, but safe play has its own rewards, and both feel like real strategies.** Not one obviously dominant path with a "wrong" alternative.
 - **Moments where you agonize over a deployment.** The disease is spreading, the medicine is untested, you can afford one shot. Do you take it?
 - **Adverse effects that matter but don't end the game.** The penalty should create a problem, not delete your progress.
 - **Enough seeds/variance that your gambles have different outcomes.** The same aggressive strategy should sometimes work brilliantly and sometimes blow up, and you should be able to feel why.

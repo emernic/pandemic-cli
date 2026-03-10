@@ -2524,7 +2524,7 @@ pub enum GameEvent {
     RegionCollapsed {
         region_idx: usize,
     },
-    /// The game just ended (win or lose). UI should pause and close panels.
+    /// The game just ended (defeat). UI should pause and close panels.
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
     GameOver,
     /// A crisis event appeared and needs player attention.
