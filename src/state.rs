@@ -1152,22 +1152,22 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned so defeat occurs at day 25-50 without intervention.
-    /// R0 = infectivity / (lethality + recovery) targets 2-4 for most types.
-    /// First region collapse at ~day 12-15, total defeat at ~day 25-50
-    /// depending on seed and pathogen type.
+    /// Stat ranges tuned for pacing: first region collapse ~day 25-30
+    /// without intervention, total defeat ~day 35-45. R0 targets 3.0-3.5
+    /// for fast types. Research pipeline takes ~5-7 days so player has
+    /// time to respond but must act quickly.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: fast spreader, moderate lethality
-            // R0 ≈ 3.7, death fraction ≈ 47%.
+            // R0 ≈ 3.4, death fraction ≈ 47%.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.008, 0.014),
+                infectivity: (0.008, 0.013),
                 lethality: (0.0008, 0.002),
                 recovery: (0.0012, 0.002),
                 cross_region: (0.003, 0.005),
             },
             // DNA viruses: moderate spread, higher lethality, slow recovery
-            // R0 ≈ 2.6, death fraction ≈ 65%.
+            // R0 ≈ 3.0, death fraction ≈ 65%.
             PathogenType::DnaVirus => DiseaseStatRanges {
                 infectivity: (0.006, 0.011),
                 lethality: (0.0012, 0.003),
@@ -1175,28 +1175,28 @@ impl PathogenType {
                 cross_region: (0.002, 0.004),
             },
             // Bacteria: moderate all around
-            // R0 ≈ 3.1, death fraction ≈ 41%.
+            // R0 ≈ 3.0, death fraction ≈ 41%.
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.006, 0.010),
+                infectivity: (0.006, 0.009),
                 lethality: (0.0006, 0.0015),
                 recovery: (0.001, 0.002),
                 cross_region: (0.002, 0.004),
             },
             // Fungi: slow-growing, moderate lethality, very low natural recovery.
-            // R0 ≈ 2.7, death fraction ≈ 68%. Hard to clear without antifungals.
+            // R0 ≈ 2.5, death fraction ≈ 68%. Hard to clear without antifungals.
             PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.004, 0.008),
+                infectivity: (0.004, 0.007),
                 lethality: (0.001, 0.002),
                 recovery: (0.0004, 0.001),
-                cross_region: (0.001, 0.003),
+                cross_region: (0.0015, 0.003),
             },
             // Prions: slow but devastating, very high lethality, almost no recovery
-            // R0 ≈ 1.7 (can dip below 1 at extremes), death fraction ≈ 87%.
+            // R0 ≈ 2.0 (slow sustained spread), death fraction ≈ 87%.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.004, 0.008),
+                infectivity: (0.004, 0.009),
                 lethality: (0.002, 0.004),
                 recovery: (0.0003, 0.0006),
-                cross_region: (0.001, 0.003),
+                cross_region: (0.0015, 0.003),
             },
         }
     }
