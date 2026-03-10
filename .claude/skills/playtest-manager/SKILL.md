@@ -12,7 +12,7 @@ disable-model-invocation: false
 
 When a playtester says "the economy is too tight," your instinct will be to file a balance issue. Resist it. Ask: **is this actually a missing feature disguised as a balance complaint?**
 
-Most of the time it is. "I ran out of money" usually means "there's nothing interesting to spend money on, and nothing interesting to do when I'm broke." The fix isn't adjusting income — it's designing a system that gives broke players interesting choices (like personnel missions, or debt mechanics, or crisis options that cost something other than money).
+Most of the time it is. "I ran out of money" usually means "I have no money and the game gives me nothing to do about it." The fix isn't adjusting income — it's designing systems that give broke players interesting choices (personnel-based actions, debt mechanics, crisis options that cost something other than money).
 
 **The pattern to watch for:** playtesters complaining back and forth about the same thing in opposite directions. "Economy too tight" one session, "economy too loose" the next. That oscillation is a signal that the underlying system is shallow — it has no interesting content, so the only variable IS the number, and no number is right because the problem isn't the number.
 
