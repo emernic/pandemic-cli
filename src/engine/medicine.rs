@@ -97,6 +97,7 @@ pub(super) fn deploy_medicine(
         region_idx,
         target,
         doses: doses_to_ship,
+        cost,
         arrive_tick,
         blocked_by_travel_ban: false,
     });

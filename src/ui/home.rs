@@ -358,6 +358,17 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             ]));
         }
 
+        // Pending shipments line
+        let shipment_cost = state.pending_shipment_cost();
+        if shipment_cost > 0.0 {
+            let count = state.pending_shipments.len();
+            lines.push(Line::from(vec![
+                Span::styled("  Shipments:", dim),
+                Span::styled(format!("-${:.0} committed", shipment_cost), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("  ({} in transit)", count), dim),
+            ]));
+        }
+
         // Net line
         let (net_str, net_color) = if net >= 0.0 {
             (format!("+¥{:.0}/day", net), Color::Green)
