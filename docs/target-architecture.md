@@ -24,10 +24,16 @@ state.rs                  Data + UI state machines (structs, enums, queries, UiS
 keypress → action.rs: key_to_action() → Action
          → lib.rs: apply_action()
              UI actions (navigate, select) → UiState methods
+             ToggleExtra → lib.rs resolves UI context → GameCommand → execute_command()
              Confirm → UiState::handle_confirm() → Option<GameCommand>
                → engine::execute_command() → CommandResult { message, success }
                → lib.rs maps result to UI navigation (inline in apply_action)
 ```
+
+**All persistent game state mutations go through `execute_command()`.** This includes standing orders, auto-deploy, and auto-research preferences. The only exceptions are:
+- `UiState` mutations (panel navigation, selection indices, wizard steps) — handled directly in `apply_action()` and UiState methods
+- `sim_state` pause/resume — simulation control handled directly in `apply_action()`
+- `auto_resolve_crises` preference — saved alongside `ResolveCrisis` command in the crisis-handling path of `apply_action()`
 
 `execute_command()` never touches `UiState`. It returns a result and the caller handles UI updates.
 

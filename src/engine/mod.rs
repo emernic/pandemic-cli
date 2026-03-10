@@ -609,9 +609,25 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (msg, success) = infrastructure::repair_infrastructure(state, *region_idx, *system);
             CommandResult { message: msg, success }
         }
-        // Handled before execute_command in lib.rs — should not reach here.
-        GameCommand::ToggleStandingOrder { .. } => {
-            CommandResult { message: None, success: false }
+        GameCommand::ToggleStandingOrder { kind } => {
+            match kind {
+                0 => state.standing_orders.auto_quarantine_at_high = !state.standing_orders.auto_quarantine_at_high,
+                1 => state.standing_orders.auto_travel_ban_at_crit = !state.standing_orders.auto_travel_ban_at_crit,
+                _ => {}
+            }
+            CommandResult { message: None, success: true }
+        }
+        GameCommand::ToggleAutoDeploy { med_idx } => {
+            while state.auto_deploy.len() <= *med_idx {
+                state.auto_deploy.push(false);
+            }
+            state.auto_deploy[*med_idx] = !state.auto_deploy[*med_idx];
+            CommandResult { message: None, success: true }
+        }
+        GameCommand::ToggleAutoResearch { track } => {
+            let idx = track.index();
+            state.auto_research[idx] = !state.auto_research[idx];
+            CommandResult { message: None, success: true }
         }
         GameCommand::StartFieldOp { kind } => {
             let (success, msg) = operations::start_field_op(state, kind.clone());
