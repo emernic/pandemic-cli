@@ -453,6 +453,15 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled("  Dead ", label),
                 Span::styled(format_number(dead), Style::default().fg(Color::DarkGray)),
             ]));
+            // Show lost specialization even during information blackout
+            let spec_label = specialization_label(idx);
+            lines.push(Line::from(vec![
+                Span::styled("Specialization: ", label),
+                Span::styled(
+                    format!("{} (LOST)", spec_label),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
             let paragraph = Paragraph::new(lines);
             f.render_widget(paragraph, inner);
             return;
