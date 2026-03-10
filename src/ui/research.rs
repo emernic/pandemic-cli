@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, format_days, personnel_speed};
+use crate::state::{GameState, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -577,7 +577,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             Some(format!("Mutation rate: {:.4} → {:.4}", current_rate, new_rate))
         }
         ResearchKind::TrainPersonnel => {
-            let added_upkeep = 5.0 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
+            let added_upkeep = TRAIN_PERSONNEL_BATCH as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
             Some(format!("Current: {} personnel (+${:.0}/day upkeep after)",
                 state.resources.personnel, added_upkeep))
         }

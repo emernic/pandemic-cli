@@ -1,7 +1,7 @@
 use crate::state::{
     GameEvent, GameOutcome, GameState, ResearchKind, ResearchProject,
     ResearchTrack, ScientistTrait, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
-    BRILLIANT_BREAKTHROUGH_CHANCE, BRILLIANT_BREAKTHROUGH_PROGRESS,
+    BRILLIANT_BREAKTHROUGH_CHANCE, BRILLIANT_BREAKTHROUGH_PROGRESS, TRAIN_PERSONNEL_BATCH,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
@@ -292,7 +292,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                 }
             }
             ResearchKind::TrainPersonnel => {
-                state.resources.personnel += 5;
+                state.resources.personnel += TRAIN_PERSONNEL_BATCH;
                 state.sync_scientists_to_personnel();
             }
             _ => {}

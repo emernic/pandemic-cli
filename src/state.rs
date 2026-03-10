@@ -1554,6 +1554,8 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
 /// 120 chosen so 5 ticks = 1 hour exactly (120 / 24 = 5).
 pub const TICKS_PER_DAY: f64 = 120.0;
+/// Personnel added per completed TrainPersonnel project.
+pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
 /// Mercy rule threshold: 5 days of zero player agency triggers defeat.
 pub const MERCY_RULE_TICKS: u64 = 600;
 /// Deploy cooldown per region in ticks (2 days). Healthcare systems need
@@ -2295,7 +2297,7 @@ impl ResearchKind {
                     .unwrap_or_else(|| "Unknown".to_string());
                 format!("Sequence: {}", name)
             }
-            ResearchKind::TrainPersonnel => "Train Personnel (+5)".to_string(),
+            ResearchKind::TrainPersonnel => format!("Train Personnel (+{})", TRAIN_PERSONNEL_BATCH),
             ResearchKind::BasicResearch { tech } => tech.name().to_string(),
         }
     }
