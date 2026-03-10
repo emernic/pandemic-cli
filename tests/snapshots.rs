@@ -17,7 +17,7 @@ fn initial_screen() {
 #[test]
 fn after_ticks() {
     let state = GameState::new_default(42);
-    let result = run_snapshot(state, &["t10".to_string()]).unwrap();
+    let result = run_snapshot(state, &["t10".to_string()], false).unwrap();
     assert_eq!(result.state.tick, 10);
     assert!(result.screen.contains("Day:"), "missing day counter");
     assert!(result.screen.contains("Infected:"), "missing infected count");
