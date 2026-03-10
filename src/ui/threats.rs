@@ -31,7 +31,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
-            // Undetected diseases: show a "?" with a brief hint to upgrade screening
+            // Undetected diseases: show a placeholder with a hint to upgrade screening
             if !disease.detected {
                 lines.push(Line::from(vec![
                     Span::styled(
