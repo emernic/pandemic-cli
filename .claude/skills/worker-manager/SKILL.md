@@ -59,10 +59,10 @@ Read the output. That string is your log path (e.g. `/tmp/worker-1773180000-1234
 
 **Bash call 2** — with `run_in_background: true`, using the exact path from call 1:
 ```bash
-unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' --output-format stream-json 2>&1 | tee /tmp/worker-1773180000-12345.log
+unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' --output-format stream-json --verbose 2>&1 | tee /tmp/worker-1773180000-12345.log
 ```
 
-`--output-format stream-json` makes Claude emit each event (tool calls, assistant messages, tool results) as a newline-delimited JSON object in real time as the session runs. Without it, `-p` only outputs the final response — a one-paragraph summary at the very end of a 20-minute session.
+`--output-format stream-json --verbose` makes Claude emit each event (tool calls, assistant messages, tool results) as a newline-delimited JSON object in real time. `--verbose` is required — `stream-json` without it errors out silently. Without these flags, `-p` only outputs the final response — a one-paragraph summary at the very end of a 20-minute session.
 
 After Bash call 2 completes, save the returned task ID to `.worker-task-id`:
 ```bash
