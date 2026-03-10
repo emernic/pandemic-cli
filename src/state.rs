@@ -2252,6 +2252,53 @@ impl ResearchKind {
             },
         }
     }
+
+    /// Short display label for a research project (used in research and scientists panels).
+    pub fn display_label(&self, diseases: &[Disease], medicines: &[Medicine]) -> String {
+        match self {
+            ResearchKind::IdentifyThreat { disease_idx } => {
+                let disease = diseases.get(*disease_idx);
+                let name = disease
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let verb = if disease.is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME) {
+                    "Study"
+                } else {
+                    "Identify"
+                };
+                format!("{}: {}", verb, name)
+            }
+            ResearchKind::DevelopMedicine { medicine_idx } => {
+                let name = medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("Develop: {}", name)
+            }
+            ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
+                let med = medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or("Unknown");
+                let dis = diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Trial: {} vs {}", med, dis)
+            }
+            ResearchKind::ManufactureDoses { medicine_idx } => {
+                let name = medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("Manufacture: {}", name)
+            }
+            ResearchKind::GenomicSequencing { disease_idx } => {
+                let name = diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Sequence: {}", name)
+            }
+            ResearchKind::TrainPersonnel => "Train Personnel (+5)".to_string(),
+            ResearchKind::BasicResearch { tech } => tech.name().to_string(),
+        }
+    }
 }
 
 impl ResearchProject {

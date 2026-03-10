@@ -155,7 +155,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
             let speed = project.speed(&state.medicines);
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
             lines.push(Line::from(Span::styled(
-                format!("{}[ACTIVE] {}", marker, format_kind(&project.kind, state)),
+                format!("{}[ACTIVE] {}", marker, project.kind.display_label(&state.diseases, &state.medicines)),
                 style,
             )));
             lines.push(Line::from(Span::styled(
@@ -191,7 +191,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                     };
 
                     lines.push(Line::from(Span::styled(
-                        format!("{}{}", marker, format_kind(kind, state)),
+                        format!("{}{}", marker, kind.display_label(&state.diseases, &state.medicines)),
                         style,
                     )));
 
@@ -247,7 +247,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
             let speed = project.speed(&state.medicines);
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
             lines.push(Line::from(Span::styled(
-                format!("{}[ACTIVE] {}", marker, format_kind(&project.kind, state)),
+                format!("{}[ACTIVE] {}", marker, project.kind.display_label(&state.diseases, &state.medicines)),
                 style,
             )));
             lines.push(Line::from(Span::styled(
@@ -288,7 +288,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                     };
 
                     lines.push(Line::from(Span::styled(
-                        format!("{}{}", marker, format_kind(kind, state)),
+                        format!("{}{}", marker, kind.display_label(&state.diseases, &state.medicines)),
                         style,
                     )));
 
@@ -349,7 +349,7 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
         lines.push(Line::from(""));
 
         lines.push(Line::from(Span::styled(
-            format!("  Start: {}", format_kind(kind, state)),
+            format!("  Start: {}", kind.display_label(&state.diseases, &state.medicines)),
             Style::default().fg(Color::Cyan),
         )));
         if let Some(detail) = format_detail(kind, state) {
@@ -440,7 +440,7 @@ fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (S
         lines.push(Line::from(""));
 
         lines.push(Line::from(Span::styled(
-            format!("  {}", format_kind(&project.kind, state)),
+            format!("  {}", project.kind.display_label(&state.diseases, &state.medicines)),
             Style::default().fg(Color::Cyan),
         )));
         lines.push(Line::from(""));
@@ -537,51 +537,6 @@ fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (S
     (title.to_string(), lines)
 }
 
-fn format_kind(kind: &ResearchKind, state: &GameState) -> String {
-    match kind {
-        ResearchKind::IdentifyThreat { disease_idx } => {
-            let disease = state.diseases.get(*disease_idx);
-            let name = disease
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            let verb = if disease.is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME) {
-                "Study"
-            } else {
-                "Identify"
-            };
-            format!("{}: {}", verb, name)
-        }
-        ResearchKind::DevelopMedicine { medicine_idx } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-            format!("Develop: {}", name)
-        }
-        ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
-            let med_name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-            let dis_name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Trial: {} vs {}", med_name, dis_name)
-        }
-        ResearchKind::ManufactureDoses { medicine_idx } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-            format!("Manufacture: {}", name)
-        }
-        ResearchKind::GenomicSequencing { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Sequence: {}", name)
-        }
-        ResearchKind::TrainPersonnel => "Train Personnel (+5)".to_string(),
-        ResearchKind::BasicResearch { tech } => tech.name().to_string(),
-    }
-}
 
 /// Supplementary detail line for a research project (targets, knowledge, etc).
 fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
