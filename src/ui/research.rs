@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -221,7 +221,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
             let speed = project.speed(&state.medicines);
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
             lines.push(Line::from(Span::styled(
-                format!("{}[ACTIVE] {}", marker, project.kind.display_label(&state.diseases, &state.medicines)),
+                format!("{}[ACTIVE] {}", marker, project.kind.display_label(&state.diseases, &state.medicines, &state.regions)),
                 style,
             )));
             lines.push(Line::from(Span::styled(
@@ -257,7 +257,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                     };
 
                     lines.push(Line::from(Span::styled(
-                        format!("{}{}", marker, kind.display_label(&state.diseases, &state.medicines)),
+                        format!("{}{}", marker, kind.display_label(&state.diseases, &state.medicines, &state.regions)),
                         style,
                     )));
 
@@ -313,7 +313,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
             let speed = project.speed(&state.medicines);
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
             lines.push(Line::from(Span::styled(
-                format!("{}[ACTIVE] {}", marker, project.kind.display_label(&state.diseases, &state.medicines)),
+                format!("{}[ACTIVE] {}", marker, project.kind.display_label(&state.diseases, &state.medicines, &state.regions)),
                 style,
             )));
             lines.push(Line::from(Span::styled(
@@ -354,7 +354,7 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                     };
 
                     lines.push(Line::from(Span::styled(
-                        format!("{}{}", marker, kind.display_label(&state.diseases, &state.medicines)),
+                        format!("{}{}", marker, kind.display_label(&state.diseases, &state.medicines, &state.regions)),
                         style,
                     )));
 
@@ -415,7 +415,7 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
         lines.push(Line::from(""));
 
         lines.push(Line::from(Span::styled(
-            format!("  Start: {}", kind.display_label(&state.diseases, &state.medicines)),
+            format!("  Start: {}", kind.display_label(&state.diseases, &state.medicines, &state.regions)),
             Style::default().fg(Color::Cyan),
         )));
         if let Some(detail) = format_detail(kind, state) {
@@ -506,7 +506,7 @@ fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (S
         lines.push(Line::from(""));
 
         lines.push(Line::from(Span::styled(
-            format!("  {}", project.kind.display_label(&state.diseases, &state.medicines)),
+            format!("  {}", project.kind.display_label(&state.diseases, &state.medicines, &state.regions)),
             Style::default().fg(Color::Cyan),
         )));
         lines.push(Line::from(""));
@@ -676,6 +676,16 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         ResearchKind::InterdictPathogen { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
             Some(format!("Cross-region spread: {:.4} → 0.0000", disease.cross_region_spread))
+        }
+        ResearchKind::FieldOperations { region_idx, system } => {
+            let region = state.regions.get(*region_idx)?;
+            let current = match system {
+                InfraSystem::Healthcare => region.healthcare_capacity,
+                InfraSystem::SupplyLines => region.supply_lines,
+                InfraSystem::CivilOrder => region.civil_order,
+            };
+            let after = (current + FIELD_OPS_RESTORE).min(1.0);
+            Some(format!("{}: {:.0}% → {:.0}%", system.label(), current * 100.0, after * 100.0))
         }
         _ => None,
     }

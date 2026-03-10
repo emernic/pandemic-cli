@@ -1166,6 +1166,9 @@ pub const INFRA_STRESSED: f64 = 0.50;
 /// Infrastructure breakpoint: critical. Severe effects.
 pub const INFRA_CRITICAL: f64 = 0.25;
 
+/// How much infrastructure a completed field operations project restores (0.30 = 30%).
+pub const FIELD_OPS_RESTORE: f64 = 0.30;
+
 /// Cost to repair 25% of a single infrastructure system.
 pub const INFRA_REPAIR_COST: f64 = 500.0;
 /// Cost to repair supply lines specifically (can also use funding).
@@ -2575,7 +2578,8 @@ impl ResearchProject {
             ResearchKind::DevelopMedicine { .. }
             | ResearchKind::ManufactureDoses { .. }
             | ResearchKind::TrainPersonnel
-            | ResearchKind::BasicResearch { .. } => false,
+            | ResearchKind::BasicResearch { .. }
+            | ResearchKind::FieldOperations { .. } => false,
         }
     }
 }
@@ -2603,6 +2607,11 @@ pub enum ResearchKind {
     /// Disrupts pathogen transmission mechanisms at the genomic level.
     /// Requires the GenomicInterdiction basic tech to be unlocked.
     InterdictPathogen { disease_idx: usize },
+    /// Field operations — send a team to stabilize degraded infrastructure in a region.
+    /// Appears when any infrastructure system drops below INFRA_STRESSED (50%).
+    /// Creates a mid-game phase shift: field research slots compete between disease
+    /// work and keeping regions operational.
+    FieldOperations { region_idx: usize, system: InfraSystem },
 }
 
 /// Technology nodes in the Basic Research tech tree.
@@ -2810,6 +2819,7 @@ impl ResearchKind {
                 BasicTech::DirectedAttenuation => (10, 600.0, 1500.0),
                 BasicTech::GenomicInterdiction => (12, 720.0, 2000.0),
             },
+            ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
             ResearchKind::AttenuatePathogen { .. } => (8, 600.0, 800.0),
             ResearchKind::InterdictPathogen { .. } => (10, 800.0, 1200.0),
@@ -2817,7 +2827,7 @@ impl ResearchKind {
     }
 
     /// Short display label for a research project (used in the research panel).
-    pub fn display_label(&self, diseases: &[Disease], medicines: &[Medicine]) -> String {
+    pub fn display_label(&self, diseases: &[Disease], medicines: &[Medicine], regions: &[Region]) -> String {
         match self {
             ResearchKind::IdentifyThreat { disease_idx } => {
                 let disease = diseases.get(*disease_idx);
@@ -2877,6 +2887,12 @@ impl ResearchKind {
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "Unknown".to_string());
                 format!("Interdict: {}", name)
+            }
+            ResearchKind::FieldOperations { region_idx, system } => {
+                let region_name = regions.get(*region_idx)
+                    .map(|r| r.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("Stabilize {}: {}", system.label(), region_name)
             }
         }
     }
@@ -3040,6 +3056,11 @@ pub enum GameEvent {
     /// Interdiction research complete — cross-region transmission eliminated.
     PathogenInterdicted {
         disease_idx: usize,
+    },
+    /// Field operations completed: infrastructure system stabilized in a region.
+    InfrastructureStabilized {
+        region_idx: usize,
+        system: InfraSystem,
     },
     /// A medicine shipment was dispatched and is in transit.
     MedicineShipped {
@@ -5397,6 +5418,25 @@ impl GameState {
                     && disease.cross_region_spread > 0.0
                 {
                     let kind = ResearchKind::InterdictPathogen { disease_idx: i };
+                    if !active_kinds.contains(&&kind) {
+                        projects.push(kind);
+                    }
+                }
+            }
+        }
+        // Field Operations: send teams to stabilize degraded infrastructure.
+        // Appears when any infrastructure system drops below INFRA_STRESSED.
+        // Only one field ops per region+system pair at a time.
+        for (r_idx, region) in self.regions.iter().enumerate() {
+            if region.collapsed || self.is_abandoned(r_idx) { continue; }
+            for system in [InfraSystem::Healthcare, InfraSystem::SupplyLines, InfraSystem::CivilOrder] {
+                let level = match system {
+                    InfraSystem::Healthcare => region.healthcare_capacity,
+                    InfraSystem::SupplyLines => region.supply_lines,
+                    InfraSystem::CivilOrder => region.civil_order,
+                };
+                if level < INFRA_STRESSED {
+                    let kind = ResearchKind::FieldOperations { region_idx: r_idx, system };
                     if !active_kinds.contains(&&kind) {
                         projects.push(kind);
                     }

@@ -340,5 +340,10 @@ fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
                 .unwrap_or_else(|| "Unknown".to_string());
             format!("Interdict {}", name)
         }
+        ResearchKind::FieldOperations { region_idx, system } => {
+            let region = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("?");
+            format!("Stabilize {} {}", system.label(), region)
+        }
     }
 }
