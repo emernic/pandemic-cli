@@ -1,5 +1,5 @@
 use crate::state::{
-    FieldOpKind, FieldOperation, GameEvent, GameOutcome, GameState,
+    FieldOpKind, FieldOperation, GameEvent, GameOutcome, GameState, InfraSystem,
     KNOWLEDGE_NAME, OP_EMERGENCY_EFFECT_TICKS, OP_EMERGENCY_LETHALITY_MULT,
     OP_RECON_KNOWLEDGE, OP_SURVEY_REPAIR,
 };
@@ -118,33 +118,31 @@ fn complete_operation(state: &mut GameState, op: &FieldOperation) {
         }
         FieldOpKind::InfraSurvey { region_idx } => {
             let r_idx = *region_idx;
-            // Repair the worst infrastructure system
+            // Find the worst infrastructure system
             let (worst_sys, worst_val) = if let Some(region) = state.regions.get(r_idx) {
-                let hc = region.healthcare_capacity;
-                let sl = region.supply_lines;
-                let co = region.civil_order;
-                if hc <= sl && hc <= co {
-                    ("Healthcare", hc)
-                } else if sl <= co {
-                    ("Supply Lines", sl)
-                } else {
-                    ("Civil Order", co)
-                }
+                let systems = [
+                    (InfraSystem::Healthcare, region.healthcare_capacity),
+                    (InfraSystem::SupplyLines, region.supply_lines),
+                    (InfraSystem::CivilOrder, region.civil_order),
+                ];
+                systems.into_iter()
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .unwrap()
             } else {
-                ("Healthcare", 1.0)
+                (InfraSystem::Healthcare, 1.0)
             };
             if let Some(region) = state.regions.get_mut(r_idx) {
                 let target = match worst_sys {
-                    "Healthcare" => &mut region.healthcare_capacity,
-                    "Supply Lines" => &mut region.supply_lines,
-                    _ => &mut region.civil_order,
+                    InfraSystem::Healthcare => &mut region.healthcare_capacity,
+                    InfraSystem::SupplyLines => &mut region.supply_lines,
+                    InfraSystem::CivilOrder => &mut region.civil_order,
                 };
                 *target = (*target + OP_SURVEY_REPAIR).min(1.0);
             }
             let new_pct = ((worst_val + OP_SURVEY_REPAIR).min(1.0) * 100.0) as u32;
             let name = state.regions.get(r_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            ("Infra Survey".to_string(), format!("{}: {} repaired to {}%", name, worst_sys, new_pct))
+            ("Infra Survey".to_string(), format!("{}: {} repaired to {}%", name, worst_sys.label(), new_pct))
         }
     };
 
