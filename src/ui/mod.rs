@@ -551,8 +551,11 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
-    let defeat_msg = if state.ark_protocol.is_some() {
-        "  The Ark has fallen. Humanity's last refuge could not hold.".to_string()
+    let defeat_msg = if let Some(ark_idx) = state.ark_protocol {
+        let region_name = state.regions.get(ark_idx)
+            .map(|r| r.name.as_str())
+            .unwrap_or("the last region");
+        format!("  Ark Protocol: {} collapsed. No fallback positions remain.", region_name)
     } else if state.mercy_rule {
         let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
         if collapsed >= 4 {
