@@ -388,11 +388,17 @@ pub fn tick(state: &GameState) -> GameState {
         let already_active = new.active_crisis.as_ref()
             .is_some_and(|c| matches!(c.kind, CrisisKind::ArkProtocol { .. }));
         if collapsed_count >= 2 && !surviving.is_empty() && !already_pending && !already_cooldown && !already_active {
+            // Score by survival fraction (alive / population) so devastated regions
+            // are not recommended as the Ark even if they have a large raw population.
+            let survival_fraction = |idx: usize| {
+                let r = &new.regions[idx];
+                r.alive() / (r.population as f64).max(1.0)
+            };
             let best = surviving.iter()
                 .copied()
                 .max_by(|&a, &b| {
-                    new.regions[a].alive()
-                        .partial_cmp(&new.regions[b].alive())
+                    survival_fraction(a)
+                        .partial_cmp(&survival_fraction(b))
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .unwrap_or(surviving[0]);
@@ -4624,17 +4630,20 @@ mod tests {
             .find(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
         assert!(ark_pending.is_some(), "should schedule Ark Protocol when 2+ regions collapse");
 
-        // Should pick the surviving region with highest alive population
+        // Should pick the surviving region with highest survival fraction (alive / population),
+        // not raw alive count — devastated regions should not be recommended as the Ark.
         if let Some((_, CrisisKind::ArkProtocol { region_idx })) = ark_pending {
             assert!(!after.regions[*region_idx].collapsed,
                 "Ark target should be a surviving region");
-            // Verify it picked the best surviving region (highest alive)
-            let best_alive = after.regions.iter().enumerate()
+            // Verify it picked the best surviving region (highest survival fraction)
+            let survival_fraction = |r: &crate::state::Region| {
+                r.alive() / (r.population as f64).max(1.0)
+            };
+            let best = after.regions.iter().enumerate()
                 .filter(|(_, r)| !r.collapsed)
-                .map(|(i, r)| (i, r.alive()))
-                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-            assert_eq!(Some(*region_idx), best_alive.map(|(i, _)| i),
-                "should pick surviving region with highest alive population");
+                .max_by(|a, b| survival_fraction(a.1).partial_cmp(&survival_fraction(b.1)).unwrap());
+            assert_eq!(Some(*region_idx), best.map(|(i, _)| i),
+                "should pick surviving region with highest survival fraction");
         }
     }
 
