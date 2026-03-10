@@ -1,5 +1,6 @@
 mod crisis;
 mod disease;
+mod infrastructure;
 mod medicine;
 mod personnel;
 mod policy;
@@ -48,6 +49,9 @@ pub fn tick(state: &GameState) -> GameState {
 
     // Process arriving medicine shipments
     medicine::tick_shipments(&mut new);
+
+    // Infrastructure degradation — hospitals overwhelm, supply lines break, civil order erodes.
+    infrastructure::tick_infrastructure(&mut new);
 
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
@@ -552,6 +556,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         }
         GameCommand::BargainWithGovernor { region_idx } => {
             let (msg, success) = policy::bargain_with_governor(state, *region_idx);
+            CommandResult { message: msg, success }
+        }
+        GameCommand::RepairInfrastructure { region_idx, system } => {
+            let (msg, success) = infrastructure::repair_infrastructure(state, *region_idx, *system);
             CommandResult { message: msg, success }
         }
     }

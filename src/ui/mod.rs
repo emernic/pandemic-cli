@@ -61,7 +61,10 @@ pub fn process_events(state: &mut GameState) {
         GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }
         | GameEvent::ThreatEscalation { .. } | GameEvent::ThreatLevelChanged { .. }
         | GameEvent::PathogenIdentified { .. }
-        | GameEvent::MedicineDeveloped { .. } | GameEvent::TrialCompleted { .. }))
+        | GameEvent::MedicineDeveloped { .. } | GameEvent::TrialCompleted { .. })
+        || state.events.iter().any(|e| matches!(e,
+            GameEvent::InfrastructureBreakpoint { threshold, .. } if *threshold <= 0.25))
+    )
     {
         state.ui.speed_multiplier = 1;
     }
@@ -261,6 +264,24 @@ pub fn process_events(state: &mut GameState) {
                 } else {
                     (9, format!("{med_name} delivered to {region_name} — {dose_str} doses administered"))
                 }
+            }
+            GameEvent::InfrastructureBreakpoint { region_idx, system, threshold } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                let system_label = match system.as_str() {
+                    "healthcare" => "Healthcare",
+                    "supply_lines" => "Supply Lines",
+                    "civil_order" => "Civil Order",
+                    _ => system.as_str(),
+                };
+                let severity = if *threshold <= 0.0 {
+                    "FAILED"
+                } else if *threshold <= 0.25 {
+                    "CRITICAL"
+                } else {
+                    "STRESSED"
+                };
+                (2, format!("⚠ {region_name}: {system_label} {severity}"))
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };

@@ -34,6 +34,11 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} abandoned — deploy to the Ark instead")));
     }
+    // Block deployment when supply lines have completely failed
+    if state.regions[region_idx].supply_lines <= 0.0 {
+        let region_name = &state.regions[region_idx].name;
+        return (false, Some(format!("{region_name} supply lines collapsed — repair first")));
+    }
     // Block deployment during cooldown
     let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick);
     if cooldown > 0 {
@@ -92,8 +97,13 @@ pub(super) fn deploy_medicine(
     state.total_doses_deployed += doses_to_ship;
     state.regions[region_idx].last_deploy_tick = Some(state.tick);
 
-    // Create the shipment
-    let arrive_tick = state.tick + SHIPPING_TICKS;
+    // Create the shipment — supply line degradation slows delivery
+    let supply_mult = if state.regions[region_idx].supply_lines < crate::state::INFRA_CRITICAL {
+        2.0 // Critical: 2x delivery time
+    } else {
+        1.0
+    };
+    let arrive_tick = state.tick + (SHIPPING_TICKS as f64 * supply_mult) as u64;
     state.pending_shipments.push(Shipment {
         medicine_idx,
         region_idx,

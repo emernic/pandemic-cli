@@ -79,7 +79,7 @@ These are one-way doors. The game doesn't tell you whether they were worth it.
 
 Each region has a governor with a name, personality, and loyalty score.
 
-**Personalities**: Cooperative, Nationalist, Populist, Technocrat. Each reacts differently to your policies and the regional situation. A Populist hates lockdowns. A Nationalist wants resources focused locally. A Technocrat respects research but demands consent.
+**Personalities**: Buffoon, Blowhard, Recluse, Hardliner, Operative, Mobster. Each has a unique bargain cost, loyalty pattern, and defiance behavior. A Blowhard hates restrictions but is cheap to buy off. A Hardliner is angry about both restrictions and suffering. An Operative demands permanent income cuts. A Mobster's price doubles every time you pay.
 
 **Loyalty** drifts continuously based on regional conditions, your policy choices, and personality. High loyalty means cheaper policies and cooperation. Low loyalty means defiance — governors can lift your quarantines, block your research, or demand military escalation. You can appease them with money, but you can't control them.
 
@@ -98,7 +98,17 @@ Three currencies:
 
 ### Regions
 
-Six regions: North America, Europe, Asia, South America, Africa, Oceania. Connected in a geographic graph. Each has population, traits (Trade-Dependent, Dense Urban, Island Geography, Low Infrastructure, Strong Public Health, Resilient Population), a governor, and active policies.
+Six regions: North America, Europe, Asia, South America, Africa, Oceania. Connected in a geographic graph. Each has population, traits (Trade-Dependent, Dense Urban, Island Geography, Low Infrastructure, Strong Public Health, Resilient Population), a governor, active policies, and three infrastructure systems.
+
+### Infrastructure
+
+Each region tracks three infrastructure systems (0–100%):
+
+- **Healthcare Capacity** — degrades as infections grow. Below 50%: lethality doubles. Below 25%: lethality quadruples. Hospital Surge policy and field hospitals slow degradation.
+- **Supply Lines** — degrades from deaths and travel bans. Below 50%: policy costs increase 50%. Below 25%: medicine delivery takes twice as long. At 0%: no medicine can be deployed.
+- **Civil Order** — degrades from deaths, restrictive policies, and healthcare collapse. At 0%: spread rate increases 50%.
+
+The cascade is what makes this system work. Healthcare fails → more deaths → supply lines fail → can't deliver medicine → MORE deaths → civil order collapses → disease runs unchecked. Each failure accelerates the others. The player must decide which system to shore up first — or whether to abandon the region entirely.
 
 Regions **collapse** when deaths exceed their threshold (typically 45-85% of population). Collapse is permanent — policies clear, refugees flee to neighbors (spreading disease), personnel are lost. When all six regions collapse, the game is over.
 

@@ -1029,6 +1029,29 @@ pub const BARGAIN_OPERATIVE_INCOME_CUT: f64 = 0.10;
 /// Mobster bargain base cost: pure funding, escalates each time.
 pub const BARGAIN_MOBSTER_BASE_COST: f64 = 200.0;
 
+// --- Infrastructure constants ---
+
+/// Infrastructure breakpoint: stressed. Effects start.
+pub const INFRA_STRESSED: f64 = 0.50;
+/// Infrastructure breakpoint: critical. Severe effects.
+pub const INFRA_CRITICAL: f64 = 0.25;
+
+/// Cost to repair 25% of a single infrastructure system.
+pub const INFRA_REPAIR_COST: f64 = 500.0;
+/// Cost to repair supply lines specifically (can also use funding).
+pub const SUPPLY_REPAIR_COST: f64 = 400.0;
+
+/// Healthcare: lethality multiplier when stressed (below 50%).
+pub const HEALTHCARE_STRESSED_LETHALITY: f64 = 2.0;
+/// Healthcare: lethality multiplier when critical (below 25%).
+pub const HEALTHCARE_CRITICAL_LETHALITY: f64 = 4.0;
+
+/// Supply lines: policy cost multiplier when stressed.
+pub const SUPPLY_STRESSED_COST_MULT: f64 = 1.5;
+
+/// Civil order: spread multiplier when at zero (anarchy).
+pub const CIVIL_ORDER_ANARCHY_SPREAD: f64 = 1.5;
+
 impl Governor {
     /// Returns true if this governor is defiant (loyalty below threshold).
     pub fn is_defiant(&self) -> bool {
@@ -1111,6 +1134,22 @@ pub struct Region {
     /// Tick when medicine was last deployed to this region. Used for deploy cooldown.
     #[serde(default)]
     pub last_deploy_tick: Option<u64>,
+    /// Healthcare capacity (0.0–1.0). Degrades as infection load grows.
+    /// Below 0.5: lethality increases. Below 0.25: lethality increases more + research slows.
+    /// At 0: maximum lethality, no field research possible here.
+    /// Hospital Surge restores some capacity while active.
+    #[serde(default = "default_one")]
+    pub healthcare_capacity: f64,
+    /// Supply line integrity (0.0–1.0). Degrades when death rate is high or travel banned.
+    /// Below 0.5: policy costs increase 50%. Below 0.25: medicine deployment takes 2x.
+    /// At 0: no medicine deployment, no new policies.
+    #[serde(default = "default_one")]
+    pub supply_lines: f64,
+    /// Civil order (0.0–1.0). Degrades when deaths mount and unpopular policies are active.
+    /// Below 0.5: screening effectiveness halved. Below 0.25: policies randomly deactivate.
+    /// At 0: all policies disabled, spread rate +50%.
+    #[serde(default = "default_one")]
+    pub civil_order: f64,
     /// Cached recent death rate (deaths per day), updated once per day
     /// by the tick function. Used for the time-to-collapse estimate.
     #[serde(skip)]
@@ -2745,6 +2784,14 @@ pub enum GameEvent {
         from: ThreatLevel,
         to: ThreatLevel,
     },
+    /// Infrastructure dropped below a breakpoint threshold.
+    InfrastructureBreakpoint {
+        region_idx: usize,
+        /// Which system: "healthcare", "supply_lines", or "civil_order"
+        system: String,
+        /// The breakpoint crossed: 0.50 (stressed) or 0.25 (critical) or 0.0 (failed)
+        threshold: f64,
+    },
 }
 
 /// Game outcome — there is no victory. You lose eventually. The question is when.
@@ -2796,6 +2843,8 @@ pub enum GameCommand {
     AppeaseGovernor { region_idx: usize },
     /// Personality-specific bargain with a defiant governor (non-monetary cost).
     BargainWithGovernor { region_idx: usize },
+    /// Repair regional infrastructure. system: 0=healthcare, 1=supply_lines, 2=civil_order.
+    RepairInfrastructure { region_idx: usize, system: u8 },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3810,6 +3859,9 @@ impl GameState {
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
+                healthcare_capacity: 1.0,
+                supply_lines: 1.0,
+                civil_order: 1.0,
             },
             Region {
                 name: "South America".into(),
@@ -3838,6 +3890,9 @@ impl GameState {
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
+                healthcare_capacity: 1.0,
+                supply_lines: 1.0,
+                civil_order: 1.0,
             },
             Region {
                 name: "Europe".into(),
@@ -3866,6 +3921,9 @@ impl GameState {
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
+                healthcare_capacity: 1.0,
+                supply_lines: 1.0,
+                civil_order: 1.0,
             },
             Region {
                 name: "Africa".into(),
@@ -3894,6 +3952,9 @@ impl GameState {
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
+                healthcare_capacity: 1.0,
+                supply_lines: 1.0,
+                civil_order: 1.0,
             },
             Region {
                 name: "Asia".into(),
@@ -3922,6 +3983,9 @@ impl GameState {
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
+                healthcare_capacity: 1.0,
+                supply_lines: 1.0,
+                civil_order: 1.0,
             },
             Region {
                 name: "Oceania".into(),
@@ -3950,6 +4014,9 @@ impl GameState {
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
+                healthcare_capacity: 1.0,
+                supply_lines: 1.0,
+                civil_order: 1.0,
             },
         ];
 
@@ -4395,7 +4462,11 @@ impl GameState {
                 let region = self.regions.get(i);
                 let traits = region.map(|r| r.traits.as_slice()).unwrap_or(&[]);
                 let gov_mult = region.map(|r| r.governor.cost_multiplier()).unwrap_or(1.0);
-                p.funding_cost(traits) * gov_mult
+                // Supply line degradation increases policy costs
+                let supply_mult = region.map(|r| {
+                    if r.supply_lines < INFRA_STRESSED { SUPPLY_STRESSED_COST_MULT } else { 1.0 }
+                }).unwrap_or(1.0);
+                p.funding_cost(traits) * gov_mult * supply_mult
             })
             .sum()
     }
