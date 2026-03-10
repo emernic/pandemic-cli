@@ -3897,6 +3897,91 @@ mod tests {
     }
 
     #[test]
+    fn trade_network_reduces_income_when_neighbors_sick() {
+        use crate::state::RegionDiseaseState;
+        let mut state = GameState::new_default(42);
+        // Clear all infections to get baseline
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+        let baseline = state.funding_income_rate();
+        assert!(baseline > 0.0);
+
+        // Now heavily infect region 0 (North America) — 30% of population
+        let pop0 = state.regions[0].population as f64;
+        state.regions[0].infections.push(RegionDiseaseState {
+            disease_idx: 0,
+            infected: pop0 * 0.30,
+            dead: 0.0,
+            immune: 0.0,
+        });
+        let with_sick_neighbor = state.funding_income_rate();
+
+        // Region 0's OWN income drops (from direct infection)
+        // But also: neighbors of region 0 (Europe=2, South America=1) lose trade income
+        // because their neighbor (NA) is unhealthy.
+        // The overall income should be LESS than if we only accounted for NA's direct loss.
+        assert!(
+            with_sick_neighbor < baseline,
+            "income should drop: {with_sick_neighbor:.4} vs {baseline:.4}"
+        );
+
+        // Verify trade penalty is non-zero
+        let trade_penalty = state.trade_income_penalty();
+        assert!(
+            trade_penalty > 0.0,
+            "trade penalty should be positive when a region is heavily infected: {trade_penalty:.4}"
+        );
+
+        // Now collapse region 0 — its neighbors should lose ALL trade from that connection
+        state.regions[0].collapsed = true;
+        let with_collapsed = state.funding_income_rate();
+        assert!(
+            with_collapsed < with_sick_neighbor,
+            "collapse should reduce income further: {with_collapsed:.4} vs {with_sick_neighbor:.4}"
+        );
+
+        // The trade penalty from collapse should be larger than from sickness
+        let collapse_penalty = state.trade_income_penalty();
+        assert!(
+            collapse_penalty > trade_penalty,
+            "collapse trade penalty {collapse_penalty:.4} > sickness penalty {trade_penalty:.4}"
+        );
+    }
+
+    #[test]
+    fn trade_network_hub_region_matters_more() {
+        let mut state = GameState::new_default(42);
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+        let baseline = state.funding_income_rate();
+
+        // Collapse Oceania (index 5, 1 connection — peripheral)
+        let mut state_oceania = state.clone();
+        state_oceania.regions[5].collapsed = true;
+        let income_after_oceania = state_oceania.funding_income_rate();
+
+        // Collapse Europe (index 2, 3 connections — hub)
+        let mut state_europe = state.clone();
+        state_europe.regions[2].collapsed = true;
+        let income_after_europe = state_europe.funding_income_rate();
+
+        // Both should reduce income from baseline
+        assert!(income_after_oceania < baseline);
+        assert!(income_after_europe < baseline);
+
+        // Europe collapse should cause MORE trade penalty than Oceania collapse
+        // (Europe is a hub with 3 connections; Oceania has 1)
+        let penalty_oceania = baseline - income_after_oceania;
+        let penalty_europe = baseline - income_after_europe;
+        assert!(
+            penalty_europe > penalty_oceania,
+            "hub collapse penalty ({penalty_europe:.4}) should exceed peripheral ({penalty_oceania:.4})"
+        );
+    }
+
+    #[test]
     fn deploy_cooldown_blocks_repeat_deployment() {
         let mut state = GameState::new_default(42);
         // Setup: unlock a medicine, seed infection, give funds
