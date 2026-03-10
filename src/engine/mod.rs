@@ -4951,7 +4951,7 @@ mod tests {
             }
             let mut rng = ChaCha8Rng::seed_from_u64(seed + 1000);
             let initial = state.diseases.len();
-            state.spawn_disease_scaled(&mut rng);
+            disease::spawn_disease_scaled(&mut state, &mut rng);
             if state.diseases.len() > initial {
                 let d = &state.diseases[initial];
                 match d.pathogen_type {
@@ -4986,7 +4986,7 @@ mod tests {
             state.policies[2].quarantine = true;
             let mut rng = ChaCha8Rng::seed_from_u64(seed + 2000);
             let initial = state.diseases.len();
-            if let Some((_, region_idx)) = state.spawn_disease_scaled(&mut rng) {
+            if let Some((_, region_idx)) = disease::spawn_disease_scaled(&mut state, &mut rng) {
                 if state.diseases.len() > initial || true {
                     region_hits[region_idx] += 1;
                 }
