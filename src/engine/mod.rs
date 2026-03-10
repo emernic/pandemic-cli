@@ -1539,9 +1539,23 @@ mod tests {
                     }
                 }
 
-                // --- MEDICINE: vaccinate ALL diseases in every region ---
-                // Vaccination permanently reduces the susceptible pool, slowing
-                // exponential growth. More impactful than treatment long-term.
+                // --- QUARANTINE: quarantine regions with significant infection ---
+                // A competent player quarantines early to slow cross-region spread.
+                for r_idx in 0..state.regions.len() {
+                    if state.regions[r_idx].collapsed { continue; }
+                    if state.policies[r_idx].quarantine { continue; }
+                    let total_infected: f64 = state.regions[r_idx].infections.iter()
+                        .map(|inf| inf.infected).sum();
+                    if total_infected > 10_000.0 {
+                        execute_command(&mut state, &GameCommand::TogglePolicy {
+                            region_idx: r_idx, policy_idx: 1, // quarantine
+                        });
+                    }
+                }
+
+                // --- MEDICINE: vaccinate AND treat diseases in every region ---
+                // Vaccination slows exponential growth; treatment reduces active
+                // infected population. Both matter with limited BS supply.
                 let min_funding = 200.0;
                 for r_idx in 0..state.regions.len() {
                     if state.regions[r_idx].collapsed { continue; }
@@ -1561,6 +1575,7 @@ mod tests {
                             }
                         }
                         let Some(med_idx) = best_med else { continue; };
+                        // Vaccinate first, then treat if infected count is high
                         let target = DeployTarget::Vaccinate { disease_idx: d_idx };
                         let result = execute_command(&mut state, &GameCommand::DeployMedicine {
                             medicine_idx: med_idx,
@@ -1568,6 +1583,23 @@ mod tests {
                             target,
                         });
                         if result.success { total_deploys += 1; }
+                        // Also treat if this region has significant infected population
+                        let infected = state.regions[r_idx].infections.iter()
+                            .find(|inf| inf.disease_idx == d_idx)
+                            .map(|inf| inf.infected)
+                            .unwrap_or(0.0);
+                        if infected > 100_000.0 && state.resources.funding >= min_funding {
+                            let med = &state.medicines[med_idx];
+                            if med.doses > 0.0 {
+                                let treat_target = DeployTarget::Treat { disease_idx: d_idx };
+                                let result = execute_command(&mut state, &GameCommand::DeployMedicine {
+                                    medicine_idx: med_idx,
+                                    region_idx: r_idx,
+                                    target: treat_target,
+                                });
+                                if result.success { total_deploys += 1; }
+                            }
+                        }
                     }
                 }
             }

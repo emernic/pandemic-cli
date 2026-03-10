@@ -2119,7 +2119,7 @@ impl TherapyType {
             // Broad-spectrum: moderate efficacy against everything except prions.
             // Higher than specialized mismatch (0.1) but lower than matched (1.0).
             (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.1,
-            (TherapyType::BroadSpectrum, _) => 0.7,
+            (TherapyType::BroadSpectrum, _) => 0.5,
             // Prions resist everything
             (_, PathogenType::Prion) => 0.0,
             // Mismatched: nearly useless
@@ -4629,8 +4629,8 @@ impl GameState {
             mechanism: None,
             target_diseases: all_disease_indices.clone(),
             cost: 10.0,
-            doses: 2_000_000_000.0,
-            max_doses: 2_000_000_000.0,
+            doses: 500_000_000.0,
+            max_doses: 500_000_000.0,
             unlocked: true,
             // Broad-spectrum starts unlocked at full supply: the player's
             // immediate (but weaker) tool against any pathogen. Research develops
@@ -5760,8 +5760,8 @@ mod tests {
         assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::RnaVirus), 0.1);
 
         // Broad-spectrum: partial efficacy
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.7);
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.7);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.5);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.5);
 
         // Prions resist everything
         assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Prion), 0.0);
