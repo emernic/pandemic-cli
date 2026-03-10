@@ -640,10 +640,10 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 }
             }
             GovernorPersonality::Recluse => {
-                // Doesn't actively sabotage — just doesn't enforce anything.
-                // Represented by reduced policy effectiveness (handled in Governor::policy_effectiveness)
-                // Periodic reminder to the player that this region is drifting
-                Some(format!("{gov_name} is unreachable in {region_name}. Policies unenforced."))
+                // Passive neglect: the governor has completely checked out.
+                // Mechanical consequence is through policy_effectiveness (0.4x vs 0.7x
+                // for other defiant governors) — policies barely work in this region.
+                Some(format!("{gov_name} is unreachable in {region_name}. Policies barely enforced."))
             }
             GovernorPersonality::Hardliner => {
                 // Unilaterally activates a restrictive policy the player didn't set
@@ -1563,14 +1563,15 @@ mod tests {
     }
 
     #[test]
-    fn recluse_governor_sends_message_only() {
+    fn recluse_governor_no_direct_resource_impact() {
         let mut state = defiant_governor_state(GovernorPersonality::Recluse);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
 
         tick_governor_actions(&mut state);
 
-        // Recluse doesn't actively sabotage — just sends a message
+        // Recluse doesn't directly drain resources — consequence is through
+        // policy_effectiveness (0.4x for Recluse vs 0.7x standard)
         assert_eq!(state.resources.funding, funding_before);
         assert_eq!(state.resources.personnel, personnel_before);
         assert!(state.events.iter().any(|e|
@@ -1620,6 +1621,21 @@ mod tests {
         assert!(state.events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("extorted"))
         ));
+    }
+
+    #[test]
+    fn recluse_defiant_policy_effectiveness_is_lower() {
+        use crate::state::{GOVERNOR_DEFIANCE_EFFECTIVENESS, RECLUSE_DEFIANCE_EFFECTIVENESS};
+        let mut state = defiant_governor_state(GovernorPersonality::Recluse);
+        assert!(state.regions[0].policy_effectiveness() < GOVERNOR_DEFIANCE_EFFECTIVENESS,
+            "Recluse policy effectiveness ({}) should be lower than standard defiance ({})",
+            state.regions[0].policy_effectiveness(), GOVERNOR_DEFIANCE_EFFECTIVENESS);
+        assert!((state.regions[0].policy_effectiveness() - RECLUSE_DEFIANCE_EFFECTIVENESS).abs() < 0.001);
+
+        // Compare with a non-Recluse defiant governor
+        state.regions[0].governor.personality = GovernorPersonality::Hardliner;
+        assert!((state.regions[0].policy_effectiveness() - GOVERNOR_DEFIANCE_EFFECTIVENESS).abs() < 0.001,
+            "Non-Recluse defiant governor should use standard effectiveness");
     }
 
     #[test]
