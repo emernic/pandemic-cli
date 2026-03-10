@@ -866,7 +866,6 @@ pub struct Resources {
     pub last_funding_warning_tick: u64,
 }
 
-impl Resources {}
 
 /// Regional traits that make each region play differently.
 /// Each region has 1-2 traits that modify policy costs, spread rates, or resilience.
