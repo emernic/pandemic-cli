@@ -506,10 +506,11 @@ pub struct RegionPolicy {
 ///   0 = Travel Ban        5 = Basic Screening     8 = Martial Law
 ///   1 = Quarantine         6 = Antigen Screening   9 = Nuclear Annihilation
 ///   2 = Hospital Surge     7 = Mass Rapid Screen  10 = Field Hospital
-///   3 = Border Controls
+///   3 = Border Controls   11 = Intel Station
 ///   4 = Water Sanitation
 ///
-/// Display position equals policy_idx. If you add a new policy, you must update:
+/// Display position is determined by `policy_display_order()` (sorted by POL threshold).
+/// If you add a new policy, you must update:
 ///   - POLICY_COUNT and POLICY_POL_THRESHOLDS (this file)
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
@@ -548,7 +549,7 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.15, // Mass Rapid Screening — mandatory mass testing, needs political will
     0.40, // Martial Law — drastic, needs high political will
     0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
-    0.15, // Field Hospital — institutional build, needs authority (especially per user)
+    0.15, // Field Hospital — institutional build, needs political authority
     0.00, // Intel Station — always available, encourages early investment
 ];
 
