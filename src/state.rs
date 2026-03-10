@@ -217,6 +217,42 @@ pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0007;
 /// Maximum number of simultaneous diseases.
 pub const MAX_DISEASES: usize = 5;
 
+/// Build a weighted pool of pathogen types based on game day.
+/// Early game favors RNA viruses and bacteria (common, treatable).
+/// Late game shifts toward fungi and prions (rare, deadly).
+/// The transition is gradual — no sharp cutoffs.
+fn pathogen_type_pool(day: f64, rng: &mut ChaCha8Rng) -> Vec<PathogenType> {
+    // Progression factor: 0.0 at day 0, ~1.0 at day 25, capped at 1.0
+    let progression = (day / 25.0).min(1.0);
+
+    // Repeat counts in the pool determine relative probability.
+    // Early (progression=0): RNA×3, Bact×3, DNA×1, Fungus×1 = 8 entries
+    // Late  (progression=1): RNA×1, Bact×1, DNA×2, Fungus×3 = 7 entries + prion chance
+    let rna_weight = lerp_round(3.0, 1.0, progression);
+    let bact_weight = lerp_round(3.0, 1.0, progression);
+    let dna_weight = lerp_round(1.0, 2.0, progression);
+    let fungus_weight = lerp_round(1.0, 3.0, progression);
+
+    let mut types = Vec::new();
+    for _ in 0..rna_weight { types.push(PathogenType::RnaVirus); }
+    for _ in 0..bact_weight { types.push(PathogenType::Bacterium); }
+    for _ in 0..dna_weight { types.push(PathogenType::DnaVirus); }
+    for _ in 0..fungus_weight { types.push(PathogenType::Fungus); }
+
+    // Prion chance rises from 5% early to 25% late
+    let prion_chance = 0.05 + 0.20 * progression;
+    if rng.r#gen::<f64>() < prion_chance {
+        types.push(PathogenType::Prion);
+    }
+
+    types
+}
+
+/// Linear interpolation rounded to nearest integer (at least 1).
+fn lerp_round(start: f64, end: f64, t: f64) -> usize {
+    (start + (end - start) * t).round().max(1.0) as usize
+}
+
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 3.0;
 /// Per-tick cost for each personnel on the roster (busy or idle).
@@ -4183,7 +4219,10 @@ impl GameState {
             return None;
         }
 
-        // Pick a pathogen type (weighted: prions rare).
+        // Pick a pathogen type. Distribution shifts as the game progresses:
+        // Early (day 0-10): mostly RNA viruses and bacteria (natural outbreaks)
+        // Mid (day 10-25): balanced across all types
+        // Late (day 25+): skews toward fungi and prions (deadlier, harder to treat)
         // Enforce diversity: no type appears more than twice among active diseases.
         let mut type_counts = HashMap::new();
         for (i, d) in self.diseases.iter().enumerate() {
@@ -4191,17 +4230,8 @@ impl GameState {
             if recycle_idx == Some(i) { continue; }
             *type_counts.entry(d.pathogen_type).or_insert(0usize) += 1;
         }
-        let mut types = vec![
-            PathogenType::RnaVirus,
-            PathogenType::RnaVirus,
-            PathogenType::DnaVirus,
-            PathogenType::Bacterium,
-            PathogenType::Bacterium,
-            PathogenType::Fungus,
-        ];
-        if rng.r#gen::<f64>() < 0.15 {
-            types.push(PathogenType::Prion);
-        }
+        let day = self.tick as f64 / TICKS_PER_DAY;
+        let mut types = pathogen_type_pool(day, rng);
         types.retain(|t| type_counts.get(t).copied().unwrap_or(0) < 2);
         // Fallback: if all types are saturated, allow any type
         if types.is_empty() {
