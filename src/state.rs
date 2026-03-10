@@ -362,20 +362,48 @@ pub const COUNTERMEASURE_KILL_FRACTION: f64 = 0.10;
 pub const COUNTERMEASURE_INFECTIVITY_MULT: f64 = 0.50;
 /// Emergency Countermeasure: cross-region spread multiplier applied to all diseases.
 pub const COUNTERMEASURE_SPREAD_MULT: f64 = 0.25;
-/// Per-tick cost for each screening level.
-pub const SCREENING_BASIC_COST: f64 = 0.2;
-pub const SCREENING_ANTIGEN_COST: f64 = 0.5;
-pub const SCREENING_MASS_RAPID_COST: f64 = 1.0;
+/// Per-tick cost for each screening level (halved from original — screening
+/// is now genuinely useful since it provides real fog-of-war rather than
+/// a transparent multiplier).
+pub const SCREENING_BASIC_COST: f64 = 0.1;
+pub const SCREENING_ANTIGEN_COST: f64 = 0.25;
+pub const SCREENING_MASS_RAPID_COST: f64 = 0.5;
+
+/// Screening ramp-up rate per tick. At ~0.004/tick, full progress takes
+/// ~250 ticks ≈ 2.1 days. This prevents the toggle-peek exploit.
+pub const SCREENING_RAMP_RATE: f64 = 0.004;
+/// Screening decay rate when disabled. Decays ~2x faster than build-up.
+pub const SCREENING_DECAY_RATE: f64 = 0.008;
 
 impl ScreeningLevel {
-    /// Fraction of actual infections visible to the player.
-    /// Without screening, only ~15% of cases are reported organically.
+    /// Theoretical accuracy at full screening progress. Used for UI indicators
+    /// (`~` prefix) and to describe the tier's eventual capability, NOT as a
+    /// direct multiplier on infected counts. Actual displayed values use the
+    /// convergence-based estimation system.
     pub fn visibility_rate(&self) -> f64 {
         match self {
             ScreeningLevel::None => 0.15,
             ScreeningLevel::Basic => 0.40,
             ScreeningLevel::Antigen => 0.75,
             ScreeningLevel::MassRapid => 0.95,
+        }
+    }
+
+    /// Per-tick convergence rate for the infected estimate toward ground truth.
+    /// Higher = faster tracking. At None, the estimate is always significantly
+    /// behind reality (creating genuine fog of war). At MassRapid, near real-time.
+    ///
+    /// Steady-state accuracy vs a disease doubling every 3 days:
+    ///   None:      ~25% of real (very foggy)
+    ///   Basic:     ~60% of real (rough idea)
+    ///   Antigen:   ~90% of real (good tracking)
+    ///   MassRapid: ~99% of real (near-perfect)
+    pub fn convergence_rate(&self) -> f64 {
+        match self {
+            ScreeningLevel::None => 0.0007,     // Estimate lags badly behind exponential growth
+            ScreeningLevel::Basic => 0.003,      // Rough tracking — still significantly behind
+            ScreeningLevel::Antigen => 0.02,     // Good tracking, slight lag on fast growth
+            ScreeningLevel::MassRapid => 0.15,   // Near real-time
         }
     }
 
@@ -457,6 +485,11 @@ pub struct RegionPolicy {
     /// are visible to the player and how quickly new diseases are detected.
     #[serde(default)]
     pub screening: ScreeningLevel,
+    /// Progress of screening infrastructure build-up (0.0 to 1.0).
+    /// Ramps up over ~2 days when screening is active; decays when off.
+    /// Prevents toggle-peek exploit: instant on/off gives no benefit.
+    #[serde(default)]
+    pub screening_progress: f64,
     /// Reduces collapse threshold by 15 percentage points. Must be enacted
     /// before collapse — cleared when region collapses like all other policies.
     #[serde(default)]
@@ -1293,6 +1326,12 @@ pub struct Region {
     /// Multiple collapses extend the duration (last-collapse-wins on end tick).
     #[serde(default)]
     pub disrupted_until: Option<u64>,
+    /// Estimated total infected (from detected diseases) visible to the player.
+    /// This is a lagged estimate — not a simple multiplier of real values.
+    /// Updated each tick by convergence toward reality; convergence rate depends
+    /// on screening level and screening_progress. Creates genuine fog of war.
+    #[serde(default)]
+    pub estimated_infected: f64,
     /// Cached recent death rate (deaths per day), updated once per day
     /// by the tick function. Used for the time-to-collapse estimate.
     #[serde(skip)]
@@ -1445,11 +1484,12 @@ impl Region {
             .sum()
     }
 
-    /// Screened infection count: actual detected infections × visibility rate.
-    /// This is what the player sees — imperfect surveillance means not all
-    /// cases are reported.
-    pub fn screened_infected(&self, diseases: &[Disease], visibility: f64) -> f64 {
-        self.detected_infected(diseases) * visibility
+    /// Screened infection count: the player's estimated total infected for this region.
+    /// This is a lagged, convergence-based estimate — NOT a simple multiplier.
+    /// The `_diseases` and `_visibility` args are kept for call-site compatibility
+    /// but ignored; the estimate is maintained by tick_screening() in the engine.
+    pub fn screened_infected(&self, _diseases: &[Disease], _visibility: f64) -> f64 {
+        self.estimated_infected
     }
 
     /// Total dead from detected diseases only (for UI display).
@@ -4287,6 +4327,7 @@ impl GameState {
                 civil_order: 1.0,
                 emergency_response_until: None,
                 disrupted_until: None,
+                estimated_infected: 0.0,
             },
             Region {
                 name: "South America".into(),
@@ -4321,6 +4362,7 @@ impl GameState {
                 civil_order: 1.0,
                 emergency_response_until: None,
                 disrupted_until: None,
+                estimated_infected: 0.0,
             },
             Region {
                 name: "Europe".into(),
@@ -4355,6 +4397,7 @@ impl GameState {
                 civil_order: 1.0,
                 emergency_response_until: None,
                 disrupted_until: None,
+                estimated_infected: 0.0,
             },
             Region {
                 name: "Africa".into(),
@@ -4389,6 +4432,7 @@ impl GameState {
                 civil_order: 1.0,
                 emergency_response_until: None,
                 disrupted_until: None,
+                estimated_infected: 0.0,
             },
             Region {
                 name: "Asia".into(),
@@ -4423,6 +4467,7 @@ impl GameState {
                 civil_order: 1.0,
                 emergency_response_until: None,
                 disrupted_until: None,
+                estimated_infected: 0.0,
             },
             Region {
                 name: "Oceania".into(),
@@ -4457,6 +4502,7 @@ impl GameState {
                 civil_order: 1.0,
                 emergency_response_until: None,
                 disrupted_until: None,
+                estimated_infected: 0.0,
             },
         ];
 
@@ -4690,29 +4736,29 @@ impl GameState {
     }
 
     /// Total screened infections across all regions — what the player sees.
-    /// Each region's infections are scaled by that region's screening visibility rate.
+    /// Uses the convergence-based estimated_infected per region.
     pub fn total_infected_screened(&self) -> f64 {
-        self.regions.iter().enumerate()
-            .map(|(i, r)| {
-                let vis = self.policies.get(i)
-                    .map(|p| p.screening.visibility_rate())
-                    .unwrap_or(ScreeningLevel::None.visibility_rate());
-                r.screened_infected(&self.diseases, vis)
-            })
+        self.regions.iter()
+            .map(|r| r.estimated_infected)
             .sum()
     }
 
-    /// Screening visibility rate for a specific region.
+    /// Effective screening visibility for a specific region, accounting for
+    /// screening_progress ramp-up. Returns 0.15 (base) when no screening or
+    /// screening just enabled, up to the tier's max at full progress.
     pub fn screening_visibility(&self, region_idx: usize) -> f64 {
-        self.policies.get(region_idx)
-            .map(|p| p.screening.visibility_rate())
-            .unwrap_or(ScreeningLevel::None.visibility_rate())
+        let (level_vis, progress) = self.policies.get(region_idx)
+            .map(|p| (p.screening.visibility_rate(), p.screening_progress))
+            .unwrap_or((0.15, 0.0));
+        let base = ScreeningLevel::None.visibility_rate();
+        base + (level_vis - base) * progress
     }
 
     /// Whether the screening level in a region reveals immune data.
+    /// Requires both an Antigen+ tier AND meaningful ramp-up progress (>50%).
     pub fn screening_shows_immune(&self, region_idx: usize) -> bool {
         self.policies.get(region_idx)
-            .map(|p| p.screening.shows_immune())
+            .map(|p| p.screening.shows_immune() && p.screening_progress > 0.5)
             .unwrap_or(false)
     }
 
@@ -4725,6 +4771,21 @@ impl GameState {
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
             .unwrap_or_default()
+    }
+
+    /// Effective detection multiplier accounting for screening progress.
+    /// Blends between None (1.0) and the best tier's multiplier based on progress.
+    /// Lower value = detects earlier.
+    pub fn effective_detection_multiplier(&self) -> f64 {
+        let base = ScreeningLevel::None.detection_multiplier(); // 1.0
+        self.policies.iter()
+            .map(|p| {
+                let level = p.screening.detection_multiplier();
+                // Interpolate: 1.0 at progress=0, level_mult at progress=1
+                base + (level - base) * p.screening_progress
+            })
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or(base)
     }
 
     /// Total dead from detected diseases plus post-collapse secondary deaths (for UI display).

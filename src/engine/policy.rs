@@ -20,7 +20,8 @@ use crate::state::{
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
     QUARANTINE_PERSONNEL,
-    TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL,
+    SCREENING_DECAY_RATE, SCREENING_RAMP_RATE,
+    TRAVEL_BAN_PERSONNEL,
     WATER_SANITATION_PERSONNEL,
 };
 
@@ -173,9 +174,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 if effective_available >= needed {
                     state.policies[region_idx].screening = target;
                     let tier_desc = match target {
-                        ScreeningLevel::Basic => "rough infected estimates, faster detection",
-                        ScreeningLevel::Antigen => "infected + immune counts, improved accuracy",
-                        ScreeningLevel::MassRapid => "near-complete data, 25% spread reduction",
+                        ScreeningLevel::Basic => "rough estimates, faster detection — ramps up over ~2 days",
+                        ScreeningLevel::Antigen => "infected + immune data, good accuracy — ramps up over ~2 days",
+                        ScreeningLevel::MassRapid => "near-complete data, 25% spread reduction — ramps up over ~2 days",
                         ScreeningLevel::None => unreachable!(),
                     };
                     (Some(format!("{region_name}: {} screening active ({tier_desc})",
@@ -897,6 +898,41 @@ pub(super) fn tick_standing_orders(state: &mut GameState) {
     }
 }
 
+/// Update screening infrastructure progress and estimated infection counts.
+///
+/// Each tick:
+/// 1. Ramp screening_progress up/down based on whether screening is active.
+/// 2. Converge each region's estimated_infected toward real detected infected.
+///    Convergence rate depends on screening level and progress — without screening,
+///    the estimate lags days behind reality (genuine fog of war). With Mass Rapid
+///    at full progress, it tracks near-real-time.
+pub(super) fn tick_screening(state: &mut GameState) {
+    let none_rate = ScreeningLevel::None.convergence_rate();
+
+    for i in 0..state.regions.len() {
+        // Update screening progress
+        let screening = state.policies[i].screening;
+        let progress = if screening != ScreeningLevel::None {
+            (state.policies[i].screening_progress + SCREENING_RAMP_RATE).min(1.0)
+        } else {
+            (state.policies[i].screening_progress - SCREENING_DECAY_RATE).max(0.0)
+        };
+        state.policies[i].screening_progress = progress;
+
+        // Compute effective convergence rate
+        let level_rate = screening.convergence_rate();
+        let effective_rate = none_rate + (level_rate - none_rate) * progress;
+
+        // Get real detected infected for this region
+        let real = state.regions[i].detected_infected(&state.diseases);
+
+        // Converge estimate toward reality
+        let estimated = state.regions[i].estimated_infected;
+        let delta = real - estimated;
+        state.regions[i].estimated_infected = (estimated + delta * effective_rate).max(0.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1024,10 +1060,11 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Place undetected disease just below the screening-reduced threshold
         state.diseases[0].detected = false;
-        // High screening: threshold = 10,000 * 0.2 = 2,000
+        // High screening at full progress: threshold = 10,000 * 0.15 = 1,500
         state.policies[0].screening = ScreeningLevel::MassRapid;
+        state.policies[0].screening_progress = 1.0;
         state.resources.funding = 10_000.0;
-        // Set infections to 2,500 (above 2,000 threshold but below 10,000 default)
+        // Set infections to 2,500 (above 1,500 threshold but below 10,000 default)
         state.regions[0].get_or_create_infection(0).infected = 2_500.0;
         // Clear other regions so total is just 2,500
         for r in &mut state.regions[1..] { r.infections.clear(); }
@@ -1045,26 +1082,64 @@ mod tests {
     }
 
     #[test]
-    fn screening_visibility_scales_reported_infections() {
+    fn screening_convergence_tracks_reality_faster_with_higher_tier() {
         let mut state = screening_test_state();
         // Set a known infection level
         state.regions[0].get_or_create_infection(0).infected = 100_000.0;
+        state.regions[0].estimated_infected = 0.0; // start with no estimate
 
-        // Without screening: visibility = 15%
-        let screened_none = state.total_infected_screened();
+        // Run 120 ticks (~1 day) with no screening — estimate converges slowly
+        for _ in 0..120 {
+            tick_screening(&mut state);
+        }
+        let estimate_no_screening = state.regions[0].estimated_infected;
 
-        // With High screening on region 0: visibility = 90%
+        // Reset and run with Mass Rapid at full progress — converges fast
+        let mut state2 = screening_test_state();
+        state2.regions[0].get_or_create_infection(0).infected = 100_000.0;
+        state2.regions[0].estimated_infected = 0.0;
+        state2.policies[0].screening = ScreeningLevel::MassRapid;
+        state2.policies[0].screening_progress = 1.0; // fully ramped up
+        for _ in 0..120 {
+            tick_screening(&mut state2);
+        }
+        let estimate_mass_rapid = state2.regions[0].estimated_infected;
+
+        assert!(estimate_mass_rapid > estimate_no_screening,
+            "Mass Rapid screening should give a higher estimate after 1 day: {estimate_mass_rapid:.0} vs {estimate_no_screening:.0}");
+
+        // Mass Rapid should be very close to reality (100K) — convergence rate 0.15
+        assert!(estimate_mass_rapid > 99_000.0,
+            "Mass Rapid at full progress should be near-perfect after 1 day: {estimate_mass_rapid:.0}");
+
+        // No screening should be far behind — convergence rate 0.0007 means
+        // after 120 ticks: 1 - 0.9993^120 ≈ 8.1% of reality
+        assert!(estimate_no_screening < 20_000.0,
+            "No screening should lag far behind reality: {estimate_no_screening:.0}");
+    }
+
+    #[test]
+    fn screening_rampup_prevents_peek_exploit() {
+        // Toggling screening on for a single tick should give negligible benefit
+        let mut state = screening_test_state();
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
+        state.regions[0].estimated_infected = 0.0;
+
+        // Enable Mass Rapid screening for 1 tick (the "peek" exploit)
         state.policies[0].screening = ScreeningLevel::MassRapid;
-        let screened_high = state.total_infected_screened();
+        tick_screening(&mut state);
+        let after_peek = state.regions[0].estimated_infected;
 
-        assert!(screened_high > screened_none,
-            "High screening should show more infections: {screened_high:.0} vs {screened_none:.0}");
+        // Disable it immediately
+        state.policies[0].screening = ScreeningLevel::None;
+        tick_screening(&mut state);
 
-        // Region 0's contribution should be roughly 90%/15% = 6x higher
-        let ratio = screened_high / screened_none;
-        // Not exactly 6x because other regions contribute too, but should be meaningfully higher
-        assert!(ratio > 2.0,
-            "screening should substantially increase visible infections (ratio: {ratio:.1}x)");
+        // The estimate should be nearly zero — ramp-up prevents instant benefit
+        assert!(after_peek < 1000.0,
+            "Single-tick peek should give negligible info: {after_peek:.0}");
+        // Progress should be near-zero
+        assert!(state.policies[0].screening_progress < 0.01,
+            "Progress should decay when screening disabled");
     }
 
     #[test]

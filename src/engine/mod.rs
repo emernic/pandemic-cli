@@ -67,6 +67,11 @@ pub fn tick(state: &GameState) -> GameState {
     // Standing orders — auto-enable policies when severity thresholds are crossed.
     policy::tick_standing_orders(&mut new);
 
+    // Screening infrastructure — update progress ramp-up and estimated infection counts.
+    // Must run after spread (so real values are current) and after policy costs
+    // (so suspended screening is reflected).
+    policy::tick_screening(&mut new);
+
     // Funding contracts — check conditions (revoke violators), offer new contracts.
     contracts::tick_check_contracts(&mut new);
     contracts::tick_offer_contracts(&mut new, &mut rng);
@@ -175,7 +180,7 @@ pub fn tick(state: &GameState) -> GameState {
     //    the disease is detected early. Thresholds: Basic=3,000, Advanced=1,000.
     {
         let global_threshold = crate::state::DETECTION_THRESHOLD
-            * new.best_screening_level().detection_multiplier();
+            * new.effective_detection_multiplier();
         for disease_idx in 0..new.diseases.len() {
             if new.diseases[disease_idx].detected {
                 continue;

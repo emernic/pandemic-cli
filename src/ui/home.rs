@@ -407,15 +407,16 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         let name = disease.display_name(i);
-        let total_inf: f64 = state.regions.iter().enumerate()
-            .map(|(ri, r)| {
-                let vis = state.screening_visibility(ri);
-                r.infections.iter()
-                    .filter(|inf| inf.disease_idx == i)
-                    .map(|inf| inf.infected * vis)
-                    .sum::<f64>()
-            })
-            .sum();
+        // Distribute each region's total estimate proportionally across diseases
+        let total_inf: f64 = state.regions.iter().map(|r| {
+            let total_real = r.detected_infected(&state.diseases);
+            if total_real <= 0.0 { return 0.0; }
+            let this_disease: f64 = r.infections.iter()
+                .filter(|inf| inf.disease_idx == i)
+                .map(|inf| inf.infected)
+                .sum();
+            r.estimated_infected * (this_disease / total_real)
+        }).sum();
 
         let severity_color = if total_inf > SEVERITY_CRIT_THRESHOLD { Color::Red }
             else if total_inf > SEVERITY_HIGH_THRESHOLD { Color::Yellow }
