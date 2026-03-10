@@ -228,7 +228,13 @@ fn render_region_box(
         ("OK", Color::DarkGray)
     };
 
-    let name_style = if selected {
+    // Collapsed (but not the Ark) = information blackout
+    let info_blackout = region.collapsed && !is_ark;
+
+    let name_style = if info_blackout {
+        // Greyed out — collapsed regions are information blackouts
+        Style::default().fg(Color::DarkGray)
+    } else if selected {
         Style::default()
             .fg(Color::White)
             .add_modifier(Modifier::BOLD)
@@ -262,7 +268,21 @@ fn render_region_box(
 
     // Line 2: Key stats
     if inner.height >= 2 {
-        if infected == 0.0 && dead == 0.0 {
+        if info_blackout {
+            // Information blackout: infected count unknown, only dead is visible
+            let mut stats = vec![
+                Span::styled("Inf ", Style::default().fg(Color::DarkGray)),
+                Span::styled("?", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            ];
+            if dead >= 0.5 {
+                stats.push(Span::styled("  Dead ", Style::default().fg(Color::DarkGray)));
+                stats.push(Span::styled(
+                    format_number(dead),
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+                ));
+            }
+            lines.push(Line::from(stats));
+        } else if infected == 0.0 && dead == 0.0 {
             lines.push(Line::from(Span::styled(
                 format!("Pop: {}", format_number(pop)),
                 Style::default().fg(Color::DarkGray),
@@ -319,10 +339,16 @@ fn render_region_box(
         }
         let sus_w = bar_w.saturating_sub(inf_w + imm_w + dead_w);
 
+        // Collapsed regions (not the Ark): all grey — information blackout, keep texture only
+        let (sus_color, inf_color, imm_color) = if info_blackout {
+            (Color::DarkGray, Color::DarkGray, Color::DarkGray)
+        } else {
+            (Color::Cyan, Color::Red, Color::Green)
+        };
         let segments: [(usize, Color, &str); 4] = [
-            (sus_w, Color::Cyan, "█"),
-            (inf_w, Color::Red, "▓"),
-            (imm_w, Color::Green, "▒"),
+            (sus_w, sus_color, "█"),
+            (inf_w, inf_color, "▓"),
+            (imm_w, imm_color, "▒"),
             (dead_w, Color::DarkGray, "░"),
         ];
 
@@ -336,7 +362,7 @@ fn render_region_box(
         let total: usize = segments.iter().map(|(w, _, _)| w).sum();
         if total < bar_w {
             let remaining = bar_w - total;
-            spans.push(Span::styled("█".repeat(remaining), Style::default().fg(Color::Cyan)));
+            spans.push(Span::styled("█".repeat(remaining), Style::default().fg(sus_color)));
         }
         lines.push(Line::from(spans));
 
@@ -396,7 +422,29 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Collapse banner
+    let is_ark = state.ark_protocol == Some(idx);
+
+    // Collapse banner — information blackout for non-Ark collapsed regions
+    if region.collapsed && !is_ark {
+        lines.push(Line::from(Span::styled(
+            "  ██ COLLAPSED ██",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+        // Only alive vs dead — all epidemiological data is unknown
+        lines.push(Line::from(vec![
+            Span::styled("Pop ", label),
+            Span::styled(format_number(pop), val),
+            Span::styled("  Alive ", label),
+            Span::styled(format_number(alive), Style::default().fg(Color::DarkGray)),
+            Span::styled("  Dead ", label),
+            Span::styled(format_number(dead), Style::default().fg(Color::DarkGray)),
+        ]));
+        let paragraph = Paragraph::new(lines);
+        f.render_widget(paragraph, inner);
+        return;
+    }
+
+    // Show COLLAPSED banner for Ark region too (but with full data below)
     if region.collapsed {
         lines.push(Line::from(Span::styled(
             "  ██ COLLAPSED ██",
