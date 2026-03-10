@@ -4091,11 +4091,13 @@ impl UiState {
             );
         } else if self.panel_selection < panel_max {
             self.panel_selection += 1;
+        } else {
+            self.panel_selection = 0;
         }
     }
 
     /// Navigate up (in map) or to the previous item (in a panel).
-    pub fn select_prev(&mut self, num_regions: usize) {
+    pub fn select_prev(&mut self, num_regions: usize, panel_max: usize) {
         if self.open_panel == Panel::None {
             self.map_selection = map_navigate(
                 self.map_selection,
@@ -4104,6 +4106,8 @@ impl UiState {
             );
         } else if self.panel_selection > 0 {
             self.panel_selection -= 1;
+        } else {
+            self.panel_selection = panel_max;
         }
     }
 
