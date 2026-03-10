@@ -533,6 +533,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (msg, success) = policy::appease_governor(state, *region_idx);
             CommandResult { message: msg, success, adverse: false }
         }
+        GameCommand::BargainWithGovernor { region_idx } => {
+            let (msg, success) = policy::bargain_with_governor(state, *region_idx);
+            CommandResult { message: msg, success, adverse: false }
+        }
     }
 }
 
@@ -541,7 +545,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{CrisisKind, DeployTarget, GameState, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
+    use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -4636,5 +4640,110 @@ mod tests {
         let (_, ok) = policy::enact_decree(&mut state, 0, None);
         assert!(ok, "decree should be available at DEFCON-4");
         assert!(state.enacted_decrees.conscript_researchers);
+    }
+
+    #[test]
+    fn bargain_nationalist_costs_personnel() {
+        let mut state = GameState::new_default(42);
+        // Make governor defiant
+        state.regions[0].governor.personality = GovernorPersonality::Nationalist;
+        state.regions[0].governor.loyalty = 20.0;
+        let initial_personnel = state.resources.personnel;
+        let initial_loyalty = state.regions[0].governor.loyalty;
+
+        let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(ok, "bargain should succeed");
+        assert!(msg.unwrap().contains("Regional Priority"));
+        assert_eq!(state.resources.personnel, initial_personnel - 2);
+        assert!(state.regions[0].governor.loyalty > initial_loyalty);
+    }
+
+    #[test]
+    fn bargain_populist_costs_pol() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.personality = GovernorPersonality::Populist;
+        state.regions[0].governor.loyalty = 20.0;
+        state.resources.political_power = 0.60;
+        let initial_pol = state.resources.political_power;
+
+        let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(ok, "bargain should succeed");
+        assert!(msg.unwrap().contains("Public Concession"));
+        assert!(state.resources.political_power < initial_pol);
+        // 15% of 0.60 = 0.09 lost
+        assert!((state.resources.political_power - 0.51).abs() < 0.01);
+    }
+
+    #[test]
+    fn bargain_technocrat_slows_research() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.personality = GovernorPersonality::Technocrat;
+        state.regions[0].governor.loyalty = 20.0;
+        // Set up active applied research
+        state.applied_research = Some(crate::state::ResearchProject {
+            kind: crate::state::ResearchKind::DevelopMedicine { medicine_idx: 0 },
+            progress: 0.0,
+            required_ticks: 500.0,
+            personnel_assigned: 1,
+            scientist_ids: vec![],
+        });
+
+        let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(ok, "bargain should succeed with active research");
+        assert!(msg.unwrap().contains("Research Oversight"));
+        assert_eq!(state.applied_research.as_ref().unwrap().required_ticks, 650.0);
+    }
+
+    #[test]
+    fn bargain_technocrat_fails_without_research() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.personality = GovernorPersonality::Technocrat;
+        state.regions[0].governor.loyalty = 20.0;
+        state.applied_research = None;
+
+        let (_, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(!ok, "bargain should fail without applied research");
+    }
+
+    #[test]
+    fn bargain_cooperative_drains_other_governors() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.personality = GovernorPersonality::Cooperative;
+        state.regions[0].governor.loyalty = 20.0;
+        // Record other governors' initial loyalty
+        let other_loyalties: Vec<f64> = state.regions[1..].iter()
+            .map(|r| r.governor.loyalty)
+            .collect();
+
+        let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(ok, "bargain should succeed");
+        assert!(msg.unwrap().contains("Joint Briefing"));
+        // Check other non-collapsed governors lost loyalty
+        for (i, &initial) in other_loyalties.iter().enumerate() {
+            let region = &state.regions[i + 1];
+            if !region.collapsed {
+                assert!(region.governor.loyalty < initial,
+                    "region {} should have lost loyalty", region.name);
+            }
+        }
+    }
+
+    #[test]
+    fn bargain_fails_when_not_defiant() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.loyalty = 60.0; // above defiance threshold
+        let (_, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(!ok, "bargain should fail when governor isn't defiant");
+    }
+
+    #[test]
+    fn bargain_nationalist_fails_without_personnel() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.personality = GovernorPersonality::Nationalist;
+        state.regions[0].governor.loyalty = 20.0;
+        state.resources.personnel = 1; // less than cost of 2
+
+        let (_, ok) = policy::bargain_with_governor(&mut state, 0);
+        assert!(!ok, "bargain should fail without enough personnel");
     }
 }

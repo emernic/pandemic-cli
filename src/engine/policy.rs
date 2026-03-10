@@ -2,6 +2,9 @@ use crate::state::{
     CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
     policy_display_name,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
+    BARGAIN_COOPERATIVE_LOYALTY_DRAIN, BARGAIN_LOYALTY_GAIN,
+    BARGAIN_NATIONALIST_PERSONNEL_COST, BARGAIN_POPULIST_POL_FRACTION,
+    BARGAIN_TECHNOCRAT_LOYALTY_GAIN, BARGAIN_TECHNOCRAT_RESEARCH_TICKS,
     BORDER_CONTROLS_PERSONNEL,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
@@ -335,6 +338,81 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
     let name = &state.regions[region_idx].governor.name;
     let loyalty = state.regions[region_idx].governor.loyalty;
     (Some(format!("{name} appeased — loyalty now {loyalty:.0} (-${APPEASE_COST:.0})")), true)
+}
+
+/// Personality-specific bargain with a defiant governor. Free in funding
+/// but costs something else depending on personality.
+pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+    if region_idx >= state.regions.len() {
+        return (None, false);
+    }
+    if state.regions[region_idx].collapsed {
+        let name = &state.regions[region_idx].name;
+        return (Some(format!("{name} has collapsed")), false);
+    }
+    if !state.regions[region_idx].governor.is_defiant() {
+        return (Some("Governor is not defiant — no bargain needed".into()), false);
+    }
+
+    let personality = state.regions[region_idx].governor.personality;
+    let gov_name = state.regions[region_idx].governor.name.clone();
+
+    match personality {
+        GovernorPersonality::Nationalist => {
+            let cost = BARGAIN_NATIONALIST_PERSONNEL_COST;
+            if state.resources.personnel < cost {
+                return (Some(format!("Not enough personnel (need {cost})")), false);
+            }
+            state.resources.personnel -= cost;
+            let gov = &mut state.regions[region_idx].governor;
+            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
+            let loyalty = state.regions[region_idx].governor.loyalty;
+            (Some(format!(
+                "{gov_name}: Regional Priority accepted — loyalty {loyalty:.0} (-{cost} personnel)"
+            )), true)
+        }
+        GovernorPersonality::Populist => {
+            let pol_loss = state.resources.political_power * BARGAIN_POPULIST_POL_FRACTION;
+            state.resources.political_power -= pol_loss;
+            let gov = &mut state.regions[region_idx].governor;
+            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
+            let loyalty = state.regions[region_idx].governor.loyalty;
+            (Some(format!(
+                "{gov_name}: Public Concession accepted — loyalty {loyalty:.0} (-{:.0}% POL)",
+                BARGAIN_POPULIST_POL_FRACTION * 100.0
+            )), true)
+        }
+        GovernorPersonality::Technocrat => {
+            if let Some(ref mut project) = state.applied_research {
+                project.required_ticks += BARGAIN_TECHNOCRAT_RESEARCH_TICKS;
+                let gov = &mut state.regions[region_idx].governor;
+                gov.loyalty = (gov.loyalty + BARGAIN_TECHNOCRAT_LOYALTY_GAIN).min(100.0);
+                let loyalty = state.regions[region_idx].governor.loyalty;
+                let delay_days = BARGAIN_TECHNOCRAT_RESEARCH_TICKS / TICKS_PER_DAY;
+                (Some(format!(
+                    "{gov_name}: Research Oversight accepted — loyalty {loyalty:.0} (+{delay_days:.1} day delay to applied research)"
+                )), true)
+            } else {
+                (Some("No active applied research — bargain unavailable".into()), false)
+            }
+        }
+        GovernorPersonality::Cooperative => {
+            // Drain loyalty from all other non-collapsed governors
+            for (i, region) in state.regions.iter_mut().enumerate() {
+                if i != region_idx && !region.collapsed {
+                    region.governor.loyalty =
+                        (region.governor.loyalty - BARGAIN_COOPERATIVE_LOYALTY_DRAIN).max(0.0);
+                }
+            }
+            let gov = &mut state.regions[region_idx].governor;
+            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
+            let loyalty = state.regions[region_idx].governor.loyalty;
+            (Some(format!(
+                "{gov_name}: Joint Briefing accepted — loyalty {loyalty:.0} (other governors -{:.0} loyalty)",
+                BARGAIN_COOPERATIVE_LOYALTY_DRAIN
+            )), true)
+        }
+    }
 }
 
 /// Tick governor loyalty drift. Called once per tick from tick().

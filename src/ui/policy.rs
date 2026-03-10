@@ -26,6 +26,10 @@ use crate::state::{
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
     POLICY_COUNT, APPEASE_COST, APPEASE_LOYALTY_GAIN,
+    BARGAIN_LOYALTY_GAIN, BARGAIN_TECHNOCRAT_LOYALTY_GAIN,
+    BARGAIN_NATIONALIST_PERSONNEL_COST, BARGAIN_POPULIST_POL_FRACTION,
+    BARGAIN_TECHNOCRAT_RESEARCH_TICKS, BARGAIN_COOPERATIVE_LOYALTY_DRAIN,
+    GovernorPersonality,
 };
 use crate::ui::hint_line;
 use crate::format_number;
@@ -578,6 +582,62 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             ),
         ]));
         lines.push(Line::from(""));
+
+        // Bargain option (below Appease, only when governor is defiant and bargain available)
+        if state.bargain_available(region_idx) {
+            let bargain_pos = POLICY_COUNT + 1;
+            let selected = state.ui.panel_selection == bargain_pos;
+            if selected { selected_line = Some(lines.len()); }
+            let marker = if selected { "▶ " } else { "  " };
+            let name_style = if selected {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Cyan)
+            };
+
+            let (bargain_name, cost_desc, loyalty_gain) = match gov.personality {
+                GovernorPersonality::Nationalist => (
+                    "Regional Priority",
+                    format!("-{} personnel", BARGAIN_NATIONALIST_PERSONNEL_COST),
+                    BARGAIN_LOYALTY_GAIN,
+                ),
+                GovernorPersonality::Populist => (
+                    "Public Concession",
+                    format!("-{:.0}% POL", BARGAIN_POPULIST_POL_FRACTION * 100.0),
+                    BARGAIN_LOYALTY_GAIN,
+                ),
+                GovernorPersonality::Technocrat => (
+                    "Research Oversight",
+                    format!("+{:.1} day delay to applied research", BARGAIN_TECHNOCRAT_RESEARCH_TICKS / TICKS_PER_DAY),
+                    BARGAIN_TECHNOCRAT_LOYALTY_GAIN,
+                ),
+                GovernorPersonality::Cooperative => (
+                    "Joint Briefing",
+                    format!("-{:.0} loyalty to other governors", BARGAIN_COOPERATIVE_LOYALTY_DRAIN),
+                    BARGAIN_LOYALTY_GAIN,
+                ),
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled(marker.to_string(), name_style),
+                Span::styled(
+                    format!("Bargain: {} ", bargain_name),
+                    name_style,
+                ),
+                Span::styled(
+                    "(DEFIANT)",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(
+                    format!("Cost: {}  →  +{:.0} loyalty", cost_desc, loyalty_gain),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]));
+            lines.push(Line::from(""));
+        }
     }
 
     lines.push(hint_line(state, "Toggle", "Back"));
