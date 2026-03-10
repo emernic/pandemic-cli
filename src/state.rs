@@ -352,6 +352,12 @@ pub enum ScreeningLevel {
 
 // Emergency Decree constants — permanent, irreversible global decisions.
 pub const DECREE_COUNT: usize = 6;
+/// Number of standing orders shown in the Policy panel BrowseRegions view.
+/// Must equal the length of the `standing_orders` array in `ui/policy.rs`.
+/// Used by `panel_selection_max()` to bound navigation — if you add a standing
+/// order in policy.rs without updating this constant, the new item will be
+/// silently unreachable via keyboard navigation.
+pub const STANDING_ORDER_COUNT: usize = 2;
 /// Conscript Researchers: immediately gain personnel, permanent income penalty.
 pub const CONSCRIPT_PERSONNEL_GAIN: u32 = 10;
 /// Per-tick income penalty for Conscript Researchers ($50/day = 0.417/tick).
@@ -1423,6 +1429,12 @@ pub const OP_CIVIL_RESILIENCE: f64 = 0.25; // +25% degradation resistance per de
 
 /// Maximum resilience bonus from infrastructure investment (caps stacking).
 pub const MAX_INFRA_RESILIENCE: f64 = 0.75; // 75% max degradation reduction
+
+/// Number of deployable field operation types (Recon, Emergency, Survey, Supply, Civil).
+/// Must equal the number of match arms in `handle_operations_confirm()` (state.rs) and
+/// the length of the `ops` array in `ui/operations.rs`. If you add a new op type,
+/// update this constant — otherwise `panel_selection_max()` will make the new type unreachable.
+pub const FIELD_OP_TYPE_COUNT: usize = 5;
 
 /// What kind of field operation is being conducted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -2802,6 +2814,13 @@ pub enum ResearchTrack {
     Basic,
 }
 
+/// Number of research track categories (Field, Applied, Basic).
+/// The "Upgrade Lab" item in BrowseCategories is always rendered AFTER these tracks
+/// at index `RESEARCH_TRACK_COUNT`. Both `panel_selection_max()` (state.rs) and
+/// the BrowseCategories renderer (ui/research.rs) use this constant — if you add a
+/// fourth track, update this constant and both dependent sites together.
+pub const RESEARCH_TRACK_COUNT: usize = 3;
+
 impl ResearchTrack {
     pub fn index(self) -> usize {
         match self {
@@ -3729,10 +3748,24 @@ pub enum OpsUiState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
-    /// Generic list index — "which item is selected in the current view."
-    /// Meaning depends on the active panel and wizard step (e.g., medicine index,
-    /// region index, policy index). Always bounded by `panel_selection_max()` and
-    /// reset to 0 on every wizard step transition.
+    /// Generic list cursor — index of the selected item in the current panel view.
+    /// Semantics depend on `open_panel` + the active sub-state (medicine_ui, research_ui, etc.):
+    ///
+    /// - `Panel::Medicines / BrowseMedicines` → index into unlocked medicines
+    /// - `Panel::Medicines / SelectRegion`    → index into grid_reading_order(regions)
+    /// - `Panel::Medicines / SelectDisease`   → index into deployable_diseases list
+    /// - `Panel::Medicines / SelectTarget`    → 0 = Vaccinate, 1 = Treat
+    /// - `Panel::Research / BrowseCategories` → 0..RESEARCH_TRACK_COUNT-1 = track, RESEARCH_TRACK_COUNT = UpgradeLab
+    /// - `Panel::Research / BrowseProjects`   → index into [active projects, then available projects]
+    /// - `Panel::Policy / BrowseRegions`      → 0..regions = region, then decrees, then standing orders
+    /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
+    /// - `Panel::Operations / BrowseOps`      → 0..n_active = active op, then 0..FIELD_OP_TYPE_COUNT = op types
+    ///
+    /// Always bounded by `panel_selection_max()` and reset to 0 on every wizard step transition.
+    ///
+    /// **Adding items to a panel list:** update the corresponding `panel_selection_max()` branch.
+    /// Named constants (RESEARCH_TRACK_COUNT, STANDING_ORDER_COUNT, FIELD_OP_TYPE_COUNT, MANAGE_*)
+    /// tie the max calculation to the renderer so changes propagate correctly.
     pub panel_selection: usize,
     #[serde(default)]
     pub medicine_ui: Option<MedicineUiState>,
@@ -3974,7 +4007,7 @@ impl UiState {
                 | None => 0,
             },
             Panel::Research => match &self.research_ui {
-                Some(ResearchUiState::BrowseCategories) => 3, // Field, Applied, Basic, Upgrade Lab
+                Some(ResearchUiState::BrowseCategories) => RESEARCH_TRACK_COUNT, // Field(0), Applied(1), Basic(2), UpgradeLab(RESEARCH_TRACK_COUNT)
                 Some(ResearchUiState::BrowseProjects { track }) => {
                     if *track == ResearchTrack::Field {
                         // Active projects + available projects (if capacity remains)
@@ -4000,8 +4033,8 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions, decrees, standing orders (2 items)
-                    state.regions.len() + DECREE_COUNT + 2 - 1
+                    // Items: 0..regions-1 = regions, decrees, standing orders (STANDING_ORDER_COUNT items)
+                    state.regions.len() + DECREE_COUNT + STANDING_ORDER_COUNT - 1
                 }
                 // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
@@ -4022,8 +4055,8 @@ impl UiState {
             },
             Panel::Operations => match &self.operations_ui {
                 Some(OpsUiState::BrowseOps) => {
-                    // Active ops + 5 operation types
-                    (state.field_operations.len() + 5).saturating_sub(1)
+                    // Active ops + FIELD_OP_TYPE_COUNT operation types
+                    (state.field_operations.len() + FIELD_OP_TYPE_COUNT).saturating_sub(1)
                 }
                 Some(OpsUiState::SelectReconTarget) => {
                     // Unidentified diseases
@@ -4275,8 +4308,8 @@ impl UiState {
     fn handle_research_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
         match self.research_ui.clone() {
             Some(ResearchUiState::BrowseCategories) => {
-                if self.panel_selection == 3 {
-                    // Upgrade Lab
+                if self.panel_selection == RESEARCH_TRACK_COUNT {
+                    // Upgrade Lab (always at index RESEARCH_TRACK_COUNT, after Field/Applied/Basic)
                     return Some(GameCommand::UpgradeLab);
                 }
                 let track = match self.panel_selection {

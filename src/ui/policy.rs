@@ -21,7 +21,7 @@ use crate::state::{
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     grid_reading_order, POLICY_POL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
-    DECREE_COUNT, decree_unlocked,
+    DECREE_COUNT, STANDING_ORDER_COUNT, decree_unlocked,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
@@ -328,6 +328,11 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             "Auto-enable Travel Ban when region exceeds 100K infected",
         ),
     ];
+    // COUPLING CHECK: must equal STANDING_ORDER_COUNT in state.rs, which bounds navigation.
+    // If you add a standing order here, also increment STANDING_ORDER_COUNT — otherwise
+    // the new entry will be silently unreachable via keyboard.
+    debug_assert_eq!(standing_orders.len(), STANDING_ORDER_COUNT,
+        "standing_orders array length must equal STANDING_ORDER_COUNT");
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(

@@ -118,6 +118,25 @@ There are two distinct pipelines for player-visible messages, each serving a dif
 
 This is intentional. Command handlers have the context needed to compose feedback (amounts, names, reasons) and the messages are simple enough that structured result types would add boilerplate without functional benefit. The convention is: new tick events → `GameEvent` variant + `process_events()` handler. New commands → return `(success, Option<String>)` from the handler.
 
+## Panel Selection Convention
+
+`UiState.panel_selection` is a **shared generic cursor** — a single `usize` that means different things depending on the active panel and wizard substate. This is a deliberate design choice (not a hack), but it creates coupling that must be actively managed.
+
+**How it works:** Each panel+substate combination treats `panel_selection` as an index into its own list. The system is safe because:
+1. `panel_selection` is reset to `0` on every wizard step transition
+2. `panel_selection_max()` bounds it correctly for each panel+substate combination
+3. Renderers and confirm handlers both read `panel_selection` in their own context and MUST agree on the index mapping
+
+**Named constants that tie the pieces together:**
+- `RESEARCH_TRACK_COUNT` — Field(0), Applied(1), Basic(2); UpgradeLab is always at index `RESEARCH_TRACK_COUNT`. Used by `panel_selection_max()`, `handle_research_confirm()`, and `render_categories()`.
+- `STANDING_ORDER_COUNT` — number of standing orders in Policy/BrowseRegions. Used by `panel_selection_max()` and asserted at render time in `ui/policy.rs`.
+- `FIELD_OP_TYPE_COUNT` — number of deployable op types in Operations/BrowseOps. Used by `panel_selection_max()` and the ops array in `ui/operations.rs`.
+- `MANAGE_*` constants — positions within Policy/ManagePolicies (policy toggles, infra repair, priority, appease, bargain). Shared between renderer and handler.
+
+**The invariant:** when adding a new item to any panel list, you must update both the renderer AND `panel_selection_max()`. The named constants enforce this for the fragile cases — if `STANDING_ORDER_COUNT` drifts from the actual array length, a `debug_assert` fires at render time.
+
+**Why not typed per-panel selections?** Replacing `panel_selection: usize` with typed enum variants per panel+substate would make the coupling compiler-enforced, but would require every renderer and every state transition to carry a different selection type. The boilerplate cost outweighs the safety benefit at current scale, since the existing constants + debug_asserts + conventions are sufficient. Revisit if the panel count grows significantly or selection drift causes actual bugs.
+
 ## What The Architecture Enforces (And What It Doesn't)
 
 The architecture is "one giant mutable state blob plus conventions." This section is honest about which boundaries are real and which are social.

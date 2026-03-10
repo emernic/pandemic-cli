@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -114,8 +114,8 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
         lines.push(Line::from(""));
     }
 
-    // Lab upgrade entry (index 3)
-    let lab_selected = state.ui.panel_selection == 3;
+    // Lab upgrade entry (always at index RESEARCH_TRACK_COUNT, after all tracks)
+    let lab_selected = state.ui.panel_selection == RESEARCH_TRACK_COUNT;
     if lab_selected {
         selected_line = Some(lines.len());
     }

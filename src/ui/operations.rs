@@ -13,6 +13,7 @@ use crate::state::{
     OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS,
     OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, OP_SUPPLY_COST,
     OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, OP_CIVIL_COST,
+    FIELD_OP_TYPE_COUNT,
 };
 use super::hint_line;
 
@@ -91,7 +92,9 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     )));
 
-    let ops: [(&str, &str, u32, f64, Option<f64>); 5] = [
+    // COUPLING CHECK: array size must equal FIELD_OP_TYPE_COUNT, which bounds panel navigation
+    // and matches the 0..=4 arms in handle_operations_confirm() (state.rs).
+    let ops: [(&str, &str, u32, f64, Option<f64>); FIELD_OP_TYPE_COUNT] = [
         ("Recon Mission", "Identify unknown pathogen", OP_RECON_PERSONNEL, OP_RECON_TICKS, None),
         ("Emergency Response", "Reduce lethality in a region", OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS, None),
         ("Infra Survey", "Repair worst infrastructure", OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS, None),
