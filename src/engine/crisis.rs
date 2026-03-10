@@ -385,7 +385,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: format!("Retention bonus (${:.0})", retention_cost),
-                    description: "Staff stays.".into(),
+                    description: "Workers stay.".into(),
                     cost: Some(CrisisCost { funding: retention_cost, personnel: 0 }),
                 },
                 kind,
