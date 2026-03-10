@@ -481,15 +481,13 @@ pub fn tick(state: &GameState) -> GameState {
 pub struct CommandResult {
     pub message: Option<String>,
     pub success: bool,
-    /// True if medicine deployment caused an adverse reaction.
-    pub adverse: bool,
 }
 
 /// Execute a game command. Pure game logic — does NOT touch UI state.
 /// The caller is responsible for UI transitions based on the result.
 pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResult {
     if state.outcome != GameOutcome::Playing {
-        return CommandResult { message: None, success: false, adverse: false };
+        return CommandResult { message: None, success: false };
     }
     match cmd {
         GameCommand::DeployMedicine {
@@ -497,48 +495,48 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             region_idx,
             target,
         } => {
-            let (success, msg, adverse) =
+            let (success, msg) =
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone());
-            CommandResult { message: msg, success, adverse }
+            CommandResult { message: msg, success }
         }
         GameCommand::StartResearch { track, project_idx, double_personnel } => {
             let (ok, msg) = research::start_research(state, *track, *project_idx, *double_personnel);
-            CommandResult { message: msg, success: ok, adverse: false }
+            CommandResult { message: msg, success: ok }
         }
         GameCommand::AddResearchPersonnel { track, slot_idx } => {
             let msg = research::add_personnel(state, *track, *slot_idx);
-            CommandResult { message: msg, success: true, adverse: false }
+            CommandResult { message: msg, success: true }
         }
         GameCommand::RemoveResearchPersonnel { track, slot_idx } => {
             let msg = research::remove_personnel(state, *track, *slot_idx);
-            CommandResult { message: msg, success: true, adverse: false }
+            CommandResult { message: msg, success: true }
         }
         GameCommand::TogglePolicy {
             region_idx,
             policy_idx,
         } => {
             let (msg, success) = policy::toggle_policy(state, *region_idx, *policy_idx);
-            CommandResult { message: msg, success, adverse: false }
+            CommandResult { message: msg, success }
         }
         GameCommand::ResolveCrisis { choice } => {
             let msg = crisis::resolve_crisis(state, *choice);
-            CommandResult { message: Some(msg), success: true, adverse: false }
+            CommandResult { message: Some(msg), success: true }
         }
         GameCommand::EnactDecree { decree_idx, region_idx } => {
             let (msg, success) = policy::enact_decree(state, *decree_idx, *region_idx);
-            CommandResult { message: msg, success, adverse: false }
+            CommandResult { message: msg, success }
         }
         GameCommand::RallySupport => {
             let (msg, success) = policy::rally_support(state);
-            CommandResult { message: msg, success, adverse: false }
+            CommandResult { message: msg, success }
         }
         GameCommand::AppeaseGovernor { region_idx } => {
             let (msg, success) = policy::appease_governor(state, *region_idx);
-            CommandResult { message: msg, success, adverse: false }
+            CommandResult { message: msg, success }
         }
         GameCommand::BargainWithGovernor { region_idx } => {
             let (msg, success) = policy::bargain_with_governor(state, *region_idx);
-            CommandResult { message: msg, success, adverse: false }
+            CommandResult { message: msg, success }
         }
     }
 }
@@ -2082,7 +2080,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick = None;
-            let (_, _, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget::Treat { disease_idx });
+            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget::Treat { disease_idx });
             // Advance time to deliver this shipment
             state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             medicine::tick_shipments(&mut state);
@@ -2108,7 +2106,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick = None;
-            let (_, _, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget::Treat { disease_idx });
+            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget::Treat { disease_idx });
             state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             medicine::tick_shipments(&mut state);
         }
@@ -4062,7 +4060,7 @@ mod tests {
 
         // First deploy should succeed
         let treat = DeployTarget::Treat { disease_idx };
-        let (nav, msg, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
+        let (nav, msg) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav, "first deploy should succeed");
         assert!(msg.unwrap().contains("Shipped"), "should show shipment message");
 
@@ -4072,7 +4070,7 @@ mod tests {
         // Second deploy at same tick should be blocked
         state.resources.funding = 1_000_000.0;
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
-        let (nav2, msg2, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
+        let (nav2, msg2) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(!nav2, "second deploy should be blocked by cooldown");
         assert!(msg2.unwrap().contains("cooldown"), "should mention cooldown");
 
@@ -4080,7 +4078,7 @@ mod tests {
         state.tick = crate::state::DEPLOY_COOLDOWN_TICKS + 1;
         state.resources.funding = 1_000_000.0;
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
-        let (nav3, msg3, _) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
+        let (nav3, msg3) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav3, "deploy after cooldown should succeed");
         assert!(msg3.unwrap().contains("Shipped"));
 
@@ -4089,7 +4087,7 @@ mod tests {
         state.regions[0].last_deploy_tick = Some(0);
         state.regions[1].get_or_create_infection(disease_idx).infected = 50_000.0;
         state.resources.funding = 1_000_000.0;
-        let (nav4, _, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone());
+        let (nav4, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone());
         assert!(nav4, "deploying to different region should work during cooldown");
     }
 
@@ -4553,7 +4551,7 @@ mod tests {
         assert!(msg.unwrap().contains("abandoned"));
 
         // Try deploying medicine to region 1 (abandoned)
-        let (success, msg, _) = medicine::deploy_medicine(
+        let (success, msg) = medicine::deploy_medicine(
             &mut state, 0, 1, DeployTarget::Treat { disease_idx: 0 },
         );
         assert!(!success, "should block medicine deployment to abandoned region");
