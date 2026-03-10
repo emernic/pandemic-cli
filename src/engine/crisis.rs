@@ -1194,8 +1194,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 option_b: CrisisOption {
                     label: "Decline — fight on all fronts".into(),
-                    description: "Continue defending every surviving region.".into(),
-                    cost: None,
+                    description: "Maintain scattered operations. Personnel and funding lost to overextension.".into(),
+                    cost: Some(CrisisCost { funding: 150.0, personnel: 3 }),
                 },
                 kind,
                 tick_created: tick,
