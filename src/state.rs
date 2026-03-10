@@ -218,14 +218,15 @@ pub const VACCINATION_FRACTION: f64 = 0.02;
 pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 
 // Disease emergence constants.
-/// First new disease can emerge after this many ticks (~day 7).
+/// First new disease can emerge after this many ticks (~day 5).
 /// Gives the player time to identify disease 0 and start the research pipeline.
-pub const EMERGENCE_MIN_TICK: u64 = 840;
+pub const EMERGENCE_MIN_TICK: u64 = 600;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 12 days (1440 ticks) → ~3 new diseases in a 45-day game.
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0007;
+/// ~1 new disease every 4 days → relentless pressure throughout the game.
+/// Combined with spawn_disease_scaled, late-game diseases are monsters.
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0020;
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 5;
+pub const MAX_DISEASES: usize = 8;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 9.0;
@@ -1403,28 +1404,20 @@ impl PathogenType {
     }
 
     /// Stat ranges tuned so total collapse occurs by day 45 without intervention.
-    /// HARD REQUIREMENT (from user): every seed must lose by day 45 with no player
-    /// action. Do NOT weaken these values. The enforcing test is
-    /// `game_is_lost_within_45_days_without_intervention`. If it starts failing,
-    /// disease parameters are too weak — increase lethality/infectivity, do not
-    /// relax the test. See also CLAUDE.md.
+    /// HARD REQUIREMENT: every seed must lose by day 45 with no player action.
+    /// The enforcing test is `game_is_lost_within_45_days_without_intervention`.
+    /// If it starts failing, increase infectivity — do NOT relax the test.
     ///
     /// Design principle: long infectious period (8–15 days) with near-zero natural
-    /// recovery. This keeps infected people active long enough for the epidemic to
-    /// sweep through each region's full population before burning out. A short
-    /// infectious period causes epidemic burnout after infecting only a small
-    /// fraction of the population — do NOT increase per-tick lethality or recovery
-    /// to speed things up, it makes the overall death toll LOWER by shortening the
-    /// period each person is infectious.
+    /// recovery. This lets the epidemic sweep through each region's full population
+    /// before burning out. A short infectious period (high per-tick lethality+recovery)
+    /// causes epidemic burnout after infecting only a small fraction of the population.
+    /// Do NOT copy the naive approach of increasing per-tick lethality to "speed up"
+    /// deaths — it makes the overall death toll LOWER by shortening infectious period.
     ///
     /// IFR = lethality / (lethality + recovery) ≈ 85–95% across all types.
     /// R0 = infectivity / (lethality + recovery) ≈ 6–15 depending on type.
     /// Attack rate ≈ 99%+ given high R0. Total deaths ≈ 85–95% of population.
-    ///
-    /// Design targets:
-    /// - Collapse begins day 6–12 depending on seed
-    /// - Total collapse (all 6 regions) by day 45, worst-case seed
-    /// - With good play: game lasts 40–80 days
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: fast spreader, near-total lethality.
