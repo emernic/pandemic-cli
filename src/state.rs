@@ -460,6 +460,10 @@ pub struct RegionPolicy {
 ///   - render_manage policies vec (ui/policy.rs)
 pub const POLICY_COUNT: usize = 12;
 
+/// Policy index for Martial Law. Included in active_policy_costs alongside 0-4
+/// because it has a recurring funding cost, unlike Nuclear (9) which is one-shot.
+pub const POLICY_IDX_MARTIAL_LAW: usize = 8;
+
 /// Policy index for Nuclear Annihilation. Special-cased in UI (☢ icon) and engine
 /// (allowed in collapsed regions when all other policies are unavailable).
 pub const POLICY_IDX_NUCLEAR: usize = 9;
@@ -546,7 +550,7 @@ impl RegionPolicy {
     /// Delegates to `bool_policy_cost()` for boolean policies to avoid duplication.
     pub fn active_policy_costs(&self, traits: &[RegionTrait]) -> Vec<(usize, f64)> {
         let mut costs = Vec::new();
-        for idx in [0, 1, 2, 3, 4, 8] {
+        for idx in [0, 1, 2, 3, 4, POLICY_IDX_MARTIAL_LAW] {
             if self.get_bool(idx) {
                 costs.push((idx, Self::bool_policy_cost(idx, traits)));
             }
