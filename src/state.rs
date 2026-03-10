@@ -2021,6 +2021,9 @@ pub struct Shipment {
     pub target: DeployTarget,
     /// Physical doses on the truck (deducted from inventory at dispatch).
     pub doses: f64,
+    /// Funding cost already paid at dispatch.
+    #[serde(default)]
+    pub cost: f64,
     /// Tick when this shipment next attempts delivery.
     pub arrive_tick: u64,
     /// True when a travel ban is currently blocking delivery.
@@ -4290,6 +4293,11 @@ impl GameState {
             ids.extend(&p.scientist_ids);
         }
         ids
+    }
+
+    /// Total cost of all pending medicine shipments (already paid, in transit).
+    pub fn pending_shipment_cost(&self) -> f64 {
+        self.pending_shipments.iter().map(|s| s.cost).sum()
     }
 
     pub fn total_policy_funding_cost(&self) -> f64 {
