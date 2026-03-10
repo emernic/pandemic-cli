@@ -7,7 +7,8 @@ use ratatui::{
 };
 
 use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
-    COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD};
+    COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
+    SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
 
 use crate::format_number;
 
@@ -205,11 +206,11 @@ fn render_region_box(
 
     let threat = if region.collapsed {
         ("FELL", Color::Red)
-    } else if infected > 100_000.0 {
+    } else if infected > SEVERITY_CRIT_THRESHOLD {
         ("CRIT", Color::Red)
-    } else if infected > 10_000.0 {
+    } else if infected > SEVERITY_HIGH_THRESHOLD {
         ("HIGH", Color::LightRed)
-    } else if infected > 1_000.0 {
+    } else if infected > SEVERITY_MOD_THRESHOLD {
         ("MOD", Color::Yellow)
     } else if infected > 0.0 {
         ("LOW", Color::Green)
