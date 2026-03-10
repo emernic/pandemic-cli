@@ -1,18 +1,32 @@
 # Pandemic CLI
 
-The inverse of Plague Inc.—a real-time-with-pause strategy game where you play as the global health system, not the disease.
+A real-time-with-pause terminal strategy game. You run a global health defense agency fighting concurrent disease outbreaks across six regions. Diseases will eventually overwhelm you — the question is how long you last and how many you save.
 
-Set in a hard sci-fi future with a united world government, you lead humanity's defense against evolving disease threats. Research gene therapies, deploy cell-based treatments, manage quarantines—using real molecular biology concepts, not magic.
+```
+cargo run
+```
 
-## What You Do
+## The Game
 
-Diseases emerge throughout the game from multiple sources—zoonotic spillovers, endemic mutations, engineered bioweapons, even alien biology. You respond by allocating research, developing countermeasures, and deploying them across the globe before outbreaks spiral out of control. Multiple threats run concurrently.
+Diseases emerge throughout the game — each with its own pathogen type, transmission vector, mutation rate, and drug resistance profile. You research them, develop medicines, and deploy treatments while managing a collapsing budget, defiant regional governors, and corporate patrons who fund your operations with strings attached.
+
+Three research tracks run simultaneously: field research (identify threats, run clinical trials), applied research (develop and manufacture medicines), and basic research (unlock new capabilities). The pipeline for each disease — identify, develop, trial, deploy — takes time you don't have.
+
+Six regions with distinct economies, infrastructure, and leadership. Infrastructure degrades under pressure: healthcare capacity, supply lines, and civil order cascade into each other. A region collapses when deaths cross its threshold. When all six collapse, the game ends.
+
+Funding comes from patrons — a shipping magnate who forbids travel bans, a resort billionaire who won't tolerate quarantine, an insurance CEO who pulls out when deaths get too high. Their money keeps you alive. Their conditions constrain your response.
+
+Crisis events interrupt constantly — supply chain failures, black market drugs, political hearings, staff burnout, governor power grabs. Each demands a choice with no clear right answer.
+
+## Running
+
+```bash
+cargo build            # build
+cargo run              # interactive mode (Space to pause/resume)
+cargo run -- --snapshot  # snapshot mode (for scripted/AI testing)
+cargo test             # run tests
+```
 
 ## Tech
 
-- Rust + ratatui — ASCII terminal interface with world map, threat panels, menus
-- Single cross-platform binary
-
-```
-cargo install pandemic-cli
-```
+Rust + [ratatui](https://github.com/ratatui/ratatui). Single binary, runs in any terminal. Deterministic simulation via seeded RNG.
