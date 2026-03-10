@@ -37,7 +37,7 @@ pub(super) fn deploy_medicine(
     // Block deployment when supply lines have completely failed
     if state.regions[region_idx].supply_lines <= 0.0 {
         let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} supply lines collapsed — repair first")));
+        return (false, Some(format!("{region_name} supply lines collapsed")));
     }
     // Block deployment during cooldown
     let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick);
@@ -55,7 +55,7 @@ pub(super) fn deploy_medicine(
         return (false, Some(insufficient_funds_message(cost, state.resources.funding)));
     }
     if state.medicines[medicine_idx].doses <= 0.0 {
-        return (false, Some(format!("No doses remaining for {med_name}. Manufacture more via Research.")));
+        return (false, Some(format!("No doses remaining for {med_name}")));
     }
 
     let disease_idx = match &target {

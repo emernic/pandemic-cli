@@ -140,7 +140,7 @@ pub fn process_events(state: &mut GameState) {
                 let efficacy = state.medicines.get(*medicine_idx)
                     .map(|m| m.effective_efficacy(*disease_idx, &state.diseases) * 100.0)
                     .unwrap_or(0.0);
-                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%). Auto-deploy ON. Press [X] in Medicines to disable.", med_name, disease_name, efficacy))
+                (2, format!("TRIAL SUCCESS: {} effective against {} ({:.0}%), auto-deploying", med_name, disease_name, efficacy))
             }
             GameEvent::TechUnlocked { tech } => {
                 (3, format!("TECH UNLOCKED: {} [{}]", tech.name(), tech.description()))
@@ -190,7 +190,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "?".to_string());
                 let pct = (level * 100.0).round() as u32;
-                (3, format!("{} adapting to containment. Quarantine/travel ban {}% less effective.", name, pct))
+                (3, format!("{} adapting to containment ({}% policy resistance)", name, pct))
             }
             GameEvent::CrisisAutoResolved => {
                 // Don't log auto-resolves — they're noise
@@ -251,7 +251,7 @@ pub fn process_events(state: &mut GameState) {
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                (4, format!("⚠ {} shipment blocked at {}. Travel ban in effect. Lift ban to deliver.", med_name, region_name))
+                (4, format!("⚠ {} shipment blocked at {} (travel ban)", med_name, region_name))
             }
             GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse } => {
                 let med_name = state.medicines.get(*medicine_idx)
