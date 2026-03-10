@@ -154,8 +154,8 @@ pub struct GameState {
     /// briefed already.
     #[serde(default)]
     pub intel_pre_detection_briefed: Vec<bool>,
-    /// Ark Protocol: when activated, all resources concentrate on one region.
-    /// Contains the index of the designated Ark region, or None if not active.
+    /// Emergency consolidation: when activated, all resources concentrate on one region.
+    /// Contains the index of the consolidated HQ region, or None if not active.
     #[serde(default)]
     pub ark_protocol: Option<usize>,
     /// Current global threat level (DEFCON-style). Computed each tick from game
@@ -3195,7 +3195,7 @@ pub enum GameEvent {
         /// Adaptation level (0.0–1.0) at the time of the event.
         level: f64,
     },
-    /// The Ark Protocol was activated — all resources consolidated into one region.
+    /// Emergency consolidation activated — all resources consolidated into one region.
     ArkProtocolActivated {
         region_idx: usize,
     },
@@ -3418,7 +3418,7 @@ pub enum CrisisKind {
 
     // --- Endgame crisis types ---
 
-    /// Ark Protocol: consolidate all resources into one surviving region.
+    /// Emergency consolidation: pull all resources into one surviving region.
     /// Fires when 2+ regions have collapsed.
     ArkProtocol { region_idx: usize },
 

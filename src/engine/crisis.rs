@@ -1482,21 +1482,20 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
             CrisisEvent {
-                title: "THE ARK PROTOCOL".into(),
+                title: "Emergency Consolidation".into(),
                 description: format!(
-                    "{} regions have fallen. Your remaining teams are spread too thin. \
-                     Recommend consolidating all personnel and resources into {}. \
-                     Abandon all other regions.",
-                    collapsed_count, region_name,
+                    "{} regions lost. Remaining personnel are overextended across {} active sites. \
+                     Recommend pulling all operations back to {}.",
+                    collapsed_count, 6 - collapsed_count, region_name,
                 ),
                 options: vec![ CrisisOption {
-                    label: format!("Activate: fall back to {}", region_name),
-                    description: "Abandon all other regions. Concentrate everything here.".into(),
+                    label: format!("Consolidate in {}", region_name),
+                    description: "Pull out of all other regions.".into(),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Decline".into(),
-                    description: "Maintain scattered operations. Personnel and funding lost to overextension.".into(),
+                    label: "Continue as-is".into(),
+                    description: "Stay spread thin. Lose personnel and funding to overextension.".into(),
                     cost: Some(CrisisCost { funding: 150.0, personnel: 3 }),
                 },
                 ],
@@ -2498,11 +2497,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.events.push(GameEvent::ArkProtocolActivated {
                 region_idx: *region_idx,
             });
-            format!("ARK PROTOCOL ACTIVATED. All resources consolidated in {}.", region_name)
+            format!("Consolidation complete. All operations moved to {}.", region_name)
         }
         (CrisisKind::ArkProtocol { .. }, _) => {
             // Declined — standard cooldown prevents re-fire
-            "Ark Protocol declined. Continuing on all fronts.".into()
+            "Consolidation declined. Maintaining all active sites.".into()
         }
 
         (CrisisKind::PublicInquiry, 0) => {

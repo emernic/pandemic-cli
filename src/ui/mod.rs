@@ -234,7 +234,7 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::ArkProtocolActivated { region_idx } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                (1, format!("⚠ ARK PROTOCOL: all resources consolidated in {}", region_name))
+                (1, format!("⚠ Emergency consolidation: all operations moved to {}", region_name))
             }
             GameEvent::GovernorAction { description, .. } => {
                 (4, description.clone())
@@ -561,7 +561,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         let region_name = state.regions.get(ark_idx)
             .map(|r| r.name.as_str())
             .unwrap_or("the last region");
-        format!("  Ark Protocol: {} collapsed. No fallback positions remain.", region_name)
+        format!("  {} collapsed. No remaining operational sites.", region_name)
     } else if state.mercy_rule {
         let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
         if collapsed >= 4 {
