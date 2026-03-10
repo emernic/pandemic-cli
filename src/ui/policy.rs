@@ -25,7 +25,7 @@ use crate::state::{
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
-    POLICY_COUNT, MANAGE_INFRA_BASE, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
+    MANAGE_INFRA_BASE, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
@@ -590,7 +590,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         lines.push(Line::from(""));
     }
 
-    // Infrastructure repair actions (POLICY_COUNT, +1, +2)
+    // Infrastructure repair actions (MANAGE_INFRA_BASE, +1, +2)
     if !region.collapsed {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
