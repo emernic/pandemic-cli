@@ -145,6 +145,24 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::TechUnlocked { tech } => {
                 (3, format!("TECH UNLOCKED: {} [{}]", tech.name(), tech.description()))
             }
+            GameEvent::PathogenSuppressed { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                (3, format!("Suppression complete: {} infectivity reduced 20%", name))
+            }
+            GameEvent::PathogenAttenuated { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                (3, format!("Attenuation complete: {} lethality reduced 30%", name))
+            }
+            GameEvent::PathogenInterdicted { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                (3, format!("Interdiction complete: {} cross-region transmission eliminated", name))
+            }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
