@@ -113,9 +113,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             )
         },
         // Infection trend arrow (compared to ~1 day ago)
+        // When infections drop because people are dying (not recovering),
+        // show a red ▼ instead of green — declining infected is bad news
+        // when the death rate is accelerating.
         match state.infection_trend() {
             Some(ratio) if ratio > 1.05 => Span::styled(" \u{25b2}", Style::default().fg(Color::Red)),
-            Some(ratio) if ratio < 0.95 => Span::styled(" \u{25bc}", Style::default().fg(Color::Green)),
+            Some(ratio) if ratio < 0.95 => {
+                let deaths_rising = state.death_trend().is_some_and(|d| d > 1.05);
+                if deaths_rising {
+                    Span::styled(" \u{25bc}", Style::default().fg(Color::Red))
+                } else {
+                    Span::styled(" \u{25bc}", Style::default().fg(Color::Green))
+                }
+            }
             Some(_) => Span::styled(" \u{2014}", Style::default().fg(Color::DarkGray)),
             None => Span::raw(""),
         },
