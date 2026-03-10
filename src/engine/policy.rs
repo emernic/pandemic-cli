@@ -768,8 +768,9 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             // Collapse the region
             state.regions[r_idx].collapsed = true;
             state.regions[r_idx].collapsed_at_tick = Some(state.tick);
-            state.regions[r_idx].hospital_level = 0; // Hospital destroyed
-            state.regions[r_idx].intel_level = 0; // Intel station destroyed
+            state.regions[r_idx].hospital_level = 0; // Hospital destroyed (per-region infrastructure)
+            state.regions[r_idx].intel_level = 0; // Intel station destroyed (per-region infrastructure)
+            // lab_level is intentionally NOT reset — it's global research infrastructure
             // Clear policies
             if let Some(p) = state.policies.get_mut(r_idx) {
                 p.clear_all();
