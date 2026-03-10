@@ -11,6 +11,8 @@ use crate::state::{
     OP_RECON_PERSONNEL, OP_RECON_TICKS,
     OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS,
     OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS,
+    OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, OP_SUPPLY_COST,
+    OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, OP_CIVIL_COST,
 };
 use super::hint_line;
 
@@ -18,9 +20,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     match &state.ui.operations_ui {
         Some(OpsUiState::BrowseOps) | None => render_browse(f, area, state),
         Some(OpsUiState::SelectReconTarget) => render_select_recon(f, area, state),
-        Some(OpsUiState::SelectEmergencyTarget) => render_select_region(f, area, state, "EMERGENCY RESPONSE"),
-        Some(OpsUiState::SelectSurveyTarget) => render_select_region(f, area, state, "INFRA SURVEY"),
+        Some(OpsUiState::SelectEmergencyTarget) => render_select_region(f, area, state, "EMERGENCY RESPONSE", None),
+        Some(OpsUiState::SelectSurveyTarget) => render_select_region(f, area, state, "INFRA SURVEY", None),
+        Some(OpsUiState::SelectSupplyTarget) => render_select_region(f, area, state, "SUPPLY REINFORCEMENT", Some(InfraDetail::SupplyLines)),
+        Some(OpsUiState::SelectCivilOrderTarget) => render_select_region(f, area, state, "CIVIL STABILIZATION", Some(InfraDetail::CivilOrder)),
     }
+}
+
+/// What infrastructure detail to show next to each region in the selection screen.
+enum InfraDetail {
+    SupplyLines,
+    CivilOrder,
 }
 
 fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
@@ -51,7 +61,9 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
                         .map(|r| r.name.clone())
                         .unwrap_or_else(|| "?".to_string())
                 }
-                crate::state::FieldOpKind::InfraSurvey { region_idx } => {
+                crate::state::FieldOpKind::InfraSurvey { region_idx }
+                | crate::state::FieldOpKind::SupplyChainReinforcement { region_idx }
+                | crate::state::FieldOpKind::CivilOrderStabilization { region_idx } => {
                     state.regions.get(*region_idx)
                         .map(|r| r.name.clone())
                         .unwrap_or_else(|| "?".to_string())
@@ -79,20 +91,26 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     )));
 
-    let ops: [(&str, &str, u32, f64); 3] = [
-        ("Recon Mission", "Identify unknown pathogen", OP_RECON_PERSONNEL, OP_RECON_TICKS),
-        ("Emergency Response", "Reduce lethality in a region", OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS),
-        ("Infra Survey", "Repair worst infrastructure", OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS),
+    let ops: [(&str, &str, u32, f64, Option<f64>); 5] = [
+        ("Recon Mission", "Identify unknown pathogen", OP_RECON_PERSONNEL, OP_RECON_TICKS, None),
+        ("Emergency Response", "Reduce lethality in a region", OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS, None),
+        ("Infra Survey", "Repair worst infrastructure", OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS, None),
+        ("Supply Reinforcement", "Bolster supply lines in a region", OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, Some(OP_SUPPLY_COST)),
+        ("Civil Stabilization", "Shore up civil order in a region", OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, Some(OP_CIVIL_COST)),
     ];
 
     let available = state.personnel_available();
 
-    for (name, desc, personnel, ticks) in &ops {
+    for (name, desc, personnel, ticks, funding_cost) in &ops {
         let is_selected = row == selected;
         let marker = if is_selected { "▸ " } else { "  " };
         let highlight = if is_selected { Color::Yellow } else { Color::White };
         let days = *ticks / TICKS_PER_DAY;
-        let cost = format!("{} personnel, {:.1} days", personnel, days);
+        let cost = if let Some(fc) = funding_cost {
+            format!("{} personnel, {:.1} days, ¥{:.0}", personnel, days, fc)
+        } else {
+            format!("{} personnel, {:.1} days", personnel, days)
+        };
 
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(Color::Yellow)),
@@ -174,7 +192,7 @@ fn render_select_recon(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &str) {
+fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &str, detail: Option<InfraDetail>) {
     let mut lines: Vec<Line> = Vec::new();
     let selected = state.ui.panel_selection;
 
@@ -193,7 +211,20 @@ fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &st
         let marker = if is_selected { "▸ " } else { "  " };
         let highlight = if is_selected { Color::Yellow } else { Color::White };
 
-        let infected_str = crate::format_number(region.estimated_infected);
+        let detail_str = match &detail {
+            Some(InfraDetail::SupplyLines) => {
+                let pct = (region.supply_lines * 100.0) as u32;
+                format!("  (supply lines: {}%)", pct)
+            }
+            Some(InfraDetail::CivilOrder) => {
+                let pct = (region.civil_order * 100.0) as u32;
+                format!("  (civil order: {}%)", pct)
+            }
+            None => {
+                let infected_str = crate::format_number(region.estimated_infected);
+                format!("  ({} infected)", infected_str)
+            }
+        };
 
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(Color::Yellow)),
@@ -202,7 +233,7 @@ fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &st
                 Style::default().fg(highlight).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("  ({} infected)", infected_str),
+                detail_str,
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
