@@ -2,7 +2,6 @@
 name: worker-manager
 description: Manage the background worker pool — ensure the recurring cron loop is running and launch a new worker Claude process to pick up an issue.
 disable-model-invocation: true
-allowed-tools: Bash, CronList, CronCreate
 ---
 
 # Worker Manager
@@ -26,20 +25,18 @@ Tell the user what you found and what you did (created a new cron, or found an e
 
 ## Step 2: Launch a Worker Claude Process
 
-Launch a new Claude process **in the background as a real terminal process** — not a sub-agent. Use the `Bash` tool with `&` to detach it. The process should run in this repository's working directory with `--dangerously-skip-permissions` so it can operate autonomously.
+Launch a new Claude process **in the background** — not a sub-agent. Use the `Bash` tool with `run_in_background: true` so it detaches and runs independently. The process needs `CLAUDECODE` unset to avoid the nested-session guard, and `--dangerously-skip-permissions` to operate autonomously.
 
-```bash
-log="/tmp/worker-$(date +%s).log"
-claude --dangerously-skip-permissions -p "/pick-up-issue" > "$log" 2>&1 &
-echo "Worker launched (PID $!). Log: $log"
+```
+Bash(
+  command="unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue'",
+  run_in_background=true
+)
 ```
 
-> **Why a real process and not a sub-agent?** Sub-agents run inside this session and block the main conversation. A background terminal process runs independently — this session stays free while the worker does its work. The worker will open its own Claude Code session with full tool access, guided by the `/pick-up-issue` skill.
+> **Why a real process and not a sub-agent?** Sub-agents run inside this session and block the main conversation. A background process runs independently — this session stays free while the worker does its work. The worker opens its own Claude Code session with full tool access, guided by the `/pick-up-issue` skill.
 
-After launching, report:
-- The PID (from `$!`)
-- The log file path
-- That the worker is running the `/pick-up-issue` skill
+After launching, tell the user the worker is running.
 
 ## That's It
 
