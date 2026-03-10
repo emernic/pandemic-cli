@@ -4771,6 +4771,44 @@ impl GameState {
         income
     }
 
+    /// Per-region income contribution per day (after all modifiers including decrees).
+    /// Returns a vec of (region_idx, income_per_day) for all regions in order.
+    /// Collapsed regions produce 0. Decree modifiers are applied proportionally.
+    pub fn per_region_income_breakdown(&self) -> Vec<(usize, f64)> {
+        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
+        if total_pop <= 0.0 {
+            return self.regions.iter().enumerate().map(|(i, _)| (i, 0.0)).collect();
+        }
+        let mut result = Vec::with_capacity(self.regions.len());
+        let mut pre_decree_total = 0.0;
+        let mut per_region_raw: Vec<f64> = Vec::with_capacity(self.regions.len());
+        for (i, region) in self.regions.iter().enumerate() {
+            let raw = if region.collapsed {
+                0.0
+            } else {
+                let base = Self::region_base_income(region, total_pop);
+                let after_ban = base * self.region_travel_ban_factor(i, region);
+                let skim_factor = 1.0 - region.governor.income_skim;
+                let after_skim = after_ban * skim_factor;
+                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+                domestic + trade
+            };
+            per_region_raw.push(raw);
+            pre_decree_total += raw;
+        }
+        // Compute decree multiplier so totals stay consistent with funding_income_rate()
+        let decree_factor = if pre_decree_total > 0.0 {
+            self.funding_income_rate() / pre_decree_total
+        } else {
+            1.0
+        };
+        for (i, raw) in per_region_raw.into_iter().enumerate() {
+            result.push((i, raw * decree_factor * TICKS_PER_DAY));
+        }
+        result
+    }
+
     /// Trade income lost per tick due to neighbor health degradation.
     /// Returns the difference between max possible trade income and actual trade income.
     pub fn trade_income_penalty(&self) -> f64 {

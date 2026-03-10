@@ -6,12 +6,12 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, ThreatLevel, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, ThreatLevel, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days, grid_reading_order};
 use crate::format_number;
 
-/// Returns the height this bar needs: always 3 to show research status.
+/// Returns the height this bar needs: 4 rows (stats + income + research + border).
 pub fn height(_state: &GameState) -> u16 {
-    3
+    4
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -147,7 +147,54 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]);
 
-    let mut lines = vec![line1];
+    // Income breakdown: show per-region contribution in map grid order (left→right, top→bottom)
+    // so players can visually associate each entry with the corresponding region on the map.
+    // Shows gross income (before personnel/policy costs) — the net is shown as (+¥N/day) above.
+    let income_line = {
+        let breakdown = state.per_region_income_breakdown();
+        // Index the breakdown by region_idx for fast lookup
+        let mut by_region = vec![0.0f64; state.regions.len()];
+        for &(idx, income) in &breakdown {
+            by_region[idx] = income;
+        }
+        let display_order = grid_reading_order(state.regions.len());
+        // Label as "Gross income" to distinguish from the net (+¥N/day) shown on line 1
+        let mut spans: Vec<Span> = vec![Span::styled("Gross income: ", Style::default().fg(Color::DarkGray))];
+        for (i, region_idx) in display_order.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::styled("  ", Style::default().fg(Color::DarkGray)));
+            }
+            let region = &state.regions[*region_idx];
+            let income_per_day = by_region[*region_idx];
+            // Abbreviate: first letter of each word (e.g. "North America" → "NA", "Asia" → "AS")
+            let abbrev: String = region.name.split_whitespace()
+                .map(|w| w.chars().next().unwrap_or('?'))
+                .take(3)
+                .collect::<String>()
+                .to_uppercase();
+            let abbrev = if abbrev.len() == 1 {
+                // Single-word names: use first 2 chars
+                region.name.chars().take(2).collect::<String>().to_uppercase()
+            } else {
+                abbrev
+            };
+            let (income_str, color) = if region.collapsed {
+                ("—".to_string(), Color::DarkGray)
+            } else {
+                let per_day = income_per_day.round() as i64;
+                let color = if per_day >= 200 { Color::Green }
+                    else if per_day >= 50 { Color::Yellow }
+                    else { Color::Red };
+                (format!("¥{per_day}"), color)
+            };
+            spans.push(Span::styled(abbrev, Style::default().fg(Color::DarkGray)));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(income_str, Style::default().fg(color)));
+        }
+        Line::from(spans)
+    };
+
+    let mut lines = vec![line1, income_line];
 
     // Always show research status line so empty slots are visible
     {
