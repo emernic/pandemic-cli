@@ -277,6 +277,9 @@ pub fn process_events(state: &mut GameState) {
                 };
                 (2, format!("⚠ {region_name}: {} {severity}", system.label()))
             }
+            GameEvent::PolicyAutoActivated { policy_name, .. } => {
+                (8, format!("Standing order: {policy_name} auto-activated"))
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

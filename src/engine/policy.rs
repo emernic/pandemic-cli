@@ -1,6 +1,8 @@
 use crate::state::{
     CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
     policy_display_name,
+    QUARANTINE_COST, TRAVEL_BAN_COST,
+    SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST,
@@ -768,6 +770,56 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
     }
 }
 
+/// Execute standing orders for policy automation. Fires each tick.
+/// Auto-enables policies for regions that cross severity thresholds,
+/// provided the policy isn't already active and the player has the
+/// required political power and personnel.
+pub(super) fn tick_standing_orders(state: &mut GameState) {
+    // Affordability guard: don't try to auto-enable policies when the player can't
+    // sustain the current cost load. Prevents oscillation where cost enforcement
+    // suspends a policy and this function immediately re-enables it.
+    let current_cost = state.total_policy_funding_cost();
+    let num_regions = state.regions.len();
+    for region_idx in 0..num_regions {
+        if state.regions[region_idx].collapsed || state.is_abandoned(region_idx) {
+            continue;
+        }
+        let infected: f64 = state.regions[region_idx].total_infected();
+
+        // Auto-quarantine at HIGH (10K+)
+        if state.standing_orders.auto_quarantine_at_high
+            && infected > SEVERITY_HIGH_THRESHOLD
+            && !state.policies[region_idx].quarantine
+            && state.resources.funding > current_cost + QUARANTINE_COST
+        {
+            let (_, ok) = toggle_policy(state, region_idx, 1);
+            if ok {
+                let region_name = state.regions[region_idx].name.clone();
+                state.events.push(GameEvent::PolicyAutoActivated {
+                    region_idx,
+                    policy_name: format!("Quarantine in {region_name}"),
+                });
+            }
+        }
+
+        // Auto-travel-ban at CRIT (100K+)
+        if state.standing_orders.auto_travel_ban_at_crit
+            && infected > SEVERITY_CRIT_THRESHOLD
+            && !state.policies[region_idx].travel_ban
+            && state.resources.funding > current_cost + TRAVEL_BAN_COST
+        {
+            let (_, ok) = toggle_policy(state, region_idx, 0);
+            if ok {
+                let region_name = state.regions[region_idx].name.clone();
+                state.events.push(GameEvent::PolicyAutoActivated {
+                    region_idx,
+                    policy_name: format!("Travel Ban in {region_name}"),
+                });
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1492,5 +1544,82 @@ mod tests {
 
         assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
             "Governor above defiance threshold should not act");
+    }
+
+    #[test]
+    fn standing_order_auto_quarantine_fires_at_high() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.standing_orders.auto_quarantine_at_high = true;
+
+        // Simulate a region at HIGH severity
+        state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
+        assert!(!state.policies[0].quarantine, "Quarantine should not be active yet");
+
+        tick_standing_orders(&mut state);
+
+        assert!(state.policies[0].quarantine, "Standing order should have enabled quarantine");
+        assert!(state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+            "PolicyAutoActivated event should have fired");
+    }
+
+    #[test]
+    fn standing_order_auto_quarantine_does_not_fire_below_threshold() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.standing_orders.auto_quarantine_at_high = true;
+
+        // Below HIGH severity
+        state.regions[0].get_or_create_infection(0).infected = 100.0;
+
+        tick_standing_orders(&mut state);
+
+        assert!(!state.policies[0].quarantine, "Quarantine should not fire below HIGH threshold");
+    }
+
+    #[test]
+    fn standing_order_auto_quarantine_skips_already_active() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.standing_orders.auto_quarantine_at_high = true;
+        state.policies[0].quarantine = true; // already active
+        state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
+
+        tick_standing_orders(&mut state);
+
+        // Should not have toggled (would disable it — we only auto-enable)
+        assert!(state.policies[0].quarantine, "Should not disable already-active quarantine");
+        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+            "Should not fire event for already-active policy");
+    }
+
+    #[test]
+    fn standing_order_auto_travel_ban_fires_at_crit() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        state.standing_orders.auto_travel_ban_at_crit = true;
+
+        state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        assert!(!state.policies[0].travel_ban);
+
+        tick_standing_orders(&mut state);
+
+        assert!(state.policies[0].travel_ban, "Standing order should have enabled travel ban");
+        assert!(state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+            "PolicyAutoActivated event should have fired");
+    }
+
+    #[test]
+    fn standing_order_disabled_does_not_fire() {
+        let mut state = GameState::new_default(42);
+        state.resources.political_power = 1.0;
+        // Both standing orders OFF (default)
+        state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+
+        tick_standing_orders(&mut state);
+
+        assert!(!state.policies[0].quarantine);
+        assert!(!state.policies[0].travel_ban);
+        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })));
     }
 }

@@ -62,6 +62,9 @@ pub fn tick(state: &GameState) -> GameState {
     // Governor autonomous actions — defiant governors act against the player.
     policy::tick_governor_actions(&mut new);
 
+    // Standing orders — auto-enable policies when severity thresholds are crossed.
+    policy::tick_standing_orders(&mut new);
+
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
     new.resources.funding += funding_income;
@@ -564,6 +567,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         GameCommand::RepairInfrastructure { region_idx, system } => {
             let (msg, success) = infrastructure::repair_infrastructure(state, *region_idx, *system);
             CommandResult { message: msg, success }
+        }
+        // Handled before execute_command in lib.rs — should not reach here.
+        GameCommand::ToggleStandingOrder { .. } => {
+            CommandResult { message: None, success: false }
         }
     }
 }

@@ -175,6 +175,15 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             if new.outcome == GameOutcome::Playing {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
+                    // Standing order toggles are player preference — no engine involvement.
+                    if let GameCommand::ToggleStandingOrder { kind } = cmd {
+                        match kind {
+                            0 => new.standing_orders.auto_quarantine_at_high = !new.standing_orders.auto_quarantine_at_high,
+                            1 => new.standing_orders.auto_travel_ban_at_crit = !new.standing_orders.auto_travel_ban_at_crit,
+                            _ => {}
+                        }
+                        return new;
+                    }
                     let result = execute_command(&mut new, &cmd);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
