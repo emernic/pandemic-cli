@@ -34,8 +34,6 @@ Bash(
 )
 ```
 
-> **Why a real process and not a sub-agent?** Sub-agents run inside this session and block the main conversation. A background process runs independently — this session stays free while the worker does its work. The worker opens its own Claude Code session with full tool access, guided by the `/pick-up-issue` skill.
-
 After launching, tell the user the worker is running.
 
 ## That's It
