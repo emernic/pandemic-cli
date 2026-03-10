@@ -218,14 +218,15 @@ pub const VACCINATION_FRACTION: f64 = 0.02;
 pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 
 // Disease emergence constants.
-/// First new disease can emerge after this many ticks (~day 7).
+/// First new disease can emerge after this many ticks (~day 5).
 /// Gives the player time to identify disease 0 and start the research pipeline.
-pub const EMERGENCE_MIN_TICK: u64 = 840;
+pub const EMERGENCE_MIN_TICK: u64 = 600;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 12 days (1440 ticks) → ~3 new diseases in a 45-day game.
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0007;
+/// ~1 new disease every 4 days → relentless pressure throughout the game.
+/// Combined with spawn_disease_scaled, late-game diseases are monsters.
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0020;
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 5;
+pub const MAX_DISEASES: usize = 8;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 9.0;
@@ -1402,51 +1403,45 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned for pacing: first region collapse ~day 25-30
-    /// without intervention, total defeat ~day 35-45. R0 targets 3.0-3.5
-    /// for fast types. Research pipeline takes ~5-7 days so player has
-    /// time to respond but must act quickly.
+    /// Stat ranges tuned for aggressive pacing: median defeat ~day 20
+    /// without intervention, absolute maximum day 45 on any seed.
+    /// Late-game diseases scale uncapped via spawn_disease_scaled.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast spreader, moderate lethality
-            // R0 ≈ 3.4, death fraction ≈ 47%.
+            // RNA viruses: fast spreader, high lethality.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.008, 0.013),
-                lethality: (0.0008, 0.002),
-                recovery: (0.0012, 0.002),
-                cross_region: (0.003, 0.005),
+                infectivity: (0.020, 0.035),
+                lethality: (0.008, 0.015),
+                recovery: (0.0008, 0.0014),
+                cross_region: (0.010, 0.018),
             },
-            // DNA viruses: moderate spread, higher lethality, slow recovery
-            // R0 ≈ 3.0, death fraction ≈ 65%.
+            // DNA viruses: moderate spread, very high lethality, slow recovery.
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.006, 0.011),
-                lethality: (0.0012, 0.003),
-                recovery: (0.0008, 0.0015),
-                cross_region: (0.002, 0.004),
+                infectivity: (0.016, 0.028),
+                lethality: (0.012, 0.020),
+                recovery: (0.0004, 0.0008),
+                cross_region: (0.008, 0.015),
             },
-            // Bacteria: moderate all around
-            // R0 ≈ 3.0, death fraction ≈ 41%.
+            // Bacteria: moderate spread, moderate lethality.
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.006, 0.009),
-                lethality: (0.0006, 0.0015),
-                recovery: (0.001, 0.002),
-                cross_region: (0.002, 0.004),
+                infectivity: (0.016, 0.025),
+                lethality: (0.006, 0.012),
+                recovery: (0.0006, 0.0012),
+                cross_region: (0.008, 0.015),
             },
-            // Fungi: slow-growing, moderate lethality, very low natural recovery.
-            // R0 ≈ 2.5, death fraction ≈ 68%. Hard to clear without antifungals.
+            // Fungi: slow-growing, high lethality, very low natural recovery.
             PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.004, 0.007),
-                lethality: (0.001, 0.002),
-                recovery: (0.0004, 0.001),
-                cross_region: (0.0015, 0.003),
+                infectivity: (0.010, 0.018),
+                lethality: (0.010, 0.016),
+                recovery: (0.0002, 0.0005),
+                cross_region: (0.006, 0.012),
             },
-            // Prions: slow but devastating, very high lethality, almost no recovery
-            // R0 ≈ 2.0 (slow sustained spread), death fraction ≈ 87%.
+            // Prions: slow but devastating, extreme lethality, almost no recovery.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.004, 0.009),
-                lethality: (0.002, 0.004),
-                recovery: (0.0003, 0.0006),
-                cross_region: (0.0015, 0.003),
+                infectivity: (0.010, 0.020),
+                lethality: (0.018, 0.030),
+                recovery: (0.0001, 0.0003),
+                cross_region: (0.006, 0.012),
             },
         }
     }

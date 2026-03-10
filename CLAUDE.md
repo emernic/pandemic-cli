@@ -159,15 +159,23 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 
 ### Game Balance Thresholds — DO NOT NERF DISEASES
 
-These are hard requirements. If your changes violate any of these, your balance is wrong:
+**These come directly from the project owner. They are non-negotiable. Do not weaken diseases.**
 
-- **20 days max without intervention** (100% of seeds must lose by day 20)
-- **Sometimes lost within 10 days** without intervention (some seeds)
-- **~40 day median** for a decently competent player
-- **100 days = absolute maximum** — surviving past 100 days should be essentially impossible
+Hard requirements for zero player input (no buttons pressed at all):
+- **65 days absolute maximum** — 100% of seeds must lose by day 65, no exceptions
+- **~15-20 day median loss** without intervention
+- **Some seeds lost by day 10** — early bad luck is expected and correct
 - **First collapse no earlier than day 3** — players need minimum time for initial decisions
 
-The game must be threatening. Diseases must kill fast enough that players feel genuine pressure from day 1. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse. The `game_is_lost_within_20_days_without_intervention` test enforces the 20-day deadline across 10 seeds.
+Hard requirements for active play:
+- **~40 day median** for a competent player
+- **100 days = absolute maximum** — surviving past 100 days should be essentially impossible
+
+The game must be threatening. Diseases must kill fast enough that players feel genuine pressure from day 1. Late-game diseases (day 30+) should be next-generation monsters — massively scaled infectivity and lethality that overwhelm any containment. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse.
+
+The `game_is_lost_within_65_days_without_intervention` test enforces the 65-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 30, something is wrong.
+
+**Governor-imposed policies (quarantine, border controls, martial law) are GOOD and should stay.** They create interesting dynamics. If policies are keeping the game alive too long, the answer is MORE lethal diseases, not weaker governors.
 
 ### Navigation Convention — Left/Right Always Controls Regions
 
