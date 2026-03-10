@@ -439,7 +439,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         (8, "Martial Law", policy.martial_law,
          format!("¥{:.0}/day + {} pers.", MARTIAL_LAW_COST * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
          "+15% collapse resilience (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra), MARTIAL_LAW_COST),
-        (9, "☢ Nuclear Option", policy.nuclear_annihilation,
+        (9, "Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ¥{:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population. Stops all disease spread.", None, 0.0),
         (10,
@@ -505,9 +505,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Style::default().fg(Color::DarkGray)
             };
             let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
+            // Nuclear uses ☢ icon to match the 🔒 icon pattern for POL-locked items.
+            let icon = if *policy_idx == 9 { "☢ " } else { "  " };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
-                Span::styled("  ", Style::default().fg(Color::DarkGray)),
+                Span::styled(icon, Style::default().fg(Color::DarkGray)),
                 Span::styled(format!("{}", name), name_style),
                 Span::styled(
                     format!("  ({})", reason),
@@ -579,11 +581,15 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         let status = if *active { "[ON] " } else { "[OFF]" };
 
-        lines.push(Line::from(vec![
+        let mut row = vec![
             Span::styled(format!("{}", marker), name_style),
             Span::styled(format!("{} ", status), status_style),
-            Span::styled(format!("{}", name), name_style),
-        ]));
+        ];
+        if *policy_idx == 9 {
+            row.push(Span::styled("☢ ", Style::default().fg(Color::Yellow)));
+        }
+        row.push(Span::styled(format!("{}", name), name_style));
+        lines.push(Line::from(row));
         lines.push(Line::from(vec![
             Span::raw("      "),
             Span::styled(*desc, Style::default().fg(Color::DarkGray)),
