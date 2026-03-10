@@ -58,11 +58,14 @@ The engine is organized as an orchestrator + subsystem modules:
 
 ```
 engine/
-  mod.rs       — tick() and execute_command(): orchestration and dispatch only
+  mod.rs       — tick() and execute_command(): orchestration + cross-cutting logic
   research.rs  — Research project commands + per-tick completion logic
-  medicine.rs  — Medicine deployment (dose calculation, efficacy, region effects)
-  policy.rs    — Policy toggle commands + per-tick cost enforcement
+  medicine.rs  — Medicine deployment, shipment delivery, auto-deploy
+  policy.rs    — Policy toggle, decrees, governor actions, infrastructure builds
   crisis.rs    — Crisis event generation + resolution
+  spread.rs    — Within-region spread, cross-region spread, mutation, adaptation
+  disease.rs   — Disease emergence (spawning new scaled diseases mid-game)
+  personnel.rs — Scientist assignment, burnout, recovery
 ```
 
 ### Subsystem conventions
@@ -72,7 +75,7 @@ Each subsystem module follows the same pattern:
 - **Visibility:** `pub(super)` — only `mod.rs` calls into subsystems
 - **Dependencies:** Only `crate::state`. Never other subsystem modules, never UI
 - **Two function types:**
-  - **Tick helpers** (called from `tick()`) — advance ongoing processes. Named `tick_*()`. Examples: `tick_research()`, `tick_enforce_costs()`
+  - **Tick helpers** (called from `tick()`) — advance ongoing processes. Named `tick_*()`. Examples: `tick_research()`, `tick_enforce_costs()`, `tick_spread_within()`
   - **Command handlers** (called from `execute_command()`) — handle player actions. Examples: `start_research()`, `deploy_medicine()`, `toggle_policy()`
 - **No cross-subsystem calls.** If research completion needs to modify medicines (e.g., unlocking one), it does so through `GameState` directly — not by calling into the medicine module. Subsystems share data through state, not through each other.
 - **Tests live with the code they test.** Each subsystem module has its own `#[cfg(test)] mod tests`. Integration tests that exercise multiple subsystems through `tick()` or `apply_action()` stay in `engine/mod.rs`.
@@ -87,7 +90,7 @@ Each subsystem module follows the same pattern:
 
 ### What stays in mod.rs
 
-`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. So does logic that spans multiple subsystems or doesn't belong to any single one: disease spread, mutation, defeat checks, regional collapse, disease emergence, history recording. If any of these grow large enough to warrant extraction, they follow the same subsystem pattern.
+`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, political power drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, mercy rule, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
 
 ## Event System
 
