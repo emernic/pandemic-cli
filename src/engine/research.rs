@@ -1425,6 +1425,7 @@ mod tests {
             (reduced - expected).abs() < 0.001,
             "infectivity should drop by 20%: original={original_infectivity:.4}, expected={expected:.4}, got={reduced:.4}"
         );
+        assert_eq!(state.pathogens_suppressed, 1, "suppression counter should increment");
     }
 
     #[test]
@@ -1494,6 +1495,7 @@ mod tests {
             (reduced - expected).abs() < 0.001,
             "lethality should drop by 30%: original={original_lethality:.4}, expected={expected:.4}, got={reduced:.4}"
         );
+        assert_eq!(state.pathogens_attenuated, 1, "attenuation counter should increment");
     }
 
     #[test]
@@ -1525,5 +1527,6 @@ mod tests {
             "cross-region spread should be eliminated, got {}",
             state.diseases[0].cross_region_spread
         );
+        assert_eq!(state.pathogens_interdicted, 1, "interdiction counter should increment");
     }
 }
