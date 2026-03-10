@@ -861,26 +861,11 @@ pub struct Resources {
     /// Fractional accumulator for personnel attrition (when funding is $0).
     #[serde(default)]
     pub attrition_accum: f64,
-    /// Tick when the player last rallied public support. Used for cooldown.
-    #[serde(default)]
-    pub last_rally_tick: Option<u64>,
     /// Tick when a FundingWarning event was last emitted. Prevents log spam.
     #[serde(default)]
     pub last_funding_warning_tick: u64,
 }
 
-impl Resources {
-    /// Remaining cooldown ticks before another rally is possible. Returns 0 if ready.
-    pub fn rally_cooldown_remaining(&self, current_tick: u64) -> u64 {
-        match self.last_rally_tick {
-            Some(t) => {
-                let elapsed = current_tick.saturating_sub(t);
-                RALLY_COOLDOWN_TICKS.saturating_sub(elapsed)
-            }
-            None => 0,
-        }
-    }
-}
 
 /// Regional traits that make each region play differently.
 /// Each region has 1-2 traits that modify policy costs, spread rates, or resilience.
@@ -1992,12 +1977,6 @@ pub const DEPLOY_COOLDOWN_TICKS: u64 = 240;
 /// Shipping delay in ticks (1 day). Deployed medicine takes this long to
 /// arrive at the destination region before taking effect.
 pub const SHIPPING_TICKS: u64 = 120;
-/// Cost to rally public support (boost POL).
-pub const RALLY_COST: f64 = 300.0;
-/// POL gain from a single rally (+5%).
-pub const RALLY_POL_GAIN: f64 = 0.05;
-/// Cooldown between rallies in ticks (2 days).
-pub const RALLY_COOLDOWN_TICKS: u64 = 240;
 
 /// Convert ticks to days for display purposes.
 pub fn ticks_to_days(ticks: f64) -> f64 {
@@ -3080,7 +3059,6 @@ pub enum GameCommand {
         region_idx: Option<usize>,
     },
     /// Spend funds to boost POL directly.
-    RallySupport,
     /// Spend funds to boost a governor's loyalty.
     AppeaseGovernor { region_idx: usize },
     /// Personality-specific bargain with a defiant governor (non-monetary cost).
@@ -3637,10 +3615,10 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions, regions = rally,
+                    // Items: 0..regions-1 = regions,
                     // (optional: +1 contract offer), decrees, standing orders (2 items)
                     let contract_items = if state.contract_offer.is_some() { 1 } else { 0 };
-                    state.regions.len() + 1 + contract_items + DECREE_COUNT + 2 - 1
+                    state.regions.len() + contract_items + DECREE_COUNT + 2 - 1
                 }
                 // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
@@ -3991,17 +3969,14 @@ impl UiState {
                         self.panel_selection = 0;
                     }
                     None
-                } else if self.panel_selection == num_regions {
-                    // Rally Public Support
-                    Some(GameCommand::RallySupport)
                 } else {
                     let contract_items = if state.contract_offer.is_some() { 1 } else { 0 };
-                    let contract_pos = num_regions + 1;
+                    let contract_pos = num_regions;
                     if contract_items > 0 && self.panel_selection == contract_pos {
                         return Some(GameCommand::AcceptContract);
                     }
-                    // Layout: decree_base = rally + 1 + contract_items
-                    let decree_base = num_regions + 1 + contract_items;
+                    // Layout: decree_base = regions + contract_items
+                    let decree_base = num_regions + contract_items;
                     let so_base = decree_base + DECREE_COUNT;
                     if self.panel_selection >= so_base {
                         // Standing order selected
@@ -4554,11 +4529,10 @@ impl GameState {
             resources: Resources {
                 funding: 500.0,
                 personnel: 20,
-                political_power: 0.10,
+                political_power: 0.20,
                 pol_crisis_modifier: 0.0,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
-                last_rally_tick: None,
                 last_funding_warning_tick: 0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
@@ -5058,11 +5032,12 @@ impl GameState {
         let initial_pop = self.initial_population();
         let death_frac = if initial_pop > 0.0 { self.total_dead() / initial_pop } else { 0.0 };
         let infected_frac = if initial_pop > 0.0 { self.total_infected() / initial_pop } else { 0.0 };
-        let time_frac = self.tick as f64 / (30.0 * TICKS_PER_DAY);
         let severity = death_frac.sqrt() + infected_frac.sqrt() * 0.4;
-        let active_policies: u32 = self.policies.iter().map(|p| p.active_count()).sum();
-        let policy_drain = active_policies as f64 * 0.02;
-        (severity + time_frac * 0.1 - policy_drain).clamp(0.0, 0.90)
+        // Baseline: 20% institutional mandate even before the crisis escalates.
+        // POL grows naturally as crisis severity worsens — the worse things get,
+        // the more emergency authority is granted. Removed per-policy drain (which
+        // was perverse: spending political capital shouldn't reduce future mandate).
+        (0.20 + severity).clamp(0.0, 0.90)
     }
 
     /// The next policy that would unlock with more POL. Returns (name, threshold)
