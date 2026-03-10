@@ -1474,7 +1474,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::CorruptOfficial { stolen }, 0) => {
             // Ignore — lose the stolen money (amount locked at generation time)
-            state.resources.funding -= stolen;
+            state.resources.funding = (state.resources.funding - stolen).max(0.0);
             // Schedule follow-up: embezzlement ring in 4 days
             let daily_drain = (state.resources.funding * 0.05).clamp(20.0, 200.0);
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
