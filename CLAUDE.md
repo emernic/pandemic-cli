@@ -217,11 +217,13 @@ This eliminates the need for save files in simple multi-step tests. For longer s
 Crisis events and pause events (disease detection, collapse, breakthroughs) **interrupt tick advancement**, exactly as they do in interactive mode. When an event fires mid-sequence:
 
 1. Tick advancement stops immediately.
-2. Any remaining queued steps are dropped (with a stderr message listing what was dropped).
-3. The rendered screen shows the current state — including the crisis popup or paused game.
-4. To continue, dismiss the event (e.g. `--do enter`) and issue another `--days` or `--do` command.
+2. For crises: subsequent key steps (e.g. `--do enter`) still fire, so you can dismiss inline: `--do d60 --do enter --do d5`. Subsequent `--days` steps are skipped until the crisis is dismissed.
+3. For pause events: remaining queued steps are dropped (with a stderr message).
+4. The rendered screen shows the current state — including the crisis popup or paused game.
 
 Game over also stops execution immediately.
+
+**Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
