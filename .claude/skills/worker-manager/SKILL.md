@@ -89,9 +89,34 @@ After launching, scan the 3 most recent **previous** worker logs (skip the one j
 ls -t .worker-logs/worker-*.log 2>/dev/null | tail -n +2 | head -3
 ```
 
-For each log, read the first and last 5 lines to understand what the worker started doing and how it ended:
+For each log, parse the NDJSON to extract a structured event summary:
 ```bash
-head -5 .worker-logs/worker-<name>.log && echo "..." && tail -5 .worker-logs/worker-<name>.log
+python3 - <<'EOF' .worker-logs/worker-<name>.log
+import sys, json
+events = []
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if not line: continue
+    try: obj = json.loads(line)
+    except: continue
+    t = obj.get('type')
+    if t == 'assistant':
+        for c in obj.get('message', {}).get('content', []):
+            if c.get('type') == 'text' and c['text'].strip():
+                events.append(('[assistant]', c['text'].strip()[:120]))
+            elif c.get('type') == 'tool_use':
+                inp = c.get('input', {})
+                desc = (inp.get('command') or inp.get('description') or
+                        inp.get('file_path') or inp.get('pattern') or
+                        inp.get('prompt', ''))
+                events.append(('[tool_use]', f"{c['name']}: {str(desc)[:100]}"))
+    elif t == 'result':
+        events.append(('[result]', obj.get('result', '')[:300]))
+N = 6
+shown = (events[:N] + [('...', f'({len(events)-2*N} events skipped)')] + events[-N:]
+         if len(events) > 2*N else events)
+for tag, msg in shown: print(f'{tag} {msg}')
+EOF
 ```
 
 Look for signs that workers are failing before doing useful work: crashing immediately, abandoning early, or ending without completing anything.
