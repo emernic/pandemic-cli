@@ -439,6 +439,10 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 /// severity thresholds the player sees (CRIT/HIGH/MOD/LOW/OK), so there
 /// is a clear mental model: "region is CRIT → governor is angry."
 pub(super) fn tick_governor_loyalty(state: &mut GameState) {
+    // Suspend Regional Authority: all governors frozen under central command
+    if state.enacted_decrees.suspend_regional_authority {
+        return;
+    }
     let num_regions = state.regions.len();
     for i in 0..num_regions {
         if state.regions[i].collapsed {
@@ -559,6 +563,10 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
 /// Tick autonomous governor actions. Defiant governors periodically act against
 /// the player based on personality. Called from tick().
 pub(super) fn tick_governor_actions(state: &mut GameState) {
+    // Suspend Regional Authority: governors can't take autonomous actions
+    if state.enacted_decrees.suspend_regional_authority {
+        return;
+    }
     let tick = state.tick;
     let num_regions = state.regions.len();
 
@@ -764,6 +772,91 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             (Some(format!(
                 "⚠ DECREE: {} designated a sacrifice zone. Abandoned. Remaining regions: +{:.0}% income.",
                 region_name, bonus_pct
+            )), true)
+        }
+        3 => {
+            // Suspend Regional Authority: neutralize all governors and freeze them.
+            // Set loyalty to 50 (neutral — no defiance, no cooperation bonuses)
+            // then tick_governor_loyalty/tick_governor_actions early-return permanently.
+            state.enacted_decrees.suspend_regional_authority = true;
+            for region in &mut state.regions {
+                if !region.collapsed {
+                    region.governor.loyalty = 50.0;
+                    region.governor.defiance_crisis_fired = false;
+                }
+            }
+            (Some(
+                "⚠ DECREE: Regional authority suspended. All governors placed under central command.".to_string()
+            ), true)
+        }
+        4 => {
+            // Fortify Region: restore one region's infrastructure, penalize all others
+            use crate::state::FORTIFY_INFRA_PENALTY;
+            let Some(r_idx) = region_idx else {
+                return (Some("Select a region to fortify".to_string()), false);
+            };
+            if r_idx >= state.regions.len() {
+                return (None, false);
+            }
+            if state.regions[r_idx].collapsed {
+                return (Some(format!("{} is already collapsed", state.regions[r_idx].name)), false);
+            }
+            let region_name = state.regions[r_idx].name.clone();
+            state.enacted_decrees.fortified_region = Some(r_idx);
+            // Restore target region's infrastructure to 100%
+            state.regions[r_idx].healthcare_capacity = 1.0;
+            state.regions[r_idx].supply_lines = 1.0;
+            state.regions[r_idx].civil_order = 1.0;
+            // Penalize all other non-collapsed regions
+            for i in 0..state.regions.len() {
+                if i != r_idx && !state.regions[i].collapsed {
+                    state.regions[i].healthcare_capacity =
+                        (state.regions[i].healthcare_capacity - FORTIFY_INFRA_PENALTY).max(0.0);
+                    state.regions[i].supply_lines =
+                        (state.regions[i].supply_lines - FORTIFY_INFRA_PENALTY).max(0.0);
+                    state.regions[i].civil_order =
+                        (state.regions[i].civil_order - FORTIFY_INFRA_PENALTY).max(0.0);
+                }
+            }
+            let penalty_pct = (FORTIFY_INFRA_PENALTY * 100.0) as u32;
+            (Some(format!(
+                "⚠ DECREE: {} designated as fortified zone. Infrastructure restored. All other regions: -{}% infrastructure.",
+                region_name, penalty_pct
+            )), true)
+        }
+        5 => {
+            // Emergency Countermeasure: reduce disease parameters, kill population
+            use crate::state::{
+                COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT,
+                COUNTERMEASURE_SPREAD_MULT,
+            };
+            state.enacted_decrees.emergency_countermeasure = true;
+            // Reduce all disease infectivity and cross-region spread
+            for disease in &mut state.diseases {
+                disease.infectivity *= COUNTERMEASURE_INFECTIVITY_MULT;
+                disease.cross_region_spread *= COUNTERMEASURE_SPREAD_MULT;
+            }
+            // Kill a fraction of the alive population in every non-collapsed region
+            let mut total_killed = 0.0_f64;
+            for region in &mut state.regions {
+                if region.collapsed {
+                    continue;
+                }
+                let alive = region.population as f64 - region.dead;
+                let killed = alive * COUNTERMEASURE_KILL_FRACTION;
+                region.dead += killed;
+                total_killed += killed;
+            }
+            let killed_str = if total_killed >= 1_000_000_000.0 {
+                format!("{:.1}B", total_killed / 1_000_000_000.0)
+            } else if total_killed >= 1_000_000.0 {
+                format!("{:.1}M", total_killed / 1_000_000.0)
+            } else {
+                format!("{:.0}", total_killed)
+            };
+            (Some(format!(
+                "⚠ DECREE: Emergency countermeasure deployed. Pathogen infectivity halved. Cross-region spread reduced 75%. Casualties: {}.",
+                killed_str
             )), true)
         }
         _ => (None, false),
@@ -1621,5 +1714,129 @@ mod tests {
         assert!(!state.policies[0].quarantine);
         assert!(!state.policies[0].travel_ban);
         assert!(!state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })));
+    }
+
+    #[test]
+    fn suspend_regional_authority_freezes_governors() {
+        let mut state = screening_test_state();
+        state.regions[0].governor.loyalty = 20.0; // defiant
+        state.regions[1].governor.loyalty = 90.0; // cooperative
+
+        let (msg, ok) = enact_decree(&mut state, 3, None);
+        assert!(ok, "should succeed");
+        assert!(msg.unwrap().contains("suspended"));
+        assert!(state.enacted_decrees.suspend_regional_authority);
+
+        // All governors should be at neutral loyalty (50)
+        for region in &state.regions {
+            if !region.collapsed {
+                assert!((region.governor.loyalty - 50.0).abs() < 0.01,
+                    "governor loyalty should be 50, got {}", region.governor.loyalty);
+            }
+        }
+
+        // Loyalty should not drift after decree
+        let loyalty_before: Vec<f64> = state.regions.iter().map(|r| r.governor.loyalty).collect();
+        tick_governor_loyalty(&mut state);
+        for (i, region) in state.regions.iter().enumerate() {
+            assert!((region.governor.loyalty - loyalty_before[i]).abs() < 0.001,
+                "loyalty should not drift after decree");
+        }
+
+        // Governor actions should not fire
+        state.regions[0].governor.loyalty = 10.0; // Force below threshold for test
+        state.regions[0].governor.last_action_tick = 0;
+        let policies_before = state.policies[0].clone();
+        tick_governor_actions(&mut state);
+        // Policies unchanged (governor didn't act)
+        assert_eq!(state.policies[0].quarantine, policies_before.quarantine);
+    }
+
+    #[test]
+    fn fortify_region_restores_target_penalizes_others() {
+        let mut state = screening_test_state();
+        // Set low infra on target region
+        state.regions[0].healthcare_capacity = 0.3;
+        state.regions[0].supply_lines = 0.4;
+        state.regions[0].civil_order = 0.5;
+        // Set high infra on others
+        for i in 1..state.regions.len() {
+            state.regions[i].healthcare_capacity = 1.0;
+            state.regions[i].supply_lines = 1.0;
+            state.regions[i].civil_order = 1.0;
+        }
+
+        let (msg, ok) = enact_decree(&mut state, 4, Some(0));
+        assert!(ok, "should succeed");
+        assert!(msg.unwrap().contains("fortified"));
+        assert_eq!(state.enacted_decrees.fortified_region, Some(0));
+
+        // Target region should be at 100%
+        assert!((state.regions[0].healthcare_capacity - 1.0).abs() < 0.01);
+        assert!((state.regions[0].supply_lines - 1.0).abs() < 0.01);
+        assert!((state.regions[0].civil_order - 1.0).abs() < 0.01);
+
+        // Other regions should be penalized by 25%
+        let penalty = crate::state::FORTIFY_INFRA_PENALTY;
+        for i in 1..state.regions.len() {
+            if !state.regions[i].collapsed {
+                assert!((state.regions[i].healthcare_capacity - (1.0 - penalty)).abs() < 0.01,
+                    "region {} HC should be {}, got {}", i, 1.0 - penalty, state.regions[i].healthcare_capacity);
+            }
+        }
+
+        // Cannot fortify again
+        let (_, ok) = enact_decree(&mut state, 4, Some(1));
+        assert!(!ok, "should not fortify twice");
+    }
+
+    #[test]
+    fn fortify_region_requires_region_idx() {
+        let mut state = screening_test_state();
+
+        let (msg, ok) = enact_decree(&mut state, 4, None);
+        assert!(!ok, "should require region selection");
+        assert!(msg.unwrap().contains("Select"));
+    }
+
+    #[test]
+    fn emergency_countermeasure_reduces_disease_params_and_kills_population() {
+        let mut state = screening_test_state();
+        // Set up disease parameters
+        state.diseases[0].infectivity = 1.0;
+        state.diseases[0].cross_region_spread = 0.5;
+        // Set up population/deaths
+        for region in &mut state.regions {
+            region.dead = 0.0;
+        }
+        let total_alive_before: f64 = state.regions.iter()
+            .filter(|r| !r.collapsed)
+            .map(|r| r.population as f64 - r.dead)
+            .sum();
+
+        let (msg, ok) = enact_decree(&mut state, 5, None);
+        assert!(ok, "should succeed");
+        assert!(msg.unwrap().contains("countermeasure"));
+        assert!(state.enacted_decrees.emergency_countermeasure);
+
+        // Disease params should be halved/quartered
+        let inf_mult = crate::state::COUNTERMEASURE_INFECTIVITY_MULT;
+        let spread_mult = crate::state::COUNTERMEASURE_SPREAD_MULT;
+        assert!((state.diseases[0].infectivity - 1.0 * inf_mult).abs() < 0.01);
+        assert!((state.diseases[0].cross_region_spread - 0.5 * spread_mult).abs() < 0.01);
+
+        // Population should have been killed
+        let total_dead: f64 = state.regions.iter()
+            .filter(|r| !r.collapsed)
+            .map(|r| r.dead)
+            .sum();
+        let kill_frac = crate::state::COUNTERMEASURE_KILL_FRACTION;
+        let expected_dead = total_alive_before * kill_frac;
+        assert!((total_dead - expected_dead).abs() / expected_dead < 0.01,
+            "should kill {:.0} people, got {:.0}", expected_dead, total_dead);
+
+        // Cannot enact again
+        let (_, ok) = enact_decree(&mut state, 5, None);
+        assert!(!ok, "should not enact twice");
     }
 }
