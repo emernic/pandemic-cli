@@ -391,12 +391,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         // Net drift per day: (target - current) * 50%/day drift rate
         let drift_per_day = (target - pol) * 0.50;
 
-        // Decompose target into its constituent parts
-        let initial_pop = state.initial_population();
-        let death_frac = if initial_pop > 0.0 { state.total_dead() / initial_pop } else { 0.0 };
-        let infected_frac = if initial_pop > 0.0 { state.total_infected() / initial_pop } else { 0.0 };
-        let death_component = death_frac.sqrt();
-        let infection_component = infected_frac.sqrt() * 0.4;
+        // Decompose target into its constituent parts (single source of truth in state.rs)
+        let (_baseline, death_component, infection_component) = state.pol_target_components();
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── POLITICAL POWER ──", cyan)));

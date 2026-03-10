@@ -5540,16 +5540,26 @@ impl GameState {
 
     /// Current POL drift target based on severity, time, and active policies.
     /// POL drifts toward this value at ~30%/day. Called by engine::tick().
-    pub fn pol_target(&self) -> f64 {
+    /// Returns (baseline, death_component, infection_component) that sum to pol_target().
+    /// `death_component` = sqrt(death_frac), `infection_component` = 0.4 * sqrt(infected_frac).
+    /// Used by the dashboard to show a breakdown without duplicating the formula.
+    pub fn pol_target_components(&self) -> (f64, f64, f64) {
         let initial_pop = self.initial_population();
         let death_frac = if initial_pop > 0.0 { self.total_dead() / initial_pop } else { 0.0 };
         let infected_frac = if initial_pop > 0.0 { self.total_infected() / initial_pop } else { 0.0 };
-        let severity = death_frac.sqrt() + infected_frac.sqrt() * 0.4;
+        let baseline = 0.20_f64;
+        let death_component = death_frac.sqrt();
+        let infection_component = infected_frac.sqrt() * 0.4;
+        (baseline, death_component, infection_component)
+    }
+
+    pub fn pol_target(&self) -> f64 {
+        let (baseline, death_component, infection_component) = self.pol_target_components();
         // Baseline: 20% institutional mandate even before the crisis escalates.
         // POL grows naturally as crisis severity worsens — the worse things get,
         // the more emergency authority is granted. Removed per-policy drain (which
         // was perverse: spending political capital shouldn't reduce future mandate).
-        (0.20 + severity).clamp(0.0, 0.90)
+        (baseline + death_component + infection_component).clamp(0.0, 0.90)
     }
 
     /// The next policy that would unlock with more POL. Returns (name, threshold)
