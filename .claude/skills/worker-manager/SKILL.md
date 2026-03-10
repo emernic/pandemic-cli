@@ -59,8 +59,10 @@ Read the output. That string is your log path (e.g. `/tmp/worker-1773180000-1234
 
 **Bash call 2** — with `run_in_background: true`, using the exact path from call 1:
 ```bash
-unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' 2>&1 | tee /tmp/worker-1773180000-12345.log
+unset CLAUDECODE; claude --dangerously-skip-permissions -p '/pick-up-issue' --output-format stream-json 2>&1 | tee /tmp/worker-1773180000-12345.log
 ```
+
+`--output-format stream-json` makes Claude emit each event (tool calls, assistant messages, tool results) as a newline-delimited JSON object in real time as the session runs. Without it, `-p` only outputs the final response — a one-paragraph summary at the very end of a 20-minute session.
 
 After Bash call 2 completes, save the returned task ID to `.worker-task-id`:
 ```bash
@@ -82,7 +84,7 @@ For each log, check the last 30 lines:
 tail -30 /tmp/worker-<name>.log
 ```
 
-Look for signs that workers are failing before doing useful work — e.g., giving up because the branch was in a bad state, failing to claim any issue, hitting permission errors, or abandoning immediately after starting.
+The log is newline-delimited JSON, but keywords like "Abandoning", "gave up", "bad branch", "permission" appear as literal strings inside the JSON values — plain `grep` works fine. Look for signs that workers are failing before doing useful work: giving up because the branch was in a bad state, failing to claim any issue, hitting permission errors, or abandoning immediately after starting.
 
 **If 3 or more consecutive recent workers show this pattern:**
 1. Cancel the cron: use `CronDelete` to remove the `/worker-manager` cron job.
