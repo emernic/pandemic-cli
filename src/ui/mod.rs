@@ -68,6 +68,12 @@ pub fn process_events(state: &mut GameState) {
                 let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
                 (0, format!("COLLAPSE: {} has fallen! {} regions remain", region_name, remaining))
             }
+            GameEvent::CollapseSecondaryDeaths { region_idx, deaths } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let deaths_str = format_number(*deaths);
+                (3, format!("{}: ~{}/day dying from secondary causes", region_name, deaths_str))
+            }
             GameEvent::DiseaseDetected { disease_idx, silent_days } => {
                 let affected: Vec<&str> = state.regions.iter()
                     .filter(|r| r.disease_state(*disease_idx).is_some_and(|inf| inf.infected > 0.0))
@@ -686,6 +692,26 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
                 ),
             ]));
         }
+    }
+
+    // Show collapse secondary deaths if any occurred
+    let total_collapse_dead: f64 = state.regions.iter().map(|r| r.collapse_deaths).sum();
+    if total_collapse_dead > 0.0 {
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled("  Secondary causes (starvation, violence)", stat_label),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("      Deaths: ", stat_label),
+            Span::styled(
+                format_number(total_collapse_dead),
+                Style::default().fg(Color::Red),
+            ),
+            Span::styled(
+                format!("  ({:.1}% of total)", if total_dead > 0.0 { total_collapse_dead / total_dead * 100.0 } else { 0.0 }),
+                stat_label,
+            ),
+        ]));
     }
 
     // Score — rewards surviving longer with more people alive
