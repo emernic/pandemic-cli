@@ -410,22 +410,23 @@ pub(super) fn tick_containment_adaptation(new: &mut GameState) {
 
 /// Apply disease mutation. Each disease has a chance to mutate per tick,
 /// drifting infectivity and lethality parameters slightly.
+///
+/// Mutations are ±10% of the current value (uniform [0.9, 1.1]).
+/// Floor clamps prevent diseases from drifting to zero. No upper clamp —
+/// spawn_disease_scaled produces diseases with stats well above base ranges,
+/// and hard upper clamps would nerf them on first mutation. The ±10% random
+/// walk has slight geometric downward drift (E[ln(factor)] < 0), so diseases
+/// naturally weaken over time without needing a ceiling.
 pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
     // Disease mutation (sequencing reduces mutation rate by half per level)
     for (d_idx, disease) in new.diseases.iter_mut().enumerate() {
         let mutation_chance = disease.effective_mutation_rate();
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
-            // Small random parameter changes (±10% of current value), clamped to
-            // prevent runaway drift over many mutations.
             let inf_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            // Clamps prevent runaway drift. Note: prions with max outflow
-            // (lethality cap 0.005 + recovery ≤0.0006 = 0.0056) can have
-            // R0 < 1 at the infectivity floor (0.003/0.0056 ≈ 0.54) — they
-            // burn out and get replaced by the spawn system, which is fine.
-            disease.infectivity = (disease.infectivity * inf_factor).clamp(0.003, 0.020);
+            disease.infectivity = (disease.infectivity * inf_factor).max(0.001);
             let leth_factor = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.2;
-            disease.lethality = (disease.lethality * leth_factor).clamp(0.0003, 0.005);
+            disease.lethality = (disease.lethality * leth_factor).max(0.0001);
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,
