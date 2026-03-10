@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::format_number;
-use crate::state::{GameState, TICKS_PER_DAY, format_days};
+use crate::state::{GameState, TICKS_PER_DAY, SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, format_days};
 
 // ── Splash (first visit) ──────────────────────────────────────────────
 
@@ -373,8 +373,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             })
             .sum();
 
-        let severity_color = if total_inf > 100_000.0 { Color::Red }
-            else if total_inf > 10_000.0 { Color::Yellow }
+        let severity_color = if total_inf > SEVERITY_CRIT_THRESHOLD { Color::Red }
+            else if total_inf > SEVERITY_HIGH_THRESHOLD { Color::Yellow }
             else if total_inf > 0.0 { Color::Cyan }
             else { Color::DarkGray };
 

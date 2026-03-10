@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, SimState,
-    CRISIS_TYPE_COOLDOWN, TICKS_PER_DAY,
+    CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
 /// Scale a dollar amount relative to current funding.
@@ -256,7 +256,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     // Congressional hearing: day 20+, requires 2+ regions in critical state
     if day > 20.0 {
         let crit_regions = state.regions.iter()
-            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > 100_000.0))
+            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
             .count();
         if crit_regions >= 2 {
             candidates.push(CrisisKind::CongressionalHearing);

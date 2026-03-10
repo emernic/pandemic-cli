@@ -831,6 +831,12 @@ pub struct Governor {
     pub loyalty: f64,
 }
 
+/// Infection count thresholds for region severity levels.
+/// Used by both the UI (status labels) and the engine (governor loyalty drift).
+pub const SEVERITY_CRIT_THRESHOLD: f64 = 100_000.0;
+pub const SEVERITY_HIGH_THRESHOLD: f64 = 10_000.0;
+pub const SEVERITY_MOD_THRESHOLD: f64 = 1_000.0;
+
 /// Loyalty threshold below which the governor becomes defiant.
 pub const GOVERNOR_DEFIANCE_THRESHOLD: f64 = 40.0;
 /// Loyalty threshold above which the governor provides cooperation bonuses.

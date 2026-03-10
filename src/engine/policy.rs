@@ -261,10 +261,11 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
 }
 
 /// Tick governor loyalty drift. Called once per tick from tick().
-/// Loyalty drifts based on:
-/// - Active policy pressure (harsh policies decrease loyalty)
-/// - Regional health (high death rates decrease loyalty)
-/// - Personality modifiers
+///
+/// Loyalty drifts based on infection severity, cumulative deaths, active
+/// restrictive policies, and personality. Governors react to the same
+/// severity thresholds the player sees (CRIT/HIGH/MOD/LOW/OK), so there
+/// is a clear mental model: "region is CRIT → governor is angry."
 pub(super) fn tick_governor_loyalty(state: &mut GameState) {
     let num_regions = state.regions.len();
     for i in 0..num_regions {
@@ -274,6 +275,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
 
         let policy = &state.policies[i];
         let personality = state.regions[i].governor.personality;
+        let current = state.regions[i].governor.loyalty;
 
         // Count active restrictive policies (travel ban, quarantine, martial law, border controls)
         let restrictive_count = [
@@ -283,27 +285,47 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
             policy.border_controls,
         ].iter().filter(|&&b| b).count() as f64;
 
-        // Death pressure: higher death rate = more loyalty loss
+        let infected = state.regions[i].total_infected();
         let pop = state.regions[i].population as f64;
         let death_frac = if pop > 0.0 { state.regions[i].dead / pop } else { 0.0 };
 
-        // Base drift per tick: mild regression toward 50
-        let current = state.regions[i].governor.loyalty;
-        let base_drift = (50.0 - current) * 0.0001; // ~1.2% per day toward 50
+        // Base drift: mild regression toward 50
+        let base_drift = (50.0 - current) * 0.0001; // ~0.012/day per point away from 50
+
+        // Severity drain: governors react to infection levels using the
+        // shared severity thresholds (CRIT/HIGH/MOD) from state.rs.
+        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
+        let severity_drain = if infected > SEVERITY_CRIT_THRESHOLD {
+            -0.008 // CRIT: ~0.96/day
+        } else if infected > SEVERITY_HIGH_THRESHOLD {
+            -0.004 // HIGH: ~0.48/day
+        } else if infected > SEVERITY_MOD_THRESHOLD {
+            -0.001 // MOD: ~0.12/day
+        } else {
+            0.0
+        };
+
+        // Death drain: cumulative deaths erode trust (linear, not sqrt)
+        let death_drain = -death_frac * 0.03; // ~0.036/day at 1% dead, ~0.36/day at 10%
 
         // Policy pressure: each restrictive policy drains loyalty
-        let policy_drain = -restrictive_count * 0.003; // ~0.36/day per restrictive policy
-
-        // Death pressure: deaths erode trust
-        let death_drain = -death_frac.sqrt() * 0.01; // scales with death severity
+        let policy_drain = -restrictive_count * 0.003; // ~0.36/day per policy
 
         // Personality modifiers
         use crate::state::GovernorPersonality;
         let personality_mod = match personality {
-            GovernorPersonality::Cooperative => 0.001, // slow passive loyalty gain
+            GovernorPersonality::Cooperative => 0.002, // passive loyalty gain (~0.24/day)
             GovernorPersonality::Nationalist => {
-                // Gets extra angry about restrictions on THEIR region
-                -restrictive_count * 0.002 // additional drain per policy
+                // Angry about both restrictions AND suffering in their region
+                let restriction_anger = -restrictive_count * 0.002;
+                let suffering_anger = if infected > SEVERITY_CRIT_THRESHOLD {
+                    -0.004 // extra CRIT penalty (~0.48/day)
+                } else if infected > SEVERITY_HIGH_THRESHOLD {
+                    -0.002 // extra HIGH penalty (~0.24/day)
+                } else {
+                    0.0
+                };
+                restriction_anger + suffering_anger
             }
             GovernorPersonality::Populist => {
                 // Hates expensive policies — loses loyalty proportional to cost
@@ -319,7 +341,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
             }
         };
 
-        let total_drift = base_drift + policy_drain + death_drain + personality_mod;
+        let total_drift = base_drift + severity_drain + death_drain + policy_drain + personality_mod;
         state.regions[i].governor.loyalty = (current + total_drift).clamp(0.0, 100.0);
     }
 }
@@ -819,6 +841,47 @@ mod tests {
         assert!(state.regions[0].governor.loyalty < before,
             "loyalty should decrease with restrictive policies: was {before}, now {}",
             state.regions[0].governor.loyalty);
+    }
+
+    #[test]
+    fn governor_loyalty_drops_fast_in_crit_region() {
+        let mut state = screening_test_state();
+        state.regions[0].governor.loyalty = 70.0;
+        // Put >100K infected so severity = CRIT
+        state.regions[0].get_or_create_infection(0).infected = 200_000.0;
+
+        // Tick for 20 days
+        for _ in 0..(120 * 20) {
+            tick_governor_loyalty(&mut state);
+        }
+        assert!(state.regions[0].governor.loyalty < 45.0,
+            "CRIT region should drive loyalty well below 45 in 20 days, got {}",
+            state.regions[0].governor.loyalty);
+    }
+
+    #[test]
+    fn nationalist_governor_drops_faster_than_cooperative() {
+        let mut state = screening_test_state();
+        state.regions[0].get_or_create_infection(0).infected = 200_000.0;
+
+        // Test Nationalist
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Nationalist;
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 15) {
+            tick_governor_loyalty(&mut state);
+        }
+        let nationalist_loyalty = state.regions[0].governor.loyalty;
+
+        // Test Cooperative
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Cooperative;
+        state.regions[0].governor.loyalty = 70.0;
+        for _ in 0..(120 * 15) {
+            tick_governor_loyalty(&mut state);
+        }
+        let cooperative_loyalty = state.regions[0].governor.loyalty;
+
+        assert!(nationalist_loyalty < cooperative_loyalty,
+            "Nationalist ({nationalist_loyalty:.1}) should lose loyalty faster than Cooperative ({cooperative_loyalty:.1}) in a CRIT region");
     }
 
     #[test]
