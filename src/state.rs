@@ -4507,9 +4507,12 @@ impl GameState {
                 1.0
             };
             let after_ban = base * travel_ban_factor;
+            // Governor income skim — Operative bargains permanently reduce regional income
+            let skim_factor = 1.0 - region.governor.income_skim;
+            let after_skim = after_ban * skim_factor;
             // Split into domestic + trade components
-            let domestic = after_ban * (1.0 - TRADE_INCOME_FRACTION);
-            let trade = after_ban * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+            let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+            let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
             income += domestic + trade;
         }
         // Decree modifiers
