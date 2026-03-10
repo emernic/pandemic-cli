@@ -20,7 +20,7 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    grid_reading_order, POLICY_POL_THRESHOLDS,
+    grid_reading_order, POLICY_POL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     DECREE_COUNT, DECREE_THREAT_LEVELS,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
@@ -489,13 +489,13 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         if selected { selected_line = Some(lines.len()); }
         let marker = if selected { "▶ " } else { "  " };
 
-        // Collapsed regions: only nuclear annihilation (idx 9) is available
+        // Collapsed regions: only nuclear annihilation is available
         // Non-collapsed regions: nuclear annihilation is not available
         // Healthcare investment (idx 10): only available pre-collapse
         let structurally_locked = if region.collapsed {
-            *policy_idx != 9 && !*active
+            *policy_idx != POLICY_IDX_NUCLEAR && !*active
         } else {
-            *policy_idx == 9
+            *policy_idx == POLICY_IDX_NUCLEAR
         };
 
         if structurally_locked {
@@ -506,7 +506,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             };
             let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
             // Nuclear uses ☢ icon to match the 🔒 icon pattern for POL-locked items.
-            let icon = if *policy_idx == 9 { "☢ " } else { "  " };
+            let icon = if *policy_idx == POLICY_IDX_NUCLEAR { "☢ " } else { "  " };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
                 Span::styled(icon, Style::default().fg(Color::DarkGray)),
@@ -528,7 +528,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 if *active {
                     // If already active, its personnel would be freed on disable
                     avail += need;
-                } else if *policy_idx >= 5 && *policy_idx <= 7 {
+                } else if *policy_idx >= POLICY_IDX_SCREENING_BASE && *policy_idx <= POLICY_IDX_SCREENING_BASE + 2 {
                     // Screening upgrade: personnel from current tier would be freed
                     avail += policy.screening.personnel_cost();
                 }
@@ -585,7 +585,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             Span::styled(format!("{}", marker), name_style),
             Span::styled(format!("{} ", status), status_style),
         ];
-        if *policy_idx == 9 {
+        if *policy_idx == POLICY_IDX_NUCLEAR {
             row.push(Span::styled("☢ ", Style::default().fg(Color::Yellow)));
         }
         row.push(Span::styled(format!("{}", name), name_style));

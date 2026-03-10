@@ -1,6 +1,6 @@
 use crate::state::{
     CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
-    policy_display_name,
+    policy_display_name, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     QUARANTINE_COST, TRAVEL_BAN_COST,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
@@ -42,7 +42,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
             }
         }
         if let Some((region_idx, policy_idx, _)) = best {
-            let name = if policy_idx == 5 {
+            let name = if policy_idx == POLICY_IDX_SCREENING_BASE {
                 // Screening: resolve tier-specific name before clearing
                 let tier_name = match state.policies[region_idx].screening {
                     ScreeningLevel::Basic => "Basic Screening",
@@ -80,7 +80,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     }
     // Collapsed regions: only nuclear annihilation is available
     if state.regions.get(region_idx).is_some_and(|r| r.collapsed) {
-        if policy_idx != 9 {
+        if policy_idx != POLICY_IDX_NUCLEAR {
             let region_name = state.regions[region_idx].name.as_str();
             return (Some(format!("{region_name} has collapsed. Policies unavailable.")), false);
         }
