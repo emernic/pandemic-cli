@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    DeployTarget, GameOutcome, GameState, RegionDiseaseState,
+    DeployTarget, GameEvent, GameOutcome, GameState, RegionDiseaseState,
 };
 
 /// Execute medicine deployment: deduct funds, apply doses (with adverse effect
@@ -182,6 +182,96 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
 
 pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
     format!("Insufficient funds! Need ${cost:.0}, have ${have:.0}")
+}
+
+/// Auto-deploy medicines to the worst-affected regions. Called once per tick.
+/// For each medicine with auto_deploy enabled:
+/// - Must be unlocked, tested, have doses, and have affordable deploy cost
+/// - Finds the region with the most infected (for any target disease) where
+///   cooldown is clear
+/// - Deploys as treatment (treating infected is the reactive choice;
+///   vaccination is strategic and left to the player)
+pub(super) fn try_auto_deploy(state: &mut GameState) {
+    // Grow auto_deploy vec if new medicines were created
+    while state.auto_deploy.len() < state.medicines.len() {
+        state.auto_deploy.push(false);
+    }
+
+    for med_idx in 0..state.medicines.len() {
+        if !state.auto_deploy.get(med_idx).copied().unwrap_or(false) {
+            continue;
+        }
+        let med = &state.medicines[med_idx];
+        if !med.unlocked || med.doses <= 0.0 {
+            continue;
+        }
+
+        // Only auto-deploy against tested diseases (avoid adverse reactions)
+        let deployable = med.deployable_diseases(&state.diseases);
+        let tested: Vec<usize> = deployable.iter()
+            .copied()
+            .filter(|d_idx| med.tested_against.contains(d_idx))
+            .collect();
+        if tested.is_empty() {
+            continue;
+        }
+
+        // Find the region with the highest infected count for any tested target disease,
+        // where cooldown is clear and region isn't collapsed
+        let mut best_region: Option<usize> = None;
+        let mut best_infected: f64 = 0.0;
+        let mut best_disease_idx: usize = 0;
+
+        for (r_idx, region) in state.regions.iter().enumerate() {
+            if region.collapsed {
+                continue;
+            }
+            if region.deploy_cooldown_remaining(state.tick) > 0 {
+                continue;
+            }
+            for &d_idx in &tested {
+                let infected = region.disease_state(d_idx)
+                    .map(|inf| inf.infected)
+                    .unwrap_or(0.0);
+                if infected > best_infected {
+                    best_infected = infected;
+                    best_region = Some(r_idx);
+                    best_disease_idx = d_idx;
+                }
+            }
+        }
+
+        if let Some(region_idx) = best_region {
+            if best_infected <= 0.0 {
+                continue;
+            }
+
+            // Check funding
+            let cost = state.medicines[med_idx].deploy_cost(state.regions[region_idx].population);
+            if state.resources.funding < cost {
+                continue;
+            }
+
+            // Compute target_selection for treatment: deployable diseases come first
+            // as vaccinate options, then treatment options. Treatment index = n + position.
+            let n = deployable.len();
+            let target_selection = if let Some(pos) = deployable.iter().position(|&d| d == best_disease_idx) {
+                n + pos // Treatment target
+            } else {
+                continue;
+            };
+
+            let (success, _msg, _adverse) = deploy_medicine(
+                state, med_idx, region_idx, target_selection,
+            );
+            if success {
+                state.events.push(GameEvent::MedicineAutoDeployed {
+                    medicine_idx: med_idx,
+                    region_idx,
+                });
+            }
+        }
+    }
 }
 
 fn deploy_feedback(med: &str, region: &str, action: &str, doses: f64, cost: f64, adverse_deaths: f64, efficacy: f64) -> String {
