@@ -254,6 +254,18 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     disease.sequencing_count += 1;
                 }
             }
+            ResearchKind::SuppressPathogen { disease_idx } => {
+                let d_idx = *disease_idx;
+                if let Some(disease) = state.diseases.get_mut(d_idx) {
+                    // Permanently reduce infectivity by 20%
+                    disease.infectivity *= 0.80;
+                    let name = disease.display_name(d_idx);
+                    state.event_log.push_back((
+                        state.tick as f64 / crate::state::TICKS_PER_DAY,
+                        format!("Suppression complete: {name} infectivity reduced 20%"),
+                    ));
+                }
+            }
             _ => {}
         }
     }
@@ -1328,6 +1340,66 @@ mod tests {
         assert!(
             (fast_duration - normal_duration * crate::state::HUMAN_TRIALS_SPEED).abs() < 1.0,
             "human trials should halve duration: normal={normal_duration}, fast={fast_duration}"
+        );
+    }
+
+    #[test]
+    fn pathogen_suppression_prereqs() {
+        let mut state = GameState::new_default(42);
+
+        // No prereqs — not available
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::PathogenSuppression }
+        )), "PathogenSuppression should not be available without VaccinePlatform + CombinationTherapy");
+
+        // Only VaccinePlatform — still not available
+        state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::PathogenSuppression }
+        )), "PathogenSuppression requires both techs, not just VaccinePlatform");
+
+        // Both prereqs — available
+        state.unlocked_techs.push(crate::state::BasicTech::CombinationTherapy);
+        let basic = state.available_basic_projects();
+        assert!(basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::PathogenSuppression }
+        )), "PathogenSuppression should be available with VaccinePlatform + CombinationTherapy");
+    }
+
+    #[test]
+    fn suppress_pathogen_reduces_infectivity_20_percent() {
+        use crate::state::KNOWLEDGE_FULL;
+        let mut state = GameState::new_default(42);
+        state.diseases[0].knowledge = KNOWLEDGE_FULL;
+        state.resources.funding = 5000.0;
+        state.resources.personnel = 20;
+        // Ensure disease is infecting somewhere
+        state.regions[0].infections[0].infected = 1000.0;
+
+        let original_infectivity = state.diseases[0].infectivity;
+
+        // Run suppression to near-completion and tick it over
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::SuppressPathogen { disease_idx: 0 },
+            progress: 599.0,
+            required_ticks: 600.0,
+            personnel_assigned: 8,
+            scientist_ids: vec![],
+        }];
+
+        // Tick to complete
+        for _ in 0..5 {
+            state = tick(&state);
+        }
+
+        assert!(state.field_research.is_empty(), "suppression project should have completed");
+        let reduced = state.diseases[0].infectivity;
+        let expected = original_infectivity * 0.80;
+        assert!(
+            (reduced - expected).abs() < 0.001,
+            "infectivity should drop by 20%: original={original_infectivity:.4}, expected={expected:.4}, got={reduced:.4}"
         );
     }
 }
