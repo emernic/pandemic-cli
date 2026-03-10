@@ -2,6 +2,7 @@ use crate::state::{
     GameEvent, GameOutcome, GameState, ResearchKind, ResearchProject,
     ResearchTrack, ScientistTrait, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     BRILLIANT_BREAKTHROUGH_CHANCE, BRILLIANT_BREAKTHROUGH_PROGRESS, TRAIN_PERSONNEL_BATCH,
+    LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
@@ -158,10 +159,12 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     // chance of a eureka moment that jumps the project forward.
     check_breakthroughs(state, rng);
 
+    let lab_mult = state.lab_speed_multiplier();
+
     // Advance all field research projects and collect completion effects
     for project in &mut state.field_research {
         let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
-        project.progress += speed;
+        project.progress += speed * lab_mult;
     }
     // Process completions (drain_filter pattern via retain)
     let mut completed_fields: Vec<ResearchProject> = Vec::new();
@@ -291,7 +294,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
     if let Some(ref mut project) = state.applied_research {
         let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
-        project.progress += speed;
+        project.progress += speed * lab_mult;
     }
     if state.applied_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.applied_research.take().unwrap();
@@ -325,7 +328,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
     if let Some(ref mut project) = state.basic_research {
         let speed = project.speed_with_scientists(&state.medicines, &state.diseases, &state.scientists);
-        project.progress += speed;
+        project.progress += speed * lab_mult;
     }
     if state.basic_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.basic_research.take().unwrap();
@@ -469,6 +472,26 @@ fn check_breakthroughs(state: &mut GameState, rng: &mut impl rand::Rng) {
             state.events.push(GameEvent::ScientistBreakthrough { scientist_name: name });
         }
     }
+}
+
+/// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
+/// Returns (success, message).
+pub(super) fn upgrade_lab(state: &mut GameState) -> (bool, Option<String>) {
+    if state.outcome != GameOutcome::Playing {
+        return (false, None);
+    }
+    let (cost, next_name) = match state.lab_level {
+        0 => (LAB_LEVEL_1_COST, "Enhanced Sequencing Lab"),
+        1 => (LAB_LEVEL_2_COST, "Advanced Genomics Center"),
+        _ => return (false, Some("Research lab is already at maximum level.".into())),
+    };
+    if state.resources.funding < cost {
+        return (false, Some(format!("Not enough funding (need ¥{:.0})", cost)));
+    }
+    state.resources.funding -= cost;
+    state.lab_level += 1;
+    (true, Some(format!("Lab upgraded to {}. Research speed +{}%.", next_name,
+        if state.lab_level == 1 { 30 } else { 60 })))
 }
 
 #[cfg(test)]
@@ -1516,5 +1539,44 @@ mod tests {
             state.diseases[0].cross_region_spread
         );
         assert_eq!(state.pathogens_interdicted, 1, "interdiction counter should increment");
+    }
+
+    #[test]
+    fn lab_upgrade_increases_research_speed() {
+        use crate::state::LAB_LEVEL_1_COST;
+
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1000.0;
+        state.field_research = vec![ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 5, // base personnel, 1.0x speed
+            scientist_ids: vec![],
+        }];
+
+        // Baseline: one tick at standard lab
+        let base_state = tick(&state);
+        let base_progress = base_state.field_research[0].progress;
+
+        // Upgrade to level 1 (1.3x multiplier)
+        state.lab_level = 1;
+        let upgraded_state = tick(&state);
+        let upgraded_progress = upgraded_state.field_research[0].progress;
+
+        assert!(
+            (upgraded_progress / base_progress - 1.3).abs() < 0.01,
+            "Lab level 1 should give 1.3x speed, got {}x",
+            upgraded_progress / base_progress
+        );
+
+        // Verify upgrade_lab deducts cost and increments level
+        let mut s = GameState::new_default(42);
+        s.resources.funding = 1000.0;
+        let (ok, msg) = super::upgrade_lab(&mut s);
+        assert!(ok);
+        assert!(msg.is_some(), "upgrade should return a message");
+        assert_eq!(s.lab_level, 1);
+        assert!((s.resources.funding - (1000.0 - LAB_LEVEL_1_COST)).abs() < 0.01);
     }
 }

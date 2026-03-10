@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{GameState, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -113,6 +113,57 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
         ]));
         lines.push(Line::from(""));
     }
+
+    // Lab upgrade entry (index 3)
+    let lab_selected = state.ui.panel_selection == 3;
+    if lab_selected {
+        selected_line = Some(lines.len());
+    }
+    let lab_marker = if lab_selected { "▶ " } else { "  " };
+    let lab_style = if lab_selected {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let lab_title = if state.lab_level >= 2 {
+        "Research Lab"
+    } else {
+        "Upgrade Research Lab"
+    };
+    lines.push(Line::from(Span::styled(
+        format!("{}{}", lab_marker, lab_title),
+        lab_style,
+    )));
+    let (lab_desc, lab_status, lab_status_color) = if state.lab_level >= 2 {
+        (
+            format!("    {} — all research runs 60% faster", state.lab_level_name()),
+            String::new(),
+            Color::Green,
+        )
+    } else {
+        let (cost, next_name, pct) = if state.lab_level == 0 {
+            (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
+        } else {
+            (LAB_LEVEL_2_COST, "Advanced Genomics Center", 60)
+        };
+        let can_afford = state.resources.funding >= cost;
+        let status = if can_afford {
+            format!(" [¥{:.0}]", cost)
+        } else {
+            format!(" [¥{:.0} needed]", cost)
+        };
+        let status_color = if can_afford { Color::Cyan } else { Color::Red };
+        (
+            format!("    {} → {} (+{}% speed)", state.lab_level_name(), next_name, pct),
+            status,
+            status_color,
+        )
+    };
+    lines.push(Line::from(vec![
+        Span::styled(lab_desc, Style::default().fg(Color::DarkGray)),
+        Span::styled(lab_status, Style::default().fg(lab_status_color)),
+    ]));
+    lines.push(Line::from(""));
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(

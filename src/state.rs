@@ -178,6 +178,10 @@ pub struct GameState {
     /// Count of pathogen interdiction operations completed (field research).
     #[serde(default)]
     pub pathogens_interdicted: u32,
+    /// Global research lab level (0=Standard, 1=Enhanced Sequencing, 2=Advanced Genomics).
+    /// Built via the Research panel. Each level multiplies all research progress rates.
+    #[serde(default)]
+    pub lab_level: u8,
     pub ui: UiState,
 }
 
@@ -309,6 +313,12 @@ pub const INTEL_STATION_PERSONNEL: u32 = 1;
 pub const ADVANCED_INTEL_COST: f64 = 150.0;
 /// Advanced Intel ongoing personnel requirement (replaces Level 1 cost).
 pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
+
+/// Research Lab upgrade costs (one-time, no ongoing personnel cost).
+/// Level 1 (Enhanced Sequencing Lab): +30% research speed.
+/// Level 2 (Advanced Genomics Center): +60% research speed.
+pub const LAB_LEVEL_1_COST: f64 = 150.0;
+pub const LAB_LEVEL_2_COST: f64 = 300.0;
 
 /// Disease surveillance intensity. Each tier reveals different information
 /// and only Mass Rapid screening actively reduces disease spread.
@@ -3083,6 +3093,8 @@ pub enum GameCommand {
     ToggleStandingOrder { kind: usize },
     /// Start a field operation (costs personnel and time, not money).
     StartFieldOp { kind: FieldOpKind },
+    /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
+    UpgradeLab,
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3595,7 +3607,7 @@ impl UiState {
                 | None => 0,
             },
             Panel::Research => match &self.research_ui {
-                Some(ResearchUiState::BrowseCategories) => 2, // Field, Applied, Basic
+                Some(ResearchUiState::BrowseCategories) => 3, // Field, Applied, Basic, Upgrade Lab
                 Some(ResearchUiState::BrowseProjects { track }) => {
                     if *track == ResearchTrack::Field {
                         // Active projects + available projects (if capacity remains)
@@ -3898,6 +3910,10 @@ impl UiState {
     fn handle_research_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
         match self.research_ui.clone() {
             Some(ResearchUiState::BrowseCategories) => {
+                if self.panel_selection == 3 {
+                    // Upgrade Lab
+                    return Some(GameCommand::UpgradeLab);
+                }
                 let track = match self.panel_selection {
                     0 => ResearchTrack::Field,
                     1 => ResearchTrack::Applied,
@@ -4537,6 +4553,7 @@ impl GameState {
             pathogens_suppressed: 0,
             pathogens_attenuated: 0,
             pathogens_interdicted: 0,
+            lab_level: 0,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -5403,6 +5420,24 @@ impl GameState {
     /// True if the player has unlocked Resistance Surveillance (can see resistance levels).
     pub fn has_resistance_surveillance(&self) -> bool {
         self.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
+    }
+
+    /// Research speed multiplier from lab infrastructure (1.0 / 1.3 / 1.6).
+    pub fn lab_speed_multiplier(&self) -> f64 {
+        match self.lab_level {
+            0 => 1.0,
+            1 => 1.3,
+            _ => 1.6,
+        }
+    }
+
+    /// Human-readable name for the current lab level.
+    pub fn lab_level_name(&self) -> &'static str {
+        match self.lab_level {
+            0 => "Standard Lab",
+            1 => "Enhanced Sequencing",
+            _ => "Advanced Genomics",
+        }
     }
 
     /// Resistance buildup multiplier. CombinationTherapy tech halves it.
