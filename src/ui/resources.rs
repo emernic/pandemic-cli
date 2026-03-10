@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, ThreatLevel, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: always 3 to show research status.
@@ -38,6 +38,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             format!("Day: {:.1}", ticks_to_days(state.tick as f64)),
             Style::default().fg(Color::Yellow),
         ),
+        Span::raw("  "),
+        {
+            let (label, color) = match state.threat_level {
+                ThreatLevel::Normal => ("DEFCON-5", Color::Green),
+                ThreatLevel::Elevated => ("DEFCON-4", Color::Yellow),
+                ThreatLevel::Crisis => ("DEFCON-3", Color::Red),
+                ThreatLevel::Catastrophe => ("DEFCON-2", Color::LightRed),
+                ThreatLevel::Extinction => ("DEFCON-1", Color::LightRed),
+            };
+            Span::styled(label, Style::default().fg(color).add_modifier(Modifier::BOLD))
+        },
         Span::raw("  "),
         {
             let pol = state.resources.political_power;

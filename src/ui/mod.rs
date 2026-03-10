@@ -55,7 +55,8 @@ pub fn process_events(state: &mut GameState) {
     // Reset speed display when tick() auto-paused on critical events
     if state.events.iter().any(|e| matches!(e,
         GameEvent::RegionCollapsed { .. } | GameEvent::DiseaseDetected { .. }
-        | GameEvent::ThreatEscalation { .. } | GameEvent::PathogenIdentified { .. }
+        | GameEvent::ThreatEscalation { .. } | GameEvent::ThreatLevelChanged { .. }
+        | GameEvent::PathogenIdentified { .. }
         | GameEvent::MedicineDeveloped { .. } | GameEvent::TrialCompleted { .. }))
     {
         state.ui.speed_multiplier = 1;
@@ -217,6 +218,9 @@ pub fn process_events(state: &mut GameState) {
             }
             GameEvent::GovernorAction { description, .. } => {
                 (4, description.clone())
+            }
+            GameEvent::ThreatLevelChanged { to, .. } => {
+                (1, format!("DEFCON {} — Threat level: {}", to.defcon(), to.label()))
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
