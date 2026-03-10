@@ -112,6 +112,23 @@ There are two distinct pipelines for player-visible messages, each serving a dif
 
 This is intentional. Command handlers have the context needed to compose feedback (amounts, names, reasons) and the messages are simple enough that structured result types would add boilerplate without functional benefit. The convention is: new tick events → `GameEvent` variant + `process_events()` handler. New commands → return `(success, Option<String>)` from the handler.
 
+## What The Architecture Enforces (And What It Doesn't)
+
+The architecture is "one giant mutable state blob plus conventions." This section is honest about which boundaries are real and which are social.
+
+**Enforced by the compiler:**
+- `pub(super)` on subsystem functions — external code can't call `research::start_research()` directly, only through `execute_command()`
+- Module visibility — `engine/` doesn't `use crate::ui`, `ui/` doesn't `use crate::engine`. A new import would be a visible `use` statement in the diff.
+- `GameCommand` enum — player actions must go through the command dispatch, not by mutating state directly from UI code
+
+**Enforced by convention only (can be violated without compiler errors):**
+- Engine code should not read or write `state.ui.*` fields. Nothing prevents it — `UiState` is a public field of `GameState`, which engine functions receive as `&mut GameState`.
+- UI code should not mutate game state (beyond `UiState`). Again, nothing prevents it — UI functions also receive `&mut GameState`.
+- Subsystems should not call each other. They share `&mut GameState`, so any subsystem could call any other subsystem's logic through state methods.
+- Command response strings are composed in the engine. Tick-time event strings are composed in the UI. No type prevents mixing these.
+
+**Why this is acceptable at current scale:** This is a single-binary game worked on by AI agents that read CLAUDE.md and architecture docs. The conventions are documented, the boundaries are visible in code review, and violations are caught by the agents' instruction-following. Type-level enforcement (splitting the state blob, wrapper types restricting access) would add significant complexity for a problem that isn't causing bugs. If the codebase grows to the point where convention violations become a recurring issue, revisit this decision.
+
 ## What NOT to Change
 
 - **Single `GameState` struct** — One serializable blob = trivial save/load.
@@ -126,4 +143,4 @@ These are done. Listed for historical context only.
 1. **UI state machines extracted from engine** — `apply_action()` moved to `lib.rs`. Panel navigation, wizard steps, selection indices all live in `UiState` methods. Engine only exports `tick()` and `execute_command()`.
 2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_applied_projects()` → `GameState` methods. UI no longer imports from engine.
 3. **`CommandResult` type** — `execute_command()` returns `CommandResult { message, success }` instead of directly modifying UI state.
-4. **Engine god file broken up** — Research, medicine, policy, and crisis logic extracted into subsystem modules.
+4. **Engine god file broken up** — Research, medicine, policy, crisis, spread, disease emergence, and personnel logic extracted into 7 subsystem modules.
