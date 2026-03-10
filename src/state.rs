@@ -1010,6 +1010,19 @@ pub const APPEASE_LOYALTY_GAIN: f64 = 15.0;
 /// Ticks between autonomous governor defiance actions (~2 days).
 pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
 
+/// Bargain loyalty gains by personality.
+pub const BARGAIN_LOYALTY_GAIN: f64 = 20.0;
+/// Technocrat bargain gives extra loyalty (research partnership is valuable).
+pub const BARGAIN_TECHNOCRAT_LOYALTY_GAIN: f64 = 25.0;
+/// Nationalist bargain cost: personnel permanently reassigned to regional control.
+pub const BARGAIN_NATIONALIST_PERSONNEL_COST: u32 = 2;
+/// Populist bargain cost: fraction of POL surrendered.
+pub const BARGAIN_POPULIST_POL_FRACTION: f64 = 0.15;
+/// Technocrat bargain cost: extra ticks added to current applied research.
+pub const BARGAIN_TECHNOCRAT_RESEARCH_TICKS: f64 = 150.0;
+/// Cooperative bargain cost: loyalty drained from all other governors.
+pub const BARGAIN_COOPERATIVE_LOYALTY_DRAIN: f64 = 5.0;
+
 impl Governor {
     /// Returns true if this governor is defiant (loyalty below threshold).
     pub fn is_defiant(&self) -> bool {
@@ -2690,6 +2703,8 @@ pub enum GameCommand {
     RallySupport,
     /// Spend funds to boost a governor's loyalty.
     AppeaseGovernor { region_idx: usize },
+    /// Personality-specific bargain with a defiant governor (non-monetary cost).
+    BargainWithGovernor { region_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3172,10 +3187,13 @@ impl UiState {
                     state.regions.len() + 1 + DECREE_COUNT - 1
                 }
                 // Policies (0..POLICY_COUNT-1) + Appease Governor (POLICY_COUNT)
+                // + Bargain (POLICY_COUNT+1, only when defiant & available)
                 // Appease is hidden for collapsed regions, so max is one less.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
                     if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
                         POLICY_COUNT - 1
+                    } else if state.bargain_available(*region_idx) {
+                        POLICY_COUNT + 1
                     } else {
                         POLICY_COUNT
                     }
@@ -3520,8 +3538,11 @@ impl UiState {
                 }
             }
             Some(PolicyUiState::ManagePolicies { region_idx }) => {
-                if self.panel_selection == POLICY_COUNT {
-                    // Appease Governor (last item in the list)
+                if self.panel_selection == POLICY_COUNT + 1 {
+                    // Bargain with Governor (below Appease, only when defiant)
+                    Some(GameCommand::BargainWithGovernor { region_idx })
+                } else if self.panel_selection == POLICY_COUNT {
+                    // Appease Governor
                     Some(GameCommand::AppeaseGovernor { region_idx })
                 } else {
                     // Toggle policy (panel_selection matches policy_idx)
@@ -4406,6 +4427,23 @@ impl GameState {
     /// Whether a policy can be activated given current POL and regional severity.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
         self.resources.political_power >= self.effective_pol_threshold(region_idx, policy_idx)
+    }
+
+    /// Whether a personality-specific bargain is available for the given region.
+    /// Requires: non-collapsed region, defiant governor, and personality-specific
+    /// preconditions (Technocrat needs active applied research).
+    pub fn bargain_available(&self, region_idx: usize) -> bool {
+        let region = match self.regions.get(region_idx) {
+            Some(r) => r,
+            None => return false,
+        };
+        if region.collapsed || !region.governor.is_defiant() {
+            return false;
+        }
+        match region.governor.personality {
+            GovernorPersonality::Technocrat => self.applied_research.is_some(),
+            _ => true,
+        }
     }
 
     /// Current POL drift target based on severity, time, and active policies.

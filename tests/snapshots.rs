@@ -1,5 +1,5 @@
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::{GameOutcome, GameState, SimState};
+use pandemic_cli_lib::state::{GameOutcome, GameState, GovernorPersonality, POLICY_COUNT, SimState};
 
 /// Smoke test: initial screen renders without panicking and contains key UI elements.
 #[test]
@@ -33,4 +33,23 @@ fn game_over_defeat() {
     assert!(output.contains("DEFEAT"), "missing defeat indicator");
     assert!(output.contains("collapsed") || output.contains("resources"), "missing defeat message");
     assert!(output.contains("Summary"), "missing summary section");
+}
+
+/// Smoke test: bargain option appears when governor is defiant.
+#[test]
+fn bargain_shown_for_defiant_governor() {
+    let mut state = GameState::new_default(42);
+    // Force Nationalist governor to be defiant
+    state.regions[0].governor.personality = GovernorPersonality::Nationalist;
+    state.regions[0].governor.loyalty = 20.0;
+    // Open policy panel for region 0, then scroll down to the bargain item
+    // (panel viewport is small, need to move selection to bring bargain into view)
+    let mut steps: Vec<String> = vec!["p".to_string(), "enter".to_string()];
+    // Navigate down past all policies + Appease to reach Bargain (POLICY_COUNT + 1)
+    for _ in 0..=POLICY_COUNT {
+        steps.push("down".to_string());
+    }
+    let result = run_snapshot(state, &steps).unwrap();
+    assert!(result.screen.contains("Bargain: Regional Priority"), "missing bargain option for defiant Nationalist");
+    assert!(result.screen.contains("DEFIANT"), "missing DEFIANT label");
 }
