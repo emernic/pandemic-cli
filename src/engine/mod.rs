@@ -1388,9 +1388,10 @@ mod tests {
     //
     // This test enforces a direct user requirement: with zero player intervention,
     // every seed must reach GameOutcome::Lost (all regions collapsed) within 45 days.
-    // If this test fails, disease parameters are too weak — increase lethality and
-    // infectivity in PathogenType::stat_ranges(). Do NOT raise the day ceiling or
-    // add seeds to skip. Do NOT comment it out. Do NOT add `#[ignore]`.
+    // If this test fails, disease parameters are too weak — increase infectivity
+    // in PathogenType::stat_ranges(). Do NOT increase per-tick lethality or recovery
+    // (that shortens infectious period and causes epidemic burnout — see stat_ranges()
+    // comment). Do NOT raise the day ceiling or add seeds to skip. Do NOT add `#[ignore]`.
     //
     // The game is supposed to be an urgent survival challenge. Players should feel
     // genuine pressure from day 1. A permissive disease gives the player no reason
