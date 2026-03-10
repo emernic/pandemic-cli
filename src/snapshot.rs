@@ -162,9 +162,8 @@ pub fn run_snapshot(
                         // Continue processing remaining steps (or break on game over above).
                     }
                     StopReason::CrisisStarted => {
-                        let day = day_after;
                         eprintln!(
-                            "\n[Day {day:.1}] A CRISIS EVENT has fired. Tick advancement stopped."
+                            "\n[Day {day_after:.1}] A CRISIS EVENT has fired. Tick advancement stopped."
                         );
                         eprintln!(
                             "NOTE: Crisis events are a key part of gameplay. They present real decisions with lasting consequences."
