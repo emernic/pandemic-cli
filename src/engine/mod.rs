@@ -139,24 +139,25 @@ pub fn tick(state: &GameState) -> GameState {
     // Later diseases are tougher (scaled by game day and player capability).
     // The arms race is bidirectional: more player tech → faster emergence.
     //
-    // Wave clustering: after day 25, recent disease spawns temporarily spike
-    // the emergence rate, creating coordinated waves (2-3 diseases within
-    // 1-2 days). The player notices diseases appearing in suspicious clusters.
+    // Wave clustering: after day 12, recent disease spawns temporarily spike
+    // the emergence rate, creating coordinated waves. Ramps from 2× (day 12)
+    // to 5× (day 25+), so mid-game sees 2-disease clusters while late-game
+    // sees 2-3.
     {
         let day = new.tick as f64 / crate::state::TICKS_PER_DAY;
 
-        // Wave boost: if a disease spawned recently and we're in late game,
-        // dramatically increase the chance of another spawn.
-        let wave_boost = if day >= 25.0 {
+        // Wave boost: if a disease spawned recently and we're past early game,
+        // increase the chance of another spawn. Ramps up over mid-to-late game.
+        let wave_boost = if day >= 12.0 {
             let most_recent_spawn = new.diseases.iter()
                 .map(|d| d.spawned_at_tick)
                 .max()
                 .unwrap_or(0);
             let ticks_since = new.tick.saturating_sub(most_recent_spawn);
             if ticks_since > 0 && ticks_since < 200 {
-                // 5x boost for ~200 ticks (1.7 days) after a spawn
-                // ~50% chance of a follow-up disease in the window
-                4.0
+                // Ramp: 2.0 at day 12 → 4.0 at day 25+
+                let ramp = ((day - 12.0) / 13.0).clamp(0.0, 1.0);
+                2.0 + ramp * 2.0
             } else {
                 0.0
             }
@@ -5333,15 +5334,15 @@ mod tests {
     fn wave_clustering_increases_emergence_after_recent_spawn() {
         use crate::state::TICKS_PER_DAY;
 
-        // At day 30, with a disease that spawned 50 ticks ago,
-        // emergence chance should be much higher than normal
+        // At day 30 (fully ramped), with a disease that spawned 50 ticks ago,
+        // emergence chance should be much higher than normal.
+        // Wave clustering ramps from 2.0 at day 12 to 4.0 at day 25+.
         let mut state = GameState::new_default(42);
         state.tick = (30.0 * TICKS_PER_DAY) as u64;
-        // Set a disease as recently spawned
         state.diseases[0].spawned_at_tick = state.tick - 50;
 
         let day = state.tick as f64 / TICKS_PER_DAY;
-        assert!(day >= 25.0, "should be past day 25");
+        assert!(day >= 25.0, "should be past full ramp at day 25");
 
         let most_recent = state.diseases.iter()
             .map(|d| d.spawned_at_tick)
@@ -5350,12 +5351,36 @@ mod tests {
         let ticks_since = state.tick.saturating_sub(most_recent);
         assert!(ticks_since < 200, "should be within wave window");
 
-        // The wave boost should be 4.0, making total multiplier = 1 + tech_pressure + 4
-        let wave_boost = 4.0; // as per the implementation
+        // At day 30 (fully ramped), wave boost is 4.0
+        let wave_boost = 4.0;
         let normal_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure());
         let boosted_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure() + wave_boost);
         assert!(boosted_chance > normal_chance * 3.0,
             "wave-boosted chance should be significantly higher: normal={normal_chance}, boosted={boosted_chance}");
+    }
+
+    #[test]
+    fn wave_clustering_ramps_from_mid_game() {
+        use crate::state::TICKS_PER_DAY;
+
+        // At day 15, wave boost should be active but weaker than late-game.
+        // Ramp: (15-12)/13 ≈ 0.23, so boost = 2.0 + 0.23*2.0 ≈ 2.46
+        let mut state = GameState::new_default(42);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+        state.diseases[0].spawned_at_tick = state.tick - 50;
+
+        let day = state.tick as f64 / TICKS_PER_DAY;
+        let ramp = ((day - 12.0) / 13.0).clamp(0.0, 1.0);
+        let wave_boost = 2.0 + ramp * 2.0;
+
+        // Should be meaningfully boosted but less than the full 4.0
+        assert!(wave_boost > 2.0, "boost should be active at day 15: {wave_boost}");
+        assert!(wave_boost < 3.0, "boost should not be fully ramped at day 15: {wave_boost}");
+
+        let normal_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure());
+        let boosted_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure() + wave_boost);
+        assert!(boosted_chance > normal_chance * 2.0,
+            "mid-game wave boost should at least double emergence chance");
     }
 
     #[test]
