@@ -1,4 +1,5 @@
 mod crisis;
+mod disease;
 mod medicine;
 mod personnel;
 mod policy;
@@ -154,7 +155,7 @@ pub fn tick(state: &GameState) -> GameState {
             && new.diseases.len() < MAX_DISEASES
             && rng.r#gen::<f64>() < emergence_chance
         {
-            new.spawn_disease_scaled(&mut rng);
+            disease::spawn_disease_scaled(&mut new, &mut rng);
         }
     }
 
@@ -471,7 +472,7 @@ pub fn tick(state: &GameState) -> GameState {
         && new.tick > EMERGENCE_MIN_TICK
     {
         let mut rng2 = new.rng.clone();
-        new.spawn_disease_scaled(&mut rng2);
+        disease::spawn_disease_scaled(&mut new, &mut rng2);
         new.rng = rng2;
     }
 
@@ -2357,7 +2358,7 @@ mod tests {
         state.diseases.clear();
         for r in &mut state.regions { r.infections.clear(); }
         let mut rng = state.rng.clone();
-        state.spawn_disease_scaled(&mut rng);
+        disease::spawn_disease_scaled(&mut state, &mut rng);
 
         // The new disease should have pre-existing resistance to CellWallInhibitor
         if !state.diseases.is_empty() {
@@ -2388,7 +2389,7 @@ mod tests {
         state.diseases.clear();
         for r in &mut state.regions { r.infections.clear(); }
         let mut rng = state.rng.clone();
-        state.spawn_disease_scaled(&mut rng);
+        disease::spawn_disease_scaled(&mut state, &mut rng);
 
         if !state.diseases.is_empty() {
             let d = &state.diseases[0];
@@ -2413,7 +2414,7 @@ mod tests {
             state.diseases.clear();
             for r in &mut state.regions { r.infections.clear(); }
             let mut rng = state.rng.clone();
-            state.spawn_disease_scaled(&mut rng);
+            disease::spawn_disease_scaled(&mut state, &mut rng);
             if !state.diseases.is_empty() && state.diseases[0].transmission == TransmissionVector::Contact {
                 early_contact += 1;
             }
@@ -2424,7 +2425,7 @@ mod tests {
             state2.diseases.clear();
             for r in &mut state2.regions { r.infections.clear(); }
             let mut rng2 = state2.rng.clone();
-            state2.spawn_disease_scaled(&mut rng2);
+            disease::spawn_disease_scaled(&mut state2, &mut rng2);
             if !state2.diseases.is_empty() && state2.diseases[0].transmission == TransmissionVector::Contact {
                 late_contact += 1;
             }
@@ -4806,7 +4807,7 @@ mod tests {
 
         let mut rng = ChaCha8Rng::seed_from_u64(99);
         let initial_count = state.diseases.len();
-        state.spawn_disease_scaled(&mut rng);
+        disease::spawn_disease_scaled(&mut state, &mut rng);
 
         if state.diseases.len() > initial_count {
             let new_d = &state.diseases[initial_count];
@@ -4826,7 +4827,7 @@ mod tests {
         state1.tick = 3000;
         let mut rng1 = ChaCha8Rng::seed_from_u64(77);
         let count1 = state1.diseases.len();
-        state1.spawn_disease_scaled(&mut rng1);
+        disease::spawn_disease_scaled(&mut state1, &mut rng1);
 
         // Spawn disease WITH PathogenSuppression (same seed for comparable params)
         let mut state2 = GameState::new_default(42);
@@ -4836,7 +4837,7 @@ mod tests {
         state2.unlocked_techs.push(BasicTech::CombinationTherapy);
         let mut rng2 = ChaCha8Rng::seed_from_u64(77);
         let count2 = state2.diseases.len();
-        state2.spawn_disease_scaled(&mut rng2);
+        disease::spawn_disease_scaled(&mut state2, &mut rng2);
 
         if state1.diseases.len() > count1 && state2.diseases.len() > count2 {
             let d1 = &state1.diseases[count1];
@@ -4859,7 +4860,7 @@ mod tests {
 
         let mut rng = ChaCha8Rng::seed_from_u64(55);
         let initial_count = state.diseases.len();
-        state.spawn_disease_scaled(&mut rng);
+        disease::spawn_disease_scaled(&mut state, &mut rng);
 
         if state.diseases.len() > initial_count {
             let new_d = &state.diseases[initial_count];
@@ -4880,7 +4881,7 @@ mod tests {
         state1.unlocked_techs.push(BasicTech::PathogenSuppression);
         let mut rng1 = ChaCha8Rng::seed_from_u64(77);
         let count1 = state1.diseases.len();
-        state1.spawn_disease_scaled(&mut rng1);
+        disease::spawn_disease_scaled(&mut state1, &mut rng1);
 
         // Spawn with PathogenSuppression + DirectedAttenuation (same seed)
         let mut state2 = GameState::new_default(42);
@@ -4889,7 +4890,7 @@ mod tests {
         state2.unlocked_techs.push(BasicTech::DirectedAttenuation);
         let mut rng2 = ChaCha8Rng::seed_from_u64(77);
         let count2 = state2.diseases.len();
-        state2.spawn_disease_scaled(&mut rng2);
+        disease::spawn_disease_scaled(&mut state2, &mut rng2);
 
         if state1.diseases.len() > count1 && state2.diseases.len() > count2 {
             let d1 = &state1.diseases[count1];
@@ -4910,7 +4911,7 @@ mod tests {
         state1.tick = 3000;
         let mut rng1 = ChaCha8Rng::seed_from_u64(77);
         let count1 = state1.diseases.len();
-        state1.spawn_disease_scaled(&mut rng1);
+        disease::spawn_disease_scaled(&mut state1, &mut rng1);
 
         // Spawn with GenomicInterdiction
         let mut state2 = GameState::new_default(42);
@@ -4919,7 +4920,7 @@ mod tests {
         state2.unlocked_techs.push(BasicTech::DirectedAttenuation);
         let mut rng2 = ChaCha8Rng::seed_from_u64(77);
         let count2 = state2.diseases.len();
-        state2.spawn_disease_scaled(&mut rng2);
+        disease::spawn_disease_scaled(&mut state2, &mut rng2);
 
         if state1.diseases.len() > count1 && state2.diseases.len() > count2 {
             let d1 = &state1.diseases[count1];
