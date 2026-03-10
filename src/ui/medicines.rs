@@ -256,8 +256,7 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
         let infected = region.screened_infected();
         let dead = region.detected_dead(&state.diseases);
 
-        let cooldown = region.deploy_cooldown_remaining(state.tick);
-        let on_cooldown = cooldown > 0;
+        let on_cooldown = region.any_deploy_cooldown(state.tick);
 
         let mut spans = vec![
             Span::styled(format!("{}{:<14}", marker, region.name), style),
@@ -279,10 +278,9 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
             ));
         }
         if on_cooldown {
-            let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
             spans.push(Span::raw("  "));
             spans.push(Span::styled(
-                format!("[{days:.1}d cooldown]"),
+                "[partial cooldown]".to_string(),
                 Style::default().fg(Color::Yellow),
             ));
         }
@@ -518,7 +516,7 @@ fn render_select_target(
         )));
     }
 
-    let deploy_cost = med.deploy_cost(region.population);
+    let deploy_cost = med.deploy_cost();
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(

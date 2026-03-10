@@ -39,15 +39,8 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} supply lines collapsed")));
     }
-    // Block deployment during cooldown
-    let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick);
-    if cooldown > 0 {
-        let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
-        let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} on cooldown, {days:.1} days remaining")));
-    }
     let med = &state.medicines[medicine_idx];
-    let base_cost = med.deploy_cost(state.regions[region_idx].population);
+    let base_cost = med.deploy_cost();
     let disruption_mult = if state.regions[region_idx].is_disrupted(state.tick) {
         DISRUPTION_MEDICINE_COST_MULT
     } else {
@@ -68,6 +61,13 @@ pub(super) fn deploy_medicine(
         DeployTarget::Vaccinate { disease_idx } => *disease_idx,
         DeployTarget::Treat { disease_idx } => *disease_idx,
     };
+
+    // Block deployment during per-disease cooldown
+    let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick, disease_idx);
+    if cooldown > 0 {
+        let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
+        return (false, Some(format!("{region_name} on cooldown for this disease, {days:.1} days remaining")));
+    }
 
     // Estimate how many doses to dispatch based on current population
     let efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
@@ -101,7 +101,7 @@ pub(super) fn deploy_medicine(
     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - doses_to_ship).max(0.0);
     state.medicines[medicine_idx].deployed_count += 1;
     state.total_doses_deployed += doses_to_ship;
-    state.regions[region_idx].last_deploy_tick = Some(state.tick);
+    state.regions[region_idx].last_deploy_tick.insert(disease_idx, state.tick);
 
     // Create the shipment — supply line degradation slows delivery
     let supply_mult = if state.regions[region_idx].supply_lines < crate::state::INFRA_CRITICAL {
@@ -342,10 +342,10 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             if region.collapsed {
                 continue;
             }
-            if region.deploy_cooldown_remaining(state.tick) > 0 {
-                continue;
-            }
             for &d_idx in &tested {
+                if region.deploy_cooldown_remaining(state.tick, d_idx) > 0 {
+                    continue;
+                }
                 let infected = region.disease_state(d_idx)
                     .map(|inf| inf.infected)
                     .unwrap_or(0.0);
@@ -363,7 +363,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             }
 
             // Check funding (including regional deployment discount)
-            let cost = state.medicines[med_idx].deploy_cost(state.regions[region_idx].population)
+            let cost = state.medicines[med_idx].deploy_cost()
                 * state.deployment_cost_bonus();
             if state.resources.funding < cost {
                 continue;

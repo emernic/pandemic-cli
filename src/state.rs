@@ -219,11 +219,15 @@ pub const MAX_FIELD_RESEARCH: usize = 3;
 // Medicine constants.
 /// Fraction of infected treated per deployment (before efficacy modifiers).
 /// Treatment is proportional — scales with infection size instead of fixed dose count.
-pub const TREATMENT_FRACTION: f64 = 0.5;
+/// At 1.0, a single deployment of a perfectly matched medicine treats all infected.
+/// Broad-spectrum (0.5 efficacy) treats ~50% per deploy, requiring multiple rounds.
+pub const TREATMENT_FRACTION: f64 = 1.0;
 /// Fraction of susceptible population vaccinated per deployment (before efficacy).
-/// Vaccination is proportional like treatment — each deploy protects a meaningful
-/// fraction, making repeated deployments build toward population immunity.
-pub const VACCINATION_FRACTION: f64 = 0.02;
+/// Vaccination is proportional like treatment. At 0.15, a targeted vaccine (eff 1.0)
+/// covers 15% of susceptible per deploy. Five deployments cover ~56%, ten cover ~80%.
+/// This creates compound returns: each deploy shrinks the susceptible pool, slowing
+/// future infection growth. VaccinePlatform tech (3x) makes this very powerful.
+pub const VACCINATION_FRACTION: f64 = 0.15;
 
 /// Efficacy multiplier when deploying a medicine against a disease it wasn't
 /// specifically developed for, but whose mechanism matches the pathogen type
@@ -1330,9 +1334,11 @@ pub struct Region {
     /// healthcare = fewer deaths. Stacks with hospital_level. Default 1.0.
     #[serde(default = "default_one")]
     pub healthcare_modifier: f64,
-    /// Tick when medicine was last deployed to this region. Used for deploy cooldown.
+    /// Tick when medicine was last deployed to this region for each disease.
+    /// Keyed by disease_idx. Per-disease cooldown lets the player treat multiple
+    /// diseases in the same region without one blocking the others.
     #[serde(default)]
-    pub last_deploy_tick: Option<u64>,
+    pub last_deploy_tick: HashMap<usize, u64>,
     /// Healthcare capacity (0.0–1.0). Degrades as infection load grows.
     /// Below 0.5: lethality increases. Below 0.25: lethality increases more + research slows.
     /// At 0: maximum lethality, no field research possible here.
@@ -1448,16 +1454,24 @@ impl Region {
         Some(deaths_remaining / self.cached_deaths_per_day)
     }
 
-    /// Remaining cooldown ticks before this region can receive another deployment.
-    /// Returns 0 if ready.
-    pub fn deploy_cooldown_remaining(&self, current_tick: u64) -> u64 {
-        match self.last_deploy_tick {
-            Some(t) => {
+    /// Remaining cooldown ticks before this region can receive a deployment
+    /// targeting the given disease. Returns 0 if ready.
+    pub fn deploy_cooldown_remaining(&self, current_tick: u64, disease_idx: usize) -> u64 {
+        match self.last_deploy_tick.get(&disease_idx) {
+            Some(&t) => {
                 let elapsed = current_tick.saturating_sub(t);
                 DEPLOY_COOLDOWN_TICKS.saturating_sub(elapsed)
             }
             None => 0,
         }
+    }
+
+    /// True if ANY disease in this region has an active deploy cooldown.
+    pub fn any_deploy_cooldown(&self, current_tick: u64) -> bool {
+        self.last_deploy_tick.values().any(|&t| {
+            let elapsed = current_tick.saturating_sub(t);
+            DEPLOY_COOLDOWN_TICKS.saturating_sub(elapsed) > 0
+        })
     }
 
     /// Total infected across all diseases, capped at population.
@@ -2038,12 +2052,11 @@ pub const TICKS_PER_DAY: f64 = 120.0;
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
 /// Mercy rule threshold: 5 days of zero player agency triggers defeat.
 pub const MERCY_RULE_TICKS: u64 = 600;
-/// Deploy cooldown per region in ticks (2 days). Healthcare systems need
-/// time to distribute and administer doses.
-pub const DEPLOY_COOLDOWN_TICKS: u64 = 120;
-/// Shipping delay in ticks (1 day). Deployed medicine takes this long to
-/// arrive at the destination region before taking effect.
-pub const SHIPPING_TICKS: u64 = 120;
+/// Deploy cooldown per disease per region in ticks (half a day).
+/// Per-disease cooldown means treating disease A doesn't block treating disease B.
+pub const DEPLOY_COOLDOWN_TICKS: u64 = 60;
+/// Shipping delay in ticks (half a day). Medicine effects apply on delivery.
+pub const SHIPPING_TICKS: u64 = 60;
 
 /// Convert ticks to days for display purposes.
 pub fn ticks_to_days(ticks: f64) -> f64 {
@@ -2100,9 +2113,10 @@ impl TherapyType {
             (TherapyType::Antiviral, PathogenType::DnaVirus) => 0.8,
             (TherapyType::Antibiotic, PathogenType::Bacterium) => 1.0,
             (TherapyType::Antifungal, PathogenType::Fungus) => 1.0,
-            // Broad-spectrum: partial efficacy against everything except prions
+            // Broad-spectrum: moderate efficacy against everything except prions.
+            // Higher than specialized mismatch (0.1) but lower than matched (1.0).
             (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.1,
-            (TherapyType::BroadSpectrum, _) => 0.5,
+            (TherapyType::BroadSpectrum, _) => 0.7,
             // Prions resist everything
             (_, PathogenType::Prion) => 0.0,
             // Mismatched: nearly useless
@@ -2298,8 +2312,8 @@ impl MechanismOfAction {
     /// Fast/cheap mechanisms have fewer doses (need more manufacturing).
     pub fn base_doses(&self) -> f64 {
         let mult = self.dev_cost_multiplier();
-        // Scale from 60M (mult=0.6) to 140M (mult=1.8)
-        (60_000_000.0 + 80_000_000.0 * (mult - 0.6) / 1.2).round()
+        // Scale from 600M (mult=0.6) to 1.4B (mult=1.8)
+        (600_000_000.0 + 800_000_000.0 * (mult - 0.6) / 1.2).round()
     }
 
     /// Deploy cost per use for this mechanism.
@@ -2369,9 +2383,11 @@ pub enum DeployTarget {
 }
 
 impl Medicine {
-    /// Deployment cost: base cost + $50 per billion population in the target region.
-    pub fn deploy_cost(&self, region_population: u64) -> f64 {
-        self.cost + region_population as f64 / 1_000_000_000.0 * 50.0
+    /// Deployment cost based on the medicine's base cost. Deployment is
+    /// limited primarily by doses and cooldown, not funding. This keeps the
+    /// core gameplay loop (research -> deploy) affordable.
+    pub fn deploy_cost(&self) -> f64 {
+        self.cost
     }
 
     /// Generate targeted medicines for a disease. For non-prion pathogens, produces
@@ -2396,7 +2412,7 @@ impl Medicine {
                     target_diseases: vec![disease_idx],
                     cost: 50.0,
                     doses: 0.0,
-                    max_doses: 100_000_000.0,
+                    max_doses: 1_000_000_000.0,
                     unlocked: false,
                     tested_against: vec![],
                     strain_generations: vec![],
@@ -3919,7 +3935,7 @@ impl UiState {
                 } else {
                     DeployTarget::Treat { disease_idx }
                 };
-                let deploy_cost = med.deploy_cost(state.regions[region_idx].population);
+                let deploy_cost = med.deploy_cost();
                 if state.resources.funding < deploy_cost {
                     self.status_message = Some(
                         format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
@@ -4356,7 +4372,7 @@ impl GameState {
                 intel_level: 0,
                 income_modifier: 1.8,     // Wealthy — major economic contributor
                 healthcare_modifier: 0.85, // Good healthcare infrastructure
-                last_deploy_tick: None,
+                last_deploy_tick: HashMap::new(),
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
@@ -4391,7 +4407,7 @@ impl GameState {
                 intel_level: 0,
                 income_modifier: 1.0,     // Moderate economy
                 healthcare_modifier: 0.95, // Decent healthcare
-                last_deploy_tick: None,
+                last_deploy_tick: HashMap::new(),
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
@@ -4426,7 +4442,7 @@ impl GameState {
                 intel_level: 0,
                 income_modifier: 1.5,     // Strong economy, hub region
                 healthcare_modifier: 0.80, // Excellent healthcare
-                last_deploy_tick: None,
+                last_deploy_tick: HashMap::new(),
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
@@ -4461,7 +4477,7 @@ impl GameState {
                 intel_level: 0,
                 income_modifier: 0.6,     // Lower per-capita income
                 healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
-                last_deploy_tick: None,
+                last_deploy_tick: HashMap::new(),
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
@@ -4496,7 +4512,7 @@ impl GameState {
                 intel_level: 0,
                 income_modifier: 0.9,     // Large but moderate per-capita
                 healthcare_modifier: 1.0,  // Baseline healthcare
-                last_deploy_tick: None,
+                last_deploy_tick: HashMap::new(),
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
@@ -4531,7 +4547,7 @@ impl GameState {
                 intel_level: 0,
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
                 healthcare_modifier: 0.75, // Best healthcare infrastructure
-                last_deploy_tick: None,
+                last_deploy_tick: HashMap::new(),
                 cached_deaths_per_day: 0.0,
                 prev_dead: 0.0,
                 prev_dead_tick: 0,
@@ -4598,12 +4614,15 @@ impl GameState {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
             mechanism: None,
-            target_diseases: all_disease_indices,
-            cost: 100.0,
-            doses: 0.0,
-            max_doses: 200_000_000.0,
-            unlocked: false,
-            tested_against: vec![],
+            target_diseases: all_disease_indices.clone(),
+            cost: 10.0,
+            doses: 2_000_000_000.0,
+            max_doses: 2_000_000_000.0,
+            unlocked: true,
+            // Broad-spectrum starts unlocked at full supply: the player's
+            // immediate (but weaker) tool against any pathogen. Research develops
+            // stronger targeted medicines. Manufacturing replenishes supply.
+            tested_against: all_disease_indices.clone(),
             strain_generations: vec![],
             deployed_count: 0,
         });
@@ -5204,8 +5223,12 @@ impl GameState {
         let no_research = self.field_research.is_empty()
             && self.applied_research.is_none()
             && self.basic_research.is_none();
-        // No medicine doses to deploy and no shipments in transit
-        let no_doses = self.medicines.iter().all(|m| m.doses <= 0.0)
+        // No medicine doses to deploy and no shipments in transit.
+        // If any medicine is unlocked, manufacturing is possible once funds
+        // recover, so the player isn't truly stuck.
+        let has_unlocked_medicine = self.medicines.iter().any(|m| m.unlocked);
+        let no_doses = !has_unlocked_medicine
+            && self.medicines.iter().all(|m| m.doses <= 0.0)
             && self.pending_shipments.is_empty();
 
         broke && no_research && no_doses
@@ -5638,8 +5661,13 @@ mod tests {
         assert!(targeted_count >= disease_count * 2,
             "expected at least 2 targeted medicines per disease, got {targeted_count}");
         assert_eq!(state.medicines.last().unwrap().therapy_type, TherapyType::BroadSpectrum);
-        // Medicines start locked — must be developed via research
-        assert!(state.medicines.iter().all(|m| !m.unlocked));
+        // Broad-spectrum starts unlocked; all others start locked
+        let broad = state.medicines.last().unwrap();
+        assert!(broad.unlocked, "broad-spectrum should start unlocked");
+        assert!(state.medicines.iter()
+            .filter(|m| m.therapy_type != TherapyType::BroadSpectrum)
+            .all(|m| !m.unlocked),
+            "targeted medicines should start locked");
         // Each disease should have at least one targeted medicine
         for i in 0..disease_count {
             assert!(state.medicines.iter().any(|m| m.target_diseases == vec![i]),
@@ -5700,8 +5728,8 @@ mod tests {
         assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::RnaVirus), 0.1);
 
         // Broad-spectrum: partial efficacy
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.5);
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.5);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.7);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.7);
 
         // Prions resist everything
         assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Prion), 0.0);
@@ -5731,6 +5759,13 @@ mod tests {
     #[test]
     fn targeted_medicine_requires_full_study() {
         let mut state = GameState::new_default(42);
+        // Reset broad-spectrum to locked so we can test the knowledge-gate logic
+        for med in &mut state.medicines {
+            if med.therapy_type == TherapyType::BroadSpectrum {
+                med.unlocked = false;
+                med.doses = 0.0;
+            }
+        }
         // Give identification-level knowledge (0.5) — enough for broad-spectrum
         for d in &mut state.diseases {
             d.knowledge = KNOWLEDGE_FOR_MEDICINE;
@@ -5834,6 +5869,13 @@ mod tests {
         state.medicines[0].deployed_count = 3;
         // Even if doses are back at max (re-manufactured), deployed_count tracks it
         state.medicines[0].doses = state.medicines[0].max_doses;
+        // Broad-spectrum starts unlocked — mark it as deployed too so it doesn't
+        // trigger the "never deployed" tip
+        for med in &mut state.medicines {
+            if med.therapy_type == TherapyType::BroadSpectrum {
+                med.deployed_count = 1;
+            }
+        }
         let tips = state.defeat_tips();
         assert!(!tips.iter().any(|t| t.contains("never deployed")),
             "should not claim 'never deployed' when deployed_count > 0: {:?}", tips);
