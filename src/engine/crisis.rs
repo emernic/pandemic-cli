@@ -1351,8 +1351,8 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
     };
     state.active_crisis = Some(crisis);
     if can_auto {
-        resolve_crisis(state, auto_choice.unwrap());
-        state.events.push(GameEvent::CrisisAutoResolved);
+        let message = resolve_crisis(state, auto_choice.unwrap());
+        state.events.push(GameEvent::CrisisAutoResolved { message });
     } else {
         state.sim_state = SimState::Event {
             was_running: state.sim_state.is_running(),

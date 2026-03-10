@@ -192,9 +192,8 @@ pub fn process_events(state: &mut GameState) {
                 let pct = (level * 100.0).round() as u32;
                 (3, format!("{} adapting to containment ({}% policy resistance)", name, pct))
             }
-            GameEvent::CrisisAutoResolved => {
-                // Don't log auto-resolves — they're noise
-                continue;
+            GameEvent::CrisisAutoResolved { message } => {
+                (5, format!("Auto-resolved: {}", message))
             }
             GameEvent::ResistanceTransferred { from_disease_idx, to_disease_idx } => {
                 let from_name = state.diseases.get(*from_disease_idx)

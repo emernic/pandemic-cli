@@ -2914,7 +2914,7 @@ mod tests {
             state = tick(&state);
             // If a personnel crisis auto-resolved, the game isn't in Event state
             // (it may be Paused from a DiseaseDetected in the same tick, which is fine)
-            if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)) {
+            if state.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })) {
                 auto_resolved = true;
                 assert!(state.active_crisis.is_none(),
                     "crisis should be resolved immediately");
@@ -3278,7 +3278,7 @@ mod tests {
             "refugee crisis should be auto-resolved, not left pending");
         assert!(!matches!(after.sim_state, SimState::Event { .. }),
             "game should not be paused after auto-resolve");
-        assert!(after.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved)),
+        assert!(after.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })),
             "CrisisAutoResolved event should be emitted");
         // POL should be lower (option 1 = close borders = POL loss)
         assert!(after.resources.political_power < 0.80,
