@@ -25,7 +25,7 @@ use crate::state::{
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS,
-    POLICY_COUNT, APPEASE_COST, APPEASE_LOYALTY_GAIN,
+    POLICY_COUNT, policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
@@ -380,10 +380,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let tb_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
 
     // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
-    // doc in state.rs for the index mapping). Display position != policy_idx in general,
-    // though currently they happen to match.
+    // doc in state.rs for the index mapping). Display position != policy_idx (sorted
+    // by POL threshold via policy_display_order()).
     //                   (policy_idx, name, active, cost_str, desc, personnel_needed)
-    let mut policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
+    let policies: Vec<(usize, &str, bool, String, &str, Option<u32>)> = vec![
         (0, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
          if trade_dep { "Reduces cross-region spread, 75% income penalty" }
@@ -459,13 +459,9 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          None),
     ];
 
-    // Sort by POL unlock threshold (ascending), ties broken by policy_idx.
-    // This ensures the list is ordered from "available immediately" to "requires high POL".
-    // display_pos matches panel_selection; confirm handler maps back via policy_display_order().
-    policies.sort_by(|a, b| {
-        POLICY_POL_THRESHOLDS[a.0].partial_cmp(&POLICY_POL_THRESHOLDS[b.0]).unwrap()
-            .then(a.0.cmp(&b.0))
-    });
+    // Reorder by canonical display order (POL threshold ascending, ties by index).
+    // display_pos == panel_selection; confirm handler maps back via policy_display_order().
+    let policies: Vec<_> = policy_display_order().iter().map(|&idx| policies[idx].clone()).collect();
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed)) in policies.iter().enumerate() {
         let selected = state.ui.panel_selection == display_pos;

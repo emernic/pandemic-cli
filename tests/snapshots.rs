@@ -45,8 +45,9 @@ fn bargain_shown_for_defiant_governor() {
     // Open policy panel for region 0, then scroll down to the bargain item
     // (panel viewport is small, need to move selection to bring bargain into view)
     let mut steps: Vec<String> = vec!["p".to_string(), "enter".to_string()];
-    // Navigate down past all policies + Appease to reach Bargain (POLICY_COUNT + 1)
-    for _ in 0..=POLICY_COUNT {
+    // Navigate down past all policies + infra repair items + Appease to reach Bargain.
+    // Layout: 0..POLICY_COUNT policies, then +3 infra repair, then Appease (+3), then Bargain (+4).
+    for _ in 0..=POLICY_COUNT + 3 {
         steps.push("down".to_string());
     }
     let result = run_snapshot(state, &steps).unwrap();
