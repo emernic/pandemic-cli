@@ -135,6 +135,13 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
         idx
     };
 
+    // If Emergency Countermeasure has been enacted, new diseases are also affected.
+    if state.enacted_decrees.emergency_countermeasure {
+        use crate::state::{COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT};
+        state.diseases[disease_idx].infectivity *= COUNTERMEASURE_INFECTIVITY_MULT;
+        state.diseases[disease_idx].cross_region_spread *= COUNTERMEASURE_SPREAD_MULT;
+    }
+
     // Place initial outbreak. Targeting shifts smoothly:
     // Day 0-15: roughly uniform → vulnerability-weighted (weak defenses attractive)
     // Day 20-30: vulnerability → strategic importance (high population,

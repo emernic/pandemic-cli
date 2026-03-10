@@ -24,7 +24,8 @@ use crate::state::{
     DECREE_COUNT, DECREE_THREAT_LEVELS,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
-    SACRIFICE_INCOME_BONUS,
+    SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
+    COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
     MANAGE_INFRA_BASE, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
@@ -43,7 +44,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             render_manage(state, *region_idx)
         }
         Some(PolicyUiState::SelectSacrificeRegion) => {
-            render_sacrifice_select(state)
+            render_region_select(state, "SACRIFICE REGION", "sacrifice",
+                &format!("Region will be abandoned. Others: +{:.0}% income.",
+                    (SACRIFICE_INCOME_BONUS - 1.0) * 100.0))
+        }
+        Some(PolicyUiState::SelectFortifyRegion) => {
+            render_region_select(state, "FORTIFY REGION", "fortify",
+                &format!("Region infrastructure restored to 100%. Others: -{:.0}% infra.",
+                    FORTIFY_INFRA_PENALTY * 100.0))
         }
         _ => render_browse(state),
     };
@@ -211,6 +219,13 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
         format!("Abandon a region, +{:.0}% income from the rest (permanent)",
             (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
+        "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
+        format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
+            FORTIFY_INFRA_PENALTY * 100.0),
+        format!("Infectivity -{:.0}%, spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
+            (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
+            (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
+            COUNTERMEASURE_KILL_FRACTION * 100.0),
     ];
 
     for decree_idx in 0..DECREE_COUNT {
@@ -231,17 +246,20 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 Span::styled("[ENACTED] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                 Span::styled(name.to_string(), name_style),
             ];
-            // Show sacrifice target
-            if decree_idx == 2 {
-                if let Some(r_idx) = state.enacted_decrees.sacrificed_region {
-                    let r_name = state.regions.get(r_idx)
-                        .map(|r| r.name.as_str())
-                        .unwrap_or("?");
-                    spans.push(Span::styled(
-                        format!(" ({})", r_name),
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                }
+            // Show region target for region-selecting decrees
+            let target_region = match decree_idx {
+                2 => state.enacted_decrees.sacrificed_region,
+                4 => state.enacted_decrees.fortified_region,
+                _ => None,
+            };
+            if let Some(r_idx) = target_region {
+                let r_name = state.regions.get(r_idx)
+                    .map(|r| r.name.as_str())
+                    .unwrap_or("?");
+                spans.push(Span::styled(
+                    format!(" ({})", r_name),
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
             lines.push(Line::from(spans));
         } else {
@@ -780,21 +798,16 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     (format!(" Policy: {} ", region.name), lines, selected_line)
 }
 
-fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_region_select(state: &GameState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
-        "  ⚠ SACRIFICE REGION: THIS CANNOT BE UNDONE ⚠",
+        format!("  ⚠ {}: THIS CANNOT BE UNDONE ⚠", title),
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  The chosen region will be abandoned. Remaining regions",
-        Style::default().fg(Color::DarkGray),
-    )));
-    lines.push(Line::from(Span::styled(
-        format!("  gain +{:.0}% income. Select a region to sacrifice:",
-            (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
+        format!("  {}", description),
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
@@ -814,19 +827,24 @@ fn render_sacrifice_select(state: &GameState) -> (String, Vec<Line<'static>>, Op
         };
 
         let pop_str = format_number(region.population as f64);
+        let infra_str = format!("HC:{:.0}% SL:{:.0}% CO:{:.0}%",
+            region.healthcare_capacity * 100.0,
+            region.supply_lines * 100.0,
+            region.civil_order * 100.0);
         lines.push(Line::from(vec![
             Span::styled(format!("{}{:<16}", marker, region.name), style),
             Span::styled(
-                format!("Pop: {}", pop_str),
+                format!("Pop: {}  {}", pop_str, infra_str),
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Sacrifice", "Cancel"));
+    let confirm_label = action[..1].to_uppercase() + &action[1..];
+    lines.push(hint_line(state, &confirm_label, "Cancel"));
 
-    (" ⚠ Sacrifice Region ".to_string(), lines, None)
+    (format!(" ⚠ {} ", title), lines, None)
 }
 
 /// Generate an effectiveness hint line for transmission-sensitive policies.

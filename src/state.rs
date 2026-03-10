@@ -338,7 +338,7 @@ pub enum ScreeningLevel {
 }
 
 // Emergency Decree constants — permanent, irreversible global decisions.
-pub const DECREE_COUNT: usize = 3;
+pub const DECREE_COUNT: usize = 6;
 /// Conscript Researchers: immediately gain personnel, permanent income penalty.
 pub const CONSCRIPT_PERSONNEL_GAIN: u32 = 10;
 /// Per-tick income penalty for Conscript Researchers ($50/day = 0.417/tick).
@@ -351,6 +351,14 @@ pub const HUMAN_TRIALS_ADVERSE_CHANCE: f64 = 0.30;
 pub const HUMAN_TRIALS_KILL_FRACTION: f64 = 0.05;
 /// Sacrifice Region: income multiplier for remaining regions.
 pub const SACRIFICE_INCOME_BONUS: f64 = 1.20;
+/// Fortify Region: infrastructure penalty applied to all OTHER non-collapsed regions.
+pub const FORTIFY_INFRA_PENALTY: f64 = 0.25;
+/// Emergency Countermeasure: fraction of alive population killed immediately.
+pub const COUNTERMEASURE_KILL_FRACTION: f64 = 0.10;
+/// Emergency Countermeasure: infectivity multiplier applied to all diseases.
+pub const COUNTERMEASURE_INFECTIVITY_MULT: f64 = 0.50;
+/// Emergency Countermeasure: cross-region spread multiplier applied to all diseases.
+pub const COUNTERMEASURE_SPREAD_MULT: f64 = 0.25;
 /// Per-tick cost for each screening level.
 pub const SCREENING_BASIC_COST: f64 = 0.2;
 pub const SCREENING_ANTIGEN_COST: f64 = 0.5;
@@ -825,6 +833,18 @@ pub struct EnactedDecrees {
     /// Sacrifice Region: voluntarily collapse one region for +20% income from the rest.
     #[serde(default)]
     pub sacrificed_region: Option<usize>,
+    /// Suspend Regional Authority: freeze all governor loyalty. No drift, no
+    /// defiance, no cooperation bonuses. Central command overrides local governance.
+    #[serde(default)]
+    pub suspend_regional_authority: bool,
+    /// Fortify Region: restore one region's infrastructure to 100%, all others
+    /// lose 25% across all systems.
+    #[serde(default)]
+    pub fortified_region: Option<usize>,
+    /// Emergency Countermeasure: reduce all disease infectivity by 50% and
+    /// cross-region spread by 75%. Kills 10% of alive population immediately.
+    #[serde(default)]
+    pub emergency_countermeasure: bool,
 }
 
 impl EnactedDecrees {
@@ -833,10 +853,12 @@ impl EnactedDecrees {
             0 => self.conscript_researchers,
             1 => self.authorize_human_trials,
             2 => self.sacrificed_region.is_some(),
+            3 => self.suspend_regional_authority,
+            4 => self.fortified_region.is_some(),
+            5 => self.emergency_countermeasure,
             _ => false,
         }
     }
-
 }
 
 /// Display name for a decree by index.
@@ -845,6 +867,9 @@ pub fn decree_display_name(decree_idx: usize) -> &'static str {
         0 => "Conscript Researchers",
         1 => "Authorize Human Trials",
         2 => "Sacrifice Region",
+        3 => "Suspend Regional Authority",
+        4 => "Fortify Region",
+        5 => "Emergency Countermeasure",
         _ => "Unknown Decree",
     }
 }
@@ -1040,6 +1065,9 @@ pub const DECREE_THREAT_LEVELS: [ThreatLevel; DECREE_COUNT] = [
     ThreatLevel::Elevated,    // Conscript Researchers — DEFCON 4
     ThreatLevel::Crisis,      // Authorize Human Trials — DEFCON 3
     ThreatLevel::Catastrophe, // Sacrifice Region — DEFCON 2
+    ThreatLevel::Crisis,      // Suspend Regional Authority — DEFCON 3
+    ThreatLevel::Catastrophe, // Fortify Region — DEFCON 2
+    ThreatLevel::Extinction,  // Emergency Countermeasure — DEFCON 1
 ];
 
 /// Infection count thresholds for region severity levels.
@@ -3334,6 +3362,8 @@ pub enum PolicyUiState {
     ManagePolicies { region_idx: usize },
     /// Select which region to sacrifice (for Sacrifice Region decree).
     SelectSacrificeRegion,
+    /// Select which region to fortify (for Fortify Region decree).
+    SelectFortifyRegion,
 }
 
 /// Research panel UI state machine, following the medicines panel pattern.
@@ -3519,7 +3549,8 @@ impl UiState {
             Panel::Policy => {
                 match &self.policy_ui {
                     Some(PolicyUiState::ManagePolicies { .. })
-                    | Some(PolicyUiState::SelectSacrificeRegion) => {
+                    | Some(PolicyUiState::SelectSacrificeRegion)
+                    | Some(PolicyUiState::SelectFortifyRegion) => {
                         self.policy_ui = Some(PolicyUiState::BrowseRegions);
                         self.panel_selection = 0;
                     }
@@ -3647,7 +3678,8 @@ impl UiState {
                         MANAGE_APPEASE_POS
                     }
                 }
-                Some(PolicyUiState::SelectSacrificeRegion) => {
+                Some(PolicyUiState::SelectSacrificeRegion)
+                | Some(PolicyUiState::SelectFortifyRegion) => {
                     // Only non-collapsed regions are selectable
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
                 }
@@ -4012,6 +4044,15 @@ impl UiState {
                         } else {
                             Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
                         }
+                    } else if decree_idx == 4 && !state.enacted_decrees.is_enacted(4) {
+                        // Fortify Region needs sub-selection
+                        if state.threat_level >= DECREE_THREAT_LEVELS[4] {
+                            self.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
+                            self.panel_selection = 0;
+                            None
+                        } else {
+                            Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+                        }
                     } else {
                         Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
                     }
@@ -4051,6 +4092,21 @@ impl UiState {
                 if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
                     Some(GameCommand::EnactDecree {
                         decree_idx: 2,
+                        region_idx: Some(region_idx),
+                    })
+                } else {
+                    None
+                }
+            }
+            Some(PolicyUiState::SelectFortifyRegion) => {
+                let non_collapsed: Vec<usize> = state.regions.iter()
+                    .enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
+                    Some(GameCommand::EnactDecree {
+                        decree_idx: 4,
                         region_idx: Some(region_idx),
                     })
                 } else {
