@@ -4443,6 +4443,20 @@ impl GameState {
         penalty
     }
 
+    /// Measure of player's technological capability (0.0+).
+    /// Each unlocked tech and deployed medicine increases disease emergence pressure.
+    /// Used by spawn_disease_scaled to make the arms race bidirectional.
+    pub fn tech_pressure(&self) -> f64 {
+        let tech_count = self.unlocked_techs.len() as f64;
+        let deployed_medicines = self.medicines.iter()
+            .filter(|m| m.unlocked && m.deployed_count > 0)
+            .count() as f64;
+        // Each tech adds 0.15 emergence pressure (8 techs max = 1.2)
+        // Each deployed medicine adds 0.05 (soft scaling with active capability)
+        // Total caps at 2.0 (meaning 3x base emergence rate at maximum player capability)
+        (tech_count * 0.15 + deployed_medicines * 0.05).min(2.0)
+    }
+
     /// Per-tick cost to maintain all personnel on the roster.
     pub fn personnel_upkeep_rate(&self) -> f64 {
         self.resources.personnel as f64 * PERSONNEL_UPKEEP_COST
@@ -4735,6 +4749,10 @@ impl GameState {
             self.seed_preexisting_resistance(disease_idx);
         }
 
+        // Tech-aware adaptations: diseases that emerge against a capable player
+        // are designed to exploit gaps in their toolkit. The arms race is bidirectional.
+        self.adapt_disease_to_player_tech(disease_idx, rng);
+
         Some(result)
     }
 
@@ -4775,6 +4793,61 @@ impl GameState {
             if resistance > 0.01 {
                 self.diseases[disease_idx].add_resistance(mechanism, resistance);
             }
+        }
+    }
+
+    /// Adapt a newly spawned disease to the player's current technological
+    /// capabilities. Diseases evolve to exploit the specific gaps in advanced
+    /// toolkits. This is the bidirectional arms race: better tools attract
+    /// harder threats.
+    fn adapt_disease_to_player_tech(&mut self, disease_idx: usize, rng: &mut ChaCha8Rng) {
+        let techs = &self.unlocked_techs;
+
+        // Tech-specific adaptations only apply when the player has unlocked techs
+        if !techs.is_empty() {
+            let d = &mut self.diseases[disease_idx];
+
+            // VaccinePlatform unlocked → diseases emerge pre-mutated.
+            // The player's vaccines target strain gen 0, but this disease starts ahead.
+            // Forces immediate re-sequencing and re-trialing.
+            if techs.contains(&BasicTech::VaccinePlatform) {
+                d.strain_generation += 1 + (rng.r#gen::<usize>() % 2) as u32; // +1 or +2
+            }
+
+            // RapidSequencing unlocked → diseases spread more aggressively across regions.
+            // The player can track mutations fast, so diseases compensate by spreading
+            // to more regions before detection, making containment harder.
+            if techs.contains(&BasicTech::RapidSequencing) {
+                d.cross_region_spread *= 1.4;
+            }
+
+            // CombinationTherapy unlocked → diseases have broader mechanism resistance.
+            // The player can hit with multiple mechanisms, so diseases pre-adapt to more.
+            // (Amplifies the existing resistance seeding from seed_preexisting_resistance)
+            if techs.contains(&BasicTech::CombinationTherapy) {
+                for entry in &mut d.mechanism_resistance {
+                    if entry.level > 0.01 {
+                        entry.level = (entry.level * 1.5).min(0.5);
+                    }
+                }
+            }
+
+            // PathogenSuppression unlocked → diseases emerge with higher base lethality.
+            // The player can suppress infectivity, so diseases shift toward killing fast
+            // rather than spreading wide.
+            if techs.contains(&BasicTech::PathogenSuppression) {
+                d.lethality *= 1.3;
+                d.recovery_rate *= 0.8; // harder to recover from
+            }
+        }
+
+        // Active quarantines → new diseases emerge with partial containment adaptation.
+        // This runs regardless of tech state — quarantine pressure is about active
+        // policy measures, not research capabilities.
+        let quarantine_count = self.policies.iter().filter(|p| p.quarantine).count();
+        if quarantine_count >= 2 {
+            let d = &mut self.diseases[disease_idx];
+            d.containment_adaptation = 0.2 + (quarantine_count as f64 * 0.05).min(0.3);
         }
     }
 
