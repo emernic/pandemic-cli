@@ -78,8 +78,9 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
             return StopReason::CrisisStarted;
         }
 
-        // Pause event (disease detection, collapse, breakthrough, etc.):
-        // stop and show the paused screen.
+        // Pause state: stop and show the screen. Currently this path is only
+        // reached if future code adds a new SimState::Paused transition during ticks
+        // (game over sets Paused but is caught above by outcome check).
         if state.sim_state == SimState::Paused {
             let description = describe_pause_events(&state.events);
             return StopReason::GamePaused { event_description: description };
@@ -327,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_stops_on_disease_detection_pause() {
+    fn disease_detection_does_not_pause_game() {
         let mut state = GameState::new_default(42);
         // Set first disease just below detection threshold so it triggers during ticks.
         // Detection threshold is 10,000 total infected across all regions.
@@ -335,15 +336,18 @@ mod tests {
         let near_threshold = 9_900.0;
         state.regions[0].get_or_create_infection(0).infected = near_threshold;
 
-        // With the disease growing, detection should trigger and pause the game.
+        // Non-crisis events no longer pause the game — they show in the notification area.
         let result = run_snapshot(state, &["d1".to_string()]).unwrap();
 
         // The disease should now be detected
         assert!(result.state.diseases[0].detected,
             "disease should be detected after crossing threshold");
-        // Tick advancement should have stopped before completing all 120 ticks
-        assert!(result.state.tick < 120,
-            "tick advancement should stop when disease detection pauses the game (got {})", result.state.tick);
+        // Tick advancement should NOT stop — detection is a notification, not a pause
+        assert_eq!(result.state.tick, 120,
+            "disease detection should not pause the game anymore (tick {})", result.state.tick);
+        // The event notification should be set
+        assert!(result.state.ui.event_notification.is_some(),
+            "event_notification should be set after disease detection");
     }
 
     #[test]

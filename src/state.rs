@@ -3058,8 +3058,14 @@ pub struct UiState {
     #[serde(default)]
     pub policy_ui: Option<PolicyUiState>,
     /// Temporary status message shown above the hotkey bar (cleared on next action).
+    /// Only set by command responses (deploy, research, etc.) — NOT by game events.
     #[serde(default)]
     pub status_message: Option<String>,
+    /// Latest event notification shown in the top-right of the status bar.
+    /// Set by process_events() when a game event fires; persists until replaced.
+    /// Distinct from status_message — events go here, command feedback goes there.
+    #[serde(default)]
+    pub event_notification: Option<String>,
     /// Which crisis option is selected (0 = A, 1 = B).
     #[serde(default)]
     pub crisis_selection: usize,
@@ -4042,6 +4048,7 @@ impl GameState {
                 research_ui: None,
                 policy_ui: None,
                 status_message: None,
+                event_notification: None,
                 crisis_selection: 0,
                 crisis_auto_resolve: false,
                 home_splash_done: false,

@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
@@ -193,8 +193,31 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         lines.push(Line::from(spans));
     }
 
-    let widget = Paragraph::new(lines).block(Block::default().borders(Borders::BOTTOM));
-    f.render_widget(widget, area);
+    if let Some(notif) = &state.ui.event_notification {
+        // Split: stats + research on left, event notification on right
+        let notif_width = (area.width / 3).clamp(40, 70);
+        let layout = Layout::horizontal([
+            Constraint::Fill(1),
+            Constraint::Length(notif_width),
+        ]).split(area);
+
+        let left_widget = Paragraph::new(lines).block(Block::default().borders(Borders::BOTTOM));
+        f.render_widget(left_widget, layout[0]);
+
+        let notif_lines = vec![
+            Line::from(Span::styled(
+                format!("⚠ {}", notif),
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+        ];
+        let notif_widget = Paragraph::new(notif_lines)
+            .block(Block::default().borders(Borders::LEFT | Borders::BOTTOM));
+        f.render_widget(notif_widget, layout[1]);
+    } else {
+        let widget = Paragraph::new(lines).block(Block::default().borders(Borders::BOTTOM));
+        f.render_widget(widget, area);
+    }
 }
 
 /// Compact research description for the header status line.

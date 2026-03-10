@@ -43,14 +43,6 @@ pub fn tick(state: &GameState) -> GameState {
     // Scientist burnout and recovery
     personnel::tick_personnel(&mut new, &mut rng);
 
-    // Auto-pause on major research breakthroughs so the player sees the good news
-    if new.events.iter().any(|e| matches!(e,
-        GameEvent::PathogenIdentified { .. } | GameEvent::MedicineDeveloped { .. }
-        | GameEvent::TrialCompleted { .. }))
-    {
-        new.sim_state = SimState::Paused;
-    }
-
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new);
 
@@ -198,8 +190,6 @@ pub fn tick(state: &GameState) -> GameState {
                     / crate::state::TICKS_PER_DAY;
                 new.diseases[disease_idx].detected = true;
                 new.events.push(GameEvent::DiseaseDetected { disease_idx, silent_days });
-                // Auto-pause so the player sees the detection and can react
-                new.sim_state = SimState::Paused;
             }
         }
     }
@@ -237,7 +227,6 @@ pub fn tick(state: &GameState) -> GameState {
                         deaths,
                         has_medicine,
                     });
-                    new.sim_state = SimState::Paused;
                 }
             }
         }
@@ -358,7 +347,8 @@ pub fn tick(state: &GameState) -> GameState {
                 };
                 new.events.push(GameEvent::CrisisStarted);
             } else {
-                new.sim_state = SimState::Paused;
+                // No uncollapsed neighbors — no refugee destination.
+                // Game is nearly over; notification area will show the collapse.
             }
         }
     }
@@ -411,11 +401,7 @@ pub fn tick(state: &GameState) -> GameState {
             // Only fire events for escalation (getting worse), not de-escalation
             if new_level > old {
                 new.events.push(GameEvent::ThreatLevelChanged { from: old, to: new_level });
-                // Auto-pause on escalation, but don't override Event state
-                // (a crisis/refugee event takes priority over just pausing)
-                if !matches!(new.sim_state, SimState::Event { .. }) {
-                    new.sim_state = SimState::Paused;
-                }
+                // No pause — DEFCON escalation shows in the top-right notification area.
             }
         }
     }
@@ -4632,8 +4618,8 @@ mod tests {
     }
 
     #[test]
-    fn threat_level_transition_fires_event_and_pauses() {
-        use crate::state::{ThreatLevel, RegionDiseaseState, GameEvent};
+    fn threat_level_transition_fires_event_without_pausing() {
+        use crate::state::{ThreatLevel, RegionDiseaseState, GameEvent, SimState};
 
         let mut state = GameState::new_default(42);
         // Set up enough infected to trigger DEFCON 4 on next tick
@@ -4641,6 +4627,7 @@ mod tests {
             disease_idx: 0, infected: 600_000.0, dead: 0.0, immune: 0.0,
         }];
         state.diseases[0].detected = true;
+        state.sim_state = SimState::Running;
         assert_eq!(state.threat_level, ThreatLevel::Normal);
 
         let after = tick(&state);
@@ -4648,7 +4635,8 @@ mod tests {
         assert!(after.events.iter().any(|e| matches!(e,
             GameEvent::ThreatLevelChanged { from: ThreatLevel::Normal, to: ThreatLevel::Elevated }
         )), "should fire ThreatLevelChanged event");
-        assert!(!after.sim_state.is_running(), "should pause on DEFCON transition");
+        // Non-crisis events no longer pause — DEFCON changes show in the notification area
+        assert!(after.sim_state.is_running(), "DEFCON transition should not pause the game");
     }
 
     #[test]
