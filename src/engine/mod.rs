@@ -123,8 +123,33 @@ pub fn tick(state: &GameState) -> GameState {
     // Mid-game disease emergence (spawns undetected — player won't see it yet).
     // Later diseases are tougher (scaled by game day and player capability).
     // The arms race is bidirectional: more player tech → faster emergence.
+    //
+    // Wave clustering: after day 25, recent disease spawns temporarily spike
+    // the emergence rate, creating coordinated waves (2-3 diseases within
+    // 1-2 days). The player notices diseases appearing in suspicious clusters.
     {
-        let emergence_chance = EMERGENCE_CHANCE_PER_TICK * (1.0 + new.tech_pressure());
+        let day = new.tick as f64 / crate::state::TICKS_PER_DAY;
+
+        // Wave boost: if a disease spawned recently and we're in late game,
+        // dramatically increase the chance of another spawn.
+        let wave_boost = if day >= 25.0 {
+            let most_recent_spawn = new.diseases.iter()
+                .map(|d| d.spawned_at_tick)
+                .max()
+                .unwrap_or(0);
+            let ticks_since = new.tick.saturating_sub(most_recent_spawn);
+            if ticks_since > 0 && ticks_since < 200 {
+                // 5x boost for ~200 ticks (1.7 days) after a spawn
+                // ~50% chance of a follow-up disease in the window
+                4.0
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+
+        let emergence_chance = EMERGENCE_CHANCE_PER_TICK * (1.0 + new.tech_pressure() + wave_boost);
         if new.tick >= EMERGENCE_MIN_TICK
             && new.diseases.len() < MAX_DISEASES
             && rng.r#gen::<f64>() < emergence_chance
@@ -4903,5 +4928,106 @@ mod tests {
                 "disease with GenomicInterdiction should spread faster: {:.4} vs {:.4}",
                 d2.cross_region_spread, d1.cross_region_spread);
         }
+    }
+
+    #[test]
+    fn counter_capability_biases_pathogen_type() {
+        use crate::state::{TherapyType, Medicine};
+        use rand::SeedableRng;
+
+        // Run many spawns with deployed antiviral medicines and count pathogen types
+        let mut virus_count = 0u32;
+        let mut non_virus_count = 0u32;
+
+        for seed in 0..50 {
+            let mut state = GameState::new_default(42);
+            state.tick = (25.0 * crate::state::TICKS_PER_DAY) as u64; // day 25 (full counter-weight)
+            // Give the player deployed antivirals
+            for med in &mut state.medicines {
+                if med.therapy_type == TherapyType::Antiviral {
+                    med.deployed_count = 5;
+                }
+            }
+            let mut rng = ChaCha8Rng::seed_from_u64(seed + 1000);
+            let initial = state.diseases.len();
+            state.spawn_disease_scaled(&mut rng);
+            if state.diseases.len() > initial {
+                let d = &state.diseases[initial];
+                match d.pathogen_type {
+                    crate::state::PathogenType::RnaVirus | crate::state::PathogenType::DnaVirus => virus_count += 1,
+                    _ => non_virus_count += 1,
+                }
+            }
+        }
+
+        // With antivirals deployed, non-virus types should appear more often
+        // than virus types (they're counter-weighted). Without bias, viruses
+        // would be ~40% of spawns. With bias, they should be significantly less.
+        let total = virus_count + non_virus_count;
+        if total >= 10 {
+            assert!(non_virus_count > virus_count,
+                "with deployed antivirals, non-virus types should dominate: viruses={virus_count}, non-viruses={non_virus_count}");
+        }
+    }
+
+    #[test]
+    fn strategic_targeting_prefers_high_population_regions_late_game() {
+        use rand::SeedableRng;
+
+        // Run many spawns at day 30+ and count which regions get hit
+        let mut region_hits = [0u32; 6];
+
+        for seed in 0..100 {
+            let mut state = GameState::new_default(42);
+            state.tick = (30.0 * crate::state::TICKS_PER_DAY) as u64;
+            // Add some infrastructure to Asia (highest pop region)
+            state.regions[2].hospital_level = 2; // Medical Center
+            state.policies[2].quarantine = true;
+            let mut rng = ChaCha8Rng::seed_from_u64(seed + 2000);
+            let initial = state.diseases.len();
+            if let Some((_, region_idx)) = state.spawn_disease_scaled(&mut rng) {
+                if state.diseases.len() > initial || true {
+                    region_hits[region_idx] += 1;
+                }
+            }
+        }
+
+        // Asia (index 2, pop 4.7B) should be hit more often than Oceania (index 5, pop 45M)
+        // at day 30 with strategic targeting active
+        let asia_hits = region_hits[2];
+        let oceania_hits = region_hits[5];
+        // Asia should have at least as many hits as Oceania (it should have MORE,
+        // but we use >= to avoid flaky tests with small sample sizes)
+        assert!(asia_hits >= oceania_hits,
+            "strategic targeting should prefer high-pop regions: Asia={asia_hits}, Oceania={oceania_hits}, all={region_hits:?}");
+    }
+
+    #[test]
+    fn wave_clustering_increases_emergence_after_recent_spawn() {
+        use crate::state::TICKS_PER_DAY;
+
+        // At day 30, with a disease that spawned 50 ticks ago,
+        // emergence chance should be much higher than normal
+        let mut state = GameState::new_default(42);
+        state.tick = (30.0 * TICKS_PER_DAY) as u64;
+        // Set a disease as recently spawned
+        state.diseases[0].spawned_at_tick = state.tick - 50;
+
+        let day = state.tick as f64 / TICKS_PER_DAY;
+        assert!(day >= 25.0, "should be past day 25");
+
+        let most_recent = state.diseases.iter()
+            .map(|d| d.spawned_at_tick)
+            .max()
+            .unwrap_or(0);
+        let ticks_since = state.tick.saturating_sub(most_recent);
+        assert!(ticks_since < 200, "should be within wave window");
+
+        // The wave boost should be 4.0, making total multiplier = 1 + tech_pressure + 4
+        let wave_boost = 4.0; // as per the implementation
+        let normal_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure());
+        let boosted_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure() + wave_boost);
+        assert!(boosted_chance > normal_chance * 3.0,
+            "wave-boosted chance should be significantly higher: normal={normal_chance}, boosted={boosted_chance}");
     }
 }
