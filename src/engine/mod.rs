@@ -326,8 +326,9 @@ pub fn tick(state: &GameState) -> GameState {
         if alive < pop * threshold {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
-            new.regions[i].hospital_level = 0; // Hospital destroyed
-            new.regions[i].intel_level = 0; // Intel station destroyed
+            new.regions[i].hospital_level = 0; // Hospital destroyed (per-region infrastructure)
+            new.regions[i].intel_level = 0; // Intel station destroyed (per-region infrastructure)
+            // lab_level is intentionally NOT reset — it's global research infrastructure
             // Clear all policies in the collapsed region
             if let Some(policy) = new.policies.get_mut(i) {
                 policy.clear_all();
