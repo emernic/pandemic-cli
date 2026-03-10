@@ -4384,6 +4384,21 @@ impl GameState {
         d.cross_region_spread *= scale;
         // Don't scale recovery — harder diseases should be harder to recover from
 
+        // Late-game optimization: diseases shift toward Contact transmission
+        // (hardest to contain with travel bans, 95% blocked vs 90% airborne)
+        // and concentrate their spread within regions rather than across them.
+        let optimization = ((day - 15.0) / 15.0).clamp(0.0, 1.0); // 0 at day 15, 1 at day 30
+        if optimization > 0.0 {
+            let d = &mut self.diseases[disease_idx];
+            // Chance to override transmission to Contact
+            if rng.r#gen::<f64>() < optimization * 0.5 {
+                d.transmission = TransmissionVector::Contact;
+            }
+            // Concentrate: reduce cross-region spread, boost lethality
+            d.cross_region_spread *= 1.0 - optimization * 0.3; // up to 30% less spread
+            d.lethality *= 1.0 + optimization * 0.2; // up to 20% more lethal
+        }
+
         // Pre-existing resistance: new diseases emerge partially resistant to
         // mechanisms the player has deployed heavily. Invisible to the player —
         // they just notice their old drugs don't work as well on new threats.

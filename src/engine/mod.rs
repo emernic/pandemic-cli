@@ -2287,6 +2287,43 @@ mod tests {
     }
 
     #[test]
+    fn late_game_diseases_favor_contact_transmission() {
+        use crate::state::{TransmissionVector, TICKS_PER_DAY};
+        let trials = 200;
+        let mut early_contact = 0usize;
+        let mut late_contact = 0usize;
+
+        for seed in 0..trials {
+            // Early game
+            let mut state = GameState::new_default(seed as u64 + 7000);
+            state.tick = 0;
+            state.diseases.clear();
+            for r in &mut state.regions { r.infections.clear(); }
+            let mut rng = state.rng.clone();
+            state.spawn_disease_scaled(&mut rng);
+            if !state.diseases.is_empty() && state.diseases[0].transmission == TransmissionVector::Contact {
+                early_contact += 1;
+            }
+
+            // Late game
+            let mut state2 = GameState::new_default(seed as u64 + 8000);
+            state2.tick = (35.0 * TICKS_PER_DAY) as u64; // day 35: full optimization
+            state2.diseases.clear();
+            for r in &mut state2.regions { r.infections.clear(); }
+            let mut rng2 = state2.rng.clone();
+            state2.spawn_disease_scaled(&mut rng2);
+            if !state2.diseases.is_empty() && state2.diseases[0].transmission == TransmissionVector::Contact {
+                late_contact += 1;
+            }
+        }
+
+        assert!(
+            late_contact > early_contact,
+            "Late-game should produce more Contact diseases: early={early_contact}/{trials}, late={late_contact}/{trials}"
+        );
+    }
+
+    #[test]
     fn late_game_diseases_target_vulnerable_regions() {
         use crate::state::{ScreeningLevel, TICKS_PER_DAY};
         // Set up: region 0 is heavily defended, region 1-5 are undefended.
