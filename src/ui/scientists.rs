@@ -114,16 +114,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         )),
     ]));
 
-    // Scroll to keep selection visible
-    let scroll = if selected > 0 {
-        // Each scientist takes 2 lines; scroll if needed
-        let visible_height = area.height.saturating_sub(4) as usize; // borders + summary
-        let line_offset = selected * 2;
-        if line_offset >= visible_height {
-            (line_offset - visible_height + 2) as u16
-        } else {
-            0
-        }
+    // Scroll to keep selection visible (each scientist = 2 lines)
+    let visible_height = area.height.saturating_sub(2) as usize; // minus top+bottom border
+    let line_offset = selected * 2;
+    let scroll = if line_offset + 2 > visible_height {
+        (line_offset + 2 - visible_height) as u16
     } else {
         0
     };
