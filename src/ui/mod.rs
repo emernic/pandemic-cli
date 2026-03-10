@@ -215,6 +215,9 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 (1, format!("⚠ ARK PROTOCOL — all resources consolidated in {}", region_name))
             }
+            GameEvent::GovernorAction { description, .. } => {
+                (4, description.clone())
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
