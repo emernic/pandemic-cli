@@ -2227,6 +2227,66 @@ mod tests {
     }
 
     #[test]
+    fn late_game_diseases_have_preexisting_resistance() {
+        use crate::state::{MechanismOfAction, TICKS_PER_DAY};
+        // Set up: player has deployed medicines heavily with CellWallInhibitor
+        let mut state = GameState::new_default(42);
+        state.tick = (30.0 * TICKS_PER_DAY) as u64; // day 30: past resistance threshold
+
+        // Simulate heavy deployment of a CellWallInhibitor medicine
+        for med in &mut state.medicines {
+            if med.mechanism == Some(MechanismOfAction::CellWallInhibitor) {
+                med.deployed_count = 50;
+            }
+        }
+
+        // Clear diseases and spawn a new one
+        state.diseases.clear();
+        for r in &mut state.regions { r.infections.clear(); }
+        let mut rng = state.rng.clone();
+        state.spawn_disease_scaled(&mut rng);
+
+        // The new disease should have pre-existing resistance to CellWallInhibitor
+        if !state.diseases.is_empty() {
+            let d = &state.diseases[0];
+            let cw_resistance = d.get_resistance(Some(MechanismOfAction::CellWallInhibitor));
+            assert!(
+                cw_resistance > 0.0,
+                "New disease should have pre-existing CellWallInhibitor resistance, got {cw_resistance}"
+            );
+            assert!(
+                cw_resistance <= 0.3,
+                "Pre-existing resistance should be capped at 0.3, got {cw_resistance}"
+            );
+        }
+    }
+
+    #[test]
+    fn early_game_diseases_have_no_preexisting_resistance() {
+        use crate::state::{MechanismOfAction, TICKS_PER_DAY};
+        let mut state = GameState::new_default(42);
+        state.tick = (5.0 * TICKS_PER_DAY) as u64; // day 5: before threshold
+
+        // Even with heavy deployments, early diseases shouldn't have resistance
+        for med in &mut state.medicines {
+            med.deployed_count = 100;
+        }
+
+        state.diseases.clear();
+        for r in &mut state.regions { r.infections.clear(); }
+        let mut rng = state.rng.clone();
+        state.spawn_disease_scaled(&mut rng);
+
+        if !state.diseases.is_empty() {
+            let d = &state.diseases[0];
+            assert!(
+                d.mechanism_resistance.is_empty(),
+                "Early-game disease should have no pre-existing resistance"
+            );
+        }
+    }
+
+    #[test]
     fn late_game_diseases_target_vulnerable_regions() {
         use crate::state::{ScreeningLevel, TICKS_PER_DAY};
         // Set up: region 0 is heavily defended, region 1-5 are undefended.
