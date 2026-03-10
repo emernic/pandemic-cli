@@ -1,8 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, SimState,
-    CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
+    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameEvent, GameState, ScreeningLevel,
+    SimState, CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
 /// Scale a dollar amount relative to current funding.
@@ -1381,10 +1381,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::PersonnelCrisis { amount }, 0) => {
             state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
-            // If a field research project is running, cancel the most recent one —
-            // the departing staff took their expertise with them.
-            if let Some(_cancelled) = state.field_research.pop() {
-                format!("Lost {} personnel to burnout — field research cancelled due to staffing shortage",
+            // If personnel drops below what active research requires, cancel the
+            // most recent field research — not enough staff to sustain it.
+            let research_demand: u32 =
+                state.field_research.iter().map(|p| p.personnel_assigned).sum::<u32>()
+                + state.applied_research.as_ref().map_or(0, |p| p.personnel_assigned)
+                + state.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
+            if research_demand > state.resources.personnel
+                && state.field_research.pop().is_some()
+            {
+                format!("Lost {} personnel to burnout — field research cancelled, not enough staff",
                     amount)
             } else {
                 format!("Lost {} personnel to burnout", amount)
@@ -1578,12 +1584,23 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
-            // Mandate — lose POL + governor loyalty drops (forced compliance breeds resentment)
+            // Mandate — lose POL + governor loyalty drops + possible nationalist rebellion
             state.resources.political_power -= 0.10;
+            let mut governor_rebels = false;
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.loyalty = (region.governor.loyalty - 15.0).max(0.0);
+                // If loyalty drops below 30, governor may rebel against federal overreach
+                if region.governor.loyalty < 30.0 {
+                    governor_rebels = true;
+                }
             }
-            "Vaccine mandate imposed — effective but governor and public deeply resentful".into()
+            if governor_rebels {
+                let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
+                state.pending_crises.push((followup_tick, CrisisKind::GovernorNationalist { region_idx: *region_idx }));
+                "Vaccine mandate imposed — governor furious, threatening to defy federal authority".into()
+            } else {
+                "Vaccine mandate imposed — effective but deeply resented".into()
+            }
         }
         (CrisisKind::VaccineHesitancy { region_idx }, _) => {
             // Education campaign — costs already deducted, gain POL
@@ -1995,7 +2012,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             if let Some(policy) = state.policies.get_mut(*region_idx) {
-                use crate::state::ScreeningLevel;
                 policy.screening = match policy.screening {
                     ScreeningLevel::MassRapid => ScreeningLevel::Antigen,
                     ScreeningLevel::Antigen => ScreeningLevel::Basic,
