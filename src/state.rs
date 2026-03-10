@@ -1031,6 +1031,31 @@ pub const BARGAIN_MOBSTER_BASE_COST: f64 = 200.0;
 
 // --- Infrastructure constants ---
 
+/// Which infrastructure system within a region.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum InfraSystem {
+    Healthcare,
+    SupplyLines,
+    CivilOrder,
+}
+
+impl InfraSystem {
+    pub fn label(self) -> &'static str {
+        match self {
+            InfraSystem::Healthcare => "Healthcare",
+            InfraSystem::SupplyLines => "Supply Lines",
+            InfraSystem::CivilOrder => "Civil Order",
+        }
+    }
+
+    pub fn repair_cost(self) -> f64 {
+        match self {
+            InfraSystem::SupplyLines => SUPPLY_REPAIR_COST,
+            _ => INFRA_REPAIR_COST,
+        }
+    }
+}
+
 /// Infrastructure breakpoint: stressed. Effects start.
 pub const INFRA_STRESSED: f64 = 0.50;
 /// Infrastructure breakpoint: critical. Severe effects.
@@ -2787,8 +2812,7 @@ pub enum GameEvent {
     /// Infrastructure dropped below a breakpoint threshold.
     InfrastructureBreakpoint {
         region_idx: usize,
-        /// Which system: "healthcare", "supply_lines", or "civil_order"
-        system: String,
+        system: InfraSystem,
         /// The breakpoint crossed: 0.50 (stressed) or 0.25 (critical) or 0.0 (failed)
         threshold: f64,
     },
@@ -2844,7 +2868,7 @@ pub enum GameCommand {
     /// Personality-specific bargain with a defiant governor (non-monetary cost).
     BargainWithGovernor { region_idx: usize },
     /// Repair regional infrastructure. system: 0=healthcare, 1=supply_lines, 2=civil_order.
-    RepairInfrastructure { region_idx: usize, system: u8 },
+    RepairInfrastructure { region_idx: usize, system: InfraSystem },
 }
 
 /// A crisis event that pauses the game and requires a player decision.

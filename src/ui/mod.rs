@@ -268,12 +268,6 @@ pub fn process_events(state: &mut GameState) {
             GameEvent::InfrastructureBreakpoint { region_idx, system, threshold } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                let system_label = match system.as_str() {
-                    "healthcare" => "Healthcare",
-                    "supply_lines" => "Supply Lines",
-                    "civil_order" => "Civil Order",
-                    _ => system.as_str(),
-                };
                 let severity = if *threshold <= 0.0 {
                     "FAILED"
                 } else if *threshold <= 0.25 {
@@ -281,7 +275,7 @@ pub fn process_events(state: &mut GameState) {
                 } else {
                     "STRESSED"
                 };
-                (2, format!("⚠ {region_name}: {system_label} {severity}"))
+                (2, format!("⚠ {region_name}: {} {severity}", system.label()))
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
