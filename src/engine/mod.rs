@@ -1511,6 +1511,10 @@ mod tests {
         // significantly longer than passive play. The three pillars work
         // together: quarantine slows spread, research develops medicines,
         // treatment reduces infected population.
+        //
+        // Strategy: treatment first (directly removes 50% of infected per deploy),
+        // vaccination second (only 7.5% susceptible coverage per BS deploy but
+        // builds long-term herd immunity). Prioritize worst-hit regions.
         use crate::state::{ResearchTrack, ResearchKind, DeployTarget};
 
         fn simulate_competent(seed: u64) -> f64 {
@@ -1558,73 +1562,113 @@ mod tests {
                     }
                 }
 
-                // --- QUARANTINE: quarantine regions with significant infection ---
-                // A competent player quarantines early to slow cross-region spread.
+                // --- POLICIES: containment and public health ---
+                // A competent player enables cheap always-available policies
+                // (border controls, water sanitation) immediately, quarantines
+                // infected regions, and activates hospital surge as POL allows.
                 for r_idx in 0..state.regions.len() {
                     if state.regions[r_idx].collapsed { continue; }
-                    if state.policies[r_idx].quarantine { continue; }
                     let total_infected: f64 = state.regions[r_idx].infections.iter()
                         .map(|inf| inf.infected).sum();
-                    if total_infected > 10_000.0 {
+                    let has_border = state.policies[r_idx].border_controls;
+                    let has_water = state.policies[r_idx].water_sanitation;
+                    let has_quarantine = state.policies[r_idx].quarantine;
+                    let has_surge = state.policies[r_idx].hospital_surge;
+
+                    if !has_border {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
-                            region_idx: r_idx, policy_idx: 1, // quarantine
+                            region_idx: r_idx, policy_idx: 3,
+                        });
+                    }
+                    if !has_water {
+                        execute_command(&mut state, &GameCommand::TogglePolicy {
+                            region_idx: r_idx, policy_idx: 4,
+                        });
+                    }
+                    if !has_quarantine && total_infected > 10_000.0 {
+                        execute_command(&mut state, &GameCommand::TogglePolicy {
+                            region_idx: r_idx, policy_idx: 1,
+                        });
+                    }
+                    if !has_surge && total_infected > 5_000.0 {
+                        execute_command(&mut state, &GameCommand::TogglePolicy {
+                            region_idx: r_idx, policy_idx: 2,
                         });
                     }
                 }
 
-                // --- MEDICINE: vaccinate AND treat diseases in every region ---
-                // Vaccination slows exponential growth; treatment reduces active
-                // infected population. Both matter with limited BS supply.
+                // --- MEDICINE: treat aggressively, vaccinate only with targeted meds ---
+                // Treatment removes ~efficacy fraction of infected per deploy and
+                // costs proportional doses. BS vaccination is a dose trap: one
+                // vaccination of a large region consumes 60-70% of all BS doses
+                // for just 7.5% coverage. Save BS for treatment, vaccinate only
+                // with targeted medicines (which are dose-efficient by design).
                 let min_funding = 200.0;
+
+                // Build list of (region, disease, infected) sorted by severity
+                let mut targets: Vec<(usize, usize, f64)> = Vec::new();
                 for r_idx in 0..state.regions.len() {
                     if state.regions[r_idx].collapsed { continue; }
-                    if state.resources.funding < min_funding { break; }
                     for d_idx in 0..state.diseases.len() {
-                        if state.resources.funding < min_funding { break; }
-                        let mut best_med: Option<usize> = None;
-                        let mut best_eff = 0.0f64;
-                        for med_idx in 0..state.medicines.len() {
-                            let med = &state.medicines[med_idx];
-                            if !med.unlocked || med.doses <= 0.0 { continue; }
-                            if !med.tested_against.contains(&d_idx) { continue; }
-                            let eff = med.effective_efficacy(d_idx, &state.diseases);
-                            if eff > best_eff {
-                                best_eff = eff;
-                                best_med = Some(med_idx);
-                            }
-                        }
-                        let Some(med_idx) = best_med else { continue; };
-                        // Vaccinate first, then treat if infected count is high
-                        let target = DeployTarget::Vaccinate { disease_idx: d_idx };
-                        let result = execute_command(&mut state, &GameCommand::DeployMedicine {
-                            medicine_idx: med_idx,
-                            region_idx: r_idx,
-                            target,
-                        });
-                        if result.success { total_deploys += 1; }
-                        // Also treat if this region has significant infected population
                         let infected = state.regions[r_idx].infections.iter()
                             .find(|inf| inf.disease_idx == d_idx)
                             .map(|inf| inf.infected)
                             .unwrap_or(0.0);
-                        if infected > 100_000.0 && state.resources.funding >= min_funding {
-                            let med = &state.medicines[med_idx];
-                            if med.doses > 0.0 {
-                                let treat_target = DeployTarget::Treat { disease_idx: d_idx };
-                                let result = execute_command(&mut state, &GameCommand::DeployMedicine {
-                                    medicine_idx: med_idx,
-                                    region_idx: r_idx,
-                                    target: treat_target,
-                                });
-                                if result.success { total_deploys += 1; }
-                            }
+                        if infected > 1000.0 {
+                            targets.push((r_idx, d_idx, infected));
+                        }
+                    }
+                }
+                targets.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+
+                for &(r_idx, d_idx, _infected) in &targets {
+                    if state.resources.funding < min_funding { break; }
+
+                    // Find best medicine: prefer targeted over broad-spectrum
+                    let mut best_med: Option<usize> = None;
+                    let mut best_eff = 0.0f64;
+                    let mut best_is_targeted = false;
+                    for med_idx in 0..state.medicines.len() {
+                        let med = &state.medicines[med_idx];
+                        if !med.unlocked || med.doses <= 0.0 { continue; }
+                        if !med.tested_against.contains(&d_idx) { continue; }
+                        let eff = med.effective_efficacy(d_idx, &state.diseases);
+                        let is_targeted = med.therapy_type != crate::state::TherapyType::BroadSpectrum;
+                        // Prefer targeted medicines; among same type, prefer higher efficacy
+                        if (is_targeted && !best_is_targeted) || (is_targeted == best_is_targeted && eff > best_eff) {
+                            best_eff = eff;
+                            best_med = Some(med_idx);
+                            best_is_targeted = is_targeted;
+                        }
+                    }
+                    let Some(med_idx) = best_med else { continue; };
+                    let is_bs = !best_is_targeted;
+
+                    // Treat: always (high impact, dose-efficient)
+                    {
+                        let target = DeployTarget::Treat { disease_idx: d_idx };
+                        let result = execute_command(&mut state, &GameCommand::DeployMedicine {
+                            medicine_idx: med_idx, region_idx: r_idx, target,
+                        });
+                        if result.success { total_deploys += 1; }
+                    }
+
+                    // Vaccinate: only with targeted medicines (BS vaccination
+                    // burns enormous doses for minimal coverage)
+                    if !is_bs && state.resources.funding >= min_funding {
+                        let med = &state.medicines[med_idx];
+                        if med.doses > 0.0 {
+                            let target = DeployTarget::Vaccinate { disease_idx: d_idx };
+                            let result = execute_command(&mut state, &GameCommand::DeployMedicine {
+                                medicine_idx: med_idx, region_idx: r_idx, target,
+                            });
+                            if result.success { total_deploys += 1; }
                         }
                     }
                 }
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
-            let quarantine_count: usize = state.policies.iter().filter(|p| p.quarantine).count();
-            eprintln!("  seed {seed}: {day:.1}d, {total_deploys} deploys, quarantine={quarantine_count}, dead={:.0}, funds={:.0}",
+            eprintln!("  seed {seed}: {day:.1}d, {total_deploys} deploys, dead={:.0}, funds={:.0}",
                 state.total_dead(), state.resources.funding);
             day
         }
@@ -1667,8 +1711,8 @@ mod tests {
         }
         eprintln!("Median improvement ratio: {median_improvement:.2}");
 
-        assert!(median_improvement >= 1.05,
-            "Median paired improvement is {median_improvement:.2}x (expected >=1.05x). \
+        assert!(median_improvement >= 1.08,
+            "Median paired improvement is {median_improvement:.2}x (expected >=1.08x). \
              Player actions aren't meaningful enough. \
              {better_count}/{} seeds show improvement.",
             seeds.len());
