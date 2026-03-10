@@ -1260,6 +1260,107 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::PatronDemand { template_id } => {
+            let contract = state.contracts.iter()
+                .find(|c| c.template_id == *template_id);
+            let patron_name = contract.map(|c| c.patron.as_str()).unwrap_or("Unknown Patron");
+            let short_name = patron_name.split(',').next().unwrap_or(patron_name);
+            let placate_cost = scaled_cost(state, 0.15, 100.0, 600.0);
+
+            let (description, placate_desc) = match template_id {
+                // Elena Vasquez — Shipping Alliance (forbid travel ban)
+                0 => (
+                    format!(
+                        "{} is threatening to reroute her fleet. \
+                         She wants the travel restrictions lifted.",
+                        short_name,
+                    ),
+                    "Compensate her logistics costs. Buys time, not compliance.".to_string(),
+                ),
+                // Dr. Amara Osei — Civil Liberties Fund (forbid quarantine)
+                1 => (
+                    format!(
+                        "{} has sent a formal rebuke. Her donors are pressuring her \
+                         over the quarantine measures.",
+                        short_name,
+                    ),
+                    "Fund a public relations campaign on her behalf. Buys time.".to_string(),
+                ),
+                // Dr. Henrik Lindqvist — Pharma Research Grant (active research)
+                2 => (
+                    format!(
+                        "{} wants to see active research. His consortium does not fund idle labs.",
+                        short_name,
+                    ),
+                    "Send him a progress report and consulting fee. Buys time.".to_string(),
+                ),
+                // James Chen — Stability Investment Pact (no collapse)
+                3 => (
+                    format!(
+                        "{} is watching the collapse numbers. His fund managers want assurances.",
+                        short_name,
+                    ),
+                    "Provide financial guarantees to his investors. Buys time.".to_string(),
+                ),
+                // Sarah Kowalski — Media Transparency Pledge (max threat 3)
+                4 => (
+                    format!(
+                        "{} says her editors won't cover a catastrophe. The threat level is too high \
+                         for continued partnership.",
+                        short_name,
+                    ),
+                    "Offer her an exclusive briefing. Buys time.".to_string(),
+                ),
+                // Dr. Fatima Al-Rashidi — Population Welfare Fund (max deaths)
+                5 => (
+                    format!(
+                        "{} is demanding accountability. The death toll has exceeded \
+                         what her organization can publicly support.",
+                        short_name,
+                    ),
+                    "Fund an emergency relief package through her organization. Buys time.".to_string(),
+                ),
+                // Roberto Silva — Medical Workers' Compact (require hospital surge)
+                6 => (
+                    format!(
+                        "{} says his members are not seeing the surge facilities they were promised.",
+                        short_name,
+                    ),
+                    "Pay hazard bonuses to his union members. Buys time.".to_string(),
+                ),
+                // Gen. Klaus Weber — Border Security Contract (require border controls)
+                7 => (
+                    format!(
+                        "{} wants to see border controls enforced. His contract is contingent on it.",
+                        short_name,
+                    ),
+                    "Fund additional security personnel for his operations. Buys time.".to_string(),
+                ),
+                _ => (
+                    format!("{} is unhappy with your performance.", short_name),
+                    "Make concessions.".to_string(),
+                ),
+            };
+
+            CrisisEvent {
+                title: format!("{}: Demands", short_name),
+                description,
+                options: vec![
+                    CrisisOption {
+                        label: format!("Placate (¥{:.0})", placate_cost),
+                        description: placate_desc,
+                        cost: Some(CrisisCost { funding: placate_cost, personnel: 0 }),
+                    },
+                    CrisisOption {
+                        label: "Refuse".into(),
+                        description: format!("{} moves closer to pulling out.", short_name),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::GovernorHardliner { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -2250,6 +2351,34 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 region.governor.loyalty = (region.governor.loyalty + 10.0).min(100.0);
             }
             "Delegation sent. Governor engaged. Policy enforcement resuming.".into()
+        }
+
+        // --- Patron demand resolutions ---
+
+        (CrisisKind::PatronDemand { template_id }, 0) => {
+            // Placate — boost satisfaction back toward safe zone (cost already deducted)
+            let short_name = if let Some(c) = state.contracts.iter_mut()
+                .find(|c| c.template_id == *template_id)
+            {
+                c.satisfaction = (c.satisfaction + 0.25).min(1.0);
+                c.warned = false;
+                c.patron.split(',').next().unwrap_or(&c.patron).to_string()
+            } else {
+                "Patron".to_string()
+            };
+            format!("{} placated. Contract stable.", short_name)
+        }
+        (CrisisKind::PatronDemand { template_id }, _) => {
+            // Refuse — satisfaction drops sharply
+            let short_name = if let Some(c) = state.contracts.iter_mut()
+                .find(|c| c.template_id == *template_id)
+            {
+                c.satisfaction = (c.satisfaction - 0.15).max(0.0);
+                c.patron.split(',').next().unwrap_or(&c.patron).to_string()
+            } else {
+                "Patron".to_string()
+            };
+            format!("{} rebuffed. Satisfaction dropped.", short_name)
         }
 
         (CrisisKind::GovernorHardliner { region_idx }, 0) => {
