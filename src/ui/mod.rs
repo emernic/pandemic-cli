@@ -175,6 +175,13 @@ pub fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 (8, format!("Auto-deployed {} to {}", med_name, region_name))
             }
+            GameEvent::ContainmentAdaptation { disease_idx, level } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                let pct = (level * 100.0).round() as u32;
+                (3, format!("{} adapting to containment — quarantine/travel ban {}% less effective", name, pct))
+            }
             GameEvent::CrisisAutoResolved => {
                 // Don't log auto-resolves — they're noise
                 continue;

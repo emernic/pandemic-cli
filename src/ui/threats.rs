@@ -57,7 +57,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::Cyan),
                     ),
                 ];
-                push_mutation_indicator(&mut type_spans, state, i);
+                push_disease_indicators(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
                 lines.push(Line::from(vec![
                     Span::raw("    "),
@@ -82,7 +82,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::Yellow),
                     ),
                 ];
-                push_mutation_indicator(&mut type_spans, state, i);
+                push_disease_indicators(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
                 // Full stats visible
                 lines.push(Line::from(vec![
@@ -197,10 +197,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-/// Push a mutation indicator span only when the player's medicines are affected.
-/// Bare "Mutated" with no actionable context is noise — only surface mutations
-/// that require the player to act (re-trial to recalibrate).
-fn push_mutation_indicator(
+/// Push disease warning indicators: outdated medicines, resistance, containment
+/// adaptation. Only shows warnings that require player action.
+fn push_disease_indicators(
     spans: &mut Vec<Span<'static>>,
     state: &GameState,
     disease_idx: usize,
@@ -215,6 +214,18 @@ fn push_mutation_indicator(
         spans.push(Span::styled(
             "  Resistance building!".to_string(),
             Style::default().fg(Color::Yellow),
+        ));
+    }
+    // Show containment adaptation when significant
+    let adaptation = state.diseases.get(disease_idx)
+        .map(|d| d.containment_adaptation)
+        .unwrap_or(0.0);
+    if adaptation >= 0.10 {
+        let pct = (adaptation * 100.0).round() as u32;
+        let color = if pct >= 50 { Color::Red } else { Color::Yellow };
+        spans.push(Span::styled(
+            format!("  Containment adapt: {}%", pct),
+            Style::default().fg(color),
         ));
     }
 }
