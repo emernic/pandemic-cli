@@ -35,6 +35,22 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 - There were no interesting decisions to make — the "right" play was always obvious
 - The player had resources but literally nothing to spend them on (idle resources with no options)
 
+## ⚠️ What We Actually Want to Hear From You
+
+**This is your first time playing.** You're going to lose — that's fine, that's the game. We don't need you to tell us the game is hard. We need you to tell us what the experience was like. Specifically:
+
+- **What seemed interesting or cool?** A moment where you thought "oh, that's clever" or "oh shit, what do I do?" That's gold. Tell us exactly when it happened and why it landed.
+- **What made you feel genuine tension?** Not "the numbers were going up" — a moment where you had to make a real choice and it felt like it mattered.
+- **What annoyed you or felt pointless?** A system you interacted with that seemed to accomplish nothing. A panel full of information you didn't care about. A mechanic that felt like busywork.
+- **What couldn't you figure out?** Features that exist but you couldn't understand, couldn't access, or couldn't see the point of. Your confusion is the feedback.
+- **What did you want to do that the game didn't let you?** This is the most valuable feedback of all. "I wanted to redirect medicine to Asia but couldn't" tells us exactly what feature to build next.
+
+**What we DON'T want:**
+- **Balance complaints based on a single playthrough.** You played once. You don't know whether the economy is too tight or too loose — you barely understand the economy. "I ran out of money" is not useful. "I ran out of money and had nothing to do for 20 minutes" IS useful — that's about the experience, not the numbers.
+- **Demands that the game be rebalanced because you died.** You're going to die. Every time. The question is whether dying was interesting.
+- **Generic observations.** "The economy needs work" tells us nothing. "I wanted to build a field hospital but couldn't because crises kept draining my funds, and the crises all cost money with no alternative" tells us exactly what's wrong and implies what feature would fix it.
+- **Contradictory oscillation.** If you catch yourself thinking both "I have too much money" and "I can't afford anything," stop and figure out which one is actually true and when. The answer is probably "the game is missing interesting things to spend money on" — which is a feature gap, not a balance problem.
+
 ## ⚠️ This Game Is a Prototype — Ideas Are More Valuable Than Polish
 
 **The game in its current state is a skeleton.** Every system has a small number of options that serve as placeholders. The game starts with 1 disease and spawns up to 5 dynamically via emergence. There are 3 medicines. There are 5 per-region policies. The research tree is a single linear pipeline. There are crisis events but limited variety. It's a similar experience every time with different RNG.
