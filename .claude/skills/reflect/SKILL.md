@@ -91,7 +91,11 @@ Ask yourself these questions and answer them honestly:
 
 ## Document Meticulousness Check
 
-**If you wrote or edited anything — documents, comments, descriptions, renamed variables — go back and re-read every word.** Is every single word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
+**If you wrote or edited anything — documents, comments, descriptions, renamed variables — go back and re-read every word.** Two separate checks:
+
+1. **Accuracy:** Is every single word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
+
+2. **Justification:** For each section or paragraph you wrote, state who reads it and what they do differently after reading it. If you can't answer both, the content is padding — cut it. Accurate but pointless text is the document equivalent of dead code. This is especially important for READMEs, design docs, and issue descriptions where the temptation is to be "thorough" by adding detail that serves no one.
 
 ## Process
 

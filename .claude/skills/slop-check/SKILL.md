@@ -31,7 +31,11 @@ Check specifically:
 
 ## Document Slop Check
 
-**If you wrote or edited anything — documents, comments, descriptions, names — go back and re-read every word.** Is every word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
+**If you wrote or edited anything — documents, comments, descriptions, names — go back and re-read every word.** Two checks:
+
+1. **Accuracy:** Is every word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
+
+2. **Dead content:** For each section or paragraph you wrote, ask: who reads this, and what do they do with it? Content that is accurate but serves no reader is the document equivalent of a dead knob — it exists, it looks like it belongs, but it doesn't actually do anything. Cut it. The most common form: detailed system descriptions or feature lists that belong in-game or in design docs, not in a README or issue description.
 
 ## Process
 
