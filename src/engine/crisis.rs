@@ -1068,6 +1068,110 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::GovernorNationalist { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+            let cost = scaled_cost(state, 0.20, 150.0, 800.0);
+            CrisisEvent {
+                title: format!("{} — Sovereignty Dispute", gov_name),
+                description: format!(
+                    "{} has declared your health mandate unconstitutional in {}. \
+                     Local authorities are blocking your field teams.",
+                    gov_name, region_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Withdraw teams".into(),
+                    description: format!("All restrictive policies disabled in {}", region_name),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Federal override (${:.0})", cost),
+                    description: "Maintain operations — governor will resent it".into(),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::GovernorPopulist { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+            let cost = scaled_cost(state, 0.20, 150.0, 800.0);
+            CrisisEvent {
+                title: format!("{} — General Strike", gov_name),
+                description: format!(
+                    "{} has called a general strike in {}. Hospital staff are walking out \
+                     and citizens are refusing to cooperate with health directives.",
+                    gov_name, region_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Let it run its course".into(),
+                    description: "Hospital surge disabled, lose 2 personnel".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Address grievances (${:.0})", cost),
+                    description: "Pay to end the strike, +10 loyalty".into(),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::GovernorTechnocrat { region_idx } => {
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+            let cost = scaled_cost(state, 0.15, 100.0, 600.0);
+            CrisisEvent {
+                title: format!("{} — Methodology Review", gov_name),
+                description: format!(
+                    "{} is demanding an independent review of your research protocols. \
+                     They've frozen cooperation until your methodology meets their standards.",
+                    gov_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Submit to review".into(),
+                    description: "Applied research progress halved".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("Bypass review (${:.0})", cost),
+                    description: "Pay consultants to certify your process".into(),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::GovernorCooperative { region_idx } => {
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+            let cost = scaled_cost(state, 0.15, 100.0, 600.0);
+            CrisisEvent {
+                title: format!("{} — Media Leak", gov_name),
+                description: format!(
+                    "{} has leaked internal situation reports to the press. \
+                     Public confidence in your agency is dropping.",
+                    gov_name,
+                ),
+                option_a: CrisisOption {
+                    label: "Accept the fallout".into(),
+                    description: "Lose 20% political power".into(),
+                    cost: None,
+                },
+                option_b: CrisisOption {
+                    label: format!("PR campaign (${:.0})", cost),
+                    description: "Manage the narrative, limit the damage".into(),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0 }),
+                },
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::PublicInquiry => {
             CrisisEvent {
                 title: "Cover-Up Exposed".into(),
@@ -1658,6 +1762,65 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::MilitaryOverreach, _) => {
             // Legal challenge — costs already deducted
             "Legal challenge successful — civilian control of research restored".into()
+        }
+
+        // --- Governor personality crisis resolutions ---
+
+        (CrisisKind::GovernorNationalist { region_idx }, 0) => {
+            // Withdraw teams — disable all restrictive policies in the region
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            if let Some(policy) = state.policies.get_mut(*region_idx) {
+                policy.travel_ban = false;
+                policy.quarantine = false;
+                policy.martial_law = false;
+                policy.border_controls = false;
+            }
+            format!("Restrictive policies withdrawn in {} — governor placated", region_name)
+        }
+        (CrisisKind::GovernorNationalist { .. }, _) => {
+            // Federal override — costs already deducted
+            "Federal authority imposed — governor forced to comply".into()
+        }
+
+        (CrisisKind::GovernorPopulist { region_idx }, 0) => {
+            // Let it run — disable hospital surge, lose 2 personnel
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            if let Some(policy) = state.policies.get_mut(*region_idx) {
+                policy.hospital_surge = false;
+            }
+            state.resources.personnel = state.resources.personnel.saturating_sub(2);
+            format!("Strike in {} — hospital surge suspended, 2 personnel lost", region_name)
+        }
+        (CrisisKind::GovernorPopulist { region_idx }, _) => {
+            // Address grievances — costs already deducted, +10 loyalty
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.loyalty = (region.governor.loyalty + 10.0).min(100.0);
+            }
+            "Grievances addressed — strike ended, governor loyalty improved".into()
+        }
+
+        (CrisisKind::GovernorTechnocrat { .. }, 0) => {
+            // Submit to review — halve applied research progress
+            if let Some(proj) = &mut state.applied_research {
+                proj.progress = (proj.progress * 0.5).max(0.0);
+            }
+            "Submitted to methodology review — applied research delayed".into()
+        }
+        (CrisisKind::GovernorTechnocrat { .. }, _) => {
+            // Bypass review — costs already deducted
+            "Bypassed the review — research continues unimpeded".into()
+        }
+
+        (CrisisKind::GovernorCooperative { .. }, 0) => {
+            // Accept fallout — lose 20% POL
+            state.resources.political_power -= 0.20;
+            "Media leak fallout — public confidence dropped".into()
+        }
+        (CrisisKind::GovernorCooperative { .. }, _) => {
+            // PR campaign — costs already deducted
+            "PR campaign contained the leak — minimal damage".into()
         }
 
         (CrisisKind::PublicInquiry, 0) => {

@@ -828,6 +828,10 @@ pub struct Governor {
     pub personality: GovernorPersonality,
     /// Loyalty 0-100. Starts at 60-80 depending on personality.
     pub loyalty: f64,
+    /// Whether the defiance crisis has already fired for this governor.
+    /// Reset when loyalty recovers above defiance threshold.
+    #[serde(default)]
+    pub defiance_crisis_fired: bool,
 }
 
 /// Infection count thresholds for region severity levels.
@@ -942,6 +946,7 @@ fn default_governor() -> Governor {
         name: "Unknown".into(),
         personality: GovernorPersonality::Cooperative,
         loyalty: 70.0,
+        defiance_crisis_fired: false,
     }
 }
 
@@ -2516,6 +2521,17 @@ pub enum CrisisKind {
     /// Congressional hearing about your handling of the crisis.
     CongressionalHearing,
 
+    // --- Governor defiance crises (fired when loyalty drops below threshold) ---
+
+    /// Nationalist governor closes borders, blocks medicine deployment.
+    GovernorNationalist { region_idx: usize },
+    /// Populist governor incites public revolt, suspends all policies.
+    GovernorPopulist { region_idx: usize },
+    /// Technocrat governor demands peer review, blocks low-efficacy medicines.
+    GovernorTechnocrat { region_idx: usize },
+    /// Cooperative governor leaks to media, damages political power.
+    GovernorCooperative { region_idx: usize },
+
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
     /// Follow-up to CongressionalHearing (Send deputy): contempt charges.
@@ -2562,6 +2578,10 @@ impl CrisisKind {
             CrisisKind::NamingRights { .. } => "naming_rights",
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
+            CrisisKind::GovernorNationalist { .. } => "gov_nationalist",
+            CrisisKind::GovernorPopulist { .. } => "gov_populist",
+            CrisisKind::GovernorTechnocrat { .. } => "gov_technocrat",
+            CrisisKind::GovernorCooperative { .. } => "gov_cooperative",
             CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
@@ -3346,6 +3366,7 @@ impl GameState {
                     name: "Gov. Torres".into(),
                     personality: GovernorPersonality::Nationalist,
                     loyalty: 65.0,
+                    defiance_crisis_fired: false,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
@@ -3369,6 +3390,7 @@ impl GameState {
                     name: "Gov. Vasquez".into(),
                     personality: GovernorPersonality::Populist,
                     loyalty: 70.0,
+                    defiance_crisis_fired: false,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
@@ -3392,6 +3414,7 @@ impl GameState {
                     name: "Gov. Lindqvist".into(),
                     personality: GovernorPersonality::Technocrat,
                     loyalty: 75.0,
+                    defiance_crisis_fired: false,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
@@ -3415,6 +3438,7 @@ impl GameState {
                     name: "Gov. Okonkwo".into(),
                     personality: GovernorPersonality::Populist,
                     loyalty: 60.0,
+                    defiance_crisis_fired: false,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
@@ -3438,6 +3462,7 @@ impl GameState {
                     name: "Gov. Chen".into(),
                     personality: GovernorPersonality::Cooperative,
                     loyalty: 70.0,
+                    defiance_crisis_fired: false,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
@@ -3461,6 +3486,7 @@ impl GameState {
                     name: "Gov. Whitfield".into(),
                     personality: GovernorPersonality::Nationalist,
                     loyalty: 75.0,
+                    defiance_crisis_fired: false,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
