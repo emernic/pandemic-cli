@@ -351,7 +351,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "Leave it".into(),
-                    description: format!("Risk total loss if breach worsens. 50/50 odds."),
+                    description: "Risk total loss if breach worsens. 30% chance it self-contains.".into(),
                     cost: None,
                 },
                 ],
@@ -552,7 +552,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "Leak circulates. Small credibility hit. −5% POL.".into(),
+                    description: "Leak circulates. −7% POL. May trigger misinformation.".into(),
                     cost: None,
                 },
                 ],
@@ -861,7 +861,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "Wait them out".into(),
-                    description: "Deliveries delayed. Blockade eventually dissolves.".into(),
+                    description: "Supply lines and healthcare degrade while you wait.".into(),
                     cost: None,
                 },
                 ],
@@ -1516,8 +1516,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Containment successful. Research project saved.".into()
         }
         (CrisisKind::LabAccident { targets_basic }, _) => {
-            // Leave it — 50/50 gamble
-            if state.rng.r#gen::<bool>() {
+            // Leave it — 70% chance of loss, 30% chance it self-contains
+            if state.rng.r#gen::<f64>() < 0.70 {
                 // Breach worsens — lose the research anyway
                 if *targets_basic {
                     state.basic_research = None;
@@ -1679,9 +1679,24 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Leak suppressed. Research intact, public confidence shaken.".into()
         }
         (CrisisKind::DataLeak, _) => {
-            // No comment — mild POL loss, no follow-up
-            state.resources.political_power -= 0.05;
-            "No official response. Leak circulates. Credibility erodes.".into()
+            // No comment — moderate POL loss, 50% chance of follow-up
+            state.resources.political_power -= 0.07;
+            if state.rng.r#gen::<bool>() {
+                let target = state.regions.iter().enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .max_by(|(_, a), (_, b)| {
+                        let a_inf: f64 = a.infections.iter().map(|i| i.infected).sum();
+                        let b_inf: f64 = b.infections.iter().map(|i| i.infected).sum();
+                        a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                let followup_tick = state.tick + (6.0 * TICKS_PER_DAY) as u64;
+                state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
+                "No comment. Leak spread. Misinformation taking hold.".into()
+            } else {
+                "No comment. Leak faded from public attention.".into()
+            }
         }
 
         (CrisisKind::BlackMarketMedicine { region_idx }, 0) => {
@@ -1823,11 +1838,18 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Incentive program deployed in {}. Compliance rates improving.", region_name)
         }
         (CrisisKind::VaccineHesitancy { region_idx }, _) => {
-            // Accept noncompliance — no intervention
+            // Accept noncompliance — infections spike from untreated spread
             state.resources.political_power -= 0.05;
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                for inf in &mut region.infections {
+                    if inf.infected > 100.0 {
+                        inf.infected *= 1.10;
+                    }
+                }
+            }
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Noncompliance accepted in {}. Treatment coverage reduced.", region_name)
+            format!("Noncompliance accepted in {}. Infections spreading unchecked.", region_name)
         }
 
         (CrisisKind::CorruptOfficial { stolen }, 0) => {
@@ -1934,12 +1956,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Blockade cleared. Supply routes restored.".into()
         }
         (CrisisKind::CultBlockade { region_idx }, _) => {
-            // Wait them out — small POL loss, some infrastructure degradation
-            state.resources.political_power -= 0.03;
+            // Wait them out — supply lines and healthcare degrade significantly
+            state.resources.political_power -= 0.05;
             if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.healthcare_capacity = (region.healthcare_capacity - 0.05).max(0.0);
+                region.healthcare_capacity = (region.healthcare_capacity - 0.10).max(0.0);
+                region.supply_lines = (region.supply_lines - 0.15).max(0.0);
             }
-            "Blockade eventually dissolved. Supplies delayed.".into()
+            "Blockade dissolved after days of delays. Supply lines degraded.".into()
         }
 
         (CrisisKind::BillionaireOffer { .. }, 0) => {
@@ -1971,11 +1994,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Your agency is now coordinating the global response. Heavy responsibility.".into()
         }
         (CrisisKind::WHOEvacuation { aid_loss, .. }, _) => {
-            // Do nothing — wait for N.W.H.O. to regroup, smaller loss
-            let partial_loss = aid_loss * 0.5;
-            state.resources.funding = (state.resources.funding - partial_loss).max(0.0);
+            // Do nothing — coordination degrades, lose funding AND 1 personnel wanders off
+            state.resources.funding = (state.resources.funding - aid_loss * 0.75).max(0.0);
+            state.resources.personnel = state.resources.personnel.saturating_sub(1);
             state.resources.political_power -= 0.03;
-            format!("Coordination degraded. Lost ¥{:.0} while waiting.", partial_loss)
+            format!("Coordination collapsed during inaction. Lost ¥{:.0}.", aid_loss * 0.75)
         }
 
         (CrisisKind::WarlordDemand { region_idx }, 0) => {
