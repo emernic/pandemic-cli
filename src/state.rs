@@ -165,6 +165,10 @@ pub struct GameState {
     /// Cumulative doses deployed across all medicines and regions.
     #[serde(default)]
     pub total_doses_deployed: f64,
+    /// Active field operations (Recon, Emergency Response, Infrastructure Survey).
+    /// These cost personnel and time, not money.
+    #[serde(default)]
+    pub field_operations: Vec<FieldOperation>,
     /// Count of pathogen suppression operations completed (field research).
     #[serde(default)]
     pub pathogens_suppressed: u32,
@@ -1097,6 +1101,70 @@ pub const SUPPLY_STRESSED_COST_MULT: f64 = 1.5;
 /// Civil order: spread multiplier when at zero (anarchy).
 pub const CIVIL_ORDER_ANARCHY_SPREAD: f64 = 1.5;
 
+// --- Field Operations constants ---
+
+/// Recon Mission: reveals pathogen type without full identification cost.
+pub const OP_RECON_PERSONNEL: u32 = 2;
+pub const OP_RECON_TICKS: f64 = 180.0; // 1.5 days
+pub const OP_RECON_KNOWLEDGE: f64 = 0.25;
+
+/// Emergency Response: temporary lethality reduction in a region.
+pub const OP_EMERGENCY_PERSONNEL: u32 = 3;
+pub const OP_EMERGENCY_TICKS: f64 = 120.0; // 1 day to deploy
+pub const OP_EMERGENCY_EFFECT_TICKS: u64 = 360; // effect lasts 3 days
+pub const OP_EMERGENCY_LETHALITY_MULT: f64 = 0.75; // 25% lethality reduction
+
+/// Infrastructure Survey: free but slow infrastructure repair.
+pub const OP_SURVEY_PERSONNEL: u32 = 2;
+pub const OP_SURVEY_TICKS: f64 = 240.0; // 2 days
+pub const OP_SURVEY_REPAIR: f64 = 0.15; // restores 15%
+
+/// What kind of field operation is being conducted.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FieldOpKind {
+    /// Partial identification of an unidentified pathogen.
+    Recon { disease_idx: usize },
+    /// Emergency medical response in a region.
+    EmergencyResponse { region_idx: usize },
+    /// Infrastructure repair via engineering survey.
+    InfraSurvey { region_idx: usize },
+}
+
+impl FieldOpKind {
+    pub fn personnel(&self) -> u32 {
+        match self {
+            FieldOpKind::Recon { .. } => OP_RECON_PERSONNEL,
+            FieldOpKind::EmergencyResponse { .. } => OP_EMERGENCY_PERSONNEL,
+            FieldOpKind::InfraSurvey { .. } => OP_SURVEY_PERSONNEL,
+        }
+    }
+
+    pub fn duration_ticks(&self) -> f64 {
+        match self {
+            FieldOpKind::Recon { .. } => OP_RECON_TICKS,
+            FieldOpKind::EmergencyResponse { .. } => OP_EMERGENCY_TICKS,
+            FieldOpKind::InfraSurvey { .. } => OP_SURVEY_TICKS,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            FieldOpKind::Recon { .. } => "Recon Mission",
+            FieldOpKind::EmergencyResponse { .. } => "Emergency Response",
+            FieldOpKind::InfraSurvey { .. } => "Infrastructure Survey",
+        }
+    }
+}
+
+/// An active field operation in progress.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FieldOperation {
+    pub kind: FieldOpKind,
+    pub personnel: u32,
+    pub ticks_remaining: f64,
+    pub total_ticks: f64,
+}
+
 impl Governor {
     /// Returns true if this governor is defiant (loyalty below threshold).
     pub fn is_defiant(&self) -> bool {
@@ -1195,6 +1263,10 @@ pub struct Region {
     /// At 0: all policies disabled, spread rate +50%.
     #[serde(default = "default_one")]
     pub civil_order: f64,
+    /// Tick at which an emergency response effect expires. While active,
+    /// lethality in this region is reduced by OP_EMERGENCY_LETHALITY_MULT.
+    #[serde(default)]
+    pub emergency_response_until: Option<u64>,
     /// Cached recent death rate (deaths per day), updated once per day
     /// by the tick function. Used for the time-to-collapse estimate.
     #[serde(skip)]
@@ -2854,6 +2926,11 @@ pub enum GameEvent {
         region_idx: usize,
         policy_name: String,
     },
+    /// A field operation completed.
+    FieldOpCompleted {
+        label: String,
+        result: String,
+    },
 }
 
 /// Automation rules that fire during tick when conditions are met.
@@ -2919,6 +2996,8 @@ pub enum GameCommand {
     RepairInfrastructure { region_idx: usize, system: InfraSystem },
     /// Toggle a standing order. Kind: 0=auto_quarantine_at_high, 1=auto_travel_ban_at_crit.
     ToggleStandingOrder { kind: usize },
+    /// Start a field operation (costs personnel and time, not money).
+    StartFieldOp { kind: FieldOpKind },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3133,6 +3212,7 @@ pub enum Panel {
     Medicines,
     Policy,
     Scientists,
+    Operations,
     Help,
 }
 
@@ -3173,6 +3253,19 @@ pub enum ResearchUiState {
     ViewActive { track: ResearchTrack, slot_idx: usize },
 }
 
+/// Operations panel UI state machine.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OpsUiState {
+    /// Top level: browse active ops and available operation types.
+    BrowseOps,
+    /// Pick a target disease (for Recon).
+    SelectReconTarget,
+    /// Pick a target region (for Emergency Response).
+    SelectEmergencyTarget,
+    /// Pick a target region (for Infra Survey).
+    SelectSurveyTarget,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
@@ -3204,6 +3297,9 @@ pub struct UiState {
     /// Whether the [X] auto-resolve toggle is active for the current crisis popup.
     #[serde(default)]
     pub crisis_auto_resolve: bool,
+    /// Operations panel wizard state.
+    #[serde(default)]
+    pub operations_ui: Option<OpsUiState>,
     /// Whether the home splash animation has completed (or been skipped).
     /// Once true, the home panel renders fully without animation.
     #[serde(default)]
@@ -3228,6 +3324,7 @@ impl UiState {
                 Panel::Medicines => matches!(self.medicine_ui, Some(MedicineUiState::BrowseMedicines) | None),
                 Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseCategories) | None),
                 Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::BrowseRegions) | None),
+                Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 _ => true,
             };
             if at_top {
@@ -3237,6 +3334,7 @@ impl UiState {
                     Panel::Medicines => self.medicine_ui = None,
                     Panel::Research => self.research_ui = None,
                     Panel::Policy => self.policy_ui = None,
+                    Panel::Operations => self.operations_ui = None,
                     _ => {}
                 }
             } else {
@@ -3246,6 +3344,7 @@ impl UiState {
                     Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                     Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
                     Panel::Policy => self.policy_ui = Some(PolicyUiState::BrowseRegions),
+                    Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
                     _ => {}
                 }
             }
@@ -3264,6 +3363,9 @@ impl UiState {
                     if let Some(pos) = order.iter().position(|&idx| idx == self.map_selection) {
                         self.panel_selection = pos;
                     }
+                }
+                Panel::Operations => {
+                    self.operations_ui = Some(OpsUiState::BrowseOps);
                 }
                 _ => {}
             }
@@ -3353,12 +3455,28 @@ impl UiState {
                     }
                 }
             }
+            Panel::Operations => {
+                match &self.operations_ui {
+                    Some(OpsUiState::SelectReconTarget)
+                    | Some(OpsUiState::SelectEmergencyTarget)
+                    | Some(OpsUiState::SelectSurveyTarget) => {
+                        self.operations_ui = Some(OpsUiState::BrowseOps);
+                        self.panel_selection = 0;
+                    }
+                    _ => {
+                        self.open_panel = Panel::None;
+                        self.panel_selection = 0;
+                        self.operations_ui = None;
+                    }
+                }
+            }
             _ => {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
                 self.medicine_ui = None;
                 self.research_ui = None;
                 self.policy_ui = None;
+                self.operations_ui = None;
             }
         }
     }
@@ -3446,6 +3564,25 @@ impl UiState {
                 .filter(|s| s.is_alive())
                 .count()
                 .saturating_sub(1),
+            Panel::Operations => match &self.operations_ui {
+                Some(OpsUiState::BrowseOps) => {
+                    // Active ops + 3 operation types
+                    (state.field_operations.len() + 3).saturating_sub(1)
+                }
+                Some(OpsUiState::SelectReconTarget) => {
+                    // Unidentified diseases
+                    state.diseases.iter()
+                        .filter(|d| d.detected && d.knowledge < KNOWLEDGE_NAME)
+                        .count()
+                        .saturating_sub(1)
+                }
+                Some(OpsUiState::SelectEmergencyTarget)
+                | Some(OpsUiState::SelectSurveyTarget) => {
+                    // Non-collapsed regions
+                    state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
+                }
+                None => 0,
+            },
             _ => 0,
         }
     }
@@ -3554,6 +3691,7 @@ impl UiState {
             Panel::Medicines => self.handle_medicine_confirm(state),
             Panel::Research => self.handle_research_confirm(state),
             Panel::Policy => self.handle_policy_confirm(state),
+            Panel::Operations => self.handle_operations_confirm(state),
             _ => None,
         }
     }
@@ -3822,6 +3960,95 @@ impl UiState {
             None => None,
         }
     }
+
+    fn handle_operations_confirm(&mut self, state: &GameState) -> Option<GameCommand> {
+        match self.operations_ui.clone() {
+            Some(OpsUiState::BrowseOps) => {
+                let n_active = state.field_operations.len();
+                if self.panel_selection < n_active {
+                    // Selected an active op — no action (view only)
+                    None
+                } else {
+                    // Selected an operation type
+                    match self.panel_selection - n_active {
+                        0 => {
+                            // Recon — need to pick a disease
+                            let targets: Vec<usize> = state.diseases.iter().enumerate()
+                                .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_NAME)
+                                .map(|(i, _)| i)
+                                .collect();
+                            if targets.is_empty() {
+                                self.status_message = Some("No unidentified pathogens".into());
+                                None
+                            } else if targets.len() == 1 {
+                                // Only one target — skip selection
+                                Some(GameCommand::StartFieldOp {
+                                    kind: FieldOpKind::Recon { disease_idx: targets[0] },
+                                })
+                            } else {
+                                self.operations_ui = Some(OpsUiState::SelectReconTarget);
+                                self.panel_selection = 0;
+                                None
+                            }
+                        }
+                        1 => {
+                            // Emergency Response — pick a region
+                            self.operations_ui = Some(OpsUiState::SelectEmergencyTarget);
+                            self.panel_selection = 0;
+                            None
+                        }
+                        2 => {
+                            // Infra Survey — pick a region
+                            self.operations_ui = Some(OpsUiState::SelectSurveyTarget);
+                            self.panel_selection = 0;
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+            }
+            Some(OpsUiState::SelectReconTarget) => {
+                let targets: Vec<usize> = state.diseases.iter().enumerate()
+                    .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_NAME)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&disease_idx) = targets.get(self.panel_selection) {
+                    Some(GameCommand::StartFieldOp {
+                        kind: FieldOpKind::Recon { disease_idx },
+                    })
+                } else {
+                    None
+                }
+            }
+            Some(OpsUiState::SelectEmergencyTarget) => {
+                let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
+                    Some(GameCommand::StartFieldOp {
+                        kind: FieldOpKind::EmergencyResponse { region_idx },
+                    })
+                } else {
+                    None
+                }
+            }
+            Some(OpsUiState::SelectSurveyTarget) => {
+                let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .map(|(i, _)| i)
+                    .collect();
+                if let Some(&region_idx) = non_collapsed.get(self.panel_selection) {
+                    Some(GameCommand::StartFieldOp {
+                        kind: FieldOpKind::InfraSurvey { region_idx },
+                    })
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
+    }
 }
 
 /// Grid layout for the world map: 3 columns × 2 rows.
@@ -3951,6 +4178,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                emergency_response_until: None,
             },
             Region {
                 name: "South America".into(),
@@ -3982,6 +4210,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                emergency_response_until: None,
             },
             Region {
                 name: "Europe".into(),
@@ -4013,6 +4242,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                emergency_response_until: None,
             },
             Region {
                 name: "Africa".into(),
@@ -4044,6 +4274,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                emergency_response_until: None,
             },
             Region {
                 name: "Asia".into(),
@@ -4075,6 +4306,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                emergency_response_until: None,
             },
             Region {
                 name: "Oceania".into(),
@@ -4106,6 +4338,7 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
+                emergency_response_until: None,
             },
         ];
 
@@ -4207,6 +4440,7 @@ impl GameState {
             auto_research: [false; 3],
             auto_deploy: vec![],
             standing_orders: StandingOrders::default(),
+            field_operations: vec![],
             pending_shipments: vec![],
             zero_agency_ticks: 0,
             mercy_rule: false,
@@ -4230,6 +4464,7 @@ impl GameState {
                 event_notification: None,
                 crisis_selection: 0,
                 crisis_auto_resolve: false,
+                operations_ui: None,
                 home_splash_done: false,
                 speed_multiplier: 1,
             },
@@ -4460,7 +4695,8 @@ impl GameState {
             1 => INTEL_STATION_PERSONNEL,
             _ => 0,
         }).sum();
-        field + applied + basic + policy + hospitals + intel
+        let ops: u32 = self.field_operations.iter().map(|op| op.personnel).sum();
+        field + applied + basic + policy + hospitals + intel + ops
     }
 
     pub fn personnel_available(&self) -> u32 {
