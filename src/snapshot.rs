@@ -135,7 +135,7 @@ pub fn run_snapshot(
     mut state: GameState,
     steps: &[String],
 ) -> Result<SnapshotResult, String> {
-    for (step_idx, step_str) in steps.iter().enumerate() {
+    for step_str in steps.iter() {
         if state.outcome != GameOutcome::Playing {
             break;
         }

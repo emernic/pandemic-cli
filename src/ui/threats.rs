@@ -31,10 +31,16 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
-            // Undetected diseases: show only a subtle "?" indicator
+            // Undetected diseases: show a "?" with a brief hint to upgrade screening
             if !disease.detected {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("{}Unknown pathogen (undetected)", marker),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
                 lines.push(Line::from(Span::styled(
-                    format!("{}?", marker),
+                    "    Upgrade [P] screening to detect sooner",
                     Style::default().fg(Color::DarkGray),
                 )));
                 lines.push(Line::from(""));
