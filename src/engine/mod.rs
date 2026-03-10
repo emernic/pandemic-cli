@@ -1995,6 +1995,39 @@ mod tests {
     }
 
     #[test]
+    fn travel_ban_does_not_block_medicine_shipments() {
+        use crate::state::{DeployTarget, SHIPPING_TICKS};
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        state.medicines[0].tested_against.push(0);
+        // Infect region 0 so treatment makes sense
+        state.regions[0].infections[0].infected = 50_000.0;
+        // Enable travel ban on region 0
+        state.policies[0].travel_ban = true;
+
+        // Deploy medicine to region 0 (creates a pending shipment)
+        let (ok, _msg) = medicine::deploy_medicine(
+            &mut state, 0, 0,
+            DeployTarget::Treat { disease_idx: 0 },
+        );
+        assert!(ok, "deployment should succeed despite travel ban");
+        assert_eq!(state.pending_shipments.len(), 1);
+
+        // Advance past arrival tick
+        let arrive = state.pending_shipments[0].arrive_tick;
+        state.tick = arrive + 1;
+        medicine::tick_shipments(&mut state);
+
+        // Shipment should have been delivered, not blocked
+        assert_eq!(state.pending_shipments.len(), 0, "shipment should deliver despite travel ban");
+        // Check that a ShipmentDelivered event was generated (not ShipmentBlocked)
+        let delivered = state.events.iter().any(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
+        let blocked = state.events.iter().any(|e| matches!(e, GameEvent::ShipmentBlocked { .. }));
+        assert!(delivered, "should have ShipmentDelivered event");
+        assert!(!blocked, "should NOT have ShipmentBlocked event");
+    }
+
+    #[test]
     fn personnel_upkeep_reduces_funding() {
         use crate::state::PERSONNEL_UPKEEP_COST;
         let mut state = GameState::new_default(42);

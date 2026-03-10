@@ -136,13 +136,12 @@ pub(super) fn deploy_medicine(
 }
 
 /// Process arriving shipments. Called each tick. Delivers doses that have
-/// arrived, blocks on travel bans, and discards shipments to collapsed regions.
+/// arrived and discards shipments to collapsed regions. Travel bans restrict
+/// civilian movement but do not block medical supply shipments.
 pub(super) fn tick_shipments(state: &mut GameState) {
     let mut i = 0;
     while i < state.pending_shipments.len() {
-        let shipment = &state.pending_shipments[i];
-        let med_idx = shipment.medicine_idx;
-        let reg_idx = shipment.region_idx;
+        let reg_idx = state.pending_shipments[i].region_idx;
 
         // Discard if region collapsed or abandoned
         let region_gone = state.regions.get(reg_idx)
@@ -155,22 +154,6 @@ pub(super) fn tick_shipments(state: &mut GameState) {
         }
 
         if state.tick < state.pending_shipments[i].arrive_tick {
-            i += 1;
-            continue;
-        }
-
-        // Check travel ban
-        let has_travel_ban = state.policies.get(reg_idx)
-            .map(|p| p.travel_ban)
-            .unwrap_or(false);
-        if has_travel_ban {
-            if !state.pending_shipments[i].blocked_by_travel_ban {
-                state.pending_shipments[i].blocked_by_travel_ban = true;
-                let event = GameEvent::ShipmentBlocked { medicine_idx: med_idx, region_idx: reg_idx };
-                state.events.push(event);
-            }
-            // Retry next day
-            state.pending_shipments[i].arrive_tick = state.tick + crate::state::TICKS_PER_DAY as u64;
             i += 1;
             continue;
         }
