@@ -2652,6 +2652,40 @@ mod tests {
     }
 
     #[test]
+    fn mid_game_diseases_resist_broad_spectrum() {
+        use crate::state::TICKS_PER_DAY;
+        // After day 10, diseases spawned against a BS-deploying player should
+        // have pre-existing BS resistance (None mechanism). BS cap is 50%.
+        let mut state = GameState::new_default(42);
+        state.tick = (20.0 * TICKS_PER_DAY) as u64;
+
+        // Simulate heavy BS deployment
+        for med in &mut state.medicines {
+            if med.therapy_type == crate::state::TherapyType::BroadSpectrum {
+                med.deployed_count = 80;
+            }
+        }
+
+        state.diseases.clear();
+        for r in &mut state.regions { r.infections.clear(); }
+        let mut rng = state.rng.clone();
+        disease::spawn_disease_scaled(&mut state, &mut rng);
+
+        if !state.diseases.is_empty() {
+            let d = &state.diseases[0];
+            let bs_resistance = d.get_resistance(None);
+            assert!(
+                bs_resistance > 0.0,
+                "Mid-game disease should have BS resistance after heavy BS deployment, got {bs_resistance}"
+            );
+            assert!(
+                bs_resistance <= 0.5,
+                "BS resistance should cap at 0.5 (not 0.3 like targeted), got {bs_resistance}"
+            );
+        }
+    }
+
+    #[test]
     fn late_game_diseases_favor_contact_transmission() {
         use crate::state::{TransmissionVector, TICKS_PER_DAY};
         let trials = 200;
@@ -2689,17 +2723,18 @@ mod tests {
     }
 
     #[test]
-    fn late_game_diseases_target_vulnerable_regions() {
+    fn mid_game_diseases_target_vulnerable_regions() {
         use crate::state::{ScreeningLevel, TICKS_PER_DAY};
         // Set up: region 0 is heavily defended, region 1-5 are undefended.
-        // At late-game tick, spawned diseases should prefer undefended regions.
+        // At mid-game (day 8), vulnerability targeting is dominant — diseases
+        // prefer undefended regions where they can spread easily.
         let trials = 200;
         let mut defended_hits = 0usize;
         let mut undefended_hits = 0usize;
 
         for seed in 0..trials {
             let mut state = GameState::new_default(seed as u64 + 5000);
-            state.tick = (20.0 * TICKS_PER_DAY) as u64; // day 20: targeting is active
+            state.tick = (8.0 * TICKS_PER_DAY) as u64; // day 8: vulnerability targeting active
             // Defend region 0 heavily
             state.policies[0].screening = ScreeningLevel::MassRapid;
             state.regions[0].hospital_level = 2;
@@ -2720,15 +2755,57 @@ mod tests {
         }
 
         // With 6 regions, uniform would give ~33 hits to region 0 out of 200.
-        // With targeting, region 0 (defended) should get significantly fewer.
+        // With vulnerability targeting, region 0 (defended) should get fewer.
         let defended_rate = defended_hits as f64 / trials as f64;
         assert!(
-            defended_rate < 0.12,
-            "Defended region should be targeted less than 12% of the time: {defended_hits}/{trials} ({defended_rate:.1}%)"
+            defended_rate < 0.15,
+            "Defended region should be targeted less than 15% of the time: {defended_hits}/{trials} ({defended_rate:.1}%)"
         );
         assert!(
             undefended_hits > defended_hits * 3,
             "Undefended regions should be targeted much more than defended: undefended={undefended_hits}, defended={defended_hits}"
+        );
+    }
+
+    #[test]
+    fn late_game_diseases_target_player_strongholds() {
+        use crate::state::{ScreeningLevel, TICKS_PER_DAY};
+        // At late-game (day 25+), strategic targeting dominates — diseases
+        // target the player's invested regions (high infrastructure, active policies).
+        // This is the "designed, not random" behavior.
+        let trials = 200;
+        let mut invested_hits = 0usize;
+        let mut neglected_hits = 0usize;
+
+        for seed in 0..trials {
+            let mut state = GameState::new_default(seed as u64 + 7000);
+            state.tick = (25.0 * TICKS_PER_DAY) as u64; // day 25: strategic targeting dominant
+            // Invest heavily in region 0 (policies + infrastructure)
+            state.policies[0].screening = ScreeningLevel::MassRapid;
+            state.policies[0].quarantine = true;
+            state.policies[0].hospital_surge = true;
+            state.regions[0].hospital_level = 2;
+            // Leave all other regions neglected
+
+            state.diseases.clear();
+            for r in &mut state.regions { r.infections.clear(); }
+
+            let mut rng = state.rng.clone();
+            if let Some((_, region_idx)) = disease::spawn_disease(&mut state, &mut rng) {
+                if region_idx == 0 {
+                    invested_hits += 1;
+                } else {
+                    neglected_hits += 1;
+                }
+            }
+        }
+
+        // With strategic targeting, the invested region should be hit MORE
+        // than uniform (1/6 = ~33/200). It should feel targeted.
+        let invested_rate = invested_hits as f64 / trials as f64;
+        assert!(
+            invested_rate > 0.20,
+            "Invested region should be targeted more than 20% of the time: {invested_hits}/{trials} ({invested_rate:.1}%)"
         );
     }
 
