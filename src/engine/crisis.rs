@@ -1176,20 +1176,21 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.15, 100.0, 600.0);
             CrisisEvent {
-                title: format!("{} — Media Leak", gov_name),
+                title: format!("{} — Formal Complaint", gov_name),
                 description: format!(
-                    "{} has leaked internal situation reports to the press. \
-                     Public confidence in your agency is dropping.",
+                    "{} has filed a formal complaint with the regional oversight board, \
+                     citing unauthorized use of emergency protocols. Your authority in \
+                     this region is under review.",
                     gov_name,
                 ),
                 option_a: CrisisOption {
-                    label: "Accept the fallout".into(),
+                    label: "Accept the ruling".into(),
                     description: "Lose 20% political power".into(),
                     cost: None,
                 },
                 option_b: CrisisOption {
-                    label: format!("PR campaign (¥{:.0})", cost),
-                    description: "Manage the narrative, limit the damage".into(),
+                    label: format!("Commission a response (¥{:.0})", cost),
+                    description: "Formally counter the complaint — limit political damage".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                 },
                 kind,
@@ -1865,13 +1866,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::GovernorCooperative { .. }, 0) => {
-            // Accept fallout — lose 20% POL
+            // Accept ruling — lose 20% POL
             state.resources.political_power -= 0.20;
-            "Media leak fallout — public confidence dropped".into()
+            "Oversight board sided with the governor — political authority reduced".into()
         }
         (CrisisKind::GovernorCooperative { .. }, _) => {
-            // PR campaign — costs already deducted
-            "PR campaign contained the leak — minimal damage".into()
+            // Formal response — costs already deducted
+            "Complaint rebutted — oversight board satisfied, authority confirmed".into()
         }
 
         (CrisisKind::ArkProtocol { region_idx }, 0) => {
