@@ -4438,6 +4438,19 @@ impl GameState {
 
     /// Per-region income contribution before travel ban modifier.
     /// `total_pop` must be > 0 (caller checks).
+    /// Travel ban income factor for a region (1.0 = no ban, 0.3 or 0.5 = ban active).
+    fn region_travel_ban_factor(&self, region_idx: usize, region: &Region) -> f64 {
+        if self.policies.get(region_idx).is_some_and(|p| p.travel_ban) {
+            if region.has_trait(RegionTrait::TradeDependent) {
+                TRADE_DEPENDENT_INCOME_FACTOR
+            } else {
+                TRAVEL_BAN_INCOME_PENALTY
+            }
+        } else {
+            1.0
+        }
+    }
+
     fn region_base_income(region: &Region, total_pop: f64) -> f64 {
         let pop = region.population as f64;
         let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
@@ -4497,16 +4510,7 @@ impl GameState {
                 continue;
             }
             let base = Self::region_base_income(region, total_pop);
-            let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                if region.has_trait(RegionTrait::TradeDependent) {
-                    TRADE_DEPENDENT_INCOME_FACTOR
-                } else {
-                    TRAVEL_BAN_INCOME_PENALTY
-                }
-            } else {
-                1.0
-            };
-            let after_ban = base * travel_ban_factor;
+            let after_ban = base * self.region_travel_ban_factor(i, region);
             // Governor income skim — Operative bargains permanently reduce regional income
             let skim_factor = 1.0 - region.governor.income_skim;
             let after_skim = after_ban * skim_factor;
@@ -4538,16 +4542,7 @@ impl GameState {
                 continue;
             }
             let base = Self::region_base_income(region, total_pop);
-            let travel_ban_factor = if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                if region.has_trait(RegionTrait::TradeDependent) {
-                    TRADE_DEPENDENT_INCOME_FACTOR
-                } else {
-                    TRAVEL_BAN_INCOME_PENALTY
-                }
-            } else {
-                1.0
-            };
-            let after_ban = base * travel_ban_factor;
+            let after_ban = base * self.region_travel_ban_factor(i, region);
             let trade_loss = after_ban * TRADE_INCOME_FRACTION * (1.0 - self.neighbor_trade_health(i));
             penalty += trade_loss;
         }
@@ -4564,7 +4559,7 @@ impl GameState {
         let mut penalty = 0.0;
         for (i, region) in self.regions.iter().enumerate() {
             if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                let factor = if region.has_trait(RegionTrait::TradeDependent) { TRADE_DEPENDENT_INCOME_FACTOR } else { TRAVEL_BAN_INCOME_PENALTY };
+                let factor = self.region_travel_ban_factor(i, region);
                 penalty += Self::region_base_income(region, total_pop) * (1.0 - factor);
             }
         }
