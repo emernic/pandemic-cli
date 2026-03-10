@@ -23,6 +23,60 @@ fn refugee_pol_cost(wave: u8) -> f64 {
     }
 }
 
+/// Phase weight for crisis selection. Determines how likely a crisis type is
+/// to be selected at a given game day. Returns a weight (higher = more likely).
+///
+/// Three phases with overlapping transitions:
+/// - Early (day 0-12): bureaucratic, political, organizational problems
+/// - Mid (day 8-22): infrastructure, resource, and escalating pressure
+/// - Late (day 18+): survival, power struggles, dark comedy
+fn phase_weight(tag: &str, day: f64) -> f64 {
+    // Smooth ramp: 0 at `start`, 1 at `peak`, stays 1 after peak
+    let ramp_up = |start: f64, peak: f64| -> f64 {
+        if day < start { 0.0 }
+        else if day < peak { (day - start) / (peak - start) }
+        else { 1.0 }
+    };
+    // Smooth fade: 1 before `start`, 0 at `gone`
+    let fade_out = |start: f64, gone: f64| -> f64 {
+        if day < start { 1.0 }
+        else if day < gone { 1.0 - (day - start) / (gone - start) }
+        else { 0.1 } // never fully zero — anachronistic crises are rare but possible
+    };
+
+    match tag {
+        // --- Early-game: bureaucratic/organizational (fade after day 15-25) ---
+        "political" | "personnel" | "dataleak" | "corrupt" |
+        "media" | "whistleblower" | "hesitancy" | "aid" | "trial"
+            => fade_out(15.0, 25.0),
+
+        // Lab accidents are early-mid (fade later, research keeps going)
+        "lab" => fade_out(20.0, 30.0),
+
+        // --- Mid-game: escalating pressure (ramp up day 5-12, fade after 25-35) ---
+        "supply" | "blackmarket" | "riot" | "mutation" |
+        "diversion" | "exhaustion"
+            => ramp_up(5.0, 12.0) * fade_out(25.0, 35.0),
+
+        // --- Late-game: survival and power struggles (ramp up day 12-20) ---
+        "military" | "cult" | "who_evac" | "warlord" | "vaccine_dispute"
+            => ramp_up(12.0, 20.0),
+
+        // --- Dark comedy: ramp in mid-to-late game ---
+        // Performance review is funniest when things are falling apart
+        "performance_review" => ramp_up(10.0, 18.0),
+        // Congressional hearing is a late-game absurdity
+        "congress" => ramp_up(18.0, 25.0),
+        // Naming rights and intern are mid-game comedy
+        "naming_rights" | "intern" => ramp_up(5.0, 10.0) * fade_out(25.0, 35.0),
+        // Billionaire can show up mid-to-late
+        "billionaire" => ramp_up(8.0, 15.0),
+
+        // Default: no phase bias (follow-ups, governor crises, etc.)
+        _ => 1.0,
+    }
+}
+
 /// Generate a crisis event based on current game state. Returns None if no
 /// suitable crisis can be generated (e.g., no valid targets for any crisis type).
 pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<CrisisEvent> {
@@ -288,7 +342,21 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         return None;
     }
 
-    let kind = candidates.remove(rng.r#gen::<usize>() % candidates.len());
+    // Weighted random selection based on game phase
+    let weights: Vec<f64> = candidates.iter()
+        .map(|k| phase_weight(k.tag(), day).max(0.01))
+        .collect();
+    let total: f64 = weights.iter().sum();
+    let mut roll = rng.r#gen::<f64>() * total;
+    let mut chosen = candidates.len() - 1; // fallback to last
+    for (i, w) in weights.iter().enumerate() {
+        roll -= w;
+        if roll <= 0.0 {
+            chosen = i;
+            break;
+        }
+    }
+    let kind = candidates.remove(chosen);
     Some(build_crisis_event(state, kind))
 }
 
@@ -2565,4 +2633,66 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         state.sim_state = if was_running { SimState::Running } else { SimState::Paused };
     }
     msg
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phase_weights_shift_with_game_day() {
+        // Early-game bureaucratic crises should dominate early, fade late
+        assert!(phase_weight("political", 3.0) > phase_weight("political", 30.0),
+            "political pressure should be more likely early than late");
+        assert!(phase_weight("corrupt", 5.0) > phase_weight("corrupt", 28.0),
+            "corrupt official should be more likely early than late");
+
+        // Late-game survival crises should be absent early, present late
+        assert!(phase_weight("military", 5.0) < phase_weight("military", 25.0),
+            "military takeover should be more likely late than early");
+        assert!(phase_weight("warlord", 3.0) < phase_weight("warlord", 20.0),
+            "warlord demands should be more likely late than early");
+        assert!(phase_weight("cult", 3.0) < phase_weight("cult", 20.0),
+            "cult blockade should be more likely late than early");
+
+        // Mid-game crises should peak in the middle
+        assert!(phase_weight("supply", 15.0) > phase_weight("supply", 2.0),
+            "supply disruption should be more likely mid-game than very early");
+        assert!(phase_weight("supply", 15.0) > phase_weight("supply", 40.0),
+            "supply disruption should be more likely mid-game than very late");
+
+        // No crisis type should ever have zero weight (anachronistic = rare but possible)
+        assert!(phase_weight("political", 50.0) > 0.0,
+            "even late-game, bureaucratic crises should have non-zero weight");
+    }
+
+    #[test]
+    fn early_game_generates_bureaucratic_crises() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let mut state = GameState::new_default(42);
+        // Day 5: early game
+        state.tick = (5.0 * TICKS_PER_DAY) as u64;
+        // Ensure preconditions for various crisis types
+        state.policies[0].quarantine = true;
+        state.medicines[0].doses = 50.0; // for supply disruption
+
+        let mut tags: Vec<&str> = Vec::new();
+        for seed in 0..50u64 {
+            let mut r = ChaCha8Rng::seed_from_u64(seed);
+            if let Some(crisis) = generate_crisis(&state, &mut r) {
+                tags.push(crisis.kind.tag());
+            }
+        }
+
+        // At day 5, late-game crises (military, cult, warlord, etc.) should
+        // be absent or extremely rare since they have near-zero weight
+        let late_count = tags.iter()
+            .filter(|&&t| matches!(t, "military" | "cult" | "warlord" | "vaccine_dispute" | "who_evac"))
+            .count();
+        assert!(late_count <= 2,
+            "at day 5, late-game crises should be rare, got {}/{}",
+            late_count, tags.len());
+    }
 }
