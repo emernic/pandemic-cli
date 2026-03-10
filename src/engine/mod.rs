@@ -1,4 +1,5 @@
 pub(crate) mod contracts;
+pub mod corporations;
 mod crisis;
 mod disease;
 mod infrastructure;
@@ -75,6 +76,9 @@ pub fn tick(state: &GameState) -> GameState {
     // Funding contracts — check conditions (revoke violators), offer new contracts.
     contracts::tick_check_contracts(&mut new);
     contracts::tick_offer_contracts(&mut new, &mut rng);
+
+    // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
+    corporations::tick_corporations(&mut new);
 
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();

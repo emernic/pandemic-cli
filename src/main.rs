@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Load or create state
-    let state: GameState = if let Some(ref path) = save_file {
+    let mut state: GameState = if let Some(ref path) = save_file {
         if std::path::Path::new(path).exists() {
             let data = fs::read_to_string(path)?;
             if data.trim().is_empty() {
@@ -84,6 +84,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         GameState::new_default(cli.seed)
     };
+
+    // Generate corporations for new games (loaded saves already have them)
+    if state.corporations.is_empty() {
+        pandemic_cli_lib::engine::corporations::generate_corporations(&mut state);
+    }
 
     if cli.snapshot {
         // Build step sequence: --do takes priority if provided, otherwise
