@@ -125,7 +125,12 @@ The architecture is "one giant mutable state blob plus conventions." This sectio
 **Enforced by the compiler:**
 - `pub(super)` on subsystem functions — external code can't call `research::start_research()` directly, only through `execute_command()`
 - Module visibility — `engine/` doesn't `use crate::ui`, `ui/` doesn't `use crate::engine`. A new import would be a visible `use` statement in the diff.
-- `GameCommand` enum — player actions must go through the command dispatch, not by mutating state directly from UI code
+- `GameCommand` enum — every variant is dispatched through `execute_command()`. `apply_action()` calls `ui.handle_confirm()` to get a `GameCommand` and passes it to `execute_command()` unconditionally. There is no intercept or bypass. Preference toggles (`auto_deploy`, `auto_research`, `standing_orders`) go through `GameCommand` variants too.
+
+**What `apply_action()` mutates directly (without `GameCommand`):**
+- `sim_state` (pause/unpause) and `ui.speed_multiplier` — pure UI controls, no game logic involved
+- `auto_resolve_crises` — crisis preference toggled inline in the crisis confirm path (reads crisis tag, manages a HashMap). This is the one remaining bypass; it could be moved to a `GameCommand` if it grows more complex.
+- All other persistent game state mutations go through `execute_command()`.
 
 **Enforced by convention only (can be violated without compiler errors):**
 - Engine code should not read or write `state.ui.*` fields. Nothing prevents it — `UiState` is a public field of `GameState`, which engine functions receive as `&mut GameState`.
