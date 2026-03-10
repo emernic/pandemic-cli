@@ -424,32 +424,26 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     let is_ark = state.ark_protocol == Some(idx);
 
-    // Collapse banner — information blackout for non-Ark collapsed regions
-    if region.collapsed && !is_ark {
-        lines.push(Line::from(Span::styled(
-            "  ██ COLLAPSED ██",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )));
-        // Only alive vs dead — all epidemiological data is unknown
-        lines.push(Line::from(vec![
-            Span::styled("Pop ", label),
-            Span::styled(format_number(pop), val),
-            Span::styled("  Alive ", label),
-            Span::styled(format_number(alive), Style::default().fg(Color::DarkGray)),
-            Span::styled("  Dead ", label),
-            Span::styled(format_number(dead), Style::default().fg(Color::DarkGray)),
-        ]));
-        let paragraph = Paragraph::new(lines);
-        f.render_widget(paragraph, inner);
-        return;
-    }
-
-    // Show COLLAPSED banner for Ark region too (but with full data below)
+    // Collapse banner (always shown for collapsed regions)
     if region.collapsed {
         lines.push(Line::from(Span::styled(
             "  ██ COLLAPSED ██",
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )));
+        if !is_ark {
+            // Information blackout: only alive vs dead — all epidemiological data is unknown
+            lines.push(Line::from(vec![
+                Span::styled("Pop ", label),
+                Span::styled(format_number(pop), val),
+                Span::styled("  Alive ", label),
+                Span::styled(format_number(alive), Style::default().fg(Color::DarkGray)),
+                Span::styled("  Dead ", label),
+                Span::styled(format_number(dead), Style::default().fg(Color::DarkGray)),
+            ]));
+            let paragraph = Paragraph::new(lines);
+            f.render_widget(paragraph, inner);
+            return;
+        }
     }
 
     // Population summary line
