@@ -22,63 +22,63 @@ struct Template {
 const TEMPLATES: &[Template] = &[
     // High-value: forbid powerful tools
     Template {
-        name: "Shipping Alliance",
-        patron: "Elena Vasquez, Logistics Magnate",
+        name: "Shipping Lane Guarantee",
+        patron: "Liang Wei, Transpacific Freight CEO",
         income: 2.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
-        source: "Open borders are non-negotiable.",
+        source: "My ships move or your funding stops.",
     },
     Template {
-        name: "Civil Liberties Fund",
-        patron: "Dr. Amara Osei, Human Rights Director",
+        name: "Saldanha Hospitality Fund",
+        patron: "Viktor Saldanha, Saldanha Resorts",
         income: 2.0,
         condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
-        source: "Quarantine is imprisonment by another name.",
+        source: "Nobody quarantines a Saldanha property.",
     },
     // Medium-value: require commitments
     Template {
-        name: "Pharma Research Grant",
-        patron: "Dr. Henrik Lindqvist, Pharma Consortium",
+        name: "Helion Research Partnership",
+        patron: "Ines Caron, Helion Pharmaceuticals VP",
         income: 1.8,
         condition: FundingCondition::ActiveResearch,
-        source: "We fund results, not bureaucracy.",
+        source: "We fund labs that produce. Not labs that sit idle.",
     },
     Template {
-        name: "Stability Investment Pact",
-        patron: "James Chen, Global Investment Fund",
+        name: "Holt Stability Fund",
+        patron: "Marcus Holt, Holt Capital Group",
         income: 2.0,
         condition: FundingCondition::NoCollapse,
-        source: "One region collapses, markets follow.",
+        source: "Every collapsed region costs me a trillion. Keep them standing.",
     },
     // Threshold-based: lost when situation deteriorates
     Template {
-        name: "Media Transparency Pledge",
-        patron: "Sarah Kowalski, World Press Group",
+        name: "Pinnacle Confidence Fund",
+        patron: "David Okafor, Pinnacle Entertainment",
         income: 1.8,
         condition: FundingCondition::MaxThreatLevel { level: 3 }, // DEFCON 3 or better
-        source: "We cover crises, not catastrophes.",
+        source: "Nobody spends money when they think they're dying.",
     },
     Template {
-        name: "Population Welfare Fund",
-        patron: "Dr. Fatima Al-Rashidi, Humanitarian Aid",
+        name: "Pacific Mutual Actuarial Pact",
+        patron: "Riko Tanaka, Pacific Mutual Insurance",
         income: 1.5,
         condition: FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
-        source: "We exist to limit casualties. So do you.",
+        source: "Every death is a claim. Keep it under half a billion.",
     },
     // Policy-requiring: force spending
     Template {
-        name: "Medical Workers' Compact",
-        patron: "Roberto Silva, Healthcare Union",
+        name: "Aldridge Equipment Lease",
+        patron: "Margaret Aldridge, Aldridge Medical Systems",
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 2 }, // Hospital Surge
-        source: "Our people need proper surge facilities.",
+        source: "We supply the surge beds. Keep the orders active.",
     },
     Template {
-        name: "Border Security Contract",
-        patron: "Gen. Klaus Weber, Security Services",
+        name: "Aegis Border Contract",
+        patron: "Col. Raymond Cross, Aegis Security Group",
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
-        source: "Secure borders save lives.",
+        source: "My people are at the checkpoints. Keep the policy active.",
     },
 ];
 
