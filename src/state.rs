@@ -2236,14 +2236,14 @@ impl BasicTech {
     /// Short description for the research panel.
     pub fn description(&self) -> &'static str {
         match self {
-            BasicTech::TargetedDrugDesign => "Unlocks targeted Antiviral/Antibiotic development",
-            BasicTech::MonoclonalAntibodies => "Unlocks high-efficacy mAb drugs for viruses",
-            BasicTech::PhageTherapy => "Unlocks phage therapy drugs for bacteria",
-            BasicTech::RapidSequencing => "Halves sequencing time, reveals mutation details",
-            BasicTech::VaccinePlatform => "3x preventive vaccination effectiveness",
-            BasicTech::ResistanceSurveillance => "Reveals drug resistance levels and trends",
-            BasicTech::CombinationTherapy => "Halves resistance buildup from deployments",
-            BasicTech::PathogenSuppression => "Unlocks suppression research: reduce infectivity ~20%",
+            BasicTech::TargetedDrugDesign => "Targeted antiviral and antibiotic development for identified pathogen classes.",
+            BasicTech::MonoclonalAntibodies => "Engineered antibody therapies with high efficacy against identified viral strains.",
+            BasicTech::PhageTherapy => "Bacteriophage-based treatment for bacterial pathogens. Low resistance development.",
+            BasicTech::RapidSequencing => "Cuts sequencing time in half. Reveals mutation drift rate and history.",
+            BasicTech::VaccinePlatform => "Triples effectiveness of preventive vaccination programs.",
+            BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
+            BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
+            BasicTech::PathogenSuppression => "Field research to suppress pathogen spread. Each project reduces infectivity ~20%.",
         }
     }
 
