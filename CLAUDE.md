@@ -212,11 +212,18 @@ cargo run -- --snapshot --do d0.5 --do p --do enter --do enter --do d1     # adv
 
 This eliminates the need for save files in simple multi-step tests. For longer sessions, save files are still useful.
 
-### Snapshot mode crisis handling
+### Snapshot mode event handling
 
-Crisis events are always auto-resolved during snapshot mode. The auto-resolver prefers option B (usually "pay to preserve status quo") when affordable, and falls back to option A (always free, but often destructive — removes policies, loses doses, etc.) when B can't be afforded. This minimizes strategic disruption from random crises. Auto-resolved crises are logged to stderr so playtest agents can see what happened.
+Crisis events and pause events (disease detection, collapse, breakthroughs) **interrupt tick advancement**, exactly as they do in interactive mode. When an event fires mid-sequence:
 
-Game over always stops execution immediately.
+1. Tick advancement stops immediately.
+2. Any remaining queued steps are dropped (with a stderr message listing what was dropped).
+3. The rendered screen shows the current state — including the crisis popup or paused game.
+4. To continue, dismiss the event (e.g. `--do enter`) and issue another `--days` or `--do` command.
+
+Game over also stops execution immediately.
+
+**Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
 ### Snapshot persistence and real playtesting
 
