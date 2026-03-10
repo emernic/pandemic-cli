@@ -430,7 +430,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency analysis (${:.0})", cost),
-                        description: "Genomic data reduces treatment drift on this strain.".into(),
+                        description: "Current strain sequenced — pathogen knowledge updated.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0 }),
                     }
                 },
@@ -697,7 +697,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Whistleblower: Drug Side Effects".into(),
                 description: format!(
-                    "A researcher has flagged undisclosed side effects in {}.",
+                    "A researcher has flagged undisclosed side effects of {}.",
                     med_name,
                 ),
                 option_a: CrisisOption {
