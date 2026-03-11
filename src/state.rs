@@ -1278,32 +1278,6 @@ pub struct Governor {
     pub income_skim: f64,
 }
 
-/// Check whether a decree is unlocked based on current crisis severity.
-/// Decrees become available when conditions are dire enough to justify them.
-pub fn decree_unlocked(state: &GameState, decree_idx: usize) -> bool {
-    let total_infected = state.total_infected();
-    let total_dead = state.total_dead();
-    let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
-    let crit_count = state.regions.iter()
-        .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
-        .count();
-
-    match decree_idx {
-        // Conscript Researchers: 500K+ infected OR 100K+ dead
-        0 => total_infected >= 500_000.0 || total_dead >= 100_000.0,
-        // Authorize Human Trials: 50M+ dead OR 2+ regions at CRIT severity
-        1 => total_dead >= 50_000_000.0 || crit_count >= 2,
-        // Sacrifice Region: any region collapsed OR 500M+ dead
-        2 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
-        // Suspend Regional Authority: 50M+ dead OR 2+ regions at CRIT severity
-        3 => total_dead >= 50_000_000.0 || crit_count >= 2,
-        // Fortify Region: any region collapsed OR 500M+ dead
-        4 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
-        // Emergency Countermeasure: 3+ regions collapsed OR 2B+ dead
-        5 => collapsed_count >= 3 || total_dead >= 2_000_000_000.0,
-        _ => false,
-    }
-}
 
 /// Infection count thresholds for region severity levels.
 /// Used by both the UI (status labels) and the engine (governor loyalty drift).
@@ -4430,7 +4404,7 @@ impl UiState {
                     let decree_idx = self.panel_selection - decree_base;
                     if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
                         // Sacrifice Region needs sub-selection — but only if unlocked
-                        if decree_unlocked(state, 2) {
+                        if state.decree_unlocked(2) {
                             self.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
                             self.panel_selection = 0;
                             None
@@ -4439,7 +4413,7 @@ impl UiState {
                         }
                     } else if decree_idx == 4 && !state.enacted_decrees.is_enacted(4) {
                         // Fortify Region needs sub-selection
-                        if decree_unlocked(state, 4) {
+                        if state.decree_unlocked(4) {
                             self.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
                             self.panel_selection = 0;
                             None
@@ -5549,6 +5523,33 @@ impl GameState {
     /// Whether a policy can be activated given current POL and regional severity.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
         self.resources.political_power >= self.effective_pol_threshold(region_idx, policy_idx)
+    }
+
+    /// Whether a decree is unlocked based on current crisis severity.
+    /// Decrees become available when conditions are dire enough to justify them.
+    pub fn decree_unlocked(&self, decree_idx: usize) -> bool {
+        let total_infected = self.total_infected();
+        let total_dead = self.total_dead();
+        let collapsed_count = self.regions.iter().filter(|r| r.collapsed).count();
+        let crit_count = self.regions.iter()
+            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
+            .count();
+
+        match decree_idx {
+            // Conscript Researchers: 500K+ infected OR 100K+ dead
+            0 => total_infected >= 500_000.0 || total_dead >= 100_000.0,
+            // Authorize Human Trials: 50M+ dead OR 2+ regions at CRIT severity
+            1 => total_dead >= 50_000_000.0 || crit_count >= 2,
+            // Sacrifice Region: any region collapsed OR 500M+ dead
+            2 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
+            // Suspend Regional Authority: 50M+ dead OR 2+ regions at CRIT severity
+            3 => total_dead >= 50_000_000.0 || crit_count >= 2,
+            // Fortify Region: any region collapsed OR 500M+ dead
+            4 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
+            // Emergency Countermeasure: 3+ regions collapsed OR 2B+ dead
+            5 => collapsed_count >= 3 || total_dead >= 2_000_000_000.0,
+            _ => false,
+        }
     }
 
     /// Whether a personality-specific bargain is available for the given region.

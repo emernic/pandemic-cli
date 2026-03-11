@@ -11,12 +11,28 @@ main.rs / snapshot.rs     I/O boundary (terminal, files, CLI)
         ↓
 lib.rs                    Coordination (apply_action routes input)
         ↓
-ui/  |  engine/           Rendering + UI state  |  Game logic
+ui/  |  engine/           Rendering + UI state  |  Game logic (mutations)
         ↓                         ↓
-state.rs                  Data + UI state machines (structs, enums, queries, UiState methods)
+state.rs                  Domain model: data structures, derived computations,
+                          and UI state machines (UiState methods)
 ```
 
 **UI and engine are peers — neither imports from the other.** Both depend on state.rs. The coordination layer in lib.rs connects them: UI state machines translate user intent into `GameCommand`s, and `apply_action()` passes those to `engine::execute_command()`.
+
+### What state.rs actually is
+
+state.rs is a **domain model layer** — not just passive data. It contains three things:
+
+1. **Data structures** — the raw stored game state (`GameState`, `Region`, `Disease`, `Medicine`, `RegionPolicy`, etc.)
+2. **Derived computations** — read-only methods that compute values both the engine and UI need: `pol_target()`, `funding_income_rate()`, `policy_unlocked()`, `decree_unlocked()`, `tech_pressure()`, `available_projects()`, `has_zero_agency()`, and many more
+3. **UI state machines** — `UiState` methods for panel navigation, wizard steps, and confirm handlers
+
+The derived computations *must* live in state.rs because both the engine (to drive game logic) and the UI (to display information to the player) read them. If they lived in engine/, the UI couldn't access them. They are all pure reads — no mutations.
+
+**The mutation boundary:** Only engine/ mutates game data (via `tick()` and `execute_command()`). Nearly everything in state.rs is a read-only computation or accessor. The handful of mutating functions are:
+- `UiState` mutation methods — UI state machines, not game state
+- Struct mutation helpers (`get_or_create_infection`, `add_resistance`, `set_bool`) — thin helpers called by engine, living on their data types
+- `migrate()` — called once after deserialization to fix save-file compatibility
 
 ### How input flows
 
