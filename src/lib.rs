@@ -861,11 +861,12 @@ mod tests {
             tick_created: 0,
         });
 
-        // Dismiss the crisis.
+        // 1st enter: dismiss the crisis.
         let state = apply_action(&state, &Action::Confirm);
         assert!(state.active_crisis.is_none(), "crisis should be dismissed");
 
-        // Panel should be reset to BrowseRegions (safe top level), not ManagePolicies.
+        // Panel must be reset to BrowseRegions (safe top level), not ManagePolicies.
+        // This is the key regression guard: if this fails, the cascade bug is back.
         assert!(
             matches!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions)),
             "policy_ui should reset to BrowseRegions after crisis dismissal, got {:?}",
@@ -873,11 +874,18 @@ mod tests {
         );
         assert_eq!(state.ui.panel_selection, 0);
 
-        // Check that border controls for region 0 were NOT accidentally toggled.
-        // panel_selection=0 in ManagePolicies points to border_controls.
+        // 2nd enter: simulates the "accidental" extra keypress from a --do chain.
+        // From BrowseRegions, this navigates INTO ManagePolicies — harmless navigation.
+        // WITHOUT the fix, we'd still be in ManagePolicies and this would toggle a policy.
+        let state = apply_action(&state, &Action::Confirm);
         assert!(
             !state.policies[0].border_controls,
-            "border_controls should not be toggled by the crisis dismissal enter"
+            "extra enter after crisis dismissal must not toggle border_controls"
+        );
+        // Now in ManagePolicies (navigated there safely, not via cascade).
+        assert!(
+            matches!(state.ui.policy_ui, Some(PolicyUiState::ManagePolicies { .. })),
+            "second enter from BrowseRegions should navigate to ManagePolicies"
         );
     }
 
