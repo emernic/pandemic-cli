@@ -572,7 +572,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let pol_pct = (pol_cost * 100.0).round() as u32;
 
             CrisisEvent {
-                title: "REFUGEE CRISIS".into(),
+                title: "Refugee Crisis".into(),
                 description,
                 options: vec![ CrisisOption {
                     label: "Open borders".into(),
@@ -827,7 +827,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: format!("Share data (+¥{:.0})", share_reward),
-                    description: format!("−0.1 knowledge, receive ¥{:.0}", share_reward),
+                    description: format!("Transfer sequencing data. Receive ¥{:.0}.", share_reward),
                     cost: None,
                 },
                  CrisisOption {
@@ -2228,11 +2228,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Investigation successful. Funds recovered, official removed.".into()
         }
 
-        (CrisisKind::ResourceDiversion { disease_idx, share_reward, .. }, 0) => {
-            // Share data — lose knowledge, gain funding
-            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
-                disease.knowledge = (disease.knowledge - 0.1).max(0.0);
-            }
+        (CrisisKind::ResourceDiversion { share_reward, .. }, 0) => {
             state.resources.funding += share_reward;
             format!("Research data shared. Received ¥{:.0}.", share_reward)
         }
