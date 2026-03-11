@@ -246,7 +246,7 @@ pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 pub const EMERGENCE_MIN_TICK: u64 = (5.0 * TICKS_PER_DAY) as u64;
 /// Per-tick probability of a new disease emerging (after min tick).
 /// ~1 new disease every 14 days → steady pressure without overwhelming the
-/// research pipeline (which takes 7-10 days per disease).
+/// research pipeline (which takes ~14-20 days per disease).
 pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0012;
 /// Maximum number of simultaneous diseases.
 pub const MAX_DISEASES: usize = 5;
