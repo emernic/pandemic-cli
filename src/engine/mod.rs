@@ -1542,9 +1542,13 @@ mod tests {
                 }
 
                 // --- POLICIES: containment and public health ---
-                // A competent player enables cheap always-available policies
-                // (border controls, water sanitation) immediately, quarantines
-                // infected regions, and activates hospital surge as POL allows.
+                // A competent player enables border controls immediately (cheap,
+                // always helps cross-region spread), enables water sanitation
+                // only when a waterborne disease is present (otherwise pure waste),
+                // quarantines infected regions, and activates hospital surge.
+                let any_waterborne = state.diseases.iter().any(|d| {
+                    d.transmission == crate::state::TransmissionVector::Waterborne
+                });
                 for r_idx in 0..state.regions.len() {
                     if state.regions[r_idx].collapsed { continue; }
                     let total_infected: f64 = state.regions[r_idx].infections.iter()
@@ -1559,7 +1563,7 @@ mod tests {
                             region_idx: r_idx, policy_idx: 3,
                         });
                     }
-                    if !has_water {
+                    if !has_water && any_waterborne {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
                             region_idx: r_idx, policy_idx: 4,
                         });
@@ -2877,7 +2881,6 @@ mod tests {
         // This is the "designed, not random" behavior.
         let trials = 200;
         let mut invested_hits = 0usize;
-        let mut neglected_hits = 0usize;
 
         for seed in 0..trials {
             let mut state = GameState::new_default(seed as u64 + 7000);
@@ -2896,8 +2899,6 @@ mod tests {
             if let Some((_, region_idx)) = disease::spawn_disease(&mut state, &mut rng) {
                 if region_idx == 0 {
                     invested_hits += 1;
-                } else {
-                    neglected_hits += 1;
                 }
             }
         }
