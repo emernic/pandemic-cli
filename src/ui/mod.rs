@@ -349,7 +349,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 let collapsed = state.regions.get(*collapsed_region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                let msg = format!("Network disruption: supply routes through {} severed — {} medicine deployment +50% for 10 days",
+                let msg = format!("Network disruption: supply routes through {} severed. {} medicine deployment +50% for 10 days",
                     collapsed, disrupted);
                 (2, msg.clone(), msg)
             }
@@ -357,15 +357,15 @@ pub(crate) fn process_events(state: &mut GameState) {
                 (2, message.clone(), message.clone())
             }
             GameEvent::ContractOffered { name } => {
-                let msg = format!("TERMS RECEIVED: {} — respond via crisis popup", name);
+                let msg = format!("TERMS RECEIVED: {}. Respond via crisis popup", name);
                 (5, msg.clone(), msg)
             }
             GameEvent::ContractWarning { patron, reason } => {
-                let msg = format!("NOTICE: {} — {}", patron, reason);
+                let msg = format!("NOTICE: {}: {}", patron, reason);
                 (2, msg.clone(), msg)
             }
             GameEvent::ContractRevoked { name, reason } => {
-                let msg = format!("FUNDING CUT: {} — {}", name, reason);
+                let msg = format!("FUNDING CUT: {}: {}", name, reason);
                 (2, msg.clone(), msg)
             }
             GameEvent::CorporationBankrupt { corp_idx, region_idx } => {

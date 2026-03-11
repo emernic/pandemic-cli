@@ -1813,7 +1813,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         description: format!(
                             "Gov. {lender_name} of {region_name} is calling in the emergency loan. \
                              Outstanding balance: ¥{outstanding:.0}. \
-                             Payment is overdue — they want their money now.",
+                             Payment is overdue. They want their money now.",
                         ),
                         options: vec![
                             if can_repay {
@@ -3105,10 +3105,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                         .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
                     match cancelled_name {
                         Some(name) => format!(
-                            "Gov. {lender_name} defaulted — {name} cancelled in {region_name}. Loyalty −20.",
+                            "Gov. {lender_name} defaulted. {name} cancelled in {region_name}. Loyalty −20.",
                         ),
                         None => format!(
-                            "Gov. {lender_name} defaulted — loyalty −20 in {region_name}.",
+                            "Gov. {lender_name} defaulted. Loyalty −20 in {region_name}.",
                         ),
                     }
                 }
@@ -3118,7 +3118,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     state.resources.personnel = state.resources.personnel.saturating_sub(lost);
                     state.resources.political_power = (state.resources.political_power - 0.10).max(0.0);
                     format!(
-                        "{lender_name} collected — {lost} researchers 'unavailable', −10% POL from smear campaign.",
+                        "{lender_name} collected. {lost} researchers 'unavailable'. −10% POL from smear campaign.",
                     )
                 }
             }

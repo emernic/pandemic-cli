@@ -143,7 +143,7 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
     )));
     let (lab_desc, lab_status, lab_status_color) = if state.lab_level >= 2 {
         (
-            format!("    {} — all research runs 60% faster", state.lab_level_name()),
+            format!("    {}: all research runs 60% faster", state.lab_level_name()),
             String::new(),
             Color::Green,
         )
@@ -691,7 +691,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                 });
                 let next = if disease.knowledge < KNOWLEDGE_FOR_MEDICINE {
                     if broad_already_available {
-                        "Targeted medicine requires full study — keep studying"
+                        "Targeted medicine requires full study. Keep studying"
                     } else {
                         "Unlocks broad-spectrum medicine development"
                     }
