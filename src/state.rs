@@ -3074,7 +3074,8 @@ impl ResearchKind {
     /// DevelopMedicine costs depend on mechanism of action: each mechanism has
     /// a dev_cost_multiplier that scales base costs (3 personnel, 200 ticks, $500).
     /// Broad-spectrum (multi-target, no mechanism) uses fixed high costs.
-    /// RapidSequencing tech halves GenomicSequencing duration.
+    /// These are BASE costs. Tech modifiers (RapidSequencing, PredictiveSurveillance) are
+    /// applied in GameState::effective_costs(), not here.
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
