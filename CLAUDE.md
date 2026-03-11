@@ -227,26 +227,23 @@ This eliminates the need for save files in simple multi-step tests. For longer s
 
 ### Snapshot mode event handling
 
-Crisis events **interrupt tick advancement**, exactly as they do in interactive mode. When a crisis fires mid-sequence:
+Crisis events **interrupt tick advancement**, exactly as they do in interactive mode. When a crisis fires:
 
 1. Tick advancement stops immediately.
-2. Subsequent key steps (e.g. `--do enter`) still fire, so you can dismiss inline: `--do d60 --do enter --do d5`. Subsequent `--days` steps are skipped until the crisis is dismissed.
-3. The rendered screen shows the current state — including the crisis popup.
+2. The rendered screen shows the full crisis popup — read it before pressing anything.
+3. Subsequent key steps still fire, allowing you to respond in the same invocation or the next.
 
 Game over also stops execution immediately.
 
-**Crisis events must be read and responded to deliberately.** When a crisis fires, the screen shows the full event text and options. Read it. Navigate the options with up/down. Make a real choice. If the crisis feels tedious, repetitive, or like its options don't matter — say so explicitly in your notes. That is valuable feedback. What is NOT acceptable: pre-loading `--do enter` steps to blow past crises unseen. This defeats the entire purpose of playtesting.
+**Crisis events are gameplay decisions, not interruptions to bypass.** Read the full text and all options before pressing anything. Navigate to your chosen option with `--key up`/`--key down`, then confirm with `--key enter`.
 
-**Practical recipe for multi-day playtesting:** Advance in short increments and handle each crisis as it fires:
+**Never put `--do enter` in the same invocation as `--do d<N>`.** You cannot know what crisis is coming before it fires. A pre-chained enter will either navigate somewhere unintended (no crisis fired) or dismiss a crisis you never read (crisis fired). The correct pattern:
 
 ```bash
-# Advance 2-3 days at a time, then check the screen:
-cargo run -- --snapshot --do d2   # advance, then read the output
-cargo run -- --snapshot --key down --key enter  # navigate crisis options and confirm
-cargo run -- --snapshot --do d2   # continue
+cargo run -- --snapshot --do d2          # advance; read full output
+cargo run -- --snapshot --key enter      # respond to crisis (use --key up/down first if not taking default option)
+cargo run -- --snapshot --do d2          # continue
 ```
-
-**Rule of thumb:** Never chain `--do d<N> --do enter` in a single invocation unless you have already seen this exact crisis in this session and know its default option is acceptable. Unknown crises must be read before dismissing.
 
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
