@@ -2893,9 +2893,11 @@ pub enum ResearchTrack {
 
 /// Number of research track categories (Field, Applied, Basic).
 /// The "Upgrade Lab" item in BrowseCategories is always rendered AFTER these tracks
-/// at index `RESEARCH_TRACK_COUNT`. Both `panel_selection_max()` (state.rs) and
-/// the BrowseCategories renderer (ui/research.rs) use this constant — if you add a
-/// fourth track, update this constant and both dependent sites together.
+/// at index `RESEARCH_TRACK_COUNT`. If you add a fourth track, update ALL of:
+///   - this constant
+///   - `ResearchTrack::from_index()` (add the new arm)
+///   - `ResearchTrack::index()` (add the new arm)
+///   - the BrowseCategories renderer in `ui/research.rs`
 pub const RESEARCH_TRACK_COUNT: usize = 3;
 
 impl ResearchTrack {
