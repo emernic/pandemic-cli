@@ -13,9 +13,9 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use pandemic_cli_lib::action::{key_to_action, Action};
 use pandemic_cli_lib::apply_action;
-use pandemic_cli_lib::engine::tick;
 use pandemic_cli_lib::snapshot;
 use pandemic_cli_lib::state::GameState;
+use pandemic_cli_lib::tick_and_process;
 use pandemic_cli_lib::ui;
 
 #[derive(Parser)]
@@ -243,8 +243,7 @@ fn game_loop(
         // Auto-tick when unpaused
         if state.sim_state.is_running() && last_tick.elapsed() >= effective_tick {
             let had_crisis = state.active_crisis.is_some();
-            state = tick(&state);
-            ui::process_events(&mut state);
+            state = tick_and_process(&state);
             last_tick += effective_tick;
             // Detect when a new crisis appears and start the input lockout
             if !had_crisis && state.active_crisis.is_some() {
