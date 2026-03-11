@@ -134,6 +134,27 @@ Two loss conditions:
 
 The defeat screen shows duration, death toll, collapse timeline, pathogen report, score, and strategic tips specific to what happened in that run.
 
+## Crisis Event Writing Standards
+
+Every crisis event must read like a situation report. It states what happened. It does not editorialize about what it means or perform urgency at the player.
+
+**The world frame:** The N.W.H.O. in 2050 is not the WHO. Institutions are hollowed out. Your authority comes from keeping your board satisfied, not from managing public opinion. "The public" is not your primary constituency. The entities that matter are named individuals — patrons, governors, board members — and corporations with their own agendas. Write events as if the player already knows this.
+
+**The register model:** PatronDemand events. "His lawyers are drafting a withdrawal." "My ships move or your funding stops." Named individuals. Blunt. No commentary. You state what the person did and what they want. The player decides. This is the right register for all crisis events, not just patron events.
+
+**Language that does not belong in crisis text:**
+
+- `"transparency"` / `"go transparent"` — 2020s activist language. Use the actual action: "issue a statement," "acknowledge the leak," etc.
+- `"misinformation"` / `"disinformation"` — 2020s political language. Use `"infodemic"` if you mean the epidemiological phenomenon, or just describe what mechanically happens.
+- `"civil unrest"` — news-speak. Say what's actually happening: perimeter breached, staff evacuating, region destabilizing.
+- `"member states"` — UN language from a world that no longer exists. Use corporations or named individuals.
+- anything that performs urgency: "nightmare scenario," "the world is watching," "desperate measures"
+- anything that explains the significance: "this is a pivotal moment," "the stakes have never been higher"
+
+**Format:** 1-3 sentences for description. Option labels describe the action. Option descriptions state the cost. No em dashes.
+
+**Before you write a crisis event, read the PatronDemand events in `crisis.rs`.** Not as templates — as a calibration. That's what earned, grounded writing sounds like in this game.
+
 ## What the Game Is Not
 
 - **Not Plague Inc.** You're defending, not attacking. But more importantly: Plague Inc. is a puzzle game where you optimize a single disease against a static world. This game is about managing cascading systems that interact in emergent ways.
