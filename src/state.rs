@@ -553,12 +553,6 @@ pub const POLICY_IDX_NUCLEAR: usize = 9;
 /// (Basic / Med / Mass Screening), all backed by the single `screening` enum field.
 pub const POLICY_IDX_SCREENING_BASE: usize = 5;
 
-/// Number of infrastructure repair items in the ManagePolicies panel
-/// (Healthcare, Supply Lines, Civil Order). This ties the renderer and
-/// confirm handler to the same layout constant — add a new infra item here,
-/// and Appease/Bargain positions update automatically everywhere.
-pub const INFRA_ITEM_COUNT: usize = 3;
-
 /// Minimum Political Power (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
@@ -579,15 +573,13 @@ pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
 /// Panel selection positions for the ManagePolicies subpanel.
 ///
 /// Layout: [0..POLICY_COUNT) = policy toggles in display order,
-///         [MANAGE_INFRA_BASE..+3) = infrastructure repair (HC, SL, CO),
 ///         MANAGE_PRIORITY_POS = Deployment Priority cycle,
 ///         MANAGE_APPEASE_POS = Appease Governor,
 ///         MANAGE_BARGAIN_POS = Bargain (only when governor is defiant).
 ///
 /// Both `ui/policy.rs` (render_manage) and `state.rs` (handle_policy_confirm) use
 /// these constants so the two sites stay in sync automatically.
-pub const MANAGE_INFRA_BASE: usize = POLICY_COUNT;
-pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT + INFRA_ITEM_COUNT;
+pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT;
 pub const MANAGE_APPEASE_POS: usize = MANAGE_PRIORITY_POS + 1;
 pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 
@@ -1390,12 +1382,6 @@ impl InfraSystem {
         }
     }
 
-    pub fn repair_cost(self) -> f64 {
-        match self {
-            InfraSystem::SupplyLines => SUPPLY_REPAIR_COST,
-            _ => INFRA_REPAIR_COST,
-        }
-    }
 }
 
 /// Infrastructure breakpoint: stressed. Effects start.
@@ -1405,11 +1391,6 @@ pub const INFRA_CRITICAL: f64 = 0.25;
 
 /// How much infrastructure a completed field operations project restores (0.30 = 30%).
 pub const FIELD_OPS_RESTORE: f64 = 0.30;
-
-/// Cost to repair 25% of a single infrastructure system.
-pub const INFRA_REPAIR_COST: f64 = 500.0;
-/// Cost to repair supply lines specifically (can also use funding).
-pub const SUPPLY_REPAIR_COST: f64 = 400.0;
 
 /// Healthcare: lethality multiplier when stressed (below 50%).
 pub const HEALTHCARE_STRESSED_LETHALITY: f64 = 2.0;
@@ -3548,8 +3529,6 @@ pub enum GameCommand {
     AppeaseGovernor { region_idx: usize },
     /// Personality-specific bargain with a defiant governor (non-monetary cost).
     BargainWithGovernor { region_idx: usize },
-    /// Repair regional infrastructure. system: 0=healthcare, 1=supply_lines, 2=civil_order.
-    RepairInfrastructure { region_idx: usize, system: InfraSystem },
     /// Toggle a standing order. Kind: 0=auto_quarantine_at_high, 1=auto_travel_ban_at_crit.
     ToggleStandingOrder { kind: usize },
     /// Toggle auto-deploy for a specific medicine.
