@@ -44,7 +44,7 @@ fn dashboard_pol_breakdown() {
     assert!(output.contains("POLITICAL POWER"), "missing POL section header");
     assert!(output.contains("Current:"), "missing current POL");
     assert!(output.contains("Target:"), "missing target POL");
-    assert!(output.contains("Baseline:"), "missing baseline breakdown");
+    assert!(output.contains("Board:"), "missing board satisfaction breakdown");
 }
 
 /// Smoke test: bargain option appears when governor is defiant.

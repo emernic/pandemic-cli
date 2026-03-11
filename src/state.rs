@@ -5364,32 +5364,71 @@ impl GameState {
         true
     }
 
-    /// Current POL drift target based on severity, time, and active policies.
-    /// POL drifts toward this value at ~30%/day. Called by engine::tick().
-    /// Returns (baseline, death_component, infection_component) that sum to pol_target().
-    /// `death_component` = sqrt(death_frac), `infection_component` = 0.4 * sqrt(infected_frac).
+    /// Board satisfaction: average reserve health of board-seat corporations (0.0–1.0).
+    /// Uses reserves_fraction rather than revenue because revenue drops immediately when
+    /// policies are applied (quarantine, border controls), which would create a perverse
+    /// incentive where good policies tank POL. Reserves deplete slowly over weeks, giving
+    /// the board's financial backing a natural lag that reflects long-term solvency.
+    /// Bankruptcies contribute 0.0; a healthy board with full reserves returns ~1.0.
+    pub fn board_satisfaction(&self) -> f64 {
+        let board_corps: Vec<&Corporation> =
+            self.corporations.iter().filter(|c| c.board_seat).collect();
+        if board_corps.is_empty() {
+            return 0.0;
+        }
+        let total: f64 = board_corps.iter().map(|c| {
+            if c.bankrupt { 0.0 } else { c.reserves_fraction() }
+        }).sum();
+        total / board_corps.len() as f64
+    }
+
+    /// Patron confidence: average satisfaction across active funding contracts (0.0–1.0).
+    /// Returns 1.0 when no contracts exist — new players aren't penalized for having
+    /// no patron relationships yet.
+    pub fn patron_confidence(&self) -> f64 {
+        if self.contracts.is_empty() {
+            return 1.0;
+        }
+        let total: f64 = self.contracts.iter().map(|c| c.satisfaction).sum();
+        total / self.contracts.len() as f64
+    }
+
+    /// Current POL drift target based on board confidence, patron relationships, and crisis severity.
+    /// POL drifts toward this value at ~50%/day. Called by engine::tick().
+    /// Returns (board_component, patron_component, severity_floor) that sum to pol_target().
     /// Used by the dashboard to show a breakdown without duplicating the formula.
     ///
-    /// Uses OBSERVED figures (detected deaths, screened infections) — not ground truth.
-    /// This means poor screening suppresses political pressure, creating a strategic
-    /// trade-off: neglect screening to slow POL growth, or invest for better intel.
+    /// Board satisfaction is the primary driver — the board grants or withholds authority
+    /// based on how healthy their corporations are. Patron confidence amplifies this when
+    /// the player has active contracts. A severity floor ensures even a hostile board must
+    /// concede some emergency authority when deaths mount.
     pub fn pol_target_components(&self) -> (f64, f64, f64) {
         let initial_pop = self.initial_population();
         let death_frac = if initial_pop > 0.0 { self.total_dead_detected() / initial_pop } else { 0.0 };
-        let infected_frac = if initial_pop > 0.0 { self.total_infected_screened() / initial_pop } else { 0.0 };
-        let baseline = 0.20_f64;
-        let death_component = death_frac.sqrt();
-        let infection_component = infected_frac.sqrt() * 0.4;
-        (baseline, death_component, infection_component)
+
+        // Board satisfaction is the primary driver (0.0–0.30)
+        let board_component = self.board_satisfaction() * 0.30;
+
+        // Patron confidence only counts when you have active contracts (0.0–0.40)
+        let patron_component = if self.contracts.is_empty() {
+            0.0
+        } else {
+            self.patron_confidence() * 0.40
+        };
+
+        // Severity floor: even a hostile board must grant some authority when people are dying
+        // Capped at 0.10 to prevent severity from dominating once board/patrons matter
+        let severity_floor = (death_frac.sqrt() * 0.3_f64).min(0.10);
+
+        (board_component, patron_component, severity_floor)
     }
 
     pub fn pol_target(&self) -> f64 {
-        let (baseline, death_component, infection_component) = self.pol_target_components();
-        // Baseline: 20% institutional mandate even before the crisis escalates.
-        // POL grows naturally as crisis severity worsens — the worse things get,
-        // the more emergency authority is granted. Removed per-policy drain (which
-        // was perverse: spending political capital shouldn't reduce future mandate).
-        (baseline + death_component + infection_component).clamp(0.0, 0.90)
+        let (board_component, patron_component, severity_floor) = self.pol_target_components();
+        // POL target is driven by board confidence + patron relationships + crisis severity.
+        // A healthy board with satisfied patrons can grant up to 70% authority.
+        // A failed board with no patrons is held to ~10% (severity floor only).
+        (board_component + patron_component + severity_floor).clamp(0.0, 0.90)
     }
 
     /// The next policy that would unlock with more POL. Returns (name, threshold)

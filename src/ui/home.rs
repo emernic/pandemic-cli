@@ -404,7 +404,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let drift_per_day = (target - pol) * 0.50;
 
         // Decompose target into its constituent parts (single source of truth in state.rs)
-        let (_baseline, death_component, infection_component) = state.pol_target_components();
+        let (board_component, patron_component, severity_floor) = state.pol_target_components();
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── POLITICAL POWER ──", cyan)));
@@ -430,22 +430,22 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
         // Target breakdown: what's driving the target
         lines.push(Line::from(vec![
-            Span::styled("  Baseline: ", dim),
-            Span::styled("+20%", Style::default().fg(Color::DarkGray)),
-            Span::styled("  (institutional mandate)", dim),
+            Span::styled("  Board:    ", dim),
+            Span::styled(format!("+{:.1}%", board_component * 100.0), Style::default().fg(Color::Cyan)),
+            Span::styled("  (board confidence)", dim),
         ]));
-        if death_component >= 0.005 {
+        if patron_component >= 0.005 {
             lines.push(Line::from(vec![
-                Span::styled("  Deaths:   ", dim),
-                Span::styled(format!("+{:.1}%", death_component * 100.0), Style::default().fg(Color::Red)),
-                Span::styled("  (public alarm from casualties)", dim),
+                Span::styled("  Patrons:  ", dim),
+                Span::styled(format!("+{:.1}%", patron_component * 100.0), Style::default().fg(Color::Green)),
+                Span::styled("  (patron satisfaction)", dim),
             ]));
         }
-        if infection_component >= 0.005 {
+        if severity_floor >= 0.005 {
             lines.push(Line::from(vec![
-                Span::styled("  Infected: ", dim),
-                Span::styled(format!("+{:.1}%", infection_component * 100.0), Style::default().fg(Color::Yellow)),
-                Span::styled("  (outbreak visibility)", dim),
+                Span::styled("  Severity: ", dim),
+                Span::styled(format!("+{:.1}%", severity_floor * 100.0), Style::default().fg(Color::Red)),
+                Span::styled("  (emergency authority from deaths)", dim),
             ]));
         }
 

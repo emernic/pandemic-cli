@@ -218,29 +218,9 @@ pub(super) fn tick_corporations(state: &mut GameState) {
 }
 
 /// Board satisfaction: average health of board-seat corporations (0.0 to 1.0).
+/// Delegates to the GameState method — logic lives in state.rs as a derived computation.
 pub fn board_satisfaction(state: &GameState) -> f64 {
-    let board_corps: Vec<&Corporation> =
-        state.corporations.iter().filter(|c| c.board_seat).collect();
-    if board_corps.is_empty() {
-        return 0.0;
-    }
-
-    let total: f64 = board_corps.iter().map(|c| {
-        if c.bankrupt {
-            0.0
-        } else {
-            // Weight by both reserves and revenue health
-            let reserves_health = c.reserves_fraction();
-            let revenue_health = if c.base_revenue > 0.0 {
-                (c.revenue / c.base_revenue).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            (reserves_health + revenue_health) / 2.0
-        }
-    }).sum();
-
-    total / board_corps.len() as f64
+    state.board_satisfaction()
 }
 
 /// Cooldown between board demand crises (~5 days).
@@ -424,13 +404,13 @@ mod tests {
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
 
-        // Damage board-seat corps to push satisfaction between 0.3 and 0.5
-        // satisfaction = avg((reserves_frac + revenue_frac) / 2)
-        // With reserves=40% and revenue=60%: (0.4 + 0.6) / 2 = 0.5 — boundary
-        // Use reserves=30%, revenue=50%: (0.3 + 0.5) / 2 = 0.4
+        // Damage board-seat corps to push satisfaction between 0.3 and 0.5.
+        // satisfaction = avg(reserves_fraction) — revenue is not included to avoid
+        // instant policy-impact feedback on pol_target.
+        // reserves=30% → reserves_fraction = 0.3 (between thresholds 0.3 and 0.5)
         for c in state.corporations.iter_mut().filter(|c| c.board_seat) {
             c.reserves = c.max_reserves * 0.3;
-            c.revenue = c.base_revenue * 0.5;
+            c.revenue = c.base_revenue * 0.5; // revenue unchanged but not used in satisfaction
         }
 
         let sat = board_satisfaction(&state);
