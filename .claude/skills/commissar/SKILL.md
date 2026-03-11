@@ -80,10 +80,12 @@ The same failure takes subtler forms. AI will also break plain sentences into sh
 
 ### 6. Look at the game
 
-Run snapshot mode. Use the `d5 enter` pair pattern:
+Run snapshot mode. Key steps must come **before** any time-advance in the same invocation — the new `--do` rule rejects keys after time-advances. To advance and dismiss crises, use separate invocations with a save file:
 
 ```bash
-cargo run -- --snapshot --do d5 --do enter --do d5 --do enter --do d5 --do enter
+cargo run -- --snapshot --do d5           # advance 5 days; note the saves/ path printed
+cargo run -- saves/FILE --snapshot --do enter --do d5   # dismiss any crisis, advance more
+cargo run -- saves/FILE --snapshot --do enter --do d5
 ```
 
 This is NOT a playtest. You are not testing balance. You are not filing gameplay-feel issues based on this. You are grounding yourself in what the UI currently looks like so you do not give direction based on a game that no longer exists. If you notice something visually broken or thematically off, note it. Otherwise: look, absorb, move on.

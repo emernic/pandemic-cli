@@ -647,7 +647,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "Leak circulates. −7% POL. 50% chance of infodemic.".into(),
+                    description: "Leak circulates. −7% POL. 50% chance of media fallout.".into(),
                     cost: None,
                 },
                 ],
@@ -1899,7 +1899,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     title: "Board Concerns".into(),
                     description: format!(
                         "{corp_name} is circulating a memo. \
-                         Corporate revenues are down. Containment policies are named. \
+                         Corporate revenues are down and your containment policies are getting the blame. \
                          Board satisfaction at {:.0}%.",
                         satisfaction * 100.0,
                     ),
