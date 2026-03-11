@@ -69,13 +69,14 @@ pub(super) fn deploy_medicine(
     let region = &state.regions[region_idx];
     let pop = region.population as f64;
     let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+    let exposed = existing.map(|i| i.exposed).unwrap_or(0.0);
     let infected = existing.map(|i| i.infected).unwrap_or(0.0);
     let dead = region.dead;
     let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
     let doses_to_ship = match &target {
         DeployTarget::Vaccinate { .. } => {
-            let susceptible = (pop - infected - dead - immune).max(0.0);
+            let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
             state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult)
         }
         DeployTarget::Treat { .. } => {
@@ -189,6 +190,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
     let region = &state.regions[reg_idx];
     let pop = region.population as f64;
     let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
+    let exposed = existing.map(|i| i.exposed).unwrap_or(0.0);
     let infected = existing.map(|i| i.infected).unwrap_or(0.0);
     let dead = region.dead;
     let immune = existing.map(|i| i.immune).unwrap_or(0.0);
@@ -197,7 +199,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
 
     let adverse = match &shipment.target {
         DeployTarget::Vaccinate { .. } => {
-            let susceptible = (pop - infected - dead - immune).max(0.0);
+            let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
             // Cap at effective doses (after infrastructure losses)
             let actual = state.medicines[med_idx]
                 .estimate_vaccination(susceptible, efficacy, vax_mult)

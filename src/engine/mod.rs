@@ -883,15 +883,19 @@ mod tests {
         // Set 90% of the region's population as immune — drastically reduces susceptible pool
         let pop = state.regions[ri].population as f64;
         state.regions[ri].get_or_create_infection(0).immune = pop * 0.9;
-        let before = state.regions[ri].disease_state(0).unwrap().infected;
+        let inf_before = state.regions[ri].disease_state(0).unwrap();
+        let before = inf_before.exposed + inf_before.infected;
         let after = tick(&state);
-        let growth = after.regions[ri].disease_state(0).unwrap().infected - before;
+        let inf_after = after.regions[ri].disease_state(0).unwrap();
+        let growth = (inf_after.exposed + inf_after.infected) - before;
 
         let state2 = GameState::new_default(42);
         let ri2 = primary_outbreak_region(&state2);
+        let inf_before2 = state2.regions[ri2].disease_state(0).unwrap();
+        let before2 = inf_before2.exposed + inf_before2.infected;
         let after2 = tick(&state2);
-        let growth2 = after2.regions[ri2].disease_state(0).unwrap().infected
-            - state2.regions[ri2].disease_state(0).unwrap().infected;
+        let inf_after2 = after2.regions[ri2].disease_state(0).unwrap();
+        let growth2 = (inf_after2.exposed + inf_after2.infected) - before2;
 
         assert!(
             growth < growth2,
@@ -906,16 +910,21 @@ mod tests {
         use crate::state::RegionTrait;
         let mut state = GameState::new_default(42);
         let ri = primary_outbreak_region(&state);
-        let before = state.regions[ri].disease_state(0).unwrap().infected;
+        // Ensure the outbreak region does NOT already have DenseUrban
+        state.regions[ri].traits.retain(|t| *t != RegionTrait::DenseUrban);
+        let inf = state.regions[ri].disease_state(0).unwrap();
+        let before = inf.exposed + inf.infected;
 
         // Tick without DenseUrban
         let after_normal = tick(&state);
-        let growth_normal = after_normal.regions[ri].disease_state(0).unwrap().infected - before;
+        let inf_n = after_normal.regions[ri].disease_state(0).unwrap();
+        let growth_normal = (inf_n.exposed + inf_n.infected) - before;
 
         // Add DenseUrban trait and tick again
         state.regions[ri].traits.push(RegionTrait::DenseUrban);
         let after_dense = tick(&state);
-        let growth_dense = after_dense.regions[ri].disease_state(0).unwrap().infected - before;
+        let inf_d = after_dense.regions[ri].disease_state(0).unwrap();
+        let growth_dense = (inf_d.exposed + inf_d.infected) - before;
 
         assert!(growth_dense > growth_normal,
             "DenseUrban should increase within-region spread: {} vs {}", growth_dense, growth_normal);
@@ -989,6 +998,7 @@ mod tests {
 
     #[test]
     fn medicine_treatment_deployment() {
+        use crate::state::DeployTarget;
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         // Disable BS auto-deploy so it doesn't create cooldowns that interfere
@@ -1000,19 +1010,15 @@ mod tests {
         let ri = primary_outbreak_region(&state);
         let infected_before = state.regions[ri].disease_state(0).unwrap().infected;
 
-        // Navigate: open medicines → select first medicine → navigate to the
-        // outbreak region → select treat target
-        state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // select medicine 0
-        // Navigate to the outbreak region
-        for _ in 0..ri {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        state = apply_action(&state, &Action::Confirm); // select region
-        state = apply_action(&state, &Action::SelectNext); // switch from vaccinate to treat
+        // Deploy treatment directly via engine API
+        state.medicines[0].tested_against.push(0);
         let funding_before = state.resources.funding;
         let deploy_cost = state.medicine_deploy_cost(0, ri);
-        state = apply_action(&state, &Action::Confirm); // dispatch shipment
+        let (ok, _msg) = medicine::deploy_medicine(
+            &mut state, 0, ri,
+            DeployTarget::Treat { disease_idx: 0 },
+        );
+        assert!(ok, "deployment should succeed");
 
         // Dispatch: cost deducted, doses deducted, pending shipment created
         assert_eq!(state.resources.funding, funding_before - deploy_cost);
@@ -2042,7 +2048,7 @@ mod tests {
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.push(0);
         // Infect region 0 so treatment makes sense
-        state.regions[0].infections[0].infected = 50_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 50_000.0;
         // Enable travel ban on region 0
         state.policies[0].travel_ban = true;
 
@@ -2395,6 +2401,7 @@ mod tests {
             containment_adaptation: 0.0,
             mutation_mode: crate::state::MutationMode::Normal,
             sequence_group: None,
+            incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
         }];
 
         let med = Medicine {
@@ -2444,6 +2451,7 @@ mod tests {
             containment_adaptation: 0.0,
             mutation_mode: MutationMode::Locked,
             sequence_group: None,
+            incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
         };
         assert_eq!(disease.effective_mutation_rate(), 0.0,
             "Locked diseases must have zero mutation rate regardless of pathogen type");
@@ -2484,6 +2492,7 @@ mod tests {
             containment_adaptation: 0.0,
             mutation_mode: MutationMode::DirectedLethality,
             sequence_group: None,
+            incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
         });
 
         // Run many mutation ticks so some mutations are guaranteed to occur
@@ -2994,12 +3003,14 @@ mod tests {
 
         // Run without quarantine
         let no_quarantine = tick(&state);
-        let inf_no_q = no_quarantine.regions[region_idx].disease_state(0).unwrap().infected;
+        let s = no_quarantine.regions[region_idx].disease_state(0).unwrap();
+        let inf_no_q = s.exposed + s.infected;
 
         // Run with quarantine
         state.policies[region_idx].quarantine = true;
         let with_quarantine = tick(&state);
-        let inf_with_q = with_quarantine.regions[region_idx].disease_state(0).unwrap().infected;
+        let s = with_quarantine.regions[region_idx].disease_state(0).unwrap();
+        let inf_with_q = s.exposed + s.infected;
 
         // Quarantine should reduce new infections significantly for Contact
         // (quarantine_factor = 0.30, so infectivity drops to 30%)
@@ -3008,7 +3019,8 @@ mod tests {
         // Now test Waterborne (quarantine factor = 0.75, less effective)
         state.diseases[0].transmission = TransmissionVector::Waterborne;
         let with_q_waterborne = tick(&state);
-        let inf_with_q_wb = with_q_waterborne.regions[region_idx].disease_state(0).unwrap().infected;
+        let s = with_q_waterborne.regions[region_idx].disease_state(0).unwrap();
+        let inf_with_q_wb = s.exposed + s.infected;
 
         // Waterborne quarantine should be less effective than Contact quarantine
         assert!(inf_with_q_wb > inf_with_q,
@@ -3032,8 +3044,10 @@ mod tests {
         let with = tick(&state);
 
         // Hospital surge should increase infections (25% spread penalty)
-        let inf_without = without.regions[region_idx].disease_state(0).unwrap().infected;
-        let inf_with = with.regions[region_idx].disease_state(0).unwrap().infected;
+        let s = without.regions[region_idx].disease_state(0).unwrap();
+        let inf_without = s.exposed + s.infected;
+        let s = with.regions[region_idx].disease_state(0).unwrap();
+        let inf_with = s.exposed + s.infected;
         assert!(inf_with > inf_without,
             "hospital surge should increase spread: {} vs {} without",
             inf_with, inf_without);
@@ -3062,6 +3076,7 @@ mod tests {
             }
             state.regions[0].infections.push(RegionDiseaseState {
                 disease_idx: 0,
+                exposed: 0.0,
                 infected: 10_000.0,
                 dead: 0.0,
                 immune: 0.0,
@@ -3108,7 +3123,7 @@ mod tests {
             state.diseases[0].cross_region_spread = 0.01;
             for region in &mut state.regions { region.infections.clear(); }
             state.regions[0].infections.push(RegionDiseaseState {
-                disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+                disease_idx: 0, exposed: 0.0, infected: 10_000.0, dead: 0.0, immune: 0.0,
             });
 
             // No policy
@@ -3148,12 +3163,14 @@ mod tests {
 
         // Without sanitation
         let no_sanitation = tick(&state);
-        let inf_no = no_sanitation.regions[region_idx].disease_state(0).unwrap().infected;
+        let s = no_sanitation.regions[region_idx].disease_state(0).unwrap();
+        let inf_no = s.exposed + s.infected;
 
         // With sanitation
         state.policies[region_idx].water_sanitation = true;
         let with_sanitation = tick(&state);
-        let inf_with = with_sanitation.regions[region_idx].disease_state(0).unwrap().infected;
+        let s = with_sanitation.regions[region_idx].disease_state(0).unwrap();
+        let inf_with = s.exposed + s.infected;
 
         assert!(inf_with < inf_no,
             "water sanitation should reduce waterborne infections: {} vs {}",
@@ -3788,7 +3805,7 @@ mod tests {
         state.regions[0].collapsed = true;
         state.regions[0].dead = 200_000_000.0; // 200M dead of 500M
         state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 10_000.0, dead: 200_000_000.0, immune: 5_000.0,
+            disease_idx: 0, exposed: 0.0, infected: 10_000.0, dead: 200_000_000.0, immune: 5_000.0,
         }];
         let survivors = state.regions[0].alive(); // 300M
         let dest_pop_before = state.regions[1].population;
@@ -3940,7 +3957,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Need infections > 100 for the effect to kick in
         state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+            disease_idx: 0, exposed: 0.0, infected: 10_000.0, dead: 0.0, immune: 0.0,
         }];
         let before_dead = state.regions[0].dead;
         setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
@@ -4577,6 +4594,7 @@ mod tests {
         let infected = pop * 0.10;
         state.regions[0].infections.push(crate::state::RegionDiseaseState {
             disease_idx: 0,
+            exposed: 0.0,
             infected,
             dead: 0.0,
             immune: 0.0,
@@ -4728,6 +4746,7 @@ mod tests {
         let pop0 = state.regions[0].population as f64;
         state.regions[0].infections.push(RegionDiseaseState {
             disease_idx: 0,
+            exposed: 0.0,
             infected: pop0 * 0.30,
             dead: 0.0,
             immune: 0.0,
@@ -4973,7 +4992,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
         state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 10_000.0, dead: 0.0, immune: 0.0,
+            disease_idx: 0, exposed: 0.0, infected: 10_000.0, dead: 0.0, immune: 0.0,
         }];
         setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -5121,7 +5140,7 @@ mod tests {
         state.diseases[0].detected = true;
 
         // Set up infections: region 0 has 100K infected, region 1 has 500K
-        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.regions[1].get_or_create_infection(0).infected = 500_000.0;
 
         // Enable auto-deploy for medicine 0
@@ -5159,7 +5178,7 @@ mod tests {
         // NOT tested: tested_against is empty
         state.diseases[0].detected = true;
 
-        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.auto_deploy = vec![true];
 
         let after = tick(&state);
@@ -5183,7 +5202,8 @@ mod tests {
         state.diseases[0].detected = true;
 
         // Only region 0 has infections, but it's on cooldown
-        state.regions[0].infections[0].infected = 100_000.0;
+        for r in &mut state.regions { r.infections.clear(); }
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.regions[0].last_deploy_tick.insert(0, state.tick);
         state.auto_deploy = vec![true];
 
@@ -5207,7 +5227,7 @@ mod tests {
         state.diseases[0].detected = true;
 
         // Region 0: 100K infected, HIGH priority
-        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.regions[0].deploy_priority = crate::state::RegionPriority::High;
 
         // Region 1: 500K infected, NORMAL priority
@@ -5241,7 +5261,7 @@ mod tests {
         state.diseases[0].detected = true;
 
         // Region 0: 500K infected but CUT OFF
-        state.regions[0].infections[0].infected = 500_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 500_000.0;
         state.regions[0].deploy_priority = crate::state::RegionPriority::CutOff;
 
         // Region 1: 100K infected, NORMAL
@@ -5342,7 +5362,7 @@ mod tests {
     fn containment_adaptation_builds_under_quarantine() {
         let mut state = GameState::new_default(42);
         // Set up: disease 0 in region 0 with quarantine active
-        state.regions[0].infections[0].infected = 10_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 10_000.0;
         state.policies[0].quarantine = true;
 
         assert_eq!(state.diseases[0].containment_adaptation, 0.0);
@@ -5379,7 +5399,7 @@ mod tests {
     #[test]
     fn containment_adaptation_weakens_quarantine() {
         let mut state = GameState::new_default(42);
-        state.regions[0].infections[0].infected = 100_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.policies[0].quarantine = true;
 
         // Run baseline (no adaptation) for 1 day
@@ -5389,7 +5409,8 @@ mod tests {
             for _ in 0..120 {
                 s = tick(&s);
             }
-            s.regions[0].infections[0].infected
+            let inf = s.regions[0].disease_state(0).unwrap();
+            inf.exposed + inf.infected
         };
 
         // Run with high adaptation for 1 day
@@ -5399,7 +5420,8 @@ mod tests {
             for _ in 0..120 {
                 s = tick(&s);
             }
-            s.regions[0].infections[0].infected
+            let inf = s.regions[0].disease_state(0).unwrap();
+            inf.exposed + inf.infected
         };
 
         // With adaptation, quarantine is weaker → more infections
@@ -5516,7 +5538,7 @@ mod tests {
 
         // Add 600K infected to unlock Conscript Researchers (decree 0)
         state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, infected: 600_000.0, dead: 0.0, immune: 0.0,
+            disease_idx: 0, exposed: 0.0, infected: 600_000.0, dead: 0.0, immune: 0.0,
         }];
         assert!(state.decree_unlocked(0), "decree 0 should unlock at 500K+ infected");
         let (_, ok) = policy::enact_decree(&mut state, 0, None);

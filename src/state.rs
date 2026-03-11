@@ -1810,7 +1810,7 @@ impl Region {
     /// May double-count people infected with multiple diseases simultaneously,
     /// but the cap prevents displaying more infected than the population.
     pub fn total_infected(&self) -> f64 {
-        let raw: f64 = self.infections.iter().map(|i| i.infected).sum();
+        let raw: f64 = self.infections.iter().map(|i| i.exposed + i.infected).sum();
         raw.min(self.population as f64)
     }
 
@@ -1846,6 +1846,7 @@ impl Region {
         } else {
             self.infections.push(RegionDiseaseState {
                 disease_idx,
+                exposed: 0.0,
                 infected: 0.0,
                 dead: 0.0,
                 immune: 0.0,
@@ -1858,7 +1859,7 @@ impl Region {
     pub fn detected_infected(&self, diseases: &[Disease]) -> f64 {
         self.infections.iter()
             .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
-            .map(|inf| inf.infected)
+            .map(|inf| inf.exposed + inf.infected)
             .sum()
     }
 
@@ -1891,6 +1892,10 @@ impl Region {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RegionDiseaseState {
     pub disease_idx: usize,
+    /// Exposed (latent) — infected but not yet infectious. Drains into `infected`
+    /// at a rate determined by the disease's incubation period.
+    #[serde(default)]
+    pub exposed: f64,
     pub infected: f64,
     pub dead: f64,
     #[serde(default)]
@@ -1962,41 +1967,48 @@ impl PathogenType {
     /// Attack rate ≈ 99%+ given high R0. Total deaths ≈ 85–95% of population.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
-            // RNA viruses: fast spreader, high lethality.
-            // Base doubling time ~1.3 days (unscaled). Scaling accelerates later.
+            // RNA viruses: very short incubation (0.5–1.5 days), fast spreader.
+            // Infectivity and cross-region bumped ~50% vs pre-SEIR to compensate
+            // for exposed compartment pipeline delay (SEIR reduces effective
+            // growth rate ~35% vs SIR at small population fractions).
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.005, 0.008),
+                infectivity: (0.009, 0.013),
                 lethality: (0.00040, 0.00070),
                 recovery: (0.00006, 0.00015),
-                cross_region: (0.005, 0.010),
+                cross_region: (0.012, 0.018),
+                incubation_days: (0.5, 1.5),
             },
-            // DNA viruses: moderate spread, high lethality.
+            // DNA viruses: short incubation (1–2 days).
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.004, 0.007),
+                infectivity: (0.007, 0.011),
                 lethality: (0.00035, 0.00065),
                 recovery: (0.00004, 0.00010),
-                cross_region: (0.004, 0.009),
+                cross_region: (0.010, 0.015),
+                incubation_days: (1.0, 2.0),
             },
-            // Bacteria: broad reach, moderate lethality, some recovery.
+            // Bacteria: very short incubation (0.25–1.0 days).
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.004, 0.006),
+                infectivity: (0.007, 0.009),
                 lethality: (0.00035, 0.00060),
                 recovery: (0.00010, 0.00020),
-                cross_region: (0.004, 0.007),
+                cross_region: (0.010, 0.013),
+                incubation_days: (0.25, 1.0),
             },
-            // Fungi: slower growth, high lethality, almost no natural recovery.
+            // Fungi: moderate incubation (1–3 days).
             PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.003, 0.005),
+                infectivity: (0.006, 0.008),
                 lethality: (0.00030, 0.00055),
                 recovery: (0.00005, 0.00015),
-                cross_region: (0.003, 0.006),
+                cross_region: (0.008, 0.012),
+                incubation_days: (1.0, 3.0),
             },
-            // Prions: slowest spread, near-certain death once infected.
+            // Prions: long incubation (3–7 days) — silent spread before symptoms.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.003, 0.006),
+                infectivity: (0.006, 0.009),
                 lethality: (0.00045, 0.00090),
                 recovery: (0.00003, 0.00006),
-                cross_region: (0.003, 0.005),
+                cross_region: (0.008, 0.011),
+                incubation_days: (3.0, 7.0),
             },
         }
     }
@@ -2223,6 +2235,8 @@ struct DiseaseStatRanges {
     lethality: (f64, f64),
     recovery: (f64, f64),
     cross_region: (f64, f64),
+    /// Incubation period in days — time from exposure to becoming infectious.
+    incubation_days: (f64, f64),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -2275,6 +2289,11 @@ pub struct Disease {
     /// Visible in the Threats panel when Rapid Sequencing is unlocked and knowledge >= 0.66.
     #[serde(default)]
     pub sequence_group: Option<u32>,
+    /// Incubation period in ticks — time from exposure to becoming infectious.
+    /// Newly infected individuals enter the "exposed" compartment and transition
+    /// to infectious at rate 1/incubation_ticks per tick.
+    #[serde(default = "default_incubation_ticks")]
+    pub incubation_ticks: f64,
 }
 
 /// Resistance level for a specific mechanism of action against a disease.
@@ -2286,6 +2305,12 @@ pub struct ResistanceEntry {
 
 fn default_true() -> bool {
     true
+}
+
+/// Default incubation: 3 days (180 ticks). Used for serde deserialization of
+/// older save files that lack the field.
+fn default_incubation_ticks() -> f64 {
+    3.0 * TICKS_PER_DAY
 }
 
 impl Disease {
@@ -2366,6 +2391,7 @@ impl Disease {
         let lethality = stat(rng, ranges.lethality, toughness_bias);
         let cross_region_spread = range_val(rng, ranges.cross_region);
         let recovery_rate = range_val(rng, ranges.recovery);
+        let incubation_ticks = range_val(rng, ranges.incubation_days) * TICKS_PER_DAY;
 
         // Use pre-generated seed to build name — no additional RNG calls.
         // Combine seed with attempt index for variation across retries.
@@ -2392,6 +2418,7 @@ impl Disease {
             containment_adaptation: 0.0,
             mutation_mode: MutationMode::Normal,
             sequence_group: None,
+            incubation_ticks,
         }
     }
 }
@@ -4790,6 +4817,7 @@ impl GameState {
         let dead = infected * 0.01; // ~1% already dead when the player takes over
         regions[region_idx].infections.push(RegionDiseaseState {
             disease_idx: 0,
+            exposed: 0.0,
             infected,
             dead,
             immune: 0.0,
@@ -4963,10 +4991,10 @@ impl GameState {
         }
     }
 
-    /// Whether a specific disease has any active infections globally.
+    /// Whether a specific disease has any active infections (including exposed) globally.
     pub fn disease_has_infected(&self, disease_idx: usize) -> bool {
         self.regions.iter().any(|r| {
-            r.disease_state(disease_idx).is_some_and(|inf| inf.infected > 0.0)
+            r.disease_state(disease_idx).is_some_and(|inf| inf.exposed + inf.infected > 0.0)
         })
     }
 
@@ -4975,7 +5003,7 @@ impl GameState {
         self.regions.iter()
             .flat_map(|r| &r.infections)
             .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
-            .map(|inf| inf.infected)
+            .map(|inf| inf.exposed + inf.infected)
             .sum()
     }
 

@@ -801,7 +801,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 let dname = disease.display_name(inf.disease_idx);
                 // Distribute region's total estimate proportionally across diseases
                 let total_real = region.detected_infected(&state.diseases);
-                let proportion = if total_real > 0.0 { inf.infected / total_real } else { 0.0 };
+                let this_disease_total = inf.exposed + inf.infected;
+                let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
                 let screened_inf = region.estimated_infected * proportion;
                 let shown_immune = if shows_immune { inf.immune } else { 0.0 };
                 let susceptible = pop - screened_inf - dead - shown_immune;
