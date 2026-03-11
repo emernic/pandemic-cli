@@ -474,7 +474,14 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         Span::styled(format_number(pop), val),
         Span::styled("  Alive ", label),
         Span::styled(format_number(alive), Style::default().fg(Color::Green)),
-        Span::styled(if visibility < 1.0 { "  Infected~ " } else { "  Infected " }, label),
+        Span::styled(
+            if visibility < 0.99 {
+                format!("  Infected~{:.0}% ", visibility * 100.0)
+            } else {
+                "  Infected ".to_string()
+            },
+            label,
+        ),
         Span::styled(format_number(infected), Style::default().fg(Color::Red)),
     ];
     if shows_immune {
