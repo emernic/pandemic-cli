@@ -406,6 +406,18 @@ Grep pattern="fn deploy_medicine" path="src/engine" -C 30   # 30 lines before an
 - Before starting to explore a system, decide what you need to understand and read it all upfront — not piecemeal as you discover you need more.
 - If you've already read a file in the current session, do NOT re-read it just because you've scrolled past it. Trust your memory.
 
+## Launching Sub-Agents
+
+**Don't pre-determine your sub-agent's results.** The whole point of a sub-agent is to spend time and tokens on analysis you can't afford in your main context. If you tell it exactly what to look for, you'll just get back results that confirm your existing biases.
+
+Give sub-agents the raw material and a clear goal, but let them figure out the structure of their findings. It's fine to include examples of what *kinds* of things might be interesting, but make it explicit these are examples, not a schema to fill in.
+
+**Bad** — prescribes the answer format, agent just fills in blanks:
+> "Break down the log into these phases: (1) Setup, (2) Issue discovery, (3) Code reading, (4) Implementation, (5) Testing, (6) PR creation. For each phase, count the actions and tokens."
+
+**Good** — gives context and goal, lets the agent think:
+> "This is an NDJSON worker log. Read it and tell me what the worker actually did — what worked, what didn't, where time/tokens were wasted. I care about finding optimization opportunities. The categories might be things like setup overhead, repeated failures, unnecessary re-reads, etc., but figure out what's actually in the log rather than fitting it to a predetermined framework."
+
 ## Conventions
 
 - **No backwards compatibility concerns.** This game is not deployed in the wild. Save files are deleted between playtests by both humans and AI agents. Do NOT keep deprecated fields, variants, or `#[serde(default)]` annotations "for save file compatibility." If a field is unused, delete it. If a struct changes shape, just change it. The `#[serde(default)]` and `#[serde(alias)]` infrastructure is there so we CAN handle compatibility later when the game ships. Until then, dead fields kept "for compat" are pure complexity waste.
