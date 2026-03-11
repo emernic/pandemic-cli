@@ -398,16 +398,16 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
     // ── Authority breakdown ──
     {
-        let pol = state.resources.political_power;
-        let target = state.pol_target();
+        let pol = state.resources.board_approval;
+        let target = state.approval_target();
         // Net drift per day: (target - current) * 50%/day drift rate
         let drift_per_day = (target - pol) * 0.50;
 
         // Decompose target into its constituent parts (single source of truth in state.rs)
-        let (board_component, patron_component, severity_floor) = state.pol_target_components();
+        let (board_component, patron_component, severity_floor) = state.approval_target_components();
 
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("  ── AUTHORITY ──", cyan)));
+        lines.push(Line::from(Span::styled("  ── BOARD APPROVAL ──", cyan)));
         lines.push(Line::from(""));
 
         let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };
@@ -450,7 +450,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         // Next unlock hint
-        if let Some((name, threshold)) = state.next_pol_unlock() {
+        if let Some((name, threshold)) = state.next_approval_unlock() {
             lines.push(Line::from(vec![
                 Span::styled("  Next:     ", dim),
                 Span::styled(format!("{} @ {:.0}%", name, threshold * 100.0), Style::default().fg(Color::DarkGray)),

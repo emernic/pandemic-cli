@@ -5,7 +5,7 @@ use crate::state::{
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_LOYALTY_GAIN,
-    BARGAIN_BUFFOON_POL_COST,
+    BARGAIN_BUFFOON_APPROVAL_COST,
     BARGAIN_HARDLINER_FUNDING_COST,
     BARGAIN_LOYALTY_GAIN,
     BARGAIN_MOBSTER_BASE_COST,
@@ -105,10 +105,10 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
-        let threshold = state.effective_pol_threshold(region_idx, policy_idx);
+        let threshold = state.effective_approval_threshold(region_idx, policy_idx);
         return (Some(format!(
-            "{} requires {:.0}% Authority (current: {:.0}%)",
-            policy_display_name(policy_idx), threshold * 100.0, state.resources.political_power * 100.0
+            "{} requires {:.0}% Board Approval (current: {:.0}%)",
+            policy_display_name(policy_idx), threshold * 100.0, state.resources.board_approval * 100.0
         )), false);
     }
     let available_personnel = state.personnel_available();
@@ -351,7 +351,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
     match personality {
         GovernorPersonality::Buffoon => {
             // Public Praise — cheap POL cost, loyalty decays fast (tracked in tick)
-            state.resources.political_power = (state.resources.political_power - BARGAIN_BUFFOON_POL_COST).max(0.0);
+            state.resources.board_approval = (state.resources.board_approval - BARGAIN_BUFFOON_APPROVAL_COST).max(0.0);
             let gov = &mut state.regions[region_idx].governor;
             gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
             let loyalty = gov.loyalty;
@@ -668,7 +668,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                     Some(format!("{gov_name} extorted ¥{demand:.0} from {region_name}"))
                 } else {
                     // Can't pay — small POL hit instead
-                    state.resources.political_power = (state.resources.political_power - 0.05).max(0.0);
+                    state.resources.board_approval = (state.resources.board_approval - 0.05).max(0.0);
                     Some(format!("{gov_name} made threats in {region_name}. International embarrassment."))
                 }
             }
@@ -878,7 +878,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
 /// Execute standing orders for policy automation. Fires each tick.
 /// Auto-enables policies for regions that cross severity thresholds,
 /// provided the policy isn't already active and the player has the
-/// required political power and personnel.
+/// required board approval and personnel.
 pub(super) fn tick_standing_orders(state: &mut GameState) {
     // Affordability guard: don't try to auto-enable policies when the player can't
     // sustain the current cost load. Prevents oscillation where cost enforcement
@@ -981,7 +981,7 @@ mod tests {
     /// Helper: set up a state with full POL and plenty of personnel for screening tests.
     fn screening_test_state() -> GameState {
         let mut state = GameState::new_default(42);
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         state.resources.funding = 10_000.0;
         // Unlock all decrees by satisfying every severity threshold:
         // - 3 collapses → unlocks decrees 4,5
@@ -1025,21 +1025,21 @@ mod tests {
     fn screening_pol_gating() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        // Basic screening has 0.05 POL threshold
-        state.resources.political_power = 0.05;
+        // Basic screening has 0.00 threshold — always available
+        state.resources.board_approval = 0.05;
         let (_, ok) = toggle_policy(&mut state, 0, 5);
-        assert!(ok, "Basic screening should work at 5% POL");
+        assert!(ok, "Basic screening should work at any approval level");
 
-        // Medium requires 0.10 POL
-        state.resources.political_power = 0.05;
+        // Antigen requires 0.30 approval
+        state.resources.board_approval = 0.10;
         let (msg, ok) = toggle_policy(&mut state, 0, 6);
-        assert!(!ok, "Medium screening should be blocked at 5% POL");
-        assert!(msg.unwrap().contains("Authority"));
+        assert!(!ok, "Antigen screening should be blocked at 10% approval");
+        assert!(msg.unwrap().contains("Board Approval"));
 
-        // With enough POL, Medium should work
-        state.resources.political_power = 0.15;
+        // With enough approval, Antigen should work
+        state.resources.board_approval = 0.35;
         let (_, ok) = toggle_policy(&mut state, 0, 6);
-        assert!(ok, "Medium screening should work at 15% POL");
+        assert!(ok, "Antigen screening should work at 35% approval");
     }
 
     #[test]
@@ -1727,7 +1727,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_fires_at_high() {
         let mut state = GameState::new_default(42);
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         state.standing_orders.auto_quarantine_at_high = true;
 
         // Simulate a region at HIGH severity
@@ -1744,7 +1744,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_does_not_fire_below_threshold() {
         let mut state = GameState::new_default(42);
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         state.standing_orders.auto_quarantine_at_high = true;
 
         // Below HIGH severity
@@ -1758,7 +1758,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_skips_already_active() {
         let mut state = GameState::new_default(42);
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         state.standing_orders.auto_quarantine_at_high = true;
         state.policies[0].quarantine = true; // already active
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
@@ -1774,7 +1774,7 @@ mod tests {
     #[test]
     fn standing_order_auto_travel_ban_fires_at_crit() {
         let mut state = GameState::new_default(42);
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         state.standing_orders.auto_travel_ban_at_crit = true;
 
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
@@ -1790,7 +1790,7 @@ mod tests {
     #[test]
     fn standing_order_disabled_does_not_fire() {
         let mut state = GameState::new_default(42);
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         // Both standing orders OFF (default)
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
 

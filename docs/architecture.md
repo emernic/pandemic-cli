@@ -91,7 +91,7 @@ tick() in engine/mod.rs:
   8.  policy::tick_enforce_costs()     — suspend unaffordable policies, deduct costs
   9.  policy::tick_governor_loyalty()  — governor loyalty drift
   10. policy::tick_governor_actions()  — defiant governor consequences
-  11. Resource income, personnel upkeep, political power drift
+  11. Resource income, personnel upkeep, board approval drift
   12. Disease detection, threat escalation
   13. Scheduled follow-up crises + crisis::generate_crisis()
   14. RNG write-back + scientist roster sync
