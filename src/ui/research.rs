@@ -387,6 +387,47 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
         }
     }
 
+    // For Applied track: show diseases that are identified but not yet developable,
+    // and show a hint when no diseases have been identified at all.
+    if track == ResearchTrack::Applied {
+        let blocked = state.blocked_medicine_developments();
+        if !blocked.is_empty() {
+            lines.push(Line::from(""));
+            for (disease_idx, reason) in &blocked {
+                let disease_name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                lines.push(Line::from(Span::styled(
+                    format!("  [PENDING] Develop: {}", disease_name),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(Span::styled(
+                    format!("    {}", reason),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        } else {
+            // No blocked diseases: either all are covered, or nothing is identified yet.
+            // Show a hint if no medicine development work is available or active.
+            let has_any_develop = state.applied_research.as_ref()
+                .is_some_and(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. }))
+                || state.available_applied_projects()
+                    .iter()
+                    .any(|k| matches!(k, ResearchKind::DevelopMedicine { .. }));
+            if !has_any_develop {
+                lines.push(Line::from(""));
+                lines.push(Line::from(Span::styled(
+                    "  No diseases identified yet.",
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(Span::styled(
+                    "  (Start an Identify Threat project in Field Research.)",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+    }
+
     lines.push(Line::from(""));
     let auto_status = if state.auto_research[track.index()] { " ON" } else { " OFF" };
     if has_selectable_items {

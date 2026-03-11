@@ -1550,4 +1550,81 @@ mod tests {
             "without Europe, doses should equal max_doses"
         );
     }
+
+    #[test]
+    fn blocked_medicine_developments_shows_identified_but_unresearched() {
+        use crate::state::{BasicTech, TherapyType};
+
+        let mut state = GameState::new_default(42);
+
+        // Nothing identified — blocked list should be empty
+        assert!(
+            state.blocked_medicine_developments().is_empty(),
+            "no blocked entries before identification"
+        );
+
+        // Partially identify disease 0 (knowledge > 0 but < 1.0, no TargetedDrugDesign)
+        state.diseases[0].knowledge = 0.6;
+        let blocked = state.blocked_medicine_developments();
+        assert!(
+            !blocked.is_empty(),
+            "should show blocked entries once a disease is partially identified"
+        );
+        assert!(
+            blocked.iter().all(|(d_idx, _)| *d_idx == 0),
+            "blocked entry should reference disease 0"
+        );
+        assert!(
+            blocked.iter().any(|(_, reason)| reason.contains("Targeted Drug Design")),
+            "reason should mention Targeted Drug Design when tech is not unlocked"
+        );
+
+        // Unlock TargetedDrugDesign but disease still only 60% studied
+        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+        let blocked_with_tech = state.blocked_medicine_developments();
+        assert!(
+            !blocked_with_tech.is_empty(),
+            "should still show blocked when knowledge < 1.0"
+        );
+        assert!(
+            blocked_with_tech.iter().any(|(_, reason)| reason.contains("Field Research")),
+            "reason should reference Field Research when study is incomplete"
+        );
+
+        // Fully identify disease 0 (knowledge 1.0) — now it should be available, not blocked
+        state.diseases[0].knowledge = 1.0;
+        let blocked_full = state.blocked_medicine_developments();
+        assert!(
+            blocked_full.iter().all(|(d_idx, _)| *d_idx != 0),
+            "disease 0 should not be blocked once fully identified with tech"
+        );
+    }
+
+    #[test]
+    fn blocked_medicine_developments_not_duplicated_when_already_available() {
+        use crate::state::BasicTech;
+
+        let mut state = GameState::new_default(42);
+
+        // Disease 0 fully identified with tech: targeted medicine should be in available, not blocked.
+        state.diseases[0].knowledge = 1.0;
+        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+
+        let available = state.available_applied_projects();
+        let disease0_available = available.iter().any(|k| {
+            if let crate::state::ResearchKind::DevelopMedicine { medicine_idx } = k {
+                state.medicines[*medicine_idx].target_diseases.contains(&0)
+                    && state.medicines[*medicine_idx].therapy_type != crate::state::TherapyType::BroadSpectrum
+            } else {
+                false
+            }
+        });
+        assert!(disease0_available, "disease 0 targeted medicine should be available");
+
+        let blocked = state.blocked_medicine_developments();
+        assert!(
+            blocked.iter().all(|(d_idx, _)| *d_idx != 0),
+            "disease 0 should not appear in blocked when already available"
+        );
+    }
 }
