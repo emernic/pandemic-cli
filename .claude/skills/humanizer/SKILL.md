@@ -1,22 +1,7 @@
 ---
 name: humanizer
 version: 2.1.1
-description: |
-  Remove signs of AI-generated writing from text. Use when editing or reviewing
-  text to make it sound more natural and human-written. Based on Wikipedia's
-  comprehensive "Signs of AI writing" guide. Detects and fixes patterns including:
-  inflated symbolism, promotional language, superficial -ing analyses, vague
-  attributions, em dash overuse, rule of three, AI vocabulary words, negative
-  parallelisms, and excessive conjunctive phrases.
-
-  Credits: Original skill by @blader - https://github.com/blader/humanizer
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Grep
-  - Glob
-  - AskUserQuestion
+description: Remove signs of AI-generated writing from text. Use after adding/modifying **ANY** user facing text longer than 3 words (in **ADDITION** to the /flavor-text skill). This is very important to avoid the whole app devolving into AI slop.
 ---
 
 # Humanizer: Remove AI Writing Patterns
@@ -31,7 +16,7 @@ When given text to humanize:
 
 1. **Identify AI patterns** - Scan for the patterns listed below
 2. **Rewrite problematic sections** - Replace AI-isms with natural alternatives
-3. **Preserve meaning** - Keep the core message intact
+3. **Preserve meaning** - Keep all information communicated in the message intact
 4. **Maintain voice** - Match the intended tone (formal, casual, technical, etc.)
 5. **Add soul** - Don't just remove bad patterns; inject actual personality
 
@@ -43,37 +28,33 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ### Signs of soulless writing (even if technically "clean"):
 - Every sentence is the same length and structure
-- No opinions, just neutral reporting
+- No opinions (everything is neutral reporting)
 - No acknowledgment of uncertainty or mixed feelings
-- No first-person perspective when appropriate
 - No humor, no edge, no personality
-- Reads like a Wikipedia article or press release
+- Melodromatic, overwritten, or trying to be overly "punchy" through sentence structure despite having nothing interesting to say.
 
-### How to add voice:
+### How to write like a human native English speaker
 
-**Have opinions.** Don't just report facts - react to them. "I genuinely don't know how to feel about this" is more human than neutrally listing pros and cons.
+**Use good reference material.** This is what the /flavor-text skill is great for (just reading lots and lots of examples of good writing vs slop).
 
-**Vary your rhythm.** Short punchy sentences. Then longer ones that take their time getting where they're going. Mix it up.
+**Have something to say.** Humans often think quietly for minutes or hours about a topic in isolation before ever bringing up their ideas to another person. AI (at a basic level) "starts talking" and decides what it's going to say along the way. This leads to a lot of filler/nonsense, which is carefully disguised as part of the message by stringing it together with words that **individually** could plausibly follow the previous one, but aren't really going anywhere. That's ok, but often by the time you get to the end you'll realize that you wrote 3 paragraphs when you really only had like 4 points that could have been wrapped together into 2 _sentences_ (and maybe 1 of the points was actually just something you threw in because you were "stalling" or realized you were about to say something incorrect halfway through and needed to divert).
 
-**Acknowledge complexity.** Real humans have mixed feelings. "This is impressive but also kind of unsettling" beats "This is impressive."
+**Use sentences.** The main failure mode of AI writing (after not thinking upfront about what you want to say) is not taking multiple passes at finding a sentence that actually communicates your intent. Em dashes are basically lazy connectors between unrelated phrases because the AI changed its mind halfway through a sentence about what it wanted to say (and used a "fancy" but very lazy and predictable conjunction to avoid using an eraser). Think hard about what the text needs to communicate, and try to construct a few sentences that do the job. Sometimes these sentences won't feel as "punchy" as a series of fragments connected by em dashes or periods, but that's part of the challenge and fun of writing in English.
 
-**Use "I" when it fits.** First person isn't unprofessional - it's honest. "I keep coming back to..." or "Here's what gets me..." signals a real person thinking.
+Producing good writing is not complicated, but it does take some real work. It can be _very_ tempting to attempt to reduce this process down to "snappier sentences, got it" or "no em dashes", but that's actually not what I'm saying. Re-read the above points carefully, because these are the foundations of all good writing. You need to **actually think hard** about several ideas you want to communicate, narrow them down to the most essential, and then **take multiple passes** at finding a simple, plain, natural series of sentences that communicate your ideas. That's all. Often, this process can condense AI writing down by a factor of 5x or more (because the density of actual good ideas is very thin originally).
 
-**Let some mess in.** Perfect structure feels algorithmic. Tangents, asides, and half-formed thoughts are human.
+### Before (low density of actual content, lazy structure):
+> There's no win condition. The diseases will win. The only question is how long you hold them off and how many people you save before they do. This isn't just a survival challenge — it's a game of life and death on a global scale.
 
-**Be specific about feelings.** Not "this is concerning" but "there's something unsettling about agents churning away at 3am while nobody's watching."
-
-### Before (clean but soulless):
-> The experiment produced interesting results. The agents generated 3 million lines of code. Some developers were impressed while others were skeptical. The implications remain unclear.
-
-### After (has a pulse):
-> I genuinely don't know how to feel about this one. 3 million lines of code, generated while the humans presumably slept. Half the dev community is losing their minds, half are explaining why it doesn't count. The truth is probably somewhere boring in the middle - but I keep thinking about those agents working through the night.
+### After (with writing process included):
+_Ok, let me think about what we actually need to communicate here. What is the point of this section of the doc? I guess is to succinctly summarize the kind of game Pandemic CLI is (in terms of the basic gameplay structure and goal). Let me think about what we haven't already said elsewhere in the doc and what the user actually would want/need to know here... "There's no win condition" doesn't really communicate anything about why the user might enjoy playing the game. Maybe "the gameplay is brutal"? No, not really, that sounds like we're making some kind of "HaRdCORE game for SERIOUS gamers". Let me think about the main things we **could** include here, it's basically: a.) Lack of win condition, b.) You're trying to save the world from diseases spreading, c.) You're playing as the head of the N.W.H.O. d.) The game is challenging, e.) The game requires strategy and skill, f.) The game might be fun for people who liked Plague Inc. or similar games, g.) The stakes of the game are high (world collapse), e.) It's set in the near future. Ok let me think of several different ways of phrasing this and decide what feels natural... (several attempts at producing sentences). I think I can pick the one that clearly and simply communicates the most compelling pieces now._
+> You play as the head of the New World Health Organization in the year 2050. You must hold out against viruses, bacteria, prions, fungi and more that threaten to annihilate humanity.
 
 ---
 
 ## CONTENT PATTERNS
 
-### 1. Undue Emphasis on Significance, Legacy, and Broader Trends
+### Undue Emphasis on Significance, Legacy, and Broader Trends
 
 **Words to watch:** stands/serves as, is a testament/reminder, a vital/significant/crucial/pivotal/key role/moment, underscores/highlights its importance/significance, reflects broader, symbolizing its ongoing/enduring/lasting, contributing to the, setting the stage for, marking/shaping the, represents/marks a shift, key turning point, evolving landscape, focal point, indelible mark, deeply rooted
 
@@ -87,7 +68,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 2. Undue Emphasis on Notability and Media Coverage
+### Undue Emphasis on Notability and Media Coverage
 
 **Words to watch:** independent coverage, local/regional/national media outlets, written by a leading expert, active social media presence
 
@@ -101,7 +82,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 3. Superficial Analyses with -ing Endings
+### Superficial Analyses with -ing Endings
 
 **Words to watch:** highlighting/underscoring/emphasizing..., ensuring..., reflecting/symbolizing..., contributing to..., cultivating/fostering..., encompassing..., showcasing...
 
@@ -115,7 +96,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 4. Promotional and Advertisement-like Language
+### Promotional and Advertisement-like Language
 
 **Words to watch:** boasts a, vibrant, rich (figurative), profound, enhancing its, showcasing, exemplifies, commitment to, natural beauty, nestled, in the heart of, groundbreaking (figurative), renowned, breathtaking, must-visit, stunning
 
@@ -129,7 +110,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 5. Vague Attributions and Weasel Words
+### Vague Attributions and Weasel Words
 
 **Words to watch:** Industry reports, Observers have cited, Experts argue, Some critics argue, several sources/publications (when few cited)
 
@@ -143,7 +124,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 6. Outline-like "Challenges and Future Prospects" Sections
+### Outline-like "Challenges and Future Prospects" Sections
 
 **Words to watch:** Despite its... faces several challenges..., Despite these challenges, Challenges and Legacy, Future Outlook
 
@@ -159,7 +140,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ## LANGUAGE AND GRAMMAR PATTERNS
 
-### 7. Overused "AI Vocabulary" Words
+### Overused "AI Vocabulary" Words
 
 **High-frequency AI words:** Additionally, align with, crucial, delve, emphasizing, enduring, enhance, fostering, garner, highlight (verb), interplay, intricate/intricacies, key (adjective), landscape (abstract noun), pivotal, showcase, tapestry (abstract noun), testament, underscore (verb), valuable, vibrant
 
@@ -173,7 +154,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 8. Avoidance of "is"/"are" (Copula Avoidance)
+### Avoidance of "is"/"are" (Copula Avoidance)
 
 **Words to watch:** serves as/stands as/marks/represents [a], boasts/features/offers [a]
 
@@ -187,7 +168,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 9. Negative Parallelisms
+### Negative Parallelisms
 
 **Problem:** Constructions like "Not only...but..." or "It's not just about..., it's..." are overused.
 
@@ -199,7 +180,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 10. Rule of Three Overuse
+### Rule of Three Overuse
 
 **Problem:** LLMs force ideas into groups of three to appear comprehensive.
 
@@ -211,7 +192,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 11. Elegant Variation (Synonym Cycling)
+### Elegant Variation (Synonym Cycling)
 
 **Problem:** AI has repetition-penalty code causing excessive synonym substitution.
 
@@ -223,7 +204,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 12. False Ranges
+### False Ranges
 
 **Problem:** LLMs use "from X to Y" constructions where X and Y aren't on a meaningful scale.
 
@@ -237,7 +218,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ## STYLE PATTERNS
 
-### 13. Em Dash Overuse
+### Em Dash Overuse
 
 **Problem:** LLMs use em dashes (—) more than humans, mimicking "punchy" sales writing.
 
@@ -249,7 +230,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 14. Overuse of Boldface
+### Overuse of Boldface
 
 **Problem:** AI chatbots emphasize phrases in boldface mechanically.
 
@@ -261,7 +242,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 15. Inline-Header Vertical Lists
+### Inline-Header Vertical Lists
 
 **Problem:** AI outputs lists where items start with bolded headers followed by colons.
 
@@ -275,7 +256,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 16. Title Case in Headings
+### Title Case in Headings
 
 **Problem:** AI chatbots capitalize all main words in headings.
 
@@ -287,21 +268,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 17. Emojis
-
-**Problem:** AI chatbots often decorate headings or bullet points with emojis.
-
-**Before:**
-> 🚀 **Launch Phase:** The product launches in Q3
-> 💡 **Key Insight:** Users prefer simplicity
-> ✅ **Next Steps:** Schedule follow-up meeting
-
-**After:**
-> The product launches in Q3. User research showed a preference for simplicity. Next step: schedule a follow-up meeting.
-
----
-
-### 18. Curly Quotation Marks
+### Curly Quotation Marks
 
 **Problem:** ChatGPT uses curly quotes ("...") instead of straight quotes ("...").
 
@@ -315,35 +282,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ## COMMUNICATION PATTERNS
 
-### 19. Collaborative Communication Artifacts
-
-**Words to watch:** I hope this helps, Of course!, Certainly!, You're absolutely right!, Would you like..., let me know, here is a...
-
-**Problem:** Text meant as chatbot correspondence gets pasted as content.
-
-**Before:**
-> Here is an overview of the French Revolution. I hope this helps! Let me know if you'd like me to expand on any section.
-
-**After:**
-> The French Revolution began in 1789 when financial crisis and food shortages led to widespread unrest.
-
----
-
-### 20. Knowledge-Cutoff Disclaimers
-
-**Words to watch:** as of [date], Up to my last training update, While specific details are limited/scarce..., based on available information...
-
-**Problem:** AI disclaimers about incomplete information get left in text.
-
-**Before:**
-> While specific details about the company's founding are not extensively documented in readily available sources, it appears to have been established sometime in the 1990s.
-
-**After:**
-> The company was founded in 1994, according to its registration documents.
-
----
-
-### 21. Sycophantic/Servile Tone
+### Sycophantic/Servile Tone
 
 **Problem:** Overly positive, people-pleasing language.
 
@@ -357,7 +296,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ## FILLER AND HEDGING
 
-### 22. Filler Phrases
+### Filler Phrases
 
 **Before → After:**
 - "In order to achieve this goal" → "To achieve this"
@@ -369,7 +308,7 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 23. Excessive Hedging
+### Excessive Hedging
 
 **Problem:** Over-qualifying statements.
 
@@ -381,9 +320,9 @@ Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as
 
 ---
 
-### 24. Generic Positive Conclusions
+### Generic Conclusions
 
-**Problem:** Vague upbeat endings.
+**Problem:** Vague endings (where the AI ran out of meaningful/correct things to say)
 
 **Before:**
 > The future looks bright for the company. Exciting times lie ahead as they continue their journey toward excellence. This represents a major step in the right direction.
