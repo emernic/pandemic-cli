@@ -9,7 +9,7 @@ use engine::execute_command;
 use state::{
     DeployTarget, DECREE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState, InfraSystem,
     KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_INFRA_BASE, MANAGE_PRIORITY_POS,
-    MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchTrack, ResearchUiState, SimState,
+    MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
     UiState, grid_reading_order, policy_display_order,
 };
 
@@ -162,15 +162,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             if new.outcome == GameOutcome::Playing {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
-                    // Standing order toggles are player preference — no engine involvement.
-                    if let GameCommand::ToggleStandingOrder { kind } = cmd {
-                        match kind {
-                            0 => new.standing_orders.auto_quarantine_at_high = !new.standing_orders.auto_quarantine_at_high,
-                            1 => new.standing_orders.auto_travel_ban_at_crit = !new.standing_orders.auto_travel_ban_at_crit,
-                            _ => {}
-                        }
-                        return new;
-                    }
                     let result = execute_command(&mut new, &cmd);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
@@ -364,7 +355,7 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
 fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.research_ui.clone() {
         Some(ResearchUiState::BrowseCategories) => {
-            if ui.panel_selection == 3 {
+            if ui.panel_selection == RESEARCH_TRACK_COUNT {
                 // Upgrade Lab
                 return Some(GameCommand::UpgradeLab);
             }
