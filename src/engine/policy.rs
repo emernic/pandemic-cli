@@ -923,9 +923,21 @@ pub(super) fn tick_screening(state: &mut GameState) {
         // Get real detected infected for this region
         let real = state.regions[i].detected_infected(&state.diseases);
 
-        // Converge estimate toward reality
+        // Apply per-region noise bias. The estimate converges toward a biased target
+        // (real * (1 + bias * strength)) rather than toward truth. Noise strength
+        // scales with visibility_rate so each screening tier meaningfully improves
+        // accuracy: None=100% noise, Basic=69%, Antigen=25%, MassRapid=0%.
+        // This means low-screening data is genuinely wrong, not just stale.
+        let none_vis = ScreeningLevel::None.visibility_rate();
+        let max_vis = ScreeningLevel::MassRapid.visibility_rate();
+        let effective_vis = none_vis + (screening.visibility_rate() - none_vis) * progress;
+        let noise_strength = 1.0 - ((effective_vis - none_vis) / (max_vis - none_vis)).clamp(0.0, 1.0);
+        let bias = state.regions[i].screening_noise_bias;
+        let target = real * (1.0 + bias * noise_strength);
+
+        // Converge estimate toward biased target
         let estimated = state.regions[i].estimated_infected;
-        let delta = real - estimated;
+        let delta = target - estimated;
         state.regions[i].estimated_infected = (estimated + delta * effective_rate).max(0.0);
     }
 }
