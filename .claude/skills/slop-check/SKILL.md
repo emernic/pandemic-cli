@@ -31,6 +31,8 @@ Check specifically:
 
 ## Document Slop Check
 
+**If you wrote or edited more than 3 words of any document OR any user-facing text, you MUST run `/humanizer` on it before finishing.** For user-facing text (crisis events, policy descriptions, UI labels, game-over messages, anything the player sees), also run `/flavor-text` first. This is not optional. Do it now if you haven't.
+
 **If you wrote or edited anything — documents, comments, descriptions, names — go back and re-read every word.** Two checks:
 
 1. **Accuracy:** Is every word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.
