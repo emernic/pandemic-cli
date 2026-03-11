@@ -1440,11 +1440,22 @@ pub const OP_CIVIL_RESILIENCE: f64 = 0.25; // +25% degradation resistance per de
 /// Maximum resilience bonus from infrastructure investment (caps stacking).
 pub const MAX_INFRA_RESILIENCE: f64 = 0.75; // 75% max degradation reduction
 
-/// Number of deployable field operation types (Recon, Emergency, Survey, Supply, Civil).
-/// Must equal the number of match arms in `handle_operations_confirm()` (state.rs) and
+/// Evacuation Corridor: moves susceptible population out of a struggling region.
+/// Evacuees travel to a destination region — bringing disease risk with them.
+/// Reduces susceptible pool in source (slows future deaths), but may seed destination.
+pub const OP_EVAC_PERSONNEL: u32 = 2;
+pub const OP_EVAC_TICKS: f64 = 120.0; // 1 day to coordinate
+pub const OP_EVAC_COST: f64 = 600.0;
+/// Fraction of source susceptibles moved to destination.
+pub const OP_EVAC_FRACTION: f64 = 0.10;
+/// Each point of source infection rate adds this much to seeding probability (cap at 0.80).
+pub const OP_EVAC_SEED_RATE_FACTOR: f64 = 3.0;
+
+/// Number of deployable field operation types (Recon, Emergency, Survey, Supply, Civil, Evac).
+/// Must equal the number of match arms in `handle_operations_confirm()` (lib.rs) and
 /// the length of the `ops` array in `ui/operations.rs`. If you add a new op type,
 /// update this constant — otherwise `panel_selection_max()` will make the new type unreachable.
-pub const FIELD_OP_TYPE_COUNT: usize = 5;
+pub const FIELD_OP_TYPE_COUNT: usize = 6;
 
 /// What kind of field operation is being conducted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1459,6 +1470,9 @@ pub enum FieldOpKind {
     SupplyChainReinforcement { region_idx: usize },
     /// Shore up civil order in a region (funded).
     CivilOrderStabilization { region_idx: usize },
+    /// Move susceptible population from a struggling region to a safer one (funded).
+    /// Reduces source susceptibles (fewer future deaths), but may seed destination.
+    EvacuationCorridor { source_idx: usize, dest_idx: usize },
 }
 
 impl FieldOpKind {
@@ -1469,6 +1483,7 @@ impl FieldOpKind {
             FieldOpKind::InfraSurvey { .. } => OP_SURVEY_PERSONNEL,
             FieldOpKind::SupplyChainReinforcement { .. } => OP_SUPPLY_PERSONNEL,
             FieldOpKind::CivilOrderStabilization { .. } => OP_CIVIL_PERSONNEL,
+            FieldOpKind::EvacuationCorridor { .. } => OP_EVAC_PERSONNEL,
         }
     }
 
@@ -1479,6 +1494,7 @@ impl FieldOpKind {
             FieldOpKind::InfraSurvey { .. } => OP_SURVEY_TICKS,
             FieldOpKind::SupplyChainReinforcement { .. } => OP_SUPPLY_TICKS,
             FieldOpKind::CivilOrderStabilization { .. } => OP_CIVIL_TICKS,
+            FieldOpKind::EvacuationCorridor { .. } => OP_EVAC_TICKS,
         }
     }
 
@@ -1489,6 +1505,7 @@ impl FieldOpKind {
             FieldOpKind::InfraSurvey { .. } => "Infrastructure Survey",
             FieldOpKind::SupplyChainReinforcement { .. } => "Supply Reinforcement",
             FieldOpKind::CivilOrderStabilization { .. } => "Civil Stabilization",
+            FieldOpKind::EvacuationCorridor { .. } => "Evacuation Corridor",
         }
     }
 
@@ -1497,6 +1514,7 @@ impl FieldOpKind {
         match self {
             FieldOpKind::SupplyChainReinforcement { .. } => Some(OP_SUPPLY_COST),
             FieldOpKind::CivilOrderStabilization { .. } => Some(OP_CIVIL_COST),
+            FieldOpKind::EvacuationCorridor { .. } => Some(OP_EVAC_COST),
             _ => None,
         }
     }
@@ -3864,6 +3882,10 @@ pub enum OpsUiState {
     SelectSupplyTarget,
     /// Pick a target region (for Civil Order Stabilization).
     SelectCivilOrderTarget,
+    /// Step 1: pick the source region to evacuate FROM.
+    SelectEvacSource,
+    /// Step 2: pick the destination region to evacuate TO. source_idx is the chosen source.
+    SelectEvacDest { source_idx: usize },
     /// Confirm an emergency decree before enacting it.
     ConfirmDecree { decree_idx: usize },
     /// Select which region to sacrifice (for Sacrifice Region decree).
@@ -4072,10 +4094,16 @@ impl UiState {
                     | Some(OpsUiState::SelectSurveyTarget)
                     | Some(OpsUiState::SelectSupplyTarget)
                     | Some(OpsUiState::SelectCivilOrderTarget)
+                    | Some(OpsUiState::SelectEvacSource)
                     | Some(OpsUiState::ConfirmDecree { .. })
                     | Some(OpsUiState::SelectSacrificeRegion)
                     | Some(OpsUiState::SelectFortifyRegion) => {
                         self.operations_ui = Some(OpsUiState::BrowseOps);
+                        self.panel_selection = 0;
+                    }
+                    Some(OpsUiState::SelectEvacDest { .. }) => {
+                        // Step 2 → back to step 1
+                        self.operations_ui = Some(OpsUiState::SelectEvacSource);
                         self.panel_selection = 0;
                     }
                     _ => {
@@ -4193,6 +4221,8 @@ impl UiState {
                 | Some(OpsUiState::SelectSurveyTarget)
                 | Some(OpsUiState::SelectSupplyTarget)
                 | Some(OpsUiState::SelectCivilOrderTarget)
+                | Some(OpsUiState::SelectEvacSource)
+                | Some(OpsUiState::SelectEvacDest { .. })
                 | Some(OpsUiState::SelectSacrificeRegion)
                 | Some(OpsUiState::SelectFortifyRegion) => {
                     // Non-collapsed regions

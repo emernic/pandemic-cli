@@ -537,6 +537,12 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                         ui.panel_selection = 0;
                         None
                     }
+                    5 => {
+                        // Evacuation Corridor — pick source region first
+                        ui.operations_ui = Some(OpsUiState::SelectEvacSource);
+                        ui.panel_selection = 0;
+                        None
+                    }
                     _ => None,
                 }
             } else if ui.panel_selection >= loan_base {
@@ -658,6 +664,36 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                 Some(GameCommand::StartFieldOp {
                     kind: FieldOpKind::CivilOrderStabilization { region_idx },
                 })
+            } else {
+                None
+            }
+        }
+        Some(OpsUiState::SelectEvacSource) => {
+            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&source_idx) = non_collapsed.get(ui.panel_selection) {
+                ui.operations_ui = Some(OpsUiState::SelectEvacDest { source_idx });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        Some(OpsUiState::SelectEvacDest { source_idx }) => {
+            let source_idx = source_idx;
+            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&dest_idx) = non_collapsed.get(ui.panel_selection) {
+                if dest_idx == source_idx {
+                    ui.status_message = Some("Source and destination must differ".into());
+                    None
+                } else {
+                    Some(GameCommand::StartFieldOp {
+                        kind: FieldOpKind::EvacuationCorridor { source_idx, dest_idx },
+                    })
+                }
             } else {
                 None
             }

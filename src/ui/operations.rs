@@ -13,6 +13,7 @@ use crate::state::{
     OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS,
     OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, OP_SUPPLY_COST,
     OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, OP_CIVIL_COST,
+    OP_EVAC_PERSONNEL, OP_EVAC_TICKS, OP_EVAC_COST,
     FIELD_OP_TYPE_COUNT, DECREE_COUNT,
     decree_display_name,
 };
@@ -27,6 +28,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(OpsUiState::SelectSurveyTarget) => render_select_region(f, area, state, "INFRA SURVEY", None),
         Some(OpsUiState::SelectSupplyTarget) => render_select_region(f, area, state, "SUPPLY REINFORCEMENT", Some(InfraDetail::SupplyLines)),
         Some(OpsUiState::SelectCivilOrderTarget) => render_select_region(f, area, state, "CIVIL STABILIZATION", Some(InfraDetail::CivilOrder)),
+        Some(OpsUiState::SelectEvacSource) => render_select_evac_source(f, area, state),
+        Some(OpsUiState::SelectEvacDest { source_idx }) => render_select_evac_dest(f, area, state, *source_idx),
         Some(OpsUiState::ConfirmDecree { decree_idx }) => {
             let (title, lines, _) = render_confirm_decree(state, *decree_idx);
             render_panel(f, area, &title, lines);
@@ -94,6 +97,11 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
                         .map(|r| r.name.clone())
                         .unwrap_or_else(|| "?".to_string())
                 }
+                crate::state::FieldOpKind::EvacuationCorridor { source_idx, dest_idx } => {
+                    let src = state.regions.get(*source_idx).map(|r| r.name.as_str()).unwrap_or("?");
+                    let dst = state.regions.get(*dest_idx).map(|r| r.name.as_str()).unwrap_or("?");
+                    format!("{} → {}", src, dst)
+                }
             };
 
             let highlight = if is_selected { Color::Yellow } else { Color::White };
@@ -129,13 +137,14 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     )));
 
     // COUPLING CHECK: array size must equal FIELD_OP_TYPE_COUNT, which bounds panel navigation
-    // and matches the 0..=4 arms in handle_operations_confirm() (state.rs).
+    // and matches the 0..=5 arms in handle_operations_confirm() (lib.rs).
     let ops: [(&str, &str, u32, f64, Option<f64>); FIELD_OP_TYPE_COUNT] = [
         ("Recon Mission", "Identify unknown pathogen", OP_RECON_PERSONNEL, OP_RECON_TICKS, None),
         ("Emergency Response", "Reduce lethality in a region", OP_EMERGENCY_PERSONNEL, OP_EMERGENCY_TICKS, None),
         ("Infra Survey", "Repair worst infrastructure", OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS, None),
         ("Supply Reinforcement", "Restore supply lines + permanent resilience", OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, Some(OP_SUPPLY_COST)),
         ("Civil Stabilization", "Restore civil order + permanent resilience", OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, Some(OP_CIVIL_COST)),
+        ("Evacuation Corridor", "Evacuate civilians from a high-risk region. Carriers travel with them.", OP_EVAC_PERSONNEL, OP_EVAC_TICKS, Some(OP_EVAC_COST)),
     ];
 
     let available = state.personnel_available();
@@ -419,6 +428,118 @@ fn render_select_region(f: &mut Frame, area: Rect, state: &GameState, title: &st
 
     let block = Block::default()
         .title(format!(" {} ", title))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+fn render_select_evac_source(f: &mut Frame, area: Rect, state: &GameState) {
+    let mut lines: Vec<Line> = Vec::new();
+    let selected = state.ui.panel_selection;
+
+    lines.push(Line::from(Span::styled(
+        "  Evacuation Corridor: select origin region",
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "  ~10% of susceptibles will be transferred to a region you choose next.",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(Span::styled(
+        "  Higher infection rates increase the chance of seeding the destination.",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::raw(""));
+
+    let non_collapsed: Vec<(usize, &crate::state::Region)> = state.regions.iter().enumerate()
+        .filter(|(_, r)| !r.collapsed)
+        .collect();
+
+    for (i, (_, region)) in non_collapsed.iter().enumerate() {
+        let is_selected = i == selected;
+        let marker = if is_selected { "▸ " } else { "  " };
+        let highlight = if is_selected { Color::Yellow } else { Color::White };
+
+        let pop = region.population as f64;
+        let dead_pct = if pop > 0.0 { (region.dead / pop * 100.0) as u32 } else { 0 };
+        let susceptibles = (pop - region.dead - region.total_infected()).max(0.0);
+        let to_move = susceptibles * 0.10;
+        let detail = format!("  ({}% dead, ~{} evacuable)", dead_pct, crate::format_number(to_move));
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(&region.name, Style::default().fg(highlight).add_modifier(Modifier::BOLD)),
+            Span::styled(detail, Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(hint_line(state, "Select origin", "Back"));
+
+    let block = Block::default()
+        .title(" EVACUATION CORRIDOR — SOURCE ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+fn render_select_evac_dest(f: &mut Frame, area: Rect, state: &GameState, source_idx: usize) {
+    let mut lines: Vec<Line> = Vec::new();
+    let selected = state.ui.panel_selection;
+
+    let source_name = state.regions.get(source_idx).map(|r| r.name.as_str()).unwrap_or("?");
+    lines.push(Line::from(Span::styled(
+        format!("  Evacuation Corridor: select destination for evacuees from {}", source_name),
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "  ~10% of susceptibles transferred. Carriers may arrive with them.",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::raw(""));
+
+    let non_collapsed: Vec<(usize, &crate::state::Region)> = state.regions.iter().enumerate()
+        .filter(|(_, r)| !r.collapsed)
+        .collect();
+
+    for (i, (r_idx, region)) in non_collapsed.iter().enumerate() {
+        let is_selected = i == selected;
+        let is_source = *r_idx == source_idx;
+        let marker = if is_selected { "▸ " } else { "  " };
+        let highlight = if is_source {
+            Color::DarkGray
+        } else if is_selected {
+            Color::Yellow
+        } else {
+            Color::White
+        };
+
+        let detail = if is_source {
+            "  [origin region, ineligible as destination]".to_string()
+        } else {
+            let pop = region.population as f64;
+            let dead_pct = if pop > 0.0 { (region.dead / pop * 100.0) as u32 } else { 0 };
+            format!("  ({}% dead, pop {})", dead_pct, crate::format_number(pop))
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(&region.name, Style::default().fg(highlight).add_modifier(Modifier::BOLD)),
+            Span::styled(detail, Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(hint_line(state, "Confirm evacuation", "Back"));
+
+    let block = Block::default()
+        .title(" EVACUATION CORRIDOR — DESTINATION ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
