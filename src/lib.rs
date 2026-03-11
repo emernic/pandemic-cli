@@ -6,7 +6,12 @@ pub mod ui;
 
 use action::Action;
 use engine::execute_command;
-use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, PolicyUiState, ResearchTrack, ResearchUiState, SimState};
+use state::{
+    DeployTarget, DECREE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState, InfraSystem,
+    KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_INFRA_BASE, MANAGE_PRIORITY_POS,
+    MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchTrack, ResearchUiState, SimState,
+    UiState, grid_reading_order, policy_display_order,
+};
 
 /// Route a player action to the appropriate handler.
 ///
@@ -15,6 +20,10 @@ use state::{GameCommand, GameOutcome, GameState, MedicineUiState, Panel, PolicyU
 /// UiState methods. Game commands (deploy, research) go through
 /// engine::execute_command(). This function does NOT live in engine.rs
 /// because it's coordination logic, not game simulation.
+///
+/// Wizard confirm logic (handle_confirm and friends below) lives here too —
+/// it's the "what happens when you press Enter" half of the coordination layer,
+/// complementing the post-command UI navigation done inline after execute_command.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
     new.ui.status_message = None;
@@ -152,7 +161,16 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::Confirm => {
             if new.outcome == GameOutcome::Playing {
                 let state_snapshot = new.clone();
-                if let Some(cmd) = new.ui.handle_confirm(&state_snapshot) {
+                if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
+                    // Standing order toggles are player preference — no engine involvement.
+                    if let GameCommand::ToggleStandingOrder { kind } = cmd {
+                        match kind {
+                            0 => new.standing_orders.auto_quarantine_at_high = !new.standing_orders.auto_quarantine_at_high,
+                            1 => new.standing_orders.auto_travel_ban_at_crit = !new.standing_orders.auto_travel_ban_at_crit,
+                            _ => {}
+                        }
+                        return new;
+                    }
                     let result = execute_command(&mut new, &cmd);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
@@ -190,6 +208,448 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 /// Format a number with human-readable suffix (K, M, B).
 // Re-export from state.rs so all existing `crate::format_number` references work.
 pub use state::format_number;
+
+// ── Wizard confirm handlers ───────────────────────────────────────────────────
+//
+// These translate a Confirm keypress (Enter) into an optional GameCommand.
+// They live here — the coordination layer — not in state.rs, because they're
+// behavioral logic (decision-making, command synthesis, UX pre-validation),
+// not data or simple state mutations. state.rs owns the UiState struct and its
+// navigation/panel methods; lib.rs owns what happens when the player acts.
+
+/// Dispatch Confirm to the active panel's wizard handler.
+fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    match ui.open_panel {
+        Panel::Medicines => handle_medicine_confirm(ui, state),
+        Panel::Research => handle_research_confirm(ui, state),
+        Panel::Policy => handle_policy_confirm(ui, state),
+        Panel::Operations => handle_operations_confirm(ui, state),
+        _ => None,
+    }
+}
+
+fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    match ui.medicine_ui.clone() {
+        Some(MedicineUiState::BrowseMedicines) => {
+            let unlocked: Vec<usize> = state
+                .medicines
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| m.unlocked)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&med_idx) = unlocked.get(ui.panel_selection) {
+                ui.medicine_ui =
+                    Some(MedicineUiState::SelectRegion { medicine_idx: med_idx });
+                // Pre-select the region matching the current map selection
+                let order = grid_reading_order(state.regions.len());
+                ui.panel_selection = order.iter()
+                    .position(|&idx| idx == ui.map_selection)
+                    .unwrap_or(0);
+            }
+            None
+        }
+        Some(MedicineUiState::SelectRegion { medicine_idx }) => {
+            let order = grid_reading_order(state.regions.len());
+            let region_idx = order.get(ui.panel_selection).copied().unwrap_or(0);
+            if region_idx < state.regions.len() {
+                let med = &state.medicines[medicine_idx];
+                let deployable = med.deployable_diseases(&state.diseases);
+                let has_known_incompatible = state.diseases.iter().enumerate()
+                    .any(|(i, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME && !deployable.contains(&i));
+                if deployable.len() == 1 && !has_known_incompatible {
+                    // Only one deployable disease and no incompatible ones to explain:
+                    // skip disease selection to save the player a step.
+                    ui.medicine_ui = Some(MedicineUiState::SelectTarget {
+                        medicine_idx,
+                        region_idx,
+                        disease_idx: deployable[0],
+                    });
+                } else {
+                    ui.medicine_ui = Some(MedicineUiState::SelectDisease {
+                        medicine_idx,
+                        region_idx,
+                    });
+                }
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
+            let med = &state.medicines[medicine_idx];
+            let deployable = med.deployable_diseases(&state.diseases);
+            if let Some(&disease_idx) = deployable.get(ui.panel_selection) {
+                ui.medicine_ui = Some(MedicineUiState::SelectTarget {
+                    medicine_idx,
+                    region_idx,
+                    disease_idx,
+                });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        Some(MedicineUiState::SelectTarget {
+            medicine_idx,
+            region_idx,
+            disease_idx,
+        }) => {
+            let med = &state.medicines[medicine_idx];
+            // panel_selection: 0 = vaccinate, 1 = treat
+            let target = if ui.panel_selection == 0 {
+                DeployTarget::Vaccinate { disease_idx }
+            } else {
+                DeployTarget::Treat { disease_idx }
+            };
+            let deploy_cost = med.deploy_cost();
+            // UX pre-check: show error early so the wizard doesn't advance to ConfirmDeploy
+            // when the player can't afford it. The engine validates authoritatively in deploy_medicine().
+            if state.resources.funding < deploy_cost {
+                ui.status_message = Some(
+                    format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
+                        deploy_cost, state.resources.funding),
+                );
+                None
+            } else {
+                let is_tested = med.tested_against.contains(&disease_idx);
+                if !is_tested {
+                    ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
+                        medicine_idx,
+                        region_idx,
+                        target: target.clone(),
+                    });
+                    None
+                } else {
+                    Some(GameCommand::DeployMedicine {
+                        medicine_idx,
+                        region_idx,
+                        target,
+                    })
+                }
+            }
+        }
+        Some(MedicineUiState::ConfirmDeploy {
+            medicine_idx,
+            region_idx,
+            target,
+        }) => {
+            Some(GameCommand::DeployMedicine {
+                medicine_idx,
+                region_idx,
+                target,
+            })
+        }
+        Some(MedicineUiState::DeployResult { medicine_idx, .. }) => {
+            ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+            ui.panel_selection = 0;
+            None
+        }
+        None => None,
+    }
+}
+
+fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    match ui.research_ui.clone() {
+        Some(ResearchUiState::BrowseCategories) => {
+            if ui.panel_selection == 3 {
+                // Upgrade Lab
+                return Some(GameCommand::UpgradeLab);
+            }
+            let track = match ui.panel_selection {
+                0 => ResearchTrack::Field,
+                1 => ResearchTrack::Applied,
+                _ => ResearchTrack::Basic,
+            };
+            ui.research_ui = Some(ResearchUiState::BrowseProjects { track });
+            ui.panel_selection = 0;
+            None
+        }
+        Some(ResearchUiState::BrowseProjects { track }) => {
+            if track == ResearchTrack::Field {
+                // Field track: list shows active projects first, then available.
+                let n_active = state.field_research.len();
+                if ui.panel_selection < n_active {
+                    // Selected an active project → view it
+                    ui.research_ui = Some(ResearchUiState::ViewActive { track, slot_idx: ui.panel_selection });
+                    ui.panel_selection = 0;
+                } else {
+                    // Selected an available project
+                    let project_idx = ui.panel_selection - n_active;
+                    let count = state.available_projects(track).len();
+                    if project_idx < count && state.field_research_has_capacity() {
+                        ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                            track,
+                            project_idx,
+                            double_personnel: false,
+                        });
+                        ui.panel_selection = 0;
+                    }
+                }
+            } else {
+                // Applied/Basic: single-slot behavior
+                if state.research_slot(track).is_some() {
+                    ui.research_ui = Some(ResearchUiState::ViewActive { track, slot_idx: 0 });
+                    ui.panel_selection = 0;
+                } else {
+                    let count = state.available_projects(track).len();
+                    if count > 0 {
+                        ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                            track,
+                            project_idx: ui.panel_selection,
+                            double_personnel: false,
+                        });
+                        ui.panel_selection = 0;
+                    }
+                }
+            }
+            None
+        }
+        Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
+            Some(GameCommand::StartResearch { track, project_idx, double_personnel })
+        }
+        Some(ResearchUiState::ViewActive { track, .. }) => {
+            // Confirm from ViewActive goes back to project list
+            ui.research_ui = Some(ResearchUiState::BrowseProjects { track });
+            ui.panel_selection = 0;
+            None
+        }
+        None => None,
+    }
+}
+
+fn handle_policy_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    match ui.policy_ui.clone() {
+        Some(PolicyUiState::BrowseRegions) => {
+            let num_regions = state.regions.len();
+            if ui.panel_selection < num_regions {
+                // Region selected — manage its policies
+                let order = grid_reading_order(num_regions);
+                let region_idx = order.get(ui.panel_selection).copied().unwrap_or(0);
+                if region_idx < num_regions {
+                    ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
+                    ui.panel_selection = 0;
+                }
+                None
+            } else {
+                let decree_base = num_regions;
+                let so_base = decree_base + DECREE_COUNT;
+                if ui.panel_selection >= so_base {
+                    // Standing order selected
+                    let kind = ui.panel_selection - so_base;
+                    return Some(GameCommand::ToggleStandingOrder { kind });
+                }
+                // Decree selected.
+                let decree_idx = ui.panel_selection - decree_base;
+                if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
+                    // Sacrifice Region needs sub-selection — but only if unlocked
+                    if state.decree_unlocked(2) {
+                        ui.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
+                        ui.panel_selection = 0;
+                        None
+                    } else {
+                        Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+                    }
+                } else if decree_idx == 4 && !state.enacted_decrees.is_enacted(4) {
+                    // Fortify Region needs sub-selection
+                    if state.decree_unlocked(4) {
+                        ui.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
+                        ui.panel_selection = 0;
+                        None
+                    } else {
+                        Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+                    }
+                } else {
+                    Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+                }
+            }
+        }
+        Some(PolicyUiState::ManagePolicies { region_idx }) => {
+            if ui.panel_selection == MANAGE_BARGAIN_POS {
+                // Bargain with Governor (only when defiant)
+                Some(GameCommand::BargainWithGovernor { region_idx })
+            } else if ui.panel_selection == MANAGE_APPEASE_POS {
+                // Appease Governor
+                Some(GameCommand::AppeaseGovernor { region_idx })
+            } else if ui.panel_selection == MANAGE_PRIORITY_POS {
+                // Cycle deployment priority
+                Some(GameCommand::CycleDeployPriority { region_idx })
+            } else if ui.panel_selection >= MANAGE_INFRA_BASE && ui.panel_selection < MANAGE_PRIORITY_POS {
+                // Repair infrastructure (MANAGE_INFRA_BASE=HC, +1=SL, +2=CO)
+                let system = match ui.panel_selection - MANAGE_INFRA_BASE {
+                    0 => InfraSystem::Healthcare,
+                    1 => InfraSystem::SupplyLines,
+                    _ => InfraSystem::CivilOrder,
+                };
+                Some(GameCommand::RepairInfrastructure { region_idx, system })
+            } else {
+                // Map display position to policy_idx via sorted display order
+                let policy_idx = policy_display_order()[ui.panel_selection];
+                Some(GameCommand::TogglePolicy {
+                    region_idx,
+                    policy_idx,
+                })
+            }
+        }
+        Some(PolicyUiState::SelectSacrificeRegion) => {
+            // Map display position to actual region index (skipping collapsed)
+            let non_collapsed: Vec<usize> = state.regions.iter()
+                .enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::EnactDecree {
+                    decree_idx: 2,
+                    region_idx: Some(region_idx),
+                })
+            } else {
+                None
+            }
+        }
+        Some(PolicyUiState::SelectFortifyRegion) => {
+            let non_collapsed: Vec<usize> = state.regions.iter()
+                .enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::EnactDecree {
+                    decree_idx: 4,
+                    region_idx: Some(region_idx),
+                })
+            } else {
+                None
+            }
+        }
+        None => None,
+    }
+}
+
+fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    match ui.operations_ui.clone() {
+        Some(OpsUiState::BrowseOps) => {
+            let n_active = state.field_operations.len();
+            if ui.panel_selection < n_active {
+                // Selected an active op — no action (view only)
+                None
+            } else {
+                // Selected an operation type
+                match ui.panel_selection - n_active {
+                    0 => {
+                        // Recon — need to pick a disease
+                        let targets: Vec<usize> = state.diseases.iter().enumerate()
+                            .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_NAME)
+                            .map(|(i, _)| i)
+                            .collect();
+                        if targets.is_empty() {
+                            ui.status_message = Some("No unidentified pathogens".into());
+                            None
+                        } else if targets.len() == 1 {
+                            // Only one target — skip selection
+                            Some(GameCommand::StartFieldOp {
+                                kind: FieldOpKind::Recon { disease_idx: targets[0] },
+                            })
+                        } else {
+                            ui.operations_ui = Some(OpsUiState::SelectReconTarget);
+                            ui.panel_selection = 0;
+                            None
+                        }
+                    }
+                    1 => {
+                        // Emergency Response — pick a region
+                        ui.operations_ui = Some(OpsUiState::SelectEmergencyTarget);
+                        ui.panel_selection = 0;
+                        None
+                    }
+                    2 => {
+                        // Infra Survey — pick a region
+                        ui.operations_ui = Some(OpsUiState::SelectSurveyTarget);
+                        ui.panel_selection = 0;
+                        None
+                    }
+                    3 => {
+                        // Supply Chain Reinforcement — pick a region
+                        ui.operations_ui = Some(OpsUiState::SelectSupplyTarget);
+                        ui.panel_selection = 0;
+                        None
+                    }
+                    4 => {
+                        // Civil Order Stabilization — pick a region
+                        ui.operations_ui = Some(OpsUiState::SelectCivilOrderTarget);
+                        ui.panel_selection = 0;
+                        None
+                    }
+                    _ => None,
+                }
+            }
+        }
+        Some(OpsUiState::SelectReconTarget) => {
+            let targets: Vec<usize> = state.diseases.iter().enumerate()
+                .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_NAME)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&disease_idx) = targets.get(ui.panel_selection) {
+                Some(GameCommand::StartFieldOp {
+                    kind: FieldOpKind::Recon { disease_idx },
+                })
+            } else {
+                None
+            }
+        }
+        Some(OpsUiState::SelectEmergencyTarget) => {
+            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::StartFieldOp {
+                    kind: FieldOpKind::EmergencyResponse { region_idx },
+                })
+            } else {
+                None
+            }
+        }
+        Some(OpsUiState::SelectSurveyTarget) => {
+            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::StartFieldOp {
+                    kind: FieldOpKind::InfraSurvey { region_idx },
+                })
+            } else {
+                None
+            }
+        }
+        Some(OpsUiState::SelectSupplyTarget) => {
+            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::StartFieldOp {
+                    kind: FieldOpKind::SupplyChainReinforcement { region_idx },
+                })
+            } else {
+                None
+            }
+        }
+        Some(OpsUiState::SelectCivilOrderTarget) => {
+            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::StartFieldOp {
+                    kind: FieldOpKind::CivilOrderStabilization { region_idx },
+                })
+            } else {
+                None
+            }
+        }
+        None => None,
+    }
+}
 
 #[cfg(test)]
 mod tests {
