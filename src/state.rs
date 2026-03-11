@@ -532,7 +532,7 @@ pub struct RegionPolicy {
 ///   3 = Border Controls   11 = Intel Station
 ///   4 = Water Sanitation
 ///
-/// Display position is determined by `policy_display_order()` (sorted by POL threshold).
+/// Display position is determined by `policy_display_order()` (grouped by function).
 /// If you add a new policy, you must update:
 ///   - POLICY_COUNT and POLICY_POL_THRESHOLDS (this file)
 ///   - get_bool/set_bool if it's a boolean policy (this file)
@@ -583,18 +583,18 @@ pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT;
 pub const MANAGE_APPEASE_POS: usize = MANAGE_PRIORITY_POS + 1;
 pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 
-/// Policy indices sorted by POL unlock threshold (ascending), ties broken by index.
+/// Policy display order — grouped by function, cheapest/earliest to most
+/// expensive/latest within each group:
+///
+///   Detection:    Intel Station (11), Basic Screening (5), Antigen (6), Mass Rapid (7)
+///   Containment:  Border Controls (3), Travel Ban (0), Quarantine (1)
+///   Medical:      Water Sanitation (4), Hospital Surge (2), Field Hospital (10)
+///   Extreme:      Nuclear Option (9), Martial Law (8)
+///
 /// This is the canonical display ordering — both the policy renderer and the confirm
 /// handler use this to map display position → policy_idx.
 pub fn policy_display_order() -> [usize; POLICY_COUNT] {
-    let mut order: [usize; POLICY_COUNT] = std::array::from_fn(|i| i);
-    order.sort_by(|&a, &b| {
-        POLICY_POL_THRESHOLDS[a]
-            .partial_cmp(&POLICY_POL_THRESHOLDS[b])
-            .unwrap()
-            .then(a.cmp(&b))
-    });
-    order
+    [11, 5, 6, 7, 3, 0, 1, 4, 2, 10, 9, 8]
 }
 
 /// Short display name for each policy by index. Canonical source — used by
