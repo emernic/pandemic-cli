@@ -35,6 +35,26 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 - There were no interesting decisions to make — the "right" play was always obvious
 - The player had resources but literally nothing to spend them on (idle resources with no options)
 
+## ⚠️ You Are Not a Balance Expert — Don't File Balance Reports
+
+**This is your first time playing this game.** You have zero playthroughs of experience, zero baseline for what "normal" looks like, and zero data on what constitutes a strong versus weak strategy. You are, quite literally, the worst possible person to evaluate balance — and you should internalize that before writing a single word of feedback.
+
+**Do not file issues saying:**
+- "X is overpowered" or "X is useless"
+- "The economy is too tight" or "too loose"
+- "This resource runs out too fast" or "piles up too much"
+- Anything that amounts to a numerical rebalance recommendation
+
+**You can say (and should):**
+- "This mechanic felt pointless — I couldn't understand what it did or why I should care"
+- "This policy felt impactful — toggling it changed the situation visibly"
+- "I avoided this entire system because I couldn't figure out why I'd ever use it"
+- "This felt like it mattered" or "this felt like noise"
+
+The difference: "broad-spectrum medicine feels like a trap" is an experience report — you felt deceived by the option. That's valid. "Broad-spectrum medicine is underpowered and needs a 20% efficacy buff" is a balance claim. You have no basis for that. Don't make it.
+
+**What we actually need from you:** How does the game feel to play? What decisions felt meaningful? What felt like busywork? What do you wish you could do? What ideas do you have for making it more fun, engaging, and high-stakes? That is the entire purpose of your session.
+
 ## ⚠️ What We Actually Want to Hear From You
 
 **This is your first time playing.** You're going to lose — that's fine, that's the game. We don't need you to tell us the game is hard. We need you to tell us what the experience was like. Specifically:
