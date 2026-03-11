@@ -69,27 +69,42 @@ Other agents are merging features constantly. Playtesting stale code generates n
 
 ## Step 2: Launch Playtest
 
+**Always use `subagent_type=playtest`.** Not `general-purpose`. The playtest agent has specialized tooling and its own persona system — using a general-purpose agent here defeats the purpose.
+
 ```
 Agent(subagent_type=playtest, prompt=...)
 ```
 
 **Always include in the prompt:**
 - Use a save file at `./pt_save_<session>.json`
-- What to focus on (vary this — rotate through the focus areas below)
 - Remind it to write the log to `./playtests/`
 - **Include the navigation instructions below verbatim** — the playtest agent needs them
 - **Ask "Do you want to play again?"** — at the end of their report, the agent must answer yes or no. Tell them that if they say yes, they'll get to immediately start a new session with a different strategy. **Do NOT actually let them play again** — this is just to measure whether they would. Record their answer in your summary and move on to triage.
 
 **The game is designed to be unwinnable.** Survival/endurance challenge. 20+ days decent, 40+ good, 100+ exceptional. Do NOT file issues about "can't win." DO file issues about the experience — was losing interesting? Were there meaningful decisions?
 
-**Focus areas (rotate each session):**
-1. Early game pacing and onboarding
-2. Full research pipeline end-to-end
-3. Policy system depth and trade-offs
-4. Late game endurance and loss arc
-5. Multi-disease triage decisions
-6. Economy and resource pressure
-7. Crisis events and player agency
+### ⚠️ DON'T BIAS THE PLAYTESTER — THIS IS THE #1 FAILURE MODE
+
+**Most playtests should be fully unguided.** Just tell the agent: "Play the game. Make your own decisions. Report what you notice." Full stop. No focus area. No list of things to test. Let the player discover what the game actually is, not what you already think it is.
+
+When you prime a playtester with a specific focus ("look for idle personnel") or a list of things to test ("track your money over time, note any moments where you wanted to spend but couldn't"), you are not running a playtest — you are running a survey of your own existing hypotheses. The playtester will dutifully find exactly what you told them to look for and report it back. You will feel like you "confirmed" something. You confirmed nothing. You just talked to yourself through an intermediary.
+
+**The information value of a playtest comes from surprise.** A player who discovers something you didn't expect is giving you signal. A player who confirms what you already suspected is giving you noise. Surprise requires the player to have genuine freedom to discover anything — which means you cannot tell them what to look for.
+
+**When focus is appropriate:** Occasionally (not every session) you may want a player to spend time in a specific area of the game they might otherwise skip — e.g., "try to use the policy system" or "try to complete the research pipeline." This is acceptable only as a high-level area directive, never as a list of things to notice or evaluate. Do NOT tell them what findings to expect. Do NOT tell them what would constitute a problem. Let them form their own impressions.
+
+**Alternating rule: every other playtest should be fully unguided.** Unguided = no focus, no hints, just "play the game." The alternating focused sessions should pick an area that changed recently, that playtesters seldom explore on their own, or that hasn't been the focus in a while — NOT the same area every time. Variety matters: if you've focused on research three times running, pick something else.
+
+**When focus is appropriate:** State the area in one sentence: "Spend some time exploring [area]." Nothing more. Do NOT list things to look for, do NOT describe what a problem would look like, do NOT tell them what conclusions to draw.
+
+**Example focus areas** (not exhaustive — use your judgment based on recent changes and gaps):
+- Early game / onboarding
+- Research pipeline
+- Policy system
+- Late game endurance
+- Multi-disease management
+- Economy and resource use
+- Crisis events
 
 ### ⚠️ CRITICAL: Navigation Instructions for Playtest Agent
 
