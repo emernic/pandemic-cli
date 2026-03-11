@@ -598,19 +598,6 @@ pub fn policy_display_order() -> [usize; POLICY_COUNT] {
     [11, 10, 5, 6, 7, 3, 0, 1, 4, 2, 9, 8]
 }
 
-/// Section header labels for the policy panel, keyed by display position.
-/// Returns Some(header) at the start of each group, None otherwise.
-pub fn policy_section_header(display_pos: usize) -> Option<&'static str> {
-    match display_pos {
-        0 => Some("Infrastructure"),
-        2 => Some("Detection"),
-        5 => Some("Containment"),
-        8 => Some("Medical"),
-        10 => Some("Extreme"),
-        _ => None,
-    }
-}
-
 /// Short display name for each policy by index. Canonical source — used by
 /// both engine (status messages) and UI (panel rendering).
 pub fn policy_display_name(policy_idx: usize) -> &'static str {

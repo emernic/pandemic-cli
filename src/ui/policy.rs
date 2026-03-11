@@ -26,7 +26,7 @@ use crate::state::{
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
-    policy_display_order, policy_section_header, APPEASE_COST, APPEASE_LOYALTY_GAIN,
+    policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
@@ -35,6 +35,19 @@ use crate::state::{
 };
 use crate::ui::hint_line;
 use crate::format_number;
+
+/// Section header labels for the policy panel, keyed by display position.
+/// Returns Some(header) at the start of each group, None otherwise.
+fn policy_section_header(display_pos: usize) -> Option<&'static str> {
+    match display_pos {
+        0 => Some("Infrastructure"),
+        2 => Some("Detection"),
+        5 => Some("Containment"),
+        8 => Some("Medical"),
+        10 => Some("Extreme"),
+        _ => None,
+    }
+}
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines, selected_line) = match &state.ui.policy_ui {
