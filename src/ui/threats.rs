@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
+use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
 use crate::format_number;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -184,6 +184,27 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 )));
             }
 
+            // Sequence homology: Rapid Sequencing reveals shared genetic markers between
+            // wave-coordinated diseases. Shows when knowledge >= 0.66 on both diseases.
+            // Factual data only — no commentary. Player connects the dots.
+            if state.unlocked_techs.contains(&BasicTech::RapidSequencing)
+                && disease.knowledge >= KNOWLEDGE_PARTIAL_STATS
+            {
+                if let Some(group) = disease.sequence_group {
+                    for (other_idx, other) in state.diseases.iter().enumerate() {
+                        if other_idx != i
+                            && other.sequence_group == Some(group)
+                            && other.knowledge >= KNOWLEDGE_PARTIAL_STATS
+                        {
+                            lines.push(Line::from(Span::styled(
+                                format!("    Shares sequences with {}", other.display_name(other_idx)),
+                                Style::default().fg(Color::Magenta),
+                            )));
+                        }
+                    }
+                }
+            }
+
             // Show knowledge bar
             if disease.knowledge > 0.0 {
                 let pct = (disease.knowledge * 100.0).min(100.0);
@@ -227,7 +248,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 }
 
 /// Push disease warning indicators: outdated medicines, resistance, containment
-/// adaptation. Only shows warnings that require player action.
+/// adaptation, and sequence homology. Only shows warnings that require player action
+/// or provide actionable intelligence.
 fn push_disease_indicators(
     spans: &mut Vec<Span<'static>>,
     state: &GameState,
