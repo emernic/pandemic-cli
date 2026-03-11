@@ -311,11 +311,11 @@ mod tests {
     }
 
     #[test]
-    fn policy_panel_shows_decrees() {
+    fn orders_panel_shows_decrees() {
         let state = GameState::new_default(42);
-        let result = run_snapshot(state, &["p".to_string()]).unwrap();
-        assert!(result.screen.contains("EMERGENCY DECREES"),
-            "policy panel should show decrees section");
+        let result = run_snapshot(state, &["o".to_string()]).unwrap();
+        assert!(result.screen.contains("Emergency Decrees"),
+            "orders panel should show decrees section");
         assert!(result.screen.contains("Conscript"),
             "should show Conscript Researchers decree");
         assert!(result.screen.contains("Human Trials"),

@@ -13,9 +13,11 @@ use crate::state::{
     OP_SURVEY_PERSONNEL, OP_SURVEY_TICKS,
     OP_SUPPLY_PERSONNEL, OP_SUPPLY_TICKS, OP_SUPPLY_COST,
     OP_CIVIL_PERSONNEL, OP_CIVIL_TICKS, OP_CIVIL_COST,
-    FIELD_OP_TYPE_COUNT,
+    FIELD_OP_TYPE_COUNT, DECREE_COUNT,
+    decree_display_name,
 };
 use super::hint_line;
+use super::policy::{decree_description, render_confirm_decree, render_region_select};
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     match &state.ui.operations_ui {
@@ -25,6 +27,28 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(OpsUiState::SelectSurveyTarget) => render_select_region(f, area, state, "INFRA SURVEY", None),
         Some(OpsUiState::SelectSupplyTarget) => render_select_region(f, area, state, "SUPPLY REINFORCEMENT", Some(InfraDetail::SupplyLines)),
         Some(OpsUiState::SelectCivilOrderTarget) => render_select_region(f, area, state, "CIVIL STABILIZATION", Some(InfraDetail::CivilOrder)),
+        Some(OpsUiState::ConfirmDecree { decree_idx }) => {
+            let (title, lines, selected_line) = render_confirm_decree(state, *decree_idx);
+            render_panel(f, area, &title, lines, selected_line);
+        }
+        Some(OpsUiState::SelectSacrificeRegion) => {
+            let (title, lines, selected_line) = render_region_select(
+                state,
+                "SACRIFICE REGION",
+                "Sacrifice",
+                "Choose a region to abandon. Its population is written off; income from remaining regions increases permanently.",
+            );
+            render_panel(f, area, &title, lines, selected_line);
+        }
+        Some(OpsUiState::SelectFortifyRegion) => {
+            let (title, lines, selected_line) = render_region_select(
+                state,
+                "FORTIFY REGION",
+                "Fortify",
+                "Choose a region to restore to full infrastructure. All other regions suffer a permanent infrastructure penalty.",
+            );
+            render_panel(f, area, &title, lines, selected_line);
+        }
     }
 }
 
@@ -151,12 +175,138 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]));
 
+    // Emergency Decrees
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "  Emergency Decrees",
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    )));
+
+    // COUPLING CHECK: loop count must equal DECREE_COUNT
+    for decree_idx in 0..DECREE_COUNT {
+        let is_selected = row == selected;
+        let marker = if is_selected { "▸ " } else { "  " };
+        let name = decree_display_name(decree_idx);
+        let enacted = state.enacted_decrees.is_enacted(decree_idx);
+        let unlocked = state.decree_unlocked(decree_idx);
+
+        let (name_color, desc_color) = if enacted {
+            (Color::DarkGray, Color::DarkGray)
+        } else if is_selected {
+            (Color::Yellow, Color::DarkGray)
+        } else if unlocked {
+            (Color::Red, Color::DarkGray)
+        } else {
+            (Color::DarkGray, Color::DarkGray)
+        };
+
+        let suffix = if enacted {
+            " [ENACTED]".to_string()
+        } else if !unlocked {
+            format!(" [{}]", GameState::decree_unlock_hint(decree_idx))
+        } else {
+            String::new()
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+            Span::styled(suffix, Style::default().fg(Color::DarkGray)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(decree_description(decree_idx), Style::default().fg(desc_color)),
+        ]));
+        row += 1;
+    }
+
+    // Standing Orders
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "  Standing Orders",
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+    )));
+
+    // COUPLING CHECK: must equal STANDING_ORDER_COUNT (= 2)
+    let standing_orders = [
+        (
+            "Auto-Quarantine at HIGH",
+            "Automatically enable Quarantine when infections exceed HIGH threshold (10K).",
+            state.standing_orders.auto_quarantine_at_high,
+        ),
+        (
+            "Auto-Travel Ban at CRIT",
+            "Automatically enable Travel Ban when infections exceed CRIT threshold (100K).",
+            state.standing_orders.auto_travel_ban_at_crit,
+        ),
+    ];
+
+    for (name, desc, enabled) in &standing_orders {
+        let is_selected = row == selected;
+        let marker = if is_selected { "▸ " } else { "  " };
+        let name_color = if is_selected { Color::Yellow } else { Color::White };
+        let status = if *enabled { "[ON] " } else { "[OFF]" };
+        let status_color = if *enabled { Color::Green } else { Color::DarkGray };
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(status, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+            Span::styled(" ", Style::default()),
+            Span::styled(*name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(*desc, Style::default().fg(Color::DarkGray)),
+        ]));
+        row += 1;
+    }
+
+    // Outstanding Loans
+    if !state.loans.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            "  Outstanding Loans",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+
+        for loan in &state.loans {
+            let is_selected = row == selected;
+            let marker = if is_selected { "▸ " } else { "  " };
+            let highlight = if is_selected { Color::Yellow } else { Color::White };
+            let interest_per_day = loan.interest_per_tick() * TICKS_PER_DAY;
+            let days_left = (loan.due_day - state.tick as f64 / TICKS_PER_DAY).max(0.0);
+
+            lines.push(Line::from(vec![
+                Span::styled(marker, Style::default().fg(Color::Yellow)),
+                Span::styled(&loan.lender_name, Style::default().fg(highlight).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!(" — ¥{:.0} outstanding (+¥{:.1}/day, {:.1}d left)",
+                        loan.outstanding, interest_per_day, days_left),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            row += 1;
+        }
+    }
+
+    let _ = row; // suppress unused variable warning
+
     lines.push(hint_line(state, "Select", "Close"));
 
     let block = Block::default()
-        .title(" FIELD OPERATIONS ")
+        .title(" ORDERS ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+fn render_panel(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line>, _selected_line: Option<usize>) {
+    let block = Block::default()
+        .title(title.to_string())
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Red));
 
     let widget = Paragraph::new(lines).block(block);
     f.render_widget(widget, area);

@@ -355,7 +355,7 @@ pub enum ScreeningLevel {
 
 // Emergency Decree constants — permanent, irreversible global decisions.
 pub const DECREE_COUNT: usize = 6;
-/// Number of standing orders shown in the Policy panel BrowseRegions view.
+/// Number of standing orders shown in the Orders panel.
 /// Must equal the length of the `standing_orders` array in `ui/policy.rs`.
 /// Used by `panel_selection_max()` to bound navigation — if you add a standing
 /// order in policy.rs without updating this constant, the new item will be
@@ -3853,16 +3853,8 @@ pub enum MedicineUiState {
 /// Policy panel UI state machine.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PolicyUiState {
-    /// Browse regions and their active policies.
-    BrowseRegions,
-    /// Manage policies for a specific region.
+    /// Manage policies for a specific region (the only state — no overview page).
     ManagePolicies { region_idx: usize },
-    /// Select which region to sacrifice (for Sacrifice Region decree).
-    SelectSacrificeRegion,
-    /// Select which region to fortify (for Fortify Region decree).
-    SelectFortifyRegion,
-    /// Confirm a decree before enacting it.
-    ConfirmDecree { decree_idx: usize },
 }
 
 /// Research panel UI state machine, following the medicines panel pattern.
@@ -3878,10 +3870,10 @@ pub enum ResearchUiState {
     ViewActive { track: ResearchTrack, slot_idx: usize },
 }
 
-/// Operations panel UI state machine.
+/// Operations/Orders panel UI state machine.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OpsUiState {
-    /// Top level: browse active ops and available operation types.
+    /// Top level: browse active ops, available operation types, decrees, standing orders, loans.
     BrowseOps,
     /// Pick a target disease (for Recon).
     SelectReconTarget,
@@ -3893,6 +3885,12 @@ pub enum OpsUiState {
     SelectSupplyTarget,
     /// Pick a target region (for Civil Order Stabilization).
     SelectCivilOrderTarget,
+    /// Confirm an emergency decree before enacting it.
+    ConfirmDecree { decree_idx: usize },
+    /// Select which region to sacrifice (for Sacrifice Region decree).
+    SelectSacrificeRegion,
+    /// Select which region to fortify (for Fortify Region decree).
+    SelectFortifyRegion,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3907,7 +3905,6 @@ pub struct UiState {
     /// - `Panel::Medicines / SelectTarget`    → 0 = Vaccinate, 1 = Treat
     /// - `Panel::Research / BrowseCategories` → 0..RESEARCH_TRACK_COUNT-1 = track, RESEARCH_TRACK_COUNT = UpgradeLab
     /// - `Panel::Research / BrowseProjects`   → index into [active projects, then available projects]
-    /// - `Panel::Policy / BrowseRegions`      → 0..regions = region, then decrees, then standing orders, then loans
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → 0..n_active = active op, then 0..FIELD_OP_TYPE_COUNT = op types
     ///
@@ -3960,13 +3957,13 @@ impl UiState {
     /// Toggle a panel open/closed. If deep in a panel wizard, pressing the same
     /// panel key resets to the top level instead of closing. Only closes when
     /// already at the top level.
-    pub fn toggle_panel(&mut self, panel: Panel, num_regions: usize) {
+    pub fn toggle_panel(&mut self, panel: Panel, _num_regions: usize) {
         if self.open_panel == panel {
             // Check if we're deeper than the top level — if so, reset to top
             let at_top = match panel {
                 Panel::Medicines => matches!(self.medicine_ui, Some(MedicineUiState::BrowseMedicines) | None),
                 Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseCategories) | None),
-                Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::BrowseRegions) | None),
+                Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::ManagePolicies { .. }) | None),
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 _ => true,
             };
@@ -3986,7 +3983,9 @@ impl UiState {
                 match panel {
                     Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                     Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
-                    Panel::Policy => self.policy_ui = Some(PolicyUiState::BrowseRegions),
+                    Panel::Policy => {
+                        self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: self.map_selection });
+                    }
                     Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
                     _ => {}
                 }
@@ -4000,12 +3999,9 @@ impl UiState {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                 Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
                 Panel::Policy => {
-                    self.policy_ui = Some(PolicyUiState::BrowseRegions);
-                    // Pre-select the region matching the current map selection
-                    let order = grid_reading_order(num_regions);
-                    if let Some(pos) = order.iter().position(|&idx| idx == self.map_selection) {
-                        self.panel_selection = pos;
-                    }
+                    // Go directly to the policies for the currently selected region.
+                    // Left/right map navigation (sync_panel_region) keeps this in sync.
+                    self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: self.map_selection });
                 }
                 Panel::Operations => {
                     self.operations_ui = Some(OpsUiState::BrowseOps);
@@ -4064,20 +4060,10 @@ impl UiState {
                 }
             }
             Panel::Policy => {
-                match &self.policy_ui {
-                    Some(PolicyUiState::ManagePolicies { .. })
-                    | Some(PolicyUiState::SelectSacrificeRegion)
-                    | Some(PolicyUiState::SelectFortifyRegion)
-                    | Some(PolicyUiState::ConfirmDecree { .. }) => {
-                        self.policy_ui = Some(PolicyUiState::BrowseRegions);
-                        self.panel_selection = 0;
-                    }
-                    _ => {
-                        self.open_panel = Panel::None;
-                        self.panel_selection = 0;
-                        self.policy_ui = None;
-                    }
-                }
+                // ManagePolicies is the top level — Esc always closes the panel.
+                self.open_panel = Panel::None;
+                self.panel_selection = 0;
+                self.policy_ui = None;
             }
             Panel::Research => {
                 match &self.research_ui {
@@ -4106,7 +4092,10 @@ impl UiState {
                     | Some(OpsUiState::SelectEmergencyTarget)
                     | Some(OpsUiState::SelectSurveyTarget)
                     | Some(OpsUiState::SelectSupplyTarget)
-                    | Some(OpsUiState::SelectCivilOrderTarget) => {
+                    | Some(OpsUiState::SelectCivilOrderTarget)
+                    | Some(OpsUiState::ConfirmDecree { .. })
+                    | Some(OpsUiState::SelectSacrificeRegion)
+                    | Some(OpsUiState::SelectFortifyRegion) => {
                         self.operations_ui = Some(OpsUiState::BrowseOps);
                         self.panel_selection = 0;
                     }
@@ -4183,10 +4172,6 @@ impl UiState {
                 None => 0,
             },
             Panel::Policy => match &self.policy_ui {
-                Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions, decrees, standing orders, loans (if any)
-                    state.regions.len() + DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len() - 1
-                }
                 // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
                     if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
@@ -4197,18 +4182,14 @@ impl UiState {
                         MANAGE_APPEASE_POS
                     }
                 }
-                Some(PolicyUiState::SelectSacrificeRegion)
-                | Some(PolicyUiState::SelectFortifyRegion) => {
-                    // Only non-collapsed regions are selectable
-                    state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
-                }
-                Some(PolicyUiState::ConfirmDecree { .. }) => 0,
                 None => 0,
             },
             Panel::Operations => match &self.operations_ui {
                 Some(OpsUiState::BrowseOps) => {
-                    // Active ops + FIELD_OP_TYPE_COUNT operation types
-                    (state.field_operations.len() + FIELD_OP_TYPE_COUNT).saturating_sub(1)
+                    // Active ops + op types + decrees + standing orders + loans
+                    (state.field_operations.len() + FIELD_OP_TYPE_COUNT
+                        + DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len())
+                        .saturating_sub(1)
                 }
                 Some(OpsUiState::SelectReconTarget) => {
                     // Unidentified diseases
@@ -4220,10 +4201,13 @@ impl UiState {
                 Some(OpsUiState::SelectEmergencyTarget)
                 | Some(OpsUiState::SelectSurveyTarget)
                 | Some(OpsUiState::SelectSupplyTarget)
-                | Some(OpsUiState::SelectCivilOrderTarget) => {
+                | Some(OpsUiState::SelectCivilOrderTarget)
+                | Some(OpsUiState::SelectSacrificeRegion)
+                | Some(OpsUiState::SelectFortifyRegion) => {
                     // Non-collapsed regions
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
                 }
+                Some(OpsUiState::ConfirmDecree { .. }) => 0,
                 None => 0,
             },
             _ => 0,

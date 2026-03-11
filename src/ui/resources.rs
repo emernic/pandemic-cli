@@ -180,6 +180,36 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             spans.push(Span::raw(" "));
             spans.push(Span::styled(income_str, Style::default().fg(color)));
         }
+        // Funding contracts — show after regional income if any are active
+        if !state.contracts.is_empty() {
+            spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled("Contracts: ", Style::default().fg(Color::DarkGray)));
+            for (i, contract) in state.contracts.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::styled("  ", Style::default()));
+                }
+                let patron_short = if !contract.patron.is_empty() {
+                    contract.patron.split(',').next().unwrap_or(&contract.patron)
+                        .split_whitespace().last().unwrap_or(&contract.patron)
+                } else {
+                    &contract.name
+                };
+                let income_day = contract.income * TICKS_PER_DAY;
+                let sat_color = if contract.satisfaction > 0.7 {
+                    Color::Green
+                } else if contract.satisfaction > 0.5 {
+                    Color::Yellow
+                } else {
+                    Color::Red
+                };
+                spans.push(Span::styled(patron_short.to_string(), Style::default().fg(sat_color)));
+                spans.push(Span::styled(
+                    format!(" +¥{:.0}", income_day),
+                    Style::default().fg(Color::Green),
+                ));
+            }
+        }
+
         Line::from(spans)
     };
 

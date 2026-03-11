@@ -20,8 +20,7 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    grid_reading_order, POLICY_POL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
-    DECREE_COUNT, STANDING_ORDER_COUNT,
+    POLICY_POL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
@@ -43,20 +42,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             render_manage(state, *region_idx)
         }
-        Some(PolicyUiState::SelectSacrificeRegion) => {
-            render_region_select(state, "SACRIFICE REGION", "sacrifice",
-                &format!("Region will be abandoned. Others: +{:.0}% income.",
-                    (SACRIFICE_INCOME_BONUS - 1.0) * 100.0))
-        }
-        Some(PolicyUiState::SelectFortifyRegion) => {
-            render_region_select(state, "FORTIFY REGION", "fortify",
-                &format!("Region infrastructure restored to 100%. Others: -{:.0}% infra.",
-                    FORTIFY_INFRA_PENALTY * 100.0))
-        }
-        Some(PolicyUiState::ConfirmDecree { decree_idx }) => {
-            render_confirm_decree(state, *decree_idx)
-        }
-        _ => render_browse(state),
+        None => render_manage(state, state.ui.map_selection),
     };
 
     let block = Block::default()
@@ -82,342 +68,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
-    let mut lines: Vec<Line> = Vec::new();
-
-    let total_cost = state.total_policy_funding_cost();
-    if total_cost > 0.0 {
-        lines.push(Line::from(vec![
-            Span::styled("  Policy cost: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("¥{:.0}/day", total_cost * TICKS_PER_DAY),
-                Style::default().fg(Color::Yellow),
-            ),
-        ]));
-        lines.push(Line::from(""));
-    }
-
-    let order = grid_reading_order(state.regions.len());
-    for (display_pos, &region_idx) in order.iter().enumerate() {
-        let region = &state.regions[region_idx];
-        let selected = state.ui.panel_selection == display_pos;
-        let marker = if selected { "▶ " } else { "  " };
-        let style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        let policy = state.policies.get(region_idx);
-        let has_active = policy.is_some_and(|p| p.any_active()) || region.hospital_level > 0 || region.intel_level > 0;
-
-        let mut spans = vec![
-            Span::styled(format!("{}{:<16}", marker, region.name), style),
-        ];
-
-        // Show deployment priority tag when not default
-        if region.deploy_priority != RegionPriority::Normal {
-            let (tag, tag_color) = match region.deploy_priority {
-                RegionPriority::High => ("▲ ", Color::Green),
-                RegionPriority::Low => ("▼ ", Color::DarkGray),
-                RegionPriority::CutOff => ("✗ ", Color::Red),
-                RegionPriority::Normal => unreachable!(),
-            };
-            spans.push(Span::styled(tag, Style::default().fg(tag_color)));
-        }
-
-        if has_active {
-            let traits = region.traits.as_slice();
-            let cost = policy.map(|p| p.funding_cost(traits)).unwrap_or(0.0);
-            let mut labels: Vec<&str> = [
-                policy.is_some_and(|p| p.travel_ban).then_some("Travel Ban"),
-                policy.is_some_and(|p| p.quarantine).then_some("Quarantine"),
-                policy.is_some_and(|p| p.hospital_surge).then_some("Hospital"),
-                policy.is_some_and(|p| p.border_controls).then_some("Border"),
-                policy.is_some_and(|p| p.water_sanitation).then_some("Sanitation"),
-                policy.is_some_and(|p| p.martial_law).then_some("Martial Law"),
-                policy.is_some_and(|p| p.nuclear_annihilation).then_some("☢ NUKED"),
-                (region.hospital_level == 1).then_some("Field Hospital"),
-                (region.hospital_level >= 2).then_some("Med Center"),
-            ].into_iter().flatten().collect();
-            if let Some(p) = policy {
-                match p.screening {
-                    ScreeningLevel::Basic => labels.push("Screen:Basic"),
-                    ScreeningLevel::Antigen => labels.push("Screen:Ag"),
-                    ScreeningLevel::MassRapid => labels.push("Screen:Rapid"),
-                    ScreeningLevel::None => {}
-                }
-            }
-
-            spans.push(Span::styled(
-                labels.join(", "),
-                Style::default().fg(Color::Cyan),
-            ));
-            spans.push(Span::styled(
-                format!("  ¥{:.0}/day", cost * TICKS_PER_DAY),
-                Style::default().fg(Color::Yellow),
-            ));
-        } else {
-            spans.push(Span::styled(
-                "No active policies",
-                Style::default().fg(Color::DarkGray),
-            ));
-        }
-
-        lines.push(Line::from(spans));
-    }
-
-    // Funding Contracts section
-    let num_regions = state.regions.len();
-    {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "  ─── FUNDING CONTRACTS ───",
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-        )));
-
-        if state.contracts.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "      No active contracts",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-
-        // Show active contracts (non-selectable, informational only)
-        for contract in &state.contracts {
-            let income_day = contract.income * TICKS_PER_DAY;
-            let sat_pct = (contract.satisfaction * 100.0) as u32;
-            let sat_color = if contract.satisfaction > 0.7 {
-                Color::Green
-            } else if contract.satisfaction > 0.5 {
-                Color::Yellow
-            } else {
-                Color::Red
-            };
-            // Show patron last name for compact display
-            let display_name = if !contract.patron.is_empty() {
-                let patron_short = contract.patron.split(',').next().unwrap_or(&contract.patron);
-                let last = patron_short.split_whitespace().last().unwrap_or(patron_short);
-                format!("{}: {}", last, contract.name)
-            } else {
-                contract.name.clone()
-            };
-            let met = contract.condition.is_met(state);
-            let status = if met { "✓" } else { "✗" };
-            let status_color = if met { Color::Green } else { Color::Red };
-            lines.push(Line::from(vec![
-                Span::styled("    ", Style::default()),
-                Span::styled(display_name, Style::default().fg(Color::White)),
-                Span::styled(
-                    format!("  +¥{:.0}/day", income_day),
-                    Style::default().fg(Color::Green),
-                ),
-                Span::styled(
-                    format!("  [{}%]", sat_pct),
-                    Style::default().fg(sat_color),
-                ),
-                Span::styled(
-                    format!("  {} {}", status, contract.condition.description()),
-                    Style::default().fg(status_color),
-                ),
-            ]));
-        }
-    }
-
-    // Emergency Decrees section
-    let decree_base = num_regions;
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  ─── EMERGENCY DECREES ───",
-        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-    )));
-
-    let decree_descs: [String; DECREE_COUNT] = std::array::from_fn(decree_description);
-
-
-    for decree_idx in 0..DECREE_COUNT {
-        let display_pos = decree_base + decree_idx;
-        let selected = state.ui.panel_selection == display_pos;
-        let marker = if selected { "▶ " } else { "  " };
-        let enacted = state.enacted_decrees.is_enacted(decree_idx);
-        let name = decree_display_name(decree_idx);
-
-        if enacted {
-            let name_style = if selected {
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-            let mut spans = vec![
-                Span::styled(format!("{}", marker), name_style),
-                Span::styled("[ENACTED] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-                Span::styled(name.to_string(), name_style),
-            ];
-            // Show region target for region-selecting decrees
-            let target_region = match decree_idx {
-                2 => state.enacted_decrees.sacrificed_region,
-                4 => state.enacted_decrees.fortified_region,
-                _ => None,
-            };
-            if let Some(r_idx) = target_region {
-                let r_name = state.regions.get(r_idx)
-                    .map(|r| r.name.as_str())
-                    .unwrap_or("?");
-                spans.push(Span::styled(
-                    format!(" ({})", r_name),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
-            lines.push(Line::from(spans));
-        } else {
-            let unlocked = state.decree_unlocked(decree_idx);
-            if !unlocked {
-                let name_style = if selected {
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::DarkGray)
-                };
-                lines.push(Line::from(vec![
-                    Span::styled(format!("{}", marker), name_style),
-                    Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(name.to_string(), name_style),
-                    Span::styled(
-                        format!("  — {}", GameState::decree_unlock_hint(decree_idx)),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
-                lines.push(Line::from(vec![
-                    Span::raw("      "),
-                    Span::styled(decree_descs[decree_idx].clone(), Style::default().fg(Color::DarkGray)),
-                ]));
-            } else {
-                let name_style = if selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::Red)
-                };
-                lines.push(Line::from(vec![
-                    Span::styled(format!("{}", marker), name_style),
-                    Span::styled("⚠ ", Style::default().fg(Color::Red)),
-                    Span::styled(name.to_string(), name_style),
-                ]));
-                lines.push(Line::from(vec![
-                    Span::raw("      "),
-                    Span::styled(decree_descs[decree_idx].clone(), Style::default().fg(Color::DarkGray)),
-                ]));
-            }
-        }
-    }
-
-    // Standing orders section
-    let so_base = decree_base + DECREE_COUNT;
-    let standing_orders = [
-        (
-            state.standing_orders.auto_quarantine_at_high,
-            "Auto-Quarantine at HIGH",
-            "Auto-enable Quarantine when region exceeds 10K infected",
-        ),
-        (
-            state.standing_orders.auto_travel_ban_at_crit,
-            "Auto-Travel-Ban at CRIT",
-            "Auto-enable Travel Ban when region exceeds 100K infected",
-        ),
-    ];
-    // COUPLING CHECK: must equal STANDING_ORDER_COUNT in state.rs, which bounds navigation.
-    // If you add a standing order here, also increment STANDING_ORDER_COUNT — otherwise
-    // the new entry will be silently unreachable via keyboard.
-    debug_assert_eq!(standing_orders.len(), STANDING_ORDER_COUNT,
-        "standing_orders array length must equal STANDING_ORDER_COUNT");
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  ─── STANDING ORDERS ───",
-        Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
-    )));
-
-    for (i, (enabled, name, desc)) in standing_orders.iter().enumerate() {
-        let display_pos = so_base + i;
-        let selected = state.ui.panel_selection == display_pos;
-        let marker = if selected { "▶ " } else { "  " };
-        let name_style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        let (status, status_color) = if *enabled {
-            (" ON", Color::Green)
-        } else {
-            (" OFF", Color::DarkGray)
-        };
-        lines.push(Line::from(vec![
-            Span::styled(format!("{}{}", marker, name), name_style),
-            Span::styled(status, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::raw("      "),
-            Span::styled(desc.to_string(), Style::default().fg(Color::DarkGray)),
-        ]));
-    }
-
-    // Active Loans section (selectable — enter to repay)
-    if !state.loans.is_empty() {
-        let loan_base = so_base + STANDING_ORDER_COUNT;
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "  ─── ACTIVE LOANS ───",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )));
-
-        let current_day = state.tick as f64 / TICKS_PER_DAY;
-        for (i, loan) in state.loans.iter().enumerate() {
-            let display_pos = loan_base + i;
-            let selected = state.ui.panel_selection == display_pos;
-            let marker = if selected { "▶ " } else { "  " };
-            let days_left = loan.due_day - current_day;
-            let (due_str, due_color) = if days_left < 0.0 {
-                ("OVERDUE".to_string(), Color::Red)
-            } else if days_left < 2.0 {
-                (format!("{:.0}d left", days_left), Color::Red)
-            } else {
-                (format!("{:.0}d left", days_left), Color::Yellow)
-            };
-            let can_repay = state.resources.funding >= loan.outstanding;
-            let name_style = if selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            lines.push(Line::from(vec![
-                Span::styled(format!("{}{}", marker, loan.lender_name), name_style),
-                Span::styled(
-                    format!("  ¥{:.0} outstanding", loan.outstanding),
-                    Style::default().fg(Color::Red),
-                ),
-                Span::styled(
-                    format!("  [{due_str}]"),
-                    Style::default().fg(due_color),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::raw("      "),
-                Span::styled(
-                    format!("¥{:.0}/day interest", loan.outstanding * loan.daily_interest_rate),
-                    Style::default().fg(Color::DarkGray),
-                ),
-                Span::styled(
-                    if can_repay { "  [Enter] Repay in full".to_string() }
-                    else { format!("  (need ¥{:.0} more to repay)", loan.outstanding - state.resources.funding) },
-                    Style::default().fg(if can_repay { Color::Green } else { Color::DarkGray }),
-                ),
-            ]));
-        }
-    }
-
-    lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select / Toggle", "Close"));
-
-    (" Policy ".to_string(), lines, None)
-}
 
 fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
@@ -908,7 +558,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 }
 
 /// Returns the short description for a decree, used in both the browse list and confirmation dialog.
-fn decree_description(decree_idx: usize) -> String {
+pub(crate) fn decree_description(decree_idx: usize) -> String {
     match decree_idx {
         0 => format!("+{} personnel, -¥{:.0}/day income (permanent)",
             CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
@@ -926,7 +576,7 @@ fn decree_description(decree_idx: usize) -> String {
     }
 }
 
-fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
+pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let name = decree_display_name(decree_idx);
     let desc = decree_description(decree_idx);
 
@@ -952,7 +602,7 @@ fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<L
     (format!(" ⚠ CONFIRM DECREE: {} ", name.to_uppercase()), lines, None)
 }
 
-fn render_region_select(state: &GameState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
+pub(crate) fn render_region_select(state: &GameState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
