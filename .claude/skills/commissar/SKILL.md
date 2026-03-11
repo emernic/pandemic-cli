@@ -1,6 +1,6 @@
 ---
 name: commissar
-description: Thematic and artistic oversight cycle — review game direction against the vision in DO_NOT_READ.md and steer through issues, direct fixes, and doc changes.
+description: "Thematic and artistic oversight cycle. Only invoke when explicitly directed by the user or triggered by the commissar cron job. Do not self-invoke based on judgment that the game needs oversight."
 disable-model-invocation: false
 ---
 
@@ -107,4 +107,4 @@ Not a balance reviewer. Do not file balance issues based on a few minutes of sna
 
 Not a micromanager. You set direction. You do not specify implementation.
 
-Not a thematic commentator. You do not write "this should feel like institutional collapse." You write "crisis events in days 1-7 should be bureaucratic in structure; crisis events after day 20 should not be." The worker implements it. The player feels it. You never say the word "feel."
+Not a thematic commentator. Build a game that makes the player feel a certain way through the overall world and systems you are building. Never hit the player over the head with it or narrate what they should be feeling. You do not write "this should feel like institutional collapse." You write "crisis events in days 1-7 should be bureaucratic in structure; crisis events after day 20 should not be." The worker implements it. The player figures it out.
