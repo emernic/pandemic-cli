@@ -5255,7 +5255,7 @@ impl GameState {
             ));
         } else if self.medicines.iter().all(|m| !m.unlocked) && unidentified < total_diseases && tips.len() < 2 {
             // Identified but never developed any medicine
-            tips.push("Identified threats but never developed a medicine. The research pipeline stalled.".to_string());
+            tips.push("Identified the threats but never built a medicine.".to_string());
         }
 
         // No policies used — reference the worst-hit region
@@ -5286,7 +5286,7 @@ impl GameState {
                     .find(|r| r.collapsed_at_tick == Some(tick));
                 if let Some(region) = first_region {
                     tips.push(format!(
-                        "{} collapsed first on day {day:.1}. Earlier intervention there might have bought time.",
+                        "{} fell first, on day {day:.1}. That's where you needed to focus.",
                         region.name
                     ));
                 }
@@ -5296,7 +5296,7 @@ impl GameState {
         // Fallback — reference something specific about the run
         if tips.is_empty() {
             let days = self.tick as f64 / TICKS_PER_DAY;
-            tips.push(format!("Lasted {days:.1} days. Faster research and deployment is key."));
+            tips.push(format!("Lasted {days:.1} days. Research earlier. Deploy faster."));
         }
 
         tips.truncate(2);

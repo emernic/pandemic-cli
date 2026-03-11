@@ -49,8 +49,7 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
     segments.push(("  The previous director was removed for inaction.\n".to_string(), dim));
     segments.push(("  You are the replacement.\n".to_string(), dim));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  You have operational authority over research,\n".to_string(), white));
-    segments.push(("  containment policy, and budget.\n".to_string(), white));
+    segments.push(("  You control the research, the policy, and the money.\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
     segments.push(("  Your first priority: send a field research team\n".to_string(), white));
     segments.push(("  to identify what we're dealing with.\n".to_string(), white));

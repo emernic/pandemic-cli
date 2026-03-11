@@ -554,7 +554,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from(""),
             Line::from(Span::styled("Pandemic Defense", Style::default().fg(Color::Cyan))),
             Line::from(""),
-            Line::from("Defend humanity against disease outbreaks."),
+            Line::from("The outbreaks will win. Your job is to hold them off as long as you can."),
             Line::from(""),
             Line::from(Span::styled("Controls:", Style::default().fg(Color::Yellow))),
             Line::from("  [T] View active threats"),
@@ -609,7 +609,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         format!("  {} collapsed. No remaining operational sites.", region_name)
     } else {
         let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
-        format!("  All {collapsed} regions collapsed. Global health infrastructure has ceased to function.")
+        format!("  All {collapsed} regions collapsed. There's nothing left.")
     };
     lines.push(Line::from(Span::styled(
         defeat_msg,

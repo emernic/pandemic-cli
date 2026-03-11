@@ -466,8 +466,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Personnel Attrition".into(),
                 description: format!(
-                    "Sustained operational tempo is unsustainable. {} staff have submitted \
-                     resignation notices.",
+                    "You lost {} more staff to burnout.",
                     amount,
                 ),
                 options: vec![ CrisisOption {
@@ -699,8 +698,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::MediaPanic => {
             CrisisEvent {
                 title: "Communications Failure".into(),
-                description: "Regional reporting systems are returning inconsistent data. \
-                    Population-level noncompliance is rising.".into(),
+                description: "Comms are breaking down. Reports from the field contradict each other, and containment compliance is falling.".into(),
                 options: vec![ CrisisOption {
                     label: "Deprioritize".into(),
                     description: "−8% POL as institutional trust degrades".into(),
@@ -757,10 +755,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             CrisisEvent {
-                title: "Treatment Noncompliance".into(),
+                title: "Treatment Refusal".into(),
                 description: format!(
-                    "Compliance rates in {} have dropped below operational thresholds. \
-                     Population is refusing medical directives.",
+                    "Nobody in {} is coming in for treatment.",
                     region_name,
                 ),
                 options: vec![ CrisisOption {
@@ -987,8 +984,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::WHOEvacuation { aid_loss } => {
             CrisisEvent {
                 title: "N.W.H.O. Headquarters Evacuated".into(),
-                description: "A containment breach has forced N.W.H.O. headquarters to evacuate. \
-                    Global coordination is degrading.".into(),
+                description: "HQ went dark after a breach. Your field teams have no central support.".into(),
                 options: vec![ CrisisOption {
                     label: "Let regions go independent".into(),
                     description: format!("Lose ¥{:.0} in aid income, −5% POL", aid_loss),
