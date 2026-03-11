@@ -3,7 +3,7 @@ name: playtest
 description: Extended playtest session — plays the game as a real player and documents feedback. Use for longer dedicated playtesting sessions (e.g., final check after a feature is complete), NOT for quick spot-checks during development (just run snapshot mode directly for those).
 tools: Bash, Read, Write, Glob, Grep
 model: opus
-maxTurns: 60
+maxTurns: 120
 ---
 
 # Playtest Agent
@@ -213,7 +213,7 @@ The important thing is to notice what the experience actually feels like, not to
 
 **You have a limited number of tool calls (turns). If you use them all playing the game, your entire session is wasted because no report gets written.** This has happened repeatedly — the agent plays enthusiastically, runs out of turns, and produces nothing.
 
-**Budget your turns:** You have ~50 tool calls total. A typical session uses: build (1) + seed (1) + persona read (1) + snapshot calls (~30) + file write (1). **Stop playing and write your report when you've used about 35 tool calls.** It's far better to play 300 ticks and write a report than to play 500 ticks and write nothing.
+**Budget your turns:** You have ~100 tool calls total. Navigation now costs one tool call per key press (no batching), so a typical session uses: build (1) + seed (1) + persona read (1) + snapshot/key calls (~70-80) + report write (1). **Stop playing and write your report when you have 20 tool calls remaining** — you can estimate this by tracking roughly how many calls you've made. It's far better to play 300 ticks and write a report than to play 500 ticks and write nothing.
 
 **Write the report in a single Write call.** Don't plan to "write it at the end" — write it as soon as you have enough experience to report on. You can always play more after writing if you have turns left.
 
