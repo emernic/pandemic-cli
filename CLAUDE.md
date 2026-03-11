@@ -207,6 +207,8 @@ The UI/engine separation is done. The engine god file has been broken into subsy
 
 **Before starting any feature or bug fix, play a few frames of the game yourself.** Not a sub-agent. Not the playtest agent. YOU. Run snapshot commands directly with the Bash tool so you see the rendered output with your own eyes. This grounds you in what the game actually looks like and how it behaves right now.
 
+**⚠️ CRITICAL: Keep in mind, this is your FIRST TIME EVER playing the game.** These instructions exist so you can test things out and see a tiny sliver of how things work for yourself, but you should **NOT** walk away from your own playtests assuming you fully understand how to make game balance changes. Do not make assertive statements like "I confirmed from playtesting that early research is weak." There is **NO** way for you to verify something like that in a tiny playtest where you just opened the game for the first time. **Balance information comes from:** (1) reading existing issues to see consistent patterns across many independent playtests, and (2) occasionally, careful analysis of the math in the code — NOT from your one 30-second snapshot session.
+
 ```bash
 cargo run -- --snapshot                          # see initial state (auto-creates a resumable save under saves/)
 cargo run -- --snapshot --days 1                 # advance 1 day and print the resume command
