@@ -5306,7 +5306,7 @@ impl GameState {
             1 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
             2 => "Unlocks: any region at CRITICAL (100K+ infected) or 500M+ dead",
             3 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
-            4 => "Unlocks: any region collapsed or 500M+ dead",
+            4 => "Unlocks: any region at CRITICAL (100K+ infected) or 500M+ dead",
             5 => "Unlocks: 3+ regions collapsed or 2B+ dead",
             _ => "",
         }
@@ -5329,8 +5329,8 @@ impl GameState {
             2 => crit_count >= 1 || total_dead >= 500_000_000.0,
             // Suspend Regional Authority: 50M+ dead OR 2+ regions at CRIT severity
             3 => total_dead >= 50_000_000.0 || crit_count >= 2,
-            // Fortify Region: any region collapsed OR 500M+ dead
-            4 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
+            // Fortify Region: any region at CRITICAL (100K+ infected) OR 500M+ dead
+            4 => crit_count >= 1 || total_dead >= 500_000_000.0,
             // Emergency Countermeasure: 3+ regions collapsed OR 2B+ dead
             5 => collapsed_count >= 3 || total_dead >= 2_000_000_000.0,
             _ => false,
