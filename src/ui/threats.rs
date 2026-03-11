@@ -19,8 +19,30 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Green),
         )));
     } else {
-        for (i, disease) in state.diseases.iter().enumerate() {
-            let selected = state.ui.panel_selection == i;
+        // Pre-calculate per-disease total deaths for ranking
+        let disease_deaths: Vec<f64> = (0..state.diseases.len())
+            .map(|i| state.regions.iter()
+                .filter_map(|r| r.disease_state(i))
+                .map(|inf| inf.dead)
+                .sum())
+            .collect();
+        let grand_total_deaths: f64 = disease_deaths.iter().sum();
+
+        // Sort display order: detected diseases by deaths desc, undetected last
+        let mut display_order: Vec<usize> = (0..state.diseases.len()).collect();
+        display_order.sort_by(|&a, &b| {
+            let a_detected = state.diseases[a].detected;
+            let b_detected = state.diseases[b].detected;
+            match (a_detected, b_detected) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => disease_deaths[b].partial_cmp(&disease_deaths[a]).unwrap_or(std::cmp::Ordering::Equal),
+            }
+        });
+
+        for (display_pos, &i) in display_order.iter().enumerate() {
+            let disease = &state.diseases[i];
+            let selected = state.ui.panel_selection == display_pos;
             if selected {
                 selected_line = Some(lines.len());
             }
@@ -31,7 +53,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
-            // Undetected diseases: show a placeholder with a hint to upgrade screening
+            // Undetected diseases: show placeholder with deaths and a hint to upgrade screening
             if !disease.detected {
                 lines.push(Line::from(vec![
                     Span::styled(
@@ -39,6 +61,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]));
+                let d = disease_deaths[i];
+                if d > 0.0 {
+                    lines.push(Line::from(Span::styled(
+                        format!("    {}", format_deaths_line(d, grand_total_deaths)),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
                 lines.push(Line::from(Span::styled(
                     "    Upgrade [P] screening to detect sooner",
                     Style::default().fg(Color::DarkGray),
@@ -54,11 +83,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             )));
 
             if disease.knowledge < KNOWLEDGE_NAME {
-                // Completely unknown — show nothing
+                // Detected but unidentified — show deaths if any
                 lines.push(Line::from(Span::styled(
                     "    ???",
                     Style::default().fg(Color::DarkGray),
                 )));
+                let d = disease_deaths[i];
+                if d > 0.0 {
+                    lines.push(Line::from(Span::styled(
+                        format!("    {}", format_deaths_line(d, grand_total_deaths)),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
             } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
                 // Name known, partial stats + pathogen type (vector not yet known)
                 let mut type_spans = vec![
@@ -122,13 +158,24 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ]));
             }
 
-            // Comparative triage data — CFR, region spread, medicine status
+            // Comparative triage data — deaths ranking, CFR, region spread, medicine status
             if disease.knowledge >= KNOWLEDGE_NAME {
+                let total_dead = disease_deaths[i];
+
+                // Deaths + share of total deaths — primary triage signal
+                let death_color = if grand_total_deaths > 0.0 {
+                    let share = total_dead / grand_total_deaths;
+                    if share >= 0.5 { Color::Red }
+                    else if share >= 0.25 { Color::Yellow }
+                    else { Color::White }
+                } else { Color::DarkGray };
+                let death_text = format_deaths_line(total_dead, grand_total_deaths);
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(death_text, Style::default().fg(death_color)),
+                ]));
+
                 // Case fatality rate (resolved cases that died)
-                let total_dead: f64 = state.regions.iter()
-                    .filter_map(|r| r.disease_state(i))
-                    .map(|inf| inf.dead)
-                    .sum();
                 let total_immune: f64 = state.regions.iter()
                     .filter_map(|r| r.disease_state(i))
                     .map(|inf| inf.immune)
@@ -245,6 +292,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .block(block)
         .scroll((scroll_offset, 0));
     f.render_widget(widget, area);
+}
+
+/// Format deaths with share-of-total: "Deaths: 1.2M  (34% of total)" or "Deaths: 230  (<1% of total)".
+/// When grand_total is 0 or deaths is 0, omits the percentage.
+fn format_deaths_line(deaths: f64, grand_total: f64) -> String {
+    if grand_total > 0.0 && deaths > 0.0 {
+        let share = deaths / grand_total;
+        let pct_str = if share < 0.01 { "<1%".to_string() } else { format!("{:.0}%", share * 100.0) };
+        format!("Deaths: {}  ({pct_str} of total)", format_number(deaths))
+    } else {
+        format!("Deaths: {}", format_number(deaths))
+    }
 }
 
 /// Push disease warning indicators: outdated medicines, resistance, containment
