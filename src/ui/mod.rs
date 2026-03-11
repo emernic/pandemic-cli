@@ -554,7 +554,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from(""),
             Line::from(Span::styled("Pandemic Defense", Style::default().fg(Color::Cyan))),
             Line::from(""),
-            Line::from("The outbreaks will win. Your job is to hold them off as long as you can."),
+            Line::from("You head the N.W.H.O. The outbreaks will win. Your job is to hold them off as long as you can."),
             Line::from(""),
             Line::from(Span::styled("Controls:", Style::default().fg(Color::Yellow))),
             Line::from("  [T] View active threats"),
