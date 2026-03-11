@@ -136,24 +136,18 @@ The defeat screen shows duration, death toll, collapse timeline, pathogen report
 
 ## Crisis Event Writing Standards
 
-Every crisis event must read like a situation report. It states what happened. It does not editorialize about what it means or perform urgency at the player.
+Crisis events are situation reports. State what happened and let the player respond without editorializing about what it means.
 
-**The world frame:** The N.W.H.O. in 2050 is not the WHO. Institutions are hollowed out. Your authority comes from keeping your board satisfied, not from managing public opinion. "The public" is not your primary constituency. The entities that matter are named individuals (patrons, governors, board members) and corporations with their own agendas. Write events as if the player already knows this.
+In 2050, authority flows from satisfying individual power-holders, not from managing public perception. Write events that reflect who actually cares about what happened: your board members, patrons, and governors. Read the PatronDemand events in `crisis.rs` before writing anything new. That's the register: named individuals, direct statements, no commentary on what the player should feel.
 
-**The register model:** PatronDemand events. "His lawyers are drafting a withdrawal." "My ships move or your funding stops." Named individuals. Blunt. No commentary. You state what the person did and what they want. The player decides. This is the right register for all crisis events, not just patron events.
+The following words belong to 2020s institutional and media vocabulary, not 2050 crisis text:
 
-**Language that does not belong in crisis text:**
+- `"transparency"` / `"go transparent"`: write the actual action ("issue a statement", "acknowledge the data")
+- `"misinformation"` / `"disinformation"` / `"infodemic"`: describe what mechanically happens ("compliance dropping", "treatment rates falling", "leak circulating")
+- `"civil unrest"`: say what's actually happening ("perimeter breached", "staff evacuating")
+- `"member states"`: use corporations or named individuals
 
-- `"transparency"` / `"go transparent"` — 2020s activist language. Use the actual action: "issue a statement," "acknowledge the leak," etc.
-- `"misinformation"` / `"disinformation"` / `"infodemic"` — 2020s WHO language. Describe what mechanically happens: "leak circulating," "compliance dropping," "treatment rates falling."
-- `"civil unrest"` — news-speak. Say what's actually happening: perimeter breached, staff evacuating, region destabilizing.
-- `"member states"` — UN language from a world that no longer exists. Use corporations or named individuals.
-- anything that performs urgency: "nightmare scenario," "the world is watching," "desperate measures"
-- anything that explains the significance: "this is a pivotal moment," "the stakes have never been higher"
-
-**Format:** 1-3 sentences for description. Option labels describe the action. Option descriptions state the cost. No em dashes.
-
-**Before you write a crisis event, read the PatronDemand events in `crisis.rs`.** Not as templates — as a calibration. That's what earned, grounded writing sounds like in this game.
+Format: descriptions are 1-3 sentences, option labels describe the action, and option descriptions state the cost. Don't use em dashes.
 
 ## What the Game Is Not
 
