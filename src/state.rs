@@ -3870,7 +3870,7 @@ pub struct UiState {
     /// - `Panel::Medicines / SelectTarget`    → 0 = Vaccinate, 1 = Treat
     /// - `Panel::Research / BrowseCategories` → 0..RESEARCH_TRACK_COUNT-1 = track, RESEARCH_TRACK_COUNT = UpgradeLab
     /// - `Panel::Research / BrowseProjects`   → index into [active projects, then available projects]
-    /// - `Panel::Policy / BrowseRegions`      → 0..regions = region, then decrees, then standing orders
+    /// - `Panel::Policy / BrowseRegions`      → 0..regions = region, then decrees, then standing orders, then loans
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → 0..n_active = active op, then 0..FIELD_OP_TYPE_COUNT = op types
     ///
@@ -5081,10 +5081,6 @@ impl GameState {
         self.loans.iter().map(|l| l.outstanding * l.daily_interest_rate).sum()
     }
 
-    /// Per-tick interest cost on all active loans.
-    pub fn debt_service_rate(&self) -> f64 {
-        self.loans.iter().map(|l| l.interest_per_tick()).sum()
-    }
 
     /// Per-region income contribution per day (after all modifiers including decrees).
     /// Returns a vec of (region_idx, income_per_day) for all regions in order.

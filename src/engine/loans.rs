@@ -100,7 +100,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
             a.governor.loyalty.partial_cmp(&b.governor.loyalty).unwrap_or(std::cmp::Ordering::Equal)
         })
         .filter(|(_, r)| r.governor.loyalty >= 40.0) // Only willing governors
-        .map(|(i, r)| (i, r.governor.name.clone(), r.name.clone()));
+        .map(|(i, r)| (i, r.governor.name.clone()));
 
     // Try corporation lender (prefers most financially healthy, non-bankrupt)
     let corp_lender = state.corporations.iter().enumerate()
@@ -115,7 +115,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
         .map(|(ci, c)| (ci, c.name.clone()));
 
     // Pick a lender (governor preferred for drama; corp as fallback)
-    let (lender, lender_name, interest_rate) = if let Some((region_idx, gov_name, _region_name)) = governor_lender {
+    let (lender, lender_name, interest_rate) = if let Some((region_idx, gov_name)) = governor_lender {
         (LoanLender::Governor { region_idx }, gov_name, LOAN_GOVERNOR_INTEREST_RATE)
     } else if let Some((corp_idx, corp_name)) = corp_lender {
         (LoanLender::Corporation { corp_idx }, corp_name, LOAN_CORP_INTEREST_RATE)
