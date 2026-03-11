@@ -350,15 +350,15 @@ pub(crate) fn process_events(state: &mut GameState) {
                 (2, message.clone(), message.clone())
             }
             GameEvent::ContractOffered { name } => {
-                let msg = format!("CONTRACT OFFER: {} — accept/reject via crisis popup", name);
+                let msg = format!("TERMS RECEIVED: {} — respond via crisis popup", name);
                 (5, msg.clone(), msg)
             }
             GameEvent::ContractWarning { patron, reason } => {
-                let msg = format!("PATRON WARNING: {} is unhappy — {}", patron, reason);
+                let msg = format!("NOTICE: {} — {}", patron, reason);
                 (2, msg.clone(), msg)
             }
             GameEvent::ContractRevoked { name, reason } => {
-                let msg = format!("PATRON WITHDREW: {} — {}", name, reason);
+                let msg = format!("FUNDING CUT: {} — {}", name, reason);
                 (2, msg.clone(), msg)
             }
             GameEvent::CorporationBankrupt { corp_idx, region_idx } => {
