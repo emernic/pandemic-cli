@@ -128,9 +128,8 @@ Operations create a personnel-vs-money trade-off: you can spend funding on polic
 
 ### Game Over
 
-Two loss conditions:
+One loss condition:
 1. **All regions collapsed** — immediate defeat
-2. **Mercy rule** — if the player has zero agency (no funding, no research, no deployable medicine) for several consecutive days, the game ends rather than forcing a slow, helpless decline
 
 The defeat screen shows duration, death toll, collapse timeline, pathogen report, score, and strategic tips specific to what happened in that run.
 
