@@ -1710,8 +1710,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     title: "Board Ultimatum".into(),
                     description: format!(
                         "{corp_name} has called an emergency board session. \
-                         Corporate revenues are at {:.0}% of baseline. \
-                         Funding is on the table.",
+                         Corporate revenues are at {:.0}% of baseline.",
                         satisfaction * 100.0,
                     ),
                     options: vec![
