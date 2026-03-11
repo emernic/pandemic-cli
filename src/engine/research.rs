@@ -1553,7 +1553,7 @@ mod tests {
 
     #[test]
     fn blocked_medicine_developments_shows_identified_but_unresearched() {
-        use crate::state::{BasicTech, TherapyType};
+        use crate::state::BasicTech;
 
         let mut state = GameState::new_default(42);
 

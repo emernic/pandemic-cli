@@ -395,10 +395,14 @@ pub const SCREENING_RAMP_RATE: f64 = 0.004;
 pub const SCREENING_DECAY_RATE: f64 = 0.008;
 
 impl ScreeningLevel {
-    /// Theoretical accuracy at full screening progress. Used for UI indicators
-    /// (`~` prefix) and to describe the tier's eventual capability, NOT as a
-    /// direct multiplier on infected counts. Actual displayed values use the
-    /// convergence-based estimation system.
+    /// Theoretical accuracy at full screening progress. Used for:
+    ///   1. UI indicators (`~` prefix) and tier descriptions.
+    ///   2. Noise suppression scaling in `tick_screening()` — higher visibility
+    ///      means the per-region systematic bias is suppressed more aggressively,
+    ///      so upgrading screening reveals more *accurate* data, not just faster data.
+    ///
+    /// NOT used as a direct multiplier on infected counts (displayed values come
+    /// from the convergence-based `estimated_infected` system).
     pub fn visibility_rate(&self) -> f64 {
         match self {
             ScreeningLevel::None => 0.15,
@@ -1662,6 +1666,12 @@ pub struct Region {
     /// on screening level and screening_progress. Creates genuine fog of war.
     #[serde(default)]
     pub estimated_infected: f64,
+    /// Per-region systematic reporting bias, seeded from the game RNG at start.
+    /// Range roughly [-0.3, 0.3]: positive = this region tends to over-report,
+    /// negative = under-report. Suppressed at high screening levels (near zero at
+    /// MassRapid). Makes unscreened data genuinely wrong, not just late.
+    #[serde(default)]
+    pub screening_noise_bias: f64,
     /// Cached recent death rate (deaths per day), updated once per day
     /// by the tick function. Used for the time-to-collapse estimate.
     #[serde(skip)]
@@ -4456,6 +4466,7 @@ impl GameState {
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
+                screening_noise_bias: 0.0,
             },
             Region {
                 name: "South America".into(),
@@ -4494,6 +4505,7 @@ impl GameState {
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
+                screening_noise_bias: 0.0,
             },
             Region {
                 name: "Europe".into(),
@@ -4532,6 +4544,7 @@ impl GameState {
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
+                screening_noise_bias: 0.0,
             },
             Region {
                 name: "Africa".into(),
@@ -4570,6 +4583,7 @@ impl GameState {
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
+                screening_noise_bias: 0.0,
             },
             Region {
                 name: "Asia".into(),
@@ -4608,6 +4622,7 @@ impl GameState {
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
+                screening_noise_bias: 0.0,
             },
             Region {
                 name: "Oceania".into(),
@@ -4646,8 +4661,20 @@ impl GameState {
                 emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
+                screening_noise_bias: 0.0,
             },
         ];
+
+        // Assign per-region systematic noise biases so unscreened data is genuinely
+        // wrong (not just stale). Each region over- or under-reports consistently,
+        // varying by seed. Derived from a separate RNG stream keyed on the game seed
+        // + region index so we don't shift the main RNG sequence (which would change
+        // disease generation and break seeded reproducibility).
+        // Suppressed at higher screening levels in tick_screening().
+        for (i, region) in regions.iter_mut().enumerate() {
+            let mut bias_rng = ChaCha8Rng::seed_from_u64(seed ^ (i as u64).wrapping_mul(0x9e3779b97f4a7c15));
+            region.screening_noise_bias = bias_rng.r#gen::<f64>() * 0.6 - 0.3; // [-0.3, 0.3]
+        }
 
         // --- Initial disease ---
         // Start with a single disease so the player can learn the ropes.
