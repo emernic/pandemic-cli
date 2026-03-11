@@ -40,11 +40,11 @@ use crate::format_number;
 /// Returns Some(header) at the start of each group, None otherwise.
 fn policy_section_header(display_pos: usize) -> Option<&'static str> {
     match display_pos {
-        0 => Some("Infrastructure"),
-        2 => Some("Detection"),
-        5 => Some("Containment"),
-        8 => Some("Medical"),
-        10 => Some("Extreme"),
+        0 => Some("Detection"),
+        3 => Some("Containment"),
+        7 => Some("Medical"),
+        8 => Some("Infrastructure"),
+        10 => Some("Other"),
         _ => None,
     }
 }
