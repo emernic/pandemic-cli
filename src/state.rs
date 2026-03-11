@@ -226,7 +226,7 @@ pub const MAX_FIELD_RESEARCH: usize = 3;
 /// Fraction of infected treated per deployment (before efficacy modifiers).
 /// Treatment is proportional — scales with infection size instead of fixed dose count.
 /// At 1.0, a single deployment of a perfectly matched medicine treats all infected.
-/// Broad-spectrum (0.5 efficacy) treats ~50% per deploy, requiring multiple rounds.
+/// Broad-spectrum (0.15 efficacy) treats ~15% per deploy — a bandaid, not a cure.
 pub const TREATMENT_FRACTION: f64 = 1.0;
 /// Fraction of susceptible population vaccinated per deployment (before efficacy).
 /// Vaccination is proportional like treatment. At 0.15, a targeted vaccine (eff 1.0)
@@ -2392,10 +2392,10 @@ impl TherapyType {
             (TherapyType::Antiviral, PathogenType::DnaVirus) => 0.8,
             (TherapyType::Antibiotic, PathogenType::Bacterium) => 1.0,
             (TherapyType::Antifungal, PathogenType::Fungus) => 1.0,
-            // Broad-spectrum: moderate efficacy against everything except prions.
-            // Higher than specialized mismatch (0.1) but lower than matched (1.0).
-            (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.1,
-            (TherapyType::BroadSpectrum, _) => 0.5,
+            // Broad-spectrum: weak efficacy against everything except prions.
+            // A blunt bandaid — slows disease but can't stop it. Forces research investment.
+            (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.05,
+            (TherapyType::BroadSpectrum, _) => 0.15,
             // Prions resist everything
             (_, PathogenType::Prion) => 0.0,
             // Mismatched: nearly useless
@@ -5024,12 +5024,13 @@ impl GameState {
             mechanism: None,
             target_diseases: all_disease_indices.clone(),
             cost: 10.0,
-            doses: 500_000_000.0,
-            max_doses: 500_000_000.0,
+            doses: 25_000_000.0,
+            max_doses: 25_000_000.0,
             unlocked: true,
-            // Broad-spectrum starts unlocked at full supply: the player's
-            // immediate (but weaker) tool against any pathogen. Research develops
-            // stronger targeted medicines. Manufacturing replenishes supply.
+            // Broad-spectrum starts unlocked at limited supply: a blunt bandaid
+            // that slows early disease spread while the player develops targeted medicines.
+            // 25M doses depletes quickly in multi-region outbreaks, forcing investment
+            // in the research pipeline. Targeted medicines are 6–7x more effective.
             tested_against: all_disease_indices.clone(),
             strain_generations: vec![],
             deployed_count: 0,
@@ -6172,14 +6173,14 @@ mod tests {
         assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Bacterium), 0.1);
         assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::RnaVirus), 0.1);
 
-        // Broad-spectrum: partial efficacy
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.5);
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.5);
+        // Broad-spectrum: weak efficacy — a bandaid, not a cure
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::RnaVirus), 0.15);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Bacterium), 0.15);
 
         // Prions resist everything
         assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Prion), 0.0);
         assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::Prion), 0.0);
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Prion), 0.1);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Prion), 0.05);
     }
 
     #[test]
