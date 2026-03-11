@@ -3632,8 +3632,8 @@ pub enum CrisisKind {
     WHOEvacuation { aid_loss: f64 },
     /// Warlord declares himself ruler of collapsed region, demands recognition.
     WarlordDemand { region_idx: usize },
-    /// Two nations claim credit for your vaccine, threaten war.
-    VaccineDispute { neutral_loss: f64, credit_gain: f64 },
+    /// Two corporations claim credit for your treatment breakthrough, threatening to cut contracts.
+    VaccineDispute { neutral_loss: f64, credit_gain: f64, corp_a: String, corp_b: String },
 
     // --- Dark comedy events (personality and flavor) ---
 
@@ -3693,8 +3693,8 @@ pub enum CrisisKind {
     PublicInquiry,
     /// Follow-up to MediaPanic (Ignore): misinformation degrades screening.
     Infodemic { region_idx: usize },
-    /// Follow-up to VaccineDispute (Credit one side): losing side retaliates.
-    SanctionsThreat { funding_loss: f64 },
+    /// Follow-up to VaccineDispute (Credit one side): losing corp retaliates.
+    SanctionsThreat { funding_loss: f64, corp_name: String },
 
     // --- Corporate crises ---
 
