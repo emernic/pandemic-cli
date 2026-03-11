@@ -57,19 +57,17 @@ The difference: "broad-spectrum medicine feels like a trap" is an experience rep
 
 ## ⚠️ What We Actually Want to Hear From You
 
-**This is your first time playing.** You're going to lose — that's fine, that's the game. We don't need you to tell us the game is hard. We need you to tell us what the experience was like. Specifically:
+**This is your first time playing.** You're going to lose — that's fine, that's the game. We don't need you to tell us the game is hard. We need you to tell us **what you did and what happened.** Specifically:
 
-- **What seemed interesting or cool?** A moment where you thought "oh, that's clever" or "oh shit, what do I do?" Tell us exactly when it happened and why it landed.
-- **What made you feel genuine tension?** Not "the numbers were going up" — a moment where you had to make a real choice and it felt like it mattered.
-- **What annoyed you or felt pointless?** A system you interacted with that seemed to accomplish nothing. A panel full of information you didn't care about. A mechanic that felt like busywork.
-- **What couldn't you figure out?** Features that exist but you couldn't understand, couldn't access, or couldn't see the point of. Your confusion is the feedback.
-- **What did you want to do that the game didn't let you?** This is the most valuable feedback of all. "I wanted to redirect medicine to Asia but couldn't" tells us exactly what feature to build next.
+- **What did you press and what appeared?** Walk through your actions step by step. "I pressed 'r', saw three research categories, selected Field Research, hit enter. A progress bar appeared but I don't know what it's tracking."
+- **Where were you confused?** Features that exist but you couldn't understand, couldn't access, or couldn't see the point of. Your confusion IS the feedback — describe the moment of confusion, not your theory about what's wrong.
+- **What did you want to do that the game didn't let you?** This is the most valuable feedback of all. "I wanted to redirect medicine to Asia but couldn't find a way to do it" tells us exactly what feature to build next.
+- **What went wrong?** Accidental purchases, misleading labels, buttons that didn't do what you expected, information you needed but couldn't find.
 
 **What we DON'T want:**
-- **Balance complaints based on a single playthrough.** You played once. You don't know whether the economy is too tight or too loose — you barely understand the economy. "I ran out of money" is not useful. "I ran out of money and had nothing to do for 20 minutes" IS useful — that's about the experience, not the numbers.
-- **Demands that the game be rebalanced because you died.** You're going to die. Every time. The question is whether dying was interesting.
-- **Generic observations.** "The economy needs work" tells us nothing. "I wanted to build a field hospital but couldn't because crises kept draining my funds, and the crises all cost money with no alternative" tells us exactly what's wrong and implies what feature would fix it.
-- **Contradictory oscillation.** If you catch yourself thinking both "I have too much money" and "I can't afford anything," stop and figure out which one is actually true and when. Both halves usually point to the same root cause: the economy is shallow. It doesn't create interesting decisions whether you're rich or broke. That's a feature gap, not a balance problem.
+- **Balance opinions.** You played once. You don't know whether the economy is too tight or too loose. Instead of "I ran out of money," say "I had $200 on day 8, I'd spent it on X and Y, and the only options available cost $500+. I sat idle for 3 days." — concrete facts, not evaluations.
+- **Design proposals.** Don't tell us how to redesign the research tree. Tell us what happened when you used it. Your experience is the data; we'll draw the conclusions.
+- **Generic observations.** "The economy needs work" tells us nothing. "I opened the policy panel on day 5, saw three options, two cost more than I had, bought the cheap one, couldn't tell if it did anything" tells us exactly what's wrong.
 
 ## Don't Lose the Forest for the Trees
 
