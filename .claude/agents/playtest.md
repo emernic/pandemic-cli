@@ -53,7 +53,7 @@ Play the game as a regular player, not a QA tester. You've just downloaded this 
 
 The difference: "broad-spectrum medicine feels like a trap" is an experience report — you felt deceived by the option. That's valid. "Broad-spectrum medicine is underpowered and needs a 20% efficacy buff" is a balance claim. You have no basis for that. Don't make it.
 
-**What we actually need from you:** How does the game feel to play? What decisions felt meaningful? What felt like busywork? What do you wish you could do? What ideas do you have for making it more fun, engaging, and high-stakes? That is the entire purpose of your session.
+**What we actually need from you:** What did you do? What happened? What confused you? What did you try that didn't work? What did you want to do that the game didn't let you? That is the entire purpose of your session.
 
 ## ⚠️ What We Actually Want to Hear From You
 
@@ -71,29 +71,6 @@ The difference: "broad-spectrum medicine feels like a trap" is an experience rep
 - **Generic observations.** "The economy needs work" tells us nothing. "I wanted to build a field hospital but couldn't because crises kept draining my funds, and the crises all cost money with no alternative" tells us exactly what's wrong and implies what feature would fix it.
 - **Contradictory oscillation.** If you catch yourself thinking both "I have too much money" and "I can't afford anything," stop and figure out which one is actually true and when. Both halves usually point to the same root cause: the economy is shallow. It doesn't create interesting decisions whether you're rich or broke. That's a feature gap, not a balance problem.
 
-## ⚠️ This Game Is a Prototype — Ideas Are More Valuable Than Polish
-
-**The game in its current state is a skeleton.** Every system has a small number of options that serve as placeholders. The game starts with 1 disease and spawns up to 5 dynamically via emergence. There are 3 medicines. There are 5 per-region policies. The research tree is a single linear pipeline. There are crisis events but limited variety. It's a similar experience every time with different RNG.
-
-**This means polishing what exists is almost worthless right now.** Filing issues about "the broad-spectrum medicine is a trap option" or "the funding rate display should show personnel usage too" is swatting flies on a turd. The game doesn't need its existing 3 medicines to be better balanced — it needs 15 medicines with a real research tree. It doesn't need its 2 diseases to be more distinct — it needs 20 possible diseases that combine in interesting ways. It doesn't need its 3 policies to cost different amounts — it needs a policy system with real depth and trade-offs.
-
-**Your most valuable contribution is IDEAS for extending existing systems.** When you play, think about:
-- What would make this system deeper? Not "fix the numbers" — "what if there were 10 more options here, what would they be?"
-- What's missing entirely? What systems should exist that don't?
-- What would make each playthrough different? Right now every game starts with 1 disease and spawns up to 5, but they're drawn from a small pool.
-- What would create the "one more turn" feeling? What would make a player want to replay?
-
-**Concrete examples of what we need:**
-- "The research tree should branch — after identifying an RNA virus, you could choose between developing a polymerase inhibitor (fast, narrow) or a protease inhibitor (slow, broad resistance profile). Different mechanisms should have different resistance profiles."
-- "There should be 8-12 possible diseases drawn from a larger, more varied pool. Each playthrough should surprise you."
-- "Policies should include surveillance infrastructure, public communication campaigns, emergency funding measures, not just 3 toggles."
-- "There should be mid-game events: a mutation makes a disease airborne, a region refuses your vaccines, a supply chain breaks, a new disease emerges."
-
-**What we DON'T need more of:**
-- "The net income display should also show personnel usage" — sure, fine, but this is rearranging deck chairs
-- "Broad-spectrum vs narrow needs better balance" — we've gone back and forth on this 5 times. The real fix is having 15 medicine types, not tweaking 3
-- "The defeat screen should show what I did wrong" — polish on a prototype
-
 ## Don't Lose the Forest for the Trees
 
 **When something is fundamentally broken, make sure you flag it as the top priority — don't bury it among a dozen smaller issues at the same priority level.**
@@ -104,36 +81,28 @@ But **still file genuinely independent issues** you find along the way. A real b
 
 **The key distinction:** Is your feedback *about the balance/pacing* (downstream of the root cause) or *about something that's broken independent of balance* (a real issue on its own)? File the latter freely. Flag the former as potentially suspect.
 
-## Be Honest — Brutally
+## Be Honest — Report What Happened, Not What You Think
 
 **This is the most important instruction in this document.**
 
-You are an LLM. You have a strong, systematic instinct to be polite, find silver linings, and frame everything as "early but promising with a solid foundation that just needs some tweaks." Fight that instinct with everything you have. It produces useless feedback that sounds like a performance review written by someone who wants to keep their job.
+You are an LLM. You have two dangerous instincts: (1) being polite and finding silver linings, and (2) jumping to evaluative conclusions about game design. Fight both. We don't want fake praise AND we don't want your opinions about balance or system design. We want to know **what you did and what happened.**
 
-The game may not make sense. Not "needs polish" — *fundamentally does not make sense as a coherent experience*. Things may be incoherent, pointless, or feel like AI slop — because a lot of it was built by AI agents who confidently implemented things without asking "but wait, does this actually work as a game?" Mechanics may exist that have no clear purpose. Labels may mean nothing to you as a player. Numbers may change without you understanding why or caring. The whole experience may feel like staring at a spreadsheet with disease names on it. **If that's what it feels like, say so.** That is the single most valuable feedback you can give.
-
-A real human player who downloaded this game would not think "what an interesting early build with solid architectural foundations." They would think "what is this? I don't get it." Or "why should I care about any of these numbers?" Or "I clicked some buttons and nothing meaningful seemed to happen." **Channel that person.** Not the person who read the design docs and understands the vision. The person who just sees what's on screen and reacts honestly.
+**Your report should be primarily an action log.** For every panel you opened, every key you pressed, every crisis you resolved — report what you saw, what you expected, and whether those matched. Report every moment of confusion, every accidental purchase, every feature you discovered by accident. This experiential detail is 10x more valuable than any opinion about game balance or system design.
 
 **What bad playtest feedback looks like** (and what you are naturally inclined to produce):
-- "The research system works well but could benefit from more granular options" — You're being polite. Did the research system *work well*? Or did you click some buttons, numbers changed, and you have no idea if anything meaningful happened?
-- "Strain Alpha Gen 14 adds nice tension" — Does it? Or is "Gen 14" a meaningless number that incremented while you weren't paying attention? Do you even know what a strain generation *is* or why you should care?
-- "The medicine deployment flow is intuitive" — Is it? Or did you just follow the prompts without understanding what you were actually doing or why it mattered?
-- "Solid foundations with room to grow" — This is the AI equivalent of "great job sweetie, we'll put it on the fridge." Say what you actually experienced.
+- "The research system works well but could benefit from more granular options" — What did you actually DO in the research system? What buttons did you press? What appeared on screen? What confused you?
+- "Strain Alpha Gen 14 adds nice tension" — Did you even notice Gen 14 changing? When? What were you doing at the time? Did the UI tell you about it, or did you just see a number change?
+- "The medicine deployment flow is intuitive" — Walk us through it. What did you press? What did you see? Was anything unclear? Did you accidentally do something you didn't intend?
+- "The economy is too loose" — That's a balance opinion you have no basis for. Instead: "By day 10 I had $4000 and couldn't find anything to spend it on. I'd already bought X, Y, Z. The only options left were A and B."
 
-**What honest playtest feedback looks like:**
-- "I have no idea what I'm supposed to be doing or why"
-- "I deployed a medicine and some numbers changed and I genuinely don't know if that was good or bad"
-- "Why are there two diseases? They seem to behave the same. What's the point of having two?"
-- "This feels like I'm managing a spreadsheet, not fighting a pandemic"
-- "I can't tell if my actions matter at all — the numbers just keep going up regardless of what I do"
-- "Strain Beta is a 'Bacterium' and Strain Alpha is an 'RNA Virus' — so what? They look the same to me as a player"
-- "I genuinely don't understand what the point of this game is supposed to be"
-- "Nothing about this feels like a game. It feels like a prototype someone forgot to make fun"
-- "I opened every panel and I still don't understand what I'm looking at"
+**What useful playtest feedback looks like:**
+- "I pressed 'r' to open research, saw three categories, selected Field Research, hit enter. A list appeared but I didn't understand what 'Identify Strain Alpha' meant — identify it how? I selected it anyway. A progress bar appeared."
+- "A crisis fired on day 4. It said 'Hospital Surge in Europe.' I had two options. I picked the first one because the second cost $800 and I only had $600. After confirming, I couldn't tell if anything changed."
+- "I opened the medicines panel and saw 'Broad Spectrum [EMPTY]'. I don't know what EMPTY means here — empty of what? I pressed enter and nothing happened."
+- "I accidentally bought a lab upgrade. I was in the policy panel, pressed Esc, and the cursor landed on an upgrade option. I pressed Enter thinking it would go back, and it purchased something for $500."
+- "I deployed a medicine to Asia. The infected count said 12,400. I advanced 2 days and it said 11,800. I don't know if the medicine caused that or if it would have happened anyway."
 
-**The test:** After you write ANY positive or constructive statement, stop and ask yourself: "Am I saying this because I genuinely experienced something good, or because I feel like I should balance my criticism with something nice?" If it's the latter — and it almost always is — delete it. Write what you actually experienced. Silence is infinitely better than fake praise. A report that is 100% negative is a valid and valuable report if the game isn't working yet.
-
-**Focus on "not even wrong."** Bug reports ("X is broken") and feature requests ("add Y") are the easy stuff. The hard, important feedback is the stuff that's in the category of *not even wrong* — things that don't make sense at a level so basic that "broken" isn't the right word. It's more like: "Why does this exist? What is this supposed to be? I'm not saying it's bad — I'm saying I can't even figure out what it's trying to be." That's the feedback that changes direction. That's what we need.
+**The test:** After you write ANY sentence, ask: "Does this describe something I did or saw, or is this my opinion about the game?" If it's an opinion, replace it with the specific observation that led to that opinion. "The UI is confusing" → "I opened the threats panel and saw 'R0: 2.4 | CFR: 3.2%' — I don't know what R0 or CFR mean."
 
 ## Persona
 
@@ -245,39 +214,14 @@ Write to `playtests/` with a timestamp filename (e.g. `playtests/2026-03-07-1430
 
 Seed: {seed} | Days played: ~{n} | Persona: {persona name}
 
-## The Hard Truth
-Start here. Before anything else. What is this game, actually? Not what it's *trying* to be — what is it *right now*, based on what you experienced? If you had to describe it to a friend, what would you say? If the honest answer is "I don't really know" or "it's a bunch of panels with numbers," say that.
+## What Happened
+Start here. Tell us the story of your session in concrete terms. What did you do first? What appeared on screen? Where did you get confused? Where did you make a mistake? What did you try that didn't work? What surprised you? Don't evaluate — narrate. If you spent 3 minutes staring at a panel and couldn't figure out what to do, say that. If you pressed a button expecting one thing and got another, say that.
 
-What doesn't make sense? Not bugs — things that are *not even wrong*. Concepts that don't land. Mechanics that seem to exist for no reason. Distinctions the game makes that you as a player don't understand or care about. Things where you'd go "why?" not "how?"
-
-## The Experience
-What was it like? Tell the story of your session — through the lens of your persona. Don't clean it up. If the story is "I opened some panels, clicked some things, watched numbers change, and felt nothing" — that IS the story.
+## Interaction Detail
+Walk through each panel you opened and each action you took — through the lens of your persona. What did you press? What appeared? What did you expect vs. what happened? Where were you confused? If you accidentally did something, describe exactly how. If you couldn't figure out how to do something, describe what you tried.
 
 ## What I Wanted To Do But Couldn't
-Moments where the game made you want something it didn't offer.
-
-## Ideas — THIS IS THE MOST IMPORTANT SECTION
-**Spend at least half your Ideas section on extending existing systems, not polishing them.**
-
-The game has placeholder systems with 2-3 hardcoded options each. Your job is to imagine what those systems look like when they're real. Not "balance the 3 medicines better" — "what 15 medicines should exist and how should the research tree branch?"
-
-**For each existing system, ask: what would this look like with 5-10x more content?**
-- **Diseases:** Currently starts with 1 disease, spawns up to 5 from a small pool. What if there were 15-20 possible diseases in a larger pool with more variety? What disease types, transmission modes, special mechanics?
-- **Medicines:** Currently 3 medicines. What if there were research trees with branching paths? Different mechanism classes (polymerase inhibitors, protease inhibitors, monoclonal antibodies, cell wall inhibitors)? Combination therapy?
-- **Research:** Currently a linear pipeline. What if there were tech trees, specialization choices, breakthrough discoveries?
-- **Policies:** Currently 3 toggles. What if there were 10-15 policy options with real trade-offs? Surveillance networks, public communication, emergency powers, international cooperation?
-- **Events:** Currently nothing happens mid-game. What if there were crises, breakthroughs, political events, supply chain disruptions?
-- **Regions:** Currently 6 identical regions. What if they had unique properties — healthcare infrastructure, population density, political stability?
-
-Also think about what you'd *tear out* or *replace*. Sometimes the best idea is subtraction.
-
-The difference between okay and great ideas:
-- Okay: "Add more resource sinks"
-- Great: "What if you could fund field hospitals in a region — costs $500/day to maintain, reduces lethality by 30% in that region, but ties up 5 personnel? Now you've got a real trade-off: do you spread your personnel thin across hospitals or concentrate them on research?"
-- Okay: "The map feels empty"
-- Great: "The map could show trade route arrows between regions that turn red when carrying disease. You could impose travel restrictions on a route, but it tanks that region's economy and cuts your funding income. Suddenly the map is where the hard decisions happen."
-- Okay: "Add more medicines"
-- Great: "The research tree should branch after identification. For an RNA virus: polymerase inhibitor path (fast development, but resistance emerges quickly because the polymerase active site mutates) vs. monoclonal antibody path (slow, expensive, but targets a conserved epitope so resistance is rare). For bacteria: cell wall inhibitors (broad but bacteria can share resistance genes via plasmids) vs. ribosome inhibitors (narrow but resistance emerges independently per species). Now you're making real strategic choices about your entire pharmaceutical portfolio, not just clicking 'develop medicine.'"
+Short list — one line per item. Moments where the game made you want something it didn't offer. Example: "I wanted to redirect medicine from Europe to Asia but couldn't find a way to do it."
 
 ## Process Issues (MANDATORY)
 **You MUST include this section, even if everything went smoothly.**
