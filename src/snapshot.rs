@@ -273,6 +273,15 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_rejects_any_key_after_ticks() {
+        // The rule applies to all keys, not just enter
+        let state = GameState::new_default(42);
+        let result = run_snapshot(state, &["d1".to_string(), "r".to_string()]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("follows a time-advance step"));
+    }
+
+    #[test]
     fn snapshot_stops_on_crisis() {
         let state = GameState::new_default(42);
         // d60 will hit crises. Snapshot should stop at the first one.
