@@ -134,6 +134,14 @@ You are reading the notes of a first-time player who has never seen the game bef
 
 Before filing anything from a single session, apply this checklist:
 
+**Ask: Is the playtester complaining about crisis events?** Every playtester will complain that crisis events are disruptive — they interrupt gameplay at the worst moments and force decisions the player doesn't want to make. This is the correct behavior. Do NOT file issues asking to reduce, remove, or make crises optional based on this frustration. The crisis system is not broken when players hate it.
+
+The useful signal in crisis complaints is specificity: which crises felt boring and which felt meaningful?
+- **A boring crisis:** options felt predetermined, outcome didn't matter, had nothing to do with what was happening in the game. File an issue to redesign or remove that specific crisis.
+- **A good crisis:** painful, forced a real tradeoff, cost something significant — and the playtester begrudgingly concedes it was fair, or immediately wants to replay to avoid it next time. These are working exactly as intended.
+
+"The crisis events interrupt my flow" is noise. "The Helion contract offer is always an obvious accept" is a bug report for that specific crisis. When playtesters identify specific boring crises, file targeted issues to replace them with better ones.
+
 **Ask: Is this player error?**
 The most common "bugs" in playtest logs are things like: "I died to a disease I never identified" (player didn't run identification research), "I ran out of money" (player didn't notice the contracts panel), "the policy didn't work" (player toggled it off by accident navigating a long list). These are NOT bugs. A first-time player not knowing how to play is expected. Do NOT file investigate issues for expected first-time confusion — you will bury the backlog in noise and waste developer cycles.
 
