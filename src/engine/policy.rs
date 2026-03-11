@@ -174,9 +174,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 if effective_available >= needed {
                     state.policies[region_idx].screening = target;
                     let tier_desc = match target {
-                        ScreeningLevel::Basic => "rough estimates, faster detection — ramps up over ~2 days",
-                        ScreeningLevel::Antigen => "infected + immune data, good accuracy — ramps up over ~2 days",
-                        ScreeningLevel::MassRapid => "near-complete data, 25% spread reduction — ramps up over ~2 days",
+                        ScreeningLevel::Basic => "rough estimates, faster detection — ramps up over ~4 days",
+                        ScreeningLevel::Antigen => "infected + immune data, good accuracy — ramps up over ~4 days",
+                        ScreeningLevel::MassRapid => "near-complete data, 25% spread reduction — ramps up over ~4 days",
                         ScreeningLevel::None => unreachable!(),
                     };
                     (Some(format!("{region_name}: {} screening active ({tier_desc})",

@@ -389,7 +389,7 @@ pub const SCREENING_ANTIGEN_COST: f64 = 0.25;
 pub const SCREENING_MASS_RAPID_COST: f64 = 0.5;
 
 /// Screening ramp-up rate per tick. At ~0.004/tick, full progress takes
-/// ~250 ticks ≈ 2.1 days. This prevents the toggle-peek exploit.
+/// ~250 ticks ≈ 4.2 days (TICKS_PER_DAY=60). This prevents the toggle-peek exploit.
 pub const SCREENING_RAMP_RATE: f64 = 0.004;
 /// Screening decay rate when disabled. Decays ~2x faster than build-up.
 pub const SCREENING_DECAY_RATE: f64 = 0.008;
