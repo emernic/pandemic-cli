@@ -2989,6 +2989,14 @@ pub enum BasicTech {
     /// a disease's ability to spread between regions.
     /// Prereq: DirectedAttenuation.
     GenomicInterdiction,
+    /// Reduces ManufactureDoses applied research duration by 35%.
+    /// Prereq: at least one targeted medicine developed (mechanism.is_some() && unlocked).
+    /// Note: when a Biotech corp is healthy, bonus could be increased to 50% (#1381).
+    AutomatedSynthesis,
+    /// Each ManufactureDoses run produces 25% more doses. Stacks multiplicatively
+    /// with Europe's manufacturing yield bonus.
+    /// Prereq: AutomatedSynthesis.
+    DistributedStorage,
 }
 
 impl BasicTech {
@@ -3006,6 +3014,8 @@ impl BasicTech {
             BasicTech::PathogenSuppression => "Pathogen Suppression",
             BasicTech::DirectedAttenuation => "Directed Attenuation",
             BasicTech::GenomicInterdiction => "Genomic Interdiction",
+            BasicTech::AutomatedSynthesis => "Automated Synthesis",
+            BasicTech::DistributedStorage => "Distributed Storage",
         }
     }
 
@@ -3023,6 +3033,8 @@ impl BasicTech {
             BasicTech::PathogenSuppression => "Field research to suppress pathogen spread. Each project reduces infectivity ~20%.",
             BasicTech::DirectedAttenuation => "In-situ modification of pathogen virulence factors. Each project permanently reduces target lethality.",
             BasicTech::GenomicInterdiction => "Disrupt pathogen transmission mechanisms at the genomic level. Eliminates cross-region spread.",
+            BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
+            BasicTech::DistributedStorage => "Distributed cold storage increases yield per manufacturing run by 25%.",
         }
     }
 
@@ -3081,6 +3093,13 @@ impl BasicTech {
             BasicTech::GenomicInterdiction => {
                 state.unlocked_techs.contains(&BasicTech::DirectedAttenuation)
             }
+            BasicTech::AutomatedSynthesis => {
+                // Prereq: at least one targeted medicine developed (not broad-spectrum)
+                state.medicines.iter().any(|m| m.mechanism.is_some() && m.unlocked)
+            }
+            BasicTech::DistributedStorage => {
+                state.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
+            }
         }
     }
 
@@ -3098,6 +3117,8 @@ impl BasicTech {
             BasicTech::PathogenSuppression => "Vaccine Platform + Combination Therapy",
             BasicTech::DirectedAttenuation => "Pathogen Suppression",
             BasicTech::GenomicInterdiction => "Directed Attenuation",
+            BasicTech::AutomatedSynthesis => "Develop any targeted medicine",
+            BasicTech::DistributedStorage => "Automated Synthesis",
         }
     }
 
@@ -3115,6 +3136,8 @@ impl BasicTech {
             BasicTech::PathogenSuppression,
             BasicTech::DirectedAttenuation,
             BasicTech::GenomicInterdiction,
+            BasicTech::AutomatedSynthesis,
+            BasicTech::DistributedStorage,
         ]
     }
 }
@@ -3161,6 +3184,8 @@ impl ResearchKind {
                 BasicTech::PathogenSuppression => (8, 480.0, 1200.0),
                 BasicTech::DirectedAttenuation => (10, 600.0, 1500.0),
                 BasicTech::GenomicInterdiction => (12, 720.0, 2000.0),
+                BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
+                BasicTech::DistributedStorage => (5, 280.0, 700.0),
             },
             ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
@@ -5586,6 +5611,11 @@ impl GameState {
         {
             duration *= 0.75;
         }
+        if matches!(kind, ResearchKind::ManufactureDoses { .. })
+            && self.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
+        {
+            duration *= 0.65; // 35% faster
+        }
         (personnel, duration, funding)
     }
 
@@ -5645,8 +5675,15 @@ impl GameState {
     }
 
     /// Europe: Manufacturing capacity. +20% bonus doses from manufacturing.
+    /// DistributedStorage tech adds an additional 25% multiplier (stacks multiplicatively).
     pub fn manufacturing_yield_bonus(&self) -> f64 {
-        if !self.regions[2].collapsed { 1.2 } else { 1.0 }
+        let base = if !self.regions[2].collapsed { 1.2 } else { 1.0 };
+        let tech_bonus = if self.unlocked_techs.contains(&BasicTech::DistributedStorage) {
+            1.25
+        } else {
+            1.0
+        };
+        base * tech_bonus
     }
 
     /// Africa: Basic research networks. +20% basic research speed.
@@ -6192,5 +6229,93 @@ mod tests {
             ps_pos == rs_pos + 1,
             "PredictiveSurveillance should appear immediately after RapidSequencing in all()"
         );
+    }
+
+    #[test]
+    fn automated_synthesis_prereq_requires_developed_medicine() {
+        let mut state = GameState::new_default(42);
+        // No targeted medicines unlocked yet (broad-spectrum starts unlocked but has no mechanism)
+        assert!(state.medicines.iter().all(|m| m.mechanism.is_none() || !m.unlocked));
+        assert!(!BasicTech::AutomatedSynthesis.prerequisites_met(&state));
+        // After a targeted medicine is developed, prereq is met
+        // Find first medicine with a mechanism
+        let idx = state.medicines.iter().position(|m| m.mechanism.is_some()).unwrap();
+        state.medicines[idx].unlocked = true;
+        assert!(BasicTech::AutomatedSynthesis.prerequisites_met(&state));
+    }
+
+    #[test]
+    fn distributed_storage_prereq_requires_automated_synthesis() {
+        let mut state = GameState::new_default(42);
+        assert!(!BasicTech::DistributedStorage.prerequisites_met(&state));
+        state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
+        assert!(BasicTech::DistributedStorage.prerequisites_met(&state));
+    }
+
+    #[test]
+    fn automated_synthesis_reduces_manufacture_doses_duration() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::ManufactureDoses { medicine_idx: 0 };
+        let (_, base_duration, _) = state.effective_costs(&kind);
+        state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
+        let (_, fast_duration, _) = state.effective_costs(&kind);
+        assert!(
+            (fast_duration - base_duration * 0.65).abs() < 0.01,
+            "ManufactureDoses should be 35% faster with AutomatedSynthesis: expected {}, got {}",
+            base_duration * 0.65,
+            fast_duration
+        );
+    }
+
+    #[test]
+    fn automated_synthesis_does_not_affect_develop_medicine_duration() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::DevelopMedicine { medicine_idx: 0 };
+        let (_, base_duration, _) = state.effective_costs(&kind);
+        state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
+        let (_, after_duration, _) = state.effective_costs(&kind);
+        assert!(
+            (base_duration - after_duration).abs() < 0.01,
+            "DevelopMedicine should not be affected by AutomatedSynthesis"
+        );
+    }
+
+    #[test]
+    fn distributed_storage_boosts_manufacturing_yield() {
+        let mut state = GameState::new_default(42);
+        // Base: Europe alive = 1.2
+        let base = state.manufacturing_yield_bonus();
+        assert!((base - 1.2).abs() < 0.001, "base yield should be 1.2 with Europe alive");
+        state.unlocked_techs.push(BasicTech::DistributedStorage);
+        let with_tech = state.manufacturing_yield_bonus();
+        assert!(
+            (with_tech - 1.2 * 1.25).abs() < 0.001,
+            "DistributedStorage should stack multiplicatively with Europe: expected {}, got {}",
+            1.2 * 1.25,
+            with_tech
+        );
+    }
+
+    #[test]
+    fn distributed_storage_boost_applies_without_europe() {
+        let mut state = GameState::new_default(42);
+        state.regions[2].collapsed = true; // collapse Europe
+        state.unlocked_techs.push(BasicTech::DistributedStorage);
+        let bonus = state.manufacturing_yield_bonus();
+        assert!(
+            (bonus - 1.25).abs() < 0.001,
+            "DistributedStorage alone should give 1.25x yield: got {}",
+            bonus
+        );
+    }
+
+    #[test]
+    fn automated_synthesis_and_distributed_storage_appear_in_all() {
+        let all = BasicTech::all();
+        assert!(all.contains(&BasicTech::AutomatedSynthesis), "AutomatedSynthesis must be in all()");
+        assert!(all.contains(&BasicTech::DistributedStorage), "DistributedStorage must be in all()");
+        let as_pos = all.iter().position(|t| *t == BasicTech::AutomatedSynthesis).unwrap();
+        let ds_pos = all.iter().position(|t| *t == BasicTech::DistributedStorage).unwrap();
+        assert!(ds_pos > as_pos, "DistributedStorage should appear after AutomatedSynthesis");
     }
 }
