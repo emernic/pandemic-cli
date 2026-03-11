@@ -60,6 +60,8 @@ keypress → action.rs: key_to_action() → Action
 - **state.rs `impl UiState`:** Navigation and panel state mutations (`toggle_panel`, `close_panel`, `select_*`, `panel_selection_max`, `sync_panel_region`). These only need `&mut self` plus scalar counts — they don't make decisions requiring full `GameState` context.
 - **lib.rs wizard handlers:** What happens when you press Enter. These read game state broadly (medicines, diseases, research slots) to decide how wizard steps advance and which command to synthesize.
 
+**UI pre-check contract:** Wizard handlers may add *best-effort preview checks* to fail early, before a multi-step wizard reaches a dead end. These must use the same cost calculation as the engine — never recompute formulas inline. Add a method to `GameState` and call it from both places. `GameState::medicine_deploy_cost(medicine_idx, region_idx)` is the canonical example: it encapsulates base × disruption × discount, and is called by both `handle_medicine_confirm()` (preview) and `deploy_medicine()` (authoritative check). Most game commands validate preconditions in the engine command handler; crisis resolution is an exception where callers check affordability before calling `resolve_crisis()`.
+
 ### How simulation flows
 
 The canonical way to advance the game is `lib::tick_and_process(state)` — it calls `engine::tick()` then `ui::process_events()` as a single logical operation and is the only public API for advancing the simulation. Both `engine::tick()` and `ui::process_events()` are `pub(crate)`, so external callers cannot bypass `tick_and_process`. Engine unit tests may call `engine::tick()` directly to test game logic in isolation without UI state updates.
