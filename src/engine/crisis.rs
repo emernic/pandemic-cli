@@ -1,8 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    ActiveLoan, CrisisCost, CrisisEvent, CrisisKind, CrisisOption, CrisisOperation,
-    GameEvent, GameState, LoanLender, ScreeningLevel,
+    ActiveLoan, CorporationSector, CrisisCost, CrisisEvent, CrisisKind, CrisisOption,
+    CrisisOperation, GameEvent, GameState, LoanLender, ScreeningLevel,
     SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -285,11 +285,27 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::WarlordDemand { region_idx: idx });
     }
 
-    // Vaccine dispute: requires day > 30, at least one unlocked medicine
+    // Vaccine dispute: requires day > 30, at least one unlocked medicine, at least 2 corps
     if day > 30.0 && state.medicines.iter().any(|m| m.unlocked) {
         let neutral_loss = scaled_cost(state, 0.20, 100.0, 700.0);
         let credit_gain = scaled_cost(state, 0.30, 150.0, 800.0);
-        candidates.push(CrisisKind::VaccineDispute { neutral_loss, credit_gain });
+        // Prefer biotech corps, fall back to any non-bankrupt corp
+        let biotech: Vec<&str> = state.corporations.iter()
+            .filter(|c| !c.bankrupt && c.sector == CorporationSector::Biotech)
+            .map(|c| c.name.as_str())
+            .collect();
+        let any_corps: Vec<&str> = state.corporations.iter()
+            .filter(|c| !c.bankrupt)
+            .map(|c| c.name.as_str())
+            .collect();
+        let pool = if biotech.len() >= 2 { &biotech } else { &any_corps };
+        if pool.len() >= 2 {
+            let idx_a = rng.r#gen::<usize>() % pool.len();
+            let idx_b = (idx_a + 1 + rng.r#gen::<usize>() % (pool.len() - 1)) % pool.len();
+            let corp_a = pool[idx_a].to_string();
+            let corp_b = pool[idx_b].to_string();
+            candidates.push(CrisisKind::VaccineDispute { neutral_loss, credit_gain, corp_a, corp_b });
+        }
     }
 
     // --- Dark comedy events ---
@@ -1049,19 +1065,21 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::VaccineDispute { neutral_loss, credit_gain } => {
+        CrisisKind::VaccineDispute { neutral_loss, credit_gain, corp_a, corp_b } => {
             CrisisEvent {
                 title: "Attribution Dispute".into(),
-                description: "Two member states both claim credit for your treatment breakthrough. \
-                    Both are threatening to cut funding if you don't back their claim.".into(),
+                description: format!(
+                    "{corp_a} and {corp_b} are both claiming credit for your treatment breakthrough. \
+                     Each is threatening to pull funding unless you back their side."
+                ),
                 options: vec![ CrisisOption {
                     label: "Stay neutral".into(),
                     description: format!("Both cut funding. −¥{:.0} total.", neutral_loss),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Credit one side".into(),
-                    description: format!("+¥{:.0} from the winner, −15% POL from the loser's allies", credit_gain),
+                    label: format!("Back {corp_a}"),
+                    description: format!("+¥{:.0} from {corp_a}. {corp_b} retaliates.", credit_gain),
                     cost: None,
                 },
                 ],
@@ -1668,20 +1686,21 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::SanctionsThreat { funding_loss } => {
+        CrisisKind::SanctionsThreat { funding_loss, corp_name } => {
             CrisisEvent {
-                title: "Sanctions Threat".into(),
-                description:
-                    "The member state you sided against in the attribution dispute is retaliating. \
-                     They're threatening to freeze your accounts and block supply chains.".into(),
+                title: "Corporate Retaliation".into(),
+                description: format!(
+                    "{corp_name} is pulling its contracts. \
+                     They're threatening to freeze your accounts and block supply access."
+                ),
                 options: vec![ CrisisOption {
-                    label: "Accept sanctions".into(),
+                    label: "Accept the cuts".into(),
                     description: format!("Lose ¥{funding_loss:.0} and −10% political power"),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Diplomatic back-channel (2 personnel for 3d)".into(),
-                    description: "Costs resources but preserves trade. Envoys return in 3 days.".into(),
+                    label: "Negotiate a settlement (2 personnel for 3d)".into(),
+                    description: "Costs resources but preserves contracts. Envoys return in 3 days.".into(),
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.20, 150.0, 600.0),
                         personnel: 2,
@@ -2508,16 +2527,17 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
             // Stay neutral — lose funding from both
             state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
-            format!("Stayed neutral. Both sides cut ¥{:.0} in aid.", neutral_loss)
+            format!("Stayed neutral. Both canceled ¥{:.0} in contracts.", neutral_loss)
         }
-        (CrisisKind::VaccineDispute { credit_gain, .. }, _) => {
-            // Credit one side — gain funding, lose POL, schedule retaliation
+        (CrisisKind::VaccineDispute { credit_gain, corp_a, corp_b, .. }, _) => {
+            // Back corp_a — gain funding, lose POL, schedule retaliation from corp_b
             state.resources.funding += credit_gain;
             state.resources.political_power -= 0.15;
             let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss }));
-            format!("Picked a side. ¥{:.0} from the winner.", credit_gain)
+            let retaliator = corp_b.clone();
+            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator }));
+            format!("Backed {}. ¥{:.0} deposited. {} is furious.", corp_a, credit_gain, corp_b)
         }
 
         // --- Dark comedy event resolutions ---
@@ -2890,15 +2910,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Screening infrastructure restored in {}", region_name)
         }
 
-        (CrisisKind::SanctionsThreat { funding_loss }, 0) => {
-            // Accept sanctions — lose funding + POL hit
+        (CrisisKind::SanctionsThreat { funding_loss, .. }, 0) => {
+            // Accept cuts — lose funding + POL hit
             state.resources.funding = (state.resources.funding - funding_loss).max(0.0);
             state.resources.political_power -= 0.10;
-            format!("Sanctions imposed. ¥{:.0} frozen.", funding_loss)
+            format!("Contracts canceled. ¥{:.0} lost.", funding_loss)
         }
         (CrisisKind::SanctionsThreat { .. }, _) => {
-            // Diplomatic back-channel — costs already deducted, trade preserved
-            "Back-channel negotiations successful. Sanctions averted.".into()
+            // Negotiate settlement — costs already deducted, contracts preserved
+            "Settlement reached. Contracts preserved.".into()
         }
 
         // --- Emergency loan crises ---
