@@ -39,9 +39,9 @@ The derived computations *must* live in state.rs because both the engine (to dri
 ```
 keypress → action.rs: key_to_action() → Action
          → lib.rs: apply_action()
-             UI actions (navigate, select) → UiState methods
+             UI actions (navigate, select) → UiState methods (state.rs)
              ToggleExtra → lib.rs resolves UI context → GameCommand → execute_command()
-             Confirm → UiState::handle_confirm() → Option<GameCommand>
+             Confirm → lib.rs: handle_confirm() → Option<GameCommand>
                → engine::execute_command() → CommandResult { message, success }
                → lib.rs maps result to UI navigation (inline in apply_action)
 ```
@@ -52,6 +52,11 @@ keypress → action.rs: key_to_action() → Action
 - `auto_resolve_crises` preference — saved alongside `ResolveCrisis` command in the crisis-handling path of `apply_action()`
 
 `execute_command()` never touches `UiState`. It returns a result and the caller handles UI updates.
+
+**Confirm handling lives in lib.rs, not state.rs.** `handle_confirm()` and the four panel-specific wizard handlers (`handle_medicine_confirm`, `handle_research_confirm`, `handle_policy_confirm`, `handle_operations_confirm`) are free functions in lib.rs. They take `&mut UiState` and `&GameState`, advance wizard state machines, do UX pre-validation (e.g. funding checks), and synthesize `GameCommand`s. This is coordination logic — it belongs in the coordination layer. The boundary is:
+
+- **state.rs `impl UiState`:** Navigation and panel state mutations (`toggle_panel`, `close_panel`, `select_*`, `panel_selection_max`, `sync_panel_region`). These only need `&mut self` plus scalar counts — they don't make decisions requiring full `GameState` context.
+- **lib.rs wizard handlers:** What happens when you press Enter. These read game state broadly (medicines, diseases, research slots) to decide how wizard steps advance and which command to synthesize.
 
 ### How simulation flows
 
@@ -188,7 +193,7 @@ The architecture is "one giant mutable state blob plus conventions." This sectio
 
 These are done. Listed for historical context only.
 
-1. **UI state machines extracted from engine** — `apply_action()` moved to `lib.rs`. Panel navigation, wizard steps, selection indices all live in `UiState` methods. Engine only exports `tick()` and `execute_command()`.
+1. **UI state machines extracted from engine** — `apply_action()` moved to `lib.rs`. Panel navigation and selection indices live in `UiState` methods. Wizard confirm handlers (what happens when you press Enter) are free functions in `lib.rs`. Engine only exports `tick()` and `execute_command()`.
 2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_applied_projects()` → `GameState` methods. UI no longer imports from engine.
 3. **`CommandResult` type** — `execute_command()` returns `CommandResult { message, success }` instead of directly modifying UI state.
 4. **Engine god file broken up** — Research, medicine, policy, crisis, spread, disease emergence, and personnel logic extracted into 7 subsystem modules.
