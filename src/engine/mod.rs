@@ -4440,32 +4440,32 @@ mod tests {
     }
 
     #[test]
-    fn pol_drifts_toward_severity_target() {
+    fn pol_drifts_toward_board_target() {
+        // POL is now driven by board satisfaction, not severity.
+        // With a healthy board (full reserves), pol_target ≈ 0.30.
+        // Starting from 0, POL should drift well above 0.10 within 5 days.
         let mut state = GameState::new_default(42);
-        // Start with zero POL and significant infections to create a target > 0.
-        // With the flattened curve (sqrt * 1.0), need ~8% infected for a meaningful target.
+        corporations::generate_corporations(&mut state);
         state.resources.political_power = 0.0;
-        for region in &mut state.regions {
-            region.get_or_create_infection(0).infected = 100_000_000.0;
-        }
 
-        // Run several ticks — POL should drift upward toward the severity target
         let mut s = state.clone();
         for _ in 0..(TICKS_PER_DAY as u64 * 5) {
             s = tick(&s);
+            if s.active_crisis.is_some() {
+                s.active_crisis = None;
+                s.sim_state = SimState::Running;
+            }
         }
-        assert!(s.resources.political_power > 0.05,
-            "POL should drift up after 5 days with ~8% infected, got {}",
+        assert!(s.resources.political_power > 0.10,
+            "POL should drift up after 5 days with healthy board, got {}",
             s.resources.political_power);
     }
 
     #[test]
     fn pol_recovers_after_crisis_hit() {
         let mut state = GameState::new_default(42);
-        // Small infections — just enough to create a non-zero POL target
-        for region in &mut state.regions {
-            region.get_or_create_infection(0).infected = 1_000_000.0;
-        }
+        // Healthy board creates a non-zero POL target (~0.30)
+        corporations::generate_corporations(&mut state);
         state.tick = 0; // prevent new disease spawns
 
         // Let POL reach a steady state over 3 days
@@ -4497,73 +4497,59 @@ mod tests {
     }
 
     #[test]
-    fn active_policies_drain_pol_target() {
-        // Two identical states: one with policies, one without.
-        // The one with policies should have lower POL after the same time.
-        let mut base = GameState::new_default(42);
-        // Modest infections — enough for meaningful POL but not immediate collapse
-        for region in &mut base.regions {
-            region.get_or_create_infection(0).infected = 10_000_000.0;
-        }
-        base.resources.political_power = 0.0;
-        base.resources.funding = 100_000.0; // enough to sustain policies
-        base.tick = 0; // prevent new disease spawns
+    fn board_health_drives_pol_target() {
+        // pol_target is now board-driven, not severity-driven.
+        // A healthy board (full reserves) gives pol_target ≈ 0.30 (no patrons).
+        // A bankrupt board gives pol_target ≈ severity_floor only (very low).
+        let mut state = GameState::new_default(42);
+        corporations::generate_corporations(&mut state);
 
-        let mut with_policies = base.clone();
-        // Enable quarantine + hospital surge in all 6 regions = 12 active policies
-        for policy in &mut with_policies.policies {
-            policy.quarantine = true;
-            policy.hospital_surge = true;
-        }
+        let healthy_target = state.pol_target();
+        assert!(
+            healthy_target >= 0.20 && healthy_target <= 0.40,
+            "pol_target with healthy board and no patrons should be 0.20–0.40, got {healthy_target:.3}"
+        );
 
-        // Run both for 5 days
-        let mut s_base = base;
-        let mut s_pol = with_policies;
-        for _ in 0..(TICKS_PER_DAY as u64 * 5) {
-            s_base = tick(&s_base);
-            if s_base.active_crisis.is_some() {
-                s_base.active_crisis = None;
-                s_base.sim_state = SimState::Running;
-            }
-            s_pol = tick(&s_pol);
-            if s_pol.active_crisis.is_some() {
-                s_pol.active_crisis = None;
-                s_pol.sim_state = SimState::Running;
-            }
+        // Bankrupt all board-seat corporations: pol_target should drop significantly
+        let mut damaged = state.clone();
+        for c in damaged.corporations.iter_mut().filter(|c| c.board_seat) {
+            c.bankrupt = true;
+            c.reserves = 0.0;
+            c.revenue = 0.0;
         }
-
-        // Policies reduce infections/deaths → lower detected figures → lower pol_target → lower POL.
-        // The magnitude is modest because POL uses detected (screened) figures, which are lower
-        // than real figures when screening is poor. Direction must hold.
-        assert!(s_pol.resources.political_power < s_base.resources.political_power - 0.005,
-            "active policies should reduce POL: without={:.3}, with={:.3}",
-            s_base.resources.political_power, s_pol.resources.political_power);
+        let damaged_target = damaged.pol_target();
+        assert!(
+            damaged_target < 0.15,
+            "pol_target with bankrupt board should be low (<0.15), got {damaged_target:.3}"
+        );
+        assert!(
+            damaged_target < healthy_target,
+            "damaged board should give lower pol_target: healthy={healthy_target:.3} damaged={damaged_target:.3}"
+        );
     }
 
     #[test]
-    fn pol_target_capped_at_90_percent() {
+    fn pol_drifts_down_when_above_target() {
+        // With a fresh state and no corporations (board_satisfaction=0, patron=0),
+        // pol_target = severity_floor only (very low). POL above target must drift down.
+        // This also verifies the clamp keeps pol_target ≤ 0.90.
         let mut state = GameState::new_default(42);
-        // Massive deaths + infections to maximize severity.
-        // Set both the per-disease attribution (inf.dead, used by total_dead_detected)
-        // and the authoritative region counter (region.dead), plus estimated_infected
-        // (used by total_infected_screened for POL calculation).
+        // Some deaths to give a small severity floor
         for region in &mut state.regions {
             let inf = region.get_or_create_infection(0);
-            inf.infected = 500_000_000.0;
-            inf.dead = 500_000_000.0;
-            region.dead = 500_000_000.0;
-            region.estimated_infected = 500_000_000.0;
+            inf.dead = 1_000_000.0;
+            region.dead = 1_000_000.0;
         }
-        state.resources.political_power = 0.95; // Start above the 0.90 cap
-        state.tick = TICKS_PER_DAY as u64 * 100; // far into the game
+        state.resources.political_power = 0.80; // well above the tiny severity-only target
+        state.tick = TICKS_PER_DAY as u64 * 100;
 
-        // Run a few days — POL should drift DOWN toward the 0.90 cap
+        // Run a few days — POL should drift DOWN toward the low target
         let mut s = state;
         for _ in 0..(TICKS_PER_DAY as u64 * 5) {
             s = tick(&s);
         }
-        assert!(s.resources.political_power < 0.92,
-            "POL should drift toward 0.90 cap, got {:.3}", s.resources.political_power);
+        assert!(s.resources.political_power < 0.50,
+            "POL should drift down toward severity-only target, got {:.3}", s.resources.political_power);
     }
 
     #[test]
