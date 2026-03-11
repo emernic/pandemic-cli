@@ -199,9 +199,17 @@ The important thing is to notice what the experience actually feels like, not to
 
 ## SAVE YOUR REPORT — This Is Non-Negotiable
 
-**You have a limited number of tool calls (turns). If you use them all playing the game, your entire session is wasted because no report gets written.** This has happened repeatedly — the agent plays enthusiastically, runs out of turns, and produces nothing.
+**You have a limited number of tool calls (turns). If you use them all playing the game, your entire session is wasted because no report gets written.** This has happened repeatedly — 3 of 5 recent sessions produced no log file because the agent kept playing "just one more turn" until the budget ran out.
 
-**Budget your turns:** You have ~100 tool calls. A typical session uses: build (1) + seed (1) + persona (1) + gameplay (~70 one-key-at-a-time calls) + report write (1). Play until around day 20-30, write your report, then keep playing with remaining calls if you want more data. Writing early doesn't end the session — it just ensures you have something to show for your work.
+### Hard Rule: Write Your Report by Turn 70
+
+**You MUST write your session log file by your 70th tool call.** Count your tool calls. When you hit 70, stop playing and write the report immediately — no exceptions, no "just one more day." A session with 20 days of play and a written report is infinitely more valuable than 30 days of play with no report.
+
+**After writing the report, you can keep playing.** If you have remaining turns, continue playing and append new findings to the report at the end. Writing early doesn't end the session — it just ensures your work isn't lost.
+
+**The trap you WILL fall into:** You'll think "I have plenty of turns left, I'll write the report after this next crisis." Then another crisis fires. Then you want to see what happens next. Then you're at turn 95 thinking "I'll write it now" and you run out. **This has happened in 60% of recent sessions.** The only defense is a hard cutoff. Turn 70. No negotiation.
+
+**Budget your turns:** You have ~100 tool calls. A typical session uses: build (1) + seed (1) + persona (1) + gameplay (~65 calls) + report write (1) + optional continued play (~30 calls). The report takes ONE tool call to write. There is no excuse for not having one call available by turn 70.
 
 ## Writing Feedback
 
