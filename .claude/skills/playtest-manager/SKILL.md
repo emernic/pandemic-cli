@@ -122,7 +122,7 @@ When you prime a playtester with a specific focus ("look for idle personnel") or
 
 ## Step 3: Read the Log and Extract Findings
 
-Check `./playtests/` for the log file. **If the agent didn't write a log** (which happens when they hit the tool call limit before finishing), read their output transcript from the task output file and write the log yourself. The transcript contains all their commentary — format it into the standard session log structure. Note at the top: "Log reconstructed by playtest manager from agent transcript."
+Check `./playtests/` for the log file. **If the agent didn't write a log** and you have access to its output transcript in the current session (e.g., from a task notification), extract the agent's commentary and write the log yourself. Note at the top: "Log reconstructed by playtest manager from agent transcript." If the transcript is not available (e.g., this is a new cron invocation), skip triage for that session and launch a fresh one.
 
 Read the full playtest log. Extract every distinct finding.
 
