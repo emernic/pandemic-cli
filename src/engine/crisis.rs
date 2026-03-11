@@ -1732,7 +1732,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
         }
         CrisisKind::LoanCallIn { lender_name, lender, outstanding } => {
-            let repay_amount = *outstanding;
+            // Use current outstanding from state.loans — more accurate than the value
+            // captured when the crisis was queued (interest has continued accruing since).
+            let repay_amount = state.loans.iter()
+                .find(|l| l.lender == *lender)
+                .map(|l| l.outstanding)
+                .unwrap_or(*outstanding);
             let can_repay = state.resources.funding >= repay_amount;
             match lender {
                 LoanLender::Governor { region_idx } => {

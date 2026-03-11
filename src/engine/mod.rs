@@ -663,6 +663,7 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             }
             let amount = state.loans[*loan_idx].outstanding;
             let lender_name = state.loans[*loan_idx].lender_name.clone();
+            let lender = state.loans[*loan_idx].lender.clone();
             if state.resources.funding < amount {
                 return CommandResult {
                     message: Some(format!(
@@ -673,6 +674,11 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 };
             }
             loans::repay_loan(state, *loan_idx);
+            // Clear any pending LoanCallIn for this lender — prevents double-payment
+            // if the crisis was queued but hadn't fired yet when the player paid early.
+            state.pending_crises.retain(|(_, k)| {
+                !matches!(k, CrisisKind::LoanCallIn { lender: l, .. } if *l == lender)
+            });
             CommandResult {
                 message: Some(format!("Loan repaid to {}. ¥{:.0} deducted.", lender_name, amount)),
                 success: true,
