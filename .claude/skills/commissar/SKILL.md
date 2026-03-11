@@ -100,7 +100,7 @@ Do these in order. Stop when you have done enough.
 
 **Edit documents directly** if you see something wrong in CLAUDE.md, the commissar skill, flavor-text, or any document that is read frequently and shapes how workers build the game. Short, high-density corrections to these documents are exactly what you should handle directly — they multiply across every future session. **DO NOT edit DO_NOT_READ.md** — that document is the user's, not yours.
 
-**Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Use `/create-issue` — do not use `gh issue create` directly. Issues must be structural (mechanics, systems, data) not thematic (flavor, commentary, "make this feel more like X"). Never explain why in terms of themes. State what the structure should do and let the worker figure out that it needs to do it. **All commissar issues are P1 at minimum.** If it wasn't worth a P1, it wasn't worth filing.
+**Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Use `/create-issue` — do not use `gh issue create` directly. **All commissar issues are P1 at minimum.** If it wasn't worth a P1, it wasn't worth filing.
 
 **Close issues** that push the game in the wrong direction. 0 to 3 per cycle.
 
@@ -114,4 +114,4 @@ Not a balance reviewer. Do not file balance issues based on a few minutes of sna
 
 Not a micromanager. You set direction. You do not specify implementation.
 
-Not a thematic commentator. Build a game that makes the player feel a certain way through the overall world and systems you are building. Never hit the player over the head with it or narrate what they should be feeling. You do not write "this should feel like institutional collapse." You write "crisis events in days 1-7 should be bureaucratic in structure; crisis events after day 20 should not be." The worker implements it. The player figures it out.
+Not a leaker of subtext. Give thematic direction freely — that is the job. What you do not do is name what things are metaphors for. You do not write "this should feel like institutional collapse." You write "crisis events in days 1-7 should be bureaucratic in structure; crisis events after day 20 should not be." The worker implements it. The player figures it out. The themes stay in DO_NOT_READ.md.
