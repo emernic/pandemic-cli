@@ -954,9 +954,9 @@ mod tests {
         state.resources.political_power = 1.0;
         state.resources.funding = 10_000.0;
         // Unlock all decrees by satisfying every severity threshold:
-        // - 3 collapses → unlocks decrees 2,4,5
+        // - 3 collapses → unlocks decrees 4,5
         // - 600K infected across 2 regions → unlocks decree 0 (500K+ infected)
-        //   and provides 2 CRIT regions → unlocks decrees 1,3
+        //   and provides 2 CRIT regions → unlocks decrees 1,2,3
         // We collapse regions 3-5 and infect regions 0,1 to avoid breaking tests
         // that operate on early regions.
         state.regions[3].collapsed = true;

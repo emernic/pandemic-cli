@@ -5290,7 +5290,7 @@ impl GameState {
         match decree_idx {
             0 => "Unlocks: 500K+ infected or 100K+ dead",
             1 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
-            2 => "Unlocks: any region collapsed or 500M+ dead",
+            2 => "Unlocks: any region at CRITICAL (100K+ infected) or 500M+ dead",
             3 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
             4 => "Unlocks: any region collapsed or 500M+ dead",
             5 => "Unlocks: 3+ regions collapsed or 2B+ dead",
@@ -5311,8 +5311,8 @@ impl GameState {
             0 => total_infected >= 500_000.0 || total_dead >= 100_000.0,
             // Authorize Human Trials: 50M+ dead OR 2+ regions at CRIT severity
             1 => total_dead >= 50_000_000.0 || crit_count >= 2,
-            // Sacrifice Region: any region collapsed OR 500M+ dead
-            2 => collapsed_count >= 1 || total_dead >= 500_000_000.0,
+            // Sacrifice Region: any region at CRITICAL (100K+ infected) OR 500M+ dead
+            2 => crit_count >= 1 || total_dead >= 500_000_000.0,
             // Suspend Regional Authority: 50M+ dead OR 2+ regions at CRIT severity
             3 => total_dead >= 50_000_000.0 || crit_count >= 2,
             // Fortify Region: any region collapsed OR 500M+ dead
