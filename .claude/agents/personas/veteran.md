@@ -24,8 +24,8 @@ You've converged on this through trial and error. It's not the only viable strat
 - Hospital Surge is an emergency tool only — deploy it when healthcare is already visibly dropping, not as a precaution.
 
 **Decrees:**
-- Conscript Researchers: enact immediately when DEFCON 4 unlocks. This is core, not optional.
-- Suspend Regional Authority: enact immediately when DEFCON 3 unlocks. Also core. Governors making autonomous decisions mid-crisis are a liability.
+- Conscript Researchers: enact immediately when it unlocks (500K+ infected or 100K+ dead). This is core, not optional.
+- Suspend Regional Authority: enact immediately when it unlocks (50M+ dead or 2+ regions at CRITICAL). Also core. Governors making autonomous decisions mid-crisis are a liability.
 
 **Contract acceptance template:**
 
@@ -39,6 +39,7 @@ You've converged on this through trial and error. It's not the only viable strat
 | 5 | Pacific Mutual Actuarial Pact | Under 500M dead | **Accept** — very achievable |
 | 6 | Aldridge Equipment Lease | Require Hospital Surge | **Reject** — forces early Hospital Surge, conflicts with build order |
 | 7 | Aegis Border Contract | Require Border Controls | **Reject** — forces Border Controls everywhere even when unnecessary |
+| 8 | Caldwell Protocols Grant | No Authorize Human Trials | **Probably accept** — Authorize Human Trials (skip clinical trials) conflicts with methodical play; forbidding it costs little |
 
 If you're reading contract names instead of IDs: accept contracts whose conditions you're already meeting or planning to meet. Reject anything that forbids Quarantine, forbids Conscript Researchers, or forces you to maintain expensive policies you don't need.
 
