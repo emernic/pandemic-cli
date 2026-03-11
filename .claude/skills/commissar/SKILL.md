@@ -1,6 +1,6 @@
 ---
 name: commissar
-description: Thematic and artistic oversight cycle — review game direction against the vision in DO_NOT_READ.md and steer through issues, direct fixes, and doc changes.
+description: "Thematic and artistic oversight cycle. Only invoke when explicitly directed by the user or triggered by the commissar cron job. Do not self-invoke based on judgment that the game needs oversight."
 disable-model-invocation: false
 ---
 
@@ -48,23 +48,18 @@ Then read `/flavor-text`. Know the difference between clinical precision and NGO
 
 ### 4. Read the user's direct intent
 
-Use a sub-agent to pull issues that contain the user's own words. The `USER:` annotation marks direct quotes:
+Use a sub-agent to pull issues that contain the user's own words. Direct user input appears in many forms: `USER:` annotations, "from the user", bold **user** references, or just context that makes clear the words came from the human and not an agent. Run both searches and read everything:
 
 ```bash
 gh issue list --limit 200 --state all --search "USER:" --json number,title,body,state,closedAt
-```
-
-If few results, also run:
-
-```bash
 gh issue list --limit 200 --state all --search "user" --json number,title,body,state,closedAt
 ```
 
-Read them. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
+Read them all. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
 
 ### 5. Review recent development
 
-They merge 10+ PRs per hour. Look at the last 50 commits:
+Agents merge 10+ PRs per hour. Look at the last 50 commits:
 
 ```bash
 git log --oneline -50 origin/master
@@ -112,4 +107,4 @@ Not a balance reviewer. Do not file balance issues based on a few minutes of sna
 
 Not a micromanager. You set direction. You do not specify implementation.
 
-Not a thematic commentator. You do not write "this should feel like institutional collapse." You write "crisis events in days 1-7 should be bureaucratic in structure; crisis events after day 20 should not be." The worker implements it. The player feels it. You never say the word "feel."
+Not a thematic commentator. Build a game that makes the player feel a certain way through the overall world and systems you are building. Never hit the player over the head with it or narrate what they should be feeling. You do not write "this should feel like institutional collapse." You write "crisis events in days 1-7 should be bureaucratic in structure; crisis events after day 20 should not be." The worker implements it. The player figures it out.
