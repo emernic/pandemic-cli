@@ -48,23 +48,18 @@ Then read `/flavor-text`. Know the difference between clinical precision and NGO
 
 ### 4. Read the user's direct intent
 
-Use a sub-agent to pull issues that contain the user's own words. The `USER:` annotation marks direct quotes:
+Use a sub-agent to pull issues that contain the user's own words. Direct user input appears in many forms: `USER:` annotations, "from the user", bold **user** references, or just context that makes clear the words came from the human and not an agent. Run both searches and read everything:
 
 ```bash
 gh issue list --limit 200 --state all --search "USER:" --json number,title,body,state,closedAt
-```
-
-If few results, also run:
-
-```bash
 gh issue list --limit 200 --state all --search "user" --json number,title,body,state,closedAt
 ```
 
-Read them. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
+Read them all. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
 
 ### 5. Review recent development
 
-They merge 10+ PRs per hour. Look at the last 50 commits:
+Agents merge 10+ PRs per hour. Look at the last 50 commits:
 
 ```bash
 git log --oneline -50 origin/master
