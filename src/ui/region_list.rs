@@ -714,19 +714,18 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 } else {
                     format!("  ¥{:.0}/d", profit)
                 };
+                // Days of runway when burning reserves
+                let runway = corp.days_of_runway();
                 // Trend arrow: shows when reserves are actively changing.
                 // Only shown when recovering (below max) or burning — not at stable max.
-                let recovering = !corp.bankrupt && profit >= 0.0 && corp.reserves_fraction() < 0.99;
-                let burning = !corp.bankrupt && profit < 0.0;
-                let (trend, trend_color) = if burning {
+                let recovering = runway.is_none() && !corp.bankrupt && corp.reserves_fraction() < 0.99;
+                let (trend, trend_color) = if runway.is_some() {
                     (" ↓", Color::Red)
                 } else if recovering {
                     (" ↑", Color::Green)
                 } else {
                     ("", Color::DarkGray)
                 };
-                // Days of runway when burning reserves
-                let runway = corp.days_of_runway();
                 let runway_str = match runway {
                     Some(days) => format!("  ~{:.0}d", days),
                     None => String::new(),
