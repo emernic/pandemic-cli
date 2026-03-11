@@ -6,6 +6,7 @@ use crate::state::{
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     PATRON_SATISFACTION_WARN, PATRON_SATISFACTION_REVOKE,
     PATRON_DEGRADE_RATE, PATRON_RECOVER_RATE, PATRON_DEMAND_COOLDOWN,
+    SEVERITY_HIGH_THRESHOLD,
 };
 
 /// Contract template with named patron.
@@ -99,6 +100,46 @@ fn build_contract(template_id: u8, rng: &mut ChaCha8Rng) -> FundingContract {
     }
 }
 
+/// Whether a template is contextually relevant given the current game state.
+///
+/// Prevents offering contracts whose conditions are trivially met with no real risk —
+/// e.g., "keep deaths under 500M" when only 90 people have died, or "no Travel Bans"
+/// when spread hasn't reached a level where Travel Ban would actually be useful.
+/// Each template type becomes relevant once the game situation justifies its restriction.
+fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
+    match template_id {
+        // ForbidPolicy: Travel Ban — only relevant when spread is multi-regional or large-scale
+        // (player needs a reason to actually want a Travel Ban before forbidding it)
+        0 => {
+            let infected_regions = state.regions.iter()
+                .filter(|r| !r.collapsed)
+                .filter(|r| r.infections.iter().any(|i| i.infected > 0.0))
+                .count();
+            infected_regions >= 2 || state.total_infected() >= 10_000.0
+        }
+        // ForbidPolicy: Quarantine — only relevant when a region has significant infection
+        1 => state.regions.iter().any(|r| {
+            !r.collapsed && {
+                let infected: f64 = r.infections.iter().map(|i| i.infected).sum();
+                r.population > 0 && infected / r.population as f64 >= 0.005
+            }
+        }),
+        // Helion Research Partnership (ActiveResearch) — always relevant
+        2 => true,
+        // Holt Stability Fund (NoCollapse) — only relevant when collapse is a real risk
+        3 => state.regions.iter().any(|r| {
+            !r.collapsed && r.infections.iter().any(|i| i.infected >= SEVERITY_HIGH_THRESHOLD)
+        }),
+        // Pinnacle Confidence Fund (MaxDeaths < 50M) — only when deaths are significant
+        4 => state.total_dead() >= 250_000.0,
+        // Pacific Mutual Actuarial Pact (MaxDeaths < 500M) — only when deaths substantial
+        5 => state.total_dead() >= 2_500_000.0,
+        // RequirePolicy (Hospital Surge, Border Controls) — always relevant
+        6 | 7 => true,
+        _ => true,
+    }
+}
+
 /// Tick patron satisfaction and revoke contracts when satisfaction bottoms out.
 pub fn tick_check_contracts(state: &mut GameState) {
     // First pass: compute satisfaction changes (need immutable borrow for is_met)
@@ -182,10 +223,13 @@ pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
         return;
     }
 
-    // Pick a template that isn't already active and whose condition is currently met
+    // Pick a template that isn't already active, whose condition is met, and that is
+    // contextually relevant to the current game state (not trivially free money).
     let active_ids: Vec<u8> = state.contracts.iter().map(|c| c.template_id).collect();
     let eligible: Vec<u8> = (0..TEMPLATES.len() as u8)
         .filter(|id| !active_ids.contains(id))
+        .filter(|id| TEMPLATES[*id as usize].condition.is_met(state))
+        .filter(|id| is_contextually_relevant(*id as usize, state))
         .collect();
 
     if eligible.is_empty() {
@@ -194,11 +238,6 @@ pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
 
     let pick = eligible[rng.r#gen::<usize>() % eligible.len()];
     let contract = build_contract(pick, rng);
-
-    // Only offer if condition is currently met (don't offer dead-on-arrival contracts)
-    if !contract.condition.is_met(state) {
-        return;
-    }
 
     let template_id = contract.template_id;
     state.events.push(GameEvent::ContractOffered {
@@ -412,6 +451,8 @@ mod tests {
     fn offer_generated_at_first_offer_tick() {
         let mut state = GameState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
+        // Set deaths so MaxDeaths templates are contextually relevant
+        state.regions[0].dead = 3_000_000.0;
 
         state.tick = CONTRACT_FIRST_OFFER_TICK - 1;
         tick_offer_contracts(&mut state, &mut rng);
@@ -454,6 +495,8 @@ mod tests {
         let mut state = GameState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
+        // Set deaths so MaxDeaths templates are contextually relevant
+        state.regions[0].dead = 3_000_000.0;
 
         tick_offer_contracts(&mut state, &mut rng);
         let first_offer = state.contract_offer.as_ref().unwrap().name.clone();
@@ -525,6 +568,8 @@ mod tests {
         let mut state = GameState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
+        // Set deaths so MaxDeaths templates are contextually relevant
+        state.regions[0].dead = 3_000_000.0;
 
         assert!(state.pending_crises.is_empty());
         tick_offer_contracts(&mut state, &mut rng);
