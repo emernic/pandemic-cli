@@ -1613,7 +1613,7 @@ mod tests {
                 // A competent player enables border controls immediately (cheap,
                 // always helps cross-region spread), enables water sanitation
                 // only when a waterborne disease is present (otherwise pure waste),
-                // quarantines infected regions, and activates hospital surge.
+                // quarantines infected regions.
                 let any_waterborne = state.diseases.iter().any(|d| {
                     d.transmission == crate::state::TransmissionVector::Waterborne
                 });
@@ -1624,8 +1624,6 @@ mod tests {
                     let has_border = state.policies[r_idx].border_controls;
                     let has_water = state.policies[r_idx].water_sanitation;
                     let has_quarantine = state.policies[r_idx].quarantine;
-                    let has_surge = state.policies[r_idx].hospital_surge;
-
                     if !has_border {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
                             region_idx: r_idx, policy_idx: 3,
@@ -1641,11 +1639,8 @@ mod tests {
                             region_idx: r_idx, policy_idx: 1,
                         });
                     }
-                    if !has_surge && total_infected > 5_000.0 {
-                        execute_command(&mut state, &GameCommand::TogglePolicy {
-                            region_idx: r_idx, policy_idx: 2,
-                        });
-                    }
+                    // Hospitals are baseline — no need to activate hospital surge.
+                    // Discourage Hospitalization (policy 2) is NOT auto-activated.
                 }
 
                 // --- MEDICINE: treat aggressively, vaccinate only with targeted meds ---
@@ -2170,26 +2165,26 @@ mod tests {
     }
 
     #[test]
-    fn policy_hospital_surge_reduces_deaths() {
+    fn discourage_hospitalization_increases_deaths() {
         let mut state = GameState::new_default(42);
         let ri = primary_outbreak_region(&state);
-        // Run without hospital surge
-        let mut no_h = state.clone();
+        // Run baseline (hospitals active by default)
+        let mut baseline = state.clone();
         for _ in 0..50 {
-            no_h = tick(&no_h);
+            baseline = tick(&baseline);
         }
 
-        // Run with hospital surge on the primary outbreak region
-        state.policies[ri].hospital_surge = true;
-        let mut with_h = state;
+        // Run with discourage hospitalization on the primary outbreak region
+        state.policies[ri].discourage_hosp = true;
+        let mut with_dh = state;
         for _ in 0..50 {
-            with_h = tick(&with_h);
+            with_dh = tick(&with_dh);
         }
 
         assert!(
-            with_h.regions[ri].total_dead() < no_h.regions[ri].total_dead(),
-            "hospital surge should reduce deaths: {} vs {}",
-            with_h.regions[ri].total_dead(), no_h.regions[ri].total_dead()
+            with_dh.regions[ri].total_dead() > baseline.regions[ri].total_dead(),
+            "discourage hospitalization should increase deaths: {} vs baseline {}",
+            with_dh.regions[ri].total_dead(), baseline.regions[ri].total_dead()
         );
     }
 
@@ -2235,27 +2230,27 @@ mod tests {
         // Set up 3 policies: $1.0 + $0.6 + $0.4 = $2.0/tick total
         state.policies[0].travel_ban = true;
         state.policies[0].quarantine = true;
-        state.policies[0].hospital_surge = true;
-        // Enough for quarantine + hospital surge ($1.0) but not all three ($2.0)
+        state.policies[0].discourage_hosp = true;
+        // Enough for quarantine + discourage hosp ($1.0) but not all three ($2.0)
         state.resources.funding = 1.2;
         state = tick(&state);
         // Travel ban ($1.0, most expensive) should be suspended
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended first");
         assert!(state.policies[0].quarantine, "quarantine should survive tick 1");
-        assert!(state.policies[0].hospital_surge, "hospital surge should survive tick 1");
+        assert!(state.policies[0].discourage_hosp, "discourage hosp should survive tick 1");
     }
 
     #[test]
     fn funding_warning_when_runway_low() {
         let mut state = GameState::new_default(42);
         // Enable expensive policies across ALL regions to create net burn.
-        // Per region: travel ban ($1/tick) + quarantine ($0.6/tick) + hospital ($0.4/tick) = $2/tick
+        // Per region: travel ban ($1/tick) + quarantine ($0.6/tick) + discourage hosp ($0.4/tick) = $2/tick
         // Six regions = $12/tick policy cost. Plus upkeep: 20 × $0.06 = $1.2/tick. Total ~$13.2/tick.
         // Income ~$9/tick (minus travel ban penalty halving income). Net burn is positive → warning fires.
         for i in 0..6 {
             state.policies[i].travel_ban = true;
             state.policies[i].quarantine = true;
-            state.policies[i].hospital_surge = true;
+            state.policies[i].discourage_hosp = true;
         }
         // Funding must be ≥ policy_cost (12.0) to avoid auto-suspension, but
         // low enough that the runway warning fires.
@@ -2965,7 +2960,7 @@ mod tests {
             // Invest heavily in region 0 (policies + infrastructure)
             state.policies[0].screening = ScreeningLevel::MassRapid;
             state.policies[0].quarantine = true;
-            state.policies[0].hospital_surge = true;
+            state.policies[0].discourage_hosp = false; // hospitals active (default)
             state.regions[0].hospital_level = 2;
             // Leave all other regions neglected
 
@@ -3030,7 +3025,7 @@ mod tests {
     }
 
     #[test]
-    fn hospital_surge_increases_infectivity() {
+    fn discourage_hosp_reduces_infectivity() {
         let mut state = GameState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
@@ -3038,21 +3033,21 @@ mod tests {
         state.diseases[0].lethality = 0.01;
         state.regions[region_idx].get_or_create_infection(0).infected = 5000.0;
 
-        // Run without hospital surge
-        let without = tick(&state);
+        // Run baseline (hospitals active, +25% spread)
+        let baseline = tick(&state);
 
-        // Run with hospital surge
-        state.policies[region_idx].hospital_surge = true;
-        let with = tick(&state);
+        // Run with discourage hospitalization (removes hospital exposure)
+        state.policies[region_idx].discourage_hosp = true;
+        let with_dh = tick(&state);
 
-        // Hospital surge should increase infections (25% spread penalty)
-        let s = without.regions[region_idx].disease_state(0).unwrap();
-        let inf_without = s.exposed + s.infected;
-        let s = with.regions[region_idx].disease_state(0).unwrap();
-        let inf_with = s.exposed + s.infected;
-        assert!(inf_with > inf_without,
-            "hospital surge should increase spread: {} vs {} without",
-            inf_with, inf_without);
+        // Discourage hospitalization should reduce infections
+        let s = baseline.regions[region_idx].disease_state(0).unwrap();
+        let inf_baseline = s.exposed + s.infected;
+        let s = with_dh.regions[region_idx].disease_state(0).unwrap();
+        let inf_dh = s.exposed + s.infected;
+        assert!(inf_dh < inf_baseline,
+            "discourage hospitalization should reduce spread: {} vs baseline {}",
+            inf_dh, inf_baseline);
     }
 
     #[test]
@@ -4143,26 +4138,25 @@ mod tests {
     }
 
     #[test]
-    fn exhaustion_epidemic_option_a_disables_hospital_surge() {
+    fn exhaustion_epidemic_option_a_enables_discourage_hosp() {
         let mut state = GameState::new_default(42);
-        state.policies[0].hospital_surge = true;
+        assert!(!state.policies[0].discourage_hosp);
         setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0, personnel_loss: 3 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!(!after.policies[0].hospital_surge,
-            "option A should disable hospital surge");
+        assert!(after.policies[0].discourage_hosp,
+            "option A should enable discourage hospitalization");
     }
 
     #[test]
     fn exhaustion_epidemic_option_b_loses_personnel() {
         let mut state = GameState::new_default(42);
-        state.policies[0].hospital_surge = true;
         let before = state.resources.personnel;
         setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0, personnel_loss: 3 }, 1);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.personnel, before - 3,
             "option B should lose scaled personnel");
-        assert!(after.policies[0].hospital_surge,
-            "option B should keep hospital surge active");
+        assert!(!after.policies[0].discourage_hosp,
+            "option B should keep hospitals running (no discourage)");
     }
 
     #[test]

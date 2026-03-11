@@ -15,7 +15,7 @@ use crate::state::{
     COLLAPSE_DISRUPTION_TICKS,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
-    HOSPITAL_SURGE_PERSONNEL,
+    DISCOURAGE_HOSP_PERSONNEL,
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     MARTIAL_LAW_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
@@ -126,10 +126,10 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                       QUARANTINE_PERSONNEL + if low_infra { 1 } else { 0 },
                       "Quarantine imposed",
                       "Quarantine lifted"),
-                2 => ("Hospital Surge",
-                      HOSPITAL_SURGE_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Hospital Surge authorized",
-                      "Hospital Surge stood down"),
+                2 => ("Discourage Hospitalization",
+                      DISCOURAGE_HOSP_PERSONNEL + if low_infra { 1 } else { 0 },
+                      "Hospitalization discouraged",
+                      "Hospitalization restrictions lifted"),
                 3 => ("Border Controls",
                       BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 },
                       "Border Controls established",
@@ -580,7 +580,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                 let active_policies: Vec<&str> = [
                     (policy.travel_ban, "travel_ban"),
                     (policy.quarantine, "quarantine"),
-                    (policy.hospital_surge, "hospital_surge"),
+                    (policy.discourage_hosp, "discourage_hosp"),
                     (policy.border_controls, "border_controls"),
                 ].iter()
                     .filter(|(active, _)| *active)
@@ -593,7 +593,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                     let label = match target {
                         "travel_ban" => { state.policies[i].travel_ban = false; "Travel Ban" }
                         "quarantine" => { state.policies[i].quarantine = false; "Quarantine" }
-                        "hospital_surge" => { state.policies[i].hospital_surge = false; "Hospital Surge" }
+                        "discourage_hosp" => { state.policies[i].discourage_hosp = false; "Discourage Hospitalization" }
                         "border_controls" => { state.policies[i].border_controls = false; "Border Controls" }
                         _ => unreachable!(),
                     };
@@ -1476,7 +1476,7 @@ mod tests {
         use crate::state::GOVERNOR_COOPERATION_THRESHOLD;
 
         let mut state = screening_test_state();
-        state.policies[0].hospital_surge = true;
+        state.policies[0].discourage_hosp = true;
 
         // Normal loyalty — full cost
         state.regions[0].governor.loyalty = 50.0;

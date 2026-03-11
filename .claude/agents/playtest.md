@@ -95,7 +95,7 @@ You are an LLM. You have two dangerous instincts: (1) being polite and finding s
 
 **What useful playtest feedback looks like:**
 - "I pressed 'r' to open research, saw three categories, selected Field Research, hit enter. A list appeared but I didn't understand what 'Identify Strain Alpha' meant — identify it how? I selected it anyway. A progress bar appeared."
-- "A crisis fired on day 4. It said 'Hospital Surge in Europe.' I had two options. I picked the first one because the second cost $800 and I only had $600. After confirming, I couldn't tell if anything changed."
+- "A crisis fired on day 4. It said 'Healthcare Worker Collapse in Europe.' I had two options. I picked the first one because the second cost $800 and I only had $600. After confirming, I couldn't tell if anything changed."
 - "I opened the medicines panel and saw 'Broad Spectrum [EMPTY]'. I don't know what EMPTY means here — empty of what? I pressed enter and nothing happened."
 - "I accidentally bought a lab upgrade. I was in the policy panel, pressed Esc, and the cursor landed on an upgrade option. I pressed Enter thinking it would go back, and it purchased something for $500."
 - "I deployed a medicine to Asia. The infected count said 12,400. I advanced 2 days and it said 11,800. I don't know if the medicine caused that or if it would have happened anyway."

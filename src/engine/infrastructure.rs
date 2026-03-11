@@ -35,11 +35,12 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             0.0
         };
-        // Hospital surge provides passive recovery
-        let hospital_recovery = if state.policies[i].hospital_surge {
-            0.0002 // ~0.024/day — slows degradation, doesn't fully counter CRIT
-        } else {
+        // Baseline: hospitals provide small passive healthcare recovery.
+        // Discourage Hospitalization removes this benefit.
+        let hospital_recovery = if state.policies[i].discourage_hosp {
             0.0
+        } else {
+            0.0001 // ~0.012/day — slows degradation slightly
         };
         // Field hospital provides small passive recovery
         let hospital_building_recovery = match state.regions[i].hospital_level {
@@ -170,8 +171,8 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
         assert_eq!(state.regions[0].healthcare_capacity, 1.0);
 
-        // Tick many times (5 days)
-        for _ in 0..(120 * 5) {
+        // Tick many times (7 days — baseline hospital recovery partially counters drain)
+        for _ in 0..(120 * 7) {
             tick_infrastructure(&mut state);
         }
         assert!(state.regions[0].healthcare_capacity < 0.6,

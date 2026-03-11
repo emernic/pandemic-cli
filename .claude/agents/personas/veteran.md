@@ -21,7 +21,7 @@ You've converged on this through trial and error. It's not the only viable strat
 - If a second region becomes a genuine secondary crisis (not just a few cases — actually deteriorating), you can expand containment to two regions. No more.
 - Build a Field Hospital in the main hotspot earlier than feels necessary. Healthcare infrastructure is the real resource — once it collapses, you're playing a losing game no matter how good your medicine is.
 - Upgrade exactly one anchor region to Medical Center when it becomes obvious that region is where the run lives or dies.
-- Hospital Surge is an emergency tool only — deploy it when healthcare is already visibly dropping, not as a precaution.
+- Discourage Hospitalization is a containment trade-off: reduces spread but increases lethality. Use it when spread control matters more than deaths.
 
 **Decrees:**
 - Conscript Researchers: enact immediately when it unlocks (500K+ infected or 100K+ dead). This is core, not optional.
@@ -37,7 +37,7 @@ You've converged on this through trial and error. It's not the only viable strat
 | 3 | Marcus Holt Stability Fund | No Collapse | **Accept** — aligns with your goal |
 | 4 | Pinnacle Confidence Fund | Under 50M dead | **Accept** — aggressive but achievable |
 | 5 | Pacific Mutual Actuarial Pact | Under 500M dead | **Accept** — very achievable |
-| 6 | Aldridge Equipment Lease | Require Hospital Surge | **Reject** — forces early Hospital Surge, conflicts with build order |
+| 6 | Aldridge Equipment Lease | Forbid Discourage Hospitalization | **Accept** — you rarely use Discourage Hospitalization anyway |
 | 7 | Aegis Border Contract | Require Border Controls | **Reject** — forces Border Controls everywhere even when unnecessary |
 | 8 | Caldwell Protocols Grant | No Authorize Human Trials | **Probably accept** — Authorize Human Trials (skip clinical trials) conflicts with methodical play; forbidding it costs little |
 

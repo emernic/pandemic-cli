@@ -279,10 +279,12 @@ pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
-pub const HOSPITAL_SURGE_COST: f64 = 0.4;
-pub const HOSPITAL_SURGE_PERSONNEL: u32 = 2;
-/// Hospital Surge increases infectivity by this factor (1.25 = +25% spread).
-pub const HOSPITAL_SURGE_SPREAD_FACTOR: f64 = 1.25;
+pub const DISCOURAGE_HOSP_COST: f64 = 0.4;
+pub const DISCOURAGE_HOSP_PERSONNEL: u32 = 2;
+/// Discourage Hospitalization reduces infectivity by this factor (0.80 = -20% spread).
+/// Baseline assumes hospitals are active (+25% spread from hospital exposure).
+/// Discouraging hospitalization removes that exposure penalty.
+pub const DISCOURAGE_HOSP_SPREAD_FACTOR: f64 = 0.80;
 /// Co-infection lethality multiplier per additional active disease in the same
 /// region. With 2 diseases: +25% lethality; 3 diseases: +50%.
 /// Threshold: a disease counts as "co-infecting" when it has >= 1000 infected.
@@ -504,8 +506,9 @@ pub struct RegionPolicy {
     pub travel_ban: bool,
     /// Reduces infection rate within the region (20–65% depending on transmission vector).
     pub quarantine: bool,
-    /// Halves lethality in the region.
-    pub hospital_surge: bool,
+    /// Discourages hospitalization: +50% lethality (no hospital care)
+    /// but reduces spread by 20% (no hospital exposure).
+    pub discourage_hosp: bool,
     /// Reduces cross-region spread by 50%, no income penalty.
     /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
     #[serde(default, alias = "border_screening")]
@@ -537,7 +540,7 @@ pub struct RegionPolicy {
 /// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
 ///   0 = Travel Ban        5 = Basic Screening     8 = Martial Law
 ///   1 = Quarantine         6 = Antigen Screening   9 = Nuclear Annihilation
-///   2 = Hospital Surge     7 = Mass Rapid Screen  10 = Field Hospital
+///   2 = Discourage Hosp.   7 = Mass Rapid Screen  10 = Field Hospital
 ///   3 = Border Controls   11 = Intel Station
 ///   4 = Water Sanitation
 ///
@@ -568,7 +571,7 @@ pub const POLICY_IDX_SCREENING_BASE: usize = 5;
 pub const POLICY_APPROVAL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.40, // Travel Ban — basic containment, available near starting approval
     0.45, // Quarantine — restricts movement, moderate board buy-in
-    0.30, // Hospital Surge — medical infrastructure, low threshold
+    0.30, // Discourage Hospitalization — containment, low threshold
     0.00, // Border Controls — basic containment, always available (costs personnel + funding)
     0.00, // Water Sanitation — basic public health, always available (costs personnel + funding)
     0.00, // Basic Screening — disease reporting, always available (costs personnel + funding)
@@ -597,15 +600,14 @@ pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 /// expensive/latest within each group:
 ///
 ///   Detection:      Basic Screening (5), Antigen (6), Mass Rapid (7)
-///   Containment:    Border Controls (3), Travel Ban (0), Quarantine (1), Water Sanitation (4)
-///   Medical:        Hospital Surge (2)
+///   Containment:    Border Controls (3), Travel Ban (0), Quarantine (1), Discourage Hosp. (2), Water Sanitation (4)
 ///   Infrastructure: Intel Station (11), Field Hospital (10)
 ///   Other:          Nuclear Option (9), Martial Law (8)
 ///
 /// This is the canonical display ordering — both the policy renderer and the confirm
 /// handler use this to map display position → policy_idx.
 pub fn policy_display_order() -> [usize; POLICY_COUNT] {
-    [5, 6, 7, 3, 0, 1, 4, 2, 11, 10, 9, 8]
+    [5, 6, 7, 3, 0, 1, 2, 4, 11, 10, 9, 8]
 }
 
 /// Short display name for each policy by index. Canonical source — used by
@@ -614,7 +616,7 @@ pub fn policy_display_name(policy_idx: usize) -> &'static str {
     match policy_idx {
         0 => "Travel Ban",
         1 => "Quarantine",
-        2 => "Hospital Surge",
+        2 => "Discourage Hospitalization",
         3 => "Border Controls",
         4 => "Water Sanitation",
         5 => "Basic Screening",
@@ -652,7 +654,7 @@ impl RegionPolicy {
         match policy_idx {
             0 => if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST },
             1 => QUARANTINE_COST,
-            2 => HOSPITAL_SURGE_COST,
+            2 => DISCOURAGE_HOSP_COST,
             3 => BORDER_CONTROLS_COST,
             4 => WATER_SANITATION_COST,
             8 => MARTIAL_LAW_COST,
@@ -676,7 +678,7 @@ impl RegionPolicy {
         let mut active_count = 0u32;
         if self.travel_ban { cost += TRAVEL_BAN_PERSONNEL; active_count += 1; }
         if self.quarantine { cost += QUARANTINE_PERSONNEL; active_count += 1; }
-        if self.hospital_surge { cost += HOSPITAL_SURGE_PERSONNEL; active_count += 1; }
+        if self.discourage_hosp { cost += DISCOURAGE_HOSP_PERSONNEL; active_count += 1; }
         if self.border_controls { cost += BORDER_CONTROLS_PERSONNEL; active_count += 1; }
         if self.water_sanitation { cost += WATER_SANITATION_PERSONNEL; active_count += 1; }
         if self.martial_law { cost += MARTIAL_LAW_PERSONNEL; active_count += 1; }
@@ -688,7 +690,7 @@ impl RegionPolicy {
     }
 
     pub fn any_active(&self) -> bool {
-        self.travel_ban || self.quarantine || self.hospital_surge
+        self.travel_ban || self.quarantine || self.discourage_hosp
             || self.border_controls || self.water_sanitation
             || self.screening != ScreeningLevel::None
             || self.martial_law || self.nuclear_annihilation
@@ -700,7 +702,7 @@ impl RegionPolicy {
         let mut n = 0u32;
         if self.travel_ban { n += 1; }
         if self.quarantine { n += 1; }
-        if self.hospital_surge { n += 1; }
+        if self.discourage_hosp { n += 1; }
         if self.border_controls { n += 1; }
         if self.water_sanitation { n += 1; }
         if self.martial_law { n += 1; }
@@ -723,7 +725,7 @@ impl RegionPolicy {
     pub fn clear_all(&mut self) {
         self.travel_ban = false;
         self.quarantine = false;
-        self.hospital_surge = false;
+        self.discourage_hosp = false;
         self.border_controls = false;
         self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
@@ -736,7 +738,7 @@ impl RegionPolicy {
         match idx {
             0 => self.travel_ban,
             1 => self.quarantine,
-            2 => self.hospital_surge,
+            2 => self.discourage_hosp,
             3 => self.border_controls,
             4 => self.water_sanitation,
             8 => self.martial_law,
@@ -750,7 +752,7 @@ impl RegionPolicy {
         match idx {
             0 => self.travel_ban = val,
             1 => self.quarantine = val,
-            2 => self.hospital_surge = val,
+            2 => self.discourage_hosp = val,
             3 => self.border_controls = val,
             4 => self.water_sanitation = val,
             8 => self.martial_law = val,
@@ -1041,14 +1043,14 @@ impl CorporationSector {
         }
     }
 
-    /// Revenue multiplier when hospital surge is active (some sectors benefit).
-    pub fn hospital_surge_factor(&self) -> f64 {
+    /// Revenue multiplier when hospitalization is discouraged (some sectors hurt).
+    pub fn discourage_hosp_factor(&self) -> f64 {
         match self {
             Self::Energy => 1.0,
-            Self::Logistics => 1.05,  // Medical supply contracts
-            Self::Biotech => 1.15,    // Increased demand for their products
+            Self::Logistics => 0.95,  // Fewer medical supply contracts
+            Self::Biotech => 0.85,    // Reduced demand for their products
             Self::Mining => 1.0,
-            Self::DataInfra => 1.05,  // Health data infrastructure
+            Self::DataInfra => 0.95,  // Less health data infrastructure demand
             Self::Automation => 1.0,
         }
     }
@@ -1650,7 +1652,7 @@ pub struct Region {
     /// Healthcare capacity (0.0–1.0). Degrades as infection load grows.
     /// Below 0.5: lethality increases. Below 0.25: lethality increases more + research slows.
     /// At 0: maximum lethality, no field research possible here.
-    /// Hospital Surge restores some capacity while active.
+    /// Baseline hospitals restore some capacity. Discourage Hospitalization removes this.
     #[serde(default = "default_one")]
     pub healthcare_capacity: f64,
     /// Supply line integrity (0.0–1.0). Degrades when death rate is high or travel banned.
@@ -6355,7 +6357,7 @@ mod tests {
     fn low_infrastructure_increases_personnel() {
         let mut policy = RegionPolicy::default();
         policy.quarantine = true;
-        policy.hospital_surge = true;
+        policy.discourage_hosp = true;
         let base = policy.personnel_cost(&[]);
         let low_infra = policy.personnel_cost(&[RegionTrait::LowInfrastructure]);
         // 2 active policies, each +1 = base + 2

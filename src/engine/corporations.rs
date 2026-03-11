@@ -176,8 +176,8 @@ pub(super) fn tick_corporations(state: &mut GameState) {
             if p.border_controls {
                 factor *= sector.border_controls_factor();
             }
-            if p.hospital_surge {
-                factor *= sector.hospital_surge_factor();
+            if p.discourage_hosp {
+                factor *= sector.discourage_hosp_factor();
             }
             factor
         } else {

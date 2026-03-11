@@ -10,7 +10,7 @@ use crate::state::{
     GameState, PolicyUiState, RegionPriority, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
-    HOSPITAL_SURGE_COST, HOSPITAL_SURGE_PERSONNEL, HOSPITAL_SURGE_SPREAD_FACTOR,
+    DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, DISCOURAGE_HOSP_SPREAD_FACTOR,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
@@ -42,7 +42,6 @@ fn policy_section_header(display_pos: usize) -> Option<&'static str> {
     match display_pos {
         0 => Some("Detection"),
         3 => Some("Containment"),
-        7 => Some("Medical"),
         8 => Some("Infrastructure"),
         10 => Some("Other"),
         _ => None,
@@ -143,14 +142,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         (1, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
          "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST),
-        (2, "Hospital Surge", policy.hospital_surge,
-         format!("¥{:.0}/day + {} pers.", HOSPITAL_SURGE_COST * TICKS_PER_DAY, HOSPITAL_SURGE_PERSONNEL + infra_extra),
-         if region.has_trait(RegionTrait::StrongPublicHealth) {
-             "60% lethality reduction, +25% spread (hospital exposure)"
-         } else {
-             "Halves lethality, +25% spread (hospital exposure)"
-         },
-         Some(HOSPITAL_SURGE_PERSONNEL + infra_extra), HOSPITAL_SURGE_COST),
+        (2, "Discourage Hospitalization", policy.discourage_hosp,
+         format!("¥{:.0}/day + {} pers.", DISCOURAGE_HOSP_COST * TICKS_PER_DAY, DISCOURAGE_HOSP_PERSONNEL + infra_extra),
+         "Reduces spread 20% but +50% lethality (no hospital care)",
+         Some(DISCOURAGE_HOSP_PERSONNEL + infra_extra), DISCOURAGE_HOSP_COST),
         (3, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
          "Blocks 50% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST),
@@ -619,7 +614,7 @@ pub(crate) fn render_region_select(state: &GameState, title: &str, action: &str,
 /// Shows per-disease reduction percentages based on transmission vector.
 fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -> Option<Line<'static>> {
     // Only transmission-sensitive policies get hints
-    // 0=Travel Ban, 1=Quarantine, 2=Hospital Surge, 4=Water Sanitation
+    // 0=Travel Ban, 1=Quarantine, 2=Discourage Hospitalization, 4=Water Sanitation
     if !matches!(policy_idx, 0 | 1 | 2 | 4) {
         return None;
     }
@@ -666,9 +661,9 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
                     else { Color::Red };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
-            2 => { // Hospital Surge — universal +25% spread
-                let increase = (HOSPITAL_SURGE_SPREAD_FACTOR - 1.0) * gov_eff * 100.0;
-                (format!("{name} ({}, +{increase:.0}% spread!)", vector.label()), Color::Red)
+            2 => { // Discourage Hospitalization — reduces spread
+                let reduction = (1.0 - DISCOURAGE_HOSP_SPREAD_FACTOR) * gov_eff * 100.0;
+                (format!("{name} ({}, -{reduction:.0}% spread)", vector.label()), Color::Green)
             }
             4 => { // Water Sanitation
                 match vector {
@@ -734,10 +729,13 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 impact_type = "infections";
             }
             2 => {
-                // Hospital Surge: deaths prevented = infected × lethality × 0.5
-                let prevented = inf.infected * disease.lethality * 0.5 * gov_eff;
-                total_impact += prevented;
-                impact_type = "deaths";
+                // Discourage Hospitalization: infections prevented from reduced spread
+                if susceptible > 0.0 {
+                    // Baseline has 1.25x hospital exposure. This removes it (0.80x).
+                    let prevented = inf.infected * disease.infectivity * 1.25 * (1.0 - DISCOURAGE_HOSP_SPREAD_FACTOR) * gov_eff * (susceptible / pop);
+                    total_impact += prevented;
+                }
+                impact_type = "infections";
             }
             3 => {
                 // Border Controls: cross-region spread prevention — hard to estimate

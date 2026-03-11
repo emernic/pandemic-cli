@@ -861,8 +861,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
             if policy.quarantine {
                 policy_parts.push(Span::styled("Quarantine ", policy_style));
             }
-            if policy.hospital_surge {
-                policy_parts.push(Span::styled("Hospital Surge ", policy_style));
+            if policy.discourage_hosp {
+                policy_parts.push(Span::styled("Disc. Hosp. ", policy_style));
             }
             if policy.border_controls {
                 policy_parts.push(Span::styled("Border Ctrl ", policy_style));

@@ -71,8 +71,8 @@ const TEMPLATES: &[Template] = &[
         name: "Aldridge Equipment Lease",
         patron: "Margaret Aldridge, Aldridge Medical Systems",
         income: 1.5,
-        condition: FundingCondition::RequirePolicy { policy_idx: 2 }, // Hospital Surge
-        source: "We supply the surge beds. Keep the orders active.",
+        condition: FundingCondition::ForbidPolicy { policy_idx: 2 }, // Discourage Hospitalization
+        source: "We supply the hospital beds. Don't shut down our customers.",
     },
     Template {
         name: "Aegis Border Contract",
@@ -143,7 +143,7 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
         4 => state.total_dead() >= 250_000.0,
         // Pacific Mutual Actuarial Pact (MaxDeaths < 500M) — only when deaths substantial
         5 => state.total_dead() >= 2_500_000.0,
-        // RequirePolicy (Hospital Surge, Border Controls) — always relevant
+        // ForbidPolicy (Discourage Hosp.) / RequirePolicy (Border Controls) — always relevant
         6 | 7 => true,
         // Caldwell Protocols Grant (ForbidDecree: Authorize Human Trials) — only relevant when
         // that decree is unlocked (50M+ dead or 2+ CRITICAL regions).

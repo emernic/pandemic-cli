@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::state::{
     Disease, GameEvent, GameState, MutationMode, PathogenType, RegionTrait,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
-    HOSPITAL_SURGE_SPREAD_FACTOR, TICKS_PER_DAY,
+    DISCOURAGE_HOSP_SPREAD_FACTOR, TICKS_PER_DAY,
 };
 
 /// Scale a policy reduction factor by governor effectiveness.
@@ -42,7 +42,7 @@ pub(super) fn tick_spread_within(
         let pop = region.population as f64;
         let policy = new.policies.get(region_idx);
         let quarantine_active = policy.is_some_and(|p| p.quarantine);
-        let hospital_active = policy.is_some_and(|p| p.hospital_surge);
+        let discourage_hosp = policy.is_some_and(|p| p.discourage_hosp);
         let sanitation_active = policy.is_some_and(|p| p.water_sanitation);
         let gov_eff = region.policy_effectiveness();
         let alive = (pop - region.dead).max(0.0);
@@ -75,8 +75,12 @@ pub(super) fn tick_spread_within(
                 } else {
                     disease.infectivity
                 };
-                if hospital_active {
-                    infectivity *= scale_policy_factor(HOSPITAL_SURGE_SPREAD_FACTOR, gov_eff);
+                // Baseline: hospitals increase spread (+25% from hospital exposure).
+                // Discourage Hospitalization removes this penalty (-20% net).
+                if discourage_hosp {
+                    infectivity *= scale_policy_factor(DISCOURAGE_HOSP_SPREAD_FACTOR, gov_eff);
+                } else {
+                    infectivity *= 1.25; // hospital exposure baseline
                 }
                 if sanitation_active {
                     let f = disease.transmission.water_sanitation_factor();
@@ -110,14 +114,15 @@ pub(super) fn tick_spread_within(
                 let exposed_to_infected = (inf.exposed * incubation_rate).min(inf.exposed);
 
                 let mut lethality = disease.lethality * region.healthcare_modifier;
-                if hospital_active {
-                    // StrongPublicHealth: 60% reduction instead of 50%
-                    let surge_factor = if region.has_trait(RegionTrait::StrongPublicHealth) {
-                        0.4
+                // Discourage Hospitalization: people avoid hospitals, increasing lethality.
+                // StrongPublicHealth regions suffer a larger penalty (they relied on hospitals more).
+                if discourage_hosp {
+                    let penalty = if region.has_trait(RegionTrait::StrongPublicHealth) {
+                        1.75 // +75% lethality (regions that depend heavily on hospitals)
                     } else {
-                        0.5
+                        1.50 // +50% lethality
                     };
-                    lethality *= scale_policy_factor(surge_factor, gov_eff);
+                    lethality *= scale_policy_factor(penalty, gov_eff);
                 }
                 if region.hospital_level >= 2 {
                     lethality *= 0.60; // Medical Center: 40% total lethality reduction
