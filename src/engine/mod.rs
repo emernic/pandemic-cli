@@ -3889,8 +3889,8 @@ mod tests {
     }
 
     #[test]
-    fn data_leak_option_a_loses_research_gains_pol() {
-        use crate::state::{ResearchProject, ResearchKind, TICKS_PER_DAY};
+    fn data_leak_option_a_diverts_personnel_gains_pol() {
+        use crate::state::{ResearchProject, ResearchKind};
         let mut state = GameState::new_default(42);
         state.field_research = vec![ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
@@ -3899,13 +3899,22 @@ mod tests {
             personnel_assigned: 3,
         }];
         let before_pol = state.resources.political_power;
-        setup_crisis(&mut state, CrisisKind::DataLeak, 0);
+        let before_progress = state.field_research[0].progress;
+        // Use the real event (not setup_crisis stub) so option costs are present
+        use crate::state::SimState;
+        state.sim_state = SimState::Event { was_running: true };
+        state.ui.crisis_selection = 0;
+        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
         let after = apply_action(&state, &Action::Confirm);
-        let expected_progress = (500.0 - 2.0 * TICKS_PER_DAY as f64).max(0.0);
-        assert!((after.field_research.first().unwrap().progress - expected_progress).abs() < 0.01,
-            "option A should lose 2 days of field research progress");
+        // Research progress should be unchanged (no rollback)
+        assert!((after.field_research.first().unwrap().progress - before_progress).abs() < 0.01,
+            "option A should not roll back research progress");
+        // POL should increase
         assert!((after.resources.political_power - (before_pol + 0.05)).abs() < 0.001,
             "option A should gain 0.05 POL modifier");
+        // 2 personnel should be temporarily diverted
+        assert!(!after.crisis_operations.is_empty(), "option A should create a temporary operation");
+        assert_eq!(after.crisis_operations[0].personnel, 2, "operation should divert 2 personnel");
     }
 
     #[test]
