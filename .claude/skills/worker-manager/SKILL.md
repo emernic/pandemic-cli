@@ -10,7 +10,41 @@ disable-model-invocation: true
 
 Do these steps, in order.
 
-## Step 1: Check If Previous Worker Is Still Running
+## Step 1: Unclaim Abandoned In-Progress Issues
+
+Before anything else, clean up issues that were claimed but never completed by a previous worker.
+
+1. List all open issues with the `in-progress` label:
+
+```bash
+gh issue list --state open --label "in-progress" --json number,title --limit 50
+```
+
+2. For each issue returned, find when the `in-progress` label was most recently added by checking the issue timeline:
+
+```bash
+gh api repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/issues/NUMBER/timeline \
+  --paginate \
+  --jq '[.[] | select(.event == "labeled" and .label.name == "in-progress")] | last | .created_at'
+```
+
+3. Compare that timestamp to the current time. If the label was added **more than 2 hours ago**, the worker that claimed it is presumed dead — unclaim it:
+
+```bash
+# Example time comparison (Linux date):
+NOW=$(date -u +%s)
+LABELED_AT=$(date -u -d "TIMESTAMP_FROM_API" +%s)
+AGE=$((NOW - LABELED_AT))
+# If AGE > 7200 (2 hours), unclaim:
+gh issue edit NUMBER --remove-label "in-progress"
+gh issue comment NUMBER --body "This issue appears to have been abandoned by a worker (in-progress label was set more than 2 hours ago with no completion). Removing the label so another worker can pick it up."
+```
+
+Skip any issue where the label was applied within the last 2 hours — the worker may still be actively working on it.
+
+If there are no open `in-progress` issues, skip this step silently and proceed.
+
+## Step 2: Check If Previous Worker Is Still Running
 
 Read `.worker-task-id` in the worktree root:
 
@@ -21,10 +55,10 @@ cat .worker-task-id 2>/dev/null || echo "none"
 If the file contains a task ID (not "none"), call `TaskOutput` with `block=false` and that task ID to check its current status.
 
 - **If status is `running`**: The previous worker is still active. **Stop here immediately.** Tell the user the previous worker is still running (include the task ID). Do NOT create a branch, do NOT touch the cron, do NOT spawn anything.
-- **If status is `completed`, `failed`, or `TaskOutput` returns an error (task ID no longer tracked)**: Proceed to Step 2.
-- **If the file doesn't exist**: Proceed to Step 2.
+- **If status is `completed`, `failed`, or `TaskOutput` returns an error (task ID no longer tracked)**: Proceed to Step 3.
+- **If the file doesn't exist**: Proceed to Step 3.
 
-## Step 2: Create a Fresh Branch for the Worker
+## Step 3: Create a Fresh Branch for the Worker
 
 Master changes frequently. Checking out the latest `origin/master` ensures the worker launches with up-to-date skill files (including `/pick-up-issue`). The worker will create its own issue branch from here.
 
@@ -34,7 +68,7 @@ git fetch origin && git checkout --no-track -b worker-$(date +%s) origin/master
 
 Tell the user the branch name that was created.
 
-## Step 3: Ensure the Recurring Loop Is Running
+## Step 4: Ensure the Recurring Loop Is Running
 
 Use `CronList` to list all existing cron jobs.
 
@@ -49,7 +83,7 @@ That schedule fires at minute 0 and minute 30 of every hour (i.e., every 30 minu
 
 Tell the user what you found and what you did (created a new cron, or found an existing one and left it).
 
-## Step 4: Launch a Worker Claude Process
+## Step 5: Launch a Worker Claude Process
 
 Launch a new Claude process **in the background** — not a sub-agent. Use the `Bash` tool with `run_in_background: true` so it detaches and runs independently.
 
@@ -81,7 +115,7 @@ echo "<task-id-from-bash-call-2>" > .worker-task-id
 
 Tell the user the worker is running and give them the exact log path to tail.
 
-## Step 5: Check Recent Worker Logs for Consistent Failures
+## Step 6: Check Recent Worker Logs for Consistent Failures
 
 After launching, scan the 3 most recent **previous** worker logs (skip the one just launched — it's empty) to see if the loop is healthy:
 
