@@ -98,6 +98,13 @@ fn render_categories(state: &GameState) -> (String, Vec<Line<'static>>, Option<u
                     .unwrap_or_else(|| " [LOCKED]".to_string());
                 (hint, Color::DarkGray)
             }
+        } else if *track == ResearchTrack::Applied {
+            let has_low_doses = state.medicines.iter().any(|m| m.unlocked && m.doses < m.max_doses * 0.5);
+            if has_low_doses {
+                (" [MANUFACTURE READY]".to_string(), Color::Yellow)
+            } else {
+                (" [NONE]".to_string(), Color::DarkGray)
+            }
         } else {
             (" [NONE]".to_string(), Color::DarkGray)
         };

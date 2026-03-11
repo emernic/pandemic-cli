@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
+use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -172,6 +172,23 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             }
 
             lines.push(Line::from(detail_spans));
+
+            // Show manufacture hint when doses are depleted
+            if med.doses <= 0.0 {
+                let is_manufacturing = state.applied_research.as_ref()
+                    .is_some_and(|p| matches!(&p.kind, ResearchKind::ManufactureDoses { medicine_idx: mi } if *mi == med_idx));
+                if is_manufacturing {
+                    lines.push(Line::from(Span::styled(
+                        "    ↻ Restocking in progress (Applied Research)",
+                        Style::default().fg(Color::Yellow),
+                    )));
+                } else {
+                    lines.push(Line::from(Span::styled(
+                        "    → Restock via Research [R] > Applied Research",
+                        Style::default().fg(Color::Red),
+                    )));
+                }
+            }
 
             // Show pending shipments for this medicine
             let shipments: Vec<_> = state.pending_shipments.iter()
