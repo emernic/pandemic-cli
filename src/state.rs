@@ -243,9 +243,9 @@ pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 // Disease emergence constants.
 /// First new disease can emerge after this many ticks (~day 5).
 /// Gives the player time to identify disease 0 and start the research pipeline.
-pub const EMERGENCE_MIN_TICK: u64 = 600;
+pub const EMERGENCE_MIN_TICK: u64 = (5.0 * TICKS_PER_DAY) as u64;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 7 days → steady pressure without overwhelming the
+/// ~1 new disease every 14 days → steady pressure without overwhelming the
 /// research pipeline (which takes 7-10 days per disease).
 pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0012;
 /// Maximum number of simultaneous diseases.
@@ -313,7 +313,7 @@ pub const ADVANCED_INTEL_COST: f64 = 150.0;
 pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 
 /// Ticks a neighboring-collapse disruption lasts (10 days).
-pub const COLLAPSE_DISRUPTION_TICKS: u64 = 1200;
+pub const COLLAPSE_DISRUPTION_TICKS: u64 = (10.0 * TICKS_PER_DAY) as u64;
 /// Medicine deployment cost multiplier for regions disrupted by a neighboring collapse.
 pub const DISRUPTION_MEDICINE_COST_MULT: f64 = 1.5;
 /// Post-collapse secondary death rate: fraction of alive population lost per day
@@ -327,9 +327,9 @@ pub const COLLAPSE_SUBSISTENCE_FLOOR: f64 = 0.02;
 /// Maximum active funding contracts.
 pub const MAX_CONTRACTS: usize = 3;
 /// Ticks between contract offers (~5 days).
-pub const CONTRACT_OFFER_INTERVAL: u64 = 600;
+pub const CONTRACT_OFFER_INTERVAL: u64 = (5.0 * TICKS_PER_DAY) as u64;
 /// Tick when the first contract offer appears (~1 day).
-pub const CONTRACT_FIRST_OFFER_TICK: u64 = 120;
+pub const CONTRACT_FIRST_OFFER_TICK: u64 = TICKS_PER_DAY as u64;
 
 /// Research Lab upgrade costs (one-time, no ongoing personnel cost).
 /// Level 1 (Enhanced Sequencing Lab): +30% research speed.
@@ -1892,12 +1892,12 @@ impl PathogenType {
         }
     }
 
-    /// Stat ranges tuned so total collapse occurs by day 45 without intervention.
-    /// HARD REQUIREMENT: every seed must lose by day 45 with no player action.
-    /// The enforcing test is `game_is_lost_within_45_days_without_intervention`.
+    /// Stat ranges tuned so total collapse occurs by day 90 without intervention.
+    /// HARD REQUIREMENT: every seed must lose by day 90 with no player action.
+    /// The enforcing test is `game_is_lost_within_90_days_without_intervention`.
     /// If it starts failing, increase infectivity — do NOT relax the test.
     ///
-    /// Design principle: long infectious period (8–15 days) with near-zero natural
+    /// Design principle: long infectious period (16–30 days) with near-zero natural
     /// recovery. This lets the epidemic sweep through each region's full population
     /// before burning out. A short infectious period (high per-tick lethality+recovery)
     /// causes epidemic burnout after infecting only a small fraction of the population.
@@ -2325,17 +2325,17 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 
 
 /// Number of simulation ticks per in-game day. The UI displays days, not ticks.
-/// 120 chosen so 5 ticks = 1 hour exactly (120 / 24 = 5).
-pub const TICKS_PER_DAY: f64 = 120.0;
+/// 60 ticks/day = each tick represents ~24 minutes of game time.
+pub const TICKS_PER_DAY: f64 = 60.0;
 /// Personnel added per completed TrainPersonnel project.
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
 /// Mercy rule threshold: 5 days of zero player agency triggers defeat.
-pub const MERCY_RULE_TICKS: u64 = 600;
+pub const MERCY_RULE_TICKS: u64 = (5.0 * TICKS_PER_DAY) as u64;
 /// Deploy cooldown per disease per region in ticks (half a day).
 /// Per-disease cooldown means treating disease A doesn't block treating disease B.
-pub const DEPLOY_COOLDOWN_TICKS: u64 = 60;
+pub const DEPLOY_COOLDOWN_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
 /// Shipping delay in ticks (half a day). Medicine effects apply on delivery.
-pub const SHIPPING_TICKS: u64 = 60;
+pub const SHIPPING_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
 
 /// Convert ticks to days for display purposes.
 pub fn ticks_to_days(ticks: f64) -> f64 {
@@ -3692,14 +3692,14 @@ impl CrisisKind {
 }
 
 /// Crisis events start appearing after this many ticks (~3 days).
-pub const CRISIS_MIN_TICK: u64 = 360;
+pub const CRISIS_MIN_TICK: u64 = (3.0 * TICKS_PER_DAY) as u64;
 /// Average ticks between crises (~7 days).
-pub const CRISIS_INTERVAL: u64 = 840;
+pub const CRISIS_INTERVAL: u64 = (7.0 * TICKS_PER_DAY) as u64;
 /// Minimum ticks before the same crisis type can repeat (~15 days).
-pub const CRISIS_TYPE_COOLDOWN: u64 = 1800;
+pub const CRISIS_TYPE_COOLDOWN: u64 = (15.0 * TICKS_PER_DAY) as u64;
 /// Minimum ticks between any two consecutive crises (~1.5 days).
 /// Prevents crisis spam during collapse cascades and late-game.
-pub const CRISIS_MIN_GAP: u64 = 180;
+pub const CRISIS_MIN_GAP: u64 = (1.5 * TICKS_PER_DAY) as u64;
 
 /// Total infected across all regions at which a disease is detected by health systems.
 /// Below this, the disease spreads silently and is invisible to the player.
