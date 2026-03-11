@@ -235,17 +235,18 @@ Crisis events **interrupt tick advancement**, exactly as they do in interactive 
 
 Game over also stops execution immediately.
 
-**Practical recipe for multi-day playtesting:** Break long runs into short segments with `--do enter` dismissals between each:
+**Crisis events must be read and responded to deliberately.** When a crisis fires, the screen shows the full event text and options. Read it. Navigate the options with up/down. Make a real choice. If the crisis feels tedious, repetitive, or like its options don't matter — say so explicitly in your notes. That is valuable feedback. What is NOT acceptable: pre-loading `--do enter` steps to blow past crises unseen. This defeats the entire purpose of playtesting.
+
+**Practical recipe for multi-day playtesting:** Advance in short increments and handle each crisis as it fires:
 
 ```bash
-# Instead of one large d30 that might get stuck on a crisis:
-cargo run -- --snapshot --do d5 --do enter --do d5 --do enter --do d5 --do enter --do d5 --do enter --do d5 --do enter --do d5
-
-# If you're still blocked after one enter, you may have multiple queued crises — add more:
-cargo run -- --snapshot --do d10 --do enter --do enter --do enter --do d10
+# Advance 2-3 days at a time, then check the screen:
+cargo run -- --snapshot --do d2   # advance, then read the output
+cargo run -- --snapshot --key down --key enter  # navigate crisis options and confirm
+cargo run -- --snapshot --do d2   # continue
 ```
 
-**Rule of thumb:** Use `d5 enter` pairs rather than one large `d<N>`. If a sequence gets stuck, add more `--do enter` steps — never retry from scratch with a bigger single advance. Multiple crises can queue up, so a single `enter` may not be enough.
+**Rule of thumb:** Never chain `--do d<N> --do enter` in a single invocation unless you have already seen this exact crisis in this session and know its default option is acceptable. Unknown crises must be read before dismissing.
 
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
