@@ -4097,6 +4097,18 @@ impl UiState {
     }
 
 
+    /// Close all panels and return to the main dashboard.
+    /// Unlike `close_panel` (Esc), which goes back one step in a wizard,
+    /// this resets all panel state immediately regardless of depth.
+    pub fn go_home(&mut self) {
+        self.open_panel = Panel::None;
+        self.panel_selection = 0;
+        self.medicine_ui = None;
+        self.research_ui = None;
+        self.policy_ui = None;
+        self.operations_ui = None;
+    }
+
     /// Maximum selection index for the current panel and UI sub-state.
     /// Used by navigation (SelectNext) to bounds-check panel_selection.
     pub fn panel_selection_max(&self, state: &GameState) -> usize {

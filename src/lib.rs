@@ -131,6 +131,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenOperations => new.ui.toggle_panel(Panel::Operations, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(&new.medicines, &new.diseases),
+        Action::GoHome => new.ui.go_home(),
         Action::SelectNext => {
             let max = new.ui.panel_selection_max(&new);
             new.ui.select_next(new.regions.len(), max);

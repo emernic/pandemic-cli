@@ -21,6 +21,9 @@ pub enum Action {
     /// Jump directly to item N in the current panel list (0-based).
     /// Keys 1–9 → index 0–8, key 0 → index 9.
     JumpToItem { index: usize },
+    /// Close all panels and return to the main dashboard in one keypress.
+    /// Unlike ClosePanel (Esc), which goes back one step, GoHome goes all the way.
+    GoHome,
 }
 
 /// Map a crossterm KeyCode to an Action.
@@ -44,6 +47,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(Action::Quit),
         KeyCode::Char(c @ '1'..='9') => Some(Action::JumpToItem { index: (c as usize) - ('1' as usize) }),
         KeyCode::Char('0') => Some(Action::JumpToItem { index: 9 }),
+        KeyCode::Home => Some(Action::GoHome),
         _ => None,
     }
 }
@@ -79,6 +83,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "8" => Some(Action::JumpToItem { index: 7 }),
         "9" => Some(Action::JumpToItem { index: 8 }),
         "0" => Some(Action::JumpToItem { index: 9 }),
+        "home" => Some(Action::GoHome),
         _ => None,
     }
 }
@@ -106,6 +111,10 @@ mod tests {
         assert_eq!(string_to_action("T"), Some(Action::OpenThreats));
         assert_eq!(string_to_action("M"), Some(Action::OpenMedicines));
         assert_eq!(string_to_action("Q"), Some(Action::Quit));
+
+        assert_eq!(string_to_action("home"), Some(Action::GoHome));
+        assert_eq!(string_to_action("Home"), Some(Action::GoHome));
+        assert_eq!(string_to_action("HOME"), Some(Action::GoHome));
     }
 
     #[test]
