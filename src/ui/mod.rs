@@ -83,6 +83,13 @@ pub(crate) fn process_events(state: &mut GameState) {
                 };
                 (0u8, msg, notification)
             }
+            GameEvent::RegionAbandoned { region_idx } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
+                let msg = format!("ABANDONED: {} withdrawn from operations. {} regions remain", region_name, remaining);
+                (0u8, msg.clone(), msg)
+            }
             GameEvent::CollapseSecondaryDeaths { region_idx, deaths } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -690,8 +697,8 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         } else {
             "       ".to_string()
         };
-        let status_color = if region.collapsed { Color::Red } else { Color::Green };
-        let status = if region.collapsed { "FELL" } else { "held" };
+        let status_color = if region.abandoned { Color::Yellow } else if region.collapsed { Color::Red } else { Color::Green };
+        let status = if region.abandoned { "ABDN" } else if region.collapsed { "FELL" } else { "held" };
         lines.push(Line::from(vec![
             Span::styled(format!("  {timing}  "), stat_label),
             Span::styled(format!("{:<16}", region.name), stat_value),
