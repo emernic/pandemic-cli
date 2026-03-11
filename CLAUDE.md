@@ -231,7 +231,6 @@ Crisis events **interrupt tick advancement**, exactly as they do in interactive 
 
 1. Tick advancement stops immediately.
 2. The rendered screen shows the full crisis popup — read it before pressing anything.
-3. Subsequent key steps still fire, allowing you to respond in the same invocation or the next.
 
 Game over also stops execution immediately.
 
