@@ -378,6 +378,28 @@ In your final message before stopping work, always include a concise status bloc
 
 The user switches between many terminal tabs. They need to instantly see what was being worked on and whether there's anything left to do. Don't make them scroll up and piece it together.
 
+## Codebase Navigation Tips
+
+The core files (`src/state.rs`, `src/engine/crisis.rs`, `src/engine/mod.rs`) are large — 1000–6000+ lines. The single biggest time-waster in this codebase is repeatedly re-reading the same file with different offsets. Don't do that.
+
+**Use `Grep` with context flags instead of grep + Read:**
+
+```bash
+# Bad: grep for line number, then Read at offset, then Read more for context
+# Good: get the code and its context in one shot
+Grep pattern="fn deploy_medicine" path="src/engine" -C 30   # 30 lines before and after
+```
+
+**When you need a whole function, read generously on first access:**
+
+- If you know you'll need the surrounding 50–100 lines, pass `limit: 100` on your first `Read` rather than reading a narrow slice and then going back for more.
+- For large files, prefer one wide read over three narrow ones. The context window can handle it.
+
+**Read files once, not nine times:**
+
+- Before starting to explore a system, decide what you need to understand and read it all upfront — not piecemeal as you discover you need more.
+- If you've already read a file in the current session, do NOT re-read it just because you've scrolled past it. Trust your memory.
+
 ## Conventions
 
 - **No backwards compatibility concerns.** This game is not deployed in the wild. Save files are deleted between playtests by both humans and AI agents. Do NOT keep deprecated fields, variants, or `#[serde(default)]` annotations "for save file compatibility." If a field is unused, delete it. If a struct changes shape, just change it. The `#[serde(default)]` and `#[serde(alias)]` infrastructure is there so we CAN handle compatibility later when the game ships. Until then, dead fields kept "for compat" are pure complexity waste.
