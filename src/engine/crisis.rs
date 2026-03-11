@@ -1236,7 +1236,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Appeal".into(),
-                    description: "Same cost, less political damage. −3% Board.".into(),
+                    description: "Same cost, less reputational damage. −3% Board.".into(),
                     cost: Some(CrisisCost { funding: *fine, personnel: 0, ..Default::default() }),
                 },
                 ],
@@ -1375,7 +1375,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      The charges are unsubstantiated."),
                 options: vec![ CrisisOption {
                     label: "Ignore it".into(),
-                    description: "Small approval loss. The noise will die down.".into(),
+                    description: "−5% Board. The noise will die down.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1603,7 +1603,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Your field staff are aware. Inaction signals complicity."),
                 options: vec![ CrisisOption {
                     label: "Look the other way".into(),
-                    description: "Lose 15% Board. Your staff lose respect.".into(),
+                    description: "−15% Board. Your staff lose respect.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1628,7 +1628,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "{gov_name} wants ¥{demand:.0}. Last time it was less. Next time it will be more."),
                 options: vec![ CrisisOption {
                     label: "Refuse".into(),
-                    description: "Lose 20% Board. They'll make your life difficult.".into(),
+                    description: "−20% Board. They'll make your life difficult.".into(),
                     cost: None,
                 },
                  CrisisOption {

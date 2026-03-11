@@ -5334,9 +5334,9 @@ impl GameState {
         self.regions.iter().map(|r| r.population as f64).sum()
     }
 
-    /// Effective POL threshold for a policy in a specific region.
+    /// Effective approval threshold for a policy in a specific region.
     /// Regional severity (infection rate) reduces the threshold — a crisis
-    /// in a region justifies action even with low global political will.
+    /// in a region justifies action even with low global board approval.
     pub fn effective_approval_threshold(&self, region_idx: usize, policy_idx: usize) -> f64 {
         let base = POLICY_APPROVAL_THRESHOLDS.get(policy_idx).copied().unwrap_or(1.0);
         let region = match self.regions.get(region_idx) {
