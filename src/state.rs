@@ -1600,6 +1600,10 @@ pub struct Region {
     /// block medicine deployment, and have reduced cross-region spread (0.3x).
     #[serde(default)]
     pub collapsed: bool,
+    /// Whether this region was voluntarily abandoned via the Sacrifice Region decree.
+    /// Distinct from natural collapse (disease-driven). Shown as ABANDONED on defeat screen.
+    #[serde(default)]
+    pub abandoned: bool,
     /// Tick when this region collapsed (None if still standing).
     #[serde(default)]
     pub collapsed_at_tick: Option<u64>,
@@ -3365,6 +3369,10 @@ pub enum GameEvent {
         /// Number of personnel lost due to the collapse (0 if none were available).
         personnel_lost: u32,
     },
+    /// A region was voluntarily abandoned via the Sacrifice Region decree.
+    RegionAbandoned {
+        region_idx: usize,
+    },
     /// Post-collapse secondary deaths (starvation, violence, infrastructure breakdown).
     /// Fires once per day per collapsed region so the event log isn't spammed.
     CollapseSecondaryDeaths {
@@ -4484,6 +4492,7 @@ impl GameState {
                 collapse_threshold: 0.55, // Fragile — collapses at 45% dead
                 dead: 0.0,
                 collapsed: false,
+                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -4523,6 +4532,7 @@ impl GameState {
                 collapse_threshold: 0.55, // Moderate resilience — 45% dead
                 dead: 0.0,
                 collapsed: false,
+                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -4562,6 +4572,7 @@ impl GameState {
                 collapse_threshold: 0.50, // Developed infrastructure — 50% dead
                 dead: 0.0,
                 collapsed: false,
+                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -4601,6 +4612,7 @@ impl GameState {
                 collapse_threshold: 0.50, // Resilient — 50% dead
                 dead: 0.0,
                 collapsed: false,
+                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -4640,6 +4652,7 @@ impl GameState {
                 collapse_threshold: 0.50, // Huge population — 50% dead
                 dead: 0.0,
                 collapsed: false,
+                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -4679,6 +4692,7 @@ impl GameState {
                 collapse_threshold: 0.50, // Small but developed — 50% dead
                 dead: 0.0,
                 collapsed: false,
+                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,

@@ -12,6 +12,7 @@ use crate::state::{
     BARGAIN_OPERATIVE_INCOME_CUT,
     BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
+    COLLAPSE_DISRUPTION_TICKS,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
     HOSPITAL_SURGE_PERSONNEL,
@@ -728,7 +729,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             ), true)
         }
         2 => {
-            // Sacrifice Region: voluntarily collapse a region for income bonus
+            // Sacrifice Region: voluntarily abandon a region for income bonus
             let Some(r_idx) = region_idx else {
                 return (Some("Select a region to sacrifice".to_string()), false);
             };
@@ -740,15 +741,44 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             }
             let region_name = state.regions[r_idx].name.clone();
             state.enacted_decrees.sacrificed_region = Some(r_idx);
-            // Collapse the region
+            // Mark as abandoned (player-chosen) and collapse
+            state.regions[r_idx].abandoned = true;
             state.regions[r_idx].collapsed = true;
             state.regions[r_idx].collapsed_at_tick = Some(state.tick);
-            state.regions[r_idx].hospital_level = 0; // Hospital destroyed (per-region infrastructure)
-            state.regions[r_idx].intel_level = 0; // Intel station destroyed (per-region infrastructure)
-            // lab_level is intentionally NOT reset — it's global research infrastructure
-            // Clear policies
+            state.regions[r_idx].hospital_level = 0;
+            state.regions[r_idx].intel_level = 0;
+            // Clear policies — this immediately frees all personnel assigned there
             if let Some(p) = state.policies.get_mut(r_idx) {
                 p.clear_all();
+            }
+            // Notify the UI
+            state.events.push(GameEvent::RegionAbandoned { region_idx: r_idx });
+            // Apply network disruption to connected non-collapsed regions (same as natural collapse)
+            let disruption_end = state.tick + COLLAPSE_DISRUPTION_TICKS;
+            let connected: Vec<usize> = state.regions[r_idx].connections.clone();
+            for &c in &connected {
+                if !state.regions[c].collapsed {
+                    state.regions[c].disrupted_until = Some(
+                        state.regions[c].disrupted_until.map_or(disruption_end, |t| t.max(disruption_end))
+                    );
+                    state.events.push(GameEvent::NetworkDisruption {
+                        disrupted_region_idx: c,
+                        collapsed_region_idx: r_idx,
+                    });
+                }
+            }
+            // Schedule refugee wave toward a non-collapsed neighbor (if any)
+            let neighbors: Vec<usize> = connected.iter()
+                .filter(|&&c| !state.regions[c].collapsed)
+                .copied()
+                .collect();
+            if let Some(&to) = neighbors.first() {
+                let wave = state.regions.iter().filter(|r| r.collapsed).count() as u8;
+                state.pending_crises.push((state.tick, CrisisKind::RefugeeWave {
+                    from_region: r_idx,
+                    to_region: to,
+                    wave,
+                }));
             }
             let bonus_pct = (SACRIFICE_INCOME_BONUS - 1.0) * 100.0;
             (Some(format!(
@@ -1282,7 +1312,14 @@ mod tests {
         assert!(ok, "should succeed");
         assert!(msg.unwrap().contains("sacrifice zone"));
         assert!(state.regions[0].collapsed);
+        assert!(state.regions[0].abandoned, "sacrificed region should be marked abandoned");
         assert_eq!(state.enacted_decrees.sacrificed_region, Some(0));
+        // Refugee wave should be scheduled
+        assert!(state.pending_crises.iter().any(|(_, k)| matches!(k, crate::state::CrisisKind::RefugeeWave { from_region: 0, .. })),
+            "refugee wave should be scheduled from sacrificed region");
+        // RegionAbandoned event should be fired
+        assert!(state.events.iter().any(|e| matches!(e, crate::state::GameEvent::RegionAbandoned { region_idx: 0 })),
+            "RegionAbandoned event should be fired");
 
         // Income should reflect the sacrifice: the collapsed region's contribution
         // is lost, but remaining regions get a +20% bonus.
