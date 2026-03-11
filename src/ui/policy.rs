@@ -197,7 +197,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          None, 0.0),
     ];
 
-    // Reorder by canonical display order (POL threshold ascending, ties by index).
+    // Reorder by canonical display order (grouped by function — see policy_display_order() doc).
     // display_pos == panel_selection; confirm handler maps back via policy_display_order().
     let policies: Vec<_> = policy_display_order().iter().map(|&idx| policies[idx].clone()).collect();
 
