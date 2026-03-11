@@ -100,7 +100,7 @@ Do these in order. Stop when you have done enough.
 
 **Edit documents directly** if you see something wrong in CLAUDE.md, the commissar skill, flavor-text, or any document that is read frequently and shapes how workers build the game. Short, high-density corrections to these documents are exactly what you should handle directly — they multiply across every future session. **DO NOT edit DO_NOT_READ.md** — that document is the user's, not yours.
 
-**Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Issues must be structural (mechanics, systems, data) not thematic (flavor, commentary, "make this feel more like X"). Never explain why in terms of themes. State what the structure should do and let the worker figure out that it needs to do it.
+**Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Use `/create-issue` — do not use `gh issue create` directly. Issues must be structural (mechanics, systems, data) not thematic (flavor, commentary, "make this feel more like X"). Never explain why in terms of themes. State what the structure should do and let the worker figure out that it needs to do it. **All commissar issues are P1 at minimum.** If it wasn't worth a P1, it wasn't worth filing.
 
 **Close issues** that push the game in the wrong direction. 0 to 3 per cycle.
 
