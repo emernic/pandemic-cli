@@ -365,6 +365,15 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
+            // Skip if resistance has reduced efficacy below the useful threshold.
+            // High-resistance medicines waste doses for negligible benefit; this
+            // also prevents slow-disease seeds from being suppressed indefinitely
+            // by a fully-resisted medicine with trivially-small dose consumption.
+            let effective_eff = state.medicines[med_idx].effective_efficacy(best_disease_idx, &state.diseases);
+            if effective_eff < 0.04 {
+                continue;
+            }
+
             // Check funding (including disruption multiplier and regional discount)
             if state.resources.funding < state.medicine_deploy_cost(med_idx, region_idx) {
                 continue;
