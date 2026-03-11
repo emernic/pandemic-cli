@@ -5731,6 +5731,74 @@ impl GameState {
         projects
     }
 
+    /// Diseases that are identified but cannot yet be developed in Applied Research, with reasons.
+    /// Returns (disease_idx, reason_string) for each blocked disease.
+    /// Used to show greyed-out "pending" entries in the Applied Research panel.
+    pub fn blocked_medicine_developments(&self) -> Vec<(usize, String)> {
+        let active_kind = self.applied_research.as_ref().map(|p| &p.kind);
+        let has_targeted_drug_design = self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
+
+        // Collect disease indices already covered by an available or active targeted medicine
+        // development option. (The global BroadSpectrum medicine is always unlocked from game
+        // start and therefore appears only in ManufactureDoses, never in DevelopMedicine — it
+        // cannot pollute this set. Prion medicines have therapy_type BroadSpectrum but target
+        // only one disease and are skipped in the main loop below, so they have no effect.)
+        let mut covered: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        for kind in self.available_applied_projects() {
+            if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
+                for &d_idx in &self.medicines[medicine_idx].target_diseases {
+                    covered.insert(d_idx);
+                }
+            }
+        }
+        if let Some(ResearchKind::DevelopMedicine { medicine_idx }) = active_kind {
+            for &d_idx in &self.medicines[*medicine_idx].target_diseases {
+                covered.insert(d_idx);
+            }
+        }
+
+        let mut result = Vec::new();
+        let mut seen_diseases: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+        for med in &self.medicines {
+            if med.unlocked || med.therapy_type == TherapyType::BroadSpectrum {
+                continue;
+            }
+            let disease_idx = match med.target_diseases.first().copied() {
+                Some(d) => d,
+                None => continue,
+            };
+            if seen_diseases.contains(&disease_idx) || covered.contains(&disease_idx) {
+                continue;
+            }
+            let disease = match self.diseases.get(disease_idx) {
+                Some(d) => d,
+                None => continue,
+            };
+            if disease.knowledge <= 0.0 {
+                continue; // Not identified at all — no entry until player starts Field Research
+            }
+            seen_diseases.insert(disease_idx);
+
+            let has_full_knowledge = disease.knowledge >= KNOWLEDGE_FOR_TARGETED;
+            let reason = match (has_full_knowledge, has_targeted_drug_design) {
+                (true, false) => "Targeted Drug Design required [Basic Research]".to_string(),
+                (false, false) => format!(
+                    "study {:.0}% complete · Targeted Drug Design required",
+                    disease.knowledge * 100.0
+                ),
+                (false, true) => format!(
+                    "study {:.0}% complete · continue Field Research",
+                    disease.knowledge * 100.0
+                ),
+                (true, true) => continue, // Should be in covered — skip defensively
+            };
+
+            result.push((disease_idx, reason));
+        }
+        result
+    }
+
 }
 
 /// Format a number for display: 1234 → "1.2K", 1234567 → "1.2M", etc.
