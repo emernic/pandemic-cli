@@ -71,6 +71,26 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
+                // Reset panel sub-states to top level so the enter that dismissed
+                // the crisis cannot bleed through to the underlying panel.
+                // Without this, a ManagePolicies state would cause the next enter
+                // to toggle a policy — silent state corruption.
+                if new.ui.policy_ui.is_some() {
+                    new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
+                    new.ui.panel_selection = 0;
+                }
+                if new.ui.medicine_ui.is_some() {
+                    new.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
+                    new.ui.panel_selection = 0;
+                }
+                if new.ui.research_ui.is_some() {
+                    new.ui.research_ui = Some(ResearchUiState::BrowseCategories);
+                    new.ui.panel_selection = 0;
+                }
+                if new.ui.operations_ui.is_some() {
+                    new.ui.operations_ui = Some(OpsUiState::BrowseOps);
+                    new.ui.panel_selection = 0;
+                }
                 // sim_state restoration (Event → Running/Paused) happens inside
                 // crisis::resolve_crisis() — no post-processing needed here.
             }
@@ -816,6 +836,49 @@ mod tests {
         // Press R again at top level — now it closes
         let state = apply_action(&state, &Action::OpenResearch);
         assert_eq!(state.ui.open_panel, Panel::None);
+    }
+
+    #[test]
+    fn crisis_dismiss_resets_panel_to_top_level() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+
+        // Set up state with policy panel open in ManagePolicies (the dangerous nested state).
+        let mut state = GameState::new_default(42);
+        state.ui.open_panel = Panel::Policy;
+        state.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: 0 });
+        state.ui.panel_selection = 0; // pointing at Border Controls
+
+        // Fire a crisis while in this state.
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            title: "Aid Offer".into(),
+            description: "Choose wisely".into(),
+            options: vec![
+                CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
+                CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            ],
+            tick_created: 0,
+        });
+
+        // Dismiss the crisis.
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(state.active_crisis.is_none(), "crisis should be dismissed");
+
+        // Panel should be reset to BrowseRegions (safe top level), not ManagePolicies.
+        assert!(
+            matches!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions)),
+            "policy_ui should reset to BrowseRegions after crisis dismissal, got {:?}",
+            state.ui.policy_ui
+        );
+        assert_eq!(state.ui.panel_selection, 0);
+
+        // Check that border controls for region 0 were NOT accidentally toggled.
+        // panel_selection=0 in ManagePolicies points to border_controls.
+        assert!(
+            !state.policies[0].border_controls,
+            "border_controls should not be toggled by the crisis dismissal enter"
+        );
     }
 
     #[test]
