@@ -3922,6 +3922,7 @@ pub struct UiState {
     /// Generic list cursor — index of the selected item in the current panel view.
     /// Semantics depend on `open_panel` + the active sub-state (medicine_ui, research_ui, etc.):
     ///
+    /// - `Panel::Threats`                     → index into display_order (diseases sorted by deaths desc)
     /// - `Panel::Medicines / BrowseMedicines` → index into unlocked medicines
     /// - `Panel::Medicines / SelectRegion`    → index into grid_reading_order(regions)
     /// - `Panel::Medicines / SelectDisease`   → index into deployable_diseases list
