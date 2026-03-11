@@ -217,12 +217,6 @@ pub(super) fn tick_corporations(state: &mut GameState) {
     }
 }
 
-/// Board satisfaction: average health of board-seat corporations (0.0 to 1.0).
-/// Delegates to the GameState method — logic lives in state.rs as a derived computation.
-pub fn board_satisfaction(state: &GameState) -> f64 {
-    state.board_satisfaction()
-}
-
 /// Cooldown between board demand crises (~5 days).
 const BOARD_DEMAND_COOLDOWN: u64 = (5.0 * TICKS_PER_DAY) as u64;
 
@@ -239,7 +233,7 @@ pub(super) fn check_board_demands(state: &mut GameState) {
         return;
     }
 
-    let satisfaction = board_satisfaction(state);
+    let satisfaction = state.board_satisfaction();
 
     // Determine severity: 1 = ultimatum (< 0.3), 0 = demand (< 0.5), else nothing
     let severity = if satisfaction < BOARD_ULTIMATUM_THRESHOLD {
@@ -378,7 +372,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
 
-        let sat_before = board_satisfaction(&state);
+        let sat_before = state.board_satisfaction();
         assert!(sat_before > 0.5, "healthy board satisfaction should be high: {sat_before}");
 
         // Bankrupt half the board-seat corps
@@ -392,7 +386,7 @@ mod tests {
             }
         }
 
-        let sat_after = board_satisfaction(&state);
+        let sat_after = state.board_satisfaction();
         assert!(
             sat_after < sat_before,
             "board satisfaction should drop: before={sat_before:.2} after={sat_after:.2}"
@@ -413,7 +407,7 @@ mod tests {
             c.revenue = c.base_revenue * 0.5; // revenue unchanged but not used in satisfaction
         }
 
-        let sat = board_satisfaction(&state);
+        let sat = state.board_satisfaction();
         assert!(sat < BOARD_DEMAND_THRESHOLD, "satisfaction should be below demand threshold: {sat}");
         assert!(sat >= BOARD_ULTIMATUM_THRESHOLD, "satisfaction should be above ultimatum threshold: {sat}");
 
@@ -445,7 +439,7 @@ mod tests {
             count += 1;
         }
 
-        let sat = board_satisfaction(&state);
+        let sat = state.board_satisfaction();
         assert!(sat < BOARD_ULTIMATUM_THRESHOLD, "satisfaction should be below ultimatum threshold: {sat}");
 
         check_board_demands(&mut state);
@@ -517,7 +511,7 @@ mod tests {
         }
 
         if !board_demand_found {
-            let sat = board_satisfaction(&s);
+            let sat = s.board_satisfaction();
             assert!(
                 sat >= BOARD_DEMAND_THRESHOLD,
                 "Board satisfaction dropped to {sat:.2} but no BoardDemand crisis fired in 30 days"
@@ -530,7 +524,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
 
-        let sat = board_satisfaction(&state);
+        let sat = state.board_satisfaction();
         assert!(sat > BOARD_DEMAND_THRESHOLD, "healthy corps should have high satisfaction: {sat}");
 
         check_board_demands(&mut state);

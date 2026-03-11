@@ -432,7 +432,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         lines.push(Line::from(vec![
             Span::styled("  Board:    ", dim),
             Span::styled(format!("+{:.1}%", board_component * 100.0), Style::default().fg(Color::Cyan)),
-            Span::styled("  (board confidence)", dim),
+            Span::styled("  (corp reserve health)", dim),
         ]));
         if patron_component >= 0.005 {
             lines.push(Line::from(vec![
@@ -445,7 +445,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             lines.push(Line::from(vec![
                 Span::styled("  Severity: ", dim),
                 Span::styled(format!("+{:.1}%", severity_floor * 100.0), Style::default().fg(Color::Red)),
-                Span::styled("  (emergency authority from deaths)", dim),
+                Span::styled("  (crisis severity)", dim),
             ]));
         }
 
