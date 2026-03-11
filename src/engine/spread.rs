@@ -46,17 +46,18 @@ pub(super) fn tick_spread_within(
         let gov_eff = region.policy_effectiveness();
         let alive = (pop - region.dead).max(0.0);
 
-        // Co-infection: count diseases with significant active infections.
-        // Each additional disease increases lethality for all diseases in this region.
-        let coinfection_count = region.infections.iter()
-            .filter(|inf| inf.infected >= COINFECTION_THRESHOLD)
-            .count();
-        let coinfection_factor = 1.0
-            + COINFECTION_LETHALITY_PER_DISEASE * (coinfection_count as f64 - 1.0).max(0.0);
+        // Co-infection: collect infected counts for qualifying diseases.
+        // Used to estimate the fraction of each disease's infected who are also infected
+        // with other diseases (independence assumption: P(co-infected with B) = I_B / alive).
+        let coinfecting_infected: Vec<(usize, f64)> = region.infections.iter()
+            .enumerate()
+            .filter(|(_, inf)| inf.infected >= COINFECTION_THRESHOLD)
+            .map(|(i, inf)| (i, inf.infected))
+            .collect();
 
         // Phase 1: compute outflows for each disease without mutating yet.
         let mut outflows: Vec<DiseaseOutflows> = Vec::with_capacity(region.infections.len());
-        for inf in &region.infections {
+        for (inf_idx, inf) in region.infections.iter().enumerate() {
             if let Some(disease) = diseases.get(inf.disease_idx) {
                 let susceptible = alive - inf.infected - inf.immune;
                 if susceptible <= 0.0 {
@@ -112,8 +113,16 @@ pub(super) fn tick_spread_within(
                 } else if region.hospital_level >= 1 {
                     lethality *= 0.75; // Field Hospital: 25% lethality reduction
                 }
-                // Co-infection amplifies lethality (overwhelmed hospitals, immune suppression)
-                lethality *= coinfection_factor;
+                // Co-infection amplifies lethality only for estimated co-infected individuals.
+                // Under independence: fraction of this disease's infected who also have disease B
+                // ≈ I_B / alive. Sum contributions from all other qualifying diseases.
+                let coinfection_boost: f64 = coinfecting_infected.iter()
+                    .filter(|(idx, _)| *idx != inf_idx)
+                    .map(|(_, other_infected)| {
+                        COINFECTION_LETHALITY_PER_DISEASE * (other_infected / alive.max(1.0))
+                    })
+                    .sum();
+                lethality *= 1.0 + coinfection_boost;
                 // Infrastructure: healthcare capacity degradation increases lethality
                 if region.healthcare_capacity < crate::state::INFRA_CRITICAL {
                     lethality *= crate::state::HEALTHCARE_CRITICAL_LETHALITY;
