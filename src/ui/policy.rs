@@ -244,14 +244,6 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             COUNTERMEASURE_KILL_FRACTION * 100.0),
     ];
 
-    let decree_unlock_hints: [&str; DECREE_COUNT] = [
-        "Unlocks: 500K+ infected or 100K+ dead",
-        "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
-        "Unlocks: any region collapsed or 500M+ dead",
-        "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
-        "Unlocks: any region collapsed or 500M+ dead",
-        "Unlocks: 3+ regions collapsed or 2B+ dead",
-    ];
 
     for decree_idx in 0..DECREE_COUNT {
         let display_pos = decree_base + decree_idx;
@@ -300,7 +292,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                     Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
                     Span::styled(name.to_string(), name_style),
                     Span::styled(
-                        format!("  — {}", decree_unlock_hints[decree_idx]),
+                        format!("  — {}", GameState::decree_unlock_hint(decree_idx)),
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]));

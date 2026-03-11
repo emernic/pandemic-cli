@@ -5092,6 +5092,20 @@ impl GameState {
 
     /// Whether a decree is unlocked based on current crisis severity.
     /// Decrees become available when conditions are dire enough to justify them.
+    /// Human-readable unlock condition for a decree, shown in the policy panel when locked.
+    /// Must stay in sync with `decree_unlocked`.
+    pub fn decree_unlock_hint(decree_idx: usize) -> &'static str {
+        match decree_idx {
+            0 => "Unlocks: 500K+ infected or 100K+ dead",
+            1 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
+            2 => "Unlocks: any region collapsed or 500M+ dead",
+            3 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
+            4 => "Unlocks: any region collapsed or 500M+ dead",
+            5 => "Unlocks: 3+ regions collapsed or 2B+ dead",
+            _ => "",
+        }
+    }
+
     pub fn decree_unlocked(&self, decree_idx: usize) -> bool {
         let total_infected = self.total_infected();
         let total_dead = self.total_dead();
