@@ -67,6 +67,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
+                ui::process_events(&mut new);
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
@@ -163,6 +164,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
+                    ui::process_events(&mut new);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
                         GameCommand::DeployMedicine { medicine_idx, .. } if result.success => {
