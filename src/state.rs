@@ -2911,6 +2911,9 @@ pub enum BasicTech {
     /// Halves genomic sequencing duration and reveals mutation stat details.
     /// Prereq: completed at least one genomic sequencing project.
     RapidSequencing,
+    /// All field research (IdentifyThreat, ClinicalTrial, FieldOperations) completes 25% faster.
+    /// Prereq: RapidSequencing (logical progression: fast sequencing → predictive field response).
+    PredictiveSurveillance,
     /// Triples preventive vaccination effectiveness.
     /// Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform).
     VaccinePlatform,
@@ -2945,6 +2948,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Monoclonal Antibodies",
             BasicTech::PhageTherapy => "Phage Therapy",
             BasicTech::RapidSequencing => "Rapid Sequencing",
+            BasicTech::PredictiveSurveillance => "Predictive Surveillance",
             BasicTech::VaccinePlatform => "Vaccine Platform",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
@@ -2961,6 +2965,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Engineered antibody therapies with high efficacy against identified viral strains.",
             BasicTech::PhageTherapy => "Bacteriophage-based treatment for bacterial pathogens. Low resistance development.",
             BasicTech::RapidSequencing => "Cuts sequencing time in half. Reveals mutation drift rate and history.",
+            BasicTech::PredictiveSurveillance => "Integrated genomic surveillance network. Field identification and clinical trials 25% faster.",
             BasicTech::VaccinePlatform => "Triples effectiveness of preventive vaccination programs.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
@@ -3001,6 +3006,9 @@ impl BasicTech {
                 state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
                     || state.unlocked_techs.contains(&BasicTech::PhageTherapy)
             }
+            BasicTech::PredictiveSurveillance => {
+                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
+            }
             BasicTech::ResistanceSurveillance => {
                 // Prereq: RapidSequencing (need sequencing infrastructure to monitor resistance)
                 state.unlocked_techs.contains(&BasicTech::RapidSequencing)
@@ -3032,6 +3040,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
             BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
+            BasicTech::PredictiveSurveillance => "Rapid Sequencing",
             BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::CombinationTherapy => "Deploy 2+ different medicines",
@@ -3048,6 +3057,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
             BasicTech::RapidSequencing,
+            BasicTech::PredictiveSurveillance,
             BasicTech::VaccinePlatform,
             BasicTech::ResistanceSurveillance,
             BasicTech::CombinationTherapy,
@@ -3092,6 +3102,7 @@ impl ResearchKind {
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
                 BasicTech::RapidSequencing => (4, 300.0, 750.0),
+                BasicTech::PredictiveSurveillance => (4, 280.0, 650.0),
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
@@ -5467,13 +5478,25 @@ impl GameState {
     }
 
     /// Project costs adjusted for unlocked technologies.
-    /// Currently: RapidSequencing halves GenomicSequencing duration.
+    /// - RapidSequencing halves GenomicSequencing duration.
+    /// - PredictiveSurveillance cuts IdentifyThreat, ClinicalTrial, and FieldOperations by 25%.
+    ///   (Does not affect GenomicSequencing — already covered by RapidSequencing.)
+    ///   TODO: when Data/Infra corp is healthy in any region, increase bonus to 35% (#1381).
     pub fn effective_costs(&self, kind: &ResearchKind) -> (u32, f64, f64) {
         let (personnel, mut duration, funding) = kind.costs(&self.medicines);
         if matches!(kind, ResearchKind::GenomicSequencing { .. })
             && self.unlocked_techs.contains(&BasicTech::RapidSequencing)
         {
             duration *= 0.5;
+        }
+        if matches!(
+            kind,
+            ResearchKind::IdentifyThreat { .. }
+                | ResearchKind::ClinicalTrial { .. }
+                | ResearchKind::FieldOperations { .. }
+        ) && self.unlocked_techs.contains(&BasicTech::PredictiveSurveillance)
+        {
+            duration *= 0.75;
         }
         (personnel, duration, funding)
     }
@@ -5933,5 +5956,85 @@ mod tests {
         // 2 active policies, each +1 = base + 2
         assert_eq!(low_infra, base + 2,
             "LowInfrastructure should add +1 per active policy");
+    }
+
+    #[test]
+    fn predictive_surveillance_prereq_requires_rapid_sequencing() {
+        let mut state = GameState::new_default(42);
+        // Without RapidSequencing, prereq is not met
+        assert!(!state.unlocked_techs.contains(&BasicTech::RapidSequencing));
+        assert!(!BasicTech::PredictiveSurveillance.prerequisites_met(&state));
+        // After unlocking RapidSequencing, prereq is met
+        state.unlocked_techs.push(BasicTech::RapidSequencing);
+        assert!(BasicTech::PredictiveSurveillance.prerequisites_met(&state));
+    }
+
+    #[test]
+    fn predictive_surveillance_reduces_identify_threat_duration() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::IdentifyThreat { disease_idx: 0 };
+        let (_, base_duration, _) = state.effective_costs(&kind);
+        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        let (_, fast_duration, _) = state.effective_costs(&kind);
+        assert!(
+            (fast_duration - base_duration * 0.75).abs() < 0.01,
+            "IdentifyThreat should be 25% faster: expected {}, got {}",
+            base_duration * 0.75,
+            fast_duration
+        );
+    }
+
+    #[test]
+    fn predictive_surveillance_reduces_clinical_trial_duration() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 };
+        let (_, base_duration, _) = state.effective_costs(&kind);
+        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        let (_, fast_duration, _) = state.effective_costs(&kind);
+        assert!(
+            (fast_duration - base_duration * 0.75).abs() < 0.01,
+            "ClinicalTrial should be 25% faster: expected {}, got {}",
+            base_duration * 0.75,
+            fast_duration
+        );
+    }
+
+    #[test]
+    fn predictive_surveillance_reduces_field_operations_duration() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::FieldOperations { region_idx: 0, system: InfraSystem::Healthcare };
+        let (_, base_duration, _) = state.effective_costs(&kind);
+        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        let (_, fast_duration, _) = state.effective_costs(&kind);
+        assert!(
+            (fast_duration - base_duration * 0.75).abs() < 0.01,
+            "FieldOperations should be 25% faster: expected {}, got {}",
+            base_duration * 0.75,
+            fast_duration
+        );
+    }
+
+    #[test]
+    fn predictive_surveillance_does_not_affect_genomic_sequencing() {
+        let mut state = GameState::new_default(42);
+        let kind = ResearchKind::GenomicSequencing { disease_idx: 0 };
+        let (_, base_duration, _) = state.effective_costs(&kind);
+        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        let (_, after_duration, _) = state.effective_costs(&kind);
+        assert!(
+            (base_duration - after_duration).abs() < 0.01,
+            "GenomicSequencing should not be affected by PredictiveSurveillance"
+        );
+    }
+
+    #[test]
+    fn predictive_surveillance_appears_in_all_after_rapid_sequencing() {
+        let all = BasicTech::all();
+        let rs_pos = all.iter().position(|t| *t == BasicTech::RapidSequencing).unwrap();
+        let ps_pos = all.iter().position(|t| *t == BasicTech::PredictiveSurveillance).unwrap();
+        assert!(
+            ps_pos == rs_pos + 1,
+            "PredictiveSurveillance should appear immediately after RapidSequencing in all()"
+        );
     }
 }
