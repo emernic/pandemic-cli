@@ -1,8 +1,11 @@
+use rand::Rng;
+
 use crate::state::{
     FieldOpKind, FieldOperation, GameEvent, GameOutcome, GameState, InfraSystem,
     KNOWLEDGE_NAME, MAX_INFRA_RESILIENCE, OP_EMERGENCY_EFFECT_TICKS,
     OP_EMERGENCY_LETHALITY_MULT, OP_RECON_KNOWLEDGE, OP_SURVEY_REPAIR,
     OP_SUPPLY_RESTORE, OP_SUPPLY_RESILIENCE, OP_CIVIL_RESTORE, OP_CIVIL_RESILIENCE,
+    OP_EVAC_FRACTION, OP_EVAC_SEED_RATE_FACTOR, format_number,
 };
 
 /// Start a field operation. Validates personnel availability and target.
@@ -80,6 +83,20 @@ pub(super) fn start_field_op(
             }
             if state.field_operations.iter().any(|op| matches!(&op.kind, FieldOpKind::CivilOrderStabilization { region_idx: r } if r == region_idx)) {
                 return (false, Some("Civil stabilization already in progress".to_string()));
+            }
+        }
+        FieldOpKind::EvacuationCorridor { source_idx, dest_idx } => {
+            if state.regions.get(*source_idx).is_some_and(|r| r.collapsed) {
+                return (false, Some("Source region has collapsed".to_string()));
+            }
+            if state.regions.get(*dest_idx).is_some_and(|r| r.collapsed) {
+                return (false, Some("Destination region has collapsed".to_string()));
+            }
+            if source_idx == dest_idx {
+                return (false, Some("Source and destination must differ".to_string()));
+            }
+            if state.field_operations.iter().any(|op| matches!(&op.kind, FieldOpKind::EvacuationCorridor { source_idx: s, .. } if s == source_idx)) {
+                return (false, Some("Evacuation already in progress from this region".to_string()));
             }
         }
     }
@@ -206,6 +223,72 @@ fn complete_operation(state: &mut GameState, op: &FieldOperation) {
             let name = state.regions.get(r_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             ("Civil Stabilization".to_string(), format!("{}: civil order {}%, resilience {}%", name, new_pct, res_pct))
+        }
+        FieldOpKind::EvacuationCorridor { source_idx, dest_idx } => {
+            let s_idx = *source_idx;
+            let d_idx = *dest_idx;
+
+            // Calculate susceptibles in source: alive people who aren't infected
+            let source_pop = state.regions.get(s_idx).map(|r| r.population as f64).unwrap_or(0.0);
+            let source_dead = state.regions.get(s_idx).map(|r| r.dead).unwrap_or(0.0);
+            let source_infected = state.regions.get(s_idx).map(|r| r.total_infected()).unwrap_or(0.0);
+            let susceptibles = (source_pop - source_dead - source_infected).max(0.0);
+            let to_move = (susceptibles * OP_EVAC_FRACTION) as u64;
+
+            let source_name = state.regions.get(s_idx).map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+            let dest_name = state.regions.get(d_idx).map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+
+            // Transfer population
+            if to_move > 0 {
+                if let Some(src) = state.regions.get_mut(s_idx) {
+                    src.population = src.population.saturating_sub(to_move);
+                }
+                if let Some(dst) = state.regions.get_mut(d_idx) {
+                    dst.population = dst.population.saturating_add(to_move);
+                }
+            }
+
+            // Seeding risk: evacuees may carry infection
+            // Seed chance scales with infection rate in source (capped at 80%)
+            let infection_rate = if source_pop > 0.0 { source_infected / source_pop } else { 0.0 };
+            let seed_chance = (infection_rate * OP_EVAC_SEED_RATE_FACTOR).min(0.80);
+            let seeded = if seed_chance > 0.0 {
+                let roll: f64 = state.rng.r#gen();
+                roll < seed_chance
+            } else {
+                false
+            };
+
+            let result = if seeded && source_infected > 0.0 {
+                // Seed destination with a fraction of evacuees proportional to infection rate
+                let seed_count = (to_move as f64 * infection_rate * 0.5).max(1.0);
+                // Find the most prevalent disease in source to seed with
+                if let Some(disease_idx) = state.regions.get(s_idx)
+                    .and_then(|r| r.infections.iter().max_by(|a, b| a.infected.partial_cmp(&b.infected).unwrap()))
+                    .map(|inf| inf.disease_idx)
+                {
+                    let dest_inf = state.regions[d_idx].get_or_create_infection(disease_idx);
+                    dest_inf.infected += seed_count;
+                    format!(
+                        "{} evacuated from {} to {}. {:.0} carriers arrived at destination.",
+                        format_number(to_move as f64),
+                        source_name, dest_name,
+                        seed_count
+                    )
+                } else {
+                    format!(
+                        "{} evacuated from {} to {}",
+                        format_number(to_move as f64), source_name, dest_name
+                    )
+                }
+            } else {
+                format!(
+                    "{} evacuated from {} to {}. No carriers detected.",
+                    format_number(to_move as f64), source_name, dest_name
+                )
+            };
+
+            ("Evacuation Corridor".to_string(), result)
         }
     };
 
@@ -357,5 +440,55 @@ mod tests {
         assert!(ok1);
         let (ok2, _) = start_field_op(&mut state, kind);
         assert!(!ok2);
+    }
+
+    #[test]
+    fn evacuation_corridor_transfers_population() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        let src_pop = state.regions[0].population;
+        let dst_pop = state.regions[1].population;
+
+        let kind = FieldOpKind::EvacuationCorridor { source_idx: 0, dest_idx: 1 };
+        let (ok, msg) = start_field_op(&mut state, kind);
+        assert!(ok);
+        assert!(msg.unwrap().contains("¥600"));
+        assert_eq!(state.personnel_available(), 20 - 2);
+
+        for _ in 0..130 {
+            tick_field_operations(&mut state);
+        }
+        assert_eq!(state.field_operations.len(), 0, "op should complete");
+
+        // Source loses ~10% susceptibles; destination gains them
+        assert!(state.regions[0].population < src_pop, "source population should decrease");
+        assert!(state.regions[1].population > dst_pop, "dest population should increase");
+        // Transfer should be roughly 10% of source population (no deaths at start)
+        let expected_transfer = (src_pop as f64 * 0.10) as u64;
+        let actual_transfer = src_pop - state.regions[0].population;
+        assert!((actual_transfer as i64 - expected_transfer as i64).abs() < 1_000_000,
+            "transferred ~{} but expected ~{}", actual_transfer, expected_transfer);
+    }
+
+    #[test]
+    fn evacuation_corridor_blocks_same_source_dest() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        let kind = FieldOpKind::EvacuationCorridor { source_idx: 0, dest_idx: 0 };
+        let (ok, msg) = start_field_op(&mut state, kind);
+        assert!(!ok);
+        assert!(msg.unwrap().contains("differ"));
+    }
+
+    #[test]
+    fn evacuation_corridor_blocks_duplicate_from_same_source() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 2000.0;
+        let kind = FieldOpKind::EvacuationCorridor { source_idx: 0, dest_idx: 1 };
+        let (ok1, _) = start_field_op(&mut state, kind.clone());
+        assert!(ok1);
+        let (ok2, msg) = start_field_op(&mut state, kind);
+        assert!(!ok2);
+        assert!(msg.unwrap().contains("already in progress"));
     }
 }
