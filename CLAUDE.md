@@ -234,6 +234,18 @@ Crisis events **interrupt tick advancement**, exactly as they do in interactive 
 
 Game over also stops execution immediately.
 
+**Practical recipe for multi-day playtesting:** Break long runs into short segments with `--do enter` dismissals between each:
+
+```bash
+# Instead of one large d30 that might get stuck on a crisis:
+cargo run -- --snapshot --do d5 --do enter --do d5 --do enter --do d5 --do enter --do d5 --do enter --do d5 --do enter --do d5
+
+# If you're still blocked after one enter, you may have multiple queued crises — add more:
+cargo run -- --snapshot --do d10 --do enter --do enter --do enter --do d10
+```
+
+**Rule of thumb:** Use `d5 enter` pairs rather than one large `d<N>`. If a sequence gets stuck, add more `--do enter` steps — never retry from scratch with a bigger single advance. Multiple crises can queue up, so a single `enter` may not be enough.
+
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
 **⛔ NEVER add an `--auto-crises` flag or any equivalent.** This has been implemented and deleted multiple times. Crisis events are a core gameplay mechanic. Playtests must handle them, not bypass them — if playtest agents complain about crises, the answer is to improve the crisis events, not skip them. Any flag, option, or code path that auto-resolves or skips crisis events in snapshot mode is permanently off-limits.
