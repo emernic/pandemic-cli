@@ -190,10 +190,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 /// Advance the simulation by one tick and process the resulting events into
 /// UI state (event log, notifications, panel resets).
 ///
-/// This is the canonical way to advance the game simulation. Callers should
-/// use this instead of calling `engine::tick()` and `ui::process_events()`
-/// separately — the pairing is a single logical operation and nothing would
-/// catch a caller that forgets the second step.
+/// This is the canonical way to advance the game simulation. Both
+/// `engine::tick()` and `ui::process_events()` are `pub(crate)`, so external
+/// callers must go through this function and cannot split the pairing.
 ///
 /// `engine::tick()` is `pub(crate)` and accessible for engine unit tests that
 /// test game logic in isolation and do not need UI state updates.
