@@ -60,8 +60,7 @@ CronCreate(schedule="*/30 * * * *", command="/playtest-manager")
 ## Step 1: Fresh Branch From origin/master (EVERY TIME — NO EXCEPTIONS)
 
 ```bash
-git fetch origin
-git checkout -b playtest-$(date +%Y%m%d-%H%M%S) origin/master
+git fetch origin && git checkout --no-track -b playtest-$(date +%Y%m%d-%H%M%S) origin/master
 ```
 
 Other agents are merging features constantly. Playtesting stale code generates noise, not signal.

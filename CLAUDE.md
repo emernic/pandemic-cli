@@ -331,7 +331,7 @@ The VERY FIRST thing you do — before reading code, before planning, before tou
    - If you're on ANY branch other than `master`, **tell the user what branch you're on and ask if that's expected.** Do not silently continue on a random branch.
    - If you're starting new work, **always** create a fresh branch from `origin/master`:
      ```
-     git checkout -b my-branch origin/master
+     git fetch origin && git checkout --no-track -b my-branch origin/master
      ```
    - Only continue on the current branch if the user **explicitly** says to.
    - **Never assume the current branch is fine just because `git status` shows a clean working tree.** Clean working tree ≠ correct branch.
@@ -395,10 +395,10 @@ The user switches between many terminal tabs. They need to instantly see what wa
 - `tick()` is NOT an Action — simulation steps and player actions are separate concepts
 - Always create branches from `origin/master`, not local `master`:
   ```
-  git fetch origin && git checkout -b my-branch origin/master
+  git fetch origin && git checkout --no-track -b my-branch origin/master
   ```
-  Local `master` may be checked out in another worktree, which blocks `git checkout master`.
+  The `--no-track` flag is important: without it, git sets the upstream to `origin/master`, which means `git push` will either fail with an upstream mismatch error or (in permissive configs) push onto master. `--no-track` creates the branch at the right commit with no upstream configured. Local `master` may be checked out in another worktree, which blocks `git checkout master`.
+- **Always push with `git push origin HEAD`** — since branches are created with `--no-track`, there is no upstream configured and bare `git push` will fail. Use `git push origin HEAD` to push the current branch by name.
 - **Never use `gh pr merge --delete-branch`** — it tries to `git checkout master` locally, which fails because master is checked out in another worktree. Use `gh pr merge --squash` instead. Remote branches are auto-deleted on merge (repo setting enabled).
 - **After a force push, wait before merging** — `gh pr merge` immediately after `git push --force-with-lease` will fail with "not mergeable" because GitHub hasn't re-evaluated the branch yet. Add `sleep 8` between the push and the merge call.
-- **After squash-merging a PR, do not push follow-up commits to the same branch** — the squash rewrites history and GitHub will report the branch as non-mergeable. Always open a fresh branch for follow-up work: `git stash && git checkout -b <descriptive-name> origin/master && git stash pop`. Do NOT try to `git rebase origin/master` on the old branch — git does not reliably detect squash-merged patches as already-applied, so you risk force-pushing stale file versions over unrelated changes that landed on master in the meantime.
-- **Use `git push origin HEAD` not `git push`** — `git checkout -b branch origin/master` sets the upstream to `origin/master`, so plain `git push` will fail with an upstream mismatch error. Always push with `git push origin HEAD` or `git push -u origin <branchname>`.
+- **After squash-merging a PR, do not push follow-up commits to the same branch** — the squash rewrites history and GitHub will report the branch as non-mergeable. Always open a fresh branch for follow-up work. Do NOT try to `git rebase origin/master` on the old branch — git does not reliably detect squash-merged patches as already-applied, so you risk force-pushing stale file versions over unrelated changes that landed on master in the meantime.

@@ -66,8 +66,8 @@ gh issue comment <number> --body "Picking up this issue."
 Create a branch from master named after the issue:
 
 ```bash
-git fetch origin master
-git checkout -b issue-<number>-<short-description> origin/master
+git fetch origin
+git checkout --no-track -b issue-<number>-<short-description> origin/master
 ```
 
 Use a short kebab-case description derived from the issue title (e.g., `issue-7-fix-spread-calc`).
