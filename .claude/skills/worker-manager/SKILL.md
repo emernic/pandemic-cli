@@ -29,7 +29,7 @@ If the file contains a task ID (not "none"), call `TaskOutput` with `block=false
 Master changes frequently. Checking out the latest `origin/master` ensures the worker launches with up-to-date skill files (including `/pick-up-issue`). The worker will create its own issue branch from here.
 
 ```bash
-git fetch origin && git checkout -b worker-$(date +%s) origin/master
+git fetch origin && git checkout --no-track -b worker-$(date +%s) origin/master
 ```
 
 Tell the user the branch name that was created.

@@ -37,7 +37,7 @@ CronCreate: every 3 hours ("17 */3 * * *"), prompt: "COMMISSAR WAKE-UP. Run /com
 ### 2. Orient
 
 ```bash
-git fetch origin && git checkout -b commissar-$(date +%Y%m%d-%H%M%S) origin/master
+git fetch origin && git checkout --no-track -b commissar-$(date +%Y%m%d-%H%M%S) origin/master
 ```
 
 ### 3. Re-internalize the vision
