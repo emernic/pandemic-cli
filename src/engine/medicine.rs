@@ -365,10 +365,9 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
-            // Skip if resistance has reduced efficacy below the useful threshold.
-            // High-resistance medicines waste doses for negligible benefit; this
-            // also prevents slow-disease seeds from being suppressed indefinitely
-            // by a fully-resisted medicine with trivially-small dose consumption.
+            // Skip if resistance has made the medicine too weak to be worth deploying.
+            // Wasting doses on a near-useless medicine delays the player from
+            // switching to targeted medicines with full efficacy.
             let effective_eff = state.medicines[med_idx].effective_efficacy(best_disease_idx, &state.diseases);
             if effective_eff < 0.04 {
                 continue;

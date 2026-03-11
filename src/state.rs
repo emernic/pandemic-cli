@@ -4846,12 +4846,11 @@ impl GameState {
             history: vec![],
             auto_research: [false; 3],
             auto_deploy: {
-                // Broad-Spectrum is always the last medicine; start it deployed so
-                // novices benefit from it immediately and learn the system exists.
+                // Broad-Spectrum is always the last medicine. Start it auto-deployed
+                // so novices see the system working immediately rather than having to
+                // discover the toggle buried in the Medicines panel.
                 let mut v = vec![false; num_medicines];
-                if !v.is_empty() {
-                    *v.last_mut().unwrap() = true;
-                }
+                *v.last_mut().expect("at least one medicine (Broad-Spectrum) always exists") = true;
                 v
             },
             standing_orders: StandingOrders::default(),
