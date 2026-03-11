@@ -1074,12 +1074,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Stay neutral".into(),
-                    description: format!("Both cut funding. −¥{:.0} total.", neutral_loss),
+                    description: format!("Both cancel contracts. −¥{:.0} total.", neutral_loss),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Back {corp_a}"),
-                    description: format!("+¥{:.0} from {corp_a}. {corp_b} retaliates.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_a}. −15% POL. {corp_b} retaliates.", credit_gain),
                     cost: None,
                 },
                 ],
