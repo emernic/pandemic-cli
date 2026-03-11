@@ -18,6 +18,9 @@ pub enum Action {
     ToggleExtra,
     SpeedUp,
     Quit,
+    /// Jump directly to item N in the current panel list (0-based).
+    /// Keys 1–9 → index 0–8, key 0 → index 9.
+    JumpToItem { index: usize },
 }
 
 /// Map a crossterm KeyCode to an Action.
@@ -39,6 +42,16 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('x') | KeyCode::Char('X') => Some(Action::ToggleExtra),
         KeyCode::Char('z') | KeyCode::Char('Z') => Some(Action::SpeedUp),
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(Action::Quit),
+        KeyCode::Char('1') => Some(Action::JumpToItem { index: 0 }),
+        KeyCode::Char('2') => Some(Action::JumpToItem { index: 1 }),
+        KeyCode::Char('3') => Some(Action::JumpToItem { index: 2 }),
+        KeyCode::Char('4') => Some(Action::JumpToItem { index: 3 }),
+        KeyCode::Char('5') => Some(Action::JumpToItem { index: 4 }),
+        KeyCode::Char('6') => Some(Action::JumpToItem { index: 5 }),
+        KeyCode::Char('7') => Some(Action::JumpToItem { index: 6 }),
+        KeyCode::Char('8') => Some(Action::JumpToItem { index: 7 }),
+        KeyCode::Char('9') => Some(Action::JumpToItem { index: 8 }),
+        KeyCode::Char('0') => Some(Action::JumpToItem { index: 9 }),
         _ => None,
     }
 }
@@ -64,6 +77,16 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "x" => Some(Action::ToggleExtra),
         "z" => Some(Action::SpeedUp),
         "q" => Some(Action::Quit),
+        "1" => Some(Action::JumpToItem { index: 0 }),
+        "2" => Some(Action::JumpToItem { index: 1 }),
+        "3" => Some(Action::JumpToItem { index: 2 }),
+        "4" => Some(Action::JumpToItem { index: 3 }),
+        "5" => Some(Action::JumpToItem { index: 4 }),
+        "6" => Some(Action::JumpToItem { index: 5 }),
+        "7" => Some(Action::JumpToItem { index: 6 }),
+        "8" => Some(Action::JumpToItem { index: 7 }),
+        "9" => Some(Action::JumpToItem { index: 8 }),
+        "0" => Some(Action::JumpToItem { index: 9 }),
         _ => None,
     }
 }
@@ -91,5 +114,14 @@ mod tests {
         assert_eq!(string_to_action("T"), Some(Action::OpenThreats));
         assert_eq!(string_to_action("M"), Some(Action::OpenMedicines));
         assert_eq!(string_to_action("Q"), Some(Action::Quit));
+    }
+
+    #[test]
+    fn digit_keys_map_to_jump_to_item() {
+        assert_eq!(string_to_action("1"), Some(Action::JumpToItem { index: 0 }));
+        assert_eq!(string_to_action("5"), Some(Action::JumpToItem { index: 4 }));
+        assert_eq!(string_to_action("9"), Some(Action::JumpToItem { index: 8 }));
+        assert_eq!(string_to_action("0"), Some(Action::JumpToItem { index: 9 }));
+        assert_eq!(string_to_action("a"), None);
     }
 }

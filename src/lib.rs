@@ -145,6 +145,13 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::SelectRight => {
             new.ui.select_right(new.regions.len());
         }
+        Action::JumpToItem { index } => {
+            // Jump directly to item N in the current panel list (only when a panel is open).
+            if new.ui.open_panel != Panel::None {
+                let max = new.ui.panel_selection_max(&new);
+                new.ui.panel_selection = (*index).min(max);
+            }
+        }
         Action::ToggleExtra => {
             // Toggle "Assign 2x personnel" on research confirm screen (pure UI state)
             if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
@@ -796,6 +803,31 @@ mod tests {
         let state = apply_action(&state, &Action::Confirm);
         assert!(!state.auto_resolve_crises.contains_key("aid"),
             "manually handling a crisis should clear saved preference");
+    }
+
+    #[test]
+    fn jump_to_item_moves_panel_selection() {
+        let state = GameState::new_default(42);
+
+        // No panel open — JumpToItem should be ignored
+        let state = apply_action(&state, &Action::JumpToItem { index: 2 });
+        assert_eq!(state.ui.panel_selection, 0, "JumpToItem ignored when no panel open");
+
+        // Open research panel (BrowseCategories: 0=Field, 1=Applied, 2=Basic, 3=UpgradeLab)
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.panel_selection, 0);
+
+        // Key '3' → index 2 → should select Basic (index 2)
+        let state = apply_action(&state, &Action::JumpToItem { index: 2 });
+        assert_eq!(state.ui.panel_selection, 2, "key 3 should jump to index 2");
+
+        // Key '1' → index 0 → should jump back to Field
+        let state = apply_action(&state, &Action::JumpToItem { index: 0 });
+        assert_eq!(state.ui.panel_selection, 0, "key 1 should jump to index 0");
+
+        // Key '0' → index 9, clamped to max (3 in BrowseCategories)
+        let state = apply_action(&state, &Action::JumpToItem { index: 9 });
+        assert_eq!(state.ui.panel_selection, 3, "key 0 should clamp to max index");
     }
 
     #[test]
