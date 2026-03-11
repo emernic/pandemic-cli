@@ -202,12 +202,12 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 });
                 if retrial_in_progress {
                     lines.push(Line::from(Span::styled(
-                        "    ↻ Re-trial in progress — efficacy will be restored",
+                        "    ↻ Re-trial in progress, efficacy will be restored",
                         Style::default().fg(Color::Yellow),
                     )));
                 } else {
                     lines.push(Line::from(Span::styled(
-                        "    → Strain drifted — re-trial via Research [R] > Field Research",
+                        "    → Strain drifted. Re-trial via Research [R] > Field Research",
                         Style::default().fg(Color::Red),
                     )));
                 }
@@ -560,9 +560,9 @@ fn render_select_target(
                 if *mi == medicine_idx && *di == disease_idx)
         });
         let action = if retrial_in_progress {
-            " — re-trial in progress"
+            ": re-trial in progress"
         } else {
-            " — re-trial in Research [R] to restore"
+            ": re-trial in Research [R] to restore"
         };
         lines.push(Line::from(Span::styled(
             format!("  Strain drift{}{}", behind_str, action),
