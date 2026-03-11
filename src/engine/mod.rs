@@ -693,7 +693,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
+    use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -2287,17 +2287,13 @@ mod tests {
     fn policy_toggle_via_confirm() {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 1.0; // Full POL for testing
+
+        // P key now opens directly to ManagePolicies for the current map region (0)
         state = apply_action(&state, &Action::OpenPolicy);
         assert_eq!(state.ui.open_panel, Panel::Policy);
-
-        // Select Asia (reading order position 2: NA, Europe, Asia, ...)
-        for _ in 0..2 {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        state = apply_action(&state, &Action::Confirm);
         assert!(matches!(
             state.ui.policy_ui,
-            Some(PolicyUiState::ManagePolicies { region_idx: 4 })
+            Some(PolicyUiState::ManagePolicies { region_idx: 0 })
         ));
 
         // Navigate to Travel Ban (display position 6 after sorting by POL threshold)
@@ -2305,11 +2301,11 @@ mod tests {
             state = apply_action(&state, &Action::SelectNext);
         }
         state = apply_action(&state, &Action::Confirm);
-        assert!(state.policies[4].travel_ban);
+        assert!(state.policies[0].travel_ban);
 
         // Toggle it off
         state = apply_action(&state, &Action::Confirm);
-        assert!(!state.policies[4].travel_ban);
+        assert!(!state.policies[0].travel_ban);
     }
 
     #[test]
@@ -4907,7 +4903,7 @@ mod tests {
     }
 
     #[test]
-    fn decree_enact_via_policy_panel_ui_flow() {
+    fn decree_enact_via_orders_panel_ui_flow() {
         let mut state = GameState::new_default(42);
         state.resources.political_power = 1.0;
         state.resources.funding = 10_000.0;
@@ -4915,19 +4911,19 @@ mod tests {
         for i in 3..6 { state.regions[i].collapsed = true; }
         state.regions[0].get_or_create_infection(0).infected = 600_000.0;
 
-        // Open policy panel, navigate past 6 regions to first decree
-        state = apply_action(&state, &Action::OpenPolicy);
-        assert_eq!(state.ui.open_panel, Panel::Policy);
-        for _ in 0..6 {
+        // Open Orders panel, navigate past 5 op types to first decree (FIELD_OP_TYPE_COUNT = 5)
+        state = apply_action(&state, &Action::OpenOperations);
+        assert_eq!(state.ui.open_panel, Panel::Operations);
+        for _ in 0..crate::state::FIELD_OP_TYPE_COUNT {
             state = apply_action(&state, &Action::SelectNext);
         }
-        // panel_selection should be 6 (first decree: Conscript Researchers)
-        assert_eq!(state.ui.panel_selection, 6);
+        // panel_selection should be FIELD_OP_TYPE_COUNT (first decree: Conscript Researchers)
+        assert_eq!(state.ui.panel_selection, crate::state::FIELD_OP_TYPE_COUNT);
 
         let personnel_before = state.resources.personnel;
         // First Confirm goes to the confirmation screen
         state = apply_action(&state, &Action::Confirm);
-        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::ConfirmDecree { decree_idx: 0 }),
+        assert_eq!(state.ui.operations_ui, Some(OpsUiState::ConfirmDecree { decree_idx: 0 }),
             "should show confirmation before enacting");
         assert!(!state.enacted_decrees.conscript_researchers, "should not yet be enacted");
         // Second Confirm enacts the decree
@@ -4946,16 +4942,17 @@ mod tests {
         for i in 3..6 { state.regions[i].collapsed = true; }
         state.regions[0].get_or_create_infection(0).infected = 600_000.0;
 
-        // Open policy panel, navigate to Sacrifice Region (index 8 = 6 regions + 2)
-        state = apply_action(&state, &Action::OpenPolicy);
-        for _ in 0..8 {
+        // Open Orders panel, navigate to Sacrifice Region (FIELD_OP_TYPE_COUNT + 2 = 7)
+        state = apply_action(&state, &Action::OpenOperations);
+        let sacrifice_idx = crate::state::FIELD_OP_TYPE_COUNT + 2;
+        for _ in 0..sacrifice_idx {
             state = apply_action(&state, &Action::SelectNext);
         }
-        assert_eq!(state.ui.panel_selection, 8);
+        assert_eq!(state.ui.panel_selection, sacrifice_idx);
         state = apply_action(&state, &Action::Confirm);
 
         // Should be in SelectSacrificeRegion state
-        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::SelectSacrificeRegion));
+        assert_eq!(state.ui.operations_ui, Some(OpsUiState::SelectSacrificeRegion));
 
         // Select first non-collapsed region and confirm
         state = apply_action(&state, &Action::Confirm);
@@ -4963,9 +4960,9 @@ mod tests {
         let sacrificed_idx = state.enacted_decrees.sacrificed_region.unwrap();
         assert!(state.regions[sacrificed_idx].collapsed);
 
-        // UI should return to BrowseRegions after successful sacrifice
-        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions),
-            "should return to BrowseRegions after enacting sacrifice");
+        // UI should return to BrowseOps after successful sacrifice
+        assert_eq!(state.ui.operations_ui, Some(OpsUiState::BrowseOps),
+            "should return to BrowseOps after enacting sacrifice");
     }
 
     // --- Crisis chain tests ---

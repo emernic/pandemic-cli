@@ -7,7 +7,7 @@ pub mod ui;
 use action::Action;
 use engine::execute_command;
 use state::{
-    DeployTarget, DECREE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState, InfraSystem,
+    DeployTarget, DECREE_COUNT, FIELD_OP_TYPE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState, InfraSystem,
     KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_INFRA_BASE, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
@@ -71,12 +71,13 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
-                // Reset panel sub-states to top level so the enter that dismissed
-                // the crisis cannot bleed through to the underlying panel.
-                // Without this, a ManagePolicies state would cause the next enter
-                // to toggle a policy — silent state corruption.
+                // Close the policy panel on crisis dismiss — there is no safe
+                // "browse" intermediate state to reset to (ManagePolicies is the
+                // top level and would allow a stray Enter to toggle a policy).
+                // The player can press P again to reopen.
                 if new.ui.policy_ui.is_some() {
-                    new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
+                    new.ui.open_panel = Panel::None;
+                    new.ui.policy_ui = None;
                     new.ui.panel_selection = 0;
                 }
                 if new.ui.medicine_ui.is_some() {
@@ -200,8 +201,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::EnactDecree { .. } if result.success => {
-                            // Return to BrowseRegions after enacting (especially from SelectSacrificeRegion)
-                            new.ui.policy_ui = Some(PolicyUiState::BrowseRegions);
+                            // Return to BrowseOps after enacting (decrees are in the Orders panel)
+                            new.ui.operations_ui = Some(OpsUiState::BrowseOps);
                             new.ui.panel_selection = 0;
                         }
                         _ => {}
@@ -444,59 +445,8 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
     }
 }
 
-fn handle_policy_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCommand> {
     match ui.policy_ui.clone() {
-        Some(PolicyUiState::BrowseRegions) => {
-            let num_regions = state.regions.len();
-            if ui.panel_selection < num_regions {
-                // Region selected — manage its policies
-                let order = grid_reading_order(num_regions);
-                let region_idx = order.get(ui.panel_selection).copied().unwrap_or(0);
-                if region_idx < num_regions {
-                    ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx });
-                    ui.panel_selection = 0;
-                }
-                None
-            } else {
-                let decree_base = num_regions;
-                let so_base = decree_base + DECREE_COUNT;
-                let loan_base = so_base + STANDING_ORDER_COUNT;
-                if ui.panel_selection >= loan_base {
-                    // Loan selected — repay in full
-                    let loan_idx = ui.panel_selection - loan_base;
-                    return Some(GameCommand::RepayLoan { loan_idx });
-                }
-                if ui.panel_selection >= so_base {
-                    // Standing order selected
-                    let kind = ui.panel_selection - so_base;
-                    return Some(GameCommand::ToggleStandingOrder { kind });
-                }
-                // Decree selected.
-                let decree_idx = ui.panel_selection - decree_base;
-                if state.enacted_decrees.is_enacted(decree_idx) {
-                    // Already enacted — no action
-                    None
-                } else if !state.decree_unlocked(decree_idx) {
-                    // Locked — no action
-                    None
-                } else if decree_idx == 2 {
-                    // Sacrifice Region needs sub-selection first
-                    ui.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
-                    ui.panel_selection = 0;
-                    None
-                } else if decree_idx == 4 {
-                    // Fortify Region needs sub-selection first
-                    ui.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
-                    ui.panel_selection = 0;
-                    None
-                } else {
-                    // All other decrees go through a confirmation step
-                    ui.policy_ui = Some(PolicyUiState::ConfirmDecree { decree_idx });
-                    ui.panel_selection = 0;
-                    None
-                }
-            }
-        }
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             if ui.panel_selection == MANAGE_BARGAIN_POS {
                 // Bargain with Governor (only when defiant)
@@ -524,41 +474,6 @@ fn handle_policy_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
                 })
             }
         }
-        Some(PolicyUiState::SelectSacrificeRegion) => {
-            // Map display position to actual region index (skipping collapsed)
-            let non_collapsed: Vec<usize> = state.regions.iter()
-                .enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::EnactDecree {
-                    decree_idx: 2,
-                    region_idx: Some(region_idx),
-                })
-            } else {
-                None
-            }
-        }
-        Some(PolicyUiState::SelectFortifyRegion) => {
-            let non_collapsed: Vec<usize> = state.regions.iter()
-                .enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::EnactDecree {
-                    decree_idx: 4,
-                    region_idx: Some(region_idx),
-                })
-            } else {
-                None
-            }
-        }
-        Some(PolicyUiState::ConfirmDecree { decree_idx }) => {
-            // Player confirmed — enact it
-            Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
-        }
         None => None,
     }
 }
@@ -567,12 +482,17 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
     match ui.operations_ui.clone() {
         Some(OpsUiState::BrowseOps) => {
             let n_active = state.field_operations.len();
+            let op_type_base = n_active;
+            let decree_base = op_type_base + FIELD_OP_TYPE_COUNT;
+            let so_base = decree_base + DECREE_COUNT;
+            let loan_base = so_base + STANDING_ORDER_COUNT;
+
             if ui.panel_selection < n_active {
                 // Selected an active op — no action (view only)
                 None
-            } else {
+            } else if ui.panel_selection < decree_base {
                 // Selected an operation type
-                match ui.panel_selection - n_active {
+                match ui.panel_selection - op_type_base {
                     0 => {
                         // Recon — need to pick a disease
                         let targets: Vec<usize> = state.diseases.iter().enumerate()
@@ -619,6 +539,62 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                     }
                     _ => None,
                 }
+            } else if ui.panel_selection >= loan_base {
+                // Loan selected — repay in full
+                let loan_idx = ui.panel_selection - loan_base;
+                Some(GameCommand::RepayLoan { loan_idx })
+            } else if ui.panel_selection >= so_base {
+                // Standing order selected — toggle
+                let kind = ui.panel_selection - so_base;
+                Some(GameCommand::ToggleStandingOrder { kind })
+            } else {
+                // Decree selected
+                let decree_idx = ui.panel_selection - decree_base;
+                if state.enacted_decrees.is_enacted(decree_idx) || !state.decree_unlocked(decree_idx) {
+                    None
+                } else if decree_idx == 2 {
+                    // Sacrifice Region — needs region selection
+                    ui.operations_ui = Some(OpsUiState::SelectSacrificeRegion);
+                    ui.panel_selection = 0;
+                    None
+                } else if decree_idx == 4 {
+                    // Fortify Region — needs region selection
+                    ui.operations_ui = Some(OpsUiState::SelectFortifyRegion);
+                    ui.panel_selection = 0;
+                    None
+                } else {
+                    // All other decrees go through confirmation
+                    ui.operations_ui = Some(OpsUiState::ConfirmDecree { decree_idx });
+                    ui.panel_selection = 0;
+                    None
+                }
+            }
+        }
+        Some(OpsUiState::ConfirmDecree { decree_idx }) => {
+            Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+        }
+        Some(OpsUiState::SelectSacrificeRegion) => {
+            let non_collapsed: Vec<usize> = state.regions.iter()
+                .enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::EnactDecree { decree_idx: 2, region_idx: Some(region_idx) })
+            } else {
+                None
+            }
+        }
+        Some(OpsUiState::SelectFortifyRegion) => {
+            let non_collapsed: Vec<usize> = state.regions.iter()
+                .enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
+                Some(GameCommand::EnactDecree { decree_idx: 4, region_idx: Some(region_idx) })
+            } else {
+                None
             }
         }
         Some(OpsUiState::SelectReconTarget) => {
@@ -850,14 +826,14 @@ mod tests {
     }
 
     #[test]
-    fn crisis_dismiss_resets_panel_to_top_level() {
+    fn crisis_dismiss_closes_policy_panel() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        // Set up state with policy panel open in ManagePolicies (the dangerous nested state).
+        // Set up state with policy panel open in ManagePolicies.
         let mut state = GameState::new_default(42);
         state.ui.open_panel = Panel::Policy;
         state.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: 0 });
-        state.ui.panel_selection = 0; // pointing at Border Controls
+        state.ui.panel_selection = 0;
 
         // Fire a crisis while in this state.
         state.sim_state = SimState::Event { was_running: true };
@@ -872,32 +848,23 @@ mod tests {
             tick_created: 0,
         });
 
-        // 1st enter: dismiss the crisis.
+        // Dismiss the crisis.
         let state = apply_action(&state, &Action::Confirm);
         assert!(state.active_crisis.is_none(), "crisis should be dismissed");
 
-        // Panel must be reset to BrowseRegions (safe top level), not ManagePolicies.
-        // This is the key regression guard: if this fails, the cascade bug is back.
-        assert!(
-            matches!(state.ui.policy_ui, Some(PolicyUiState::BrowseRegions)),
-            "policy_ui should reset to BrowseRegions after crisis dismissal, got {:?}",
-            state.ui.policy_ui
-        );
+        // Policy panel must be closed entirely — there is no safe intermediate state
+        // to reset to (ManagePolicies is the top level and is an "action" state).
+        // Closing prevents a stray Enter from accidentally toggling a policy.
+        assert_eq!(state.ui.open_panel, Panel::None,
+            "policy panel should close after crisis dismissal");
+        assert!(state.ui.policy_ui.is_none(),
+            "policy_ui should be None after crisis dismissal, got {:?}", state.ui.policy_ui);
         assert_eq!(state.ui.panel_selection, 0);
 
-        // 2nd enter: simulates the "accidental" extra keypress from a --do chain.
-        // From BrowseRegions, this navigates INTO ManagePolicies — harmless navigation.
-        // WITHOUT the fix, we'd still be in ManagePolicies and this would toggle a policy.
+        // A stray Enter now does nothing (no panel open).
         let state = apply_action(&state, &Action::Confirm);
-        assert!(
-            !state.policies[0].border_controls,
-            "extra enter after crisis dismissal must not toggle border_controls"
-        );
-        // Now in ManagePolicies (navigated there safely, not via cascade).
-        assert!(
-            matches!(state.ui.policy_ui, Some(PolicyUiState::ManagePolicies { .. })),
-            "second enter from BrowseRegions should navigate to ManagePolicies"
-        );
+        assert!(!state.policies[0].border_controls,
+            "stray enter after crisis dismissal must not toggle border_controls");
     }
 
     #[test]

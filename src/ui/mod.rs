@@ -350,7 +350,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                 (2, message.clone(), message.clone())
             }
             GameEvent::ContractOffered { name } => {
-                let msg = format!("CONTRACT OFFER: {} — check Policy panel", name);
+                let msg = format!("CONTRACT OFFER: {} — accept/reject via crisis popup", name);
                 (5, msg.clone(), msg)
             }
             GameEvent::ContractWarning { patron, reason } => {
