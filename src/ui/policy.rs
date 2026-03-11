@@ -922,7 +922,7 @@ fn decree_description(decree_idx: usize) -> String {
             (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
             (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
             COUNTERMEASURE_KILL_FRACTION * 100.0),
-        _ => "Permanent action.".to_string(),
+        _ => unreachable!("decree_idx {} out of range", decree_idx),
     }
 }
 
@@ -933,17 +933,17 @@ fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<L
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
-        format!("  ⚠  {}  ⚠", name.to_uppercase()),
+        format!("  {}", name.to_uppercase()),
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  This action is PERMANENT and cannot be undone.",
+        "  Once enacted, this decree is permanent.",
         Style::default().fg(Color::Red),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        format!("  Effect: {}", desc),
+        format!("  {}", desc),
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
