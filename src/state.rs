@@ -136,14 +136,6 @@ pub struct GameState {
     /// Historical snapshots for dashboard charts. Recorded every HISTORY_INTERVAL ticks.
     #[serde(default)]
     pub history: Vec<HistorySnapshot>,
-    /// Consecutive ticks the player has had zero agency (no funds, no research, no doses).
-    /// After MERCY_RULE_TICKS, the game ends.
-    #[serde(default)]
-    pub zero_agency_ticks: u64,
-    /// True if defeat was triggered by the mercy rule (zero agency) rather than
-    /// all regions collapsing. Used by the UI to show a distinct defeat message.
-    #[serde(default)]
-    pub mercy_rule: bool,
     /// Per-disease highest death milestone tier already notified (0=none, 1=1M, 2=100M, 3=1B).
     /// Prevents repeat alerts for the same threshold.
     #[serde(default, alias = "threat_alert_level")]
@@ -2303,8 +2295,6 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 pub const TICKS_PER_DAY: f64 = 60.0;
 /// Personnel added per completed TrainPersonnel project.
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
-/// Mercy rule threshold: 5 days of zero player agency triggers defeat.
-pub const MERCY_RULE_TICKS: u64 = (5.0 * TICKS_PER_DAY) as u64;
 /// Deploy cooldown per disease per region in ticks (half a day).
 /// Per-disease cooldown means treating disease A doesn't block treating disease B.
 pub const DEPLOY_COOLDOWN_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
@@ -5048,8 +5038,6 @@ impl GameState {
             field_operations: vec![],
             crisis_operations: vec![],
             pending_shipments: vec![],
-            zero_agency_ticks: 0,
-            mercy_rule: false,
             death_milestone_tier: vec![0; num_diseases],
             intel_pre_detection_briefed: vec![false; num_diseases],
             ark_protocol: None,
@@ -5641,29 +5629,6 @@ impl GameState {
     pub fn is_abandoned(&self, region_idx: usize) -> bool {
         self.ark_protocol.is_some_and(|ark| ark != region_idx)
             && !self.regions.get(region_idx).is_some_and(|r| r.collapsed)
-    }
-
-    pub fn has_zero_agency(&self) -> bool {
-        let upkeep = self.personnel_upkeep_rate();
-        let policy_cost = self.total_policy_funding_cost();
-        let income = self.funding_income_rate();
-        let net_income = income - upkeep - policy_cost;
-
-        // Must have very low funds AND negative/zero income (can't recover)
-        let broke = self.resources.funding < 100.0 && net_income <= 0.0;
-        // No active research of any kind
-        let no_research = self.field_research.is_empty()
-            && self.applied_research.is_none()
-            && self.basic_research.is_none();
-        // No medicine doses to deploy and no shipments in transit.
-        // If any medicine is unlocked, manufacturing is possible once funds
-        // recover, so the player isn't truly stuck.
-        let has_unlocked_medicine = self.medicines.iter().any(|m| m.unlocked);
-        let no_doses = !has_unlocked_medicine
-            && self.medicines.iter().all(|m| m.doses <= 0.0)
-            && self.pending_shipments.is_empty();
-
-        broke && no_research && no_doses
     }
 
     /// Generate debrief-style tips referencing what actually happened in this run.
