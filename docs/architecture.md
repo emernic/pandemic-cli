@@ -96,7 +96,7 @@ tick() in engine/mod.rs:
   13. Scheduled follow-up crises + crisis::generate_crisis()
   14. RNG write-back + scientist roster sync
   15. Regional collapse checks (may trigger crisis)
-  16. Defeat conditions + mercy rule
+  16. Defeat conditions
   17. History recording (sparkline data)
 ```
 

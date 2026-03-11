@@ -81,7 +81,7 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 11. Scheduled follow-up crises + `crisis::generate_crisis()`
 12. *RNG write-back* + scientist roster sync
 13. Regional collapse (may trigger refugee crisis)
-14. Defeat conditions + mercy rule
+14. Defeat conditions
 
 After each tick, `lib::tick_and_process()` calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
@@ -123,7 +123,7 @@ Each subsystem module follows the same pattern:
 
 ### What stays in mod.rs
 
-`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, political power drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, mercy rule, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
+`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, political power drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
 
 ## Event System
 
