@@ -97,6 +97,16 @@ Ask yourself these questions and answer them honestly:
 
 2. **Justification:** For each section or paragraph you wrote, state who reads it and what they do differently after reading it. If you can't answer both, the content is padding — cut it. Accurate but pointless text is the document equivalent of dead code. This is especially important for READMEs, design docs, and issue descriptions where the temptation is to be "thorough" by adding detail that serves no one.
 
+## Process Hygiene Check
+
+If you picked up an issue via `/pick-up-issue`:
+
+1. Is the issue **closed**? (not just "PR merged" — verify with `gh issue view`)
+2. Is the `in-progress` label **removed**?
+3. Is your PR **merged** (not just created)?
+
+If any answer is "no" and you're about to end your session, finish the job. Leaving an issue open with `in-progress` blocks every other agent from picking it up.
+
 ## Process
 
 **NOTE: Focus on NEW aspects that you have not already considered and discussed. Actually READ your code and surrounding code and THINK about what we're overlooking.**
