@@ -40,18 +40,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         {
-            let pol = state.resources.board_approval;
-            let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };
+            let approval = state.resources.board_approval;
+            let approval_color = if approval >= 0.5 { Color::Green } else if approval >= 0.2 { Color::Yellow } else { Color::Red };
             Span::styled(
-                format!("Board: {:.0}%", pol * 100.0),
-                Style::default().fg(pol_color),
+                format!("Board: {:.0}%", approval * 100.0),
+                Style::default().fg(approval_color),
             )
         },
-        // AUTH trend arrow: compare current AUTH to its drift target
+        // Board approval trend arrow: compare current to drift target
         {
             let target = state.approval_target();
-            let pol = state.resources.board_approval;
-            let gap = target - pol;
+            let approval = state.resources.board_approval;
+            let gap = target - approval;
             if gap > 0.02 {
                 Span::styled(" \u{25b2}", Style::default().fg(Color::Green)) // ▲ rising
             } else if gap < -0.02 {
@@ -60,7 +60,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled(" \u{2500}", Style::default().fg(Color::DarkGray)) // ─ stable
             }
         },
-        // Next AUTH unlock hint
+        // Next approval unlock hint
         match state.next_approval_unlock() {
             Some((name, threshold)) => Span::styled(
                 format!(" ({}@{:.0}%)", name, threshold * 100.0),

@@ -1371,7 +1371,7 @@ pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
 pub const BARGAIN_LOYALTY_GAIN: f64 = 20.0;
 /// Blowhard bargain: large loyalty gain (they're easy to please).
 pub const BARGAIN_BLOWHARD_LOYALTY_GAIN: f64 = 30.0;
-/// Buffoon bargain cost: small POL cost (public praise).
+/// Buffoon bargain cost: small approval cost (public praise).
 pub const BARGAIN_BUFFOON_APPROVAL_COST: f64 = 0.05;
 /// Blowhard bargain cost: small funding cost.
 pub const BARGAIN_BLOWHARD_FUNDING_COST: f64 = 100.0;
@@ -5352,7 +5352,7 @@ impl GameState {
         (base * (1.0 - severity * 0.5)).max(0.0)
     }
 
-    /// Whether a policy can be activated given current POL and regional severity.
+    /// Whether a policy can be activated given current board approval and regional severity.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
         self.resources.board_approval >= self.effective_approval_threshold(region_idx, policy_idx)
     }
@@ -5443,8 +5443,8 @@ impl GameState {
         total / self.contracts.len() as f64
     }
 
-    /// Current POL drift target based on board confidence, patron relationships, and crisis severity.
-    /// POL drifts toward this value at ~50%/day. Called by engine::tick().
+    /// Current approval drift target based on board confidence, patron relationships, and crisis severity.
+    /// Approval drifts toward this value at ~50%/day. Called by engine::tick().
     /// Returns (board_component, patron_component, severity_floor) that sum to approval_target().
     /// Used by the dashboard to show a breakdown without duplicating the formula.
     ///
@@ -5473,24 +5473,24 @@ impl GameState {
 
     pub fn approval_target(&self) -> f64 {
         let (board_component, patron_component, severity_floor) = self.approval_target_components();
-        // POL target is driven by board confidence + patron relationships + crisis severity.
-        // A healthy board with satisfied patrons can grant up to 70% authority.
+        // Approval target is driven by board confidence + patron relationships + crisis severity.
+        // A healthy board with satisfied patrons can grant up to 70% approval.
         // A failed board with no patrons is held to ~10% (severity floor only).
         (board_component + patron_component + severity_floor).clamp(0.0, 0.90)
     }
 
-    /// The next policy that would unlock with more POL. Returns (name, threshold)
+    /// The next policy that would unlock with more approval. Returns (name, threshold)
     /// for the lowest-threshold policy not yet globally available, or None if all
-    /// are already unlocked at current POL.
+    /// are already unlocked at current approval.
     pub fn next_approval_unlock(&self) -> Option<(&'static str, f64)> {
-        let pol = self.resources.board_approval;
+        let approval = self.resources.board_approval;
         let mut best: Option<(&'static str, f64)> = None;
         for idx in 0..POLICY_COUNT {
             let threshold = POLICY_APPROVAL_THRESHOLDS[idx];
             if threshold <= 0.0 {
                 continue; // Always available, skip
             }
-            if pol >= threshold {
+            if approval >= threshold {
                 continue; // Already unlocked
             }
             if best.is_none() || threshold < best.unwrap().1 {
