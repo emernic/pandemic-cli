@@ -5383,11 +5383,12 @@ impl GameState {
     }
 
     /// Patron confidence: average satisfaction across active funding contracts (0.0–1.0).
-    /// Returns 1.0 when no contracts exist — new players aren't penalized for having
-    /// no patron relationships yet.
+    /// Returns 0.0 when no contracts exist — no patron relationships means no patron
+    /// authority contribution. This is neutral (not negative): new players who haven't
+    /// signed contracts yet simply have no patron influence on pol_target.
     pub fn patron_confidence(&self) -> f64 {
         if self.contracts.is_empty() {
-            return 1.0;
+            return 0.0;
         }
         let total: f64 = self.contracts.iter().map(|c| c.satisfaction).sum();
         total / self.contracts.len() as f64
@@ -5409,12 +5410,10 @@ impl GameState {
         // Board satisfaction is the primary driver (0.0–0.30)
         let board_component = self.board_satisfaction() * 0.30;
 
-        // Patron confidence only counts when you have active contracts (0.0–0.40)
-        let patron_component = if self.contracts.is_empty() {
-            0.0
-        } else {
-            self.patron_confidence() * 0.40
-        };
+        // Patron authority scales with patron confidence (0.0–0.40).
+        // patron_confidence() returns 0.0 when no contracts exist, so this is 0
+        // with no active patron relationships.
+        let patron_component = self.patron_confidence() * 0.40;
 
         // Severity floor: even a hostile board must grant some authority when people are dying
         // Capped at 0.10 to prevent severity from dominating once board/patrons matter
