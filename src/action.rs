@@ -119,6 +119,10 @@ mod tests {
         assert_eq!(string_to_action("T"), Some(Action::OpenThreats));
         assert_eq!(string_to_action("M"), Some(Action::OpenMedicines));
         assert_eq!(string_to_action("Q"), Some(Action::Quit));
+
+        assert_eq!(string_to_action("home"), Some(Action::GoHome));
+        assert_eq!(string_to_action("Home"), Some(Action::GoHome));
+        assert_eq!(string_to_action("HOME"), Some(Action::GoHome));
     }
 
     #[test]
