@@ -816,8 +816,9 @@ pub enum FundingCondition {
     MaxDeaths { threshold: f64 },
     /// All regions must remain standing (revoked on first collapse).
     NoCollapse,
-    /// Must have at least one active research project on any track.
-    ActiveResearch,
+    /// A specific emergency decree must not be enacted while this contract is active.
+    /// Once enacted, decrees are permanent — violating this condition will eventually revoke the contract.
+    ForbidDecree { decree_idx: usize },
 }
 
 impl FundingCondition {
@@ -833,7 +834,9 @@ impl FundingCondition {
                 format!("Global deaths below {}", format_large_number(*threshold))
             }
             Self::NoCollapse => "No region may collapse".to_string(),
-            Self::ActiveResearch => "Maintain active research at all times".to_string(),
+            Self::ForbidDecree { decree_idx } => {
+                format!("Do not enact {}", decree_display_name(*decree_idx))
+            }
         }
     }
 
@@ -852,10 +855,8 @@ impl FundingCondition {
             Self::NoCollapse => {
                 !state.regions.iter().any(|r| r.collapsed)
             }
-            Self::ActiveResearch => {
-                !state.field_research.is_empty()
-                    || state.applied_research.is_some()
-                    || state.basic_research.is_some()
+            Self::ForbidDecree { decree_idx } => {
+                !state.enacted_decrees.is_enacted(*decree_idx)
             }
         }
     }

@@ -1475,13 +1475,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     ),
                     "Cover his property insurance premiums. Buys time.".to_string(),
                 ),
-                // Ines Caron — Helion Research Partnership (active research)
+                // Ines Caron — Helion Research Partnership (forbid conscript researchers)
                 2 => (
                     format!(
-                        "{} wants to see lab activity. Helion does not pay for empty workbenches.",
+                        "{} has seen the conscription order. Helion's board is calling it a compliance breach.",
                         short_name,
                     ),
-                    "Send her a progress report with billable hours. Buys time.".to_string(),
+                    "Issue a statement distancing N.W.H.O. from the policy. Buys time.".to_string(),
                 ),
                 // Marcus Holt — Holt Stability Fund (no collapse)
                 3 => (
@@ -1527,6 +1527,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         short_name,
                     ),
                     "Pay his standby deployment fees. Buys time.".to_string(),
+                ),
+                // Dr. Ingrid Caldwell — Caldwell Protocols Grant (forbid authorize human trials)
+                8 => (
+                    format!(
+                        "{} has seen the authorization order. She is calling this a breach of the grant terms.",
+                        short_name,
+                    ),
+                    "Provide written assurance that trials will return to full protocol. Buys time.".to_string(),
                 ),
                 _ => (
                     format!("{} is unhappy with your performance.", short_name),

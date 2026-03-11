@@ -36,13 +36,13 @@ const TEMPLATES: &[Template] = &[
         condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
         source: "Nobody quarantines a Saldanha property.",
     },
-    // Medium-value: require commitments
+    // Medium-value: forbid specific emergency decrees
     Template {
         name: "Helion Research Partnership",
         patron: "Ines Caron, Helion Pharmaceuticals VP",
-        income: 1.8,
-        condition: FundingCondition::ActiveResearch,
-        source: "We fund labs that produce. Not labs that sit idle.",
+        income: 2.0,
+        condition: FundingCondition::ForbidDecree { decree_idx: 0 }, // No Conscript Researchers
+        source: "One headline about forced labor in our supply chain and the board pulls out. That clause stays.",
     },
     Template {
         name: "Holt Stability Fund",
@@ -80,6 +80,14 @@ const TEMPLATES: &[Template] = &[
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
         source: "My people are at the checkpoints. Keep the policy active.",
+    },
+    // High-value: forbid fast-tracking clinical trials
+    Template {
+        name: "Caldwell Protocols Grant",
+        patron: "Dr. Ingrid Caldwell, Caldwell Medical Ethics Foundation",
+        income: 2.0,
+        condition: FundingCondition::ForbidDecree { decree_idx: 1 }, // No Authorize Human Trials
+        source: "Every grant we issue requires full authorization. We didn't build that standard to have it waived.",
     },
 ];
 
@@ -124,8 +132,9 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
                 r.population > 0 && infected / r.population as f64 >= 0.005
             }
         }),
-        // Helion Research Partnership (ActiveResearch) — always relevant
-        2 => true,
+        // Helion Research Partnership (ForbidDecree: Conscript Researchers) — only relevant when
+        // that decree is unlocked (500K+ infected or 100K+ dead). Before then the constraint is meaningless.
+        2 => state.decree_unlocked(0),
         // Holt Stability Fund (NoCollapse) — only relevant when collapse is a real risk
         3 => state.regions.iter().any(|r| {
             !r.collapsed && r.infections.iter().any(|i| i.infected >= SEVERITY_HIGH_THRESHOLD)
@@ -136,6 +145,9 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
         5 => state.total_dead() >= 2_500_000.0,
         // RequirePolicy (Hospital Surge, Border Controls) — always relevant
         6 | 7 => true,
+        // Caldwell Protocols Grant (ForbidDecree: Authorize Human Trials) — only relevant when
+        // that decree is unlocked (50M+ dead or 2+ CRITICAL regions).
+        8 => state.decree_unlocked(1),
         _ => true,
     }
 }
