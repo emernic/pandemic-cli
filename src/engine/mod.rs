@@ -1481,6 +1481,7 @@ mod tests {
         let mut loss_days = Vec::new();
         for seed in &seeds {
             let mut state = GameState::new_default(*seed);
+            corporations::generate_corporations(&mut state);
             let max_ticks = 90 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
@@ -1531,6 +1532,7 @@ mod tests {
 
         fn simulate_competent(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
+            corporations::generate_corporations(&mut state);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             let mut total_deploys = 0u32;
             for _ in 0..max_ticks {
@@ -1687,6 +1689,7 @@ mod tests {
 
         fn simulate_passive(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
+            corporations::generate_corporations(&mut state);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
