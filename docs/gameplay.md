@@ -145,7 +145,7 @@ Every crisis event must read like a situation report. It states what happened. I
 **Language that does not belong in crisis text:**
 
 - `"transparency"` / `"go transparent"` — 2020s activist language. Use the actual action: "issue a statement," "acknowledge the leak," etc.
-- `"misinformation"` / `"disinformation"` — 2020s political language. Use `"infodemic"` if you mean the epidemiological phenomenon, or just describe what mechanically happens.
+- `"misinformation"` / `"disinformation"` / `"infodemic"` — 2020s WHO language. Describe what mechanically happens: "leak circulating," "compliance dropping," "treatment rates falling."
 - `"civil unrest"` — news-speak. Say what's actually happening: perimeter breached, staff evacuating, region destabilizing.
 - `"member states"` — UN language from a world that no longer exists. Use corporations or named individuals.
 - anything that performs urgency: "nightmare scenario," "the world is watching," "desperate measures"
