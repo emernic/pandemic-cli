@@ -148,24 +148,24 @@ pub fn tick(state: &GameState) -> GameState {
     // Later diseases are tougher (scaled by game day and player capability).
     // The arms race is bidirectional: more player tech → faster emergence.
     //
-    // Wave clustering: after day 12, recent disease spawns temporarily spike
-    // the emergence rate, creating coordinated waves. Ramps from 2× (day 12)
-    // to 5× (day 25+), so mid-game sees 2-disease clusters while late-game
+    // Wave clustering: after day 24, recent disease spawns temporarily spike
+    // the emergence rate, creating coordinated waves. Ramps from 2× (day 24)
+    // to 5× (day 50+), so mid-game sees 2-disease clusters while late-game
     // sees 2-3.
     {
         let day = new.tick as f64 / crate::state::TICKS_PER_DAY;
 
         // Wave boost: if a disease spawned recently and we're past early game,
         // increase the chance of another spawn. Ramps up over mid-to-late game.
-        let wave_boost = if day >= 12.0 {
+        let wave_boost = if day >= 24.0 {
             let most_recent_spawn = new.diseases.iter()
                 .map(|d| d.spawned_at_tick)
                 .max()
                 .unwrap_or(0);
             let ticks_since = new.tick.saturating_sub(most_recent_spawn);
             if ticks_since > 0 && ticks_since < 200 {
-                // Ramp: 2.0 at day 12 → 4.0 at day 25+
-                let ramp = ((day - 12.0) / 13.0).clamp(0.0, 1.0);
+                // Ramp: 2.0 at day 24 → 4.0 at day 50+
+                let ramp = ((day - 24.0) / 26.0).clamp(0.0, 1.0);
                 2.0 + ramp * 2.0
             } else {
                 0.0
@@ -318,8 +318,8 @@ pub fn tick(state: &GameState) -> GameState {
     let crisis_interval = {
         let day = new.tick as f64 / TICKS_PER_DAY;
         let base = CRISIS_INTERVAL as f64;
-        // Halve the interval every 15 days, floor at 3 days
-        (base * 0.5_f64.powf(day / 15.0)).max(3.0 * TICKS_PER_DAY)
+        // Halve the interval every 30 days, floor at 3 days
+        (base * 0.5_f64.powf(day / 30.0)).max(3.0 * TICKS_PER_DAY)
     };
     if new.active_crisis.is_none()
         && crisis_gap_ok
@@ -2641,7 +2641,7 @@ mod tests {
     #[test]
     fn late_game_diseases_shift_toward_deadly_types() {
         use crate::state::{PathogenType, TICKS_PER_DAY};
-        // Spawn many diseases at day 0 and day 30, compare type distributions.
+        // Spawn many diseases at day 0 and day 60, compare type distributions.
         let mut early_deadly = 0usize; // fungus + prion
         let mut late_deadly = 0usize;
         let trials = 200;
@@ -2661,9 +2661,9 @@ mod tests {
             }
             state.rng = rng;
 
-            // Late game (day 30)
+            // Late game (day 60)
             let mut state2 = GameState::new_default(seed + 1000);
-            state2.tick = (30.0 * TICKS_PER_DAY) as u64;
+            state2.tick = (60.0 * TICKS_PER_DAY) as u64;
             state2.diseases.clear();
             let mut rng2 = state2.rng.clone();
             if let Some((idx, _)) = disease::spawn_disease(&mut state2, &mut rng2) {
@@ -2753,10 +2753,10 @@ mod tests {
     #[test]
     fn mid_game_diseases_resist_broad_spectrum() {
         use crate::state::TICKS_PER_DAY;
-        // After day 10, diseases spawned against a BS-deploying player should
+        // After day 20, diseases spawned against a BS-deploying player should
         // have pre-existing BS resistance (None mechanism). BS cap is 50%.
         let mut state = GameState::new_default(42);
-        state.tick = (20.0 * TICKS_PER_DAY) as u64;
+        state.tick = (30.0 * TICKS_PER_DAY) as u64; // day 30: past threshold with meaningful intensity
 
         // Simulate heavy BS deployment
         for med in &mut state.medicines {
@@ -2805,7 +2805,7 @@ mod tests {
 
             // Late game
             let mut state2 = GameState::new_default(seed as u64 + 8000);
-            state2.tick = (35.0 * TICKS_PER_DAY) as u64; // day 35: full optimization
+            state2.tick = (70.0 * TICKS_PER_DAY) as u64; // day 70: full optimization
             state2.diseases.clear();
             for r in &mut state2.regions { r.infections.clear(); }
             let mut rng2 = state2.rng.clone();
@@ -2825,7 +2825,7 @@ mod tests {
     fn mid_game_diseases_target_vulnerable_regions() {
         use crate::state::{ScreeningLevel, TICKS_PER_DAY};
         // Set up: region 0 is heavily defended, region 1-5 are undefended.
-        // At mid-game (day 8), vulnerability targeting is dominant — diseases
+        // At mid-game (day 16), vulnerability targeting is dominant — diseases
         // prefer undefended regions where they can spread easily.
         let trials = 200;
         let mut defended_hits = 0usize;
@@ -2833,7 +2833,7 @@ mod tests {
 
         for seed in 0..trials {
             let mut state = GameState::new_default(seed as u64 + 5000);
-            state.tick = (8.0 * TICKS_PER_DAY) as u64; // day 8: vulnerability targeting active
+            state.tick = (16.0 * TICKS_PER_DAY) as u64; // day 16: vulnerability targeting active
             // Defend region 0 heavily
             state.policies[0].screening = ScreeningLevel::MassRapid;
             state.regions[0].hospital_level = 2;
@@ -2869,7 +2869,7 @@ mod tests {
     #[test]
     fn late_game_diseases_target_player_strongholds() {
         use crate::state::{ScreeningLevel, TICKS_PER_DAY};
-        // At late-game (day 25+), strategic targeting dominates — diseases
+        // At late-game (day 50+), strategic targeting dominates — diseases
         // target the player's invested regions (high infrastructure, active policies).
         // This is the "designed, not random" behavior.
         let trials = 200;
@@ -2878,7 +2878,7 @@ mod tests {
 
         for seed in 0..trials {
             let mut state = GameState::new_default(seed as u64 + 7000);
-            state.tick = (25.0 * TICKS_PER_DAY) as u64; // day 25: strategic targeting dominant
+            state.tick = (50.0 * TICKS_PER_DAY) as u64; // day 50: strategic targeting dominant
             // Invest heavily in region 0 (policies + infrastructure)
             state.policies[0].screening = ScreeningLevel::MassRapid;
             state.policies[0].quarantine = true;
@@ -5763,7 +5763,7 @@ mod tests {
 
         for seed in 0..50 {
             let mut state = GameState::new_default(42);
-            state.tick = (25.0 * crate::state::TICKS_PER_DAY) as u64; // day 25 (full counter-weight)
+            state.tick = (60.0 * crate::state::TICKS_PER_DAY) as u64; // day 60 (full counter-weight)
             // Give the player deployed antivirals
             for med in &mut state.medicines {
                 if med.therapy_type == TherapyType::Antiviral {
@@ -5796,12 +5796,12 @@ mod tests {
     fn strategic_targeting_prefers_high_population_regions_late_game() {
         use rand::SeedableRng;
 
-        // Run many spawns at day 30+ and count which regions get hit
+        // Run many spawns at day 60+ and count which regions get hit
         let mut region_hits = [0u32; 6];
 
         for seed in 0..100 {
             let mut state = GameState::new_default(42);
-            state.tick = (30.0 * crate::state::TICKS_PER_DAY) as u64;
+            state.tick = (60.0 * crate::state::TICKS_PER_DAY) as u64;
             // Add some infrastructure to Asia (highest pop region)
             state.regions[2].hospital_level = 2; // Medical Center
             state.policies[2].quarantine = true;
@@ -5815,7 +5815,7 @@ mod tests {
         }
 
         // Asia (index 2, pop 4.7B) should be hit more often than Oceania (index 5, pop 45M)
-        // at day 30 with strategic targeting active
+        // at day 60 with strategic targeting active
         let asia_hits = region_hits[2];
         let oceania_hits = region_hits[5];
         // Asia should have at least as many hits as Oceania (it should have MORE,
@@ -5828,15 +5828,15 @@ mod tests {
     fn wave_clustering_increases_emergence_after_recent_spawn() {
         use crate::state::TICKS_PER_DAY;
 
-        // At day 30 (fully ramped), with a disease that spawned 50 ticks ago,
+        // At day 60 (fully ramped), with a disease that spawned 50 ticks ago,
         // emergence chance should be much higher than normal.
-        // Wave clustering ramps from 2.0 at day 12 to 4.0 at day 25+.
+        // Wave clustering ramps from 2.0 at day 24 to 4.0 at day 50+.
         let mut state = GameState::new_default(42);
-        state.tick = (30.0 * TICKS_PER_DAY) as u64;
+        state.tick = (60.0 * TICKS_PER_DAY) as u64;
         state.diseases[0].spawned_at_tick = state.tick - 50;
 
         let day = state.tick as f64 / TICKS_PER_DAY;
-        assert!(day >= 25.0, "should be past full ramp at day 25");
+        assert!(day >= 50.0, "should be past full ramp at day 50");
 
         let most_recent = state.diseases.iter()
             .map(|d| d.spawned_at_tick)
@@ -5857,19 +5857,19 @@ mod tests {
     fn wave_clustering_ramps_from_mid_game() {
         use crate::state::TICKS_PER_DAY;
 
-        // At day 15, wave boost should be active but weaker than late-game.
-        // Ramp: (15-12)/13 ≈ 0.23, so boost = 2.0 + 0.23*2.0 ≈ 2.46
+        // At day 30, wave boost should be active but weaker than late-game.
+        // Ramp: (30-24)/26 ≈ 0.23, so boost = 2.0 + 0.23*2.0 ≈ 2.46
         let mut state = GameState::new_default(42);
-        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+        state.tick = (30.0 * TICKS_PER_DAY) as u64;
         state.diseases[0].spawned_at_tick = state.tick - 50;
 
         let day = state.tick as f64 / TICKS_PER_DAY;
-        let ramp = ((day - 12.0) / 13.0).clamp(0.0, 1.0);
+        let ramp = ((day - 24.0) / 26.0).clamp(0.0, 1.0);
         let wave_boost = 2.0 + ramp * 2.0;
 
         // Should be meaningfully boosted but less than the full 4.0
-        assert!(wave_boost > 2.0, "boost should be active at day 15: {wave_boost}");
-        assert!(wave_boost < 3.0, "boost should not be fully ramped at day 15: {wave_boost}");
+        assert!(wave_boost > 2.0, "boost should be active at day 30: {wave_boost}");
+        assert!(wave_boost < 3.0, "boost should not be fully ramped at day 30: {wave_boost}");
 
         let normal_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure());
         let boosted_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure() + wave_boost);

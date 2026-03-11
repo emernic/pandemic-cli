@@ -28,9 +28,9 @@ fn refugee_pol_cost(wave: u8) -> f64 {
 /// to be selected at a given game day. Returns a weight (higher = more likely).
 ///
 /// Three phases with overlapping transitions:
-/// - Early (day 0-12): bureaucratic, political, organizational problems
-/// - Mid (day 8-22): infrastructure, resource, and escalating pressure
-/// - Late (day 18+): survival, power struggles, dark comedy
+/// - Early (day 0-24): bureaucratic, political, organizational problems
+/// - Mid (day 16-44): infrastructure, resource, and escalating pressure
+/// - Late (day 36+): survival, power struggles, dark comedy
 fn phase_weight(tag: &str, day: f64) -> f64 {
     // Smooth ramp: 0 at `start`, 1 at `peak`, stays 1 after peak
     let ramp_up = |start: f64, peak: f64| -> f64 {
@@ -46,32 +46,32 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
     };
 
     match tag {
-        // --- Early-game: bureaucratic/organizational (fade after day 15-25) ---
+        // --- Early-game: bureaucratic/organizational (fade after day 30-50) ---
         "political" | "personnel" | "dataleak" | "corrupt" |
         "media" | "whistleblower" | "hesitancy" | "aid" | "trial"
-            => fade_out(15.0, 25.0),
+            => fade_out(30.0, 50.0),
 
         // Lab accidents are early-mid (fade later, research keeps going)
-        "lab" => fade_out(20.0, 30.0),
+        "lab" => fade_out(40.0, 60.0),
 
-        // --- Mid-game: escalating pressure (ramp up day 5-12, fade after 25-35) ---
+        // --- Mid-game: escalating pressure (ramp up day 10-24, fade after 50-70) ---
         "supply" | "blackmarket" | "riot" | "mutation" |
         "diversion" | "exhaustion"
-            => ramp_up(5.0, 12.0) * fade_out(25.0, 35.0),
+            => ramp_up(10.0, 24.0) * fade_out(50.0, 70.0),
 
-        // --- Late-game: survival and power struggles (ramp up day 12-20) ---
+        // --- Late-game: survival and power struggles (ramp up day 24-40) ---
         "military" | "cult" | "who_evac" | "warlord" | "vaccine_dispute"
-            => ramp_up(12.0, 20.0),
+            => ramp_up(24.0, 40.0),
 
         // --- Dark comedy: ramp in mid-to-late game ---
         // Performance review is funniest when things are falling apart
-        "performance_review" => ramp_up(10.0, 18.0),
+        "performance_review" => ramp_up(20.0, 36.0),
         // Congressional hearing is a late-game absurdity
-        "congress" => ramp_up(18.0, 25.0),
+        "congress" => ramp_up(36.0, 50.0),
         // Naming rights and intern are mid-game comedy
-        "naming_rights" | "intern" => ramp_up(5.0, 10.0) * fade_out(25.0, 35.0),
+        "naming_rights" | "intern" => ramp_up(10.0, 20.0) * fade_out(50.0, 70.0),
         // Billionaire can show up mid-to-late
-        "billionaire" => ramp_up(8.0, 15.0),
+        "billionaire" => ramp_up(16.0, 30.0),
 
         // Default: no phase bias (follow-ups, governor crises, etc.)
         _ => 1.0,
@@ -166,13 +166,13 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Quarantine riot: requires quarantine active somewhere (different from PoliticalPressure)
-    if !quarantined.is_empty() && day > 5.0 {
+    if !quarantined.is_empty() && day > 10.0 {
         let idx = quarantined[rng.r#gen::<usize>() % quarantined.len()];
         candidates.push(CrisisKind::QuarantineRiot { region_idx: idx });
     }
 
-    // Media panic: always available after day 3
-    if day > 3.0 {
+    // Media panic: always available after day 6
+    if day > 6.0 {
         candidates.push(CrisisKind::MediaPanic);
     }
 
@@ -241,16 +241,16 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::WhistleblowerReport { medicine_idx: idx });
     }
 
-    // Military takeover: requires POL < 40% and day > 8
-    if state.resources.political_power < 0.40 && day > 8.0 {
+    // Military takeover: requires POL < 40% and day > 16
+    if state.resources.political_power < 0.40 && day > 16.0 {
         let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
         candidates.push(CrisisKind::MilitaryTakeover { cooperate_loss });
     }
 
     // --- Late-game crisis types (day-gated) ---
 
-    // Cult blockade: requires day > 12, deployed medicine exists
-    if day > 12.0 && state.medicines.iter().any(|m| m.unlocked && m.doses > 0.0) {
+    // Cult blockade: requires day > 24, deployed medicine exists
+    if day > 24.0 && state.medicines.iter().any(|m| m.unlocked && m.doses > 0.0) {
         let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
             .filter(|(_, r)| !r.collapsed)
             .map(|(i, _)| i)
@@ -261,16 +261,16 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         }
     }
 
-    // Billionaire offer: requires day > 8
-    if day > 8.0 {
+    // Billionaire offer: requires day > 16
+    if day > 16.0 {
         let reward = scaled_cost(state, 0.25, 150.0, 500.0);
         let personnel_loss = ((state.resources.personnel as f64 * 0.10).round() as u32).clamp(1, 5);
         candidates.push(CrisisKind::BillionaireOffer { reward, personnel_loss });
     }
 
-    // WHO evacuation: requires day > 10, Europe not collapsed
+    // WHO evacuation: requires day > 20, Europe not collapsed
     let europe_ok = state.regions.iter().any(|r| r.name == "Europe" && !r.collapsed);
-    if day > 10.0 && europe_ok {
+    if day > 20.0 && europe_ok {
         let aid_loss = scaled_cost(state, 0.15, 100.0, 500.0);
         candidates.push(CrisisKind::WHOEvacuation { aid_loss });
     }
@@ -285,8 +285,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::WarlordDemand { region_idx: idx });
     }
 
-    // Vaccine dispute: requires day > 15, at least one unlocked medicine
-    if day > 15.0 && state.medicines.iter().any(|m| m.unlocked) {
+    // Vaccine dispute: requires day > 30, at least one unlocked medicine
+    if day > 30.0 && state.medicines.iter().any(|m| m.unlocked) {
         let neutral_loss = scaled_cost(state, 0.20, 100.0, 700.0);
         let credit_gain = scaled_cost(state, 0.30, 150.0, 800.0);
         candidates.push(CrisisKind::VaccineDispute { neutral_loss, credit_gain });
@@ -294,13 +294,13 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // --- Dark comedy events ---
 
-    // Performance review: day 12+ (the board doesn't care about your little pandemic)
-    if day > 12.0 {
+    // Performance review: day 24+ (the board doesn't care about your little pandemic)
+    if day > 24.0 {
         candidates.push(CrisisKind::PerformanceReview);
     }
 
-    // Naming rights: day 8+, requires identified disease
-    if day > 8.0 {
+    // Naming rights: day 16+, requires identified disease
+    if day > 16.0 {
         let nameable: Vec<usize> = state.diseases.iter().enumerate()
             .filter(|(_, d)| d.detected && d.knowledge > 0.5)
             .map(|(i, _)| i)
@@ -312,14 +312,14 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         }
     }
 
-    // Intern's discovery: day 5+
-    if day > 5.0 {
+    // Intern's discovery: day 10+
+    if day > 10.0 {
         let cost = scaled_cost(state, 0.10, 100.0, 400.0);
         candidates.push(CrisisKind::InternDiscovery { cost });
     }
 
-    // Congressional hearing: day 20+, requires 2+ regions in critical state
-    if day > 20.0 {
+    // Congressional hearing: day 40+, requires 2+ regions in critical state
+    if day > 40.0 {
         let crit_regions = state.regions.iter()
             .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
             .count();
@@ -2860,27 +2860,27 @@ mod tests {
     #[test]
     fn phase_weights_shift_with_game_day() {
         // Early-game bureaucratic crises should dominate early, fade late
-        assert!(phase_weight("political", 3.0) > phase_weight("political", 30.0),
+        assert!(phase_weight("political", 3.0) > phase_weight("political", 60.0),
             "political pressure should be more likely early than late");
-        assert!(phase_weight("corrupt", 5.0) > phase_weight("corrupt", 28.0),
+        assert!(phase_weight("corrupt", 5.0) > phase_weight("corrupt", 60.0),
             "corrupt official should be more likely early than late");
 
         // Late-game survival crises should be absent early, present late
-        assert!(phase_weight("military", 5.0) < phase_weight("military", 25.0),
+        assert!(phase_weight("military", 5.0) < phase_weight("military", 50.0),
             "military takeover should be more likely late than early");
-        assert!(phase_weight("warlord", 3.0) < phase_weight("warlord", 20.0),
+        assert!(phase_weight("warlord", 3.0) < phase_weight("warlord", 50.0),
             "warlord demands should be more likely late than early");
-        assert!(phase_weight("cult", 3.0) < phase_weight("cult", 20.0),
+        assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             "cult blockade should be more likely late than early");
 
         // Mid-game crises should peak in the middle
-        assert!(phase_weight("supply", 15.0) > phase_weight("supply", 2.0),
+        assert!(phase_weight("supply", 40.0) > phase_weight("supply", 2.0),
             "supply disruption should be more likely mid-game than very early");
-        assert!(phase_weight("supply", 15.0) > phase_weight("supply", 40.0),
+        assert!(phase_weight("supply", 40.0) > phase_weight("supply", 80.0),
             "supply disruption should be more likely mid-game than very late");
 
         // No crisis type should ever have zero weight (anachronistic = rare but possible)
-        assert!(phase_weight("political", 50.0) > 0.0,
+        assert!(phase_weight("political", 60.0) > 0.0,
             "even late-game, bureaucratic crises should have non-zero weight");
     }
 

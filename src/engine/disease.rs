@@ -23,9 +23,9 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
     }
 
     // Pick a pathogen type. Distribution shifts as the game progresses:
-    // Early (day 0-10): mostly RNA viruses and bacteria (natural outbreaks)
-    // Mid (day 10-25): balanced across all types
-    // Late (day 25+): skews toward fungi and prions (deadlier, harder to treat)
+    // Early (day 0-20): mostly RNA viruses and bacteria (natural outbreaks)
+    // Mid (day 20-50): balanced across all types
+    // Late (day 50+): skews toward fungi and prions (deadlier, harder to treat)
     // Enforce diversity: no type appears more than twice among active diseases.
     let mut type_counts = HashMap::new();
     for (i, d) in state.diseases.iter().enumerate() {
@@ -47,8 +47,8 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
         ];
     }
     // Counter-capability selection: bias toward types the player can't treat.
-    // Ramps smoothly from day 10, fully active by day 25.
-    let counter_weight = ((day - 10.0) / 15.0).clamp(0.0, 1.0);
+    // Ramps smoothly from day 20, fully active by day 50.
+    let counter_weight = ((day - 20.0) / 30.0).clamp(0.0, 1.0);
     let pathogen_type = if counter_weight > 0.0 && types.len() > 1 {
         // Check which therapy types the player has deployed
         let deployed_therapies: Vec<TherapyType> = state.medicines.iter()
@@ -143,13 +143,13 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
     }
 
     // Place initial outbreak. Targeting shifts smoothly:
-    // Day 0-10: roughly uniform with vulnerability weighting (weak defenses attractive)
-    // Day 12-25: vulnerability blends into strategic importance (high population,
+    // Day 0-20: roughly uniform with vulnerability weighting (weak defenses attractive)
+    // Day 24-50: vulnerability blends into strategic importance (high population,
     //   infrastructure, active policies). The player's strongholds become
     //   the most attractive targets. The pattern feels designed, not random.
     let day = state.tick as f64 / TICKS_PER_DAY;
-    let targeting = (day / 10.0).min(1.0); // 0→1 over days 0-10
-    let strategic = ((day - 12.0) / 13.0).clamp(0.0, 1.0); // 0→1 over days 12-25
+    let targeting = (day / 20.0).min(1.0); // 0→1 over days 0-20
+    let strategic = ((day - 24.0) / 26.0).clamp(0.0, 1.0); // 0→1 over days 24-50
 
     let viable: Vec<usize> = state.regions.iter().enumerate()
         .filter(|(_, r)| !r.collapsed)
@@ -236,8 +236,8 @@ fn find_burned_out_disease(state: &GameState) -> Option<usize> {
 /// Early (progression=0): RNA×3, Bact×3, DNA×1, Fungus×1
 /// Late  (progression=1): RNA×1, Bact×1, DNA×2, Fungus×3 + prion chance
 fn pathogen_type_pool(day: f64, rng: &mut ChaCha8Rng) -> Vec<PathogenType> {
-    // Progression factor: 0.0 at day 0, ~1.0 at day 25, capped at 1.0
-    let progression = (day / 25.0).min(1.0);
+    // Progression factor: 0.0 at day 0, ~1.0 at day 50, capped at 1.0
+    let progression = (day / 50.0).min(1.0);
 
     let rna_weight = lerp_round(3.0, 1.0, progression);
     let bact_weight = lerp_round(3.0, 1.0, progression);
@@ -266,17 +266,17 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 
 /// Spawn a disease with stats scaled up based on current game day.
 /// Later diseases are tougher — simulating evolved superbugs.
-/// Infectivity scales at +35%/day (uncapped), lethality at +10%/day.
+/// Infectivity scales at +10%/day (uncapped), lethality at +3.5%/day.
 /// The split ensures diseases can sustain growth even under quarantine.
-/// After day 10, diseases also seed into multiple regions simultaneously.
+/// After day 20, diseases also seed into multiple regions simultaneously.
 pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
     // Scaling with infectivity outpacing lethality. Infectivity must stay
-    // high enough that R > 1 even under quarantine. Reduced from 0.35/0.10
-    // to give the research pipeline time to compete with disease spread.
-    // Day 10: inf 3.0x/leth 1.7x, Day 20: 5.0x/2.4x, Day 30: 7.0x/3.1x
-    let inf_scale = 1.0 + day * 0.20;
-    let leth_scale = 1.0 + day * 0.07;
+    // high enough that R > 1 even under quarantine. Halved per-day rates to
+    // match TICKS_PER_DAY halving — absolute behavior per tick is unchanged.
+    // Day 20: inf 3.0x/leth 1.7x, Day 40: 5.0x/2.4x, Day 60: 7.0x/3.1x
+    let inf_scale = 1.0 + day * 0.10;
+    let leth_scale = 1.0 + day * 0.035;
 
     let result = spawn_disease(state, rng)?;
     let (disease_idx, _) = result;
@@ -290,7 +290,7 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 
     // Late-game diseases shift toward Contact transmission (hardest to
     // contain) and get an extra lethality boost on top of the base scaling.
-    let optimization = ((day - 15.0) / 15.0).clamp(0.0, 1.0); // 0 at day 15, 1 at day 30
+    let optimization = ((day - 30.0) / 30.0).clamp(0.0, 1.0); // 0 at day 30, 1 at day 60
     if optimization > 0.0 {
         let d = &mut state.diseases[disease_idx];
         // Chance to override transmission to Contact
@@ -301,11 +301,11 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         d.lethality *= 1.0 + optimization * 0.5; // up to 50% more lethal on top of scaling
     }
 
-    // Multi-region seeding: after day 15, new diseases emerge simultaneously
-    // in additional non-collapsed regions. Pushed from day 10 to day 15 to
+    // Multi-region seeding: after day 30, new diseases emerge simultaneously
+    // in additional non-collapsed regions. Pushed from day 20 to day 30 to
     // give containment policies a window to matter before seeding makes them moot.
-    // By day 30, every viable region gets seeded.
-    let multi_seed = ((day - 15.0) / 15.0).clamp(0.0, 1.0); // 0 at day 15, 1 at day 30
+    // By day 60, every viable region gets seeded.
+    let multi_seed = ((day - 30.0) / 30.0).clamp(0.0, 1.0); // 0 at day 30, 1 at day 60
     if multi_seed > 0.0 {
         let (_, primary_region) = result;
         let viable: Vec<usize> = state.regions.iter().enumerate()
@@ -313,8 +313,8 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
             .map(|(i, _)| i)
             .collect();
         // Seed count scales with day^2 to ensure late-game diseases hit hard
-        // Day 20: ~4.5k, Day 30: ~13.5k, Day 40: ~25.5k
-        let base_seed = 500.0 + day * day * 20.0;
+        // Day 40: ~8.5k, Day 60: ~18.5k, Day 80: ~32.5k
+        let base_seed = 500.0 + day * day * 5.0;
         for &region_idx in &viable {
             if rng.r#gen::<f64>() < multi_seed {
                 let seed_count = base_seed + rng.r#gen::<f64>() * base_seed;
@@ -326,8 +326,8 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     // Pre-existing resistance: new diseases emerge partially resistant to
     // mechanisms the player has deployed heavily. Invisible to the player —
     // they just notice their old drugs don't work as well on new threats.
-    // Kicks in at day 10 to create a noticeable mid-game shift.
-    if day >= 10.0 {
+    // Kicks in at day 20 to create a noticeable mid-game shift.
+    if day >= 20.0 {
         seed_preexisting_resistance(state, disease_idx);
     }
 
@@ -357,8 +357,8 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 /// medicine usage without announcing it.
 fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
     let day = state.tick as f64 / TICKS_PER_DAY;
-    // Intensity ramps from 0 at day 10 to full at day 30
-    let intensity = ((day - 10.0) / 20.0).clamp(0.0, 1.0);
+    // Intensity ramps from 0 at day 20 to full at day 60
+    let intensity = ((day - 20.0) / 40.0).clamp(0.0, 1.0);
 
     // Aggregate total deployments per mechanism across all medicines
     let mut mech_deployments: HashMap<Option<MechanismOfAction>, u32> = HashMap::new();
