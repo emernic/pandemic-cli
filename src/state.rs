@@ -4134,9 +4134,10 @@ impl UiState {
                         self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
                         self.panel_selection = 0;
                     }
-                    Some(ResearchUiState::BrowseProjects { .. }) => {
+                    Some(ResearchUiState::BrowseProjects { track }) => {
+                        let track_idx = track.index();
                         self.research_ui = Some(ResearchUiState::BrowseCategories);
-                        self.panel_selection = 0;
+                        self.panel_selection = track_idx;
                     }
                     _ => {
                         self.open_panel = Panel::None;

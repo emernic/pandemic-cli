@@ -828,8 +828,8 @@ mod tests {
         assert!(state.applied_research.is_some());
 
         // Start basic research
+        // After Esc from Applied's BrowseProjects, cursor lands on Applied (index 1) — one SelectNext reaches Basic
         state = apply_action(&state, &Action::ClosePanel);
-        state = apply_action(&state, &Action::SelectNext); // Applied
         state = apply_action(&state, &Action::SelectNext); // Basic
         state = apply_action(&state, &Action::Confirm);
         state = apply_action(&state, &Action::Confirm);
