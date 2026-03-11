@@ -1827,8 +1827,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     // Record resolution tick for minimum gap enforcement
     state.last_crisis_resolved_tick = state.tick;
 
-    // Deduct costs generically from the chosen option (affordability was
-    // already checked in apply_action before we get here).
+    // Deduct costs generically from the chosen option. Affordability is always
+    // checked before calling resolve_crisis: apply_action() for manual resolution,
+    // activate_crisis() for auto-resolution.
     let option = &crisis.options[choice];
     if let Some(cost) = &option.cost {
         state.resources.funding -= cost.funding;

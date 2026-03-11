@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     DeployTarget, GameEvent, GameOutcome, GameState, RegionDiseaseState, Shipment,
-    DISRUPTION_MEDICINE_COST_MULT, SHIPPING_TICKS,
+    SHIPPING_TICKS,
 };
 
 /// Dispatch a medicine shipment: deduct funds and doses, create in-transit
@@ -39,14 +39,8 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} supply lines collapsed")));
     }
+    let cost = state.medicine_deploy_cost(medicine_idx, region_idx);
     let med = &state.medicines[medicine_idx];
-    let base_cost = med.deploy_cost();
-    let disruption_mult = if state.regions[region_idx].is_disrupted(state.tick) {
-        DISRUPTION_MEDICINE_COST_MULT
-    } else {
-        1.0
-    };
-    let cost = base_cost * disruption_mult * state.deployment_cost_bonus();
     let med_name = med.name.clone();
     let region_name = state.regions[region_idx].name.clone();
 
@@ -371,10 +365,8 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
-            // Check funding (including regional deployment discount)
-            let cost = state.medicines[med_idx].deploy_cost()
-                * state.deployment_cost_bonus();
-            if state.resources.funding < cost {
+            // Check funding (including disruption multiplier and regional discount)
+            if state.resources.funding < state.medicine_deploy_cost(med_idx, region_idx) {
                 continue;
             }
 

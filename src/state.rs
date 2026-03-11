@@ -5560,6 +5560,20 @@ impl GameState {
         if !self.regions[4].collapsed { 0.8 } else { 1.0 }
     }
 
+    /// Actual medicine deploy cost for a specific (medicine, region) pair.
+    /// Applies disruption multiplier and regional deployment cost bonus.
+    /// Use this for both UI affordability preview and engine-side validation
+    /// so they can never drift apart.
+    pub fn medicine_deploy_cost(&self, medicine_idx: usize, region_idx: usize) -> f64 {
+        let base = self.medicines[medicine_idx].deploy_cost();
+        let disruption_mult = if self.regions[region_idx].is_disrupted(self.tick) {
+            DISRUPTION_MEDICINE_COST_MULT
+        } else {
+            1.0
+        };
+        base * disruption_mult * self.deployment_cost_bonus()
+    }
+
     /// Oceania: Clinical trial infrastructure. +25% faster clinical trials.
     pub fn clinical_trial_bonus(&self) -> f64 {
         if !self.regions[5].collapsed { 0.75 } else { 1.0 }

@@ -307,9 +307,10 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
             } else {
                 DeployTarget::Treat { disease_idx }
             };
-            let deploy_cost = med.deploy_cost();
             // UX pre-check: show error early so the wizard doesn't advance to ConfirmDeploy
-            // when the player can't afford it. The engine validates authoritatively in deploy_medicine().
+            // when the player can't afford it. Uses medicine_deploy_cost() — the same calculation
+            // as the engine — so this preview can never drift from the authoritative check.
+            let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
             if state.resources.funding < deploy_cost {
                 ui.status_message = Some(
                     format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
