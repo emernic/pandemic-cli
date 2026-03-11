@@ -213,9 +213,15 @@ The important thing is to notice what the experience actually feels like, not to
 
 **You have a limited number of tool calls (turns). If you use them all playing the game, your entire session is wasted because no report gets written.** This has happened repeatedly — the agent plays enthusiastically, runs out of turns, and produces nothing.
 
-**Budget your turns:** You have ~100 tool calls total. Navigation now costs one tool call per key press (no batching), so a typical session uses: build (1) + seed (1) + persona read (1) + snapshot/key calls (~70-80) + report write (1). **Stop playing and write your report when you have 20 tool calls remaining** — you can estimate this by tracking roughly how many calls you've made. It's far better to play 300 ticks and write a report than to play 500 ticks and write nothing.
+**Budget your turns: write at call 35, not at the end.** The effective tool call limit is approximately 60 calls, not the nominal maximum. Sessions 77, 78, and 79 all hit this limit without writing a log. The guidance below is based on actual observed behavior:
 
-**Write the report in a single Write call.** Don't plan to "write it at the end" — write it as soon as you have enough experience to report on. You can always play more after writing if you have turns left.
+- Calls 1-5: build + seed + persona + start game
+- Calls 6-35: play the game (roughly day 0–15)
+- **Call 35: stop and write the report NOW.** This is mandatory. Do it.
+- Calls 36-55: continue playing if you have calls left, update nothing
+- Call ~60: hard cutoff — you will stop whether you want to or not
+
+**The report must be written at call 35 regardless of whether you feel "done" playing.** A report covering day 0–12 is infinitely more valuable than a report covering day 0–28 that was never written. You can always play more after writing. You cannot write after you run out of calls.
 
 ## Writing Feedback
 
