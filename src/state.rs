@@ -5482,7 +5482,7 @@ impl GameState {
     /// - RapidSequencing halves GenomicSequencing duration.
     /// - PredictiveSurveillance cuts IdentifyThreat, ClinicalTrial, and FieldOperations by 25%.
     ///   (Does not affect GenomicSequencing — already covered by RapidSequencing.)
-    ///   TODO: when Data/Infra corp is healthy in any region, increase bonus to 35% (#1381).
+    ///   Corp health modifier (25% → 35%) tracked in #1381.
     pub fn effective_costs(&self, kind: &ResearchKind) -> (u32, f64, f64) {
         let (personnel, mut duration, funding) = kind.costs(&self.medicines);
         if matches!(kind, ResearchKind::GenomicSequencing { .. })
