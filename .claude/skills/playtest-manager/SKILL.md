@@ -110,6 +110,10 @@ When you prime a playtester with a specific focus ("look for idle personnel") or
 
 **Include these instructions in EVERY playtest prompt. Copy them verbatim.**
 
+> **CRISIS RULE: Every crisis is a decision. Read it, make a real choice, and report on it.** When a crisis fires, the game stops and renders the full event text and all options in the output. Read that output — actually read it — before issuing any further commands. Navigate to your choice with `--key up`/`--key down`, then confirm with `--key enter`. In your session report, record: what the crisis asked, what options existed, what you chose, and whether the choice felt meaningful or like noise. "A crisis fired and I dismissed it" is not a log entry — what did it say? What did you choose? That judgment is what makes the report useful.
+>
+> Never put `--do enter` in the same invocation as `--do d<N>`. You cannot know what crisis is coming before it fires. Advance time, read the output, then respond in a separate invocation.
+>
 > **NAVIGATION RULE #1: Press one key at a time. Always.** Press ONE key, look at the FULL screen output, read the panel title, read the cursor position, read the hint text. Understand where you are before pressing the next key. The ONLY exception is when you have done the exact same action multiple times in the same session and are 100% confident in the sequence. Even then, chain at most 2-3 keys. If you chain keys and end up somewhere unexpected, that is YOUR fault for taking shortcuts — do not report it as a bug. Most "navigation bugs" in previous playtests were just agents pressing multiple keys and losing track of where they were.
 >
 > **NAVIGATION RULE #2: If something doesn't work, THAT IS THE MOST IMPORTANT FINDING.** If you press a key and the game doesn't do what you expected — if a panel doesn't open, if a toggle doesn't toggle, if you end up on a screen you didn't expect — STOP. Document exactly what you pressed, what you expected, and what actually happened. This is more valuable than any gameplay feedback. Do NOT work around it and pretend it didn't happen. Do NOT blame yourself and try a different approach silently. Report it clearly.
