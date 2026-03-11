@@ -2167,7 +2167,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Schedule follow-up: public inquiry in 5 days
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::PublicInquiry));
-            "Leak suppressed. Research intact, public confidence shaken.".into()
+            "Leak suppressed. Board confidence shaken. Inquiry risk elevated.".into()
         }
         (CrisisKind::DataLeak, _) => {
             // No comment — moderate POL loss, 50% chance of follow-up
