@@ -586,15 +586,29 @@ pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 /// Policy display order — grouped by function, cheapest/earliest to most
 /// expensive/latest within each group:
 ///
-///   Detection:    Intel Station (11), Basic Screening (5), Antigen (6), Mass Rapid (7)
-///   Containment:  Border Controls (3), Travel Ban (0), Quarantine (1)
-///   Medical:      Water Sanitation (4), Hospital Surge (2), Field Hospital (10)
-///   Extreme:      Nuclear Option (9), Martial Law (8)
+///   Infrastructure: Intel Station (11), Field Hospital (10)
+///   Detection:      Basic Screening (5), Antigen (6), Mass Rapid (7)
+///   Containment:    Border Controls (3), Travel Ban (0), Quarantine (1)
+///   Medical:        Water Sanitation (4), Hospital Surge (2)
+///   Extreme:        Nuclear Option (9), Martial Law (8)
 ///
 /// This is the canonical display ordering — both the policy renderer and the confirm
 /// handler use this to map display position → policy_idx.
 pub fn policy_display_order() -> [usize; POLICY_COUNT] {
-    [11, 5, 6, 7, 3, 0, 1, 4, 2, 10, 9, 8]
+    [11, 10, 5, 6, 7, 3, 0, 1, 4, 2, 9, 8]
+}
+
+/// Section header labels for the policy panel, keyed by display position.
+/// Returns Some(header) at the start of each group, None otherwise.
+pub fn policy_section_header(display_pos: usize) -> Option<&'static str> {
+    match display_pos {
+        0 => Some("Infrastructure"),
+        2 => Some("Detection"),
+        5 => Some("Containment"),
+        8 => Some("Medical"),
+        10 => Some("Extreme"),
+        _ => None,
+    }
 }
 
 /// Short display name for each policy by index. Canonical source — used by

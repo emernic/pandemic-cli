@@ -192,6 +192,27 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 }
             }
 
+            // Show re-trial hint when any disease has drifted past the medicine's calibration
+            let any_strain_outdated = med.target_diseases.iter().any(|&d_idx| {
+                med.strain_efficacy(d_idx, &state.diseases) < 1.0
+            });
+            if any_strain_outdated {
+                let retrial_in_progress = state.field_research.iter().any(|p| {
+                    matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == med_idx)
+                });
+                if retrial_in_progress {
+                    lines.push(Line::from(Span::styled(
+                        "    ↻ Re-trial in progress — efficacy will be restored",
+                        Style::default().fg(Color::Yellow),
+                    )));
+                } else {
+                    lines.push(Line::from(Span::styled(
+                        "    → Strain drifted — re-trial via Research [R] > Field Research",
+                        Style::default().fg(Color::Red),
+                    )));
+                }
+            }
+
             // Show pending shipments for this medicine
             let shipments: Vec<_> = state.pending_shipments.iter()
                 .filter(|s| s.medicine_idx == med_idx)
@@ -520,8 +541,31 @@ fn render_select_target(
         ),
     ]));
     if strain_outdated {
+        // Compute how many mutations behind to give the player context
+        let behind = med.target_diseases.iter().position(|&d| d == disease_idx)
+            .and_then(|i| med.strain_generations.get(i).copied())
+            .map(|mg| {
+                let disease_gen = state.diseases.get(disease_idx)
+                    .map_or(0, |d| d.strain_generation) as i32;
+                (disease_gen - mg).max(0) as u32
+            })
+            .unwrap_or(0);
+        let behind_str = if behind > 0 {
+            format!(", {} mutation{} behind", behind, if behind == 1 { "" } else { "s" })
+        } else {
+            String::new()
+        };
+        let retrial_in_progress = state.field_research.iter().any(|p| {
+            matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, disease_idx: di }
+                if *mi == medicine_idx && *di == disease_idx)
+        });
+        let action = if retrial_in_progress {
+            " — re-trial in progress"
+        } else {
+            " — re-trial in Research [R] to restore"
+        };
         lines.push(Line::from(Span::styled(
-            format!("  Strain outdated ({:.0}% match)", strain_eff * 100.0),
+            format!("  Strain drift{}{}", behind_str, action),
             Style::default().fg(Color::Yellow),
         )));
     }
