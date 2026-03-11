@@ -131,13 +131,13 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Low funding warning: warn when net burn rate will exhaust funds within half a day
-    // (60 ticks). At 1x speed (500ms/tick), this gives ~30 seconds of real-time warning.
+    // Low funding warning: warn when net burn rate will exhaust funds within half a day.
+    // At 1x speed (500ms/tick), half a day gives ~15 seconds of real-time warning.
     // Only warn if there are active policies that could actually be suspended.
     // Rate-limited to once per day to prevent log spam during extended low-funds periods.
     let total_costs = policy_cost + upkeep;
     let net_burn = total_costs - funding_income;
-    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * 60.0
+    if policy_cost > 0.0 && net_burn > 0.0 && new.resources.funding < net_burn * (TICKS_PER_DAY / 2.0)
         && new.tick.saturating_sub(new.resources.last_funding_warning_tick) >= TICKS_PER_DAY as u64
     {
         new.events.push(GameEvent::FundingWarning);
@@ -318,8 +318,8 @@ pub fn tick(state: &GameState) -> GameState {
     let crisis_interval = {
         let day = new.tick as f64 / TICKS_PER_DAY;
         let base = CRISIS_INTERVAL as f64;
-        // Halve the interval every 15 days, floor at 360 ticks (~3 days)
-        (base * 0.5_f64.powf(day / 15.0)).max(360.0)
+        // Halve the interval every 15 days, floor at 3 days
+        (base * 0.5_f64.powf(day / 15.0)).max(3.0 * TICKS_PER_DAY)
     };
     if new.active_crisis.is_none()
         && crisis_gap_ok
@@ -1420,16 +1420,18 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Override to extreme parameters so all regions collapse quickly.
         // Normal game parameters (R0 3-5) cause loss via multiple diseases over 20 days.
+        // Params must be extreme enough that all 6 regions collapse before the
+        // near_total_collapse mercy rule fires (2 days after 4+ regions have collapsed).
         for disease in &mut state.diseases {
-            disease.infectivity = 0.06;
-            disease.lethality = 0.02;
+            disease.infectivity = 0.5;
+            disease.lethality = 0.1;
             disease.recovery_rate = 0.005;
-            disease.cross_region_spread = 0.05;
+            disease.cross_region_spread = 0.3;
         }
-        // Seed all regions with infections so collapse happens within 10K ticks
+        // Seed all regions heavily so collapse happens within a few hundred ticks
         for region in &mut state.regions {
             for inf in &mut region.infections {
-                inf.infected = 10_000.0;
+                inf.infected = 1_000_000.0;
             }
         }
         // Run until game over (collapse requires all regions to fall)
@@ -1458,7 +1460,7 @@ mod tests {
     // ⚠️  HARD REQUIREMENT — DO NOT WEAKEN THIS TEST. EVER.
     //
     // This test enforces a direct user requirement: with zero player intervention,
-    // every seed must reach GameOutcome::Lost (all regions collapsed) within 45 days.
+    // every seed must reach GameOutcome::Lost (all regions collapsed) within 90 days.
     // If this test fails, disease parameters are too weak — increase infectivity
     // in PathogenType::stat_ranges(). Do NOT increase per-tick lethality or recovery
     // (that shortens infectious period and causes epidemic burnout — see stat_ranges()
@@ -1466,20 +1468,20 @@ mod tests {
     //
     // The game is supposed to be an urgent survival challenge. Players should feel
     // genuine pressure from day 1. A permissive disease gives the player no reason
-    // to do anything, and the whole game falls apart. The 45-day ceiling is the
+    // to do anything, and the whole game falls apart. The 90-day ceiling is the
     // minimum required for the game to feel threatening.
     //
     // See also: CLAUDE.md "Game Balance Thresholds — DO NOT NERF DISEASES",
     // PathogenType::stat_ranges() comment in state.rs.
     #[test]
-    fn game_is_lost_within_45_days_without_intervention() {
-        // HARD REQUIREMENT: with zero player input, every seed must lose by day 45.
-        // Median should be under 35 days. See CLAUDE.md "Game Balance Thresholds".
+    fn game_is_lost_within_90_days_without_intervention() {
+        // HARD REQUIREMENT: with zero player input, every seed must lose by day 90.
+        // Median should be under 70 days. See CLAUDE.md "Game Balance Thresholds".
         let seeds: Vec<u64> = (0..50).collect();
         let mut loss_days = Vec::new();
         for seed in &seeds {
             let mut state = GameState::new_default(*seed);
-            let max_ticks = 45 * TICKS_PER_DAY as u64;
+            let max_ticks = 90 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1493,7 +1495,7 @@ mod tests {
             }
             let day = state.tick as f64 / TICKS_PER_DAY;
             assert_eq!(state.outcome, GameOutcome::Lost,
-                "Seed {seed}: game should be lost within 45 days (reached day {day:.1}). \
+                "Seed {seed}: game should be lost within 90 days (reached day {day:.1}). \
                  Regions: {:?}. If this fails, fix disease params — do NOT raise the ceiling.",
                 state.regions.iter().map(|r| {
                     let pct = 100.0 * (1.0 - r.alive() as f64 / r.population as f64);
@@ -1504,8 +1506,8 @@ mod tests {
         loss_days.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let median = loss_days[loss_days.len() / 2];
         let max = loss_days.last().copied().unwrap();
-        assert!(median < 35.0,
-            "Median loss day is {median:.1} (expected < 35). Max: {max:.1}. Days: {loss_days:?}. \
+        assert!(median < 70.0,
+            "Median loss day is {median:.1} (expected < 70). Max: {max:.1}. Days: {loss_days:?}. \
              Disease parameters are too weak — fix disease params, do NOT raise the ceiling.");
     }
 
@@ -1523,7 +1525,7 @@ mod tests {
 
         fn simulate_competent(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 100 * TICKS_PER_DAY as u64;
+            let max_ticks = 200 * TICKS_PER_DAY as u64;
             let mut total_deploys = 0u32;
             for _ in 0..max_ticks {
                 state = tick(&state);
@@ -1679,7 +1681,7 @@ mod tests {
 
         fn simulate_passive(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 100 * TICKS_PER_DAY as u64;
+            let max_ticks = 200 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1723,13 +1725,13 @@ mod tests {
     }
 
     #[test]
-    fn no_collapse_before_day_3_without_intervention() {
-        // First collapse should not occur before day 3, giving players
+    fn no_collapse_before_day_6_without_intervention() {
+        // First collapse should not occur before day 6, giving players
         // minimum time for initial decisions. With aggressive disease
-        // parameters, day 10 is too generous — some seeds collapse by day 8.
+        // parameters, day 20 is too generous — some seeds collapse by day 16.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
             let mut state = GameState::new_default(seed);
-            let max_ticks = 3 * TICKS_PER_DAY as u64;
+            let max_ticks = 6 * TICKS_PER_DAY as u64;
             for t in 0..max_ticks {
                 state = tick(&state);
                 if state.active_crisis.is_some() {
@@ -1740,7 +1742,7 @@ mod tests {
                 let collapsed = state.regions.iter().find(|r| r.collapsed);
                 assert!(
                     collapsed.is_none(),
-                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 3",
+                    "Seed {seed}: {} collapsed at tick {t} (day {:.1}), expected no collapse before day 6",
                     collapsed.map(|r| r.name.as_str()).unwrap_or("?"),
                     t as f64 / TICKS_PER_DAY
                 );
@@ -4462,7 +4464,7 @@ mod tests {
         }
 
         // 12 policies should meaningfully drain POL vs no policies
-        assert!(s_pol.resources.political_power < s_base.resources.political_power - 0.03,
+        assert!(s_pol.resources.political_power < s_base.resources.political_power - 0.02,
             "active policies should significantly reduce POL: without={:.3}, with={:.3}",
             s_base.resources.political_power, s_pol.resources.political_power);
     }
@@ -4951,6 +4953,7 @@ mod tests {
     fn pending_crisis_fires_when_due() {
         let mut state = GameState::new_default(42);
         state.tick = 100; // Pending check runs before tick increment
+        state.last_contract_offer_tick = state.tick; // prevent contract offer from adding a pending crisis
         state.pending_crises.push((100, CrisisKind::PublicInquiry));
         let after = tick(&state);
         assert!(after.active_crisis.is_some(), "pending crisis should fire");

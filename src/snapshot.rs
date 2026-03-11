@@ -187,18 +187,18 @@ mod tests {
     #[test]
     fn snapshot_with_days() {
         let state = GameState::new_default(42);
-        // d1 = 1 day = 120 ticks
+        // d1 = 1 day = 60 ticks (TICKS_PER_DAY = 60)
         let result = run_snapshot(state, &["d1".to_string()]).unwrap();
         assert!(result.screen.contains("Day: 1.0"));
-        assert_eq!(result.state.tick, 120);
+        assert_eq!(result.state.tick, 60);
     }
 
     #[test]
     fn snapshot_with_raw_ticks() {
         let state = GameState::new_default(42);
-        // Legacy: t10 = 10 raw ticks
+        // Legacy: t10 = 10 raw ticks. 10/60 ≈ 0.167 → "Day: 0.2"
         let result = run_snapshot(state, &["t10".to_string()]).unwrap();
-        assert!(result.screen.contains("Day: 0.1"));
+        assert!(result.screen.contains("Day: 0.2"));
         assert_eq!(result.state.tick, 10);
     }
 
@@ -230,12 +230,12 @@ mod tests {
     #[test]
     fn snapshot_interleaved_days_and_keys() {
         let state = GameState::new_default(42);
-        // Advance 0.5 days (60 ticks), open threats panel, advance 0.5 more days
+        // Advance 0.5 days (30 ticks), open threats panel, advance 0.5 more days
         let result = run_snapshot(
             state,
             &["d0.5".to_string(), "t".to_string(), "d0.5".to_string()],
         ).unwrap();
-        assert_eq!(result.state.tick, 120);
+        assert_eq!(result.state.tick, 60);
         assert!(result.screen.contains("Threats"));
         assert!(result.screen.contains("Day: 1.0"));
     }
@@ -246,7 +246,7 @@ mod tests {
         // d60 will hit crises. Snapshot should stop at the first one.
         let result = run_snapshot(state, &["d60".to_string()]).unwrap();
         // Either a crisis is active (stopped at crisis) or game over occurred.
-        // In either case, tick should NOT have reached 60 days = 7200 ticks
+        // In either case, tick should NOT have reached 60 days = 3600 ticks
         // (the game ends well before 60 days without intervention).
         let is_blocked = result.state.active_crisis.is_some()
             || result.state.outcome != GameOutcome::Playing;
@@ -286,7 +286,7 @@ mod tests {
         assert!(result.state.diseases[0].detected,
             "disease should be detected after crossing threshold");
         // Tick advancement should NOT stop — detection is a notification, not a pause
-        assert_eq!(result.state.tick, 120,
+        assert_eq!(result.state.tick, 60,
             "disease detection should not pause the game anymore (tick {})", result.state.tick);
         // The event notification should be set
         assert!(result.state.ui.event_notification.is_some(),
