@@ -28,9 +28,9 @@ fn refugee_pol_cost(wave: u8) -> f64 {
 /// to be selected at a given game day. Returns a weight (higher = more likely).
 ///
 /// Three phases with overlapping transitions:
-/// - Early (day 0-24): bureaucratic, political, organizational problems
-/// - Mid (day 16-44): infrastructure, resource, and escalating pressure
-/// - Late (day 36+): survival, power struggles, dark comedy
+/// - Early (day 0-30): bureaucratic, political, organizational problems (fade 30-50)
+/// - Mid (day 10-70): infrastructure, resource, and escalating pressure (peak 24-50)
+/// - Late (day 24+): survival, power struggles, dark comedy (ramp 24-40)
 fn phase_weight(tag: &str, day: f64) -> f64 {
     // Smooth ramp: 0 at `start`, 1 at `peak`, stays 1 after peak
     let ramp_up = |start: f64, peak: f64| -> f64 {
