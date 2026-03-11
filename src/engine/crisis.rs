@@ -782,11 +782,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Maintain standards".into(),
-                    description: "−5% POL".into(),
+                    description: "−5% AUTH".into(),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Fast-track (+10% POL)".into(),
+                    label: "Fast-track (+10% AUTH)".into(),
                     description: "Clear for use at reduced efficacy".into(),
                     cost: None,
                 },
@@ -807,14 +807,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Enforce compliance".into(),
-                    description: "Effective but −10% POL".into(),
+                    description: "Effective but −10% AUTH".into(),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.20, 120.0, 700.0);
                     CrisisOption {
                         label: format!("Incentive program (¥{:.0})", cost),
-                        description: format!("Buy cooperation in {}, gain +5% POL", region_name),
+                        description: format!("Buy cooperation in {}, gain +5% AUTH", region_name),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
@@ -923,12 +923,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Halt deployment".into(),
-                    description: format!("Destroy 30% of {} doses, gain +5% POL", med_name),
+                    description: format!("Destroy 30% of {} doses, gain +5% AUTH", med_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: "Continue deployment".into(),
-                    description: "Keep treating patients, −8% POL".into(),
+                    description: "Keep treating patients, −8% AUTH".into(),
                     cost: None,
                 },
                 ],
@@ -943,7 +943,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     authority over your agency, citing security concerns.".into(),
                 options: vec![ CrisisOption {
                     label: "Cooperate".into(),
-                    description: format!("Cede {} personnel to military, gain +15% POL", cooperate_loss),
+                    description: format!("Cede {} personnel to military, gain +15% AUTH", cooperate_loss),
                     cost: None,
                 },
                  {
@@ -979,7 +979,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Grant concessions".into(),
-                    description: "Deliveries resume, −8% POL".into(),
+                    description: "Deliveries resume, −8% AUTH".into(),
                     cost: None,
                 },
                  {
@@ -1033,14 +1033,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     Global coordination is degrading.".into(),
                 options: vec![ CrisisOption {
                     label: "Let regions go independent".into(),
-                    description: format!("Lose ¥{:.0} in aid income, −5% POL", aid_loss),
+                    description: format!("Lose ¥{:.0} in aid income, −5% AUTH", aid_loss),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.40, 250.0, 1500.0);
                     CrisisOption {
                         label: format!("Take over coordination (¥{:.0}, 3 personnel for 5d)", cost),
-                        description: "Expensive, but gain +10% POL and maintain global response. Coordination team returns in 5 days.".into(),
+                        description: "Expensive, but gain +10% AUTH and maintain global response. Coordination team returns in 5 days.".into(),
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 3,
@@ -1071,7 +1071,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Refuse".into(),
-                    description: format!("{} remains sealed, +5% POL", region_name),
+                    description: format!("{} remains sealed, +5% AUTH", region_name),
                     cost: None,
                 },
                  {

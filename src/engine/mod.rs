@@ -125,9 +125,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         new.resources.attrition_accum = 0.0;
     }
 
-    // Political Power: drifts toward a severity-based target.
-    // Target = f(severity, time, active policies). See GameState::pol_target().
-    // POL moves toward target at ~50%/day, so crisis hits take 2-3 days to recover.
+    // Authority: drifts toward a board/patron-driven target.
+    // Target = f(board_satisfaction, patron_confidence, severity). See GameState::pol_target().
+    // AUTH moves toward target at ~50%/day, so crisis hits take 2-3 days to recover.
     {
         let target = new.pol_target();
         let drift_rate = 0.50 / TICKS_PER_DAY;

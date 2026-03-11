@@ -396,7 +396,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
-    // ── Political Power breakdown ──
+    // ── Authority breakdown ──
     {
         let pol = state.resources.political_power;
         let target = state.pol_target();
@@ -407,7 +407,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let (board_component, patron_component, severity_floor) = state.pol_target_components();
 
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("  ── POLITICAL POWER ──", cyan)));
+        lines.push(Line::from(Span::styled("  ── AUTHORITY ──", cyan)));
         lines.push(Line::from(""));
 
         let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };

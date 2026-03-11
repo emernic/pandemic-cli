@@ -107,7 +107,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
         let threshold = state.effective_pol_threshold(region_idx, policy_idx);
         return (Some(format!(
-            "{} requires {:.0}% Political Power (current: {:.0}%)",
+            "{} requires {:.0}% Authority (current: {:.0}%)",
             policy_display_name(policy_idx), threshold * 100.0, state.resources.political_power * 100.0
         )), false);
     }
@@ -1034,7 +1034,7 @@ mod tests {
         state.resources.political_power = 0.05;
         let (msg, ok) = toggle_policy(&mut state, 0, 6);
         assert!(!ok, "Medium screening should be blocked at 5% POL");
-        assert!(msg.unwrap().contains("Political Power"));
+        assert!(msg.unwrap().contains("Authority"));
 
         // With enough POL, Medium should work
         state.resources.political_power = 0.15;

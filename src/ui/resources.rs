@@ -43,11 +43,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let pol = state.resources.political_power;
             let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };
             Span::styled(
-                format!("POL: {:.0}%", pol * 100.0),
+                format!("AUTH: {:.0}%", pol * 100.0),
                 Style::default().fg(pol_color),
             )
         },
-        // POL trend arrow: compare current POL to its drift target
+        // AUTH trend arrow: compare current AUTH to its drift target
         {
             let target = state.pol_target();
             let pol = state.resources.political_power;
@@ -60,7 +60,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled(" \u{2500}", Style::default().fg(Color::DarkGray)) // ─ stable
             }
         },
-        // Next POL unlock hint
+        // Next AUTH unlock hint
         match state.next_pol_unlock() {
             Some((name, threshold)) => Span::styled(
                 format!(" ({}@{:.0}%)", name, threshold * 100.0),
