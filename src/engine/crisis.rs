@@ -2138,7 +2138,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::LabAccident { targets_basic }, _) => {
             // Leave it — 70% chance of loss, 30% chance it self-contains
-            if state.rng.r#gen::<f64>() < 0.70 {
+            if state.rng_crisis.r#gen::<f64>() < 0.70 {
                 // Breach worsens — lose the research anyway
                 if *targets_basic {
                     state.basic_research = None;
@@ -2295,7 +2295,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::DataLeak, _) => {
             // No comment — moderate POL loss, 50% chance of follow-up
             state.resources.political_power -= 0.07;
-            if state.rng.r#gen::<bool>() {
+            if state.rng_crisis.r#gen::<bool>() {
                 let target = state.regions.iter().enumerate()
                     .filter(|(_, r)| !r.collapsed)
                     .max_by(|(_, a), (_, b)| {
@@ -2544,7 +2544,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::MilitaryTakeover { .. }, _) => {
             // Stall — buy time, they may return
             state.resources.political_power -= 0.05;
-            if state.rng.r#gen::<bool>() {
+            if state.rng_crisis.r#gen::<bool>() {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let cooperate_loss = ((state.resources.personnel as f64 * 0.25).round() as u32).clamp(2, 8);
                 state.pending_crises.push((followup_tick, CrisisKind::MilitaryTakeover { cooperate_loss }));
@@ -2693,7 +2693,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::InternDiscovery { .. }, _) => {
             // Pursue — 50/50 gamble (costs already deducted)
-            let lucky = state.rng.r#gen::<bool>();
+            let lucky = state.rng_crisis.r#gen::<bool>();
             if lucky {
                 let boost = 2.0 * TICKS_PER_DAY as f64;
                 if let Some(proj) = &mut state.applied_research {
@@ -2727,7 +2727,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::CongressionalHearing, 1) => {
             // Send deputy — small POL gain, 40% chance of contempt follow-up
             state.resources.political_power += 0.02;
-            if state.rng.r#gen::<f64>() < 0.40 {
+            if state.rng_crisis.r#gen::<f64>() < 0.40 {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let fine = scaled_cost(state, 0.15, 200.0, 600.0);
                 state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
@@ -3210,7 +3210,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::FieldTeamDetained { team_size, .. }, 1) => {
             // Escalate through official channels. Cost is None, so we handle all
             // personnel effects here directly. Three outcomes, probabilistic.
-            let roll = state.rng.r#gen::<f64>();
+            let roll = state.rng_crisis.r#gen::<f64>();
             let (days, msg): (f64, &str) = if roll < 0.15 {
                 // 15%: corp escalates in response. Staff still committed, team unreachable.
                 (7.0, "The corporation escalated in response. Staff are locked into the process and the team is still unreachable.")

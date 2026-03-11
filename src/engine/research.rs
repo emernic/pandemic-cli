@@ -660,7 +660,7 @@ mod tests {
     fn narrow_medicine_cheaper_to_develop_than_broad() {
         let mut state = GameState::new_default(1);
         let disease2 = crate::state::Disease::generate(
-            &mut state.rng.clone(), crate::state::PathogenType::Bacterium, &[], true,
+            &mut state.rng_emergence.clone(), crate::state::PathogenType::Bacterium, &[], true,
         );
         state.diseases.push(disease2);
         let broad_idx = state.medicines.len() - 1;
