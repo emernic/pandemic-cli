@@ -55,10 +55,10 @@ keypress → action.rs: key_to_action() → Action
 
 **Confirm handling lives in lib.rs, not state.rs.** `handle_confirm()` and the four panel-specific wizard handlers (`handle_medicine_confirm`, `handle_research_confirm`, `handle_policy_confirm`, `handle_operations_confirm`) are free functions in lib.rs. They take `&mut UiState` and `&GameState`, advance wizard state machines, do UX pre-validation (e.g. funding checks), and synthesize `GameCommand`s. This is coordination logic — it belongs in the coordination layer. The boundary is:
 
-**Validation contract:** The engine is always the authoritative validation layer — game commands validate their preconditions (funding, doses, personnel) and return an error message on failure. UI wizard handlers may add *best-effort preview checks* to fail early and prevent players from advancing multi-step wizards to dead ends. When a UI pre-check exists, it MUST use the same cost calculation as the engine to prevent drift. The canonical example is medicine deployment: `medicine_deploy_cost(medicine_idx, region_idx)` on `GameState` computes the full actual cost (base × disruption × discount) and is called by both the UI pre-check in `handle_medicine_confirm()` and the engine in `deploy_medicine()`. Never recompute these formulas inline — add a method to `GameState` and call it from both places.
-
 - **state.rs `impl UiState`:** Navigation and panel state mutations (`toggle_panel`, `close_panel`, `select_*`, `panel_selection_max`, `sync_panel_region`). These only need `&mut self` plus scalar counts — they don't make decisions requiring full `GameState` context.
 - **lib.rs wizard handlers:** What happens when you press Enter. These read game state broadly (medicines, diseases, research slots) to decide how wizard steps advance and which command to synthesize.
+
+**UI pre-check contract:** Wizard handlers may add *best-effort preview checks* to fail early, before a multi-step wizard reaches a dead end. These must use the same cost calculation as the engine — never recompute formulas inline. Add a method to `GameState` and call it from both places. `GameState::medicine_deploy_cost(medicine_idx, region_idx)` is the canonical example: it encapsulates base × disruption × discount, and is called by both `handle_medicine_confirm()` (preview) and `deploy_medicine()` (authoritative check). Most game commands validate preconditions in the engine command handler; crisis resolution is an exception where callers check affordability before calling `resolve_crisis()`.
 
 ### How simulation flows
 
