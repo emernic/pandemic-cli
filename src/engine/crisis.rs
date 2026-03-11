@@ -1711,7 +1711,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     description: format!(
                         "{corp_name} has called an emergency board session. \
                          Corporate revenues are at {:.0}% of baseline. \
-                         The board is threatening to pull funding unless conditions improve.",
+                         Funding is on the table.",
                         satisfaction * 100.0,
                     ),
                     options: vec![
@@ -1739,8 +1739,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 CrisisEvent {
                     title: "Board Concerns".into(),
                     description: format!(
-                        "{corp_name} is leading a push on the board. \
-                         Corporate revenues are down and your containment policies are getting the blame. \
+                        "{corp_name} is circulating a memo. \
+                         Corporate revenues are down. Containment policies are named. \
                          Board satisfaction at {:.0}%.",
                         satisfaction * 100.0,
                     ),
