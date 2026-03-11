@@ -214,16 +214,23 @@ cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half a day
 ```
 
-### Interleaved steps with `--do`
+### Chaining steps with `--do`
 
-The `--do` flag lets you interleave days and key actions in a single invocation. Use `d<N>` for days, anything else is a key:
+The `--do` flag chains steps in a single invocation. Use `d<N>` for days, anything else is a key. Key steps must come **before** any time-advance step — once time has been advanced, the invocation ends so you can read the output before deciding what to do next.
 
 ```bash
-cargo run -- --snapshot --do d0.5 --do r --do enter --do enter --do enter  # advance half a day, start research
-cargo run -- --snapshot --do d0.5 --do p --do enter --do enter --do d1     # advance half day, toggle policy, advance 1 more day
-```
+# Keys before a time advance — fine:
+cargo run -- --snapshot --do r --do enter --do d1    # open research, start something, then advance 1 day
 
-This eliminates the need for save files in simple multi-step tests. For longer sessions, save files are still useful.
+# Time advance alone — fine:
+cargo run -- --snapshot --do d2                      # advance 2 days; read the output
+
+# Keys with no time advance — fine:
+cargo run -- --snapshot --do r --do enter --do enter # open research and navigate
+
+# Keys AFTER a time advance — ERROR:
+# cargo run -- --snapshot --do d1 --do r             # rejected: can't issue keys without reading output first
+```
 
 ### Snapshot mode event handling
 
