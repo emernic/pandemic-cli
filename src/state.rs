@@ -1894,7 +1894,6 @@ pub struct RegionDiseaseState {
     pub disease_idx: usize,
     /// Exposed (latent) — infected but not yet infectious. Drains into `infected`
     /// at a rate determined by the disease's incubation period.
-    #[serde(default)]
     pub exposed: f64,
     pub infected: f64,
     pub dead: f64,
@@ -2292,7 +2291,6 @@ pub struct Disease {
     /// Incubation period in ticks — time from exposure to becoming infectious.
     /// Newly infected individuals enter the "exposed" compartment and transition
     /// to infectious at rate 1/incubation_ticks per tick.
-    #[serde(default = "default_incubation_ticks")]
     pub incubation_ticks: f64,
 }
 
@@ -2305,12 +2303,6 @@ pub struct ResistanceEntry {
 
 fn default_true() -> bool {
     true
-}
-
-/// Default incubation: 3 days (180 ticks). Used for serde deserialization of
-/// older save files that lack the field.
-fn default_incubation_ticks() -> f64 {
-    3.0 * TICKS_PER_DAY
 }
 
 impl Disease {
