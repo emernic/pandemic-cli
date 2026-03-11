@@ -626,7 +626,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "Leak circulates. −7% POL. May trigger misinformation.".into(),
+                    description: "−7% POL. 50% chance of infodemic.".into(),
                     cost: None,
                 },
                 ],
@@ -667,8 +667,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Quarantine Riots".into(),
                 description: format!(
-                    "Containment perimeter in {} has been breached. \
-                     Civil unrest is escalating.",
+                    "Containment perimeter in {} has been breached.",
                     region_name,
                 ),
                 options: vec![ CrisisOption {
@@ -1268,8 +1267,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "The military you cooperated with has classified your pathogen data. \
                      Civilian researchers are locked out of their own findings.".into(),
                 options: vec![ CrisisOption {
-                    label: "Go public (−10% POL)".into(),
-                    description: "Force declassification, but damages institutional credibility".into(),
+                    label: "Release the data (−10% POL)".into(),
+                    description: "Override the restriction. Data restored to research teams.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -2187,9 +2186,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     .unwrap_or(0);
                 let followup_tick = state.tick + (6.0 * TICKS_PER_DAY) as u64;
                 state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
-                "No comment. Leak spread. Misinformation taking hold.".into()
+                "No comment. Infodemic building.".into()
             } else {
-                "No comment. Leak faded from public attention.".into()
+                "No comment. Leak faded.".into()
             }
         }
 
@@ -2681,9 +2680,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::MilitaryOverreach, 0) => {
-            // Go to the press — lose POL, but research continues
+            // Override restriction — lose POL, data restored to research teams
             state.resources.political_power -= 0.10;
-            "Went public. Military forced to release research data.".into()
+            "Restriction overridden. Data restored to research teams.".into()
         }
         (CrisisKind::MilitaryOverreach, 1) => {
             // Legal challenge — costs already deducted
