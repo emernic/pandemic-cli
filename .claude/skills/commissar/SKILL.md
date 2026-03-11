@@ -64,7 +64,7 @@ Read them. The user cannot be in every session. You are their messenger. Interna
 
 ### 5. Review recent development
 
-They merge 10+ PRs per hour. Look at the last 50 commits:
+Agents merge 10+ PRs per hour. Look at the last 50 commits:
 
 ```bash
 git log --oneline -50 origin/master
