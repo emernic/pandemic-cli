@@ -122,6 +122,8 @@ When you prime a playtester with a specific focus ("look for idle personnel") or
 
 ## Step 3: Read the Log and Extract Findings
 
+Check `./playtests/` for the log file. **If the agent didn't write a log** (which happens when they hit the tool call limit before finishing), read their output transcript from the task output file and write the log yourself. The transcript contains all their commentary — format it into the standard session log structure. Note at the top: "Log reconstructed by playtest manager from agent transcript."
+
 Read the full playtest log. Extract every distinct finding.
 
 **Playability problems come first.** If the agent couldn't navigate, couldn't toggle, couldn't take actions — that's the #1 finding. File it as a P0 bug. Do NOT file gameplay feedback from a session where the agent was struggling to play. That feedback is unreliable.
