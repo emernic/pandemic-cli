@@ -53,6 +53,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 &format!("Region infrastructure restored to 100%. Others: -{:.0}% infra.",
                     FORTIFY_INFRA_PENALTY * 100.0))
         }
+        Some(PolicyUiState::ConfirmDecree { decree_idx }) => {
+            render_confirm_decree(state, *decree_idx)
+        }
         _ => render_browse(state),
     };
 
@@ -229,20 +232,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     )));
 
-    let decree_descs: [String; DECREE_COUNT] = [
-        format!("+{} personnel, -¥{:.0}/day income (permanent)",
-            CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
-        "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
-        format!("Abandon a region, +{:.0}% income from the rest (permanent)",
-            (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
-        "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
-        format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
-            FORTIFY_INFRA_PENALTY * 100.0),
-        format!("Infectivity -{:.0}%, spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
-            (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
-            (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
-            COUNTERMEASURE_KILL_FRACTION * 100.0),
-    ];
+    let decree_descs: [String; DECREE_COUNT] = std::array::from_fn(decree_description);
 
 
     for decree_idx in 0..DECREE_COUNT {
@@ -915,6 +905,51 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     lines.push(hint_line(state, "Toggle", "Back"));
 
     (format!(" Policy: {} ", region.name), lines, selected_line)
+}
+
+/// Returns the short description for a decree, used in both the browse list and confirmation dialog.
+fn decree_description(decree_idx: usize) -> String {
+    match decree_idx {
+        0 => format!("+{} personnel, -¥{:.0}/day income (permanent)",
+            CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
+        1 => "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
+        2 => format!("Abandon a region, +{:.0}% income from the rest (permanent)",
+            (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
+        3 => "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
+        4 => format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
+            FORTIFY_INFRA_PENALTY * 100.0),
+        5 => format!("Infectivity -{:.0}%, spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
+            (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
+            (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
+            COUNTERMEASURE_KILL_FRACTION * 100.0),
+        _ => "Permanent action.".to_string(),
+    }
+}
+
+fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
+    let name = decree_display_name(decree_idx);
+    let desc = decree_description(decree_idx);
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    lines.push(Line::from(Span::styled(
+        format!("  ⚠  {}  ⚠", name.to_uppercase()),
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  This action is PERMANENT and cannot be undone.",
+        Style::default().fg(Color::Red),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("  Effect: {}", desc),
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+    lines.push(hint_line(state, "Confirm", "Cancel"));
+
+    (format!(" ⚠ CONFIRM DECREE: {} ", name.to_uppercase()), lines, None)
 }
 
 fn render_region_select(state: &GameState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {

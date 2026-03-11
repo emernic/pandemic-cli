@@ -473,26 +473,27 @@ fn handle_policy_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
                 }
                 // Decree selected.
                 let decree_idx = ui.panel_selection - decree_base;
-                if decree_idx == 2 && !state.enacted_decrees.is_enacted(2) {
-                    // Sacrifice Region needs sub-selection — but only if unlocked
-                    if state.decree_unlocked(2) {
-                        ui.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
-                        ui.panel_selection = 0;
-                        None
-                    } else {
-                        Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
-                    }
-                } else if decree_idx == 4 && !state.enacted_decrees.is_enacted(4) {
-                    // Fortify Region needs sub-selection
-                    if state.decree_unlocked(4) {
-                        ui.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
-                        ui.panel_selection = 0;
-                        None
-                    } else {
-                        Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
-                    }
+                if state.enacted_decrees.is_enacted(decree_idx) {
+                    // Already enacted — no action
+                    None
+                } else if !state.decree_unlocked(decree_idx) {
+                    // Locked — no action
+                    None
+                } else if decree_idx == 2 {
+                    // Sacrifice Region needs sub-selection first
+                    ui.policy_ui = Some(PolicyUiState::SelectSacrificeRegion);
+                    ui.panel_selection = 0;
+                    None
+                } else if decree_idx == 4 {
+                    // Fortify Region needs sub-selection first
+                    ui.policy_ui = Some(PolicyUiState::SelectFortifyRegion);
+                    ui.panel_selection = 0;
+                    None
                 } else {
-                    Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+                    // All other decrees go through a confirmation step
+                    ui.policy_ui = Some(PolicyUiState::ConfirmDecree { decree_idx });
+                    ui.panel_selection = 0;
+                    None
                 }
             }
         }
@@ -553,6 +554,10 @@ fn handle_policy_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
             } else {
                 None
             }
+        }
+        Some(PolicyUiState::ConfirmDecree { decree_idx }) => {
+            // Player confirmed — enact it
+            Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
         }
         None => None,
     }

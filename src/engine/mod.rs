@@ -4925,6 +4925,12 @@ mod tests {
         assert_eq!(state.ui.panel_selection, 6);
 
         let personnel_before = state.resources.personnel;
+        // First Confirm goes to the confirmation screen
+        state = apply_action(&state, &Action::Confirm);
+        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::ConfirmDecree { decree_idx: 0 }),
+            "should show confirmation before enacting");
+        assert!(!state.enacted_decrees.conscript_researchers, "should not yet be enacted");
+        // Second Confirm enacts the decree
         state = apply_action(&state, &Action::Confirm);
         assert!(state.enacted_decrees.conscript_researchers);
         assert_eq!(state.resources.personnel, personnel_before + crate::state::CONSCRIPT_PERSONNEL_GAIN);
