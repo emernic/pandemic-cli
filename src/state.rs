@@ -65,7 +65,16 @@ pub struct GameState {
     pub tick: u64,
     #[serde(default)]
     pub sim_state: SimState,
-    pub rng: ChaCha8Rng,
+    /// Per-subsystem RNG streams, each seeded deterministically from the master
+    /// seed. Splitting prevents one subsystem's draw count from shifting another's
+    /// sequence, so e.g. disease #1 emerges on the same tick regardless of how
+    /// many spread-noise draws occurred.
+    pub rng_spread: ChaCha8Rng,
+    pub rng_emergence: ChaCha8Rng,
+    pub rng_crisis: ChaCha8Rng,
+    pub rng_research: ChaCha8Rng,
+    /// Catch-all for contracts, corporations, medicine adverse checks, operations.
+    pub rng_misc: ChaCha8Rng,
     pub resources: Resources,
     pub regions: Vec<Region>,
     pub diseases: Vec<Disease>,
@@ -4480,7 +4489,17 @@ pub enum MapDirection {
 impl GameState {
     pub fn new_default(seed: u64) -> Self {
 
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        // Per-subsystem RNG streams, each seeded from the master seed XOR'd
+        // with a distinct constant. The emergence stream is also used for
+        // initial disease generation so the starting disease is stable.
+        // Emergence uses the raw seed so that the starting disease for a given
+        // seed stays the same as before the split. Other streams XOR with
+        // distinct constants to produce independent sequences.
+        let rng_spread = ChaCha8Rng::seed_from_u64(seed.wrapping_add(1));
+        let mut rng_emergence = ChaCha8Rng::seed_from_u64(seed);
+        let rng_crisis = ChaCha8Rng::seed_from_u64(seed.wrapping_add(3));
+        let rng_research = ChaCha8Rng::seed_from_u64(seed.wrapping_add(4));
+        let rng_misc = ChaCha8Rng::seed_from_u64(seed.wrapping_add(5));
 
         // Canonical region connections (indices match vec order):
         //   0: N.America ↔ S.America(1), Europe(2)
@@ -4754,12 +4773,12 @@ impl GameState {
             PathogenType::Bacterium,  // 2× weight
             PathogenType::Fungus,
         ];
-        let chosen_types = vec![available_types[rng.r#gen::<usize>() % available_types.len()]];
+        let chosen_types = vec![available_types[rng_emergence.r#gen::<usize>() % available_types.len()]];
 
         let mut diseases = Vec::new();
         let mut used_names: Vec<String> = Vec::new();
         for pathogen_type in &chosen_types {
-            let mut disease = Disease::generate(&mut rng, *pathogen_type, &used_names, false);
+            let mut disease = Disease::generate(&mut rng_emergence, *pathogen_type, &used_names, false);
             disease.detected = true; // starting disease is already detected — player needs something to act on
             used_names.push(disease.name.clone());
             diseases.push(disease);
@@ -4769,8 +4788,8 @@ impl GameState {
         // The starting disease has already been detected by global health systems.
         // We seed it well above the detection threshold so the player can immediately
         // see infections on the map and begin field research to identify it.
-        let region_idx = rng.r#gen::<usize>() % regions.len();
-        let infected = 1_000.0 + rng.r#gen::<f64>() * 2_000.0;
+        let region_idx = rng_emergence.r#gen::<usize>() % regions.len();
+        let infected = 1_000.0 + rng_emergence.r#gen::<f64>() * 2_000.0;
         let dead = infected * 0.01; // ~1% already dead when the player takes over
         regions[region_idx].infections.push(RegionDiseaseState {
             disease_idx: 0,
@@ -4816,7 +4835,11 @@ impl GameState {
         Self {
             tick: 0,
             sim_state: SimState::Running,
-            rng,
+            rng_spread,
+            rng_emergence,
+            rng_crisis,
+            rng_research,
+            rng_misc,
             resources: Resources {
                 funding: 500.0,
                 personnel: 20,

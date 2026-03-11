@@ -203,7 +203,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
                 .estimate_vaccination(susceptible, efficacy, vax_mult)
                 .min(effective_doses);
             if actual <= 0.0 { return; }
-            let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, susceptible);
+            let (adverse, adverse_deaths) = adverse_check(&mut state.rng_misc, actual, is_tested, susceptible);
             let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
             apply_immune_and_deaths(inf, actual, adverse_deaths);
             state.regions[reg_idx].dead += adverse_deaths;
@@ -215,7 +215,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
                 .estimate_treatment(infected, efficacy)
                 .min(effective_doses);
             if actual <= 0.0 { return; }
-            let (adverse, adverse_deaths) = adverse_check(&mut state.rng, actual, is_tested, infected);
+            let (adverse, adverse_deaths) = adverse_check(&mut state.rng_misc, actual, is_tested, infected);
             let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
             inf.infected -= actual;
             apply_immune_and_deaths(inf, actual, adverse_deaths);

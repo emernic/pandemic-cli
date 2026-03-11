@@ -83,7 +83,7 @@ pub fn generate_corporations(state: &mut GameState) {
                 _ => 0.25,
             };
             // Add ±10% variance from RNG
-            let variance = 0.9 + state.rng.r#gen::<f64>() * 0.2;
+            let variance = 0.9 + state.rng_misc.r#gen::<f64>() * 0.2;
             let base_revenue = total_daily_revenue * share * variance;
             let operating_costs = base_revenue * CORP_COST_RATIO;
             let reserves = operating_costs * CORP_STARTING_RESERVE_DAYS;

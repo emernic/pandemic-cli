@@ -35,20 +35,23 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         return new;
     }
 
-    // Clone the RNG out so we can mutably borrow both `rng` and `new.regions`
-    // simultaneously. Written back to `new.rng` at the end of the function.
-    // WARNING: Do not use `new.rng` between here and the write-back line.
-    let mut rng = new.rng.clone();
+    // Clone per-subsystem RNG streams out so we can mutably borrow them and
+    // `new.regions` simultaneously. Written back at the end of the function.
+    let mut rng_spread = new.rng_spread.clone();
+    let mut rng_emergence = new.rng_emergence.clone();
+    let mut rng_crisis = new.rng_crisis.clone();
+    let mut rng_research = new.rng_research.clone();
+    let mut rng_misc = new.rng_misc.clone();
 
     // Disease spread, mutation, and adaptation
-    spread::tick_spread_within(&mut new, &state.diseases, &mut rng);
-    spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng);
-    spread::tick_mutation(&mut new, &mut rng);
+    spread::tick_spread_within(&mut new, &state.diseases, &mut rng_spread);
+    spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng_spread);
+    spread::tick_mutation(&mut new, &mut rng_spread);
     spread::tick_horizontal_gene_transfer(&mut new);
     spread::tick_containment_adaptation(&mut new);
 
     // Research progress
-    research::tick_research(&mut new, &mut rng);
+    research::tick_research(&mut new, &mut rng_research);
 
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new);
@@ -91,7 +94,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
 
     // Funding contracts — check conditions (revoke violators), offer new contracts.
     contracts::tick_check_contracts(&mut new);
-    contracts::tick_offer_contracts(&mut new, &mut rng);
+    contracts::tick_offer_contracts(&mut new, &mut rng_misc);
 
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
     corporations::tick_corporations(&mut new);
@@ -193,9 +196,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         let emergence_chance = EMERGENCE_CHANCE_PER_TICK * (1.0 + new.tech_pressure() + wave_boost);
         if new.tick >= EMERGENCE_MIN_TICK
             && new.diseases.len() < MAX_DISEASES
-            && rng.r#gen::<f64>() < emergence_chance
+            && rng_emergence.r#gen::<f64>() < emergence_chance
         {
-            if let Some((new_disease_idx, _)) = disease::spawn_disease_scaled(&mut new, &mut rng) {
+            if let Some((new_disease_idx, _)) = disease::spawn_disease_scaled(&mut new, &mut rng_emergence) {
                 // Assign sequence group when this spawn was triggered by wave clustering.
                 // Diseases from the same wave share a group ID, visible via Rapid Sequencing.
                 if let Some(trigger_idx) = wave_trigger_idx {
@@ -355,14 +358,18 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     if new.active_crisis.is_none()
         && crisis_gap_ok
         && new.tick >= CRISIS_MIN_TICK
-        && rng.r#gen::<f64>() < 1.0 / crisis_interval
+        && rng_crisis.r#gen::<f64>() < 1.0 / crisis_interval
     {
-        if let Some(crisis) = crisis::generate_crisis(&new, &mut rng) {
+        if let Some(crisis) = crisis::generate_crisis(&new, &mut rng_crisis) {
             crisis::activate_crisis(&mut new, crisis);
         }
     }
 
-    new.rng = rng;
+    new.rng_spread = rng_spread;
+    new.rng_emergence = rng_emergence;
+    new.rng_crisis = rng_crisis;
+    new.rng_research = rng_research;
+    new.rng_misc = rng_misc;
 
     new.tick += 1;
 
@@ -415,7 +422,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 .copied()
                 .collect();
             let to = if neighbors.len() > 1 {
-                Some(neighbors[new.rng.r#gen::<usize>() % neighbors.len()])
+                Some(neighbors[new.rng_crisis.r#gen::<usize>() % neighbors.len()])
             } else {
                 neighbors.first().copied()
             };
@@ -521,9 +528,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         && new.total_infected() < 1.0
         && new.tick > EMERGENCE_MIN_TICK
     {
-        let mut rng2 = new.rng.clone();
-        disease::spawn_disease_scaled(&mut new, &mut rng2);
-        new.rng = rng2;
+        let mut rng_e = new.rng_emergence.clone();
+        disease::spawn_disease_scaled(&mut new, &mut rng_e);
+        new.rng_emergence = rng_e;
     }
 
     // Record history for dashboard sparklines
@@ -1340,7 +1347,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Need at least 2 diseases so the panel has items to navigate
         state.diseases.push(crate::state::Disease::generate(
-            &mut state.rng.clone(), crate::state::PathogenType::Bacterium, &[], true,
+            &mut state.rng_emergence.clone(), crate::state::PathogenType::Bacterium, &[], true,
         ));
         // Open threats panel — up/down should navigate panel, not map
         let s = apply_action(&state, &Action::OpenThreats);
@@ -1944,9 +1951,9 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Fill up to MAX_DISEASES
         while state.diseases.len() < MAX_DISEASES {
-            let mut rng = state.rng.clone();
+            let mut rng = state.rng_emergence.clone();
             disease::spawn_disease(&mut state, &mut rng);
-            state.rng = rng;
+            state.rng_emergence = rng;
         }
         assert_eq!(state.diseases.len(), MAX_DISEASES);
         // Clear all infections to simulate burn-out
@@ -2681,9 +2688,9 @@ mod tests {
         for seed in 0..50u64 {
             let mut state = GameState::new_default(seed);
             while state.diseases.len() < MAX_DISEASES {
-                let mut rng = state.rng.clone();
+                let mut rng = state.rng_emergence.clone();
                 disease::spawn_disease(&mut state, &mut rng);
-                state.rng = rng;
+                state.rng_emergence = rng;
             }
             let mut counts = std::collections::HashMap::new();
             for d in &state.diseases {
@@ -2716,7 +2723,7 @@ mod tests {
             // Early game (day 0)
             let mut state = GameState::new_default(seed);
             state.tick = 0;
-            let mut rng = state.rng.clone();
+            let mut rng = state.rng_emergence.clone();
             // Remove existing disease so spawn works clean
             state.diseases.clear();
             if let Some((idx, _)) = disease::spawn_disease(&mut state, &mut rng) {
@@ -2725,13 +2732,13 @@ mod tests {
                     _ => {}
                 }
             }
-            state.rng = rng;
+            state.rng_emergence = rng;
 
             // Late game (day 60)
             let mut state2 = GameState::new_default(seed + 1000);
             state2.tick = (60.0 * TICKS_PER_DAY) as u64;
             state2.diseases.clear();
-            let mut rng2 = state2.rng.clone();
+            let mut rng2 = state2.rng_emergence.clone();
             if let Some((idx, _)) = disease::spawn_disease(&mut state2, &mut rng2) {
                 match state2.diseases[idx].pathogen_type {
                     PathogenType::Fungus | PathogenType::Prion => late_deadly += 1,
@@ -2773,7 +2780,7 @@ mod tests {
         // Clear diseases and spawn a new one
         state.diseases.clear();
         for r in &mut state.regions { r.infections.clear(); }
-        let mut rng = state.rng.clone();
+        let mut rng = state.rng_emergence.clone();
         disease::spawn_disease_scaled(&mut state, &mut rng);
 
         // The new disease should have pre-existing resistance to CellWallInhibitor
@@ -2804,7 +2811,7 @@ mod tests {
 
         state.diseases.clear();
         for r in &mut state.regions { r.infections.clear(); }
-        let mut rng = state.rng.clone();
+        let mut rng = state.rng_emergence.clone();
         disease::spawn_disease_scaled(&mut state, &mut rng);
 
         if !state.diseases.is_empty() {
@@ -2833,7 +2840,7 @@ mod tests {
 
         state.diseases.clear();
         for r in &mut state.regions { r.infections.clear(); }
-        let mut rng = state.rng.clone();
+        let mut rng = state.rng_emergence.clone();
         disease::spawn_disease_scaled(&mut state, &mut rng);
 
         if !state.diseases.is_empty() {
@@ -2863,7 +2870,7 @@ mod tests {
             state.tick = 0;
             state.diseases.clear();
             for r in &mut state.regions { r.infections.clear(); }
-            let mut rng = state.rng.clone();
+            let mut rng = state.rng_emergence.clone();
             disease::spawn_disease_scaled(&mut state, &mut rng);
             if !state.diseases.is_empty() && state.diseases[0].transmission == TransmissionVector::Contact {
                 early_contact += 1;
@@ -2874,7 +2881,7 @@ mod tests {
             state2.tick = (70.0 * TICKS_PER_DAY) as u64; // day 70: full optimization
             state2.diseases.clear();
             for r in &mut state2.regions { r.infections.clear(); }
-            let mut rng2 = state2.rng.clone();
+            let mut rng2 = state2.rng_emergence.clone();
             disease::spawn_disease_scaled(&mut state2, &mut rng2);
             if !state2.diseases.is_empty() && state2.diseases[0].transmission == TransmissionVector::Contact {
                 late_contact += 1;
@@ -2909,7 +2916,7 @@ mod tests {
             state.diseases.clear();
             for r in &mut state.regions { r.infections.clear(); }
 
-            let mut rng = state.rng.clone();
+            let mut rng = state.rng_emergence.clone();
             if let Some((_, region_idx)) = disease::spawn_disease(&mut state, &mut rng) {
                 if region_idx == 0 {
                     defended_hits += 1;
@@ -2954,7 +2961,7 @@ mod tests {
             state.diseases.clear();
             for r in &mut state.regions { r.infections.clear(); }
 
-            let mut rng = state.rng.clone();
+            let mut rng = state.rng_emergence.clone();
             if let Some((_, region_idx)) = disease::spawn_disease(&mut state, &mut rng) {
                 if region_idx == 0 {
                     invested_hits += 1;
@@ -3062,7 +3069,7 @@ mod tests {
 
             // Test airborne
             state.diseases[0].transmission = TransmissionVector::Airborne;
-            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            state.rng_spread = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
             let after = tick(&state);
             if after.regions.iter().skip(1).any(|r|
                 r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
@@ -3072,7 +3079,7 @@ mod tests {
 
             // Test contact
             state.diseases[0].transmission = TransmissionVector::Contact;
-            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            state.rng_spread = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
             let after = tick(&state);
             if after.regions.iter().skip(1).any(|r|
                 r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
@@ -3105,7 +3112,7 @@ mod tests {
             });
 
             // No policy
-            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            state.rng_spread = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
             let after = tick(&state);
             if after.regions.iter().skip(1).any(|r|
                 r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)
@@ -3115,7 +3122,7 @@ mod tests {
 
             // Border controls on source region
             state.policies[0].border_controls = true;
-            state.rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            state.rng_spread = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
             let after = tick(&state);
             if after.regions.iter().skip(1).any(|r|
                 r.infections.iter().any(|inf| inf.disease_idx == 0 && inf.infected > 0.0)

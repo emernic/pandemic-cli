@@ -253,7 +253,7 @@ fn complete_operation(state: &mut GameState, op: &FieldOperation) {
             let infection_rate = if source_pop > 0.0 { source_infected / source_pop } else { 0.0 };
             let seed_chance = (infection_rate * OP_EVAC_SEED_RATE_FACTOR).min(0.80);
             let seeded = if seed_chance > 0.0 {
-                let roll: f64 = state.rng.r#gen();
+                let roll: f64 = state.rng_misc.r#gen();
                 roll < seed_chance
             } else {
                 false
