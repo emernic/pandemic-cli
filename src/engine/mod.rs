@@ -984,6 +984,9 @@ mod tests {
     fn medicine_treatment_deployment() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
+        // Disable BS auto-deploy so it doesn't create cooldowns that interfere
+        // with the manual deploy this test is exercising.
+        for flag in &mut state.auto_deploy { *flag = false; }
         for _ in 0..20 {
             state = tick(&state);
         }
@@ -4595,6 +4598,10 @@ mod tests {
     #[test]
     fn horizontal_gene_transfer_between_bacteria() {
         let mut state = GameState::new_default(42);
+        // Disable BS auto-deploy: it builds broad-spectrum resistance on disease 0
+        // which would inflate disease 0's resistance far above the manually set 0.5,
+        // causing disease 1 to receive more HGT than the test expects.
+        for flag in &mut state.auto_deploy { *flag = false; }
         // Set up two Bacterium diseases co-located in the same region
         state.diseases[0].pathogen_type = PathogenType::Bacterium;
         // Add a second Bacterium disease

@@ -1955,38 +1955,38 @@ impl PathogenType {
             // RNA viruses: fast spreader, high lethality.
             // Base doubling time ~1.3 days (unscaled). Scaling accelerates later.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.004, 0.007),
+                infectivity: (0.005, 0.008),
                 lethality: (0.00040, 0.00070),
                 recovery: (0.00006, 0.00015),
-                cross_region: (0.004, 0.008),
+                cross_region: (0.005, 0.010),
             },
             // DNA viruses: moderate spread, high lethality.
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.003, 0.006),
+                infectivity: (0.004, 0.007),
                 lethality: (0.00035, 0.00065),
                 recovery: (0.00004, 0.00010),
-                cross_region: (0.003, 0.007),
+                cross_region: (0.004, 0.009),
             },
             // Bacteria: broad reach, moderate lethality, some recovery.
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.003, 0.005),
+                infectivity: (0.004, 0.006),
                 lethality: (0.00035, 0.00060),
                 recovery: (0.00010, 0.00020),
-                cross_region: (0.003, 0.006),
+                cross_region: (0.004, 0.007),
             },
             // Fungi: slower growth, high lethality, almost no natural recovery.
             PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.002, 0.004),
+                infectivity: (0.003, 0.005),
                 lethality: (0.00030, 0.00055),
                 recovery: (0.00005, 0.00015),
-                cross_region: (0.002, 0.005),
+                cross_region: (0.003, 0.006),
             },
             // Prions: slowest spread, near-certain death once infected.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.002, 0.005),
+                infectivity: (0.003, 0.006),
                 lethality: (0.00045, 0.00090),
                 recovery: (0.00003, 0.00006),
-                cross_region: (0.002, 0.004),
+                cross_region: (0.003, 0.005),
             },
         }
     }
@@ -4811,6 +4811,7 @@ impl GameState {
         });
 
         let num_diseases = diseases.len();
+        let num_medicines = medicines.len();
 
         Self {
             tick: 0,
@@ -4844,7 +4845,15 @@ impl GameState {
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_research: [false; 3],
-            auto_deploy: vec![],
+            auto_deploy: {
+                // Broad-Spectrum is always the last medicine; start it deployed so
+                // novices benefit from it immediately and learn the system exists.
+                let mut v = vec![false; num_medicines];
+                if !v.is_empty() {
+                    *v.last_mut().unwrap() = true;
+                }
+                v
+            },
             standing_orders: StandingOrders::default(),
             field_operations: vec![],
             crisis_operations: vec![],
