@@ -2,8 +2,8 @@ use ratatui::{backend::TestBackend, Terminal};
 
 use crate::action::string_to_action;
 use crate::apply_action;
-use crate::engine::tick;
 use crate::state::{GameState, GameOutcome, SimState};
+use crate::tick_and_process;
 use crate::ui;
 
 /// Result of running snapshot mode: the rendered screen and the updated state.
@@ -63,8 +63,7 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
     }
     state.sim_state = SimState::Running;
     for _ in 0..n {
-        *state = tick(state);
-        ui::process_events(state);
+        *state = tick_and_process(state);
 
         if state.outcome != GameOutcome::Playing {
             return StopReason::GameOver;

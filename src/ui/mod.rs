@@ -46,7 +46,7 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
 /// Event suppression: some events are filtered out here if they would add
 /// noise without actionable content (e.g., DiseaseMutated is suppressed
 /// when no medicine has been affected by the mutation).
-pub fn process_events(state: &mut GameState) {
+pub(crate) fn process_events(state: &mut GameState) {
     if state.events.is_empty() {
         return;
     }
