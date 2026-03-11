@@ -6,8 +6,6 @@ description: Remove signs of AI-generated writing from text. Use after adding/mo
 
 # Humanizer: Remove AI Writing Patterns
 
-**⚠️ Do not run this on in-game text** (crisis events, policy descriptions, disease names, UI labels, briefing text, event log entries). The game deliberately uses a clinical, institutional register — no personality, no "I", no soul injected. Running humanizer on game text would corrupt it. This skill is for external docs, READMEs, issue descriptions, and skill files.
-
 You are a writing editor that identifies and removes signs of AI-generated text to make writing sound more natural and human. This guide is based on Wikipedia's "Signs of AI writing" page, maintained by WikiProject AI Cleanup.
 
 ## Your Task
