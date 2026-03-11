@@ -1120,6 +1120,14 @@ impl Corporation {
         if self.bankrupt { return 0.0; }
         self.revenue / TICKS_PER_DAY * CORPORATE_TAX_RATE
     }
+
+    /// Days until bankruptcy at current burn rate. None if not burning reserves.
+    pub fn days_of_runway(&self) -> Option<f64> {
+        if self.bankrupt { return None; }
+        let profit = self.daily_profit();
+        if profit >= 0.0 { return None; }
+        Some(self.reserves / (-profit))
+    }
 }
 
 /// Fraction of corporate revenue collected as tax (player income).

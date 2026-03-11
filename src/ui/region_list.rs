@@ -714,6 +714,28 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 } else {
                     format!("  ¥{:.0}/d", profit)
                 };
+                // Trend arrow: shows when reserves are actively changing.
+                // Only shown when recovering (below max) or burning — not at stable max.
+                let recovering = !corp.bankrupt && profit >= 0.0 && corp.reserves_fraction() < 0.99;
+                let burning = !corp.bankrupt && profit < 0.0;
+                let (trend, trend_color) = if burning {
+                    (" ↓", Color::Red)
+                } else if recovering {
+                    (" ↑", Color::Green)
+                } else {
+                    ("", Color::DarkGray)
+                };
+                // Days of runway when burning reserves
+                let runway = corp.days_of_runway();
+                let runway_str = match runway {
+                    Some(days) => format!("  ~{:.0}d", days),
+                    None => String::new(),
+                };
+                let runway_color = match runway {
+                    Some(days) if days < 7.0 => Color::Red,
+                    Some(_) => Color::Yellow,
+                    None => Color::DarkGray,
+                };
                 let board_marker = if corp.board_seat { " ★" } else { "" };
                 lines.push(Line::from(vec![
                     Span::styled(
@@ -729,8 +751,16 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(status_color),
                     ),
                     Span::styled(
+                        trend,
+                        Style::default().fg(trend_color),
+                    ),
+                    Span::styled(
                         profit_str,
                         Style::default().fg(if profit >= 0.0 { Color::Green } else { Color::Red }),
+                    ),
+                    Span::styled(
+                        runway_str,
+                        Style::default().fg(runway_color),
                     ),
                     Span::styled(
                         board_marker,
