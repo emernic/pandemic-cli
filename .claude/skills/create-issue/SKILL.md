@@ -18,7 +18,7 @@ You are writing a GitHub issue based on something you encountered during this co
 5. **If you have a solution idea**, you may include it, but it MUST go in a clearly marked section: `## Possible Solution (do not use directly)`. This section should be treated as a rough sketch, not a spec. The implementer should feel free to ignore it entirely.
 6. **Be self-contained.** The person reading this issue will NOT have access to your conversation. They need to understand the problem fully from the issue alone. Include relevant code paths, reproduction steps, and context.
 7. **Keep scope narrow.** One issue = one problem or one feature. If you noticed multiple things, file multiple issues.
-8. **Be concise.** Say what's wrong, point to where to look, and stop. Long issues full of analysis are a smell — they usually mean you're hallucinating specificity you don't have. If the issue body is longer than ~15 lines, ask yourself what you can cut.
+8. **Separate what you observed from what you suspect.** Be concise, but don't cut useful context for brevity's sake. The real problem is when speculation about root causes gets mixed in with observations and read as fact. Keep the main description grounded in what you literally saw and did. If you have theories about why something is happening, put them in a clearly marked section: `## Possible Causes (unverified)`. The next person must be able to distinguish "this definitely happened" from "I think this might be why."
 
 ## Process
 
