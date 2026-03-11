@@ -214,7 +214,7 @@ Adapt to the task — small fixes need fewer steps, big changes need more. But a
 
 Once you're confident in your plan, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
 
-**While you work, look around.** You are not a machine that processes one issue and exits. You are reading real code in a real codebase. If you see something broken, confusing, or architecturally wrong in the code you're touching or the code next to it — **file an investigate issue, don't fix it inline.** Fixing unrelated problems in the same session creates parallel PRs that conflict when merged. One issue, one branch, one PR. File the issue, stay focused, and let it be picked up in a separate session.
+**While you work, look around.** You are not a machine that processes one issue and exits. You are reading real code in a real codebase. If you see something broken, confusing, or architecturally wrong in the code you're touching or the code next to it — fix it if it's small and fits on your current branch, or **file an investigate issue** if it would need its own PR. Never create a second branch/PR while your first is unmerged — the first merge changes master, causing rebase conflicts in the second.
 
 ## Step 8: Completion
 
