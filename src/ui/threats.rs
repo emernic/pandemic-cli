@@ -66,6 +66,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         format!("    Type: {}", disease.pathogen_type.label()),
                         Style::default().fg(Color::Cyan),
                     ),
+                    Span::styled(
+                        format!("  Strain: Gen {}", disease.strain_generation),
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 ];
                 push_disease_indicators(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
@@ -90,6 +94,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Span::styled(
                         format!("  Vector: {}", disease.transmission.label()),
                         Style::default().fg(Color::Yellow),
+                    ),
+                    Span::styled(
+                        format!("  Strain: Gen {}", disease.strain_generation),
+                        Style::default().fg(Color::DarkGray),
                     ),
                 ];
                 push_disease_indicators(&mut type_spans, state, i);
