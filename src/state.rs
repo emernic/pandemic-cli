@@ -543,7 +543,7 @@ pub struct RegionPolicy {
 ///
 /// Display position is determined by `policy_display_order()` (grouped by function).
 /// If you add a new policy, you must update:
-///   - POLICY_COUNT and POLICY_POL_THRESHOLDS (this file)
+///   - POLICY_COUNT and POLICY_APPROVAL_THRESHOLDS (this file)
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
@@ -562,20 +562,21 @@ pub const POLICY_IDX_NUCLEAR: usize = 9;
 /// (Basic / Med / Mass Screening), all backed by the single `screening` enum field.
 pub const POLICY_IDX_SCREENING_BASE: usize = 5;
 
-/// Minimum Authority (0.0–1.0) required to activate each policy.
+/// Minimum Board Approval (0.0–1.0) required to activate each policy.
+/// Starting approval is 0.50 (neutral board). 0% = furious, 100% = enraptured.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
-pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
-    0.15, // Travel Ban — basic containment, available early
-    0.20, // Quarantine — restricts movement, moderate political will
-    0.10, // Hospital Surge — medical infrastructure, needs some authority
+pub const POLICY_APPROVAL_THRESHOLDS: [f64; POLICY_COUNT] = [
+    0.40, // Travel Ban — basic containment, available near starting approval
+    0.45, // Quarantine — restricts movement, moderate board buy-in
+    0.30, // Hospital Surge — medical infrastructure, low threshold
     0.00, // Border Controls — basic containment, always available (costs personnel + funding)
     0.00, // Water Sanitation — basic public health, always available (costs personnel + funding)
     0.00, // Basic Screening — disease reporting, always available (costs personnel + funding)
-    0.10, // Antigen Screening — mandatory testing, needs political will
-    0.15, // Mass Rapid Screening — mandatory mass testing, needs political will
-    0.40, // Martial Law — drastic, needs high political will
-    0.35, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
-    0.15, // Field Hospital — institutional build, needs political authority
+    0.30, // Antigen Screening — mandatory testing, needs board buy-in
+    0.40, // Mass Rapid Screening — mandatory mass testing, needs board support
+    0.70, // Martial Law — drastic, needs strong board backing
+    0.60, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
+    0.40, // Field Hospital — institutional build, needs board support
     0.00, // Intel Station — always available, encourages early investment
 ];
 
@@ -1169,12 +1170,13 @@ fn format_large_number(n: f64) -> String {
 pub struct Resources {
     pub funding: f64,
     pub personnel: u32,
-    /// Authority (0.0–1.0). Represents operational mandate from board/patrons.
+    /// Board Approval (0.0–1.0). The board's collective assessment of your performance.
+    /// 0% = furious, 50% = neutral (starting value), 100% = enraptured.
     /// Drifts toward a board/patron-driven target (~50%/day). Crisis choices modify
-    /// this directly, so AUTH hits take real time to recover from.
+    /// this directly, so approval hits take real time to recover from.
     #[serde(default)]
-    pub political_power: f64,
-    /// Fractional accumulator for POL-based personnel gains.
+    pub board_approval: f64,
+    /// Fractional accumulator for approval-based personnel gains.
     #[serde(default)]
     pub personnel_accum: f64,
     /// Fractional accumulator for personnel attrition (when funding is $0).
@@ -1370,7 +1372,7 @@ pub const BARGAIN_LOYALTY_GAIN: f64 = 20.0;
 /// Blowhard bargain: large loyalty gain (they're easy to please).
 pub const BARGAIN_BLOWHARD_LOYALTY_GAIN: f64 = 30.0;
 /// Buffoon bargain cost: small POL cost (public praise).
-pub const BARGAIN_BUFFOON_POL_COST: f64 = 0.05;
+pub const BARGAIN_BUFFOON_APPROVAL_COST: f64 = 0.05;
 /// Blowhard bargain cost: small funding cost.
 pub const BARGAIN_BLOWHARD_FUNDING_COST: f64 = 100.0;
 /// Recluse bargain cost: personnel (you send someone to physically manage).
@@ -4860,7 +4862,7 @@ impl GameState {
             resources: Resources {
                 funding: 500.0,
                 personnel: 20,
-                political_power: 0.20,
+                board_approval: 0.50,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_funding_warning_tick: 0,
@@ -5335,8 +5337,8 @@ impl GameState {
     /// Effective POL threshold for a policy in a specific region.
     /// Regional severity (infection rate) reduces the threshold — a crisis
     /// in a region justifies action even with low global political will.
-    pub fn effective_pol_threshold(&self, region_idx: usize, policy_idx: usize) -> f64 {
-        let base = POLICY_POL_THRESHOLDS.get(policy_idx).copied().unwrap_or(1.0);
+    pub fn effective_approval_threshold(&self, region_idx: usize, policy_idx: usize) -> f64 {
+        let base = POLICY_APPROVAL_THRESHOLDS.get(policy_idx).copied().unwrap_or(1.0);
         let region = match self.regions.get(region_idx) {
             Some(r) => r,
             None => return base,
@@ -5352,7 +5354,7 @@ impl GameState {
 
     /// Whether a policy can be activated given current POL and regional severity.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
-        self.resources.political_power >= self.effective_pol_threshold(region_idx, policy_idx)
+        self.resources.board_approval >= self.effective_approval_threshold(region_idx, policy_idx)
     }
 
     /// Whether a decree is unlocked based on current crisis severity.
@@ -5432,7 +5434,7 @@ impl GameState {
     /// Patron confidence: average satisfaction across active funding contracts (0.0–1.0).
     /// Returns 0.0 when no contracts exist — no patron relationships means no patron
     /// authority contribution. This is neutral (not negative): new players who haven't
-    /// signed contracts yet simply have no patron influence on pol_target.
+    /// signed contracts yet simply have no patron influence on approval_target.
     pub fn patron_confidence(&self) -> f64 {
         if self.contracts.is_empty() {
             return 0.0;
@@ -5443,14 +5445,14 @@ impl GameState {
 
     /// Current POL drift target based on board confidence, patron relationships, and crisis severity.
     /// POL drifts toward this value at ~50%/day. Called by engine::tick().
-    /// Returns (board_component, patron_component, severity_floor) that sum to pol_target().
+    /// Returns (board_component, patron_component, severity_floor) that sum to approval_target().
     /// Used by the dashboard to show a breakdown without duplicating the formula.
     ///
     /// Board satisfaction is the primary driver — the board grants or withholds authority
     /// based on how healthy their corporations are. Patron confidence amplifies this when
     /// the player has active contracts. A severity floor ensures even a hostile board must
     /// concede some emergency authority when deaths mount.
-    pub fn pol_target_components(&self) -> (f64, f64, f64) {
+    pub fn approval_target_components(&self) -> (f64, f64, f64) {
         let initial_pop = self.initial_population();
         let death_frac = if initial_pop > 0.0 { self.total_dead_detected() / initial_pop } else { 0.0 };
 
@@ -5469,8 +5471,8 @@ impl GameState {
         (board_component, patron_component, severity_floor)
     }
 
-    pub fn pol_target(&self) -> f64 {
-        let (board_component, patron_component, severity_floor) = self.pol_target_components();
+    pub fn approval_target(&self) -> f64 {
+        let (board_component, patron_component, severity_floor) = self.approval_target_components();
         // POL target is driven by board confidence + patron relationships + crisis severity.
         // A healthy board with satisfied patrons can grant up to 70% authority.
         // A failed board with no patrons is held to ~10% (severity floor only).
@@ -5480,11 +5482,11 @@ impl GameState {
     /// The next policy that would unlock with more POL. Returns (name, threshold)
     /// for the lowest-threshold policy not yet globally available, or None if all
     /// are already unlocked at current POL.
-    pub fn next_pol_unlock(&self) -> Option<(&'static str, f64)> {
-        let pol = self.resources.political_power;
+    pub fn next_approval_unlock(&self) -> Option<(&'static str, f64)> {
+        let pol = self.resources.board_approval;
         let mut best: Option<(&'static str, f64)> = None;
         for idx in 0..POLICY_COUNT {
-            let threshold = POLICY_POL_THRESHOLDS[idx];
+            let threshold = POLICY_APPROVAL_THRESHOLDS[idx];
             if threshold <= 0.0 {
                 continue; // Always available, skip
             }

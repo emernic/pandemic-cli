@@ -1184,7 +1184,7 @@ mod tests {
         state.diseases[0].knowledge = 1.0;
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
         state.resources.funding = 10_000.0;
-        state.resources.political_power = 1.0;
+        state.resources.board_approval = 1.0;
         // Develop a medicine first
         state.medicines[0].unlocked = true;
         state.medicines[0].tested_against = vec![];

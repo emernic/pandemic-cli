@@ -98,7 +98,7 @@ Crises chain: your choices create follow-up crises. Tolerate black market drugs 
 Three currencies:
 - **Funding** — income degrades as global death toll rises. Spent on policies, research, crisis resolution, deployments.
 - **Personnel** — finite workforce. Assigned to research projects and policy enforcement. Lost to attrition, crises, burnout.
-- **Authority (AUTH)** — operational mandate from board and patrons. Drifts toward a board/patron-driven target. Gates emergency decrees. Generates personnel slowly.
+- **Board Approval** — the board's collective assessment of your performance (0% = furious, 50% = neutral, 100% = enraptured). Drifts toward a board/patron-driven target. Gates policy activation and emergency decrees. Generates personnel slowly.
 
 ### Regions
 

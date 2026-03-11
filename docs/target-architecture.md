@@ -24,7 +24,7 @@ state.rs                  Domain model: data structures, derived computations,
 state.rs is a **domain model layer** — not just passive data. It contains three things:
 
 1. **Data structures** — the raw stored game state (`GameState`, `Region`, `Disease`, `Medicine`, `RegionPolicy`, etc.)
-2. **Derived computations** — read-only methods that compute values both the engine and UI need: `pol_target()`, `funding_income_rate()`, `policy_unlocked()`, `decree_unlocked()`, `tech_pressure()`, `available_projects()`, `has_zero_agency()`, and many more
+2. **Derived computations** — read-only methods that compute values both the engine and UI need: `approval_target()`, `funding_income_rate()`, `policy_unlocked()`, `decree_unlocked()`, `tech_pressure()`, `available_projects()`, `has_zero_agency()`, and many more
 3. **UI state machines** — `UiState` methods for panel navigation, wizard steps, and confirm handlers
 
 The derived computations *must* live in state.rs because both the engine (to drive game logic) and the UI (to display information to the player) read them. If they lived in engine/, the UI couldn't access them. They are all pure reads — no mutations.
@@ -123,7 +123,7 @@ Each subsystem module follows the same pattern:
 
 ### What stays in mod.rs
 
-`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, political power drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
+`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, board approval drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
 
 ## Event System
 

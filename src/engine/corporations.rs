@@ -400,7 +400,7 @@ mod tests {
 
         // Damage board-seat corps to push satisfaction between 0.3 and 0.5.
         // satisfaction = avg(reserves_fraction) — revenue is not included to avoid
-        // instant policy-impact feedback on pol_target.
+        // instant policy-impact feedback on approval_target.
         // reserves=30% → reserves_fraction = 0.3 (between thresholds 0.3 and 0.5)
         for c in state.corporations.iter_mut().filter(|c| c.board_seat) {
             c.reserves = c.max_reserves * 0.3;

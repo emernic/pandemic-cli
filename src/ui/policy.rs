@@ -20,7 +20,7 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    POLICY_POL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
+    POLICY_APPROVAL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
@@ -28,7 +28,7 @@ use crate::state::{
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
-    BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
+    BARGAIN_BUFFOON_APPROVAL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
     BARGAIN_OPERATIVE_INCOME_CUT, BARGAIN_MOBSTER_BASE_COST,
     GovernorPersonality,
@@ -284,7 +284,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         if !*active && !pol_unlocked {
             // Locked by AUTH — show as unavailable
-            let threshold = POLICY_POL_THRESHOLDS[*policy_idx];
+            let threshold = POLICY_APPROVAL_THRESHOLDS[*policy_idx];
             let name_style = if selected {
                 Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
@@ -295,7 +295,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
                 Span::styled(format!("{}", name), name_style),
                 Span::styled(
-                    format!("  (AUTH {:.0}%)", threshold * 100.0),
+                    format!("  (Board {:.0}%)", threshold * 100.0),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
@@ -460,7 +460,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             let (bargain_name, cost_desc, loyalty_gain) = match gov.personality {
                 GovernorPersonality::Buffoon => (
                     "Public Praise",
-                    format!("-{:.0}% AUTH", BARGAIN_BUFFOON_POL_COST * 100.0),
+                    format!("-{:.0}% Board", BARGAIN_BUFFOON_APPROVAL_COST * 100.0),
                     BARGAIN_LOYALTY_GAIN,
                 ),
                 GovernorPersonality::Blowhard => (
