@@ -515,7 +515,7 @@ fn render_select_target(
         )));
     }
 
-    let deploy_cost = med.deploy_cost();
+    let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(

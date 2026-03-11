@@ -924,8 +924,7 @@ mod tests {
             Some(MedicineUiState::SelectTarget { .. })
         ));
         let funding_before = state.resources.funding;
-        let deploy_cost = state.medicines[0].deploy_cost()
-            * state.deployment_cost_bonus();
+        let deploy_cost = state.medicine_deploy_cost(0, 0); // region 0 (default map selection)
         let doses_before = state.medicines[0].doses;
         state = apply_action(&state, &Action::Confirm);
         // Dispatch deducts cost and doses immediately, creates a pending shipment
@@ -971,11 +970,10 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // select region
         state = apply_action(&state, &Action::SelectNext); // switch from vaccinate to treat
         let funding_before = state.resources.funding;
+        let deploy_cost = state.medicine_deploy_cost(0, ri);
         state = apply_action(&state, &Action::Confirm); // dispatch shipment
 
         // Dispatch: cost deducted, doses deducted, pending shipment created
-        let deploy_cost = state.medicines[0].deploy_cost()
-            * state.deployment_cost_bonus();
         assert_eq!(state.resources.funding, funding_before - deploy_cost);
         assert!(
             state.medicines[0].doses < state.medicines[0].max_doses,
