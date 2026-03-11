@@ -2906,6 +2906,22 @@ impl ResearchTrack {
             ResearchTrack::Basic => 2,
         }
     }
+
+    /// Canonical inverse of `index()` — maps a `panel_selection` value in
+    /// `BrowseCategories` back to the corresponding research track.
+    ///
+    /// This is the single authoritative source for category ordering.
+    /// Both `handle_research_confirm` and `ToggleExtra` (in lib.rs) use this
+    /// instead of parallel match arms so that adding a new track only requires
+    /// updating `RESEARCH_TRACK_COUNT` and this function.
+    pub fn from_index(idx: usize) -> Option<Self> {
+        match idx {
+            0 => Some(ResearchTrack::Field),
+            1 => Some(ResearchTrack::Applied),
+            2 => Some(ResearchTrack::Basic),
+            _ => None,
+        }
+    }
 }
 
 /// An active research project.
@@ -4184,11 +4200,7 @@ impl UiState {
             Panel::Threats => state.diseases.len().saturating_sub(1),
             Panel::Medicines => match &self.medicine_ui {
                 Some(MedicineUiState::BrowseMedicines) => {
-                    state.medicines
-                        .iter()
-                        .filter(|m| m.unlocked)
-                        .count()
-                        .saturating_sub(1)
+                    state.unlocked_medicine_indices().len().saturating_sub(1)
                 }
                 Some(MedicineUiState::SelectRegion { .. }) => {
                     state.regions.len().saturating_sub(1)
@@ -5646,6 +5658,20 @@ impl GameState {
             }
         }
         projects
+    }
+
+    /// Returns the indices of unlocked medicines in `self.medicines`, in iteration order.
+    ///
+    /// Used by both the medicines UI renderer and the confirm handler so both
+    /// operate on the same ordered list without independently rebuilding it.
+    /// `panel_selection` in `BrowseMedicines` indexes into this list.
+    pub fn unlocked_medicine_indices(&self) -> Vec<usize> {
+        self.medicines
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.unlocked)
+            .map(|(i, _)| i)
+            .collect()
     }
 
     /// Get the active research project for a given track.

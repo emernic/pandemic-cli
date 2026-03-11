@@ -67,8 +67,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
-    let unlocked: Vec<(usize, &Medicine)> = state.medicines.iter().enumerate()
-        .filter(|(_, m)| m.unlocked).collect();
+    let unlocked_indices = state.unlocked_medicine_indices();
+    let unlocked: Vec<(usize, &Medicine)> = unlocked_indices.iter()
+        .map(|&i| (i, &state.medicines[i]))
+        .collect();
 
     if unlocked.is_empty() {
         lines.push(Line::from(Span::styled(
