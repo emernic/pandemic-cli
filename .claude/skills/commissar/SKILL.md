@@ -19,11 +19,15 @@ git fetch origin && git checkout -b commissar-$(date +%Y%m%d-%H%M%S) origin/mast
 Read `DO_NOT_READ.md`. Do not skip this. Do not skim it. Read it.
 
 ### 3. Read the user's intent from the issue tracker
-Use a sub-agent to search GitHub issues for issues containing the word "user" (these capture direct user feedback and instructions):
+Use a sub-agent to search GitHub issues for direct user feedback. Issues containing `USER:` in the body are the most important — they capture the user's exact words. Also check recently closed issues for user push-back or direction changes:
 ```bash
-gh issue list --limit 100 --state all --search "user" --json number,title,body,state
+gh issue list --limit 200 --state all --search "USER:" --json number,title,body,state,closedAt
 ```
-Read all of these issues. Internalize what the user cares about, what they've pushed back on, what direction they're steering. You are their messenger — your job is to keep the project aligned with their intent across sessions that have no memory of each other.
+If that returns few results, also run:
+```bash
+gh issue list --limit 200 --state all --search "user" --json number,title,body,state,closedAt
+```
+Read these issues. Internalize what the user cares about, what they've pushed back on, what direction they're steering. You are their messenger — your job is to keep the project aligned with their intent across sessions that have no memory of each other.
 
 ### 4. Review recent development
 ```bash
