@@ -126,9 +126,14 @@ When you prime a playtester with a specific focus ("look for idle personnel") or
 
 Check `./playtests/` for the log file. **If the agent didn't write a log** and you have access to its output transcript in the current session (e.g., from a task notification), extract the agent's commentary and write the log yourself. Note at the top: "Log reconstructed by playtest manager from agent transcript." If the transcript is not available (e.g., this is a new cron invocation), skip triage for that session and launch a fresh one.
 
-Read the full playtest log. Extract every distinct finding.
+Read the full playtest log. Extract every distinct finding — but **prioritize in this order:**
 
-**Playability problems come first.** If the agent couldn't navigate, couldn't toggle, couldn't take actions — that's the #1 finding. File it as a P0 bug. Do NOT file gameplay feedback from a session where the agent was struggling to play. That feedback is unreliable.
+1. **Playability failures** — agent couldn't navigate, key did nothing, crash, error. These are P0.
+2. **UX/interaction problems** — confusing displays, undiscoverable features, misleading labels, unclear feedback, accidental purchases, broken flows, things the player tried to do but couldn't figure out. **This is the primary value of AI playtests.**
+3. **Specific observations** — "the re-trial button does nothing obvious," "I couldn't tell which medicine was deployed where," "the crisis text said X but the outcome was Y."
+4. **Balance impressions** — "too easy," "too hard," "money piled up." **This is the LEAST valuable category from AI playtests. See Step 3.5.**
+
+If the agent couldn't navigate or take actions, that's the #1 finding. File it as a P0 bug. Do NOT file gameplay feedback from a session where the agent was struggling to play — that feedback is unreliable.
 
 ## ⚠️ Step 3.5: Apply Heavy Skepticism Before Triaging
 
@@ -136,7 +141,20 @@ Read the full playtest log. Extract every distinct finding.
 
 You are reading the notes of a first-time player who has never seen the game before. They do not understand the systems. They will misattribute their own mistakes to bugs. They will describe missing features that are actually already in the game and they just didn't find. They will report as "confusing" things that would be obvious on a second playthrough. **Their raw observations are low-quality signal. Your job is to filter heavily.**
 
+### ⚠️ Balance opinions from AI playtests should almost never become issues
+
+**This is the single most important triage rule.** AI playtesters play for a few minutes, see a tiny fraction of the game, and confidently declare the economy "too loose" or diseases "too weak." These balance impressions are nearly worthless. The AI has no intuition for game feel, no memory of previous sessions, and no ability to distinguish "I played badly" from "the game is unbalanced."
+
+**Balance issues are the least actionable category of playtest feedback.** They require 3+ independent sessions confirming the same direction with different seeds and strategies before they're even worth considering. A single session's balance impression is noise — always.
+
+**What playtests ARE good for:** catching specific, concrete UX and interaction problems. "I pressed M and nothing happened." "The label says 15% but I don't know 15% of what." "I accidentally bought a lab upgrade because the cursor moved after I pressed Esc." These are things a human tester would also notice, they're unambiguous, and they're fixable. This is where AI playtests provide real signal.
+
+**Self-check: If your triage summary is >50% about balance, you are doing it wrong.** Go back and re-read the log for interaction detail you missed. The UX findings are there — they're just less dramatic than "the economy is broken" so they're easy to skip over.
+
 Before filing anything from a single session, apply this checklist:
+
+**Ask: Is this a UX/interaction problem or a balance opinion?**
+Separate these ruthlessly. "I couldn't figure out how to re-trial a medicine" is UX — file it. "The re-trial takes too long" is balance — hold it. "The auto-deploy message said 'deploying' but nothing happened" is UX — file it. "Auto-deploy should be faster" is balance — hold it. When in doubt, it's probably balance dressed up as UX. Strip away the interpretation and ask: what did the player concretely try to do, and what concretely went wrong?
 
 **Ask: Is the playtester complaining about crisis events?** Every playtester will complain that crisis events are disruptive — they interrupt gameplay at the worst moments and force decisions the player doesn't want to make. This is the correct behavior. Do NOT file issues asking to reduce, remove, or make crises optional based on this frustration. The crisis system is not broken when players hate it.
 
@@ -160,13 +178,14 @@ Players who lose blame the game. "The disease killed me before I could respond" 
 
 **Filing thresholds — these are STRICTER than they sound:**
 - **P0 playability bugs** (can't navigate, key does nothing, clear crash/error): file after **1** session if the failure is unambiguous and clearly not player error.
+- **UX/interaction issues** (confusing displays, misleading labels, undiscoverable features, accidental actions, unclear feedback): file after **1-2 sessions** if the problem is specific, concrete, and reproducible. These are the bread and butter of playtest triage — prioritize them.
 - **Investigate issues**: file after **2+ sessions showing the same confusion**, or after **1 session** only if the issue is so clearly structural that no amount of player skill would fix it. Do NOT file investigate issues for things a smarter player would have figured out.
 - **Feature ideas**: file after **2+ sessions** where the gap is evident, OR after **1 session** only if the idea is exceptional — meaning it would make the game more fun *regardless of how skilled the player is*. Do not file features just because a first-timer wanted something the game doesn't have.
-- **Balance issues** (game too hard/easy, numbers feel wrong): wait for **3+ sessions confirming the same direction** with different seeds and strategies. A single session's balance impression is noise.
+- **Balance issues** (game too hard/easy, numbers feel wrong): wait for **3+ sessions confirming the same direction** with different seeds and strategies. A single session's balance impression is noise. **Most balance feedback from AI playtests should never become issues at all.**
 
 **Default is: don't file.** If you are uncertain whether to file, don't file. Your job is to accumulate pattern recognition across sessions and act on patterns, not to act on individual data points.
 
-## Step 4: Design Features and File Them
+## Step 4: File UX Issues and Design Features
 
 This is the step that matters. Everything else is logistics.
 
@@ -180,11 +199,34 @@ This is the step that matters. Everything else is logistics.
 
 **Don't presuppose mechanisms you haven't verified.** Describe what you observed, not why you think it happened.
 
-### The Real Job: Design Features
+### Priority #1: File Specific UX/Interaction Issues
 
-After reading the playtest log, ask yourself: **"What feature would have made this session more fun?"**
+The most valuable findings from playtests are specific, actionable UX problems. These are the issues that actually make the game better when fixed, regardless of balance:
 
-Not "what number should be different." Not "what modifier should be added." What FEATURE — what new thing the player can DO — would create drama, tension, hard choices?
+- **Accidental actions** — cursor position surprises, unintended purchases, toggling the wrong thing
+- **Misleading labels/messages** — text that says one thing but means another, percentages without context, status messages that don't match reality
+- **Undiscoverable features** — things the player needed but couldn't find, buried options, hidden capabilities
+- **Confusing flows** — steps that don't make sense, options that seem identical, dead ends
+- **Broken feedback loops** — actions with no visible result, success messages when nothing happened, "auto-deploying" when the medicine is empty
+
+**For each UX issue, describe:** (1) what the player tried to do, (2) what they expected, (3) what actually happened, (4) why it's confusing. File using `/create-issue`.
+
+### Priority #2: Design Features That Address UX Gaps
+
+After filing concrete UX issues, ask yourself: **"What feature would have made this session's UX problems disappear?"**
+
+The best features aren't responses to balance complaints — they're responses to moments where the player wanted to DO something and couldn't, or where the game gave them no feedback about something important, or where a system was invisible when it should have been visible.
+
+**Good feature ideas from UX observations:**
+- Player kept checking the medicine panel to see if deployment was working → design a deployment status indicator or event log entry
+- Player didn't realize a policy had side effects → design visible consequence previews
+- Player couldn't tell which region needed attention most → design a threat prioritization signal
+- Player accidentally upgraded a lab they didn't mean to → design a confirmation step or undo mechanic
+
+**Bad feature ideas (these are balance complaints in disguise):**
+- "Economy too loose, add more spending sinks" — that's a number, not a feature
+- "Research too slow, add a speed boost mechanic" — that's a balance tweak dressed as a feature
+- "Diseases too aggressive, add a containment buffer" — that's nerfing diseases through indirection
 
 **Think about the inspirations:**
 
@@ -203,6 +245,11 @@ Not "what number should be different." Not "what modifier should be added." What
 - Why it's fun/dramatic/interesting
 
 ### What Good Features Look Like
+
+**Features that FIX interaction gaps:**
+- A player action that was needed but missing (undo, confirm, preview)
+- Feedback that was absent (deployment status, policy impact, research progress)
+- Information that was hidden but needed (efficacy breakdown, cost preview, risk indicator)
 
 **Features that ADD things to do:**
 - New player actions (evacuate a region, sacrifice a region, impose martial law with consequences)
@@ -231,6 +278,9 @@ Not "what number should be different." Not "what modifier should be added." What
 
 ### Playability Issues (P0)
 - Any navigation/interaction bugs
+
+### UX/Interaction Issues Filed
+- #XXX — <title> (what the player tried to do and what went wrong)
 
 ### New Features Designed and Filed
 - #XXX — <title> (brief description of why it's cool)
