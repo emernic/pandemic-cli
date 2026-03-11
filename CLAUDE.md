@@ -326,8 +326,9 @@ Adapt the list to the task — small fixes won't need playtests, doc changes won
 The VERY FIRST thing you do — before reading code, before planning, before touching ANYTHING — is:
 
 1. **Fetch**: `git fetch origin`
-2. **Check status**: `git status` — read the output carefully. What branch are you on? Is it `master`? A feature branch? **Whose** feature branch? Are there uncommitted changes?
-3. **STOP AND THINK about your branch.** This is the critical step that everyone skips:
+2. **Read files from `origin/master`, not your worktree.** `master` is merged into every few minutes. Your local file copies are only as fresh as when your branch was created. Use `git show origin/master:<filepath>` to read any file you care about — CLAUDE.md, source files, skills, anything. Never `Read` a file and assume it's current.
+3. **Check status**: `git status` — read the output carefully. What branch are you on? Is it `master`? A feature branch? **Whose** feature branch? Are there uncommitted changes?
+4. **STOP AND THINK about your branch.** This is the critical step that everyone skips:
    - If you're on ANY branch other than `master`, **tell the user what branch you're on and ask if that's expected.** Do not silently continue on a random branch.
    - If you're starting new work, **always** create a fresh branch from `origin/master`:
      ```
@@ -336,7 +337,7 @@ The VERY FIRST thing you do — before reading code, before planning, before tou
    - Only continue on the current branch if the user **explicitly** says to.
    - **Never assume the current branch is fine just because `git status` shows a clean working tree.** Clean working tree ≠ correct branch.
 
-4. **Tell the user what you found.** Say something like: "I'm on branch `foo-bar`, working tree is clean, branch is up to date with remote." If anything looks off, flag it.
+5. **Tell the user what you found.** Say something like: "I'm on branch `foo-bar`, working tree is clean, branch is up to date with remote." If anything looks off, flag it.
 
 **Do NOT proceed until you have reported the branch state to the user.** This is enforced by a hook — you will be blocked from editing files until you run `git status`. But the hook only checks that you ran the command; YOU are responsible for actually reading the output and acting on it.
 

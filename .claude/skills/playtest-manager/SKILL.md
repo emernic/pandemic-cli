@@ -119,6 +119,11 @@ This is the step that matters. Everything else is logistics.
 
 **Don't presuppose mechanisms you haven't verified.** Describe what you observed, not why you think it happened.
 
+**Filing thresholds by issue type:**
+- **Feature ideas**: file after 1 playtest if the idea is compelling and concrete.
+- **Bug fixes / P0 playability issues**: file after 1-2 playtests if clearly reproducible.
+- **Balance issues** (numbers feel off, game too hard/easy, pacing wrong): **wait for 3+ playtests confirming the same direction before filing.** A single session's balance impression is noise — different seeds, strategies, and skill levels produce wildly different experiences. Only file a balance issue when you see the same complaint consistently across multiple sessions with different seeds and strategies.
+
 ### The Real Job: Design Features
 
 After reading the playtest log, ask yourself: **"What feature would have made this session more fun?"**
