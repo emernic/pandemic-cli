@@ -613,20 +613,25 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::DataLeak => {
             CrisisEvent {
                 title: "Research Data Leaked".into(),
-                description: "Classified pathogen data has appeared on open networks.".into(),
+                description: "Classified pathogen sequencing data has surfaced on external networks. Rivals and foreign intelligence are already analyzing it.".into(),
                 options: vec![ CrisisOption {
-                    label: "Go transparent".into(),
-                    description: "Lose 2 days of research progress, gain +5% POL".into(),
-                    cost: None,
+                    label: "Issue a statement (2 personnel for 2d)".into(),
+                    description: "Dedicate a response team to manage disclosure. +5% POL. Staff return in 2 days.".into(),
+                    cost: Some(CrisisCost {
+                        funding: 0.0,
+                        personnel: 2,
+                        operation_days: Some(2.0),
+                        operation_label: Some("Response Team".to_string()),
+                    }),
                 },
                  CrisisOption {
                     label: "Suppress the leak".into(),
-                    description: "Keep research progress, −10% POL".into(),
+                    description: "Deny and contain. −10% POL. Risk of formal inquiry if exposed.".into(),
                     cost: None,
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "−7% POL. Leak circulates uncontrolled.".into(),
+                    description: "Leak circulates. −7% POL. 50% chance of infodemic.".into(),
                     cost: None,
                 },
                 ],
@@ -2152,16 +2157,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::DataLeak, 0) => {
-            // Go transparent — lose research progress, gain POL
-            if let Some(proj) = state.field_research.first_mut() {
-                let loss = (2.0 * TICKS_PER_DAY) as f64;
-                proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = &mut state.applied_research {
-                let loss = (2.0 * TICKS_PER_DAY) as f64;
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
+            // Issue a statement — personnel diverted via CrisisCost, gain POL
             state.resources.political_power += 0.05;
-            "Went transparent. Lost research time, gained public trust.".into()
+            "Statement issued. Board confidence up. Response team deployed for 2 days.".into()
         }
         (CrisisKind::DataLeak, 1) => {
             // Suppress — lose POL
