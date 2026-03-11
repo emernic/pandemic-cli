@@ -159,50 +159,6 @@ fn emit_breakpoint_events(
     }
 }
 
-/// Repair a regional infrastructure system. Returns (message, success).
-pub(super) fn repair_infrastructure(
-    state: &mut GameState,
-    region_idx: usize,
-    system: InfraSystem,
-) -> (Option<String>, bool) {
-    if region_idx >= state.regions.len() {
-        return (None, false);
-    }
-    if state.regions[region_idx].collapsed {
-        return (Some(format!("{} has collapsed", state.regions[region_idx].name)), false);
-    }
-
-    let current = match system {
-        InfraSystem::Healthcare => state.regions[region_idx].healthcare_capacity,
-        InfraSystem::SupplyLines => state.regions[region_idx].supply_lines,
-        InfraSystem::CivilOrder => state.regions[region_idx].civil_order,
-    };
-    let cost = system.repair_cost();
-
-    if current >= 0.99 {
-        return (Some(format!("{} already at full capacity", system.label())), false);
-    }
-
-    if state.resources.funding < cost {
-        return (Some(format!("Not enough funding (need ¥{cost:.0})")), false);
-    }
-
-    state.resources.funding -= cost;
-    let restored = match system {
-        InfraSystem::Healthcare => &mut state.regions[region_idx].healthcare_capacity,
-        InfraSystem::SupplyLines => &mut state.regions[region_idx].supply_lines,
-        InfraSystem::CivilOrder => &mut state.regions[region_idx].civil_order,
-    };
-    *restored = (*restored + 0.25).min(1.0);
-    let new_pct = (*restored * 100.0) as u32;
-    let region_name = &state.regions[region_idx].name;
-
-    (
-        Some(format!("{region_name}: {} repaired to {new_pct}% (¥{cost:.0})", system.label())),
-        true,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,29 +266,6 @@ mod tests {
             GameEvent::InfrastructureBreakpoint { system: InfraSystem::Healthcare, threshold, .. }
             if (*threshold - 0.50).abs() < 0.01
         )), "should fire STRESSED breakpoint event");
-    }
-
-    #[test]
-    fn repair_restores_infrastructure() {
-        let mut state = GameState::new_default(42);
-        state.regions[0].healthcare_capacity = 0.30;
-        state.resources.funding = 1000.0;
-
-        let (msg, ok) = repair_infrastructure(&mut state, 0, InfraSystem::Healthcare);
-        assert!(ok);
-        assert!(msg.unwrap().contains("repaired"));
-        assert!((state.regions[0].healthcare_capacity - 0.55).abs() < 0.01);
-        assert!((state.resources.funding - 500.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn repair_fails_without_funding() {
-        let mut state = GameState::new_default(42);
-        state.regions[0].healthcare_capacity = 0.30;
-        state.resources.funding = 100.0;
-
-        let (_, ok) = repair_infrastructure(&mut state, 0, InfraSystem::Healthcare);
-        assert!(!ok);
     }
 
     #[test]

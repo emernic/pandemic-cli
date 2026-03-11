@@ -372,9 +372,9 @@ mod tests {
     fn policy_panel_shows_appease() {
         let state = GameState::new_default(42);
         // Open policy panel (goes directly to region management), navigate down to Appease.
-        // Appease is at position POLICY_COUNT + 3 = 15 (after policies 0-11, repair HC/SL/CO at 12-14).
+        // Appease is at position MANAGE_APPEASE_POS = POLICY_COUNT + 1 = 13.
         let steps: Vec<String> = std::iter::once("p")
-            .chain(std::iter::repeat("j").take(crate::state::POLICY_COUNT + 3))
+            .chain(std::iter::repeat("j").take(crate::state::MANAGE_APPEASE_POS))
             .map(|s| s.to_string())
             .collect();
         let result = run_snapshot(state, &steps).unwrap();

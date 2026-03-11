@@ -7,8 +7,8 @@ pub mod ui;
 use action::Action;
 use engine::execute_command;
 use state::{
-    DeployTarget, DECREE_COUNT, FIELD_OP_TYPE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState, InfraSystem,
-    KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_INFRA_BASE, MANAGE_PRIORITY_POS,
+    DeployTarget, DECREE_COUNT, FIELD_OP_TYPE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState,
+    KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
 };
@@ -457,14 +457,6 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
             } else if ui.panel_selection == MANAGE_PRIORITY_POS {
                 // Cycle deployment priority
                 Some(GameCommand::CycleDeployPriority { region_idx })
-            } else if ui.panel_selection >= MANAGE_INFRA_BASE && ui.panel_selection < MANAGE_PRIORITY_POS {
-                // Repair infrastructure (MANAGE_INFRA_BASE=HC, +1=SL, +2=CO)
-                let system = match ui.panel_selection - MANAGE_INFRA_BASE {
-                    0 => InfraSystem::Healthcare,
-                    1 => InfraSystem::SupplyLines,
-                    _ => InfraSystem::CivilOrder,
-                };
-                Some(GameCommand::RepairInfrastructure { region_idx, system })
             } else {
                 // Map display position to policy_idx via sorted display order
                 let policy_idx = policy_display_order()[ui.panel_selection];

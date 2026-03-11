@@ -606,10 +606,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (msg, success) = policy::bargain_with_governor(state, *region_idx);
             CommandResult { message: msg, success }
         }
-        GameCommand::RepairInfrastructure { region_idx, system } => {
-            let (msg, success) = infrastructure::repair_infrastructure(state, *region_idx, *system);
-            CommandResult { message: msg, success }
-        }
         GameCommand::ToggleStandingOrder { kind } => {
             match kind {
                 0 => state.standing_orders.auto_quarantine_at_high = !state.standing_orders.auto_quarantine_at_high,
