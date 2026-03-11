@@ -4811,7 +4811,6 @@ impl GameState {
         });
 
         let num_diseases = diseases.len();
-        let num_medicines = medicines.len();
 
         Self {
             tick: 0,
@@ -4845,14 +4844,7 @@ impl GameState {
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_research: [false; 3],
-            auto_deploy: {
-                // Broad-Spectrum is always the last medicine. Start it auto-deployed
-                // so novices see the system working immediately rather than having to
-                // discover the toggle buried in the Medicines panel.
-                let mut v = vec![false; num_medicines];
-                *v.last_mut().expect("at least one medicine (Broad-Spectrum) always exists") = true;
-                v
-            },
+            auto_deploy: vec![],
             standing_orders: StandingOrders::default(),
             field_operations: vec![],
             crisis_operations: vec![],
