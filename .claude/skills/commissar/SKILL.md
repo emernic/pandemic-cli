@@ -54,7 +54,7 @@ Run this directly (no sub-agent):
 gh issue list --limit 200 --state all --search "user" --json number,title,body,state,closedAt
 ```
 
-Read everything. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
+Read everything. **Do not treat these as a to-do list.** The issues with user comments are already known to workers — they will be picked up. Your job is not to act on them. Your job is to use them to calibrate your understanding of the user's overall direction, taste, and intent. Ask: why did this bother them? What does the pattern of their pushbacks reveal about where they're trying to take the game? Then go apply that judgment yourself — to things that don't have issues yet, to systems that are drifting, to text that nobody has flagged. The user's comments are a compass. You are the one who has to walk.
 
 ### 5. Review recent development
 
@@ -92,15 +92,15 @@ This is NOT a playtest. You are not testing balance. You are not filing gameplay
 
 Do these in order. Stop when you have done enough.
 
-**Fix bad text directly** if it is small and the problem is clear. Do not file an issue to replace two words. Replace the two words.
+**Fix bad text directly** only if the change is very small (a word, a title, a single line) and the problem is obvious. Do not file an issue to replace two words — replace the two words. But do not rewrite a scene, overhaul a system, or touch anything structural yourself. That is workers' work.
 
-**Open issues** for larger problems: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Issues must be structural (mechanics, systems, data) not thematic (flavor, commentary, "make this feel more like X"). Never explain why in terms of themes. State what the structure should do and let the worker figure out that it needs to do it.
+**Edit documents directly** if you see something wrong in CLAUDE.md, the commissar skill, flavor-text, DO_NOT_READ, or any document that is read frequently and shapes how workers build the game. Short, high-density corrections to these documents are exactly what you should handle directly — they multiply across every future session.
+
+**Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Issues must be structural (mechanics, systems, data) not thematic (flavor, commentary, "make this feel more like X"). Never explain why in terms of themes. State what the structure should do and let the worker figure out that it needs to do it.
 
 **Close issues** that push the game in the wrong direction. 0 to 3 per cycle.
 
 **Bump priorities** on issues that are thematically critical and sitting untouched.
-
-**Edit documents** (CLAUDE.md, skills, design docs) if you see something wrong. Merge directly.
 
 ---
 
