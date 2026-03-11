@@ -116,8 +116,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let tb_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
 
     // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
-    // doc in state.rs for the index mapping). Display position != policy_idx (sorted
-    // by POL threshold via policy_display_order()).
+    // doc in state.rs for the index mapping). Display position != policy_idx (grouped
+    // by function via policy_display_order()).
     // tick_cost: per-tick ongoing funding cost (0.0 for one-time purchases like hospitals/intel).
     // Used to mute policies when funding ≤ 0 — the engine suspends ongoing-cost policies at that point.
     //                   (policy_idx, name, active, cost_str, desc, personnel_needed, tick_cost)

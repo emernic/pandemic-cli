@@ -2292,8 +2292,13 @@ mod tests {
             Some(PolicyUiState::ManagePolicies { region_idx: 0 })
         ));
 
-        // Navigate to Travel Ban (display position 6 after sorting by POL threshold)
-        for _ in 0..6 {
+        // Navigate to Travel Ban — find its display position dynamically so the test
+        // stays correct even if policy_display_order() changes.
+        let travel_ban_display_pos = crate::state::policy_display_order()
+            .iter()
+            .position(|&idx| idx == 0) // policy_idx 0 = Travel Ban
+            .expect("Travel Ban must be in display order");
+        for _ in 0..travel_ban_display_pos {
             state = apply_action(&state, &Action::SelectNext);
         }
         state = apply_action(&state, &Action::Confirm);
