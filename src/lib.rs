@@ -162,10 +162,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             else if new.ui.open_panel == Panel::Medicines
                 && matches!(new.ui.medicine_ui, None | Some(MedicineUiState::BrowseMedicines))
             {
-                let unlocked: Vec<usize> = new.medicines.iter().enumerate()
-                    .filter(|(_, m)| m.unlocked)
-                    .map(|(i, _)| i)
-                    .collect();
+                let unlocked = new.unlocked_medicine_indices();
                 if let Some(&med_idx) = unlocked.get(new.ui.panel_selection) {
                     execute_command(&mut new, &GameCommand::ToggleAutoDeploy { med_idx });
                 }
@@ -173,12 +170,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             // Toggle auto-research when browsing categories or projects
             else {
                 let track = match &new.ui.research_ui {
-                    Some(ResearchUiState::BrowseCategories) => match new.ui.panel_selection {
-                        0 => Some(ResearchTrack::Field),
-                        1 => Some(ResearchTrack::Applied),
-                        2 => Some(ResearchTrack::Basic),
-                        _ => None,
-                    },
+                    Some(ResearchUiState::BrowseCategories) => {
+                        ResearchTrack::from_index(new.ui.panel_selection)
+                    }
                     Some(ResearchUiState::BrowseProjects { track }) => Some(*track),
                     Some(ResearchUiState::ViewActive { track, .. }) => Some(*track),
                     _ => None,
@@ -267,13 +261,7 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
 fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.medicine_ui.clone() {
         Some(MedicineUiState::BrowseMedicines) => {
-            let unlocked: Vec<usize> = state
-                .medicines
-                .iter()
-                .enumerate()
-                .filter(|(_, m)| m.unlocked)
-                .map(|(i, _)| i)
-                .collect();
+            let unlocked = state.unlocked_medicine_indices();
             if let Some(&med_idx) = unlocked.get(ui.panel_selection) {
                 ui.medicine_ui =
                     Some(MedicineUiState::SelectRegion { medicine_idx: med_idx });
@@ -391,10 +379,8 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                 // Upgrade Lab
                 return Some(GameCommand::UpgradeLab);
             }
-            let track = match ui.panel_selection {
-                0 => ResearchTrack::Field,
-                1 => ResearchTrack::Applied,
-                _ => ResearchTrack::Basic,
+            let Some(track) = ResearchTrack::from_index(ui.panel_selection) else {
+                return None;
             };
             ui.research_ui = Some(ResearchUiState::BrowseProjects { track });
             ui.panel_selection = 0;
