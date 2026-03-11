@@ -26,7 +26,7 @@ use crate::state::{
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
-    policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
+    policy_display_order, policy_section_header, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_POL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
@@ -202,6 +202,17 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let policies: Vec<_> = policy_display_order().iter().map(|&idx| policies[idx].clone()).collect();
 
     for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed, tick_cost)) in policies.iter().enumerate() {
+        // Insert section headers between policy groups
+        if let Some(header) = policy_section_header(display_pos) {
+            if display_pos > 0 {
+                lines.push(Line::from(""));
+            }
+            lines.push(Line::from(Span::styled(
+                format!("  ─── {} ───", header),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
         let selected = state.ui.panel_selection == display_pos;
         if selected { selected_line = Some(lines.len()); }
         let marker = if selected { "▶ " } else { "  " };
