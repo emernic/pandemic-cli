@@ -369,11 +369,23 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             ]));
         }
 
-        // Net line
-        let (net_str, net_color) = if net >= 0.0 {
-            (format!("+¥{:.0}/day", net), Color::Green)
+        // Debt service line
+        let debt_service = state.daily_debt_service();
+        let total_debt = state.total_debt();
+        if total_debt > 0.0 {
+            lines.push(Line::from(vec![
+                Span::styled("  Loans:    ", dim),
+                Span::styled(format!("-¥{:.0}/day", debt_service), Style::default().fg(Color::Red)),
+                Span::styled(format!("  (¥{:.0} outstanding)", total_debt), Style::default().fg(Color::Yellow)),
+            ]));
+        }
+
+        // Net line (adjusted for debt service)
+        let net_with_debt = net - debt_service;
+        let (net_str, net_color) = if net_with_debt >= 0.0 {
+            (format!("+¥{:.0}/day", net_with_debt), Color::Green)
         } else {
-            (format!("-¥{:.0}/day", net.abs()), Color::Red)
+            (format!("-¥{:.0}/day", net_with_debt.abs()), Color::Red)
         };
         lines.push(Line::from(vec![
             Span::styled("  ────────────────────", dim),
