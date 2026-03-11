@@ -54,66 +54,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             )));
 
             if disease.knowledge < KNOWLEDGE_NAME {
-                // Pathogen unidentified — show epidemiological footprint.
-                // Infection counts and region spread are observational data;
-                // no identification needed to count bodies.
-                let order = grid_reading_order(state.regions.len());
-                let affected: Vec<&str> = order.iter()
-                    .filter_map(|&idx| state.regions.get(idx))
-                    .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
-                    .map(|r| r.name.as_str())
-                    .collect();
-                let total_dead: f64 = state.regions.iter()
-                    .filter_map(|r| r.disease_state(i))
-                    .map(|inf| inf.dead)
-                    .sum();
-                // Screen-adjusted infection estimate, proportioned for this disease
-                let total_infected: f64 = state.regions.iter()
-                    .filter_map(|r| {
-                        r.disease_state(i).map(|inf| {
-                            let total_real = r.detected_infected(&state.diseases);
-                            let proportion = if total_real > 0.0 { inf.infected / total_real } else { 0.0 };
-                            r.estimated_infected * proportion
-                        })
-                    })
-                    .sum();
-
-                let spread_color = if affected.len() >= 4 { Color::Red }
-                    else if affected.len() >= 2 { Color::Yellow }
-                    else { Color::White };
-
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("Spread: {}/{}", affected.len(), state.regions.len()),
-                        Style::default().fg(spread_color),
-                    ),
-                    Span::styled(
-                        format!("  ({})", affected.join(", ")),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("Infections: ~{}", format_number(total_infected)),
-                        Style::default().fg(Color::LightRed),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        format!("Deaths: {}", format_number(total_dead)),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
-
-                // Show if field research is currently identifying this pathogen
-                let being_identified = state.field_research.iter().any(|r| r.references_disease(i));
-                if being_identified {
-                    lines.push(Line::from(Span::styled(
-                        "    Research: identifying...",
-                        Style::default().fg(Color::Yellow),
-                    )));
-                }
+                // Completely unknown — show nothing
+                lines.push(Line::from(Span::styled(
+                    "    ???",
+                    Style::default().fg(Color::DarkGray),
+                )));
             } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
                 // Name known, partial stats + pathogen type (vector not yet known)
                 let mut type_spans = vec![
