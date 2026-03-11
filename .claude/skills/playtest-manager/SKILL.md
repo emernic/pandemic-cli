@@ -122,22 +122,47 @@ Read the full playtest log. Extract every distinct finding.
 
 **Playability problems come first.** If the agent couldn't navigate, couldn't toggle, couldn't take actions — that's the #1 finding. File it as a P0 bug. Do NOT file gameplay feedback from a session where the agent was struggling to play. That feedback is unreliable.
 
+## ⚠️ Step 3.5: Apply Heavy Skepticism Before Triaging
+
+**This step is mandatory. Do not skip it.**
+
+You are reading the notes of a first-time player who has never seen the game before. They do not understand the systems. They will misattribute their own mistakes to bugs. They will describe missing features that are actually already in the game and they just didn't find. They will report as "confusing" things that would be obvious on a second playthrough. **Their raw observations are low-quality signal. Your job is to filter heavily.**
+
+Before filing anything from a single session, apply this checklist:
+
+**Ask: Is this player error?**
+The most common "bugs" in playtest logs are things like: "I died to a disease I never identified" (player didn't run identification research), "I ran out of money" (player didn't notice the contracts panel), "the policy didn't work" (player toggled it off by accident navigating a long list). These are NOT bugs. A first-time player not knowing how to play is expected. Do NOT file investigate issues for expected first-time confusion — you will bury the backlog in noise and waste developer cycles.
+
+**Ask: Have I seen this pattern before?**
+One session is noise. Two sessions with different seeds and strategies pointing in the same direction is a weak signal. Three or more is real. If you're reading a finding and thinking "yes, session 68 mentioned this too" — that's worth filing. If you're reading a finding and thinking "this is the first time I've seen this" — hold it. Add it to your mental model and wait.
+
+**Ask: Is the playtester's proposed fix actually good?**
+First-time players' ideas are almost always bad. "I wanted to spend my 20K yen on field hospitals" sounds good until you realize they earned that money because they didn't understand how to use contracts and let income pile up. Their proposed SOLUTION is wrong even if the underlying observation (money piled up) is real. Your job is to translate their observations into good game design, not to transcribe their wish list into issues.
+
+**Ask: Is this a real design problem or just "I lost and I'm annoyed"?**
+Players who lose blame the game. "The disease killed me before I could respond" is not an issue — that's the game working as designed. "The emergency decrees unlocked too late" might be real, or might be a player who didn't understand they needed to build POL. Be skeptical. The game is supposed to be hard.
+
+**Filing thresholds — these are STRICTER than they sound:**
+- **P0 playability bugs** (can't navigate, key does nothing, clear crash/error): file after **1** session if the failure is unambiguous and clearly not player error.
+- **Investigate issues**: file after **2+ sessions showing the same confusion**, or after **1 session** only if the issue is so clearly structural that no amount of player skill would fix it. Do NOT file investigate issues for things a smarter player would have figured out.
+- **Feature ideas**: file after **2+ sessions** where the gap is evident, OR after **1 session** only if the idea is exceptional — meaning it would make the game more fun *regardless of how skilled the player is*. Do not file features just because a first-timer wanted something the game doesn't have.
+- **Balance issues** (game too hard/easy, numbers feel wrong): wait for **3+ sessions confirming the same direction** with different seeds and strategies. A single session's balance impression is noise.
+
+**Default is: don't file.** If you are uncertain whether to file, don't file. Your job is to accumulate pattern recognition across sessions and act on patterns, not to act on individual data points.
+
 ## Step 4: Design Features and File Them
 
 This is the step that matters. Everything else is logistics.
 
-### ⚠️ Triage Discipline
+**Remember: you have seen many sessions. The playtester has seen one.** Your advantage is pattern recognition across many first-time players. Use it. Don't transcribe what the playtester asked for — synthesize what the game actually needs based on what you've seen repeatedly, across multiple seeds and strategies.
+
+**Aim for 1-3 issues per session maximum.** If you find yourself filing 5+ issues from a single playtest, you are almost certainly including noise. Be ruthless. Only the strongest signals earn a place in the backlog.
 
 **Don't oscillate.** If you find yourself filing an issue that directly reverses a previous issue, STOP. Find the structural root cause.
 
 **Don't re-confirm saturated issues.** If an issue already has 2+ confirmations, skip it.
 
 **Don't presuppose mechanisms you haven't verified.** Describe what you observed, not why you think it happened.
-
-**Filing thresholds by issue type:**
-- **Feature ideas**: file after 1 playtest if the idea is compelling and concrete.
-- **Bug fixes / P0 playability issues**: file after 1-2 playtests if clearly reproducible.
-- **Balance issues** (numbers feel off, game too hard/easy, pacing wrong): **wait for 3+ playtests confirming the same direction before filing.** A single session's balance impression is noise — different seeds, strategies, and skill levels produce wildly different experiences. Only file a balance issue when you see the same complaint consistently across multiple sessions with different seeds and strategies.
 
 ### The Real Job: Design Features
 
