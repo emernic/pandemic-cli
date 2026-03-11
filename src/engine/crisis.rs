@@ -63,6 +63,10 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         "military" | "cult" | "who_evac" | "warlord" | "vaccine_dispute"
             => ramp_up(24.0, 40.0),
 
+        // Corporate detention: requires a collapsed region, so can't appear before ~day 10,
+        // peak late as collapses accumulate. Follow-up has no phase bias (fires on demand).
+        "field_team_detained" => ramp_up(15.0, 30.0),
+
         // --- Dark comedy: ramp in mid-to-late game ---
         // Performance review is funniest when things are falling apart
         "performance_review" => ramp_up(20.0, 36.0),
@@ -283,6 +287,24 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     if !collapsed.is_empty() {
         let idx = collapsed[rng.r#gen::<usize>() % collapsed.len()];
         candidates.push(CrisisKind::WarlordDemand { region_idx: idx });
+    }
+
+    // Field team detained: requires collapsed region, non-bankrupt corp there, 4+ personnel
+    if !state.corporations.is_empty() && state.resources.personnel >= 4 {
+        let viable: Vec<(usize, usize)> = state.regions.iter().enumerate()
+            .filter(|(_, r)| r.collapsed)
+            .flat_map(|(ridx, _)| {
+                state.corporations.iter().enumerate()
+                    .filter(move |(_, c)| c.region_idx == ridx && !c.bankrupt)
+                    .map(move |(cidx, _)| (ridx, cidx))
+            })
+            .collect();
+        if !viable.is_empty() {
+            let (region_idx, corp_idx) = viable[rng.r#gen::<usize>() % viable.len()];
+            let fee = scaled_cost(state, 0.22, 150.0, 700.0);
+            let team_size = (state.resources.personnel / 8).clamp(2, 4);
+            candidates.push(CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size });
+        }
     }
 
     // Vaccine dispute: requires day > 30, at least one unlocked medicine, at least 2 corps
@@ -1924,6 +1946,76 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 }
             }
         }
+        CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("the region");
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.as_str()).unwrap_or("an unnamed corporation");
+            CrisisEvent {
+                title: "Field Team Unreachable".into(),
+                description: format!(
+                    "Field team has been out of contact for 36 hours. \
+                     Last GPS ping: a private compound registered to {corp_name} in {region_name}. \
+                     The regional director called to discuss a resolution.",
+                ),
+                options: vec![
+                    {
+                        CrisisOption {
+                            label: format!("Pay resolution fee (¥{fee:.0})"),
+                            description: format!(
+                                "Team returns within 24 hours. {corp_name} asks no further questions.",
+                            ),
+                            cost: Some(CrisisCost { funding: *fee, ..Default::default() }),
+                        }
+                    },
+                    CrisisOption {
+                        label: "Escalate through official channels".into(),
+                        description: format!(
+                            "No funding required. Ties up {team_size} staff for up to 7 days. \
+                             The process has no enforcement authority and the outcome is uncertain.",
+                        ),
+                        cost: None,
+                    },
+                    CrisisOption {
+                        label: "Write them off".into(),
+                        description: format!("Personnel permanently lost. No further contact from {corp_name}."),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::FieldTeamDetainedAgain { region_idx, corp_idx, fee, team_size: _ } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("the region");
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.as_str()).unwrap_or("an unnamed corporation");
+            CrisisEvent {
+                title: "Field Team Detained Again".into(),
+                description: format!(
+                    "{corp_name} has detained another field team in {region_name}. \
+                     Their regional director remembers the last arrangement. \
+                     The fee has been revised upward.",
+                ),
+                options: vec![
+                    {
+                        CrisisOption {
+                            label: format!("Pay revised fee (¥{fee:.0})"),
+                            description: format!("Team returns. {corp_name} pockets the difference."),
+                            cost: Some(CrisisCost { funding: *fee, ..Default::default() }),
+                        }
+                    },
+                    CrisisOption {
+                        label: "Write them off".into(),
+                        description: format!("Personnel permanently lost. {corp_name} gets nothing."),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
     };
     // INVARIANT: at least one option must be free so the player is never softlocked.
     debug_assert!(event.options.iter().any(|o| o.cost.is_none()),
@@ -3088,6 +3180,75 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 "Board overruled. Corporate frustration grows.".into()
             }
         }
+
+        // --- Corporate detention crises ---
+
+        (CrisisKind::FieldTeamDetained { corp_idx, region_idx, fee, team_size }, 0) => {
+            // Pay the fee (cost already deducted). Schedule follow-up detention.
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.clone()).unwrap_or_else(|| "the corporation".into());
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+            let followup_fee = fee * 1.6;
+            let followup_team = (*team_size).clamp(2, 4);
+            let followup_tick = state.tick + (10.0 * crate::engine::TICKS_PER_DAY) as u64;
+            state.pending_crises.push((followup_tick, CrisisKind::FieldTeamDetainedAgain {
+                region_idx: *region_idx,
+                corp_idx: *corp_idx,
+                fee: followup_fee,
+                team_size: followup_team,
+            }));
+            format!("¥{fee:.0} paid. Team released. {corp_name} now knows what you'll pay in {region_name}.")
+        }
+        (CrisisKind::FieldTeamDetained { team_size, .. }, 1) => {
+            // Escalate through official channels. Cost is None, so we handle all
+            // personnel effects here directly. Three outcomes, probabilistic.
+            let roll = state.rng.r#gen::<f64>();
+            if roll < 0.15 {
+                // 15%: corp escalates in response. Commit staff to the process, team still lost.
+                state.crisis_operations.push(crate::state::CrisisOperation {
+                    label: "Official Channels Process".to_string(),
+                    personnel: *team_size,
+                    ticks_remaining: 7.0 * crate::engine::TICKS_PER_DAY,
+                });
+                "The corporation escalated in response. Staff are locked into the process and the team is still unreachable.".into()
+            } else if roll < 0.45 {
+                // 30%: process moves faster than expected. Team flagged for expedited release.
+                state.crisis_operations.push(crate::state::CrisisOperation {
+                    label: "Official Channels Process".to_string(),
+                    personnel: *team_size,
+                    ticks_remaining: 4.0 * crate::engine::TICKS_PER_DAY,
+                });
+                "The process moved faster than expected. Team flagged for early release. No guarantees.".into()
+            } else {
+                // 55%: nothing moves. Staff tied up for 7 days, process stalls.
+                state.crisis_operations.push(crate::state::CrisisOperation {
+                    label: "Official Channels Process".to_string(),
+                    personnel: *team_size,
+                    ticks_remaining: 7.0 * crate::engine::TICKS_PER_DAY,
+                });
+                "Escalation logged. No enforcement authority in the region. Process runs its course.".into()
+            }
+        }
+        (CrisisKind::FieldTeamDetained { team_size, .. }, _) => {
+            // Write them off — permanent personnel loss.
+            state.resources.personnel = state.resources.personnel.saturating_sub(*team_size);
+            format!("Team written off. {team_size} personnel lost permanently.")
+        }
+
+        (CrisisKind::FieldTeamDetainedAgain { fee, team_size: _, corp_idx, .. }, 0) => {
+            // Pay revised fee (cost already deducted).
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.clone()).unwrap_or_else(|| "the corporation".into());
+            format!("¥{fee:.0} paid. Team released. {corp_name} has established a reliable revenue stream.")
+        }
+        (CrisisKind::FieldTeamDetainedAgain { team_size, corp_idx, .. }, _) => {
+            // Write them off.
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.clone()).unwrap_or_else(|| "the corporation".into());
+            state.resources.personnel = state.resources.personnel.saturating_sub(*team_size);
+            format!("Team written off. {team_size} personnel lost. {corp_name} gets nothing this time.")
+        }
     };
     // Clamp POL after crisis modifications
     state.resources.political_power = state.resources.political_power.clamp(0.0, 1.0);
@@ -3160,5 +3321,95 @@ mod tests {
         assert!(late_count <= 2,
             "at day 5, late-game crises should be rare, got {}/{}",
             late_count, tags.len());
+    }
+
+    #[test]
+    fn field_team_detained_generates_in_collapsed_region() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = (20.0 * TICKS_PER_DAY) as u64;
+        // Collapse a region and ensure it has a non-bankrupt corporation
+        state.regions[0].collapsed = true;
+        state.resources.personnel = 20; // ensure >= 4
+
+        let mut found = false;
+        for seed in 0..100u64 {
+            let mut r = ChaCha8Rng::seed_from_u64(seed);
+            if let Some(crisis) = generate_crisis(&state, &mut r) {
+                if crisis.kind.tag() == "field_team_detained" {
+                    found = true;
+                    // Must have 3 options: pay, escalate, write off
+                    assert_eq!(crisis.options.len(), 3, "FieldTeamDetained must have 3 options");
+                    // Must have at least one free option (write them off)
+                    assert!(crisis.options.iter().any(|o| o.cost.is_none()),
+                        "FieldTeamDetained must have a free option");
+                    break;
+                }
+            }
+        }
+        assert!(found, "FieldTeamDetained should appear within 100 seeds when preconditions are met");
+    }
+
+    #[test]
+    fn field_team_detained_pay_schedules_followup() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = (20.0 * TICKS_PER_DAY) as u64;
+        state.regions[0].collapsed = true;
+        state.resources.funding = 10000.0;
+        state.resources.personnel = 20;
+
+        // Find the corp_idx for a corp in region 0
+        let corp_idx = state.corporations.iter()
+            .position(|c| c.region_idx == 0 && !c.bankrupt)
+            .expect("should have a corp in region 0");
+
+        let fee = 300.0;
+        let kind = CrisisKind::FieldTeamDetained {
+            region_idx: 0,
+            corp_idx,
+            fee,
+            team_size: 3,
+        };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = crate::state::SimState::Event { was_running: false };
+
+        let pending_before = state.pending_crises.len();
+        let msg = resolve_crisis(&mut state, 0); // Pay
+        assert!(state.pending_crises.len() > pending_before, "paying should schedule follow-up");
+        assert!(state.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::FieldTeamDetainedAgain { .. })),
+            "follow-up should be FieldTeamDetainedAgain");
+        assert!(msg.contains("paid"), "resolution message should mention payment");
+    }
+
+    #[test]
+    fn field_team_detained_write_off_loses_personnel() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = (20.0 * TICKS_PER_DAY) as u64;
+        state.regions[0].collapsed = true;
+        state.resources.personnel = 20;
+
+        let corp_idx = state.corporations.iter()
+            .position(|c| c.region_idx == 0 && !c.bankrupt)
+            .expect("should have a corp in region 0");
+
+        let kind = CrisisKind::FieldTeamDetained {
+            region_idx: 0,
+            corp_idx,
+            fee: 300.0,
+            team_size: 3,
+        };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = crate::state::SimState::Event { was_running: false };
+
+        let personnel_before = state.resources.personnel;
+        resolve_crisis(&mut state, 2); // Write them off
+        assert_eq!(state.resources.personnel, personnel_before - 3, "write-off should lose team_size personnel");
     }
 }

@@ -3734,6 +3734,26 @@ pub enum CrisisKind {
     /// `severity` 0 = warning demand (satisfaction < 0.5), 1 = ultimatum (< 0.3).
     BoardDemand { severity: u8 },
 
+    // --- Corporate detention crises ---
+
+    /// Field team detained by a private corporation in a collapsed region.
+    /// Pay the resolution fee, escalate through official channels (slow, uncertain),
+    /// or write them off entirely. If paid, a repeat detention may follow.
+    FieldTeamDetained {
+        region_idx: usize,
+        corp_idx: usize,
+        fee: f64,
+        team_size: u32,
+    },
+    /// Follow-up to FieldTeamDetained when the player paid the first fee.
+    /// The corporation has learned what the market will bear.
+    FieldTeamDetainedAgain {
+        region_idx: usize,
+        corp_idx: usize,
+        fee: f64,
+        team_size: u32,
+    },
+
     // --- Emergency loan crises ---
 
     /// A governor or corporation offers an emergency loan when the player's policies
@@ -3803,6 +3823,8 @@ impl CrisisKind {
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardDemand { .. } => "board_demand",
+            CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
+            CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",
             CrisisKind::LoanCallIn { .. } => "loan_call_in",
         }
