@@ -817,7 +817,7 @@ pub enum FundingCondition {
     /// All regions must remain standing (revoked on first collapse).
     NoCollapse,
     /// A specific emergency decree must not be enacted while this contract is active.
-    /// Once enacted, decrees are permanent — violating this condition will eventually revoke the contract.
+    /// Once enacted, decrees are permanent. Violating this condition will gradually revoke the contract.
     ForbidDecree { decree_idx: usize },
 }
 
