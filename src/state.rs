@@ -3851,6 +3851,8 @@ pub enum PolicyUiState {
     SelectSacrificeRegion,
     /// Select which region to fortify (for Fortify Region decree).
     SelectFortifyRegion,
+    /// Confirm a decree before enacting it.
+    ConfirmDecree { decree_idx: usize },
 }
 
 /// Research panel UI state machine, following the medicines panel pattern.
@@ -4055,7 +4057,8 @@ impl UiState {
                 match &self.policy_ui {
                     Some(PolicyUiState::ManagePolicies { .. })
                     | Some(PolicyUiState::SelectSacrificeRegion)
-                    | Some(PolicyUiState::SelectFortifyRegion) => {
+                    | Some(PolicyUiState::SelectFortifyRegion)
+                    | Some(PolicyUiState::ConfirmDecree { .. }) => {
                         self.policy_ui = Some(PolicyUiState::BrowseRegions);
                         self.panel_selection = 0;
                     }
@@ -4189,6 +4192,7 @@ impl UiState {
                     // Only non-collapsed regions are selectable
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
                 }
+                Some(PolicyUiState::ConfirmDecree { .. }) => 0,
                 None => 0,
             },
             Panel::Operations => match &self.operations_ui {
