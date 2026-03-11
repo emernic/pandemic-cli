@@ -1,9 +1,9 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, CrisisOperation,
-    GameEvent, GameState, ScreeningLevel,
-    SimState, CRISIS_TYPE_COOLDOWN, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
+    ActiveLoan, CrisisCost, CrisisEvent, CrisisKind, CrisisOption, CrisisOperation,
+    GameEvent, GameState, LoanLender, ScreeningLevel,
+    SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
 /// Scale a dollar amount relative to current funding.
@@ -1690,6 +1690,138 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::LoanOffer { lender_name, lender, amount, daily_interest_rate } => {
+            let due_day = state.tick as f64 / TICKS_PER_DAY + LOAN_DUE_DAYS;
+            let daily_interest = amount * daily_interest_rate;
+            let (lender_type_str, context_line) = match lender {
+                LoanLender::Governor { region_idx } => {
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                    ("Governor", format!("Governor of {region_name}"))
+                }
+                LoanLender::Corporation { corp_idx } => {
+                    let sector = state.corporations.get(*corp_idx)
+                        .map(|c| format!("{:?}", c.sector)).unwrap_or_else(|| "Unknown".into());
+                    ("Corporate", sector)
+                }
+            };
+            CrisisEvent {
+                title: format!("{lender_type_str} Emergency Loan Offer"),
+                description: format!(
+                    "{lender_name} ({context_line}) has noticed your funding gap and \
+                     is offering an emergency loan of ¥{amount:.0}. \
+                     Terms: ¥{daily_interest:.0}/day interest, due by day {due_day:.0}. \
+                     If unpaid, they will enforce collection.",
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: "Decline".into(),
+                        description: "No debt. Policies remain suspended.".into(),
+                        cost: None,
+                    },
+                    CrisisOption {
+                        label: format!("Accept ¥{amount:.0} loan (¥{daily_interest:.0}/day interest, due day {due_day:.0})"),
+                        description: format!(
+                            "Funds restored. Repay ¥{amount:.0}+ by day {due_day:.0} or face retaliation.",
+                        ),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::LoanCallIn { lender_name, lender, outstanding } => {
+            // Use current outstanding from state.loans — more accurate than the value
+            // captured when the crisis was queued (interest has continued accruing since).
+            let repay_amount = state.loans.iter()
+                .find(|l| l.lender == *lender)
+                .map(|l| l.outstanding)
+                .unwrap_or(*outstanding);
+            let can_repay = state.resources.funding >= repay_amount;
+            match lender {
+                LoanLender::Governor { region_idx } => {
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+                    // Find the most expensive active policy in their region to cancel
+                    let policy_name = state.policies.get(*region_idx)
+                        .and_then(|p| {
+                            let traits = state.regions.get(*region_idx).map(|r| r.traits.as_slice()).unwrap_or(&[]);
+                            p.active_policy_costs(traits).into_iter()
+                                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|(idx, _)| crate::state::policy_display_name(idx).to_string())
+                        })
+                        .unwrap_or_else(|| "your most expensive policy".into());
+                    CrisisEvent {
+                        title: "Loan Called In".into(),
+                        description: format!(
+                            "Gov. {lender_name} of {region_name} is calling in the emergency loan. \
+                             Outstanding balance: ¥{outstanding:.0}. \
+                             Payment is overdue — they want their money now.",
+                        ),
+                        options: vec![
+                            if can_repay {
+                                CrisisOption {
+                                    label: format!("Repay ¥{repay_amount:.0}"),
+                                    description: "Settle the debt. Gov. loyalty improves slightly.".into(),
+                                    cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
+                                }
+                            } else {
+                                CrisisOption {
+                                    label: format!("Repay ¥{repay_amount:.0} (INSUFFICIENT FUNDS)"),
+                                    description: format!("Need ¥{repay_amount:.0}, have ¥{:.0}. Cannot pay.", state.resources.funding),
+                                    cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
+                                }
+                            },
+                            CrisisOption {
+                                label: "Default".into(),
+                                description: format!(
+                                    "Gov. {lender_name} cancels your {policy_name} in {region_name} \
+                                     and loyalty drops 20.",
+                                ),
+                                cost: None,
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                LoanLender::Corporation { corp_idx } => {
+                    let corp_name = state.corporations.get(*corp_idx)
+                        .map(|c| c.name.as_str()).unwrap_or(lender_name.as_str());
+                    CrisisEvent {
+                        title: "Debt Collectors Arrive".into(),
+                        description: format!(
+                            "{corp_name} has sent collectors. \
+                             Outstanding loan balance: ¥{outstanding:.0}. \
+                             They have options, and none of them are pleasant for you.",
+                        ),
+                        options: vec![
+                            if can_repay {
+                                CrisisOption {
+                                    label: format!("Repay ¥{repay_amount:.0}"),
+                                    description: "Settle the debt. No further action.".into(),
+                                    cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
+                                }
+                            } else {
+                                CrisisOption {
+                                    label: format!("Repay ¥{repay_amount:.0} (INSUFFICIENT FUNDS)"),
+                                    description: format!("Need ¥{repay_amount:.0}, have ¥{:.0}. Cannot pay.", state.resources.funding),
+                                    cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
+                                }
+                            },
+                            CrisisOption {
+                                label: "Default".into(),
+                                description: "2 researchers are 'unavailable' indefinitely. −10% POL from smear campaign.".into(),
+                                cost: None,
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+            }
+        }
         CrisisKind::BoardDemand { severity } => {
             let satisfaction = crate::engine::corporations::board_satisfaction(state);
             let placate_cost = if *severity >= 1 {
@@ -2770,6 +2902,105 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::SanctionsThreat { .. }, _) => {
             // Diplomatic back-channel — costs already deducted, trade preserved
             "Back-channel negotiations successful. Sanctions averted.".into()
+        }
+
+        // --- Emergency loan crises ---
+
+        (CrisisKind::LoanOffer { .. }, 0) => {
+            // Decline — no loan taken
+            "Loan offer declined. Policy suspension stands.".into()
+        }
+        (CrisisKind::LoanOffer { lender_name, lender, amount, daily_interest_rate }, _) => {
+            // Accept — add the loan, deposit the funds
+            let due_day = state.tick as f64 / TICKS_PER_DAY + LOAN_DUE_DAYS;
+            state.resources.funding += amount;
+            state.loans.push(ActiveLoan {
+                lender_name: lender_name.clone(),
+                lender: lender.clone(),
+                principal: *amount,
+                outstanding: *amount,
+                daily_interest_rate: *daily_interest_rate,
+                due_day,
+                hostile_queued: false,
+            });
+            format!(
+                "¥{:.0} received from {}. Repay by day {:.0} or face consequences.",
+                amount, lender_name, due_day
+            )
+        }
+
+        (CrisisKind::LoanCallIn { lender_name, lender, .. }, 0) => {
+            // Repay — cost already deducted by CrisisCost; remove the loan
+            // Find and remove the matching loan
+            let lender_ref = lender;
+            if let Some(pos) = state.loans.iter().position(|l| l.lender == *lender_ref) {
+                state.loans.remove(pos);
+            }
+            // Governor: small loyalty boost for honoring the debt
+            if let LoanLender::Governor { region_idx } = lender {
+                if let Some(region) = state.regions.get_mut(*region_idx) {
+                    region.governor.loyalty = (region.governor.loyalty + 5.0).min(100.0);
+                }
+            }
+            format!("Debt repaid to {}. Obligation cleared.", lender_name)
+        }
+        (CrisisKind::LoanCallIn { lender_name, lender, .. }, _) => {
+            // Default — hostile action
+            // Remove the loan regardless (debt is "forgiven" via enforcement)
+            let lender_ref = lender;
+            if let Some(pos) = state.loans.iter().position(|l| l.lender == *lender_ref) {
+                state.loans.remove(pos);
+            }
+            match lender {
+                LoanLender::Governor { region_idx } => {
+                    // Cancel most expensive policy in their region + loyalty drop
+                    let mut cancelled_name = None;
+                    if let Some(region) = state.regions.get(*region_idx) {
+                        let traits = region.traits.as_slice();
+                        if let Some(policy) = state.policies.get_mut(*region_idx) {
+                            if let Some((idx, _)) = policy.active_policy_costs(traits).into_iter()
+                                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                            {
+                                use crate::state::POLICY_IDX_SCREENING_BASE;
+                                if idx == POLICY_IDX_SCREENING_BASE {
+                                    cancelled_name = Some(match policy.screening {
+                                        crate::state::ScreeningLevel::Basic => "Basic Screening",
+                                        crate::state::ScreeningLevel::Antigen => "Med Screening",
+                                        crate::state::ScreeningLevel::MassRapid => "Mass Screening",
+                                        crate::state::ScreeningLevel::None => "Screening",
+                                    }.to_string());
+                                    policy.screening = crate::state::ScreeningLevel::None;
+                                } else {
+                                    cancelled_name = Some(crate::state::policy_display_name(idx).to_string());
+                                    policy.set_bool(idx, false);
+                                }
+                            }
+                        }
+                    }
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.loyalty = (region.governor.loyalty - 20.0).max(0.0);
+                    }
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+                    match cancelled_name {
+                        Some(name) => format!(
+                            "Gov. {lender_name} defaulted — {name} cancelled in {region_name}. Loyalty −20.",
+                        ),
+                        None => format!(
+                            "Gov. {lender_name} defaulted — loyalty −20 in {region_name}.",
+                        ),
+                    }
+                }
+                LoanLender::Corporation { .. } => {
+                    // Personnel intimidation + POL smear campaign
+                    let lost = 2u32.min(state.resources.personnel);
+                    state.resources.personnel = state.resources.personnel.saturating_sub(lost);
+                    state.resources.political_power = (state.resources.political_power - 0.10).max(0.0);
+                    format!(
+                        "{lender_name} collected — {lost} researchers 'unavailable', −10% POL from smear campaign.",
+                    )
+                }
+            }
         }
 
         // --- Board demand crises ---

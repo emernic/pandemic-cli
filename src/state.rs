@@ -193,6 +193,9 @@ pub struct GameState {
     /// wave-coordinated diseases. Incremented each time a new group is created.
     #[serde(default)]
     pub next_sequence_group: u32,
+    /// Active emergency loans. Interest accrues each day; hostile action fires if unpaid.
+    #[serde(default)]
+    pub loans: Vec<ActiveLoan>,
     pub ui: UiState,
 }
 
@@ -894,6 +897,51 @@ pub struct FundingContract {
 
 /// Satisfaction thresholds and rates for the patron system.
 pub const PATRON_SATISFACTION_WARN: f64 = 0.5;
+
+// Emergency loan system — governors and corporations offer loans when the player is broke.
+// If unpaid by the due date, the lender takes hostile action.
+
+/// Who offered (and holds) an emergency loan.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum LoanLender {
+    Governor { region_idx: usize },
+    Corporation { corp_idx: usize },
+}
+
+/// An active emergency loan with outstanding balance and due date.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActiveLoan {
+    pub lender_name: String,
+    pub lender: LoanLender,
+    /// Original amount borrowed.
+    pub principal: f64,
+    /// Current outstanding balance (accrues interest each day).
+    pub outstanding: f64,
+    /// Daily interest rate (e.g., 0.10 = 10% per day on outstanding).
+    pub daily_interest_rate: f64,
+    /// Game day when the loan is due.
+    pub due_day: f64,
+    /// Whether the hostile follow-up crisis has already been queued to prevent duplicates.
+    pub hostile_queued: bool,
+}
+
+impl ActiveLoan {
+    /// Per-tick interest amount to accrue.
+    pub fn interest_per_tick(&self) -> f64 {
+        self.outstanding * self.daily_interest_rate / TICKS_PER_DAY
+    }
+}
+
+/// Per-day interest rate for loans from governors (slightly lower — political relationship).
+pub const LOAN_GOVERNOR_INTEREST_RATE: f64 = 0.08;
+/// Per-day interest rate for loans from corporations (higher — business terms).
+pub const LOAN_CORP_INTEREST_RATE: f64 = 0.12;
+/// Loan due after this many days.
+pub const LOAN_DUE_DAYS: f64 = 10.0;
+/// Don't offer a new loan if player already has this many outstanding loans.
+pub const LOAN_MAX_SIMULTANEOUS: usize = 2;
+/// Minimum ticks between loan offer crises.
+pub const LOAN_OFFER_COOLDOWN: u64 = 240; // ~2 days
 pub const PATRON_SATISFACTION_REVOKE: f64 = 0.2;
 /// Per-tick degradation when condition is violated (~0.05/day = 16 days from 1.0 to revocation).
 pub const PATRON_DEGRADE_RATE: f64 = 0.05 / 120.0;
@@ -1120,6 +1168,9 @@ pub struct Resources {
     /// Tick when a FundingWarning event was last emitted. Prevents log spam.
     #[serde(default)]
     pub last_funding_warning_tick: u64,
+    /// Tick when a loan offer crisis was last triggered. Rate-limits loan offers.
+    #[serde(default)]
+    pub last_loan_offer_tick: u64,
 }
 
 
@@ -3476,6 +3527,8 @@ pub enum GameCommand {
     UpgradeLab,
     /// Cycle a region's deployment priority (High → Normal → Low → CutOff → High).
     CycleDeployPriority { region_idx: usize },
+    /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
+    RepayLoan { loan_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3648,6 +3701,25 @@ pub enum CrisisKind {
     /// Board of directors demands action when board satisfaction drops too low.
     /// `severity` 0 = warning demand (satisfaction < 0.5), 1 = ultimatum (< 0.3).
     BoardDemand { severity: u8 },
+
+    // --- Emergency loan crises ---
+
+    /// A governor or corporation offers an emergency loan when the player's policies
+    /// are being suspended due to insufficient funds.
+    LoanOffer {
+        lender_name: String,
+        lender: LoanLender,
+        amount: f64,
+        daily_interest_rate: f64,
+    },
+    /// A lender calls in an overdue loan. Player must repay or face hostile action.
+    /// Governor: cancels a policy in their region + loyalty drop.
+    /// Corporation: personnel loss (intimidation) or POL penalty (smear campaign).
+    LoanCallIn {
+        lender_name: String,
+        lender: LoanLender,
+        outstanding: f64,
+    },
 }
 
 impl CrisisKind {
@@ -3699,6 +3771,8 @@ impl CrisisKind {
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardDemand { .. } => "board_demand",
+            CrisisKind::LoanOffer { .. } => "loan_offer",
+            CrisisKind::LoanCallIn { .. } => "loan_call_in",
         }
     }
 }
@@ -4072,8 +4146,8 @@ impl UiState {
             },
             Panel::Policy => match &self.policy_ui {
                 Some(PolicyUiState::BrowseRegions) => {
-                    // Items: 0..regions-1 = regions, decrees, standing orders (STANDING_ORDER_COUNT items)
-                    state.regions.len() + DECREE_COUNT + STANDING_ORDER_COUNT - 1
+                    // Items: 0..regions-1 = regions, decrees, standing orders, loans (if any)
+                    state.regions.len() + DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len() - 1
                 }
                 // Repair/Appease/Bargain hidden for collapsed regions.
                 Some(PolicyUiState::ManagePolicies { region_idx }) => {
@@ -4627,6 +4701,7 @@ impl GameState {
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_funding_warning_tick: 0,
+                last_loan_offer_tick: 0,
             },
             policies: vec![RegionPolicy::default(); regions.len()],
             enacted_decrees: EnactedDecrees::default(),
@@ -4666,6 +4741,7 @@ impl GameState {
             corporations: Vec::new(),
             last_board_demand_tick: 0,
             next_sequence_group: 0,
+            loans: vec![],
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -4993,6 +5069,21 @@ impl GameState {
     /// Per-tick income from active contracts alone (for UI breakdown).
     pub fn contract_income_rate(&self) -> f64 {
         self.contracts.iter().map(|c| c.income).sum()
+    }
+
+    /// Total outstanding debt across all active loans.
+    pub fn total_debt(&self) -> f64 {
+        self.loans.iter().map(|l| l.outstanding).sum()
+    }
+
+    /// Per-day interest cost on all active loans (for budget display).
+    pub fn daily_debt_service(&self) -> f64 {
+        self.loans.iter().map(|l| l.outstanding * l.daily_interest_rate).sum()
+    }
+
+    /// Per-tick interest cost on all active loans.
+    pub fn debt_service_rate(&self) -> f64 {
+        self.loans.iter().map(|l| l.interest_per_tick()).sum()
     }
 
     /// Per-region income contribution per day (after all modifiers including decrees).

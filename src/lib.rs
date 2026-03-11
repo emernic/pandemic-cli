@@ -10,7 +10,7 @@ use state::{
     DeployTarget, DECREE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState, InfraSystem,
     KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_INFRA_BASE, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
-    UiState, grid_reading_order, policy_display_order,
+    STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
 };
 
 /// Route a player action to the appropriate handler.
@@ -460,6 +460,12 @@ fn handle_policy_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
             } else {
                 let decree_base = num_regions;
                 let so_base = decree_base + DECREE_COUNT;
+                let loan_base = so_base + STANDING_ORDER_COUNT;
+                if ui.panel_selection >= loan_base {
+                    // Loan selected — repay in full
+                    let loan_idx = ui.panel_selection - loan_base;
+                    return Some(GameCommand::RepayLoan { loan_idx });
+                }
                 if ui.panel_selection >= so_base {
                     // Standing order selected
                     let kind = ui.panel_selection - so_base;

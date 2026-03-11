@@ -369,6 +369,60 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
         ]));
     }
 
+    // Active Loans section (selectable — enter to repay)
+    if !state.loans.is_empty() {
+        let loan_base = so_base + STANDING_ORDER_COUNT;
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ─── ACTIVE LOANS ───",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+
+        let current_day = state.tick as f64 / TICKS_PER_DAY;
+        for (i, loan) in state.loans.iter().enumerate() {
+            let display_pos = loan_base + i;
+            let selected = state.ui.panel_selection == display_pos;
+            let marker = if selected { "▶ " } else { "  " };
+            let days_left = loan.due_day - current_day;
+            let (due_str, due_color) = if days_left < 0.0 {
+                ("OVERDUE".to_string(), Color::Red)
+            } else if days_left < 2.0 {
+                (format!("{:.0}d left", days_left), Color::Red)
+            } else {
+                (format!("{:.0}d left", days_left), Color::Yellow)
+            };
+            let can_repay = state.resources.funding >= loan.outstanding;
+            let name_style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}{}", marker, loan.lender_name), name_style),
+                Span::styled(
+                    format!("  ¥{:.0} outstanding", loan.outstanding),
+                    Style::default().fg(Color::Red),
+                ),
+                Span::styled(
+                    format!("  [{due_str}]"),
+                    Style::default().fg(due_color),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(
+                    format!("¥{:.0}/day interest", loan.outstanding * loan.daily_interest_rate),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    if can_repay { "  [Enter] Repay in full".to_string() }
+                    else { format!("  (need ¥{:.0} more to repay)", loan.outstanding - state.resources.funding) },
+                    Style::default().fg(if can_repay { Color::Green } else { Color::DarkGray }),
+                ),
+            ]));
+        }
+    }
+
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Select / Toggle", "Close"));
 
