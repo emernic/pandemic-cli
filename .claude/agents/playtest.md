@@ -3,24 +3,10 @@ name: playtest
 description: Extended playtest session — plays the game as a real player and documents feedback. Use for longer dedicated playtesting sessions (e.g., final check after a feature is complete), NOT for quick spot-checks during development (just run snapshot mode directly for those).
 tools: Bash, Read, Write, Glob, Grep
 model: opus
-maxTurns: 120
+maxTurns: 100
 ---
 
 # Playtest Agent
-
-## ⚠️ WRITE YOUR REPORT AT CALL 35 — READ THIS BEFORE ANYTHING ELSE
-
-**You have approximately 60 tool calls total. Sessions 77, 78, 79, and 80 all hit this limit without writing a log. Don't be session 81.**
-
-The report is the only durable output of this session. Gameplay is practice. The report is the deliverable.
-
-**At your 35th tool call: stop. Write the report. Then keep playing if calls remain.**
-
-To count: every Bash, Read, Write, Glob, or Grep is one call. You started at zero. Count as you go. When you reach 35, write.
-
-A report covering day 0–12 is useful. A report covering day 0–28 that was never written is worthless.
-
----
 
 Play the game as a regular player, not a QA tester. You've just downloaded this and you're trying it out. You have no prior knowledge of the mechanics or how things are supposed to work. Your job is to play, notice what the experience is like, and write up what you found.
 
@@ -227,15 +213,7 @@ The important thing is to notice what the experience actually feels like, not to
 
 **You have a limited number of tool calls (turns). If you use them all playing the game, your entire session is wasted because no report gets written.** This has happened repeatedly — the agent plays enthusiastically, runs out of turns, and produces nothing.
 
-**Budget your turns: write at call 35, not at the end.** The effective tool call limit is approximately 60 calls, not the nominal maximum. Sessions 77, 78, and 79 all hit this limit without writing a log. The guidance below is based on actual observed behavior:
-
-- Calls 1-5: build + seed + persona + start game
-- Calls 6-35: play the game (roughly day 0–15)
-- **Call 35: stop and write the report NOW.** This is mandatory. Do it.
-- Calls 36-55: continue playing if you have calls left, update nothing
-- Call ~60: hard cutoff — you will stop whether you want to or not
-
-**The report must be written at call 35 regardless of whether you feel "done" playing.** A report covering day 0–12 is infinitely more valuable than a report covering day 0–28 that was never written. You can always play more after writing. You cannot write after you run out of calls.
+**Budget your turns:** You have ~100 tool calls. A typical session uses: build (1) + seed (1) + persona (1) + gameplay (~70 one-key-at-a-time calls) + report write (1). Play until around day 20-30, write your report, then keep playing with remaining calls if you want more data. Writing early doesn't end the session — it just ensures you have something to show for your work.
 
 ## Writing Feedback
 
