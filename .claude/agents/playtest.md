@@ -163,7 +163,7 @@ SEED=$((RANDOM * RANDOM))
 
 **Always use a random seed.** Different seeds produce different RNG outcomes for disease spread, adverse effects, etc. Don't use 42, 777, or other "nice" numbers — use `$((RANDOM * RANDOM))` to get genuine variety.
 
-Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel), `up`/`down` (navigate lists), `left`/`right` (navigate regions on map), `enter` (confirm/select), `1`–`9` (jump to item 1–9 in current panel list), `0` (jump to item 10). Number keys work whenever a panel list is open — use `--key 3` or `--do 3` to jump directly to the 3rd item without pressing down repeatedly.
+Valid keys: `space` (pause/unpause), `t` (threats), `r` (research), `m` (medicines), `p` (policy), `?` (help), `esc` (close panel / go back one step), `home` (go directly to dashboard — closes all panels from any depth), `up`/`down` (navigate lists), `left`/`right` (navigate regions on map), `enter` (confirm/select), `1`–`9` (jump to item 1–9 in current panel list), `0` (jump to item 10). Number keys work whenever a panel list is open — use `--key 3` or `--do 3` to jump directly to the 3rd item without pressing down repeatedly.
 
 **Crisis events are a core part of the game.** When a crisis fires, it interrupts `--days` advancement — the log will say when and why. You MUST engage with it: read the options on screen, navigate with `up`/`down` if needed, confirm with `enter`. Crises are not bugs or nuisances to complain about. They are the game. Treat them as a real player would: read the situation, decide, act. You can dismiss inline (`--do d10 --do enter --do d5`) or in a follow-up invocation.
 

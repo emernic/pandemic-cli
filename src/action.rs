@@ -21,6 +21,9 @@ pub enum Action {
     /// Jump directly to item N in the current panel list (0-based).
     /// Keys 1–9 → index 0–8, key 0 → index 9.
     JumpToItem { index: usize },
+    /// Close all panels and return to the main dashboard in one keypress.
+    /// Unlike ClosePanel (Esc), which goes back one step, GoHome goes all the way.
+    GoHome,
 }
 
 /// Map a crossterm KeyCode to an Action.
@@ -52,6 +55,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('8') => Some(Action::JumpToItem { index: 7 }),
         KeyCode::Char('9') => Some(Action::JumpToItem { index: 8 }),
         KeyCode::Char('0') => Some(Action::JumpToItem { index: 9 }),
+        KeyCode::Home => Some(Action::GoHome),
         _ => None,
     }
 }
@@ -87,6 +91,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "8" => Some(Action::JumpToItem { index: 7 }),
         "9" => Some(Action::JumpToItem { index: 8 }),
         "0" => Some(Action::JumpToItem { index: 9 }),
+        "home" => Some(Action::GoHome),
         _ => None,
     }
 }
