@@ -425,12 +425,13 @@ fn render_select_target(
 
     // Option 0: Vaccinate
     {
+        let exposed = inf.map(|i| i.exposed).unwrap_or(0.0);
         let infected = inf.map(|i| i.infected).unwrap_or(0.0);
         let shows_immune = state.policies.get(region_idx)
             .map(|p| p.screening.shows_immune())
             .unwrap_or(false);
         let immune = if shows_immune { inf.map(|i| i.immune).unwrap_or(0.0) } else { 0.0 };
-        let susceptible = (pop - infected - region.dead - immune).max(0.0);
+        let susceptible = (pop - exposed - infected - region.dead - immune).max(0.0);
         let empty = susceptible == 0.0;
         let will_vaccinate = med.estimate_vaccination(susceptible, efficacy, state.vaccination_multiplier());
         let selected = state.ui.panel_selection == 0;

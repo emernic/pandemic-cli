@@ -400,12 +400,13 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
     for &region_idx in &order {
         let region = &state.regions[region_idx];
         if let Some(inf) = region.disease_state(disease_idx) {
-            if inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
+            if inf.exposed + inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
                 continue;
             }
             // Distribute region's total estimate proportionally across diseases
             let total_real = region.detected_infected(&state.diseases);
-            let proportion = if total_real > 0.0 { inf.infected / total_real } else { 0.0 };
+            let this_disease_total = inf.exposed + inf.infected;
+            let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
             let screened = region.estimated_infected * proportion;
             let shows_immune = state.policies.get(region_idx)
                 .map(|p| p.screening.shows_immune())

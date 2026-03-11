@@ -18,7 +18,8 @@ fn scale_policy_factor(factor: f64, effectiveness: f64) -> f64 {
 
 /// Per-disease outflows computed in phase 1, applied in phase 2.
 struct DiseaseOutflows {
-    new_infections: f64,
+    new_exposed: f64,
+    exposed_to_infected: f64,
     new_deaths: f64,
     new_recoveries: f64,
 }
@@ -59,9 +60,9 @@ pub(super) fn tick_spread_within(
         let mut outflows: Vec<DiseaseOutflows> = Vec::with_capacity(region.infections.len());
         for (inf_idx, inf) in region.infections.iter().enumerate() {
             if let Some(disease) = diseases.get(inf.disease_idx) {
-                let susceptible = alive - inf.infected - inf.immune;
+                let susceptible = alive - inf.exposed - inf.infected - inf.immune;
                 if susceptible <= 0.0 {
-                    outflows.push(DiseaseOutflows { new_infections: 0.0, new_deaths: 0.0, new_recoveries: 0.0 });
+                    outflows.push(DiseaseOutflows { new_exposed: 0.0, exposed_to_infected: 0.0, new_deaths: 0.0, new_recoveries: 0.0 });
                     continue;
                 }
 
@@ -94,9 +95,19 @@ pub(super) fn tick_spread_within(
                 if region.civil_order <= 0.0 {
                     infectivity *= crate::state::CIVIL_ORDER_ANARCHY_SPREAD;
                 }
-                let new_infections =
+                // SEIR: only infectious (not exposed) individuals transmit.
+                // New transmissions enter the exposed compartment.
+                let new_exposed =
                     (infectivity * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
+
+                // Drain exposed → infected at rate 1/incubation_ticks per tick.
+                let incubation_rate = if disease.incubation_ticks > 0.0 {
+                    1.0 / disease.incubation_ticks
+                } else {
+                    1.0 // instant transition if no incubation
+                };
+                let exposed_to_infected = (inf.exposed * incubation_rate).min(inf.exposed);
 
                 let mut lethality = disease.lethality * region.healthcare_modifier;
                 if hospital_active {
@@ -142,9 +153,9 @@ pub(super) fn tick_spread_within(
                     new_recoveries *= scale;
                 }
 
-                outflows.push(DiseaseOutflows { new_infections, new_deaths, new_recoveries });
+                outflows.push(DiseaseOutflows { new_exposed, exposed_to_infected, new_deaths, new_recoveries });
             } else {
-                outflows.push(DiseaseOutflows { new_infections: 0.0, new_deaths: 0.0, new_recoveries: 0.0 });
+                outflows.push(DiseaseOutflows { new_exposed: 0.0, exposed_to_infected: 0.0, new_deaths: 0.0, new_recoveries: 0.0 });
             }
         }
 
@@ -158,7 +169,12 @@ pub(super) fn tick_spread_within(
         for (i, outflow) in outflows.iter().enumerate() {
             let actual_deaths = outflow.new_deaths * death_scale;
             let inf = &mut region.infections[i];
-            inf.infected = inf.infected + outflow.new_infections - actual_deaths - outflow.new_recoveries;
+            // SEIR: new transmissions enter exposed, exposed drains into infected.
+            inf.exposed = inf.exposed + outflow.new_exposed - outflow.exposed_to_infected;
+            if inf.exposed < 1.0 {
+                inf.exposed = 0.0;
+            }
+            inf.infected = inf.infected + outflow.exposed_to_infected - actual_deaths - outflow.new_recoveries;
             if inf.infected < 1.0 {
                 inf.infected = 0.0;
             }
@@ -180,8 +196,12 @@ pub(super) fn tick_spread_within(
                 let other_deaths = total_new_deaths - outflow.new_deaths * death_scale;
                 if other_deaths > 0.0 {
                     let other_survive = 1.0 - (other_deaths / alive);
+                    inf.exposed *= other_survive;
                     inf.infected *= other_survive;
                     inf.immune *= other_survive;
+                    if inf.exposed < 1.0 {
+                        inf.exposed = 0.0;
+                    }
                     if inf.infected < 1.0 {
                         inf.infected = 0.0;
                     }
@@ -260,9 +280,11 @@ pub(super) fn tick_spread_cross_region(
                     } else {
                         1.0
                     };
+                    // Include both exposed and infected in cross-region spread:
+                    // exposed travelers are pre-symptomatic but still carry the disease.
                     regions_snapshot[conn_idx]
                         .disease_state(d_idx)
-                        .map(|inf| inf.infected * ban_factor * collapse_factor * screening * island_factor)
+                        .map(|inf| (inf.exposed + inf.infected) * ban_factor * collapse_factor * screening * island_factor)
                 })
                 .sum();
 
@@ -273,7 +295,7 @@ pub(super) fn tick_spread_cross_region(
             let has_active_infection = region
                 .infections
                 .iter()
-                .any(|inf| inf.disease_idx == d_idx && inf.infected > 0.0);
+                .any(|inf| inf.disease_idx == d_idx && (inf.exposed + inf.infected) > 0.0);
 
             if !has_active_infection {
                 let roll: f64 = rng.r#gen();
@@ -283,7 +305,7 @@ pub(super) fn tick_spread_cross_region(
                 if roll < chance.min(0.5) {
                     // Seed proportional to connected infected — a larger outbreak
                     // next door means more travelers carrying the disease.
-                    let seed_count = (connected_infected * 0.001).clamp(1.0, 1000.0);
+                    let seed_count = (connected_infected * 0.002).clamp(5.0, 2000.0);
                     region.get_or_create_infection(d_idx).infected = seed_count;
                     // Only notify the player about detected diseases spreading
                     if new.diseases[d_idx].detected {
@@ -292,6 +314,16 @@ pub(super) fn tick_spread_cross_region(
                             region_idx: i,
                         });
                     }
+                }
+            } else {
+                // Continuous importation: travelers from infected neighbors
+                // add a small trickle of cases. This prevents tiny seeds from
+                // stalling under SEIR dynamics where the exposed pipeline
+                // bottlenecks early exponential growth.
+                let importation = connected_infected * disease.cross_region_spread * 0.00005;
+                if importation > 0.1 {
+                    let inf = region.get_or_create_infection(d_idx);
+                    inf.infected += importation;
                 }
             }
         }

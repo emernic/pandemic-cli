@@ -209,6 +209,7 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
     let initial_infected = 500.0 + rng.r#gen::<f64>() * 2_000.0;
     state.regions[region_idx].infections.push(RegionDiseaseState {
         disease_idx,
+        exposed: 0.0,
         infected: initial_infected,
         dead: 0.0,
         immune: 0.0,
@@ -217,14 +218,14 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
     Some((disease_idx, region_idx))
 }
 
-/// Find a disease with zero infected across all regions (fully burned out).
+/// Find a disease with zero infected/exposed across all regions (fully burned out).
 fn find_burned_out_disease(state: &GameState) -> Option<usize> {
     for (d_idx, _disease) in state.diseases.iter().enumerate() {
-        let total_infected: f64 = state.regions.iter()
+        let total_active: f64 = state.regions.iter()
             .filter_map(|r| r.disease_state(d_idx))
-            .map(|inf| inf.infected)
+            .map(|inf| inf.exposed + inf.infected)
             .sum();
-        if total_infected < 1.0 {
+        if total_active < 1.0 {
             return Some(d_idx);
         }
     }

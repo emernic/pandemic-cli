@@ -1246,7 +1246,7 @@ mod tests {
         state.resources.funding = 5000.0;
         state.resources.personnel = 20;
         // Ensure disease is infecting somewhere
-        state.regions[0].infections[0].infected = 1000.0;
+        state.regions[0].get_or_create_infection(0).infected = 1000.0;
 
         let original_infectivity = state.diseases[0].infectivity;
 
@@ -1317,7 +1317,7 @@ mod tests {
         state.diseases[0].knowledge = KNOWLEDGE_FULL;
         state.resources.funding = 5000.0;
         state.resources.personnel = 20;
-        state.regions[0].infections[0].infected = 1000.0;
+        state.regions[0].get_or_create_infection(0).infected = 1000.0;
 
         let original_lethality = state.diseases[0].lethality;
 
@@ -1349,7 +1349,7 @@ mod tests {
         state.diseases[0].knowledge = KNOWLEDGE_FULL;
         state.resources.funding = 5000.0;
         state.resources.personnel = 20;
-        state.regions[0].infections[0].infected = 1000.0;
+        state.regions[0].get_or_create_infection(0).infected = 1000.0;
 
         assert!(state.diseases[0].cross_region_spread > 0.0, "disease should have cross-region spread initially");
 
