@@ -5571,10 +5571,14 @@ impl GameState {
     /// Returns (baseline, death_component, infection_component) that sum to pol_target().
     /// `death_component` = sqrt(death_frac), `infection_component` = 0.4 * sqrt(infected_frac).
     /// Used by the dashboard to show a breakdown without duplicating the formula.
+    ///
+    /// Uses OBSERVED figures (detected deaths, screened infections) — not ground truth.
+    /// This means poor screening suppresses political pressure, creating a strategic
+    /// trade-off: neglect screening to slow POL growth, or invest for better intel.
     pub fn pol_target_components(&self) -> (f64, f64, f64) {
         let initial_pop = self.initial_population();
-        let death_frac = if initial_pop > 0.0 { self.total_dead() / initial_pop } else { 0.0 };
-        let infected_frac = if initial_pop > 0.0 { self.total_infected() / initial_pop } else { 0.0 };
+        let death_frac = if initial_pop > 0.0 { self.total_dead_detected() / initial_pop } else { 0.0 };
+        let infected_frac = if initial_pop > 0.0 { self.total_infected_screened() / initial_pop } else { 0.0 };
         let baseline = 0.20_f64;
         let death_component = death_frac.sqrt();
         let infection_component = infected_frac.sqrt() * 0.4;

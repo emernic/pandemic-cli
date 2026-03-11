@@ -4472,9 +4472,11 @@ mod tests {
             }
         }
 
-        // 12 policies should meaningfully drain POL vs no policies
-        assert!(s_pol.resources.political_power < s_base.resources.political_power - 0.02,
-            "active policies should significantly reduce POL: without={:.3}, with={:.3}",
+        // Policies reduce infections/deaths → lower detected figures → lower pol_target → lower POL.
+        // The magnitude is modest because POL uses detected (screened) figures, which are lower
+        // than real figures when screening is poor. Direction must hold.
+        assert!(s_pol.resources.political_power < s_base.resources.political_power - 0.005,
+            "active policies should reduce POL: without={:.3}, with={:.3}",
             s_base.resources.political_power, s_pol.resources.political_power);
     }
 
@@ -4482,10 +4484,16 @@ mod tests {
     fn pol_target_capped_at_90_percent() {
         use crate::state::{ResearchProject, ResearchKind, BasicTech};
         let mut state = GameState::new_default(42);
-        // Massive deaths + infections to maximize severity
+        // Massive deaths + infections to maximize severity.
+        // Set both the per-disease attribution (inf.dead, used by total_dead_detected)
+        // and the authoritative region counter (region.dead), plus estimated_infected
+        // (used by total_infected_screened for POL calculation).
         for region in &mut state.regions {
-            region.get_or_create_infection(0).infected = 500_000_000.0;
+            let inf = region.get_or_create_infection(0);
+            inf.infected = 500_000_000.0;
+            inf.dead = 500_000_000.0;
             region.dead = 500_000_000.0;
+            region.estimated_infected = 500_000_000.0;
         }
         state.resources.political_power = 0.95; // Start above the 0.90 cap
         state.tick = TICKS_PER_DAY as u64 * 100; // far into the game
