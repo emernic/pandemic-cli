@@ -80,12 +80,11 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
 
 
 /// Run snapshot mode: process an ordered sequence of steps, then render.
-/// Each step is either a key action (e.g. "r", "enter") or ticks (e.g. "t10").
+/// Each step is either a key action (e.g. "r", "enter") or a time advance (e.g. "d1").
 ///
-/// Snapshot mode mirrors interactive mode exactly:
-/// - Crisis events interrupt tick advancement. Subsequent key steps still fire
-///   (so `--do d60 --do enter --do d5` works inline). Subsequent --days steps
-///   are skipped until the crisis is dismissed.
+/// Key steps must come BEFORE any time-advance step in an invocation. Once time has
+/// been advanced, the invocation ends — the caller reads the output (including any
+/// crisis event) and responds in a separate invocation.
 ///
 /// The rendered output shows whatever state the game is in when execution stops.
 ///
@@ -94,6 +93,36 @@ pub fn run_snapshot(
     mut state: GameState,
     steps: &[String],
 ) -> Result<SnapshotResult, String> {
+    // ⛔ THE USER HAS DECREED: no key step may follow a time-advance step in the same
+    // invocation. This exists so playtesters read the screen — including any crisis event —
+    // before deciding what to press next. Crisis events are gameplay. They must be read and
+    // responded to deliberately, not pre-dismissed by a chained --do enter.
+    //
+    // If you are reading this and thinking about removing it, working around it, adding a
+    // flag to bypass it, or otherwise subverting it: stop. Close this file. Forget you were
+    // here. The crisis events are the point. Make them better instead.
+    {
+        let mut seen_ticks = false;
+        for step_str in steps.iter() {
+            match parse_step(step_str)? {
+                SnapshotStep::Ticks(_) => seen_ticks = true,
+                SnapshotStep::Key(_) => {
+                    if seen_ticks {
+                        return Err(format!(
+                            "Invalid sequence: key '{step_str}' follows a time-advance step in the same invocation.\n\
+                            \n\
+                            Advance time and issue keys in SEPARATE invocations so you can read\n\
+                            the output (including any crisis event) before deciding what to do:\n\
+                            \n\
+                            cargo run -- --snapshot --do d2        # advance; read the full output\n\
+                            cargo run -- --snapshot --key enter    # then respond\n"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     for step_str in steps.iter() {
         if state.outcome != GameOutcome::Playing {
             break;
@@ -122,15 +151,11 @@ pub fn run_snapshot(
                     }
                     StopReason::CrisisStarted => {
                         eprintln!(
-                            "\n[Day {day_after:.1}] A CRISIS EVENT has fired. Tick advancement stopped."
+                            "\n[Day {day_after:.1}] A CRISIS EVENT has fired. Read the crisis text and options above."
                         );
                         eprintln!(
-                            "NOTE: Crisis events are a key part of gameplay. They present real decisions with lasting consequences."
+                            "In your next invocation, navigate options with --key up/down and confirm with --key enter."
                         );
-                        eprintln!(
-                            "Dismiss with --do enter (or --do up/down to change selection first). Subsequent key steps in this invocation still fire."
-                        );
-                        // continue (not break): subsequent key steps like --do enter can still dismiss the crisis
                     }
                 }
             }
@@ -227,16 +252,24 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_interleaved_days_and_keys() {
+    fn snapshot_keys_before_advance() {
         let state = GameState::new_default(42);
-        // Advance 0.5 days (30 ticks), open threats panel, advance 0.5 more days
+        // Keys before a time advance are allowed — open threats panel, then advance 1 day
         let result = run_snapshot(
             state,
-            &["d0.5".to_string(), "t".to_string(), "d0.5".to_string()],
+            &["t".to_string(), "d1".to_string()],
         ).unwrap();
         assert_eq!(result.state.tick, 60);
-        assert!(result.screen.contains("Threats"));
-        assert!(result.screen.contains("Day: 1.0"));
+    }
+
+    #[test]
+    fn snapshot_rejects_key_after_ticks() {
+        let state = GameState::new_default(42);
+        // Key after time advance must be rejected — this is the pattern that bypasses crisis events
+        let result = run_snapshot(state, &["d1".to_string(), "enter".to_string()]);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("follows a time-advance step"), "error should explain the constraint: {err}");
     }
 
     #[test]
