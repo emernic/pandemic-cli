@@ -3190,13 +3190,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
             let followup_fee = fee * 1.6;
-            let followup_team = (*team_size).clamp(2, 4);
             let followup_tick = state.tick + (10.0 * crate::engine::TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::FieldTeamDetainedAgain {
                 region_idx: *region_idx,
                 corp_idx: *corp_idx,
                 fee: followup_fee,
-                team_size: followup_team,
+                team_size: *team_size,
             }));
             format!("¥{fee:.0} paid. Team released. {corp_name} now knows what you'll pay in {region_name}.")
         }
@@ -3204,31 +3203,22 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Escalate through official channels. Cost is None, so we handle all
             // personnel effects here directly. Three outcomes, probabilistic.
             let roll = state.rng.r#gen::<f64>();
-            if roll < 0.15 {
-                // 15%: corp escalates in response. Commit staff to the process, team still lost.
-                state.crisis_operations.push(crate::state::CrisisOperation {
-                    label: "Official Channels Process".to_string(),
-                    personnel: *team_size,
-                    ticks_remaining: 7.0 * crate::engine::TICKS_PER_DAY,
-                });
-                "The corporation escalated in response. Staff are locked into the process and the team is still unreachable.".into()
+            let (days, msg): (f64, &str) = if roll < 0.15 {
+                // 15%: corp escalates in response. Staff still committed, team unreachable.
+                (7.0, "The corporation escalated in response. Staff are locked into the process and the team is still unreachable.")
             } else if roll < 0.45 {
-                // 30%: process moves faster than expected. Team flagged for expedited release.
-                state.crisis_operations.push(crate::state::CrisisOperation {
-                    label: "Official Channels Process".to_string(),
-                    personnel: *team_size,
-                    ticks_remaining: 4.0 * crate::engine::TICKS_PER_DAY,
-                });
-                "The process moved faster than expected. Team flagged for early release. No guarantees.".into()
+                // 30%: process moves faster than expected.
+                (4.0, "The process moved faster than expected. Team flagged for early release. No guarantees.")
             } else {
                 // 55%: nothing moves. Staff tied up for 7 days, process stalls.
-                state.crisis_operations.push(crate::state::CrisisOperation {
-                    label: "Official Channels Process".to_string(),
-                    personnel: *team_size,
-                    ticks_remaining: 7.0 * crate::engine::TICKS_PER_DAY,
-                });
-                "Escalation logged. No enforcement authority in the region. Process runs its course.".into()
-            }
+                (7.0, "Escalation logged. No enforcement authority in the region. Process runs its course.")
+            };
+            state.crisis_operations.push(crate::state::CrisisOperation {
+                label: "Official Channels Process".to_string(),
+                personnel: *team_size,
+                ticks_remaining: days * crate::engine::TICKS_PER_DAY,
+            });
+            msg.into()
         }
         (CrisisKind::FieldTeamDetained { team_size, .. }, _) => {
             // Write them off — permanent personnel loss.
