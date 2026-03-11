@@ -1879,7 +1879,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
         }
         CrisisKind::BoardDemand { severity } => {
-            let satisfaction = crate::engine::corporations::board_satisfaction(state);
+            let satisfaction = state.board_satisfaction();
             let placate_cost = if *severity >= 1 {
                 scaled_cost(state, 0.25, 200.0, 1000.0)
             } else {
