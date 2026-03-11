@@ -414,7 +414,8 @@ fn render_projects(state: &GameState, track: ResearchTrack) -> (String, Vec<Line
                 || state.available_applied_projects()
                     .iter()
                     .any(|k| matches!(k, ResearchKind::DevelopMedicine { .. }));
-            if !has_any_develop {
+            let any_identified = state.diseases.iter().any(|d| d.knowledge > 0.0);
+            if !has_any_develop && !any_identified {
                 lines.push(Line::from(""));
                 lines.push(Line::from(Span::styled(
                     "  No diseases identified yet.",
