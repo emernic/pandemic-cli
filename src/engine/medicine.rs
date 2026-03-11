@@ -197,7 +197,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
 
     let is_tested = state.medicines[med_idx].tested_against.contains(&disease_idx);
 
-    let adverse = match &shipment.target {
+    let (adverse, people_treated, people_protected) = match &shipment.target {
         DeployTarget::Vaccinate { .. } => {
             let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
             // Cap at effective doses (after infrastructure losses)
@@ -210,7 +210,9 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
             apply_immune_and_deaths(inf, actual, adverse_deaths);
             state.regions[reg_idx].dead += adverse_deaths;
             build_resistance(state, med_idx, disease_idx, false);
-            adverse
+            let net_protected = (actual - adverse_deaths).max(0.0);
+            state.medicines[med_idx].total_protected += net_protected;
+            (adverse, 0.0, net_protected)
         }
         DeployTarget::Treat { .. } => {
             let actual = state.medicines[med_idx]
@@ -223,7 +225,9 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
             apply_immune_and_deaths(inf, actual, adverse_deaths);
             state.regions[reg_idx].dead += adverse_deaths;
             build_resistance(state, med_idx, disease_idx, true);
-            adverse
+            let net_treated = (actual - adverse_deaths).max(0.0);
+            state.medicines[med_idx].total_treated += net_treated;
+            (adverse, net_treated, 0.0)
         }
     };
 
@@ -233,6 +237,8 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
         doses: shipment.doses,
         adverse,
         efficiency,
+        people_treated,
+        people_protected,
     });
 }
 

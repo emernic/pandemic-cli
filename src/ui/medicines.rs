@@ -175,6 +175,28 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
 
             lines.push(Line::from(detail_spans));
 
+            // Show cumulative impact if any deployments have happened
+            let total_impact = med.total_treated + med.total_protected;
+            if total_impact > 0.0 {
+                let mut impact_spans = vec![Span::raw("    ")];
+                if med.total_treated > 0.0 {
+                    impact_spans.push(Span::styled(
+                        format!("{} treated", format_number(med.total_treated)),
+                        Style::default().fg(Color::Green),
+                    ));
+                }
+                if med.total_treated > 0.0 && med.total_protected > 0.0 {
+                    impact_spans.push(Span::raw("  "));
+                }
+                if med.total_protected > 0.0 {
+                    impact_spans.push(Span::styled(
+                        format!("{} protected", format_number(med.total_protected)),
+                        Style::default().fg(Color::Green),
+                    ));
+                }
+                lines.push(Line::from(impact_spans));
+            }
+
             // Show manufacture hint when doses are depleted
             if med.doses <= 0.0 {
                 let is_manufacturing = state.applied_research.as_ref()
