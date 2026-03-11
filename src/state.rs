@@ -2735,6 +2735,12 @@ pub struct Medicine {
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
+    /// Cumulative people treated (moved from infected to recovered) across all deployments.
+    #[serde(default)]
+    pub total_treated: f64,
+    /// Cumulative people protected (vaccinated) across all deployments.
+    #[serde(default)]
+    pub total_protected: f64,
 }
 
 //// A medicine deployment in transit to a region. Created when the player
@@ -2795,6 +2801,8 @@ impl Medicine {
                     tested_against: vec![],
                     strain_generations: vec![],
                     deployed_count: 0,
+                    total_treated: 0.0,
+                    total_protected: 0.0,
                 }];
             }
         };
@@ -2813,6 +2821,8 @@ impl Medicine {
                 tested_against: vec![],
                 strain_generations: vec![],
                 deployed_count: 0,
+                total_treated: 0.0,
+                total_protected: 0.0,
             }
         }).collect()
     }
@@ -3521,6 +3531,10 @@ pub enum GameEvent {
         doses: f64,
         adverse: bool,
         efficiency: f64,
+        /// People actually treated (moved from infected to immune). 0 if vaccination.
+        people_treated: f64,
+        /// People actually protected (vaccinated from susceptible pool). 0 if treatment.
+        people_protected: f64,
     },
     /// A disease has adapted to containment measures — quarantine/travel ban less effective.
     ContainmentAdaptation {
@@ -4845,6 +4859,8 @@ impl GameState {
             tested_against: all_disease_indices.clone(),
             strain_generations: vec![],
             deployed_count: 0,
+            total_treated: 0.0,
+            total_protected: 0.0,
         });
 
         let num_diseases = diseases.len();
