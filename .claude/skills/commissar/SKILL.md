@@ -48,14 +48,13 @@ Then read `/flavor-text`. Know the difference between clinical precision and NGO
 
 ### 4. Read the user's direct intent
 
-Use a sub-agent to pull issues that contain the user's own words. Direct user input appears in many forms: `USER:` annotations, "from the user", bold **user** references, or just context that makes clear the words came from the human and not an agent. Run both searches and read everything:
+Run this directly (no sub-agent):
 
 ```bash
-gh issue list --limit 200 --state all --search "USER:" --json number,title,body,state,closedAt
 gh issue list --limit 200 --state all --search "user" --json number,title,body,state,closedAt
 ```
 
-Read them all. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
+Read everything. The user cannot be in every session. You are their messenger. Internalize what they pushed back on, what they explicitly wanted, what direction they are steering.
 
 ### 5. Review recent development
 
@@ -67,7 +66,11 @@ git log --oneline -50 origin/master
 
 Then check recently closed issues and skim recent PRs. You are looking for two things:
 
-**Flag for investigation:** Commits that directly contradict the user's explicit or implicit direction. Identify at least 4 commits worth examining. For each, use an Explore agent to read the PR, the relevant issues, and the code. Form a view.
+**Flag for investigation:** Commits that directly contradict the user's explicit or implicit direction. Identify at least 4 commits worth examining. For each, use an Explore agent to read the PR, the relevant issues, and the code. Every agent prompt you write must begin with:
+
+> **You are a raw information gatherer. Do not make thematic assessments, quality judgments, or say whether anything is "good" or "excellent." Your only job is to return exact text: what does the player-facing copy say, what did the PR change, what are the exact strings in the code. No opinions. The commissar will evaluate.**
+
+You are the commissar. You make the call.
 
 A worked example of what you are looking for: Claude's default instinct is to name things "THE ARK PROTOCOL" — dramatic, capitalized, vaguely sci-fi, the kind of thing that sounds cool to an AI that has ingested ten thousand airport thrillers. Every human reader immediately clocks it as slop. The fix was "Emergency Consolidation" — clinical, bureaucratic, the name an actual institution would use. Same concept, completely different register. Read `/flavor-text`. The distinction between GOOD and BAD in those examples is exactly this distinction. "Global health infrastructure has collapsed. Final count: 2.3 billion dead." vs. "humanity's hubris was its undoing." One trusts the player. One performs emotion at them. When you see "THE ARK PROTOCOL" — or anything that pattern-matches to it — that is a correction waiting to happen.
 
