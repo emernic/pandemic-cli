@@ -1968,9 +1968,9 @@ impl PathogenType {
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: very short incubation (0.5–1.5 days), fast spreader.
-            // Infectivity and cross-region bumped ~50% vs pre-SEIR to compensate
+            // Infectivity ~80% and cross-region ~2x vs pre-SEIR to compensate
             // for exposed compartment pipeline delay (SEIR reduces effective
-            // growth rate ~35% vs SIR at small population fractions).
+            // growth rate at small population fractions).
             PathogenType::RnaVirus => DiseaseStatRanges {
                 infectivity: (0.009, 0.013),
                 lethality: (0.00040, 0.00070),
