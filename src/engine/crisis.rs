@@ -626,7 +626,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "−7% POL. 50% chance of infodemic.".into(),
+                    description: "−7% POL. Leak circulates uncontrolled.".into(),
                     cost: None,
                 },
                 ],
@@ -2186,7 +2186,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     .unwrap_or(0);
                 let followup_tick = state.tick + (6.0 * TICKS_PER_DAY) as u64;
                 state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
-                "No comment. Infodemic building.".into()
+                "No comment. Leak spreading.".into()
             } else {
                 "No comment. Leak faded.".into()
             }
