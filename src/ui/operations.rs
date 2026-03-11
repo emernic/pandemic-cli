@@ -28,26 +28,26 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(OpsUiState::SelectSupplyTarget) => render_select_region(f, area, state, "SUPPLY REINFORCEMENT", Some(InfraDetail::SupplyLines)),
         Some(OpsUiState::SelectCivilOrderTarget) => render_select_region(f, area, state, "CIVIL STABILIZATION", Some(InfraDetail::CivilOrder)),
         Some(OpsUiState::ConfirmDecree { decree_idx }) => {
-            let (title, lines, selected_line) = render_confirm_decree(state, *decree_idx);
-            render_panel(f, area, &title, lines, selected_line);
+            let (title, lines, _) = render_confirm_decree(state, *decree_idx);
+            render_panel(f, area, &title, lines);
         }
         Some(OpsUiState::SelectSacrificeRegion) => {
-            let (title, lines, selected_line) = render_region_select(
+            let (title, lines, _) = render_region_select(
                 state,
                 "SACRIFICE REGION",
                 "Sacrifice",
                 "Choose a region to abandon. Its population is written off; income from remaining regions increases permanently.",
             );
-            render_panel(f, area, &title, lines, selected_line);
+            render_panel(f, area, &title, lines);
         }
         Some(OpsUiState::SelectFortifyRegion) => {
-            let (title, lines, selected_line) = render_region_select(
+            let (title, lines, _) = render_region_select(
                 state,
                 "FORTIFY REGION",
                 "Fortify",
                 "Choose a region to restore to full infrastructure. All other regions suffer a permanent infrastructure penalty.",
             );
-            render_panel(f, area, &title, lines, selected_line);
+            render_panel(f, area, &title, lines);
         }
     }
 }
@@ -302,7 +302,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_panel(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line>, _selected_line: Option<usize>) {
+fn render_panel(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line>) {
     let block = Block::default()
         .title(title.to_string())
         .borders(Borders::ALL)
