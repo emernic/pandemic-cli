@@ -2737,7 +2737,7 @@ pub struct Medicine {
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
-    /// Cumulative people treated (moved from infected to recovered) across all deployments.
+    /// Cumulative people treated (moved from infected to immune) across all deployments.
     #[serde(default)]
     pub total_treated: f64,
     /// Cumulative people protected (vaccinated) across all deployments.
