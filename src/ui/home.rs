@@ -396,12 +396,12 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
-    // ── Authority breakdown ──
+    // ── Board Approval breakdown ──
     {
-        let pol = state.resources.board_approval;
+        let approval = state.resources.board_approval;
         let target = state.approval_target();
         // Net drift per day: (target - current) * 50%/day drift rate
-        let drift_per_day = (target - pol) * 0.50;
+        let drift_per_day = (target - approval) * 0.50;
 
         // Decompose target into its constituent parts (single source of truth in state.rs)
         let (board_component, patron_component, severity_floor) = state.approval_target_components();
@@ -410,7 +410,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         lines.push(Line::from(Span::styled("  ── BOARD APPROVAL ──", cyan)));
         lines.push(Line::from(""));
 
-        let pol_color = if pol >= 0.5 { Color::Green } else if pol >= 0.2 { Color::Yellow } else { Color::Red };
+        let approval_color = if approval >= 0.5 { Color::Green } else if approval >= 0.2 { Color::Yellow } else { Color::Red };
         let (drift_str, drift_color) = if drift_per_day > 0.005 {
             (format!("+{:.1}%/day", drift_per_day * 100.0), Color::Green)
         } else if drift_per_day < -0.005 {
@@ -421,7 +421,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
         lines.push(Line::from(vec![
             Span::styled("  Current:  ", dim),
-            Span::styled(format!("{:.0}%", pol * 100.0), Style::default().fg(pol_color)),
+            Span::styled(format!("{:.0}%", approval * 100.0), Style::default().fg(approval_color)),
             Span::styled("   Target: ", dim),
             Span::styled(format!("{:.0}%", target * 100.0), Style::default().fg(Color::White)),
             Span::styled("   Drift: ", dim),
