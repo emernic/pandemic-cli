@@ -562,7 +562,7 @@ pub const POLICY_IDX_NUCLEAR: usize = 9;
 /// (Basic / Med / Mass Screening), all backed by the single `screening` enum field.
 pub const POLICY_IDX_SCREENING_BASE: usize = 5;
 
-/// Minimum Political Power (0.0–1.0) required to activate each policy.
+/// Minimum Authority (0.0–1.0) required to activate each policy.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_POL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.15, // Travel Ban — basic containment, available early
@@ -1169,9 +1169,9 @@ fn format_large_number(n: f64) -> String {
 pub struct Resources {
     pub funding: f64,
     pub personnel: u32,
-    /// Political Power (0.0–1.0). Represents global willingness to act.
-    /// Drifts toward a severity-based target (~30%/day). Crisis choices modify
-    /// this directly, so POL hits take real time to recover from.
+    /// Authority (0.0–1.0). Represents operational mandate from board/patrons.
+    /// Drifts toward a board/patron-driven target (~50%/day). Crisis choices modify
+    /// this directly, so AUTH hits take real time to recover from.
     #[serde(default)]
     pub political_power: f64,
     /// Fractional accumulator for POL-based personnel gains.

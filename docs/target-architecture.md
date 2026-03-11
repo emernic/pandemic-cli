@@ -75,7 +75,7 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 5. `medicine::try_auto_deploy()`
 6. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
 7. Resource income (funding), personnel upkeep, attrition
-8. Political power drift, POL-based personnel gain
+8. Authority drift, AUTH-based personnel gain
 9. Disease emergence (mid-game new threats)
 10. Disease detection, threat escalation alerts
 11. Scheduled follow-up crises + `crisis::generate_crisis()`

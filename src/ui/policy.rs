@@ -246,7 +246,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Style::default().fg(Color::DarkGray)
             };
             let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
-            // Nuclear uses ☢ icon to match the 🔒 icon pattern for POL-locked items.
+            // Nuclear uses ☢ icon to match the 🔒 icon pattern for AUTH-locked items.
             let icon = if *policy_idx == POLICY_IDX_NUCLEAR { "☢ " } else { "  " };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
@@ -283,7 +283,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         let can_afford = can_afford_personnel && can_afford_funding;
 
         if !*active && !pol_unlocked {
-            // Locked by POL — show as unavailable
+            // Locked by AUTH — show as unavailable
             let threshold = POLICY_POL_THRESHOLDS[*policy_idx];
             let name_style = if selected {
                 Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
@@ -295,11 +295,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
                 Span::styled(format!("{}", name), name_style),
                 Span::styled(
-                    format!("  (POL {:.0}%)", threshold * 100.0),
+                    format!("  (AUTH {:.0}%)", threshold * 100.0),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            // No blank line after POL-locked items to save panel space
+            // No blank line after AUTH-locked items to save panel space
             continue;
         }
 
@@ -460,7 +460,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             let (bargain_name, cost_desc, loyalty_gain) = match gov.personality {
                 GovernorPersonality::Buffoon => (
                     "Public Praise",
-                    format!("-{:.0}% POL", BARGAIN_BUFFOON_POL_COST * 100.0),
+                    format!("-{:.0}% AUTH", BARGAIN_BUFFOON_POL_COST * 100.0),
                     BARGAIN_LOYALTY_GAIN,
                 ),
                 GovernorPersonality::Blowhard => (

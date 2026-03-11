@@ -35,15 +35,15 @@ fn game_over_defeat() {
     assert!(output.contains("Summary"), "missing summary section");
 }
 
-/// Smoke test: dashboard POL section renders correctly.
+/// Smoke test: dashboard Authority section renders correctly.
 #[test]
 fn dashboard_pol_breakdown() {
     let mut state = GameState::new_default(42);
     state.ui.home_splash_done = true;
     let output = render_to_string(&state);
-    assert!(output.contains("POLITICAL POWER"), "missing POL section header");
-    assert!(output.contains("Current:"), "missing current POL");
-    assert!(output.contains("Target:"), "missing target POL");
+    assert!(output.contains("AUTHORITY"), "missing Authority section header");
+    assert!(output.contains("Current:"), "missing current AUTH");
+    assert!(output.contains("Target:"), "missing target AUTH");
     assert!(output.contains("Board:"), "missing board satisfaction breakdown");
 }
 
