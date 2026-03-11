@@ -94,7 +94,7 @@ Do these in order. Stop when you have done enough.
 
 **Fix bad text directly** only if the change is very small (a word, a title, a single line) and the problem is obvious. Do not file an issue to replace two words — replace the two words. But do not rewrite a scene, overhaul a system, or touch anything structural yourself. That is workers' work.
 
-**Edit documents directly** if you see something wrong in CLAUDE.md, the commissar skill, flavor-text, DO_NOT_READ, or any document that is read frequently and shapes how workers build the game. Short, high-density corrections to these documents are exactly what you should handle directly — they multiply across every future session.
+**Edit documents directly** if you see something wrong in CLAUDE.md, the commissar skill, flavor-text, or any document that is read frequently and shapes how workers build the game. Short, high-density corrections to these documents are exactly what you should handle directly — they multiply across every future session. **DO NOT edit DO_NOT_READ.md** — that document is the user's, not yours.
 
 **Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Issues must be structural (mechanics, systems, data) not thematic (flavor, commentary, "make this feel more like X"). Never explain why in terms of themes. State what the structure should do and let the worker figure out that it needs to do it.
 

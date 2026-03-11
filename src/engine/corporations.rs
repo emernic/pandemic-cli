@@ -18,13 +18,13 @@ const REGION_CORPS: [[(CorporationSector, &str); 3]; 6] = [
     [
         (CorporationSector::Mining, "Crucible Materials"),
         (CorporationSector::Automation, "Volant Industries"),
-        (CorporationSector::Energy, "Arc Meridian"),
+        (CorporationSector::Energy, "Corriente"),
     ],
     // Europe: logistics hub, biotech, automation
     [
         (CorporationSector::Logistics, "Corridor Group"),
         (CorporationSector::Biotech, "Caliber Bioscience"),
-        (CorporationSector::Automation, "Forge Collective"),
+        (CorporationSector::Automation, "Irongate Manufacturing"),
     ],
     // Africa: mining, logistics, data infrastructure
     [
@@ -34,14 +34,14 @@ const REGION_CORPS: [[(CorporationSector, &str); 3]; 6] = [
     ],
     // Asia: automation powerhouse, energy, mining
     [
-        (CorporationSector::Automation, "Atlas Dynamics"),
+        (CorporationSector::Automation, "Motive Systems"),
         (CorporationSector::Energy, "Volta Systems"),
-        (CorporationSector::Mining, "Pangaea Mining"),
+        (CorporationSector::Mining, "Tarim Extraction"),
     ],
     // Oceania: biotech, data, mining (small but specialized)
     [
         (CorporationSector::Biotech, "Optera"),
-        (CorporationSector::DataInfra, "Nexus Core"),
+        (CorporationSector::DataInfra, "Conduit Systems"),
         (CorporationSector::Mining, "Deep Vein Corp"),
     ],
 ];
