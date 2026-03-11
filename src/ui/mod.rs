@@ -529,21 +529,22 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
 }
 
 /// Simple word wrap: split a string into lines that fit within max_width.
+/// Respects explicit newlines in the input — each `\n` forces a line break.
 fn textwrap(s: &str, max_width: usize) -> Vec<String> {
     let mut lines = Vec::new();
-    let mut current = String::new();
-    for word in s.split_whitespace() {
-        if current.is_empty() {
-            current = word.to_string();
-        } else if current.len() + 1 + word.len() > max_width {
-            lines.push(current);
-            current = word.to_string();
-        } else {
-            current.push(' ');
-            current.push_str(word);
+    for paragraph in s.split('\n') {
+        let mut current = String::new();
+        for word in paragraph.split_whitespace() {
+            if current.is_empty() {
+                current = word.to_string();
+            } else if current.len() + 1 + word.len() > max_width {
+                lines.push(current);
+                current = word.to_string();
+            } else {
+                current.push(' ');
+                current.push_str(word);
+            }
         }
-    }
-    if !current.is_empty() {
         lines.push(current);
     }
     lines

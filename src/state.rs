@@ -595,16 +595,16 @@ pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 /// Policy display order — grouped by function, cheapest/earliest to most
 /// expensive/latest within each group:
 ///
-///   Infrastructure: Intel Station (11), Field Hospital (10)
 ///   Detection:      Basic Screening (5), Antigen (6), Mass Rapid (7)
-///   Containment:    Border Controls (3), Travel Ban (0), Quarantine (1)
-///   Medical:        Water Sanitation (4), Hospital Surge (2)
-///   Extreme:        Nuclear Option (9), Martial Law (8)
+///   Containment:    Border Controls (3), Travel Ban (0), Quarantine (1), Water Sanitation (4)
+///   Medical:        Hospital Surge (2)
+///   Infrastructure: Intel Station (11), Field Hospital (10)
+///   Other:          Nuclear Option (9), Martial Law (8)
 ///
 /// This is the canonical display ordering — both the policy renderer and the confirm
 /// handler use this to map display position → policy_idx.
 pub fn policy_display_order() -> [usize; POLICY_COUNT] {
-    [11, 10, 5, 6, 7, 3, 0, 1, 4, 2, 9, 8]
+    [5, 6, 7, 3, 0, 1, 4, 2, 11, 10, 9, 8]
 }
 
 /// Short display name for each policy by index. Canonical source — used by

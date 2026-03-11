@@ -1430,7 +1430,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: format!("{}: Terms", short_name),
                 description: format!(
-                    "{} has authorized {}. Condition: {}. Income: +¥{:.0}/day.\n\"{}\"",
+                    "{} has authorized {}.\nCondition: {}.\nIncome: +¥{:.0}/day.\n\"{}\"",
                     patron_name, contract_name, condition_desc, income_day, source,
                 ),
                 options: vec![
