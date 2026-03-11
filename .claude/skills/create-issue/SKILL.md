@@ -1,6 +1,6 @@
 ---
 name: create-issue
-description: Write up a well-structured GitHub issue based on something you experienced during this session
+description: "**MANDATORY for ALL issue filing.** Use this skill ANY TIME you are creating one or more GitHub issues — bugs, enhancements, investigate issues, design tasks, chores — regardless of whether you were asked to file them or noticed them yourself. Do NOT call `gh issue create` directly. Skipping this skill means issues will be missing labels, have wrong priorities, skip duplicate checks, and never get seen. TRIGGER on: 'file an issue', 'create an issue', 'open a ticket', 'log this', 'note this for later', noticing a bug/gap/problem worth tracking, or any other situation where you would otherwise reach for `gh issue create`."
 disable-model-invocation: false
 ---
 
