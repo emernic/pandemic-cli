@@ -1406,12 +1406,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let contract_name = offer.map(|c| c.name.as_str()).unwrap_or("Contract");
 
             CrisisEvent {
-                title: format!("{}: Proposal", short_name),
+                title: format!("{}: Terms", short_name),
                 description: format!(
-                    "{} is offering a funding contract: {}. \
-                     Income: +¥{:.0}/day. \"{}\"\n\
-                     Condition: {}",
-                    patron_name, contract_name, income_day, source, condition_desc,
+                    "{} has authorized {}. Condition: {}. Income: +¥{:.0}/day.\n\"{}\"",
+                    patron_name, contract_name, condition_desc, income_day, source,
                 ),
                 options: vec![
                     CrisisOption {
@@ -1869,8 +1867,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 CrisisEvent {
                     title: "Board Ultimatum".into(),
                     description: format!(
-                        "{corp_name} has called an emergency board session. \
-                         Corporate revenues are at {:.0}% of baseline.",
+                        "Revenue is at {:.0}% of baseline. \
+                         {corp_name} has convened an emergency session. \
+                         Continued operations are under review.",
                         satisfaction * 100.0,
                     ),
                     options: vec![
@@ -1886,7 +1885,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "Board slashes your operating budget. Lose 15% political power.".into(),
+                            description: "They cut your budget. Lose 15% political power.".into(),
                             cost: None,
                         },
                     ],
@@ -1896,11 +1895,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             } else {
                 // Standard demand: board satisfaction below 0.5
                 CrisisEvent {
-                    title: "Board Concerns".into(),
+                    title: "Board Notice".into(),
                     description: format!(
-                        "{corp_name} is circulating a memo. \
-                         Corporate revenues are down and your containment policies are getting the blame. \
-                         Board satisfaction at {:.0}%.",
+                        "Revenue is at {:.0}% of baseline. \
+                         {corp_name} has cited your containment approach. \
+                         The board is watching.",
                         satisfaction * 100.0,
                     ),
                     options: vec![
@@ -1916,7 +1915,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Stand firm".into(),
-                            description: "Ignore the board. Lose 10% political power.".into(),
+                            description: "Refuse their terms. Lose 10% political power.".into(),
                             cost: None,
                         },
                     ],
