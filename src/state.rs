@@ -4488,12 +4488,9 @@ pub enum MapDirection {
 impl GameState {
     pub fn new_default(seed: u64) -> Self {
 
-        // Per-subsystem RNG streams, each seeded from the master seed XOR'd
-        // with a distinct constant. The emergence stream is also used for
-        // initial disease generation so the starting disease is stable.
-        // Emergence uses the raw seed so that the starting disease for a given
-        // seed stays the same as before the split. Other streams XOR with
-        // distinct constants to produce independent sequences.
+        // Per-subsystem RNG streams. Emergence uses the raw seed so the
+        // starting disease for a given seed is unchanged. Other streams use
+        // wrapping_add offsets to produce independent sequences.
         let rng_spread = ChaCha8Rng::seed_from_u64(seed.wrapping_add(1));
         let mut rng_emergence = ChaCha8Rng::seed_from_u64(seed);
         let rng_crisis = ChaCha8Rng::seed_from_u64(seed.wrapping_add(3));
