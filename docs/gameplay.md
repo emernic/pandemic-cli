@@ -138,7 +138,7 @@ The defeat screen shows duration, death toll, collapse timeline, pathogen report
 
 Every crisis event must read like a situation report. It states what happened. It does not editorialize about what it means or perform urgency at the player.
 
-**The world frame:** The N.W.H.O. in 2050 is not the WHO. Institutions are hollowed out. Your authority comes from keeping your board satisfied, not from managing public opinion. "The public" is not your primary constituency. The entities that matter are named individuals — patrons, governors, board members — and corporations with their own agendas. Write events as if the player already knows this.
+**The world frame:** The N.W.H.O. in 2050 is not the WHO. Institutions are hollowed out. Your authority comes from keeping your board satisfied, not from managing public opinion. "The public" is not your primary constituency. The entities that matter are named individuals (patrons, governors, board members) and corporations with their own agendas. Write events as if the player already knows this.
 
 **The register model:** PatronDemand events. "His lawyers are drafting a withdrawal." "My ships move or your funding stops." Named individuals. Blunt. No commentary. You state what the person did and what they want. The player decides. This is the right register for all crisis events, not just patron events.
 
