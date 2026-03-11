@@ -607,13 +607,6 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
             .map(|r| r.name.as_str())
             .unwrap_or("the last region");
         format!("  {} collapsed. No remaining operational sites.", region_name)
-    } else if state.mercy_rule {
-        let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
-        if collapsed >= 4 {
-            format!("  {collapsed} of {} regions lost. No viable research remains.", state.regions.len())
-        } else {
-            "  No funding, no research, no medicine. The pandemic runs its course.".to_string()
-        }
     } else {
         let collapsed = state.regions.iter().filter(|r| r.collapsed).count();
         format!("  All {collapsed} regions collapsed. Global health infrastructure has ceased to function.")

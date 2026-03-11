@@ -484,39 +484,6 @@ pub fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Mercy rule: if the player has had zero/near-zero agency for several
-    // consecutive days, end the game. Two triggers:
-    // 1. Classic zero agency (broke + no research + no doses) — 5 day timer
-    // 2. Civilization collapse (4+ regions gone + no active research) — 2 day timer
-    //    This catches "has money but nothing useful to do" when most of the
-    //    world has fallen and no research pipeline exists.
-    if new.outcome == GameOutcome::Playing {
-        let collapsed_count = new.regions.iter().filter(|r| r.collapsed).count();
-        let no_research = new.field_research.is_empty()
-            && new.applied_research.is_none()
-            && new.basic_research.is_none();
-        let near_total_collapse = collapsed_count >= 4 && no_research;
-
-        if new.has_zero_agency() || near_total_collapse {
-            new.zero_agency_ticks += 1;
-            let mercy_threshold = if near_total_collapse {
-                // Shorter timer when civilization has mostly collapsed
-                (2.0 * crate::state::TICKS_PER_DAY) as u64
-            } else {
-                crate::state::MERCY_RULE_TICKS
-            };
-            if new.zero_agency_ticks >= mercy_threshold {
-                new.outcome = GameOutcome::Lost;
-                new.mercy_rule = true;
-                new.active_crisis = None;
-                new.sim_state = SimState::Paused;
-                new.events.push(GameEvent::GameOver);
-            }
-        } else {
-            new.zero_agency_ticks = 0;
-        }
-    }
-
     // If all diseases burned out but regions survive, spawn a tougher replacement.
     // This prevents the "zombie state" where the game has no threats and no end.
     if new.outcome == GameOutcome::Playing
@@ -1420,8 +1387,6 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Override to extreme parameters so all regions collapse quickly.
         // Normal game parameters (R0 3-5) cause loss via multiple diseases over 20 days.
-        // Params must be extreme enough that all 6 regions collapse before the
-        // near_total_collapse mercy rule fires (2 days after 4+ regions have collapsed).
         for disease in &mut state.diseases {
             disease.infectivity = 0.5;
             disease.lethality = 0.1;
@@ -1812,55 +1777,6 @@ mod tests {
         let tick_before = state.tick;
         state = tick(&state);
         assert_eq!(state.tick, tick_before, "tick should not advance after game over");
-    }
-
-    /// Create a state where the player has zero agency: no funds, negative
-    /// net income (personnel upkeep exceeds income), no research, no doses.
-    fn setup_zero_agency() -> GameState {
-        let mut state = GameState::new_default(42);
-        state.resources.funding = 0.0;
-        // High personnel count = high upkeep that exceeds income
-        state.resources.personnel = 150;
-        state.medicines.iter_mut().for_each(|m| { m.doses = 0.0; m.unlocked = false; });
-        state.field_research.clear();
-        state.applied_research = None;
-        state.basic_research = None;
-        state.policies.iter_mut().for_each(|p| p.clear_all());
-        // Significant deaths to reduce income, but below collapse threshold
-        for region in &mut state.regions {
-            region.dead = region.population as f64 * 0.40;
-        }
-        state
-    }
-
-    #[test]
-    fn mercy_rule_triggers_after_zero_agency() {
-        let mut state = setup_zero_agency();
-        assert!(state.has_zero_agency(), "should detect zero agency");
-
-        // Simulate enough ticks
-        state.zero_agency_ticks = crate::state::MERCY_RULE_TICKS - 1;
-        state = tick(&state);
-        assert_eq!(state.outcome, GameOutcome::Lost, "should trigger mercy defeat");
-        assert!(state.mercy_rule, "should be mercy rule defeat");
-    }
-
-    #[test]
-    fn mercy_rule_resets_on_agency_recovery() {
-        let mut state = setup_zero_agency();
-        state.zero_agency_ticks = 100;
-
-        // Give the player enough funds — even with zero income, having funds
-        // means they could potentially start research or deploy something
-        state.resources.funding = 500.0;
-        // Also need some alive population so tick doesn't immediately defeat
-        // via all-collapsed check
-        for region in &mut state.regions {
-            region.dead = region.population as f64 * 0.1;
-        }
-        state = tick(&state);
-        assert_eq!(state.zero_agency_ticks, 0, "should reset on funding recovery");
-        assert_eq!(state.outcome, GameOutcome::Playing);
     }
 
     #[test]
@@ -4497,7 +4413,6 @@ mod tests {
         }
         state.resources.political_power = 0.95; // Start above the 0.90 cap
         state.tick = TICKS_PER_DAY as u64 * 100; // far into the game
-        // Keep research active to prevent mercy rule from ending the game early
         state.basic_research = Some(ResearchProject {
             kind: ResearchKind::BasicResearch { tech: BasicTech::TargetedDrugDesign },
             progress: 0.0,
