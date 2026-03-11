@@ -162,21 +162,24 @@ pub(crate) fn tick(state: &GameState) -> GameState {
 
         // Wave boost: if a disease spawned recently and we're past early game,
         // increase the chance of another spawn. Ramps up over mid-to-late game.
-        let wave_boost = if day >= 24.0 {
-            let most_recent_spawn = new.diseases.iter()
-                .map(|d| d.spawned_at_tick)
-                .max()
-                .unwrap_or(0);
+        // Also tracks which disease triggered the wave, for sequence homology.
+        let (wave_boost, wave_trigger_idx) = if day >= 24.0 {
+            let trigger = new.diseases.iter()
+                .enumerate()
+                .max_by_key(|(_, d)| d.spawned_at_tick);
+            let (trigger_idx, most_recent_spawn) = trigger
+                .map(|(i, d)| (Some(i), d.spawned_at_tick))
+                .unwrap_or((None, 0));
             let ticks_since = new.tick.saturating_sub(most_recent_spawn);
             if ticks_since > 0 && ticks_since < 200 {
                 // Ramp: 2.0 at day 24 → 4.0 at day 50+
                 let ramp = ((day - 24.0) / 26.0).clamp(0.0, 1.0);
-                2.0 + ramp * 2.0
+                (2.0 + ramp * 2.0, trigger_idx)
             } else {
-                0.0
+                (0.0, None)
             }
         } else {
-            0.0
+            (0.0, None)
         };
 
         let emergence_chance = EMERGENCE_CHANCE_PER_TICK * (1.0 + new.tech_pressure() + wave_boost);
@@ -184,7 +187,22 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             && new.diseases.len() < MAX_DISEASES
             && rng.r#gen::<f64>() < emergence_chance
         {
-            disease::spawn_disease_scaled(&mut new, &mut rng);
+            if let Some((new_disease_idx, _)) = disease::spawn_disease_scaled(&mut new, &mut rng) {
+                // Assign sequence group when this spawn was triggered by wave clustering.
+                // Diseases from the same wave share a group ID, visible via Rapid Sequencing.
+                if let Some(trigger_idx) = wave_trigger_idx {
+                    let group = match new.diseases[trigger_idx].sequence_group {
+                        Some(g) => g,
+                        None => {
+                            let g = new.next_sequence_group;
+                            new.next_sequence_group += 1;
+                            new.diseases[trigger_idx].sequence_group = Some(g);
+                            g
+                        }
+                    };
+                    new.diseases[new_disease_idx].sequence_group = Some(group);
+                }
+            }
         }
     }
 
@@ -2336,6 +2354,7 @@ mod tests {
             mechanism_resistance: vec![],
             containment_adaptation: 0.0,
             mutation_mode: crate::state::MutationMode::Normal,
+            sequence_group: None,
         }];
 
         let med = Medicine {
@@ -2384,6 +2403,7 @@ mod tests {
             mechanism_resistance: vec![],
             containment_adaptation: 0.0,
             mutation_mode: MutationMode::Locked,
+            sequence_group: None,
         };
         assert_eq!(disease.effective_mutation_rate(), 0.0,
             "Locked diseases must have zero mutation rate regardless of pathogen type");
@@ -2423,6 +2443,7 @@ mod tests {
             mechanism_resistance: vec![],
             containment_adaptation: 0.0,
             mutation_mode: MutationMode::DirectedLethality,
+            sequence_group: None,
         });
 
         // Run many mutation ticks so some mutations are guaranteed to occur
@@ -5884,6 +5905,60 @@ mod tests {
         let boosted_chance = crate::state::EMERGENCE_CHANCE_PER_TICK * (1.0 + state.tech_pressure() + wave_boost);
         assert!(boosted_chance > normal_chance * 2.0,
             "mid-game wave boost should at least double emergence chance");
+    }
+
+    #[test]
+    fn wave_diseases_share_sequence_group() {
+        use crate::state::TICKS_PER_DAY;
+
+        // Run the game long enough for wave clustering to fire and assign sequence groups.
+        // Wave clustering is active past day 24. We run 50 seeds and check that at least
+        // one produces two diseases sharing a sequence_group (wave correlation).
+        let mut found_shared_group = false;
+        for seed in 0..50u64 {
+            let mut state = GameState::new_default(seed);
+            // Advance to day 50 (well into wave clustering territory)
+            for _ in 0..(50 * TICKS_PER_DAY as u64) {
+                state = tick(&state);
+                if matches!(state.outcome, crate::state::GameOutcome::Lost) {
+                    break;
+                }
+            }
+            // Check if any two diseases share a sequence_group
+            let groups: Vec<u32> = state.diseases.iter()
+                .filter_map(|d| d.sequence_group)
+                .collect();
+            for &g in &groups {
+                if groups.iter().filter(|&&x| x == g).count() >= 2 {
+                    found_shared_group = true;
+                    break;
+                }
+            }
+            if found_shared_group { break; }
+        }
+        assert!(found_shared_group,
+            "At least one seed should produce wave diseases sharing a sequence_group by day 50");
+    }
+
+    #[test]
+    fn non_wave_diseases_have_no_sequence_group() {
+        use crate::state::TICKS_PER_DAY;
+
+        // Early game (before day 24) diseases should not have a sequence_group,
+        // since wave clustering is inactive before day 24.
+        let mut state = GameState::new_default(42);
+        // Advance to day 20 (before wave clustering kicks in at day 24)
+        for _ in 0..(20 * TICKS_PER_DAY as u64) {
+            state = tick(&state);
+            if matches!(state.outcome, crate::state::GameOutcome::Lost) {
+                break;
+            }
+        }
+        // All diseases spawned before day 24 should have no sequence group
+        for disease in &state.diseases {
+            assert!(disease.sequence_group.is_none(),
+                "Disease '{}' spawned before day 24 should have no sequence_group", disease.name);
+        }
     }
 
     #[test]

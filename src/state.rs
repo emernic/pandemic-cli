@@ -189,6 +189,10 @@ pub struct GameState {
     /// Tick when the last board demand crisis fired (cooldown tracking).
     #[serde(default)]
     pub last_board_demand_tick: u64,
+    /// Monotonically increasing counter for assigning sequence group IDs to
+    /// wave-coordinated diseases. Incremented each time a new group is created.
+    #[serde(default)]
+    pub next_sequence_group: u32,
     pub ui: UiState,
 }
 
@@ -2183,6 +2187,11 @@ pub struct Disease {
     /// pathogens may be locked (no mutation) or directed (one-way drift).
     #[serde(default)]
     pub mutation_mode: MutationMode,
+    /// Wave origin marker. Diseases that emerge in the same coordinated wave (post
+    /// day 24 wave clustering) share a sequence_group ID. None = naturally independent.
+    /// Visible in the Threats panel when Rapid Sequencing is unlocked and knowledge >= 0.66.
+    #[serde(default)]
+    pub sequence_group: Option<u32>,
 }
 
 /// Resistance level for a specific mechanism of action against a disease.
@@ -2299,6 +2308,7 @@ impl Disease {
             mechanism_resistance: vec![],
             containment_adaptation: 0.0,
             mutation_mode: MutationMode::Normal,
+            sequence_group: None,
         }
     }
 }
@@ -4643,6 +4653,7 @@ impl GameState {
             last_contract_offer_tick: 0,
             corporations: Vec::new(),
             last_board_demand_tick: 0,
+            next_sequence_group: 0,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
