@@ -1666,7 +1666,7 @@ pub struct Region {
     /// on screening level and screening_progress. Creates genuine fog of war.
     #[serde(default)]
     pub estimated_infected: f64,
-    /// Per-region systematic reporting bias, seeded from the game RNG at start.
+    /// Per-region systematic reporting bias, derived from the game seed at start.
     /// Range roughly [-0.3, 0.3]: positive = this region tends to over-report,
     /// negative = under-report. Suppressed at high screening levels (near zero at
     /// MassRapid). Makes unscreened data genuinely wrong, not just late.
