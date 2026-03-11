@@ -224,9 +224,15 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::ResourceDiversion { disease_idx: idx, share_reward, refuse_cost });
     }
 
-    // Exhaustion epidemic: requires hospital_surge active
+    // Exhaustion epidemic: fires when hospitals are overwhelmed by patient volume.
+    // Requires: hospitals running (not discouraged) AND significant infection load.
+    // Discourage Hospitalization prevents this — fewer patients means no staff burnout.
     let hospitals_active: Vec<usize> = state.policies.iter().enumerate()
-        .filter(|(_, p)| p.hospital_surge)
+        .filter(|(i, p)| {
+            !p.discourage_hosp
+                && !state.regions[*i].collapsed
+                && state.regions[*i].total_infected() > 10_000.0
+        })
         .map(|(i, _)| i)
         .collect();
     if !hospitals_active.is_empty() {
@@ -888,23 +894,23 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Healthcare Worker Collapse".into(),
                 description: format!(
-                    "Hospital staff in {} are collapsing from overwork. The hospital surge \
-                     program is unsustainable at this pace.",
+                    "Hospital staff in {} are collapsing from overwork. \
+                     Patient volume is unsustainable at this pace.",
                     region_name,
                 ),
                 options: vec![ CrisisOption {
-                    label: "Reduce shifts".into(),
-                    description: format!("Disable hospital surge in {}. Staff recover.", region_name),
+                    label: "Discourage hospitalization".into(),
+                    description: format!("Tell patients in {} to stay home. Staff recover.", region_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Push through (−{} personnel)", personnel_loss),
-                    description: "Maintain surge. Some workers quit permanently.".into(),
+                    description: "Keep hospitals open. Some workers quit permanently.".into(),
                     cost: None, // Personnel cost applied in resolve
                 },
                 CrisisOption {
                     label: "Ignore the warnings".into(),
-                    description: "Some staff leave on their own. Surge continues.".into(),
+                    description: "Some staff leave on their own. Hospitals stay open.".into(),
                     cost: None,
                 },
                 ],
@@ -1510,11 +1516,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     ),
                     "Co-sign a reinsurance arrangement. Buys time.".to_string(),
                 ),
-                // Margaret Aldridge — Aldridge Equipment Lease (require hospital surge)
+                // Margaret Aldridge — Aldridge Equipment Lease (forbid discourage hospitalization)
                 6 => (
                     format!(
-                        "{} is not seeing the surge orders she was promised. \
-                         Her warehouses are full of equipment nobody is buying.",
+                        "{} says you're shutting down her customers. \
+                         Hospitals need equipment. Don't discourage hospitalization.",
                         short_name,
                     ),
                     "Place a partial equipment order from her inventory. Buys time.".to_string(),
@@ -2490,13 +2496,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::ExhaustionEpidemic { region_idx, .. }, 0) => {
-            // Reduce shifts — disable hospital surge
+            // Discourage hospitalization — enable the policy to reduce hospital load
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
             if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.hospital_surge = false;
+                policy.discourage_hosp = true;
             }
-            format!("Hospital surge suspended in {}. Staff recovering.", region_name)
+            format!("Hospitalization discouraged in {}. Staff recovering.", region_name)
         }
         (CrisisKind::ExhaustionEpidemic { personnel_loss, .. }, 1) => {
             // Push through — lose personnel

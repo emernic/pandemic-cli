@@ -184,7 +184,7 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
                 state.policies[i].travel_ban,
                 state.policies[i].quarantine,
                 state.policies[i].border_controls,
-                state.policies[i].hospital_surge,
+                state.policies[i].discourage_hosp,
             ].iter().filter(|&&b| b).count() as f64;
             let strategic_value = pop_importance * 2.0 + infrastructure + active_policies;
 

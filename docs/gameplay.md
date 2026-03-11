@@ -56,7 +56,7 @@ Deployment options: **Treat** (reduce infected population) or **Vaccinate** (bui
 Regional policies, toggled per-region. Each costs funding and personnel:
 - **Travel Ban** — blocks 90% cross-region spread but halves regional income
 - **Quarantine** — halves infection rate within region
-- **Hospital Surge** — halves lethality, boosts medicine efficacy
+- **Discourage Hospitalization** — reduces spread 20% but +50% lethality (no hospital care)
 - **Border Controls** — lighter version of travel ban (50% cross-region reduction)
 - **Water Sanitation** — halves waterborne disease spread
 - **Disease Screening** — tiered (Basic → Antigen → Mass Rapid), affects disease detection visibility
@@ -108,7 +108,7 @@ Six regions: North America, Europe, Asia, South America, Africa, Oceania. Connec
 
 Each region tracks three infrastructure systems (0–100%):
 
-- **Healthcare Capacity** — degrades as infections grow. Below 50%: lethality doubles. Below 25%: lethality quadruples. Hospital Surge policy and field hospitals slow degradation.
+- **Healthcare Capacity** — degrades as infections grow. Below 50%: lethality doubles. Below 25%: lethality quadruples. Baseline hospitals and field hospital buildings slow degradation. Discourage Hospitalization removes baseline hospital recovery.
 - **Supply Lines** — degrades from deaths and travel bans. Below 50%: policy costs increase 50%. Below 25%: medicine delivery takes twice as long. At 0%: no medicine can be deployed.
 - **Civil Order** — degrades from deaths, restrictive policies, and healthcare collapse. At 0%: spread rate increases 50%.
 
