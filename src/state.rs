@@ -5215,9 +5215,12 @@ impl GameState {
             .map(|(i, region)| self.region_raw_income_pre_decree(i, region, total_pop))
             .collect();
         let pre_decree_total: f64 = per_region_raw.iter().sum();
-        // Compute decree multiplier so totals stay consistent with funding_income_rate()
+        // Compute decree multiplier for regional income only. Subtract contract income
+        // (which is global, not regional) so contracts aren't distributed to regions.
+        // Contracts are displayed separately in the UI income breakdown.
+        let regional_income_after_decrees = self.funding_income_rate() - self.contract_income_rate();
         let decree_factor = if pre_decree_total > 0.0 {
-            self.funding_income_rate() / pre_decree_total
+            regional_income_after_decrees / pre_decree_total
         } else {
             1.0
         };
@@ -6428,5 +6431,39 @@ mod tests {
         let as_pos = all.iter().position(|t| *t == BasicTech::AutomatedSynthesis).unwrap();
         let ds_pos = all.iter().position(|t| *t == BasicTech::DistributedStorage).unwrap();
         assert!(ds_pos > as_pos, "DistributedStorage should appear after AutomatedSynthesis");
+    }
+
+    #[test]
+    fn per_region_income_breakdown_excludes_contract_income() {
+        // Contract income is global, not regional. It must NOT be distributed into
+        // per-region breakdown numbers (which are displayed alongside a separate Contracts line in UI).
+        let mut state = GameState::new_default(42);
+        let regional_sum_without_contract: f64 = state.per_region_income_breakdown()
+            .iter().map(|(_, v)| v).sum();
+
+        // Add a contract with known income
+        let contract_income_per_tick = 10.0;
+        state.contracts.push(FundingContract {
+            name: "Test Contract".to_string(),
+            patron: "Test Patron".to_string(),
+            income: contract_income_per_tick,
+            condition: FundingCondition::NoCollapse,
+            source: "test".to_string(),
+            template_id: 99,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+        });
+
+        let regional_sum_with_contract: f64 = state.per_region_income_breakdown()
+            .iter().map(|(_, v)| v).sum();
+
+        // Adding a contract must not change per-region totals
+        assert!(
+            (regional_sum_with_contract - regional_sum_without_contract).abs() < 0.01,
+            "contract income should not be distributed into per-region breakdown: \
+             without contract={regional_sum_without_contract:.2}, \
+             with contract={regional_sum_with_contract:.2}"
+        );
     }
 }
