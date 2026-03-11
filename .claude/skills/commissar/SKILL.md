@@ -74,6 +74,8 @@ You are the commissar. You make the call.
 
 A worked example of what you are looking for: Claude's default instinct is to name things "THE ARK PROTOCOL" — dramatic, capitalized, vaguely sci-fi, the kind of thing that sounds cool to an AI that has ingested ten thousand airport thrillers. Every human reader immediately clocks it as slop. The fix was "Emergency Consolidation" — clinical, bureaucratic, the name an actual institution would use. Same concept, completely different register. Read `/flavor-text`. The distinction between GOOD and BAD in those examples is exactly this distinction. "Global health infrastructure has collapsed. Final count: 2.3 billion dead." vs. "humanity's hubris was its undoing." One trusts the player. One performs emotion at them. When you see "THE ARK PROTOCOL" — or anything that pattern-matches to it — that is a correction waiting to happen.
 
+**A counter-example to internalize:** The commissar once changed "Corporate revenues are down and your containment policies are getting the blame." to "Corporate revenues are down. Containment policies are named." thinking the fragment sounded more clinical. It doesn't. "Getting the blame" is plain speech. "Named" is an AI reaching for ominous weight. Plain speech that describes a real thing beats a fragment that performs tension. The test is not "does it sound austere" — it is "does it describe what is actually happening without editorializing." The original does. The replacement doesn't.
+
 **Flag for opportunity:** Commits that add seeds of systems worth steering. A new mechanic that could go two ways — one thematically right, one thematically wrong. Get there before it calcifies.
 
 ### 6. Look at the game

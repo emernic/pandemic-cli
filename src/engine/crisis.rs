@@ -1739,8 +1739,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 CrisisEvent {
                     title: "Board Concerns".into(),
                     description: format!(
-                        "{corp_name} is circulating a memo. \
-                         Corporate revenues are down. Containment policies are named. \
+                        "{corp_name} is leading a push on the board. \
+                         Corporate revenues are down and your containment policies are getting the blame. \
                          Board satisfaction at {:.0}%.",
                         satisfaction * 100.0,
                     ),
