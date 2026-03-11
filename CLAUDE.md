@@ -288,7 +288,7 @@ For extended playtesting (e.g., as a final check after a feature is complete), u
 **Always merge your own PRs. Do not ask for permission.** This is an early-stage project and it's far more important to get changes in than to risk leaving them behind. The user manages many agents and terminals and may not even see your request — so just take ownership and handle it.
 
 - When your tests pass and you're happy with the changes, merge immediately with `gh pr merge --squash`.
-- If you notice something else to improve after merging, that's fine — create a new branch, fix it, open a new PR, merge again. Iterate freely.
+- **One PR at a time.** Never create a second PR while your first is unmerged — the first merge changes master, causing rebase conflicts in the second. File investigate issues for anything you discover mid-task. Follow-up PRs after merging are fine (fresh branch from `origin/master`).
 - The only exception: if you're genuinely unsure whether a change is correct (e.g., it might break something you can't test), flag it. But this should be rare.
 
 ## Task Tracking

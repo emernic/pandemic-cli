@@ -140,11 +140,13 @@ AI playtest agents (Claude Code) **cannot see console colors**. They receive raw
 
 ## Step 4: Read and Understand the Issue
 
-Read the full issue body **AND all comments**:
+Read the full issue body **AND all comments** in a single call:
 
 ```bash
 gh issue view <number> --comments
 ```
+
+This gives you everything — title, body, labels, and all comments. **Do not call `gh issue view` again later in the session.** You already have the information; re-fetching it wastes API calls. If you need to check the issue state after merging (Step 8), that's the one exception.
 
 **⚠️ You MUST read all comments.** Comments often contain critical context, corrections, or direct instructions from the user that override or refine the issue description. The `--comments` flag shows everything — do not skip it.
 
@@ -212,7 +214,7 @@ Adapt to the task — small fixes need fewer steps, big changes need more. But a
 
 Once you're confident in your plan, implement it. Follow the project's conventions (see CLAUDE.md). Run tests with `cargo test` to make sure nothing is broken.
 
-**While you work, look around.** You are not a machine that processes one issue and exits. You are reading real code in a real codebase. If you see something broken, confusing, or architecturally wrong in the code you're touching or the code next to it — file an investigate issue. It takes 30 seconds. If you don't do it, no one will. See CLAUDE.md for the full ownership philosophy.
+**While you work, look around.** You are not a machine that processes one issue and exits. You are reading real code in a real codebase. If you see something broken, confusing, or architecturally wrong in the code you're touching or the code next to it — **file an investigate issue, don't fix it inline.** Fixing unrelated problems in the same session creates parallel PRs that conflict when merged. One issue, one branch, one PR. File the issue, stay focused, and let it be picked up in a separate session.
 
 ## Step 8: Completion
 
