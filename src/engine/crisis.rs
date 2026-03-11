@@ -2534,25 +2534,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
             format!("Stayed neutral. Both canceled ¥{:.0} in contracts.", neutral_loss)
         }
-        (CrisisKind::VaccineDispute { credit_gain, corp_a, corp_b, .. }, 1) => {
-            // Back corp_a — gain funding, lose POL, schedule retaliation from corp_b
+        (CrisisKind::VaccineDispute { credit_gain, corp_a, corp_b, .. }, option) => {
+            // Back one corp — gain funding, lose POL, schedule retaliation from the other
+            let (backed, retaliator) = if option == 1 { (corp_a, corp_b) } else { (corp_b, corp_a) };
             state.resources.funding += credit_gain;
             state.resources.political_power -= 0.15;
             let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
-            let retaliator = corp_b.clone();
-            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator }));
-            format!("Backed {}. ¥{:.0} deposited. {} is furious.", corp_a, credit_gain, corp_b)
-        }
-        (CrisisKind::VaccineDispute { credit_gain, corp_a, corp_b, .. }, _) => {
-            // Back corp_b — gain funding, lose POL, schedule retaliation from corp_a
-            state.resources.funding += credit_gain;
-            state.resources.political_power -= 0.15;
-            let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
-            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
-            let retaliator = corp_a.clone();
-            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator }));
-            format!("Backed {}. ¥{:.0} deposited. {} is furious.", corp_b, credit_gain, corp_a)
+            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator.clone() }));
+            format!("Backed {}. ¥{:.0} deposited. {} is furious.", backed, credit_gain, retaliator)
         }
 
         // --- Dark comedy event resolutions ---
