@@ -4929,44 +4929,43 @@ impl GameState {
     /// inter-region trade modifiers apply on top.
     ///
     /// Falls back to the pre-corporation formula if no corporations exist (backwards compat).
+    /// Per-region raw income before decree modifiers (per tick).
+    /// Handles both corporate (normal) and legacy (pre-corporation save) paths.
+    /// Collapsed regions return 0. Called by both `funding_income_rate()` and
+    /// `per_region_income_breakdown()` to avoid duplicating the formula.
+    fn region_raw_income_pre_decree(&self, i: usize, region: &Region, total_pop: f64) -> f64 {
+        if region.collapsed { return 0.0; }
+        if self.corporations.is_empty() {
+            // Fallback: old abstract formula (for saves without corporations)
+            let base = Self::region_base_income(region, total_pop);
+            let after_ban = base * self.region_travel_ban_factor(i, region);
+            let skim_factor = 1.0 - region.governor.income_skim;
+            let after_skim = after_ban * skim_factor;
+            let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+            let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+            domestic + trade
+        } else {
+            // Corporate income: sum tax contributions per region, apply skim + trade
+            let region_corp_tax: f64 = self.corporations.iter()
+                .filter(|c| c.region_idx == i)
+                .map(|c| c.tax_contribution())
+                .sum();
+            let skim_factor = 1.0 - region.governor.income_skim;
+            let after_skim = region_corp_tax * skim_factor;
+            let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
+            let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
+            domestic + trade
+        }
+    }
+
     pub fn funding_income_rate(&self) -> f64 {
         let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
         if total_pop <= 0.0 {
             return 0.0;
         }
-        let mut income = if self.corporations.is_empty() {
-            // Fallback: old abstract formula (for saves without corporations)
-            let mut inc = 0.0;
-            for (i, region) in self.regions.iter().enumerate() {
-                if region.collapsed { continue; }
-                let base = Self::region_base_income(region, total_pop);
-                let after_ban = base * self.region_travel_ban_factor(i, region);
-                let skim_factor = 1.0 - region.governor.income_skim;
-                let after_skim = after_ban * skim_factor;
-                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-                inc += domestic + trade;
-            }
-            inc
-        } else {
-            // Corporate income: sum tax contributions per region, apply skim + trade
-            let mut inc = 0.0;
-            for (i, region) in self.regions.iter().enumerate() {
-                if region.collapsed { continue; }
-                let region_corp_tax: f64 = self.corporations.iter()
-                    .filter(|c| c.region_idx == i)
-                    .map(|c| c.tax_contribution())
-                    .sum();
-                // Governor income skim
-                let skim_factor = 1.0 - region.governor.income_skim;
-                let after_skim = region_corp_tax * skim_factor;
-                // Domestic + trade split
-                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-                inc += domestic + trade;
-            }
-            inc
-        };
+        let mut income: f64 = self.regions.iter().enumerate()
+            .map(|(i, region)| self.region_raw_income_pre_decree(i, region, total_pop))
+            .sum();
         // Decree modifiers
         if self.enacted_decrees.sacrificed_region.is_some() {
             income *= SACRIFICE_INCOME_BONUS;
@@ -4992,44 +4991,19 @@ impl GameState {
         if total_pop <= 0.0 {
             return self.regions.iter().enumerate().map(|(i, _)| (i, 0.0)).collect();
         }
-        let mut result = Vec::with_capacity(self.regions.len());
-        let mut pre_decree_total = 0.0;
-        let mut per_region_raw: Vec<f64> = Vec::with_capacity(self.regions.len());
-        for (i, region) in self.regions.iter().enumerate() {
-            let raw = if region.collapsed {
-                0.0
-            } else if !self.corporations.is_empty() {
-                let region_corp_tax: f64 = self.corporations.iter()
-                    .filter(|c| c.region_idx == i)
-                    .map(|c| c.tax_contribution())
-                    .sum();
-                let skim_factor = 1.0 - region.governor.income_skim;
-                let after_skim = region_corp_tax * skim_factor;
-                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-                domestic + trade
-            } else {
-                let base = Self::region_base_income(region, total_pop);
-                let after_ban = base * self.region_travel_ban_factor(i, region);
-                let skim_factor = 1.0 - region.governor.income_skim;
-                let after_skim = after_ban * skim_factor;
-                let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-                let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-                domestic + trade
-            };
-            per_region_raw.push(raw);
-            pre_decree_total += raw;
-        }
+        let per_region_raw: Vec<f64> = self.regions.iter().enumerate()
+            .map(|(i, region)| self.region_raw_income_pre_decree(i, region, total_pop))
+            .collect();
+        let pre_decree_total: f64 = per_region_raw.iter().sum();
         // Compute decree multiplier so totals stay consistent with funding_income_rate()
         let decree_factor = if pre_decree_total > 0.0 {
             self.funding_income_rate() / pre_decree_total
         } else {
             1.0
         };
-        for (i, raw) in per_region_raw.into_iter().enumerate() {
-            result.push((i, raw * decree_factor * TICKS_PER_DAY));
-        }
-        result
+        per_region_raw.into_iter().enumerate()
+            .map(|(i, raw)| (i, raw * decree_factor * TICKS_PER_DAY))
+            .collect()
     }
 
     /// Trade income lost per tick due to neighbor health degradation.

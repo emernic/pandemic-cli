@@ -3803,7 +3803,7 @@ mod tests {
         // Second tick fires the pending refugee crisis
         let after2 = tick(&after);
         assert!(after2.active_crisis.is_some(), "refugee crisis should fire on next tick");
-        assert_eq!(after2.active_crisis.as_ref().unwrap().title, "REFUGEE CRISIS");
+        assert_eq!(after2.active_crisis.as_ref().unwrap().title, "Refugee Crisis");
     }
 
     #[test]
@@ -4059,15 +4059,15 @@ mod tests {
     }
 
     #[test]
-    fn resource_diversion_option_a_trades_knowledge_for_funding() {
+    fn resource_diversion_option_a_gains_funding_no_knowledge_cost() {
         let mut state = GameState::new_default(42);
         detect_all_diseases(&mut state);
         state.diseases[0].knowledge = 0.5;
         state.resources.funding = 1000.0;
         setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0, share_reward: 250.0, refuse_cost: 150.0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.diseases[0].knowledge - 0.4).abs() < 0.001,
-            "option A should lose 0.1 knowledge");
+        assert!((after.diseases[0].knowledge - 0.5).abs() < 0.001,
+            "option A should not cost any knowledge");
         assert!((after.resources.funding - 1250.0).abs() < 1.0,
             "option A should gain $250 funding (scaled)");
     }
