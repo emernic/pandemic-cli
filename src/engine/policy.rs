@@ -687,7 +687,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
     use crate::state::{
-        decree_display_name, decree_unlocked,
+        decree_display_name,
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY, TICKS_PER_DAY,
         SACRIFICE_INCOME_BONUS,
     };
@@ -702,7 +702,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
     }
 
     // Severity check: decrees require sufficiently dire conditions to justify them.
-    if !decree_unlocked(state, decree_idx) {
+    if !state.decree_unlocked(decree_idx) {
         return (Some(format!(
             "{} requires a more severe crisis before it can be enacted.",
             decree_display_name(decree_idx),

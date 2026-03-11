@@ -5444,7 +5444,7 @@ mod tests {
 
     #[test]
     fn decree_gated_by_crisis_severity() {
-        use crate::state::{decree_unlocked, RegionDiseaseState};
+        use crate::state::RegionDiseaseState;
 
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -5459,7 +5459,7 @@ mod tests {
         state.regions[0].infections = vec![RegionDiseaseState {
             disease_idx: 0, infected: 600_000.0, dead: 0.0, immune: 0.0,
         }];
-        assert!(decree_unlocked(&state, 0), "decree 0 should unlock at 500K+ infected");
+        assert!(state.decree_unlocked(0), "decree 0 should unlock at 500K+ infected");
         let (_, ok) = policy::enact_decree(&mut state, 0, None);
         assert!(ok, "decree should be available with sufficient severity");
         assert!(state.enacted_decrees.conscript_researchers);
