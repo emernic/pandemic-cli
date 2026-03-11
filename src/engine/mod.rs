@@ -4398,7 +4398,6 @@ mod tests {
 
     #[test]
     fn pol_target_capped_at_90_percent() {
-        use crate::state::{ResearchProject, ResearchKind, BasicTech};
         let mut state = GameState::new_default(42);
         // Massive deaths + infections to maximize severity.
         // Set both the per-disease attribution (inf.dead, used by total_dead_detected)
@@ -4413,12 +4412,6 @@ mod tests {
         }
         state.resources.political_power = 0.95; // Start above the 0.90 cap
         state.tick = TICKS_PER_DAY as u64 * 100; // far into the game
-        state.basic_research = Some(ResearchProject {
-            kind: ResearchKind::BasicResearch { tech: BasicTech::TargetedDrugDesign },
-            progress: 0.0,
-            required_ticks: 99999.0,
-            personnel_assigned: 1,
-        });
 
         // Run a few days — POL should drift DOWN toward the 0.90 cap
         let mut s = state;
