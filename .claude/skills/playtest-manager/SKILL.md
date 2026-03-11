@@ -97,6 +97,8 @@ When you prime a playtester with a specific focus ("look for idle personnel") or
 
 **When focus is appropriate:** State the area in one sentence: "Spend some time exploring [area]." Nothing more. Do NOT list things to look for, do NOT describe what a problem would look like, do NOT tell them what conclusions to draw.
 
+**Late-game focused sessions:** Add this line to the prompt: "Write your report no later than turn 45, even if you haven't reached the late game yet — use remaining turns to keep playing after writing." Agents given a late-game focus will naturally push as deep as possible and exhaust their budget without writing. The explicit turn ceiling prevents this.
+
 **Example focus areas** (not exhaustive — use your judgment based on recent changes and gaps):
 - Early game / onboarding
 - Research pipeline
