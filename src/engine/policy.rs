@@ -105,6 +105,13 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
         _ => false,
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy_idx) {
+        if !state.policy_research_met(policy_idx) {
+            let tech = GameState::policy_research_prerequisite(policy_idx).unwrap();
+            return (Some(format!(
+                "{} requires {} research",
+                policy_display_name(policy_idx), tech.name()
+            )), false);
+        }
         let threshold = state.effective_approval_threshold(region_idx, policy_idx);
         return (Some(format!(
             "{} requires {:.0}% Board Approval (current: {:.0}%)",
@@ -998,6 +1005,9 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.board_approval = 1.0;
         state.resources.funding = 10_000.0;
+        // Unlock research prerequisites for advanced screening tiers
+        state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
+        state.unlocked_techs.push(crate::state::BasicTech::PredictiveSurveillance);
         // Unlock all decrees by satisfying every severity threshold:
         // - 3 collapses → unlocks decrees 4,5
         // - 600K infected across 2 regions → unlocks decree 0 (500K+ infected)
@@ -1045,16 +1055,23 @@ mod tests {
         let (_, ok) = toggle_policy(&mut state, 0, 5);
         assert!(ok, "Basic screening should work at any approval level");
 
-        // Antigen requires 0.30 approval
+        // Antigen requires RapidSequencing research — blocked without it
+        state.resources.board_approval = 0.35;
+        let (msg, ok) = toggle_policy(&mut state, 0, 6);
+        assert!(!ok, "Antigen screening should be blocked without RapidSequencing");
+        assert!(msg.unwrap().contains("research"), "should mention research prerequisite");
+
+        // Unlock research but drop approval — blocked by approval
+        state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
         state.resources.board_approval = 0.10;
         let (msg, ok) = toggle_policy(&mut state, 0, 6);
         assert!(!ok, "Antigen screening should be blocked at 10% approval");
         assert!(msg.unwrap().contains("Board Approval"));
 
-        // With enough approval, Antigen should work
+        // With research AND enough approval, Antigen should work
         state.resources.board_approval = 0.35;
         let (_, ok) = toggle_policy(&mut state, 0, 6);
-        assert!(ok, "Antigen screening should work at 35% approval");
+        assert!(ok, "Antigen screening should work with research + 35% approval");
     }
 
     #[test]

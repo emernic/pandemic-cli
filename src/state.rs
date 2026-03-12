@@ -5280,9 +5280,29 @@ impl GameState {
         (base * (1.0 - severity * 0.5)).max(0.0)
     }
 
-    /// Whether a policy can be activated given current board approval and regional severity.
+    /// The BasicTech prerequisite for a policy, if any. Policies without a research
+    /// prerequisite return None. Both approval AND research must be satisfied.
+    pub fn policy_research_prerequisite(policy_idx: usize) -> Option<BasicTech> {
+        match policy_idx {
+            6 => Some(BasicTech::RapidSequencing),      // Antigen Screening
+            7 => Some(BasicTech::PredictiveSurveillance), // Mass Rapid Screening
+            _ => None,
+        }
+    }
+
+    /// Whether a policy's research prerequisite is satisfied (or has none).
+    pub fn policy_research_met(&self, policy_idx: usize) -> bool {
+        match Self::policy_research_prerequisite(policy_idx) {
+            Some(tech) => self.unlocked_techs.contains(&tech),
+            None => true,
+        }
+    }
+
+    /// Whether a policy can be activated given current board approval, regional severity,
+    /// and research prerequisites.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
-        self.resources.board_approval >= self.effective_approval_threshold(region_idx, policy_idx)
+        self.policy_research_met(policy_idx)
+            && self.resources.board_approval >= self.effective_approval_threshold(region_idx, policy_idx)
     }
 
     /// Whether a decree is unlocked based on current crisis severity.

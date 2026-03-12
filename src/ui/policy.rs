@@ -279,8 +279,22 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         let can_afford = can_afford_personnel && can_afford_funding;
 
         if !*active && !pol_unlocked {
-            // Locked by AUTH — show as unavailable
+            // Locked — show as unavailable with the reason
+            let research_met = state.policy_research_met(*policy_idx);
             let threshold = POLICY_APPROVAL_THRESHOLDS[*policy_idx];
+            let approval_met = state.resources.board_approval
+                >= state.effective_approval_threshold(region_idx, *policy_idx);
+
+            let lock_reason = if !research_met && !approval_met {
+                let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
+                format!("  (Requires {} + Board {:.0}%)", tech.name(), threshold * 100.0)
+            } else if !research_met {
+                let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
+                format!("  (Requires {})", tech.name())
+            } else {
+                format!("  (Board {:.0}%)", threshold * 100.0)
+            };
+
             let name_style = if selected {
                 Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
@@ -291,11 +305,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
                 Span::styled(format!("{}", name), name_style),
                 Span::styled(
-                    format!("  (Board {:.0}%)", threshold * 100.0),
+                    lock_reason,
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            // No blank line after AUTH-locked items to save panel space
+            // No blank line after locked items to save panel space
             continue;
         }
 
