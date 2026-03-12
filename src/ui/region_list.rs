@@ -847,15 +847,15 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(if corp.bankrupt { Color::DarkGray } else { Color::White }),
                     ),
                     Span::styled(
-                        ticker_str,
+                        format!("{:<6}", ticker_str),
                         Style::default().fg(price_color),
                     ),
                     Span::styled(
-                        change_str,
+                        format!("{:<8}", change_str),
                         Style::default().fg(change_color),
                     ),
                     Span::styled(
-                        format!(" {}", spark),
+                        spark,
                         Style::default().fg(Color::DarkGray),
                     ),
                     Span::styled(
