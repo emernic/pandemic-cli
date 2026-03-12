@@ -6509,7 +6509,7 @@ impl GameState {
                 }
             }
         }
-        // Train Personnel: always available as an applied project
+        // Train Personnel: always available (displayed in Lab section, uses Applied slot)
         let kind = ResearchKind::TrainPersonnel;
         if active_kind != Some(&kind) {
             projects.push(kind);
