@@ -476,8 +476,7 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
 fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.operations_ui.clone() {
         Some(OpsUiState::BrowseOps) => {
-            let decree_base = 0;
-            let so_base = decree_base + DECREE_COUNT;
+            let so_base = DECREE_COUNT;
             let loan_base = so_base + STANDING_ORDER_COUNT;
 
             if ui.panel_selection >= loan_base {
@@ -490,7 +489,7 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                 Some(GameCommand::ToggleStandingOrder { kind })
             } else {
                 // Decree selected
-                let decree_idx = ui.panel_selection - decree_base;
+                let decree_idx = ui.panel_selection;
                 if state.enacted_decrees.is_enacted(decree_idx) || !state.decree_unlocked(decree_idx) {
                     None
                 } else if decree_idx == 2 {
