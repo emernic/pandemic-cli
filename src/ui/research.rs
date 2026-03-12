@@ -663,10 +663,10 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let med = state.medicines.get(*medicine_idx)?;
             let is_retrial = med.tested_against.contains(disease_idx);
             if is_retrial {
-                let current_eff = med.effective_efficacy(*disease_idx, &state.diseases);
+                let strain_eff = med.strain_efficacy(*disease_idx, &state.diseases);
                 let behind = med.mutations_behind(*disease_idx, &state.diseases);
-                Some(format!("Recalibrate strain drift ({} mutation{} behind, current eff {:.0}%)",
-                    behind, if behind == 1 { "" } else { "s" }, current_eff * 100.0))
+                Some(format!("Recalibrate strain drift ({} mutation{} behind, strain eff {:.0}%)",
+                    behind, if behind == 1 { "" } else { "s" }, strain_eff * 100.0))
             } else {
                 Some("First trial — tests efficacy and enables deployment".to_string())
             }
