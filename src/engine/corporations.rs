@@ -88,8 +88,8 @@ pub fn generate_corporations(state: &mut GameState) {
             let operating_costs = base_revenue * CORP_COST_RATIO;
             let reserves = operating_costs * CORP_STARTING_RESERVE_DAYS;
 
-            // First (typically largest) corp in each region gets a board seat
-            let board_seat = i == 0;
+            // Board seat assigned randomly after all corps are created (see below)
+            let board_seat = false;
 
             corps.push(Corporation {
                 name: name.to_string(),
@@ -108,6 +108,18 @@ pub fn generate_corporations(state: &mut GameState) {
     }
 
     state.corporations = corps;
+
+    // Randomly assign one board seat per region
+    for r_idx in 0..state.regions.len() {
+        let region_corps: Vec<usize> = state.corporations.iter().enumerate()
+            .filter(|(_, c)| c.region_idx == r_idx)
+            .map(|(i, _)| i)
+            .collect();
+        if !region_corps.is_empty() {
+            let pick = state.rng_misc.r#gen::<usize>() % region_corps.len();
+            state.corporations[region_corps[pick]].board_seat = true;
+        }
+    }
 
     // Assign manufacturing contracts to medicines.
     // Each non-broad-spectrum medicine gets a corporation as its manufacturer.
