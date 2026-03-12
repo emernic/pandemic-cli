@@ -1,9 +1,10 @@
 use rand::Rng;
 
 use crate::state::{
-    ActiveLoan, BoardRole, CorporationSector, CrisisCost, CrisisEvent, CrisisKind, CrisisOption,
-    CrisisOperation, GameEvent, GameState, LoanLender, ResearchKind, ResearchTrack, ScreeningLevel,
-    SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
+    ActiveLoan, BoardPersonality, BoardRole, CorporationSector, CrisisCost, CrisisEvent,
+    CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, LoanLender, ResearchKind,
+    ResearchTrack, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
+    SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
 /// Scale a dollar amount relative to current funding.
@@ -28,16 +29,21 @@ fn board_budget_satisfaction_mult(board_sat: f64) -> f64 {
 /// Content chairman (>0.7 satisfaction) steers meetings favorably; hostile pushes for cuts.
 /// Profiteer chairman amplifies swings: ±0.15 instead of the default ±0.10.
 fn chairman_funding_shift(state: &GameState) -> f64 {
-    let chairman = state.board_members.iter().find(|m| m.is_chairman);
-    let magnitude = if state.chairman_personality() == Some(crate::state::BoardPersonality::Profiteer) {
+    let chairman = match state.board_members.iter().find(|m| m.is_chairman) {
+        Some(c) => c,
+        None => return 0.0,
+    };
+    let magnitude = if chairman.personality == Some(BoardPersonality::Profiteer) {
         0.15
     } else {
         0.1
     };
-    match chairman {
-        Some(c) if c.satisfaction > 0.7 => magnitude,
-        Some(c) if c.satisfaction < 0.3 => -magnitude,
-        _ => 0.0,
+    if chairman.satisfaction > 0.7 {
+        magnitude
+    } else if chairman.satisfaction < 0.3 {
+        -magnitude
+    } else {
+        0.0
     }
 }
 
