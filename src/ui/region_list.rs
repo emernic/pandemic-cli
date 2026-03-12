@@ -166,7 +166,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let shows_immune = state.screening_shows_immune(idx);
         let is_ark = state.ark_protocol == Some(idx);
         let is_abandoned = state.is_abandoned(idx);
-        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned);
+        let board_count = state.board_members.iter().filter(|bm| bm.region_idx == Some(idx)).count();
+        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned, board_count);
     }
 
     // Detail panel below the grid for the selected region
@@ -188,6 +189,7 @@ fn render_region_box(
     shows_immune: bool,
     is_ark: bool,
     is_abandoned: bool,
+    board_count: usize,
 ) {
     let border_color = if is_ark {
         Color::Cyan
@@ -253,26 +255,33 @@ fn render_region_box(
     let iw = inner.width as usize;
     let mut lines: Vec<Line> = Vec::new();
 
-    // Line 1: Name + threat level
+    // Line 1: Name + board stars + threat level
     let name = &region.name;
+    let stars = "★".repeat(board_count);
     let threat_len = threat.0.len();
-    let max_name = iw.saturating_sub(threat_len + 1);
+    let stars_len = board_count; // each ★ is 1 display column
+    let max_name = iw.saturating_sub(threat_len + stars_len + if stars_len > 0 { 2 } else { 1 });
     let display_name: &str = if name.len() > max_name {
         &name[..max_name]
     } else {
         name
     };
-    let padding = iw.saturating_sub(display_name.len() + threat_len);
-    lines.push(Line::from(vec![
+    let used = display_name.len() + stars_len + threat_len;
+    let padding = iw.saturating_sub(used);
+    let mut name_spans = vec![
         Span::styled(display_name.to_string(), name_style),
-        Span::raw(" ".repeat(padding)),
-        Span::styled(
-            threat.0,
-            Style::default()
-                .fg(threat.1)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]));
+    ];
+    if board_count > 0 {
+        name_spans.push(Span::styled(stars, Style::default().fg(Color::Yellow)));
+    }
+    name_spans.push(Span::raw(" ".repeat(padding)));
+    name_spans.push(Span::styled(
+        threat.0,
+        Style::default()
+            .fg(threat.1)
+            .add_modifier(Modifier::BOLD),
+    ));
+    lines.push(Line::from(name_spans));
 
     // Line 2: Key stats
     if inner.height >= 2 {
@@ -669,8 +678,13 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         } else {
             ""
         };
+        let gov_is_board = state.board_members.iter().any(|bm| {
+            matches!(bm.role, crate::state::BoardRole::RegionGovernor { region_idx: ri } if ri == idx)
+        });
+        let gov_board_marker = if gov_is_board { " ★" } else { "" };
         lines.push(Line::from(vec![
             Span::styled(&gov.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled(gov_board_marker, Style::default().fg(Color::Yellow)),
             Span::styled(
                 format!(" ({}) ", gov.personality.label()),
                 Style::default().fg(Color::DarkGray),
