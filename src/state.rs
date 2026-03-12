@@ -1699,6 +1699,9 @@ pub struct Governor {
     /// Operative: fraction of regional income being skimmed (accumulates with bargains).
     #[serde(default)]
     pub income_skim: f64,
+    /// Tick when the governor last had a sick crisis (cooldown tracking).
+    #[serde(default)]
+    pub last_sick_tick: Option<u64>,
     /// Whether this governor is dead (region becomes leaderless).
     #[serde(default)]
     pub dead: bool,
@@ -1974,6 +1977,7 @@ fn default_governor() -> Governor {
         last_action_tick: 0,
         bargain_count: 0,
         income_skim: 0.0,
+        last_sick_tick: None,
         dead: false,
         succession_tick: None,
     }
@@ -4090,6 +4094,8 @@ pub enum CrisisKind {
     GovernorBuffoon { region_idx: usize },
     /// Mobster governor escalates demands.
     GovernorMobster { region_idx: usize },
+    /// Governor falls ill during high infection levels. Personality determines the crisis.
+    GovernorSick { region_idx: usize },
     /// Governor has died from the pandemic. Region becomes leaderless.
     GovernorDeath { region_idx: usize },
 
@@ -4216,6 +4222,7 @@ impl CrisisKind {
             CrisisKind::GovernorOperative { .. } => "gov_operative",
             CrisisKind::GovernorBuffoon { .. } => "gov_buffoon",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
+            CrisisKind::GovernorSick { .. } => "gov_sick",
             CrisisKind::GovernorDeath { .. } => "gov_death",
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
@@ -4855,6 +4862,7 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
                 },
@@ -4897,6 +4905,7 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
                 },
@@ -4939,6 +4948,7 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
                 },
@@ -4981,6 +4991,7 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
                 },
@@ -5023,6 +5034,7 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
                 },
@@ -5065,6 +5077,7 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
                 },
