@@ -179,7 +179,10 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
 
     // Infrastructure bottlenecks: supply lines × healthcare capacity
     let efficiency = state.regions[reg_idx].delivery_efficiency();
-    let effective_doses = shipment.doses * efficiency;
+    // Targeting waste: without surveillance, doses go to the wrong people
+    let targeting = state.targeting_efficiency(reg_idx);
+    let effective_doses = shipment.doses * efficiency * targeting;
+    let doses_wasted = shipment.doses * efficiency * (1.0 - targeting);
     if effective_doses <= 0.0 { return; }
 
     let mut efficacy = state.medicines[med_idx].effective_efficacy(disease_idx, &state.diseases);
@@ -237,6 +240,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
         doses: shipment.doses,
         adverse,
         efficiency,
+        doses_wasted,
         people_treated,
         people_protected,
     });

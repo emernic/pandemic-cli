@@ -306,7 +306,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                 };
                 (9, msg.clone(), msg)
             }
-            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency, people_treated, people_protected } => {
+            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency, doses_wasted, people_treated, people_protected } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
@@ -319,15 +319,24 @@ pub(crate) fn process_events(state: &mut GameState) {
                 } else {
                     String::new()
                 };
+                let waste_note = if *doses_wasted > 100.0 {
+                    format!(", {} wasted (no surveillance)", format_number(*doses_wasted))
+                } else {
+                    String::new()
+                };
                 let msg = if *adverse {
                     format!("⚠ {med_name} delivered to {region_name}. ADVERSE REACTION — {dose_str} doses{outcome}")
-                } else if *efficiency < 0.90 {
+                } else if *efficiency < 0.90 || *doses_wasted > 100.0 {
                     let eff_pct = (*efficiency * 100.0) as u32;
-                    format!("{med_name} delivered to {region_name}{outcome} ({eff_pct}% infra efficiency)")
+                    if *efficiency < 0.90 {
+                        format!("{med_name} delivered to {region_name}{outcome} ({eff_pct}% infra efficiency){waste_note}")
+                    } else {
+                        format!("{med_name} delivered to {region_name}{outcome}{waste_note}")
+                    }
                 } else {
                     format!("{med_name} delivered to {region_name}{outcome}")
                 };
-                let priority = if *adverse { 3 } else if *efficiency < 0.90 { 6 } else { 9 };
+                let priority = if *adverse { 3 } else if *efficiency < 0.90 || *doses_wasted > 100.0 { 6 } else { 9 };
                 (priority, msg.clone(), msg)
             }
             GameEvent::InfrastructureBreakpoint { region_idx, system, threshold } => {
