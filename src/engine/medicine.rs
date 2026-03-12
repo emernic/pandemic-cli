@@ -84,7 +84,7 @@ pub(super) fn deploy_medicine(
         }
     };
 
-    if doses_to_ship <= 0.0 {
+    if doses_to_ship < 1.0 {
         return match target {
             DeployTarget::Vaccinate { .. } => (false, Some(format!("No susceptible population in {region_name}"))),
             DeployTarget::Treat { .. } => (false, Some(format!("No infected population in {region_name}"))),
