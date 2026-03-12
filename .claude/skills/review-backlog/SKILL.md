@@ -42,13 +42,15 @@ These were all suggested as closes during a triage session and overruled by the 
 
 5. **"Close — just misleading comments."** The user said delete the comments entirely. Misleading comments actively confuse future readers — they're not harmless.
 
-## Closing Comments
+## Comments
 
-Your comments will be read by future agents. Two rules:
+Your comments will be read by future agents. Three rules:
 
 1. **Match confidence to effort.** Say "seems outdated" or "I think this was fixed," not "I confirmed X." You glanced at it — say so.
 
 2. **Don't inject opinions that could mislead future readers.** If you write "this is not a game code issue," future agents will ignore similar issues. If you write "the current design is intentional," future agents will defend a bad design. Stick to facts: "the code referenced no longer exists" or "this was addressed in PR #1234."
+
+3. **Keep-open comments must be minimal.** When keeping an issue open, say "Reviewed during backlog triage — keeping open, seems still relevant." That's it. Do NOT add analysis like "confirmed the duplication exists" or "this is genuinely misleading to players" — you haven't actually investigated it deeply enough to make those claims, and assertive-sounding comments on open issues short-circuit the actual investigation that still needs to happen.
 
 ## Workflow
 
