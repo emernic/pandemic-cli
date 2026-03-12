@@ -91,15 +91,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         GameState::new_default(seed)
     };
 
-    // Generate corporations for new games (loaded saves already have them)
-    if state.corporations.is_empty() {
-        pandemic_cli_lib::engine::corporations::generate_corporations(&mut state);
-    }
-
-    // Generate board members for new games (loaded saves already have them)
-    if state.board_members.is_empty() {
-        pandemic_cli_lib::engine::board::generate_board_members(&mut state);
-    }
+    // Initialize game systems (corporations, board) for new games.
+    // Loaded saves already have this data; initialize_game checks and skips.
+    pandemic_cli_lib::engine::initialize_game(&mut state);
 
     if cli.snapshot {
         // Build step sequence: --do takes priority if provided, otherwise

@@ -39,7 +39,7 @@ fn chairman_funding_shift(state: &GameState) -> f64 {
 /// Compute the per-tick board budget at a given satisfaction level.
 /// Uses the base corporate tax revenue (at full health) as the reference point,
 /// then scales by satisfaction + chairman influence.
-pub fn compute_board_budget_per_tick(state: &GameState, board_sat: f64) -> f64 {
+pub(super) fn compute_board_budget_per_tick(state: &GameState, board_sat: f64) -> f64 {
     let base = state.base_board_budget_per_tick();
     let mult = board_budget_satisfaction_mult(board_sat);
     let shift = chairman_funding_shift(state);

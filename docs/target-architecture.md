@@ -68,20 +68,22 @@ The canonical way to advance the game is `lib::tick_and_process(state)` — it c
 
 Each tick, `engine::tick()` orchestrates subsystems in order:
 
-1. Disease spread (within-region, cross-region)
-2. Disease mutation
-3. `research::tick_research()` — advance/complete research projects
-4. `personnel::tick_personnel()` — scientist burnout and recovery
-5. `medicine::try_auto_deploy()`
+1. Disease spread (within-region, cross-region) + mutation
+2. `research::tick_research()` — advance/complete projects, scientist burnout/recovery
+3. `medicine::try_auto_deploy()` + `tick_shipments()`
+4. `infrastructure::tick_infrastructure()` — hospital/intel degradation
+5. `crisis::tick_crisis_operations()` — temporary personnel commitments
 6. `policy::tick_enforce_costs()` — suspend unaffordable policies, deduct costs
-7. Resource income (funding), personnel upkeep, attrition
-8. Authority drift, AUTH-based personnel gain
-9. Disease emergence (mid-game new threats)
-10. Disease detection, threat escalation alerts
-11. Scheduled follow-up crises + `crisis::generate_crisis()`
-12. *RNG write-back* + scientist roster sync
-13. Regional collapse (may trigger refugee crisis)
-14. Defeat conditions
+7. Loans — queue offers after policy suspensions, accrue interest
+8. Policy: governor cooperation/actions, standing orders, screening
+9. `contracts::tick_check/offer_contracts()` — funding contract conditions + new offers
+10. `corporations::tick_corporations()` + `board::update_board_satisfaction()`
+11. Resource income (funding), personnel upkeep, attrition, authority drift
+12. Disease emergence (mid-game new threats), detection, threat escalation
+13. Pending crises, board meetings, `crisis::generate_crisis()`
+14. *RNG write-back*
+15. Regional collapse (may trigger refugee crisis)
+16. Defeat conditions + history recording
 
 After each tick, `lib::tick_and_process()` calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
@@ -91,14 +93,18 @@ The engine is organized as an orchestrator + subsystem modules:
 
 ```
 engine/
-  mod.rs       — tick() and execute_command(): orchestration + cross-cutting logic
-  research.rs  — Research project commands + per-tick completion logic
-  medicine.rs  — Medicine deployment, shipment delivery, auto-deploy
-  policy.rs    — Policy toggle, decrees, governor actions, infrastructure builds
-  crisis.rs    — Crisis event generation + resolution
-  spread.rs    — Within-region spread, cross-region spread, mutation, adaptation
-  disease.rs   — Disease emergence (spawning new scaled diseases mid-game)
-  personnel.rs — Scientist assignment, burnout, recovery
+  mod.rs            — tick(), execute_command(), initialize_game(): orchestration + cross-cutting logic
+  research.rs       — Research project commands + per-tick completion logic + scientist burnout/recovery
+  medicine.rs       — Medicine deployment, shipment delivery, auto-deploy
+  policy.rs         — Policy toggle, decrees, governor actions, infrastructure builds
+  crisis.rs         — Crisis event generation + resolution, board budget calculation
+  spread.rs         — Within-region spread, cross-region spread, mutation, adaptation
+  disease.rs        — Disease emergence (spawning new scaled diseases mid-game)
+  board.rs          — Board member generation and satisfaction
+  corporations.rs   — Corporation generation, manufacturer assignment, stock price ticks
+  contracts.rs      — Funding contract offers, condition checking, acceptance/rejection
+  loans.rs          — Emergency loans, interest accrual
+  infrastructure.rs — Hospital/intel infrastructure degradation
 ```
 
 ### Subsystem conventions
@@ -123,7 +129,7 @@ Each subsystem module follows the same pattern:
 
 ### What stays in mod.rs
 
-`tick()` and `execute_command()` are the orchestrators — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, board approval drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
+`tick()`, `execute_command()`, and `initialize_game()` are the public entry points — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, board approval drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
 
 ## Event System
 
@@ -171,7 +177,7 @@ The architecture is "one giant mutable state blob plus conventions." This sectio
 **Enforced by the compiler:**
 - `pub(super)` on subsystem functions — external code can't call `research::start_research()` directly, only through `execute_command()`
 - Module visibility — `engine/` doesn't `use crate::ui`, `ui/` doesn't `use crate::engine`. A new import would be a visible `use` statement in the diff.
-- `GameCommand` enum — every variant is dispatched through `execute_command()`. `apply_action()` calls `ui.handle_confirm()` to get a `GameCommand` and passes it to `execute_command()` unconditionally. There is no intercept or bypass. Preference toggles (`auto_deploy`, `auto_research`, `standing_orders`) go through `GameCommand` variants too.
+- `GameCommand` enum — every variant is dispatched through `execute_command()`. `apply_action()` calls `handle_confirm(&mut ui, &state)` (a free function in lib.rs) to get a `GameCommand` and passes it to `execute_command()` unconditionally. There is no intercept or bypass. Preference toggles (`auto_deploy`, `auto_research`, `standing_orders`) go through `GameCommand` variants too.
 
 **What `apply_action()` mutates directly (without `GameCommand`):**
 - `sim_state` (pause/unpause) and `ui.speed_multiplier` — pure UI controls, no game logic involved

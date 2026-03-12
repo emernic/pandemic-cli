@@ -26,9 +26,9 @@ All game state (simulation + UI) lives in a single JSON-serializable struct. Eac
 │  execute_command() handles player   │
 │  commands. No UI knowledge.         │
 ├─────────────────────────────────────┤
-│  state.rs                           │  Pure data
-│  GameState, all structs/enums,      │
-│  constants, query methods.          │
+│  state.rs                           │  Domain model
+│  Data structures, derived           │
+│  computations, UI state machines.   │
 └─────────────────────────────────────┘
 ```
 
@@ -36,18 +36,22 @@ Dependencies flow downward only. UI never imports from engine. Engine never touc
 
 ## Engine Structure
 
-The engine is a module directory. `mod.rs` is the orchestrator — it owns `tick()` and `execute_command()`, which sequence and dispatch to subsystem modules:
+The engine is a module directory. `mod.rs` is the orchestrator — it owns `tick()`, `execute_command()`, and `initialize_game()`, which sequence and dispatch to subsystem modules:
 
 ```
 engine/
-  mod.rs       — tick() orchestrator, execute_command() dispatcher, defeat/collapse checks
-  research.rs  — start_research(), add/remove_personnel(), tick_research()
-  medicine.rs  — deploy_medicine(), tick_shipments(), try_auto_deploy()
-  policy.rs    — toggle_policy(), tick_enforce_costs(), tick_governor_cooperation()
-  crisis.rs    — generate_crisis(), activate_crisis(), resolve_crisis()
-  spread.rs    — tick_spread_within(), tick_spread_cross_region(), tick_mutation()
-  disease.rs   — spawn_disease_scaled() (mid-game new threat emergence)
-  personnel.rs — scientist assignment, burnout, recovery tick
+  mod.rs            — tick(), execute_command(), initialize_game(): orchestration + cross-cutting logic
+  research.rs       — Research projects, scientist assignment, burnout/recovery
+  medicine.rs       — Medicine deployment, shipment delivery, auto-deploy
+  policy.rs         — Policy toggle, decrees, governor actions, infrastructure builds
+  crisis.rs         — Crisis event generation + resolution, board budget calculation
+  spread.rs         — Within-region spread, cross-region spread, mutation, adaptation
+  disease.rs        — Disease emergence (spawning new scaled diseases mid-game)
+  board.rs          — Board member generation and satisfaction
+  corporations.rs   — Corporation generation, manufacturer assignment, stock price ticks
+  contracts.rs      — Funding contract offers, condition checking, acceptance/rejection
+  loans.rs          — Emergency loans, interest accrual
+  infrastructure.rs — Hospital/intel infrastructure degradation
 ```
 
 Each subsystem module exposes `pub(super)` functions in two categories:
@@ -81,30 +85,30 @@ keypress
 
 ```
 tick() in engine/mod.rs:
-  1.  spread::tick_spread_within()     — within-region disease transmission
-  2.  spread::tick_spread_cross_region() — inter-region spread via connections
-  3.  spread::tick_mutation()          — disease strain evolution
-  4.  research::tick_research()        — advance/complete research projects
-  5.  personnel::tick_personnel()      — scientist burnout and recovery
-  6.  medicine::try_auto_deploy()      — auto-deploy triggered by trial completions
-  7.  medicine::tick_shipments()       — deliver in-transit medicine shipments
-  8.  policy::tick_enforce_costs()     — suspend unaffordable policies, deduct costs
-  9.  policy::tick_governor_cooperation()  — governor cooperation drift
-  10. policy::tick_governor_actions()  — defiant governor consequences
-  11. Resource income, personnel upkeep, board approval drift
-  12. Disease detection, threat escalation
-  13. Scheduled follow-up crises + crisis::generate_crisis()
-  14. RNG write-back + scientist roster sync
-  15. Regional collapse checks (may trigger crisis)
-  16. Defeat conditions
-  17. History recording (sparkline data)
+  1.  spread::tick_spread_within/cross_region/mutation — disease transmission + evolution
+  2.  research::tick_research()         — advance/complete research, scientist burnout/recovery
+  3.  medicine::try_auto_deploy()       — auto-deploy to worst-affected regions
+  4.  medicine::tick_shipments()        — deliver in-transit shipments
+  5.  infrastructure::tick_infrastructure() — hospital/intel degradation
+  6.  crisis::tick_crisis_operations()  — temporary personnel commitments
+  7.  policy::tick_enforce_costs()      — suspend unaffordable policies, deduct costs
+  8.  loans (maybe_queue_loan_offer + tick_loans) — emergency loans after suspensions
+  9.  policy::tick_governor_cooperation/actions/standing_orders/screening
+  10. contracts::tick_check/offer_contracts — funding contract conditions + new offers
+  11. corporations::tick_corporations() + board::update_board_satisfaction()
+  12. Resource income, personnel upkeep, authority drift, attrition
+  13. Disease emergence, detection, threat escalation, intel briefings
+  14. Pending crises, board meetings, crisis::generate_crisis()
+  15. RNG write-back
+  16. Regional collapse (may trigger refugee crisis)
+  17. Defeat conditions + history recording
 ```
 
 ## State
 
 One JSON file = one complete save. Includes simulation state (outbreaks, research, resources) AND UI state (open menus, selections, cursor position). If it affects what you see on screen, it's in the file.
 
-`state.rs` is pure data + query methods. It defines all structs, enums, and constants. Game logic lives in engine, not in state — but convenience queries like `available_field_projects()` and `personnel_available()` live on `GameState` so both engine and UI can use them without coupling to each other.
+`state.rs` is the domain model layer — not just passive data. It contains data structures, derived computations (read-only methods needed by both engine and UI, like `approval_target()` and `funding_income_rate()`), and UI state machines (`UiState` methods for panel navigation). See `docs/target-architecture.md` for the full breakdown. Game logic mutations live in engine/, not in state.
 
 ## Snapshot Mode
 
@@ -137,14 +141,18 @@ src/
   action.rs        — Action enum, key-to-action mapping
   snapshot.rs      — Non-interactive snapshot mode for testing
   engine/
-    mod.rs         — tick() orchestrator, execute_command() dispatcher
-    research.rs    — Research project commands + tick completion
-    medicine.rs    — Medicine deployment + shipment delivery + auto-deploy
-    policy.rs      — Policy toggle, decrees, governor actions, per-tick costs
-    crisis.rs      — Crisis event generation + resolution
-    spread.rs      — Within-region spread, cross-region spread, mutation
-    disease.rs     — Disease emergence (spawning new threats mid-game)
-    personnel.rs   — Scientist assignment, burnout, recovery
+    mod.rs            — tick(), execute_command(), initialize_game()
+    research.rs       — Research projects, scientist assignment, burnout/recovery
+    medicine.rs       — Medicine deployment, shipment delivery, auto-deploy
+    policy.rs         — Policy toggle, decrees, governor actions
+    crisis.rs         — Crisis generation + resolution, board budget
+    spread.rs         — Within-region spread, cross-region spread, mutation
+    disease.rs        — Disease emergence (new threats mid-game)
+    board.rs          — Board member generation and satisfaction
+    corporations.rs   — Corporation generation, stock prices
+    contracts.rs      — Funding contract offers and conditions
+    loans.rs          — Emergency loans, interest accrual
+    infrastructure.rs — Hospital/intel degradation
   ui/
     mod.rs         — Layout orchestration, panel routing, process_events()
     home.rs        — Defeat screen
@@ -153,7 +161,9 @@ src/
     medicines.rs   — Medicine deployment wizard
     research.rs    — Research project panel
     policy.rs      — Policy management panel
+    operations.rs  — Decrees and field operations panel
+    board.rs       — Board members and satisfaction panel
+    ledger.rs      — Stock trading and financial ledger
     resources.rs   — Header status bar
     hotkey_bar.rs  — Footer hotkey legend + status messages
-    scientists.rs  — Scientists roster panel
 ```

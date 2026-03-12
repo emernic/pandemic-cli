@@ -1,6 +1,6 @@
-pub mod board;
-pub(crate) mod contracts;
-pub mod corporations;
+mod board;
+mod contracts;
+mod corporations;
 mod crisis;
 mod disease;
 mod infrastructure;
@@ -22,6 +22,18 @@ use crate::state::{
 
 /// Advance the simulation by one tick.
 ///
+/// Initialize game systems that run after basic state construction.
+/// Called once for new games (not for loaded saves that already have this data).
+/// Generates corporations and board members from the initial game state.
+pub fn initialize_game(state: &mut GameState) {
+    if state.corporations.is_empty() {
+        corporations::generate_corporations(state);
+    }
+    if state.board_members.is_empty() {
+        board::generate_board_members(state);
+    }
+}
+
 /// External callers should use `lib::tick_and_process()` instead, which also
 /// calls `ui::process_events()` to materialize events into UI state. This
 /// function is `pub(crate)` so engine unit tests can call it directly without

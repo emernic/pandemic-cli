@@ -135,7 +135,7 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
 }
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
-pub fn tick_check_contracts(state: &mut GameState) {
+pub(super) fn tick_check_contracts(state: &mut GameState) {
     // First pass: compute satisfaction changes (need immutable borrow for is_met)
     let updates: Vec<(usize, bool)> = state.contracts.iter().enumerate()
         .map(|(i, c)| (i, c.condition.is_met(state)))
@@ -206,7 +206,7 @@ pub fn tick_check_contracts(state: &mut GameState) {
 /// Generate a new contract offer if enough time has passed and slots are available.
 /// The offering board member is chosen randomly from members who don't already have
 /// an active contract.
-pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
+pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
     // Don't offer if already have a pending offer
     if state.contract_offer.is_some() {
         return;

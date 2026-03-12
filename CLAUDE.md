@@ -147,7 +147,7 @@ All game state lives in one `GameState` struct (src/state.rs). Two pure function
 
 Both clone-and-mutate. Deterministic via seeded ChaCha8Rng.
 
-Key files: `src/state.rs` (data structures + derived computations), `src/engine/` (mutations + orchestration — research.rs, medicine.rs, policy.rs, crisis.rs), `src/lib.rs` (action routing), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
+Key files: `src/state.rs` (data structures + derived computations), `src/engine/` (mutations + orchestration — 11 subsystem modules, see `docs/target-architecture.md`), `src/lib.rs` (action routing), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
@@ -156,7 +156,7 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 The UI/engine separation is done. The engine god file has been broken into subsystem modules. See `docs/target-architecture.md` for the full picture. The short version:
 
 - **state.rs is NOT just passive data** — it contains three things: (1) raw data structures, (2) derived computations (read-only methods needed by both engine AND UI — `approval_target()`, `funding_income_rate()`, `decree_unlocked()`, `policy_unlocked()`, etc.), and (3) UI state machines. The split between engine/ and state.rs is "mutations + orchestration" vs "data + derived computation" — NOT "game logic" vs "passive data."
-- **engine/ contains all game-state mutations** — `tick()` orchestrates subsystems, `execute_command()` dispatches player commands. Subsystem modules (research.rs, medicine.rs, policy.rs, crisis.rs) handle domain-specific mutations with `pub(super)` visibility. The rule is: engine/ mutates, state.rs computes read-only views.
+- **engine/ contains all game-state mutations** — `tick()` orchestrates subsystems, `execute_command()` dispatches player commands, `initialize_game()` sets up corporations and board. All subsystem modules use `pub(super)` visibility — only mod.rs calls into them. The rule is: engine/ mutates, state.rs computes read-only views.
 - **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into `GameCommand`s.
 - **Layering: state.rs ← engine/ ← ui/ ← lib.rs ← main.rs** — Each layer only imports from layers below it. UI and engine are peers that both depend on state.rs but never on each other.
 
