@@ -1235,7 +1235,7 @@ pub const CORP_COST_RATIO: f64 = 0.65;
 pub enum BoardRole {
     /// Owns a board-seat corporation. Satisfaction tracks corp reserves.
     CorporateLeader { corp_idx: usize },
-    /// Also a regional governor. Satisfaction tracks region population health.
+    /// Also a regional governor. Satisfaction tracks regional GDP.
     RegionGovernor { region_idx: usize },
     /// Independent figure with global concerns. Satisfaction tracks overall death rate.
     IndependentAdvisor,
@@ -1721,6 +1721,12 @@ pub struct Region {
     /// MassRapid). Makes unscreened data genuinely wrong, not just late.
     #[serde(default)]
     pub screening_noise_bias: f64,
+    /// Regional GDP as a fraction of potential (0.0–1.0). Starts at 1.0.
+    /// Affected by population alive, disease burden, and active containment policies.
+    /// Smoothed via exponential decay toward a computed target each tick.
+    /// Governors care about this — it drives their board satisfaction.
+    #[serde(default = "default_one")]
+    pub gdp: f64,
     /// Cached recent death rate (deaths per day), updated once per day
     /// by the tick function. Used for the time-to-collapse estimate.
     #[serde(skip)]
@@ -4640,6 +4646,7 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
+                gdp: 1.0,
             },
             Region {
                 name: "South America".into(),
@@ -4678,6 +4685,7 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
+                gdp: 1.0,
             },
             Region {
                 name: "Europe".into(),
@@ -4716,6 +4724,7 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
+                gdp: 1.0,
             },
             Region {
                 name: "Africa".into(),
@@ -4754,6 +4763,7 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
+                gdp: 1.0,
             },
             Region {
                 name: "Asia".into(),
@@ -4792,6 +4802,7 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
+                gdp: 1.0,
             },
             Region {
                 name: "Oceania".into(),
@@ -4830,6 +4841,7 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
+                gdp: 1.0,
             },
         ];
 
@@ -5257,6 +5269,36 @@ impl GameState {
         // Deaths reflect permanent economic damage
         let damage = infected_frac * 3.0 + death_frac * 2.0;
         (1.0 - damage).clamp(0.1, 1.0)
+    }
+
+    /// Compute the GDP target for a region (0.0–1.0).
+    /// Combines economic health (disease burden) with policy penalties.
+    /// The actual `region.gdp` smoothly tracks toward this target each tick.
+    pub fn gdp_target(&self, region_idx: usize) -> f64 {
+        let region = &self.regions[region_idx];
+        let base = Self::region_economic_health(region);
+
+        // Active containment policies reduce GDP — the core tension.
+        let policy = match self.policies.get(region_idx) {
+            Some(p) => p,
+            None => return base,
+        };
+        let mut policy_factor = 1.0;
+        if policy.quarantine {
+            policy_factor *= 0.80; // 20% GDP hit — people can't work freely
+        }
+        if policy.travel_ban {
+            policy_factor *= 0.70; // 30% GDP hit — trade disrupted
+        }
+        if policy.border_controls && !policy.travel_ban {
+            // Border controls are superseded by travel ban
+            policy_factor *= 0.90; // 10% GDP hit — trade friction
+        }
+        if policy.martial_law {
+            policy_factor *= 0.85; // 15% GDP hit — curfews, restricted movement
+        }
+
+        (base * policy_factor).clamp(0.0, 1.0)
     }
 
     /// Average economic health of a region's connected neighbors (0.0 to 1.0).
