@@ -302,8 +302,13 @@ pub(super) fn tick_spread_cross_region(
                 if roll < chance.min(0.5) {
                     // Seed proportional to connected infected — a larger outbreak
                     // next door means more travelers carrying the disease.
-                    let seed_count = (connected_infected * 0.002).clamp(5.0, 2000.0);
-                    region.get_or_create_infection(d_idx).infected = seed_count;
+                    // Split across infected + exposed so the SEIR pipeline has
+                    // enough fuel to sustain early exponential growth without
+                    // needing a continuous importation trickle.
+                    let seed_total = (connected_infected * 0.005).clamp(50.0, 5000.0);
+                    let inf_entry = region.get_or_create_infection(d_idx);
+                    inf_entry.infected = seed_total * 0.4;
+                    inf_entry.exposed = seed_total * 0.6;
                     // Only notify the player about detected diseases spreading
                     if new.diseases[d_idx].detected {
                         new.events.push(GameEvent::DiseaseSpreadToRegion {
@@ -311,16 +316,6 @@ pub(super) fn tick_spread_cross_region(
                             region_idx: i,
                         });
                     }
-                }
-            } else {
-                // Continuous importation: travelers from infected neighbors
-                // add a small trickle of cases. This prevents tiny seeds from
-                // stalling under SEIR dynamics where the exposed pipeline
-                // bottlenecks early exponential growth.
-                let importation = connected_infected * disease.cross_region_spread * 0.00005;
-                if importation > 0.1 {
-                    let inf = region.get_or_create_infection(d_idx);
-                    inf.infected += importation;
                 }
             }
         }
