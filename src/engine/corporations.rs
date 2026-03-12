@@ -109,6 +109,7 @@ pub fn generate_corporations(state: &mut GameState) {
                 bankrupt_at_tick: None,
                 board_seat,
                 share_price: ipo_price,
+                ipo_price,
                 price_history: vec![ipo_price],
             });
         }
@@ -320,8 +321,7 @@ fn tick_share_prices(state: &mut GameState) {
         let reserves_frac = corp.reserves_fraction();
 
         // Fair value: IPO price × weighted performance
-        let ipo_price = corp.price_history.first().copied().unwrap_or(100.0);
-        let fair_value = ipo_price * (0.6 * revenue_ratio + 0.4 * reserves_frac);
+        let fair_value = corp.ipo_price * (0.6 * revenue_ratio + 0.4 * reserves_frac);
 
         // Mean-revert toward fair value with random walk
         let old_price = corp.share_price;
