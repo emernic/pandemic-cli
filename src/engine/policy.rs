@@ -959,8 +959,14 @@ pub(super) fn tick_screening(state: &mut GameState) {
         let level_rate = screening.convergence_rate();
         let effective_rate = none_rate + (level_rate - none_rate) * progress;
 
-        // Get real detected infected for this region
-        let real = state.regions[i].detected_infected(&state.diseases);
+        // Get real detected infected for this region.
+        // Without antigen-level screening, exposed (incubating) people are invisible —
+        // they show no symptoms, so only symptomatic cases contribute to the estimate.
+        let real = if screening.shows_exposed() {
+            state.regions[i].detected_infected(&state.diseases)
+        } else {
+            state.regions[i].detected_symptomatic(&state.diseases)
+        };
 
         // Apply per-region noise bias. The estimate converges toward a biased target
         // (real * (1 + bias * strength)) rather than toward truth. Noise strength

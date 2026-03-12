@@ -112,8 +112,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let (ca, ra) = map_grid_pos(conn.a).unwrap();
             let (_cb, rb) = map_grid_pos(conn.b).unwrap();
 
-            let has_spread = state.regions[conn.a].detected_infected(&state.diseases) > 0.0
-                || state.regions[conn.b].detected_infected(&state.diseases) > 0.0;
+            let has_spread = state.regions[conn.a].screened_infected() > 0.0
+                || state.regions[conn.b].screened_infected() > 0.0;
             let color = if has_spread {
                 Color::Red
             } else {
@@ -426,6 +426,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     let visibility = state.screening_visibility(idx);
     let infected = region.screened_infected();
     let shows_immune = state.screening_shows_immune(idx);
+    let shows_exposed = state.screening_shows_exposed(idx);
     let immune = if shows_immune { region.detected_immune(&state.diseases) } else { 0.0 };
     let dead = region.detected_dead(&state.diseases);
     let alive = pop - dead; // alive based on detected deaths only
@@ -799,9 +800,14 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     continue;
                 }
                 let dname = disease.display_name(inf.disease_idx);
-                // Distribute region's total estimate proportionally across diseases
-                let total_real = region.detected_infected(&state.diseases);
-                let this_disease_total = inf.exposed + inf.infected;
+                // Distribute region's total estimate proportionally across diseases.
+                // Without antigen screening, exposed (incubating) people are invisible.
+                let total_real = if shows_exposed {
+                    region.detected_infected(&state.diseases)
+                } else {
+                    region.detected_symptomatic(&state.diseases)
+                };
+                let this_disease_total = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
                 let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
                 let screened_inf = region.estimated_infected * proportion;
                 let shown_immune = if shows_immune { inf.immune } else { 0.0 };

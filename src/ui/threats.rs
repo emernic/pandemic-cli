@@ -403,9 +403,15 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
             if inf.exposed + inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
                 continue;
             }
-            // Distribute region's total estimate proportionally across diseases
-            let total_real = region.detected_infected(&state.diseases);
-            let this_disease_total = inf.exposed + inf.infected;
+            // Distribute region's total estimate proportionally across diseases.
+            // Without antigen screening, exposed (incubating) people are invisible.
+            let shows_exposed = state.screening_shows_exposed(region_idx);
+            let total_real = if shows_exposed {
+                region.detected_infected(&state.diseases)
+            } else {
+                region.detected_symptomatic(&state.diseases)
+            };
+            let this_disease_total = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
             let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
             let screened = region.estimated_infected * proportion;
             let shows_immune = state.policies.get(region_idx)

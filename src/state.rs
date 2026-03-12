@@ -500,6 +500,12 @@ impl ScreeningLevel {
         matches!(self, ScreeningLevel::Antigen | ScreeningLevel::MassRapid)
     }
 
+    /// Whether this screening level detects exposed (incubating) individuals.
+    /// Without antigen-level testing, exposed people show no symptoms and are invisible.
+    pub fn shows_exposed(&self) -> bool {
+        matches!(self, ScreeningLevel::Antigen | ScreeningLevel::MassRapid)
+    }
+
     /// Spread reduction factor (1.0 = no reduction, lower = less spread).
     /// Any level of screening identifies and isolates cases, reducing transmission.
     pub fn spread_factor(&self) -> f64 {
@@ -1783,10 +1789,21 @@ impl Region {
     }
 
     /// Total infected from detected diseases only (for UI display).
+    /// Includes both exposed and symptomatic — use `detected_symptomatic()` when
+    /// exposed individuals should be hidden from the player.
     pub fn detected_infected(&self, diseases: &[Disease]) -> f64 {
         self.infections.iter()
             .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
             .map(|inf| inf.exposed + inf.infected)
+            .sum()
+    }
+
+    /// Total symptomatic infected from detected diseases only (excludes exposed/incubating).
+    /// Use this for player-visible counts when screening doesn't reveal exposed individuals.
+    pub fn detected_symptomatic(&self, diseases: &[Disease]) -> f64 {
+        self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.infected)
             .sum()
     }
 
@@ -4932,6 +4949,14 @@ impl GameState {
     pub fn screening_shows_immune(&self, region_idx: usize) -> bool {
         self.policies.get(region_idx)
             .map(|p| p.screening.shows_immune() && p.screening_progress > 0.5)
+            .unwrap_or(false)
+    }
+
+    /// Whether the screening level in a region reveals exposed (incubating) individuals.
+    /// Requires both an Antigen+ tier AND meaningful ramp-up progress (>50%).
+    pub fn screening_shows_exposed(&self, region_idx: usize) -> bool {
+        self.policies.get(region_idx)
+            .map(|p| p.screening.shows_exposed() && p.screening_progress > 0.5)
             .unwrap_or(false)
     }
 

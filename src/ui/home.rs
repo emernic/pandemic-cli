@@ -470,13 +470,19 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         let name = disease.display_name(i);
-        // Distribute each region's total estimate proportionally across diseases
-        let total_inf: f64 = state.regions.iter().map(|r| {
-            let total_real = r.detected_infected(&state.diseases);
+        // Distribute each region's total estimate proportionally across diseases.
+        // Without antigen screening, exposed (incubating) people are invisible.
+        let total_inf: f64 = state.regions.iter().enumerate().map(|(ri, r)| {
+            let shows_exposed = state.screening_shows_exposed(ri);
+            let total_real = if shows_exposed {
+                r.detected_infected(&state.diseases)
+            } else {
+                r.detected_symptomatic(&state.diseases)
+            };
             if total_real <= 0.0 { return 0.0; }
             let this_disease: f64 = r.infections.iter()
                 .filter(|inf| inf.disease_idx == i)
-                .map(|inf| inf.infected)
+                .map(|inf| if shows_exposed { inf.exposed + inf.infected } else { inf.infected })
                 .sum();
             r.estimated_infected * (this_disease / total_real)
         }).sum();
