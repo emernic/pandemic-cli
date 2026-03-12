@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::state::{
     ActiveLoan, BoardPersonality, BoardRole, CorporationSector, CrisisCost, CrisisEvent,
     CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, GovernorPersonality,
-    LoanLender, ResearchKind,
+    LoanLender, OperationSpec, ResearchKind,
     ResearchTrack, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
@@ -538,8 +538,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 3,
-                            operation_days: Some(2.0),
-                            operation_label: Some("Containment Team".to_string()),
+                            operation: Some(OperationSpec { days: 2.0, label: "Containment Team".into() }),
                         }),
                     }
                 },
@@ -764,8 +763,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 5,
-                        operation_days: Some(2.0),
-                        operation_label: Some("Response Team".to_string()),
+                        operation: Some(OperationSpec { days: 2.0, label: "Response Team".into() }),
                     }),
                 },
                  CrisisOption {
@@ -830,8 +828,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 2,
-                        operation_days: Some(2.0),
-                        operation_label: Some("Security Detail".to_string()),
+                        operation: Some(OperationSpec { days: 2.0, label: "Security Detail".into() }),
                     }),
                 },
                 CrisisOption {
@@ -862,8 +859,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 1,
-                            operation_days: Some(2.0),
-                            operation_label: Some("Comms Team".to_string()),
+                            operation: Some(OperationSpec { days: 2.0, label: "Comms Team".into() }),
                         }),
                     }
                 },
@@ -954,8 +950,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 2,
-                        operation_days: Some(3.0),
-                        operation_label: Some("Audit Team".to_string()),
+                        operation: Some(OperationSpec { days: 3.0, label: "Audit Team".into() }),
                     }),
                 },
                 ],
@@ -1096,8 +1091,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 2,
-                            operation_days: Some(2.0),
-                            operation_label: Some("Escort Detail".to_string()),
+                            operation: Some(OperationSpec { days: 2.0, label: "Escort Detail".into() }),
                         }),
                     }
                 },
@@ -1150,8 +1144,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 3,
-                            operation_days: Some(5.0),
-                            operation_label: Some("Coordination Team".to_string()),
+                            operation: Some(OperationSpec { days: 5.0, label: "Coordination Team".into() }),
                         }),
                     }
                 },
@@ -1372,8 +1365,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: crackdown_cost,
                         personnel: 2,
-                        operation_days: Some(2.0),
-                        operation_label: Some("Enforcement Team".to_string()),
+                        operation: Some(OperationSpec { days: 2.0, label: "Enforcement Team".into() }),
                     }),
                 },
                 ],
@@ -1512,8 +1504,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 2,
-                        operation_days: Some(4.0),
-                        operation_label: Some("Diplomatic Delegation".to_string()),
+                        operation: Some(OperationSpec { days: 4.0, label: "Diplomatic Delegation".into() }),
                     }),
                 },
                 ],
@@ -1743,8 +1734,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             cost: Some(CrisisCost {
                                 funding: 0.0,
                                 personnel: 2,
-                                operation_days: Some(5.0),
-                                operation_label: Some("Regional Management Team".to_string()),
+                                operation: Some(OperationSpec { days: 5.0, label: "Regional Management Team".into() }),
                             }),
                         },
                         ],
@@ -1765,8 +1755,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             cost: Some(CrisisCost {
                                 funding: 0.0,
                                 personnel: 2,
-                                operation_days: Some(5.0),
-                                operation_label: Some("Priority Deployment".to_string()),
+                                operation: Some(OperationSpec { days: 5.0, label: "Priority Deployment".into() }),
                             }),
                         },
                         CrisisOption {
@@ -1819,8 +1808,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             cost: Some(CrisisCost {
                                 funding: 0.0,
                                 personnel: 3,
-                                operation_days: Some(5.0),
-                                operation_label: Some("Governor Security Detail".to_string()),
+                                operation: Some(OperationSpec { days: 5.0, label: "Governor Security Detail".into() }),
                             }),
                         },
                         CrisisOption {
@@ -1936,8 +1924,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.15, 100.0, 500.0),
                         personnel: 1,
-                        operation_days: Some(2.0),
-                        operation_label: Some("Screening Team".to_string()),
+                        operation: Some(OperationSpec { days: 2.0, label: "Screening Team".into() }),
                     }),
                 },
                 ],
@@ -1963,8 +1950,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: Some(CrisisCost {
                         funding: scaled_cost(state, 0.20, 150.0, 600.0),
                         personnel: 2,
-                        operation_days: Some(3.0),
-                        operation_label: Some("Diplomatic Envoys".to_string()),
+                        operation: Some(OperationSpec { days: 3.0, label: "Diplomatic Envoys".into() }),
                     }),
                 },
                 ],
@@ -2482,13 +2468,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     if let Some(cost) = &option.cost {
         state.resources.funding -= cost.funding;
         if cost.personnel > 0 {
-            if let Some(days) = cost.operation_days {
+            if let Some(op) = &cost.operation {
                 // Create a temporary operation — personnel are tied up and returned later
-                let label = cost.operation_label.clone()
-                    .unwrap_or_else(|| "Crisis Response".to_string());
-                let ticks = days * TICKS_PER_DAY;
+                let ticks = op.days * TICKS_PER_DAY;
                 state.crisis_operations.push(CrisisOperation {
-                    label,
+                    label: op.label.clone(),
                     personnel: cost.personnel,
                     ticks_remaining: ticks,
                 });

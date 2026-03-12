@@ -3982,13 +3982,17 @@ pub struct CrisisCost {
     pub funding: f64,
     #[serde(default)]
     pub personnel: u32,
-    /// If Some, personnel are tied up in a temporary operation for this many days
-    /// and returned when it completes. If None, personnel are permanently deducted.
+    /// If Some, personnel are tied up in a temporary operation for the specified
+    /// duration and returned when it completes. If None, personnel are permanently deducted.
     #[serde(default)]
-    pub operation_days: Option<f64>,
-    /// Label shown in the event log when the temporary operation completes.
-    #[serde(default)]
-    pub operation_label: Option<String>,
+    pub operation: Option<OperationSpec>,
+}
+
+/// Specification for a temporary crisis operation that ties up personnel.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OperationSpec {
+    pub days: f64,
+    pub label: String,
 }
 
 /// A temporary crisis response operation that ties up personnel for a set duration.
