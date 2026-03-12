@@ -11,23 +11,7 @@ use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
 
 use crate::format_number;
-
-/// Compact sparkline for stock price history (used in region detail ticker).
-fn mini_sparkline(history: &[f64], width: usize) -> String {
-    if history.is_empty() {
-        return String::new();
-    }
-    let bars = [' ', '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
-    let min = history.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max = history.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let range = (max - min).max(0.01);
-    let start = history.len().saturating_sub(width);
-    let slice = &history[start..];
-    slice.iter().map(|v| {
-        let normalized = ((v - min) / range * 7.0).round() as usize;
-        bars[normalized.min(8)]
-    }).collect()
-}
+use super::sparkline;
 
 #[derive(Clone, Copy)]
 enum ConnKind {
@@ -834,8 +818,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     else if change < -0.5 { Color::Red }
                     else { Color::DarkGray };
                 let board_marker = if corp.board_seat { " ★" } else { "" };
-                // Mini sparkline (last 8 points)
-                let spark = mini_sparkline(&corp.price_history, 8);
+                let spark = sparkline(&corp.price_history, 8);
                 lines.push(Line::from(vec![
                     Span::styled(
                         format!(" {:<18}", corp.name),
