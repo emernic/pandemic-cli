@@ -144,7 +144,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         state.regions.get(*region_idx)
                             .map(|r| if r.collapsed {
                                 format!("Demands: Rebuild {}", r.name)
-                            } else if r.gdp < 0.6 {
+                            } else if r.gdp_fraction() < 0.6 {
                                 format!("Demands: Restore {} economy", r.name)
                             } else {
                                 format!("Demands: Protect {} economy", r.name)
@@ -284,7 +284,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
         }
         BoardRole::RegionGovernor { region_idx } => {
             if let Some(region) = state.regions.get(*region_idx) {
-                let gdp_pct = region.gdp * 100.0;
+                let gdp_frac = region.gdp_fraction();
 
                 lines.push(Line::from(vec![
                     Span::styled("    Region: ", hdr),
@@ -296,11 +296,11 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
 
                 let status = if region.collapsed {
                     ("COLLAPSED", Color::Red)
-                } else if gdp_pct < 40.0 {
+                } else if gdp_frac < 0.40 {
                     ("Depression", Color::Red)
-                } else if gdp_pct < 60.0 {
+                } else if gdp_frac < 0.60 {
                     ("Recession", Color::LightRed)
-                } else if gdp_pct < 80.0 {
+                } else if gdp_frac < 0.80 {
                     ("Strained", Color::Yellow)
                 } else {
                     ("Stable", Color::Green)
@@ -308,7 +308,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                 lines.push(Line::from(vec![
                     Span::styled("    GDP: ", hdr),
                     Span::styled(
-                        format!("{:.0}%", gdp_pct),
+                        format!("{:.0}k", region.gdp),
                         Style::default().fg(status.1),
                     ),
                     Span::styled(
@@ -355,7 +355,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                 ]));
 
                 lines.push(Line::from(Span::styled(
-                    "    Tracks regional GDP",
+                    format!("    Tracks regional GDP (base: {:.0}k)", region.base_gdp),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
