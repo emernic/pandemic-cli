@@ -159,25 +159,27 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 detail_spans.push(Span::styled(name, Style::default().fg(Color::Red)));
 
                 if med.tested_against.contains(&d_idx) {
-                    let strain_eff = med.strain_efficacy(d_idx, &state.diseases);
-                    let res_factor = med.resistance_factor(d_idx, &state.diseases);
-                    let combined = strain_eff * res_factor;
-                    let pct = (combined * 100.0).round() as u32;
+                    let efficacy = med.effective_efficacy(d_idx, &state.diseases);
+                    let pct = (efficacy * 100.0).round() as u32;
                     let color = if pct >= 85 {
                         Color::Green
                     } else if pct >= 50 {
                         Color::Yellow
-                    } else {
+                    } else if pct >= 10 {
                         Color::Red
+                    } else {
+                        Color::DarkGray
                     };
-                    // Show ▼ when efficacy has degraded below 85%
-                    let trend = if pct < 85 { "\u{25bc}" } else { "" };
+                    // Show ▼ when strain drift has reduced calibration
+                    let strain_eff = med.strain_efficacy(d_idx, &state.diseases);
+                    let trend = if strain_eff < 1.0 { "\u{25bc}" } else { "" };
                     detail_spans.push(Span::styled(
                         format!(" ({}%{})", pct, trend),
                         Style::default().fg(color),
                     ));
                     // Show resistance level if surveillance unlocked
                     if state.has_resistance_surveillance() {
+                        let res_factor = med.resistance_factor(d_idx, &state.diseases);
                         let res_pct = ((1.0 - res_factor) * 100.0).round() as u32;
                         if res_pct > 0 {
                             let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
