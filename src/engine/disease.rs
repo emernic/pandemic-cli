@@ -478,14 +478,6 @@ fn adapt_disease_to_player_tech(state: &mut GameState, disease_idx: usize) {
         }
     }
 
-    // Active quarantines → new diseases emerge with partial containment adaptation.
-    // This runs regardless of tech state — quarantine pressure is about active
-    // policy measures, not research capabilities.
-    let quarantine_count = state.policies.iter().filter(|p| p.quarantine).count();
-    if quarantine_count >= 2 {
-        let d = &mut state.diseases[disease_idx];
-        d.containment_adaptation = 0.2 + (quarantine_count as f64 * 0.05).min(0.3);
-    }
 }
 
 #[cfg(test)]

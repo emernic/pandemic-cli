@@ -259,14 +259,6 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("Auto-started {} research", track_name);
                 (8, msg.clone(), msg)
             }
-            GameEvent::ContainmentAdaptation { disease_idx, level } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "?".to_string());
-                let pct = (level * 100.0).round() as u32;
-                let msg = format!("{} adapting to containment ({}% policy resistance)", name, pct);
-                (3, msg.clone(), msg)
-            }
             GameEvent::CrisisAutoResolved { message } => {
                 let msg = format!("Auto-resolved: {}", message);
                 (5, msg.clone(), msg)

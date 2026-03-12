@@ -326,18 +326,6 @@ fn push_disease_indicators(
             Style::default().fg(Color::Yellow),
         ));
     }
-    // Show containment adaptation when significant
-    let adaptation = state.diseases.get(disease_idx)
-        .map(|d| d.containment_adaptation)
-        .unwrap_or(0.0);
-    if adaptation >= 0.10 {
-        let pct = (adaptation * 100.0).round() as u32;
-        let color = if pct >= 50 { Color::Red } else { Color::Yellow };
-        spans.push(Span::styled(
-            format!("  Containment adapt: {}%", pct),
-            Style::default().fg(color),
-        ));
-    }
 }
 
 enum MedStatus {
