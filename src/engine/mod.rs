@@ -394,6 +394,25 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         crisis::activate_crisis(&mut new, crisis);
     }
 
+    // Vote of No Confidence: Chairman calls a vote after ~3 days of sustained hostility.
+    // Bypasses normal crisis cooldown (like board meetings) — this is a personal confrontation.
+    {
+        let day = new.tick as f64 / TICKS_PER_DAY;
+        let hostile_days = new.chairman_hostile_since
+            .map(|since| (new.tick.saturating_sub(since)) as f64 / TICKS_PER_DAY)
+            .unwrap_or(0.0);
+        let on_cooldown = new.crisis_cooldowns.get("vote_no_confidence")
+            .is_some_and(|&last| new.tick.saturating_sub(last) < (14.0 * TICKS_PER_DAY) as u64);
+        if new.active_crisis.is_none()
+            && hostile_days >= 3.0
+            && day > 10.0
+            && !on_cooldown
+        {
+            let crisis = crisis::build_crisis_event(&new, CrisisKind::VoteOfNoConfidence);
+            crisis::activate_crisis(&mut new, crisis);
+        }
+    }
+
     // Crisis event generation (only when no crisis is active).
     // Frequency scales with game day: early game ~1/10 days, late game ~1/3 days.
     let crisis_interval = {

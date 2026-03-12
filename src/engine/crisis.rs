@@ -2001,6 +2001,45 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::VoteOfNoConfidence => {
+            let chairman_name = state.board_members.iter()
+                .find(|m| m.is_chairman)
+                .map(|m| m.name.as_str())
+                .unwrap_or("The Chairman");
+            let corp_name = state.board_members.iter()
+                .find(|m| m.is_chairman)
+                .and_then(|m| m.corp_idx)
+                .and_then(|idx| state.corporations.get(idx))
+                .map(|c| c.name.as_str())
+                .unwrap_or("their corporation");
+            let concession_cost = scaled_cost(state, 0.25, 200.0, 800.0);
+            CrisisEvent {
+                title: "Vote of No Confidence".into(),
+                description: format!(
+                    "{} has called an emergency session. The motion cites mismanagement of \
+                     the crisis and neglect of {} interests. Three board members have \
+                     already indicated support.",
+                    chairman_name, corp_name
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: format!("Make concessions (¥{:.0})", concession_cost),
+                        description: format!(
+                            "Redirect ¥{:.0} to {}. Chairman withdraws the motion.",
+                            concession_cost, corp_name
+                        ),
+                        cost: Some(CrisisCost { funding: concession_cost, personnel: 0, ..Default::default() }),
+                    },
+                    CrisisOption {
+                        label: "Stand firm".into(),
+                        description: "Refuse concessions. The board retaliates with funding cuts.".into(),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("the region");
@@ -3274,6 +3313,22 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Letter filed. The board will be monitoring fund allocations.".into()
         }
 
+        (CrisisKind::VoteOfNoConfidence, 0) => {
+            // Make concessions: cost already deducted. Boost chairman satisfaction.
+            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+                chairman.satisfaction_modifier += 0.30;
+            }
+            // Reset hostility timer since we placated them
+            state.chairman_hostile_since = None;
+            "Concessions accepted. The Chairman withdraws the motion.".into()
+        }
+        (CrisisKind::VoteOfNoConfidence, _) => {
+            // Stand firm: board approval hit + temporary funding multiplier penalty
+            state.resources.board_approval = (state.resources.board_approval - 0.15).max(0.0);
+            state.board_funding_multiplier = (state.board_funding_multiplier - 0.20).max(0.3);
+            "Motion defeated, but the board has slashed your budget.".into()
+        }
+
         // --- Corporate detention crises ---
 
         (CrisisKind::FieldTeamDetained { corp_idx, region_idx, fee, team_size }, 0) => {
@@ -3637,5 +3692,156 @@ mod tests {
         let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
         assert!(crisis.description.contains("deeper cuts"),
             "hostile chairman text should mention cuts: {}", crisis.description);
+    }
+
+    #[test]
+    fn vote_no_confidence_names_chairman_and_corp() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        let chair = state.board_members.iter().find(|m| m.is_chairman).unwrap();
+        let chair_name = chair.name.clone();
+        let corp_name = chair.corp_idx
+            .and_then(|idx| state.corporations.get(idx))
+            .map(|c| c.name.clone())
+            .unwrap();
+
+        let crisis = build_crisis_event(&state,
+            CrisisKind::VoteOfNoConfidence);
+        assert!(crisis.description.contains(&chair_name),
+            "should mention chairman name: {}", crisis.description);
+        assert!(crisis.description.contains(&corp_name),
+            "should mention chairman's corp: {}", crisis.description);
+        assert_eq!(crisis.options.len(), 2);
+        assert!(crisis.options[0].label.contains("concessions"),
+            "first option should be concessions: {}", crisis.options[0].label);
+        assert!(crisis.options[0].cost.is_some(), "concessions should have a funding cost");
+    }
+
+    #[test]
+    fn vote_no_confidence_concessions_boost_chairman() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+        state.resources.funding = 5000.0;
+
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman).unwrap();
+        state.board_members[chair_idx].satisfaction = 0.1;
+        state.chairman_hostile_since = Some(0);
+
+        // Directly test resolve_crisis for concessions (option 0)
+        let kind = CrisisKind::VoteOfNoConfidence;
+        let crisis_event = build_crisis_event(&state, kind);
+        // Simulate cost deduction (generic handler does this before resolve)
+        let cost = crisis_event.options[0].cost.as_ref().unwrap().funding;
+        state.active_crisis = Some(crisis_event);
+        state.resources.funding -= cost;
+        resolve_crisis(&mut state, 0);
+
+        let chair = &state.board_members[chair_idx];
+        assert!(chair.satisfaction_modifier > 0.2,
+            "concessions should boost chairman modifier, got {}", chair.satisfaction_modifier);
+        assert!(state.chairman_hostile_since.is_none(),
+            "hostility timer should reset after concessions");
+    }
+
+    #[test]
+    fn vote_no_confidence_stand_firm_cuts_budget() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+        state.resources.funding = 5000.0;
+        state.resources.board_approval = 0.60;
+        state.board_funding_multiplier = 1.0;
+
+        let kind = CrisisKind::VoteOfNoConfidence;
+        let crisis_event = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis_event);
+        resolve_crisis(&mut state, 1);
+
+        assert!(state.resources.board_approval < 0.50,
+            "board approval should drop, got {}", state.resources.board_approval);
+        assert!(state.board_funding_multiplier < 0.85,
+            "funding multiplier should drop, got {}", state.board_funding_multiplier);
+    }
+
+    #[test]
+    fn vote_no_confidence_fires_after_3_days_hostile() {
+        use crate::engine::tick;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+        state.tick = (11.0 * crate::state::TICKS_PER_DAY) as u64; // past day 10 gate
+        state.next_board_meeting_tick = u64::MAX; // prevent board meetings
+        state.last_contract_offer_tick = state.tick; // prevent contract offers
+
+        // Make chairman hostile (satisfaction < 0.20)
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman).unwrap();
+        let corp_idx = match &state.board_members[chair_idx].role {
+            crate::state::BoardRole::CorporateLeader { corp_idx } => *corp_idx,
+            _ => panic!("chairman should be corporate leader"),
+        };
+        // Tank the corp's share price to make chairman satisfaction drop
+        state.corporations[corp_idx].share_price = 0.0;
+        state.corporations[corp_idx].bankrupt = true;
+
+        // Set hostility timer to 3+ days ago
+        state.chairman_hostile_since = Some(state.tick - (3.5 * crate::state::TICKS_PER_DAY) as u64);
+
+        // Tick and look for the crisis
+        let mut found = false;
+        let max_ticks = 20;
+        let mut current = state;
+        for _ in 0..max_ticks {
+            current = tick(&current);
+            if let Some(ref crisis) = current.active_crisis {
+                if crisis.kind.tag() == "vote_no_confidence" {
+                    found = true;
+                    assert!(crisis.title.contains("No Confidence"));
+                    break;
+                }
+                // Auto-resolve other crises
+                current.active_crisis = None;
+                current.last_crisis_resolved_tick = current.tick;
+            }
+        }
+        assert!(found, "Vote of No Confidence should fire after 3 days of chairman hostility");
+    }
+
+    #[test]
+    fn vote_no_confidence_respects_cooldown() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+        state.tick = (15.0 * crate::state::TICKS_PER_DAY) as u64;
+        state.next_board_meeting_tick = u64::MAX;
+        state.last_contract_offer_tick = state.tick;
+
+        // Chairman is hostile for 3+ days
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman).unwrap();
+        let corp_idx = match &state.board_members[chair_idx].role {
+            crate::state::BoardRole::CorporateLeader { corp_idx } => *corp_idx,
+            _ => panic!("chairman should be corporate leader"),
+        };
+        state.corporations[corp_idx].share_price = 0.0;
+        state.corporations[corp_idx].bankrupt = true;
+        state.chairman_hostile_since = Some(state.tick - (4.0 * crate::state::TICKS_PER_DAY) as u64);
+
+        // Set cooldown from recent firing
+        state.crisis_cooldowns.insert("vote_no_confidence".to_string(), state.tick - 100);
+
+        // Tick a few times — should NOT fire due to cooldown
+        let mut current = state;
+        for _ in 0..10 {
+            current = crate::engine::tick(&current);
+            if let Some(ref crisis) = current.active_crisis {
+                assert_ne!(crisis.kind.tag(), "vote_no_confidence",
+                    "should not fire while on cooldown");
+                current.active_crisis = None;
+                current.last_crisis_resolved_tick = current.tick;
+            }
+        }
     }
 }
