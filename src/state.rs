@@ -199,6 +199,11 @@ pub struct GameState {
     /// Board meetings are proactive, recurring events on a fixed schedule (~every 7-10 days).
     #[serde(default)]
     pub next_board_meeting_tick: u64,
+    /// Board-set funding multiplier (0.5..1.2). Applied to base income each tick.
+    /// Set by board meeting outcomes based on overall satisfaction.
+    /// 1.0 = neutral (initial value), >1.0 = board is generous, <1.0 = budget slashed.
+    #[serde(default = "default_one")]
+    pub board_funding_multiplier: f64,
     /// Monotonically increasing counter for assigning sequence group IDs to
     /// wave-coordinated diseases. Incremented each time a new group is created.
     #[serde(default)]
@@ -1202,18 +1207,6 @@ pub enum BoardRole {
     IndependentAdvisor,
 }
 
-/// What two rival board members are fighting about in a rival agenda meeting.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RivalConflict {
-    /// Corp leader wants quarantine/border controls lifted; governor wants them kept.
-    /// `region_idx` is the contested region.
-    Quarantine { region_idx: usize },
-    /// Two governors each want resources directed to their region.
-    ResourcePriority { region_a: usize, region_b: usize },
-    /// Corp leader wants restrictions lifted for economic recovery;
-    /// independent advisor wants them tightened for public health.
-    PolicyDirection { region_idx: usize },
-}
 
 /// A named individual on the NWHO board of directors.
 /// Satisfaction is computed from game state each tick based on the member's role
@@ -1234,9 +1227,6 @@ pub struct BoardMember {
     pub region_idx: Option<usize>,
     /// Individual satisfaction (0.0–1.0). Updated each tick from connected entity health.
     pub satisfaction: f64,
-    /// Tick when this member last fired a demand crisis. Per-member cooldown.
-    #[serde(default)]
-    pub last_demand_tick: u64,
 }
 
 fn format_large_number(n: f64) -> String {
@@ -3812,20 +3802,10 @@ pub enum CrisisKind {
 
     // --- Corporate crises ---
 
-    /// A specific board member demands action when their individual satisfaction drops.
-    /// `severity` 0 = warning demand (satisfaction < 0.5), 1 = ultimatum (< 0.3).
-    /// `member_idx` indexes into `GameState::board_members`.
-    BoardDemand { severity: u8, member_idx: usize },
-    /// Scheduled board meeting. The most dissatisfied member raises a motion.
-    /// `member_idx` is the index into `board_members` of the member driving the agenda.
-    BoardMeeting { member_idx: usize },
-    /// Two board members want opposite things. Player must choose who to anger.
-    /// `member_a_idx` drives the meeting, `member_b_idx` opposes.
-    RivalAgenda {
-        member_a_idx: usize,
-        member_b_idx: usize,
-        conflict: RivalConflict,
-    },
+    /// Scheduled board meeting communiqué. Fires on a recurring timer (~every 10 days).
+    /// Single-option event: the board informs the player of decisions made.
+    /// Funding level is adjusted based on overall board satisfaction.
+    BoardMeeting,
 
     // --- Corporate detention crises ---
 
@@ -3915,9 +3895,7 @@ impl CrisisKind {
             CrisisKind::PublicInquiry => "public_inquiry",
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
-            CrisisKind::BoardDemand { .. } => "board_demand",
-            CrisisKind::BoardMeeting { .. } => "board_meeting",
-            CrisisKind::RivalAgenda { .. } => "rival_agenda",
+            CrisisKind::BoardMeeting => "board_meeting",
             CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",
@@ -4904,6 +4882,7 @@ impl GameState {
             corporations: Vec::new(),
             board_members: Vec::new(),
             next_board_meeting_tick: 0, // initialized properly after RNG setup
+            board_funding_multiplier: 1.0,
             next_sequence_group: 0,
             loans: vec![],
             ui: UiState {
@@ -5252,7 +5231,10 @@ impl GameState {
         if self.enacted_decrees.conscript_researchers {
             income = (income - CONSCRIPT_INCOME_PENALTY).max(0.0);
         }
-        // Contract income — fixed, not affected by population health
+        // Board funding multiplier — set by board meetings based on satisfaction.
+        // Applies to regional income only (not contracts).
+        income *= self.board_funding_multiplier;
+        // Contract income — fixed, not affected by population health or board multiplier
         let contract_income: f64 = self.contracts.iter().map(|c| c.income).sum();
         income + contract_income
     }

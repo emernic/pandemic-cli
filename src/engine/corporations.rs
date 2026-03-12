@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Corporation, CorporationSector, CrisisKind, GameEvent, GameState,
+    Corporation, CorporationSector, GameEvent, GameState,
     CORPORATE_TAX_RATE, CORP_COST_RATIO, CORP_STARTING_RESERVE_DAYS, TICKS_PER_DAY,
 };
 
@@ -283,68 +283,11 @@ pub(super) fn tick_corporations(state: &mut GameState) {
     }
 }
 
-/// Per-member cooldown between demand crises (~5 days).
-const BOARD_DEMAND_COOLDOWN: u64 = (5.0 * TICKS_PER_DAY) as u64;
-
-/// Individual member satisfaction threshold for a standard demand.
-const BOARD_DEMAND_THRESHOLD: f64 = 0.5;
-
-/// Individual member satisfaction threshold for an ultimatum.
-const BOARD_ULTIMATUM_THRESHOLD: f64 = 0.3;
-
-/// Check each board member's satisfaction and queue per-member demand crises.
-/// Members fire demands independently based on their own satisfaction and cooldown.
-/// Called from tick() after tick_corporations() and update_board_satisfaction().
-pub(super) fn check_board_demands(state: &mut GameState) {
-    if state.board_members.is_empty() {
-        return;
-    }
-
-    // Collect members that should fire demands (avoid borrow issues).
-    let mut to_fire: Vec<(usize, u8)> = Vec::new();
-
-    for (m_idx, member) in state.board_members.iter().enumerate() {
-        let severity = if member.satisfaction < BOARD_ULTIMATUM_THRESHOLD {
-            1u8
-        } else if member.satisfaction < BOARD_DEMAND_THRESHOLD {
-            0u8
-        } else {
-            continue;
-        };
-
-        // Per-member cooldown
-        let cooldown_ok = member.last_demand_tick == 0
-            || state.tick.saturating_sub(member.last_demand_tick) >= BOARD_DEMAND_COOLDOWN;
-        if !cooldown_ok {
-            continue;
-        }
-
-        // Don't queue if this member already has a pending or active demand
-        let already_pending = state.pending_crises.iter()
-            .any(|(_, k)| matches!(k, CrisisKind::BoardDemand { member_idx, .. } if *member_idx == m_idx));
-        let already_active = state.active_crisis.as_ref()
-            .map_or(false, |c| matches!(c.kind, CrisisKind::BoardDemand { member_idx, .. } if member_idx == m_idx));
-        if already_pending || already_active {
-            continue;
-        }
-
-        to_fire.push((m_idx, severity));
-    }
-
-    for (m_idx, severity) in to_fire {
-        state.board_members[m_idx].last_demand_tick = state.tick;
-        state.pending_crises.push((
-            state.tick,
-            CrisisKind::BoardDemand { severity, member_idx: m_idx },
-        ));
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::engine::tick;
-    use crate::state::BoardRole;
 
     #[test]
     fn generate_creates_18_corporations_across_6_regions() {
@@ -465,145 +408,6 @@ mod tests {
             sat_after < sat_before,
             "board satisfaction should drop: before={sat_before:.2} after={sat_after:.2}"
         );
-    }
-
-    #[test]
-    fn low_member_satisfaction_queues_demand_crisis() {
-        let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
-
-        // Set corp reserves to 40% so corporate leaders have individual satisfaction 0.4
-        // (between demand threshold 0.5 and ultimatum threshold 0.3).
-        for c in state.corporations.iter_mut().filter(|c| c.board_seat) {
-            c.reserves = c.max_reserves * 0.4;
-        }
-        crate::engine::board::update_board_satisfaction(&mut state);
-
-        // Verify corporate leaders are individually unhappy
-        let corp_leader = state.board_members.iter()
-            .find(|m| matches!(m.role, BoardRole::CorporateLeader { .. }))
-            .expect("should have corporate leaders");
-        assert!(corp_leader.satisfaction < BOARD_DEMAND_THRESHOLD,
-            "corp leader satisfaction should be below demand threshold: {}", corp_leader.satisfaction);
-        assert!(corp_leader.satisfaction >= BOARD_ULTIMATUM_THRESHOLD,
-            "corp leader satisfaction should be above ultimatum threshold: {}", corp_leader.satisfaction);
-
-        check_board_demands(&mut state);
-
-        assert!(!state.pending_crises.is_empty(), "should queue at least one board demand crisis");
-        assert!(
-            state.pending_crises.iter().all(|(_, k)| matches!(k, CrisisKind::BoardDemand { severity: 0, .. })),
-            "all should be severity 0 (demand, not ultimatum)"
-        );
-    }
-
-    #[test]
-    fn very_low_satisfaction_queues_ultimatum() {
-        let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
-
-        // Bankrupt most board-seat corps to push satisfaction very low
-        let mut count = 0;
-        for c in state.corporations.iter_mut().filter(|c| c.board_seat) {
-            if count < 4 {
-                c.bankrupt = true;
-                c.reserves = 0.0;
-                c.revenue = 0.0;
-            } else {
-                c.reserves = c.max_reserves * 0.1;
-            }
-            count += 1;
-        }
-        crate::engine::board::update_board_satisfaction(&mut state);
-
-        check_board_demands(&mut state);
-
-        // At least one member should fire an ultimatum
-        assert!(
-            state.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::BoardDemand { severity: 1, .. })),
-            "should have at least one severity 1 (ultimatum)"
-        );
-    }
-
-    #[test]
-    fn board_demand_cooldown_prevents_spam() {
-        let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
-        state.tick = 1000;
-
-        // Damage board corps
-        for c in state.corporations.iter_mut().filter(|c| c.board_seat) {
-            c.reserves = c.max_reserves * 0.1;
-        }
-        crate::engine::board::update_board_satisfaction(&mut state);
-
-        // First check queues crises
-        check_board_demands(&mut state);
-        let first_count = state.pending_crises.len();
-        assert!(first_count > 0);
-
-        // Clear pending crises (simulate them firing)
-        state.pending_crises.clear();
-
-        // Second check within cooldown should NOT queue more
-        state.tick += 10;
-        check_board_demands(&mut state);
-        assert_eq!(state.pending_crises.len(), 0, "cooldown should prevent repeat crises");
-
-        // After cooldown expires, should queue again
-        state.tick += BOARD_DEMAND_COOLDOWN;
-        check_board_demands(&mut state);
-        assert!(state.pending_crises.len() > 0, "should queue after cooldown");
-    }
-
-    #[test]
-    fn board_demand_fires_during_natural_game() {
-        let mut s = GameState::new_default(42);
-        generate_corporations(&mut s);
-        crate::engine::board::generate_board_members(&mut s);
-        let mut board_demand_found = false;
-
-        for _ in 0..(30 * TICKS_PER_DAY as u64) {
-            if let Some(ref crisis) = s.active_crisis {
-                if !matches!(crisis.kind, CrisisKind::BoardDemand { .. }) {
-                    s = crate::apply_action(&s, &crate::action::Action::Confirm);
-                }
-            }
-
-            s = tick(&s);
-
-            if s.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::BoardDemand { .. }))
-                || s.active_crisis.as_ref().map_or(false, |c| matches!(c.kind, CrisisKind::BoardDemand { .. }))
-                || s.crisis_cooldowns.contains_key("board_demand")
-            {
-                board_demand_found = true;
-                break;
-            }
-        }
-
-        if !board_demand_found {
-            let sat = s.board_satisfaction();
-            assert!(
-                sat >= BOARD_DEMAND_THRESHOLD,
-                "Board satisfaction dropped to {sat:.2} but no BoardDemand crisis fired in 30 days"
-            );
-        }
-    }
-
-    #[test]
-    fn healthy_corps_dont_trigger_board_demand() {
-        let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
-
-        let sat = state.board_satisfaction();
-        assert!(sat > BOARD_DEMAND_THRESHOLD, "healthy corps should have high satisfaction: {sat}");
-
-        check_board_demands(&mut state);
-        assert_eq!(state.pending_crises.len(), 0, "no crisis when board is satisfied");
     }
 
     #[test]
