@@ -295,12 +295,12 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
             let lock_reason = if !research_met && !approval_met {
                 let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
-                format!("  (Requires {} + Board {:.0}%)", tech.name(), threshold * 100.0)
+                format!("  (Requires {} + Board Approval {:.0}%)", tech.name(), threshold * 100.0)
             } else if !research_met {
                 let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
                 format!("  (Requires {})", tech.name())
             } else {
-                format!("  (Board {:.0}%)", threshold * 100.0)
+                format!("  (Board Approval {:.0}%)", threshold * 100.0)
             };
 
             let name_style = if selected {
@@ -478,7 +478,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             let (bargain_name, cost_desc, loyalty_gain) = match gov.personality {
                 GovernorPersonality::Buffoon => (
                     "Public Praise",
-                    format!("-{:.0}% Board", BARGAIN_BUFFOON_APPROVAL_COST * 100.0),
+                    format!("-{:.0}% board approval", BARGAIN_BUFFOON_APPROVAL_COST * 100.0),
                     BARGAIN_LOYALTY_GAIN,
                 ),
                 GovernorPersonality::Blowhard => (

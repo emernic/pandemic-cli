@@ -653,7 +653,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: format!("Close borders (−{}% Board)", pol_pct),
+                    label: format!("Close borders (−{}% board approval)", pol_pct),
                     description: if *wave >= 3 {
                         format!(
                             "Seal the borders. {:.0}M die in the open.",
@@ -686,7 +686,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 description: "Classified pathogen sequencing data has surfaced on external networks. Rivals and foreign intelligence are already analyzing it.".into(),
                 options: vec![ CrisisOption {
                     label: "Issue a statement (2 personnel for 2d)".into(),
-                    description: "Dedicate a response team to manage disclosure. +5% Board. Staff return in 2 days.".into(),
+                    description: "Dedicate a response team to manage disclosure. +5% board approval. Staff return in 2 days.".into(),
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 2,
@@ -696,12 +696,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Suppress the leak".into(),
-                    description: "Deny and contain. −10% Board. Risk of formal inquiry if exposed.".into(),
+                    description: "Deny and contain. −10% board approval. Risk of formal inquiry if exposed.".into(),
                     cost: None,
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "Leak circulates. −7% Board. 50% chance of media fallout.".into(),
+                    description: "Leak circulates. −7% board approval. 50% chance of media fallout.".into(),
                     cost: None,
                 },
                 ],
@@ -751,7 +751,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Deploy military (−15% Board, 2 personnel for 2d)".into(),
+                    label: "Deploy military (−15% board approval, 2 personnel for 2d)".into(),
                     description: "Maintain quarantine by force. Troops return in 2 days.".into(),
                     cost: Some(CrisisCost {
                         funding: 0.0,
@@ -777,14 +777,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     Population-level noncompliance is rising.".into(),
                 options: vec![ CrisisOption {
                     label: "Deprioritize".into(),
-                    description: "−8% Board as institutional trust degrades".into(),
+                    description: "−8% board approval as institutional trust degrades".into(),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Restore comms infrastructure (¥{:.0}, 1 personnel for 2d)", cost),
-                        description: "Stabilize reporting systems, gain +5% Board. Tech team returns in 2 days.".into(),
+                        description: "Stabilize reporting systems, gain +5% board approval. Tech team returns in 2 days.".into(),
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 1,
@@ -814,11 +814,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Maintain standards".into(),
-                    description: "−5% Board".into(),
+                    description: "−5% board approval".into(),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Fast-track (+10% Board)".into(),
+                    label: "Fast-track (+10% board approval)".into(),
                     description: "Clear for use at reduced efficacy".into(),
                     cost: None,
                 },
@@ -839,14 +839,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Enforce compliance".into(),
-                    description: "Effective but −10% Board".into(),
+                    description: "Effective but −10% board approval".into(),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.20, 120.0, 700.0);
                     CrisisOption {
                         label: format!("Incentive program (¥{:.0})", cost),
-                        description: format!("Buy cooperation in {}, gain +5% Board", region_name),
+                        description: format!("Buy cooperation in {}, gain +5% board approval", region_name),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
@@ -955,12 +955,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Halt deployment".into(),
-                    description: format!("Destroy 30% of {} doses, gain +5% Board", med_name),
+                    description: format!("Destroy 30% of {} doses, gain +5% board approval", med_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: "Continue deployment".into(),
-                    description: "Keep treating patients, −8% Board".into(),
+                    description: "Keep treating patients, −8% board approval".into(),
                     cost: None,
                 },
                 ],
@@ -975,7 +975,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     authority over your agency, citing security concerns.".into(),
                 options: vec![ CrisisOption {
                     label: "Cooperate".into(),
-                    description: format!("Cede {} personnel to military, gain +15% Board", cooperate_loss),
+                    description: format!("Cede {} personnel to military, gain +15% board approval", cooperate_loss),
                     cost: None,
                 },
                  {
@@ -1011,7 +1011,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Grant concessions".into(),
-                    description: "Deliveries resume, −8% Board".into(),
+                    description: "Deliveries resume, −8% board approval".into(),
                     cost: None,
                 },
                  {
@@ -1065,14 +1065,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     Global coordination is degrading.".into(),
                 options: vec![ CrisisOption {
                     label: "Let regions go independent".into(),
-                    description: format!("Lose ¥{:.0} in aid income, −5% Board", aid_loss),
+                    description: format!("Lose ¥{:.0} in aid income, −5% board approval", aid_loss),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.40, 250.0, 1500.0);
                     CrisisOption {
                         label: format!("Take over coordination (¥{:.0}, 3 personnel for 5d)", cost),
-                        description: "Expensive, but gain +10% Board and maintain global response. Coordination team returns in 5 days.".into(),
+                        description: "Expensive, but gain +10% board approval and maintain global response. Coordination team returns in 5 days.".into(),
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 3,
@@ -1103,7 +1103,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Refuse".into(),
-                    description: format!("{} remains sealed, +5% Board", region_name),
+                    description: format!("{} remains sealed, +5% board approval", region_name),
                     cost: None,
                 },
                  {
@@ -1133,12 +1133,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: format!("Back {corp_a}"),
-                    description: format!("+¥{:.0} from {corp_a}. −15% Board. {corp_b} retaliates.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_a}. −15% board approval. {corp_b} retaliates.", credit_gain),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Back {corp_b}"),
-                    description: format!("+¥{:.0} from {corp_b}. −15% Board. {corp_a} retaliates.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_b}. −15% board approval. {corp_a} retaliates.", credit_gain),
                     cost: None,
                 },
                 ],
@@ -1162,12 +1162,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Attend the review".into(),
-                    description: "Lose 1 day of research progress. +5% Board.".into(),
+                    description: "Lose 1 day of research progress. +5% board approval.".into(),
                     cost: None,
                 },
                  CrisisOption {
                     label: "\"I'm busy.\"".into(),
-                    description: "Research continues. −5% Board.".into(),
+                    description: "Research continues. −5% board approval.".into(),
                     cost: None,
                 },
                 ],
@@ -1187,12 +1187,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Decline".into(),
-                    description: "+3% Board.".into(),
+                    description: "+3% board approval.".into(),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Accept (¥{:.0})", payout),
-                    description: "Disease renamed. −5% Board.".into(),
+                    description: "Disease renamed. −5% board approval.".into(),
                     cost: None,
                 },
                 ],
@@ -1232,17 +1232,17 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      several days. Attendance is technically mandatory.".into(),
                 options: vec![ CrisisOption {
                     label: "Testify in person".into(),
-                    description: "Lose 2 days of all research. +10% Board.".into(),
+                    description: "Lose 2 days of all research. +10% board approval.".into(),
                     cost: None,
                 },
                  CrisisOption {
                     label: "Send a deputy".into(),
-                    description: "+2% Board. 40% chance of contempt charges.".into(),
+                    description: "+2% board approval. 40% chance of contempt charges.".into(),
                     cost: None,
                 },
                 CrisisOption {
                     label: "Ignore the subpoena".into(),
-                    description: "Guaranteed contempt charges. −15% Board. Research uninterrupted.".into(),
+                    description: "Guaranteed contempt charges. −15% board approval. Research uninterrupted.".into(),
                     cost: None,
                 },
                 ],
@@ -1260,12 +1260,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: format!("Pay the fine (¥{:.0})", fine),
-                    description: "−8% Board.".into(),
+                    description: "−8% board approval.".into(),
                     cost: None,
                 },
                  CrisisOption {
                     label: "Appeal".into(),
-                    description: "Same cost, less reputational damage. −3% Board.".into(),
+                    description: "Same cost, less reputational damage. −3% board approval.".into(),
                     cost: Some(CrisisCost { funding: *fine, personnel: 0, ..Default::default() }),
                 },
                 ],
@@ -1346,7 +1346,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "The military you cooperated with has classified your pathogen data. \
                      Civilian researchers are locked out of their own findings.".into(),
                 options: vec![ CrisisOption {
-                    label: "Release the data (−10% Board)".into(),
+                    label: "Release the data (−10% board approval)".into(),
                     description: "Override the restriction. Data restored to research teams.".into(),
                     cost: None,
                 },
@@ -1404,7 +1404,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      The charges are unsubstantiated."),
                 options: vec![ CrisisOption {
                     label: "Ignore it".into(),
-                    description: "−5% Board. The noise will die down.".into(),
+                    description: "−5% board approval. The noise will die down.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1560,7 +1560,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Your field staff are aware. Inaction signals complicity."),
                 options: vec![ CrisisOption {
                     label: "Look the other way".into(),
-                    description: "−15% Board. Your staff lose respect.".into(),
+                    description: "−15% board approval. Your staff lose respect.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1585,7 +1585,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "{gov_name} wants ¥{demand:.0}. Last time it was less. Next time it will be more."),
                 options: vec![ CrisisOption {
                     label: "Refuse".into(),
-                    description: "−20% Board. They'll make your life difficult.".into(),
+                    description: "−20% board approval. They'll make your life difficult.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1635,12 +1635,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      a matter of public record. An independent inquiry has been demanded.".into(),
                 options: vec![ CrisisOption {
                     label: "Full transparency now".into(),
-                    description: "Lose 3 days research progress, gain +10% Board for honesty".into(),
+                    description: "Lose 3 days research progress, gain +10% board approval for honesty".into(),
                     cost: None,
                 },
                  CrisisOption {
                     label: "Stonewall".into(),
-                    description: "−20% Board. Research intact.".into(),
+                    description: "−20% board approval. Research intact.".into(),
                     cost: None,
                 },
                 ],
@@ -1825,7 +1825,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             },
                             CrisisOption {
                                 label: "Default".into(),
-                                description: "2 researchers are 'unavailable' indefinitely. −10% Board from smear campaign.".into(),
+                                description: "2 researchers are 'unavailable' indefinitely. −10% board approval from smear campaign.".into(),
                                 cost: None,
                             },
                         ],
@@ -3162,7 +3162,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     state.resources.personnel = state.resources.personnel.saturating_sub(lost);
                     state.resources.board_approval = (state.resources.board_approval - 0.10).max(0.0);
                     format!(
-                        "{lender_name} collected. {lost} researchers 'unavailable'. −10% Board from smear campaign.",
+                        "{lender_name} collected. {lost} researchers 'unavailable'. −10% board approval from smear campaign.",
                     )
                 }
             }
