@@ -1479,17 +1479,19 @@ mod tests {
         let mut state = GameState::new_default(42);
         state = apply_action(&state, &Action::OpenResearch);
 
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)));
+        // Flat panel: BrowseAll with all items in one list
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
         assert_eq!(state.ui.panel_selection, 0);
 
-        state = apply_action(&state, &Action::SelectNext);
-        assert_eq!(state.ui.panel_selection, 1);
+        let items = state.research_flat_items();
+        let max = items.len().saturating_sub(1);
+        assert!(max > 0, "should have at least one selectable item");
 
-        state = apply_action(&state, &Action::SelectNext);
-        assert_eq!(state.ui.panel_selection, 2); // Basic Research
-
-        state = apply_action(&state, &Action::SelectNext);
-        assert_eq!(state.ui.panel_selection, 3); // Upgrade Lab
+        // Navigate forward through all items
+        for i in 1..=max {
+            state = apply_action(&state, &Action::SelectNext);
+            assert_eq!(state.ui.panel_selection, i);
+        }
 
         // Wraps from last to first
         state = apply_action(&state, &Action::SelectNext);
@@ -1506,47 +1508,43 @@ mod tests {
         detect_all_diseases(&mut state);
 
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { track: ResearchTrack::Field })));
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
 
-        state = apply_action(&state, &Action::Confirm); // Select project
+        // Confirm first available project → goes to ConfirmProject
+        state = apply_action(&state, &Action::Confirm);
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
 
-        state = apply_action(&state, &Action::ClosePanel); // Back to projects
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { .. })));
+        // Esc back to flat list
+        state = apply_action(&state, &Action::ClosePanel);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
 
-        state = apply_action(&state, &Action::ClosePanel); // Back to categories
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)));
-
-        state = apply_action(&state, &Action::ClosePanel); // Close panel
+        // Esc again closes panel
+        state = apply_action(&state, &Action::ClosePanel);
         assert_eq!(state.ui.open_panel, Panel::None);
     }
 
     #[test]
-    fn research_confirm_noop_on_empty_list() {
+    fn research_confirm_noop_on_active_project() {
+        use crate::state::ResearchFlatItem;
+
         let mut state = GameState::new_default(42);
-        // Make all diseases fully known AND prion type (mutation_rate too low
-        // for genomic sequencing) so no field projects are available
-        for disease in &mut state.diseases {
-            disease.knowledge = 1.0;
-            disease.pathogen_type = crate::state::PathogenType::Prion;
-        }
-        // No medicines are unlocked, so no clinical trials either
-        // => available_field_projects returns empty
-
+        // Start a field research project first
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Enter Field Research
-        assert!(matches!(
-            state.ui.research_ui,
-            Some(ResearchUiState::BrowseProjects { track: ResearchTrack::Field })
-        ));
+        state = apply_action(&state, &Action::Confirm); // Confirm first available
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
+        state = apply_action(&state, &Action::Confirm); // Start it
+        // After starting, UI returns to BrowseAll on the Research panel
 
-        // Pressing Enter on empty list should stay on BrowseProjects
+        // Close the panel first, then re-open to get a fresh BrowseAll
+        state = apply_action(&state, &Action::ClosePanel);
+        state = apply_action(&state, &Action::OpenResearch);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        let items = state.research_flat_items();
+        assert!(matches!(items.first(), Some(ResearchFlatItem::FieldActive(0))));
+
+        // Enter on active project should be a no-op (stays on BrowseAll)
         state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(
-            state.ui.research_ui,
-            Some(ResearchUiState::BrowseProjects { track: ResearchTrack::Field })
-        ));
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
     }
 
     #[test]

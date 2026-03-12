@@ -3000,12 +3000,8 @@ pub enum ResearchTrack {
 }
 
 /// Number of research track categories (Field, Applied, Basic).
-/// The "Upgrade Lab" item in BrowseCategories is always rendered AFTER these tracks
-/// at index `RESEARCH_TRACK_COUNT`. If you add a fourth track, update ALL of:
-///   - this constant
-///   - `ResearchTrack::from_index()` (add the new arm)
-///   - `ResearchTrack::index()` (add the new arm)
-///   - the BrowseCategories renderer in `ui/research.rs`
+/// If you add a fourth track, update `ResearchTrack::from_index()`,
+/// `ResearchTrack::index()`, and `research_flat_items()`.
 pub const RESEARCH_TRACK_COUNT: usize = 3;
 
 impl ResearchTrack {
@@ -3017,13 +3013,8 @@ impl ResearchTrack {
         }
     }
 
-    /// Canonical inverse of `index()` — maps a `panel_selection` value in
-    /// `BrowseCategories` back to the corresponding research track.
-    ///
-    /// This is the single authoritative source for category ordering.
-    /// Both `handle_research_confirm` and `ToggleExtra` (in lib.rs) use this
-    /// instead of parallel match arms so that adding a new track only requires
-    /// updating `RESEARCH_TRACK_COUNT` and this function.
+    /// Canonical inverse of `index()` — maps a numeric index to the
+    /// corresponding research track.
     pub fn from_index(idx: usize) -> Option<Self> {
         match idx {
             0 => Some(ResearchTrack::Field),
@@ -4030,15 +4021,47 @@ pub enum PolicyUiState {
     ManagePolicies { region_idx: usize },
 }
 
-/// Research panel UI state machine, following the medicines panel pattern.
+/// Research panel UI state machine.
+/// The research panel is a flat scrollable list with section headers (like the policy panel).
+/// `BrowseAll` is the only browsing state — no intermediate category screen.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchUiState {
-    /// Top level: choose Field, Applied, or Basic Research category.
-    BrowseCategories,
-    /// Browsing available projects in the selected category.
-    BrowseProjects { track: ResearchTrack },
+    /// Flat list showing all research tracks with section headers.
+    BrowseAll,
     /// Confirming a project before starting it.
     ConfirmProject { track: ResearchTrack, project_idx: usize, double_personnel: bool },
+}
+
+/// A selectable item in the flat research panel list.
+/// Built dynamically by `GameState::research_flat_items()`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ResearchFlatItem {
+    /// An active field research project (index into `field_research` vec).
+    FieldActive(usize),
+    /// An available field research project (index into `available_projects(Field)`).
+    FieldAvailable(usize),
+    /// The single active applied research project.
+    AppliedActive,
+    /// An available applied research project (index into `available_projects(Applied)`).
+    AppliedAvailable(usize),
+    /// The single active basic research project.
+    BasicActive,
+    /// An available basic research project (index into `available_projects(Basic)`).
+    BasicAvailable(usize),
+    /// The lab upgrade button.
+    UpgradeLab,
+}
+
+impl ResearchFlatItem {
+    /// Which research track this item belongs to, if any.
+    pub fn track(&self) -> Option<ResearchTrack> {
+        match self {
+            Self::FieldActive(_) | Self::FieldAvailable(_) => Some(ResearchTrack::Field),
+            Self::AppliedActive | Self::AppliedAvailable(_) => Some(ResearchTrack::Applied),
+            Self::BasicActive | Self::BasicAvailable(_) => Some(ResearchTrack::Basic),
+            Self::UpgradeLab => None,
+        }
+    }
 }
 
 /// Operations/Orders panel UI state machine.
@@ -4083,8 +4106,7 @@ pub struct UiState {
     /// - `Panel::Medicines / SelectRegion`    → index into grid_reading_order(regions)
     /// - `Panel::Medicines / SelectDisease`   → index into deployable_diseases list
     /// - `Panel::Medicines / SelectTarget`    → 0 = Vaccinate, 1 = Treat
-    /// - `Panel::Research / BrowseCategories` → 0..RESEARCH_TRACK_COUNT-1 = track, RESEARCH_TRACK_COUNT = UpgradeLab
-    /// - `Panel::Research / BrowseProjects`   → index into [active projects, then available projects]
+    /// - `Panel::Research / BrowseAll`         → index into `research_flat_items()` flat list
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → decrees, standing orders, loans
     ///
@@ -4148,7 +4170,7 @@ impl UiState {
             // Check if we're deeper than the top level — if so, reset to top
             let at_top = match panel {
                 Panel::Medicines => matches!(self.medicine_ui, Some(MedicineUiState::BrowseMedicines) | None),
-                Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseCategories) | None),
+                Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseAll) | None),
                 Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::ManagePolicies { .. }) | None),
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
@@ -4172,7 +4194,7 @@ impl UiState {
                 self.panel_selection = 0;
                 match panel {
                     Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
-                    Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
+                    Panel::Research => self.research_ui = Some(ResearchUiState::BrowseAll),
                     Panel::Policy => {
                         self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: self.map_selection });
                     }
@@ -4189,7 +4211,7 @@ impl UiState {
             self.home_splash_done = true;
             match panel {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
-                Panel::Research => self.research_ui = Some(ResearchUiState::BrowseCategories),
+                Panel::Research => self.research_ui = Some(ResearchUiState::BrowseAll),
                 Panel::Policy => {
                     // Go directly to the policies for the currently selected region.
                     // Left/right map navigation (sync_panel_region) keeps this in sync.
@@ -4265,14 +4287,9 @@ impl UiState {
             }
             Panel::Research => {
                 match &self.research_ui {
-                    Some(ResearchUiState::ConfirmProject { track, .. }) => {
-                        self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
+                    Some(ResearchUiState::ConfirmProject { .. }) => {
+                        self.research_ui = Some(ResearchUiState::BrowseAll);
                         self.panel_selection = 0;
-                    }
-                    Some(ResearchUiState::BrowseProjects { track }) => {
-                        let track_idx = track.index();
-                        self.research_ui = Some(ResearchUiState::BrowseCategories);
-                        self.panel_selection = track_idx;
                     }
                     _ => {
                         self.open_panel = Panel::None;
@@ -4367,25 +4384,8 @@ impl UiState {
                 | None => 0,
             },
             Panel::Research => match &self.research_ui {
-                Some(ResearchUiState::BrowseCategories) => RESEARCH_TRACK_COUNT, // Field(0), Applied(1), Basic(2), UpgradeLab(RESEARCH_TRACK_COUNT)
-                Some(ResearchUiState::BrowseProjects { track }) => {
-                    if *track == ResearchTrack::Field {
-                        // Active projects + available projects (if capacity remains)
-                        let n_active = state.field_research.len();
-                        let n_available = if state.field_research_has_capacity() {
-                            state.available_projects(*track).len()
-                        } else {
-                            0
-                        };
-                        (n_active + n_available).saturating_sub(1)
-                    } else {
-                        let active = state.research_slot(*track).is_some();
-                        if active {
-                            0
-                        } else {
-                            state.available_projects(*track).len().saturating_sub(1)
-                        }
-                    }
+                Some(ResearchUiState::BrowseAll) => {
+                    state.research_flat_items().len().saturating_sub(1)
                 }
                 Some(ResearchUiState::ConfirmProject { .. }) => 0,
                 None => 0,
@@ -5977,6 +5977,47 @@ impl GameState {
             ResearchTrack::Applied => self.available_applied_projects(),
             ResearchTrack::Basic => self.available_basic_projects(),
         }
+    }
+
+    /// Build the flat list of selectable items for the research panel.
+    /// Used by both the renderer and the input handler.
+    pub fn research_flat_items(&self) -> Vec<ResearchFlatItem> {
+        let mut items = Vec::new();
+
+        // Field Research: active projects, then available (if capacity remains)
+        for i in 0..self.field_research.len() {
+            items.push(ResearchFlatItem::FieldActive(i));
+        }
+        if self.field_research_has_capacity() {
+            for i in 0..self.available_projects(ResearchTrack::Field).len() {
+                items.push(ResearchFlatItem::FieldAvailable(i));
+            }
+        }
+
+        // Applied Research: active project OR available projects
+        if self.research_slot(ResearchTrack::Applied).is_some() {
+            items.push(ResearchFlatItem::AppliedActive);
+        } else {
+            for i in 0..self.available_projects(ResearchTrack::Applied).len() {
+                items.push(ResearchFlatItem::AppliedAvailable(i));
+            }
+        }
+
+        // Basic Research: active project OR available projects
+        if self.research_slot(ResearchTrack::Basic).is_some() {
+            items.push(ResearchFlatItem::BasicActive);
+        } else {
+            for i in 0..self.available_projects(ResearchTrack::Basic).len() {
+                items.push(ResearchFlatItem::BasicAvailable(i));
+            }
+        }
+
+        // Lab upgrade (always present unless max level)
+        if self.lab_level < 2 {
+            items.push(ResearchFlatItem::UpgradeLab);
+        }
+
+        items
     }
 
     /// Project costs adjusted for unlocked technologies.

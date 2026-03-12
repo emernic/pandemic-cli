@@ -9,7 +9,7 @@ use engine::execute_command;
 use state::{
     DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
     LedgerUiState, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
-    MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
+    MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem, ResearchTrack, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -85,7 +85,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     new.ui.panel_selection = 0;
                 }
                 if new.ui.research_ui.is_some() {
-                    new.ui.research_ui = Some(ResearchUiState::BrowseCategories);
+                    new.ui.research_ui = Some(ResearchUiState::BrowseAll);
                     new.ui.panel_selection = 0;
                 }
                 if new.ui.operations_ui.is_some() {
@@ -193,15 +193,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     execute_command(&mut new, &GameCommand::ToggleAutoDeploy { med_idx });
                 }
             }
-            // Toggle auto-research when browsing categories or projects
-            else {
-                let track = match &new.ui.research_ui {
-                    Some(ResearchUiState::BrowseCategories) => {
-                        ResearchTrack::from_index(new.ui.panel_selection)
-                    }
-                    Some(ResearchUiState::BrowseProjects { track }) => Some(*track),
-                    _ => None,
-                };
+            // Toggle auto-research based on which track the cursor is on
+            else if matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+                let items = new.research_flat_items();
+                let track = items.get(new.ui.panel_selection).and_then(|item| item.track());
                 if let Some(track) = track {
                     execute_command(&mut new, &GameCommand::ToggleAutoResearch { track });
                 }
@@ -223,8 +218,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             });
                             new.ui.panel_selection = 0;
                         }
-                        GameCommand::StartResearch { track, .. } if result.success => {
-                            new.ui.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
+                        GameCommand::StartResearch { .. } if result.success => {
+                            new.ui.research_ui = Some(ResearchUiState::BrowseAll);
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::EnactDecree { .. } if result.success => {
@@ -409,48 +404,43 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
 
 fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.research_ui.clone() {
-        Some(ResearchUiState::BrowseCategories) => {
-            if ui.panel_selection == RESEARCH_TRACK_COUNT {
-                // Upgrade Lab
-                return Some(GameCommand::UpgradeLab);
-            }
-            let Some(track) = ResearchTrack::from_index(ui.panel_selection) else {
+        Some(ResearchUiState::BrowseAll) => {
+            let items = state.research_flat_items();
+            let Some(item) = items.get(ui.panel_selection) else {
                 return None;
             };
-            ui.research_ui = Some(ResearchUiState::BrowseProjects { track });
-            ui.panel_selection = 0;
-            None
-        }
-        Some(ResearchUiState::BrowseProjects { track }) => {
-            if track == ResearchTrack::Field {
-                // Field track: list shows active projects first, then available.
-                let n_active = state.field_research.len();
-                if ui.panel_selection >= n_active {
-                    // Selected an available project
-                    let project_idx = ui.panel_selection - n_active;
-                    let count = state.available_projects(track).len();
-                    if project_idx < count && state.field_research_has_capacity() {
-                        ui.research_ui = Some(ResearchUiState::ConfirmProject {
-                            track,
-                            project_idx,
-                            double_personnel: false,
-                        });
-                        ui.panel_selection = 0;
-                    }
+            match item {
+                ResearchFlatItem::UpgradeLab => {
+                    return Some(GameCommand::UpgradeLab);
                 }
-                // Enter on an active project is a no-op (info already visible in the list)
-            } else {
-                // Applied/Basic: single-slot behavior — Enter only works when starting new research
-                if state.research_slot(track).is_none() {
-                    let count = state.available_projects(track).len();
-                    if count > 0 {
-                        ui.research_ui = Some(ResearchUiState::ConfirmProject {
-                            track,
-                            project_idx: ui.panel_selection,
-                            double_personnel: false,
-                        });
-                        ui.panel_selection = 0;
-                    }
+                // Active projects: Enter is a no-op (info already visible)
+                ResearchFlatItem::FieldActive(_)
+                | ResearchFlatItem::AppliedActive
+                | ResearchFlatItem::BasicActive => {}
+                // Available projects: go to confirm screen
+                ResearchFlatItem::FieldAvailable(project_idx) => {
+                    ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                        track: ResearchTrack::Field,
+                        project_idx: *project_idx,
+                        double_personnel: false,
+                    });
+                    ui.panel_selection = 0;
+                }
+                ResearchFlatItem::AppliedAvailable(project_idx) => {
+                    ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                        track: ResearchTrack::Applied,
+                        project_idx: *project_idx,
+                        double_personnel: false,
+                    });
+                    ui.panel_selection = 0;
+                }
+                ResearchFlatItem::BasicAvailable(project_idx) => {
+                    ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                        track: ResearchTrack::Basic,
+                        project_idx: *project_idx,
+                        double_personnel: false,
+                    });
+                    ui.panel_selection = 0;
                 }
             }
             None
@@ -736,36 +726,38 @@ mod tests {
         let state = apply_action(&state, &Action::JumpToItem { index: 2 });
         assert_eq!(state.ui.panel_selection, 0, "JumpToItem ignored when no panel open");
 
-        // Open research panel (BrowseCategories: 0=Field, 1=Applied, 2=Basic, 3=UpgradeLab)
+        // Open research panel (flat list: items depend on game state)
         let state = apply_action(&state, &Action::OpenResearch);
         assert_eq!(state.ui.panel_selection, 0);
+        let max = state.research_flat_items().len().saturating_sub(1);
 
-        // Key '3' → index 2 → should select Basic (index 2)
+        // Key '3' → index 2 → should select item at index 2 (or clamp)
         let state = apply_action(&state, &Action::JumpToItem { index: 2 });
-        assert_eq!(state.ui.panel_selection, 2, "key 3 should jump to index 2");
+        assert_eq!(state.ui.panel_selection, 2.min(max), "key 3 should jump to index 2");
 
-        // Key '1' → index 0 → should jump back to Field
+        // Key '1' → index 0 → should jump back to first item
         let state = apply_action(&state, &Action::JumpToItem { index: 0 });
         assert_eq!(state.ui.panel_selection, 0, "key 1 should jump to index 0");
 
-        // Key '0' → index 9, clamped to max (3 in BrowseCategories)
+        // Key '0' → index 9, clamped to max
         let state = apply_action(&state, &Action::JumpToItem { index: 9 });
-        assert_eq!(state.ui.panel_selection, 3, "key 0 should clamp to max index");
+        assert_eq!(state.ui.panel_selection, max, "key 0 should clamp to max index");
     }
 
     #[test]
     fn panel_hotkey_resets_to_top_when_deep_in_wizard() {
         let state = GameState::new_default(42);
-        // Open research → enter field category → now at BrowseProjects
+        // Open research → confirm first item → now at ConfirmProject
         let state = apply_action(&state, &Action::OpenResearch);
         assert_eq!(state.ui.open_panel, Panel::Research);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
         let state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseProjects { .. })));
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
 
-        // Press R again — should reset to BrowseCategories, NOT close the panel
+        // Press R again — should reset to BrowseAll, NOT close the panel
         let state = apply_action(&state, &Action::OpenResearch);
         assert_eq!(state.ui.open_panel, Panel::Research);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseCategories)));
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
 
         // Press R again at top level — now it closes
         let state = apply_action(&state, &Action::OpenResearch);
