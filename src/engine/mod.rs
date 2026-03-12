@@ -4408,7 +4408,7 @@ mod tests {
 
     #[test]
     fn crisis_temporary_operation_ties_up_personnel_and_returns_them() {
-        use crate::state::{CrisisCost, CrisisEvent, CrisisKind, CrisisOption, TICKS_PER_DAY};
+        use crate::state::{CrisisCost, CrisisEvent, CrisisKind, CrisisOption, OperationSpec, TICKS_PER_DAY};
 
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
@@ -4426,8 +4426,7 @@ mod tests {
                 cost: Some(CrisisCost {
                     funding: 0.0,
                     personnel: 2,
-                    operation_days: Some(2.0),
-                    operation_label: Some("Test Team".to_string()),
+                    operation: Some(OperationSpec { days: 2.0, label: "Test Team".into() }),
                 }),
             }],
             tick_created: 0,
