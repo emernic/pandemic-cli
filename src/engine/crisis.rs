@@ -1527,7 +1527,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 title: format!("{}: Contract Offer", member_name),
                 description: format!(
                     "{} is offering a contract: {}.\n\nCondition: {}.\nIncome: +¥{:.0}/day.\n\n\
-                     Accepting will anger the other {} board members.",
+                     Accepting locks out other contracts of this type.\n\
+                     The other {} board members will resent the deal.",
                     member_name, contract_name, condition_desc, income_day, other_count,
                 ),
                 options: vec![
@@ -1540,8 +1541,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         cost: None,
                     },
                     CrisisOption {
-                        label: "Decline".into(),
-                        description: format!("{} will not be happy.", member_name),
+                        label: "Decline — hold out for better terms".into(),
+                        description: format!(
+                            "{} will not be happy. But prices rise over time — a better offer may come later.",
+                            member_name,
+                        ),
                         cost: None,
                     },
                 ],
