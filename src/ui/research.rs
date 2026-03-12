@@ -659,6 +659,18 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let disease = state.diseases.get(*disease_idx)?;
             Some(format!("Cross-region spread: {:.4} → 0.0000", disease.cross_region_spread))
         }
+        ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
+            let med = state.medicines.get(*medicine_idx)?;
+            let is_retrial = med.tested_against.contains(disease_idx);
+            if is_retrial {
+                let current_eff = med.effective_efficacy(*disease_idx, &state.diseases);
+                let behind = med.mutations_behind(*disease_idx, &state.diseases);
+                Some(format!("Recalibrate strain drift ({} mutation{} behind, current eff {:.0}%)",
+                    behind, if behind == 1 { "" } else { "s" }, current_eff * 100.0))
+            } else {
+                Some("First trial — tests efficacy and enables deployment".to_string())
+            }
+        }
         ResearchKind::FieldOperations { region_idx, system } => {
             let region = state.regions.get(*region_idx)?;
             let current = match system {
@@ -669,6 +681,5 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let after = (current + FIELD_OPS_RESTORE).min(1.0);
             Some(format!("{}: {:.0}% → {:.0}%", system.label(), current * 100.0, after * 100.0))
         }
-        _ => None,
     }
 }

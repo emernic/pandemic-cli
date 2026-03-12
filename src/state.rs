@@ -2879,6 +2879,26 @@ impl Medicine {
         }
     }
 
+    /// How many strain generations behind this medicine is for a given disease.
+    /// Returns 0 if not calibrated or disease not targeted.
+    pub fn mutations_behind(&self, disease_idx: usize, diseases: &[Disease]) -> u32 {
+        let pos = self.target_diseases.iter().position(|&d| d == disease_idx);
+        match pos {
+            Some(i) => {
+                let med_gen = self.strain_generations.get(i).copied();
+                match med_gen {
+                    Some(mg) => {
+                        let disease_gen = diseases.get(disease_idx)
+                            .map_or(0, |d| d.strain_generation) as i32;
+                        (disease_gen - mg).max(0) as u32
+                    }
+                    None => 0,
+                }
+            }
+            None => 0,
+        }
+    }
+
     /// Efficacy multiplier from mechanism resistance (0.2–1.0). Reads resistance
     /// from the disease based on this medicine's mechanism of action.
     pub fn resistance_factor(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
@@ -3322,13 +3342,17 @@ impl ResearchKind {
                 format!("Develop: {}", name)
             }
             ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
-                let med = medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str())
-                    .unwrap_or("Unknown");
+                let med = medicines.get(*medicine_idx);
+                let med_name = med.map(|m| m.name.as_str()).unwrap_or("Unknown");
                 let dis = diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "Unknown".to_string());
-                format!("Trial: {} vs {}", med, dis)
+                let is_retrial = med.map_or(false, |m| m.tested_against.contains(disease_idx));
+                if is_retrial {
+                    format!("Re-trial: {} vs {}", med_name, dis)
+                } else {
+                    format!("Trial: {} vs {}", med_name, dis)
+                }
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
                 let name = medicines.get(*medicine_idx)
@@ -6102,11 +6126,11 @@ impl GameState {
             let reason = match (has_full_knowledge, has_targeted_drug_design) {
                 (true, false) => "Targeted Drug Design required [Basic Research]".to_string(),
                 (false, false) => format!(
-                    "study {:.0}% complete · Targeted Drug Design required",
+                    "{:.0}% knowledge · Targeted Drug Design required",
                     disease.knowledge * 100.0
                 ),
                 (false, true) => format!(
-                    "study {:.0}% complete · continue Field Research",
+                    "{:.0}% knowledge · continue Field Research",
                     disease.knowledge * 100.0
                 ),
                 (true, true) => continue, // Should be in covered — skip defensively
