@@ -364,6 +364,17 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                             region.governor.cooperation),
                         hdr,
                     ),
+                    {
+                        let eff = region.policy_effectiveness();
+                        if eff < 1.0 {
+                            Span::styled(
+                                format!("  (policies {:.0}%)", eff * 100.0),
+                                Style::default().fg(Color::Red),
+                            )
+                        } else {
+                            Span::raw("")
+                        }
+                    },
                 ]));
 
                 lines.push(Line::from(Span::styled(
