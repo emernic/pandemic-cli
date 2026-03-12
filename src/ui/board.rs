@@ -120,6 +120,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             if let Some(personality) = &member.personality {
                 connections.push(format!("[{}]", personality.label()));
             }
+            if state.contracts.iter().any(|c| c.board_member_idx == i) {
+                connections.push("[Contract]".to_string());
+            }
             if !connections.is_empty() {
                 detail_spans.push(Span::styled(
                     format!("  {}", connections.join(" ")),

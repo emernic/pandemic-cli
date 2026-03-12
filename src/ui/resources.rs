@@ -146,31 +146,14 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(if board_budget_day >= 200.0 { Color::Green } else if board_budget_day >= 100.0 { Color::Yellow } else { Color::Red }),
             ),
         ];
-        // Funding contracts — show after board budget if any are active
+        // Funding contracts — show aggregated total
         if !state.contracts.is_empty() {
+            let contract_income_day = state.contract_income_rate() * TICKS_PER_DAY;
             spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            spans.push(Span::styled("Contracts: ", Style::default().fg(Color::DarkGray)));
-            for (i, contract) in state.contracts.iter().enumerate() {
-                if i > 0 {
-                    spans.push(Span::styled("  ", Style::default()));
-                }
-                let member_short = state.board_members.get(contract.board_member_idx)
-                    .map(|m| m.name.as_str())
-                    .unwrap_or(&contract.name);
-                let income_day = contract.income * TICKS_PER_DAY;
-                let sat_color = if contract.satisfaction > 0.7 {
-                    Color::Green
-                } else if contract.satisfaction > 0.5 {
-                    Color::Yellow
-                } else {
-                    Color::Red
-                };
-                spans.push(Span::styled(member_short.to_string(), Style::default().fg(sat_color)));
-                spans.push(Span::styled(
-                    format!(" +¥{:.0}", income_day),
-                    Style::default().fg(Color::Green),
-                ));
-            }
+            spans.push(Span::styled(
+                format!("+¥{:.0}/day contracts", contract_income_day),
+                Style::default().fg(Color::Green),
+            ));
         }
 
         Line::from(spans)
