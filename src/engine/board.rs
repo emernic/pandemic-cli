@@ -127,6 +127,74 @@ fn compute_member_satisfaction(state: &GameState, member_idx: usize) -> f64 {
     }
 }
 
+/// Satisfaction boost when player buys shares in a board member's own corporation.
+/// Scaled per 10-share block — a single buy gives +0.05, comparable to a minor contract favor.
+const INVEST_OWN_CORP_BOOST: f64 = 0.05;
+
+/// Satisfaction penalty when player buys shares in a rival corp (same sector, different company).
+/// Smaller than the boost — board members notice slights less than favors.
+const INVEST_RIVAL_PENALTY: f64 = 0.03;
+
+/// Satisfaction penalty when player sells shares of a board member's own corporation.
+/// A mild rebuke — selling is less provocative than investing in a rival.
+const SELL_OWN_CORP_PENALTY: f64 = 0.03;
+
+/// Apply board member satisfaction modifiers when player buys shares.
+/// Board members with CorporateLeader role react:
+/// - Positive when you invest in their corp
+/// - Negative when you invest in a same-sector rival
+/// Returns a short reaction hint for the transaction message.
+pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<String> {
+    let bought_sector = match state.corporations.get(corp_idx) {
+        Some(c) => c.sector,
+        None => return None,
+    };
+
+    let mut pleased: Option<String> = None;
+    let mut displeased_count = 0usize;
+
+    for member in state.board_members.iter_mut() {
+        let member_corp_idx = match member.role {
+            BoardRole::CorporateLeader { corp_idx } => corp_idx,
+            _ => continue,
+        };
+        if member_corp_idx == corp_idx {
+            member.satisfaction_modifier += INVEST_OWN_CORP_BOOST;
+            pleased = Some(member.name.clone());
+        } else if let Some(member_corp) = state.corporations.get(member_corp_idx) {
+            if member_corp.sector == bought_sector {
+                member.satisfaction_modifier -= INVEST_RIVAL_PENALTY;
+                displeased_count += 1;
+            }
+        }
+    }
+
+    match (pleased, displeased_count) {
+        (Some(name), 0) => Some(format!("{} approves.", name)),
+        (Some(name), n) => Some(format!("{} approves; {} rival{} displeased.", name, n, if n == 1 { "" } else { "s" })),
+        (None, n) if n > 0 => Some(format!("{} sector rival{} displeased.", n, if n == 1 { "" } else { "s" })),
+        _ => None,
+    }
+}
+
+/// Apply board member satisfaction modifiers when player sells shares.
+/// Only the member whose corp was sold reacts (negatively).
+/// Returns a short reaction hint for the transaction message.
+pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<String> {
+    let mut displeased: Option<String> = None;
+    for member in state.board_members.iter_mut() {
+        let member_corp_idx = match member.role {
+            BoardRole::CorporateLeader { corp_idx } => corp_idx,
+            _ => continue,
+        };
+        if member_corp_idx == corp_idx {
+            member.satisfaction_modifier -= SELL_OWN_CORP_PENALTY;
+            displeased = Some(member.name.clone());
+        }
+    }
+    displeased.map(|name| format!("{} disapproves.", name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +342,111 @@ mod tests {
             }
         }
         assert!(found_meeting, "board meeting should have fired by tick {max_tick}");
+    }
+
+    #[test]
+    fn buying_own_corp_boosts_member_satisfaction() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        generate_board_members(&mut state);
+
+        // Find a corporate leader and their corp_idx
+        let (member_idx, corp_idx) = state.board_members.iter().enumerate()
+            .find_map(|(i, m)| match m.role {
+                BoardRole::CorporateLeader { corp_idx } => Some((i, corp_idx)),
+                _ => None,
+            }).expect("should have a corporate leader");
+
+        let before = state.board_members[member_idx].satisfaction_modifier;
+        on_buy_shares(&mut state, corp_idx);
+        let after = state.board_members[member_idx].satisfaction_modifier;
+
+        assert!((after - before - INVEST_OWN_CORP_BOOST).abs() < 0.001,
+            "buying own corp should boost modifier by {INVEST_OWN_CORP_BOOST}, got delta {}",
+            after - before);
+    }
+
+    #[test]
+    fn buying_rival_sector_penalizes_member() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        generate_board_members(&mut state);
+
+        // Find a corporate leader
+        let (member_idx, member_corp_idx) = state.board_members.iter().enumerate()
+            .find_map(|(i, m)| match m.role {
+                BoardRole::CorporateLeader { corp_idx } => Some((i, corp_idx)),
+                _ => None,
+            }).expect("should have a corporate leader");
+
+        let member_sector = state.corporations[member_corp_idx].sector;
+
+        // Find a different corp in the same sector
+        let rival_idx = state.corporations.iter().enumerate()
+            .find(|(idx, c)| *idx != member_corp_idx && c.sector == member_sector)
+            .map(|(idx, _)| idx);
+
+        if let Some(rival_idx) = rival_idx {
+            let before = state.board_members[member_idx].satisfaction_modifier;
+            on_buy_shares(&mut state, rival_idx);
+            let after = state.board_members[member_idx].satisfaction_modifier;
+
+            assert!((after - before + INVEST_RIVAL_PENALTY).abs() < 0.001,
+                "buying rival sector corp should penalize by {INVEST_RIVAL_PENALTY}, got delta {}",
+                after - before);
+        }
+        // If no same-sector rival exists for this seed, the test passes vacuously
+    }
+
+    #[test]
+    fn selling_own_corp_penalizes_member() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        generate_board_members(&mut state);
+
+        let (member_idx, corp_idx) = state.board_members.iter().enumerate()
+            .find_map(|(i, m)| match m.role {
+                BoardRole::CorporateLeader { corp_idx } => Some((i, corp_idx)),
+                _ => None,
+            }).expect("should have a corporate leader");
+
+        let before = state.board_members[member_idx].satisfaction_modifier;
+        on_sell_shares(&mut state, corp_idx);
+        let after = state.board_members[member_idx].satisfaction_modifier;
+
+        assert!((after - before + SELL_OWN_CORP_PENALTY).abs() < 0.001,
+            "selling own corp should penalize by {SELL_OWN_CORP_PENALTY}, got delta {}",
+            after - before);
+    }
+
+    #[test]
+    fn buying_unrelated_sector_no_effect() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        generate_board_members(&mut state);
+
+        // Find a corporate leader
+        let (member_idx, member_corp_idx) = state.board_members.iter().enumerate()
+            .find_map(|(i, m)| match m.role {
+                BoardRole::CorporateLeader { corp_idx } => Some((i, corp_idx)),
+                _ => None,
+            }).expect("should have a corporate leader");
+
+        let member_sector = state.corporations[member_corp_idx].sector;
+
+        // Find a corp in a DIFFERENT sector that also isn't this member's corp
+        let unrelated_idx = state.corporations.iter().enumerate()
+            .find(|(idx, c)| *idx != member_corp_idx && c.sector != member_sector)
+            .map(|(idx, _)| idx);
+
+        if let Some(unrelated_idx) = unrelated_idx {
+            let before = state.board_members[member_idx].satisfaction_modifier;
+            on_buy_shares(&mut state, unrelated_idx);
+            let after = state.board_members[member_idx].satisfaction_modifier;
+
+            assert!((after - before).abs() < 0.001,
+                "buying unrelated sector should not affect this member, got delta {}",
+                after - before);
+        }
     }
 }

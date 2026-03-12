@@ -761,14 +761,16 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 state.portfolio.push(0);
             }
             state.portfolio[*corp_idx] += quantity;
+            let reaction = board::on_buy_shares(state, *corp_idx);
             let name = state.corporations[*corp_idx].name.clone();
-            CommandResult {
-                message: Some(format!(
-                    "Bought {} shares of {} at ¥{:.1}/share (¥{:.0} total)",
-                    quantity, name, state.corporations[*corp_idx].share_price, cost
-                )),
-                success: true,
+            let mut msg = format!(
+                "Bought {} shares of {} at ¥{:.1}/share (¥{:.0} total)",
+                quantity, name, state.corporations[*corp_idx].share_price, cost
+            );
+            if let Some(r) = reaction {
+                msg.push_str(&format!(" — {}", r));
             }
+            CommandResult { message: Some(msg), success: true }
         }
         GameCommand::SellShares { corp_idx, quantity } => {
             if *corp_idx >= state.corporations.len() {
@@ -784,14 +786,16 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let proceeds = state.corporations[*corp_idx].share_price * (*quantity as f64);
             state.resources.funding += proceeds;
             state.portfolio[*corp_idx] -= quantity;
+            let reaction = board::on_sell_shares(state, *corp_idx);
             let name = state.corporations[*corp_idx].name.clone();
-            CommandResult {
-                message: Some(format!(
-                    "Sold {} shares of {} at ¥{:.1}/share (¥{:.0} proceeds)",
-                    quantity, name, state.corporations[*corp_idx].share_price, proceeds
-                )),
-                success: true,
+            let mut msg = format!(
+                "Sold {} shares of {} at ¥{:.1}/share (¥{:.0} proceeds)",
+                quantity, name, state.corporations[*corp_idx].share_price, proceeds
+            );
+            if let Some(r) = reaction {
+                msg.push_str(&format!(" — {}", r));
             }
+            CommandResult { message: Some(msg), success: true }
         }
     }
 }
