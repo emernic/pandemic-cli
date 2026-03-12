@@ -2275,6 +2275,29 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::BoardResearchInquiry => {
+            let chairman_name = state.board_members.iter()
+                .find(|m| m.is_chairman)
+                .map(|m| m.name.as_str())
+                .unwrap_or("The Chairman");
+            CrisisEvent {
+                title: "Board Inquiry: Research Status".into(),
+                description: format!(
+                    "{} has requested a formal update on pathogen identification efforts. \
+                     No field research has been initiated. The board expects a response.",
+                    chairman_name
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: "Acknowledged".into(),
+                        description: "Accept the board's concern and proceed.".into(),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("the region");
@@ -3727,6 +3750,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::BoardEmbezzlementWarning, _) => {
             state.embezzlement_warned = true;
             "Letter filed. The board will be monitoring fund allocations.".into()
+        }
+
+        (CrisisKind::BoardResearchInquiry, _) => {
+            "The board's concern has been noted.".into()
         }
 
         (CrisisKind::VoteOfNoConfidence, 0) => {
