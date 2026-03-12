@@ -235,6 +235,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             new.ui.operations_ui = Some(OpsUiState::BrowseOps);
                             new.ui.panel_selection = 0;
                         }
+                        GameCommand::EmergencySampleDelivery { .. } if result.success => {
+                            new.ui.operations_ui = Some(OpsUiState::BrowseOps);
+                            new.ui.panel_selection = 0;
+                        }
                         _ => {}
                     }
                     if new.ui.status_message.is_none() {
@@ -494,12 +498,23 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
     match ui.operations_ui.clone() {
         Some(OpsUiState::BrowseOps) => {
             let so_base = DECREE_COUNT;
-            let loan_base = so_base + STANDING_ORDER_COUNT;
+            let field_ops_base = so_base + STANDING_ORDER_COUNT;
+            let loan_base = field_ops_base + 1; // 1 = Emergency Sample Delivery
 
             if ui.panel_selection >= loan_base {
                 // Loan selected — repay in full
                 let loan_idx = ui.panel_selection - loan_base;
                 Some(GameCommand::RepayLoan { loan_idx })
+            } else if ui.panel_selection >= field_ops_base {
+                // Emergency Sample Delivery
+                let eligible = crate::ui::operations::emergency_delivery_medicines(state);
+                if eligible.is_empty() {
+                    None
+                } else {
+                    ui.operations_ui = Some(OpsUiState::SelectEmergencyMedicine);
+                    ui.panel_selection = 0;
+                    None
+                }
             } else if ui.panel_selection >= so_base {
                 // Standing order selected — toggle
                 let kind = ui.panel_selection - so_base;
@@ -553,6 +568,20 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
             } else {
                 None
             }
+        }
+        Some(OpsUiState::SelectEmergencyMedicine) => {
+            let eligible = crate::ui::operations::emergency_delivery_medicines(state);
+            if let Some(&medicine_idx) = eligible.get(ui.panel_selection) {
+                ui.operations_ui = Some(OpsUiState::ConfirmEmergencyDelivery { medicine_idx });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        Some(OpsUiState::ConfirmEmergencyDelivery { medicine_idx }) => {
+            Some(GameCommand::EmergencySampleDelivery {
+                medicine_idx,
+                region_idx: ui.map_selection,
+            })
         }
         None => None,
     }

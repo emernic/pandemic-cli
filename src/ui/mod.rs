@@ -456,6 +456,19 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("{} returned ({} personnel freed)", label, personnel);
                 (3, msg.clone(), msg)
             }
+            GameEvent::EmergencySampleDelivered { medicine_idx, region_idx, cooperation_change, adverse } => {
+                let med_name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("Unknown");
+                let gov_name = state.regions.get(*region_idx)
+                    .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+                let msg = if *adverse {
+                    format!("Adverse reaction to {} samples. {} cooperation {:.0}", med_name, gov_name, cooperation_change)
+                } else {
+                    format!("Delivered {} samples to {}. Cooperation +{:.0}", med_name, gov_name, cooperation_change)
+                };
+                let priority = if *adverse { 1 } else { 2 };
+                (priority, msg.clone(), msg)
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
