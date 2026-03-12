@@ -3962,6 +3962,9 @@ pub enum GameCommand {
     /// Bypasses full clinical trial pipeline — boosts governor cooperation
     /// but risks adverse reactions for untested medicines.
     EmergencySampleDelivery { medicine_idx: usize, region_idx: usize },
+    /// Cancel an active contract by board member index. Frees the contract slot
+    /// but applies a satisfaction penalty to the offering member.
+    CancelContract { board_member_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
