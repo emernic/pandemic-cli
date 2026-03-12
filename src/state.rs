@@ -381,10 +381,10 @@ pub enum ScreeningLevel {
 // Emergency Decree constants — permanent, irreversible global decisions.
 pub const DECREE_COUNT: usize = 6;
 /// Number of standing orders shown in the Orders panel.
-/// Must equal the length of the `standing_orders` array in `ui/policy.rs`.
+/// Must equal the length of the `standing_orders` array in `ui/operations.rs`.
 /// Used by `ui::operations::selection_max()` to bound navigation — if you add
-/// a standing order in policy.rs without updating this constant, the new item
-/// will be silently unreachable via keyboard navigation.
+/// a standing order in operations.rs without updating this constant, the new
+/// item will be silently unreachable via keyboard navigation.
 pub const STANDING_ORDER_COUNT: usize = 2;
 /// Conscript Researchers: immediately gain personnel, permanent income penalty.
 pub const CONSCRIPT_PERSONNEL_GAIN: u32 = 10;
