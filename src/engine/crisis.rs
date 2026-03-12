@@ -1654,6 +1654,33 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::GovernorDeath { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+            let cost = scaled_cost(state, 0.15, 120.0, 600.0);
+            CrisisEvent {
+                title: format!("{} is dead", gov_name),
+                description: format!(
+                    "{gov_name} of {region_name} has died from the pandemic. \
+                     The region has no leadership. Policy enforcement will suffer \
+                     until a successor is appointed."),
+                options: vec![ CrisisOption {
+                    label: "Emergency appointment".into(),
+                    description: format!("Spend ¥{cost:.0} to fast-track a replacement. Successor arrives in 7 days."),
+                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                },
+                 CrisisOption {
+                    label: "Let the process run".into(),
+                    description: "A successor will emerge on their own. 12 days leaderless.".into(),
+                    cost: None,
+                },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::ArkProtocol { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -3169,6 +3196,35 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 region.governor.cooperation = (region.governor.cooperation + 15.0).min(100.0);
             }
             "Paid. They'll be back for more.".into()
+        }
+
+        (CrisisKind::GovernorDeath { region_idx }, 0) => {
+            // Emergency appointment: faster succession (7 days)
+            use crate::state::TICKS_PER_DAY;
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                let old_name = region.governor.name.clone();
+                region.governor.dead = true;
+                region.governor.succession_tick = Some(state.tick + (7.0 * TICKS_PER_DAY) as u64);
+                state.events.push(GameEvent::GovernorDied {
+                    region_idx: *region_idx,
+                    name: old_name,
+                });
+            }
+            "Emergency appointment ordered. Successor expected in 7 days.".into()
+        }
+        (CrisisKind::GovernorDeath { region_idx }, _) => {
+            // Let the process run: standard succession (12 days)
+            use crate::state::{TICKS_PER_DAY, GOVERNOR_SUCCESSION_DAYS};
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                let old_name = region.governor.name.clone();
+                region.governor.dead = true;
+                region.governor.succession_tick = Some(state.tick + (GOVERNOR_SUCCESSION_DAYS * TICKS_PER_DAY) as u64);
+                state.events.push(GameEvent::GovernorDied {
+                    region_idx: *region_idx,
+                    name: old_name,
+                });
+            }
+            "No replacement appointed. The region will be leaderless for 12 days.".into()
         }
 
         (CrisisKind::ArkProtocol { region_idx }, 0) => {

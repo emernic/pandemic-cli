@@ -91,7 +91,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
 
     // Try governor lender first (prefers highest cooperation among non-collapsed regions)
     let governor_lender = state.regions.iter().enumerate()
-        .filter(|(_, r)| !r.collapsed)
+        .filter(|(_, r)| !r.collapsed && !r.governor.is_dead())
         .filter(|(i, _)| {
             // Don't offer from a governor who already gave us a loan
             !state.loans.iter().any(|l| matches!(l.lender, LoanLender::Governor { region_idx } if region_idx == *i))

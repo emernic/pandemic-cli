@@ -1699,6 +1699,12 @@ pub struct Governor {
     /// Operative: fraction of regional income being skimmed (accumulates with bargains).
     #[serde(default)]
     pub income_skim: f64,
+    /// Whether this governor is dead (region becomes leaderless).
+    #[serde(default)]
+    pub dead: bool,
+    /// Tick when a successor governor will arrive (None if governor is alive or no succession scheduled).
+    #[serde(default)]
+    pub succession_tick: Option<u64>,
 }
 
 
@@ -1725,6 +1731,12 @@ pub const APPEASE_COST: f64 = 200.0;
 pub const APPEASE_COOPERATION_GAIN: f64 = 15.0;
 /// Ticks between autonomous governor defiance actions (~2 days).
 pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
+/// Policy effectiveness when the region is leaderless (governor dead, no successor yet).
+pub const LEADERLESS_EFFECTIVENESS: f64 = 0.5;
+/// Days until a successor governor arrives after the previous one dies.
+pub const GOVERNOR_SUCCESSION_DAYS: f64 = 12.0;
+/// Starting cooperation for a successor governor (neutral).
+pub const SUCCESSOR_COOPERATION: f64 = 50.0;
 
 /// Bargain cooperation gains by personality.
 pub const BARGAIN_COOPERATION_GAIN: f64 = 20.0;
@@ -1785,20 +1797,28 @@ pub const CIVIL_ORDER_ANARCHY_SPREAD: f64 = 1.5;
 
 
 impl Governor {
+    /// Returns true if this governor is dead (region is leaderless).
+    pub fn is_dead(&self) -> bool {
+        self.dead
+    }
+
     /// Returns true if this governor is defiant (cooperation below threshold).
+    /// Dead governors are not defiant — they're absent entirely.
     pub fn is_defiant(&self) -> bool {
-        self.cooperation < GOVERNOR_DEFIANCE_THRESHOLD
+        !self.dead && self.cooperation < GOVERNOR_DEFIANCE_THRESHOLD
     }
 
     /// Returns true if this governor provides cooperation bonuses.
     pub fn is_cooperative(&self) -> bool {
-        self.cooperation >= GOVERNOR_COOPERATION_THRESHOLD
+        !self.dead && self.cooperation >= GOVERNOR_COOPERATION_THRESHOLD
     }
 
-    /// Policy effectiveness multiplier based on cooperation and personality.
-    /// 1.0 = normal, 0.7 = defiant, 0.4 = defiant Recluse.
+    /// Policy effectiveness multiplier based on governor state.
+    /// 0.5 = leaderless (dead), 0.7 = defiant, 0.4 = defiant Recluse, 1.0 = normal.
     pub fn policy_effectiveness(&self) -> f64 {
-        if self.is_defiant() {
+        if self.dead {
+            LEADERLESS_EFFECTIVENESS
+        } else if self.cooperation < GOVERNOR_DEFIANCE_THRESHOLD {
             if self.personality == GovernorPersonality::Recluse {
                 RECLUSE_DEFIANCE_EFFECTIVENESS
             } else {
@@ -1810,7 +1830,7 @@ impl Governor {
     }
 
     /// Policy cost multiplier based on cooperation.
-    /// 1.0 = normal, 0.8 = cooperative.
+    /// 1.0 = normal/dead, 0.8 = cooperative.
     pub fn cost_multiplier(&self) -> f64 {
         if self.is_cooperative() {
             GOVERNOR_COOPERATION_COST_MULT
@@ -1954,6 +1974,8 @@ fn default_governor() -> Governor {
         last_action_tick: 0,
         bargain_count: 0,
         income_skim: 0.0,
+        dead: false,
+        succession_tick: None,
     }
 }
 
@@ -3824,6 +3846,16 @@ pub enum GameEvent {
         region_idx: usize,
         description: String,
     },
+    /// A governor died from the pandemic. Region is now leaderless.
+    GovernorDied {
+        region_idx: usize,
+        name: String,
+    },
+    /// A successor governor has arrived in a leaderless region.
+    GovernorSucceeded {
+        region_idx: usize,
+        name: String,
+    },
     /// Infrastructure dropped below a breakpoint threshold.
     InfrastructureBreakpoint {
         region_idx: usize,
@@ -4058,6 +4090,8 @@ pub enum CrisisKind {
     GovernorBuffoon { region_idx: usize },
     /// Mobster governor escalates demands.
     GovernorMobster { region_idx: usize },
+    /// Governor has died from the pandemic. Region becomes leaderless.
+    GovernorDeath { region_idx: usize },
 
     // --- Detection alert types ---
 
@@ -4182,6 +4216,7 @@ impl CrisisKind {
             CrisisKind::GovernorOperative { .. } => "gov_operative",
             CrisisKind::GovernorBuffoon { .. } => "gov_buffoon",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
+            CrisisKind::GovernorDeath { .. } => "gov_death",
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
             CrisisKind::ContemptOfCongress { .. } => "contempt",
@@ -4820,6 +4855,8 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    dead: false,
+                    succession_tick: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
@@ -4860,6 +4897,8 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    dead: false,
+                    succession_tick: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
@@ -4900,6 +4939,8 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    dead: false,
+                    succession_tick: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
@@ -4940,6 +4981,8 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    dead: false,
+                    succession_tick: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
@@ -4980,6 +5023,8 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    dead: false,
+                    succession_tick: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
@@ -5020,6 +5065,8 @@ impl GameState {
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
+                    dead: false,
+                    succession_tick: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
@@ -5680,7 +5727,7 @@ impl GameState {
             Some(r) => r,
             None => return false,
         };
-        if region.collapsed || !region.governor.is_defiant() {
+        if region.collapsed || region.governor.is_dead() || !region.governor.is_defiant() {
             return false;
         }
         // All personality types can always bargain when defiant

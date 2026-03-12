@@ -738,52 +738,71 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     // Governor cooperation
     {
         let gov = &region.governor;
-        let cooperation_color = if gov.is_defiant() {
-            Color::Red
-        } else if gov.is_cooperative() {
-            Color::Green
+        if gov.is_dead() {
+            // Leaderless state: show succession countdown
+            let succession_info = if let Some(succ_tick) = gov.succession_tick {
+                let ticks_left = succ_tick.saturating_sub(state.tick);
+                let days_left = ticks_left as f64 / crate::state::TICKS_PER_DAY;
+                format!(" (successor in {:.0} days)", days_left.ceil())
+            } else {
+                String::new()
+            };
+            lines.push(Line::from(vec![
+                Span::styled("LEADERLESS", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(succession_info, Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" (policies {:.0}% effective)", gov.policy_effectiveness() * 100.0),
+                    Style::default().fg(Color::Red),
+                ),
+            ]));
         } else {
-            Color::Yellow
-        };
-        let status = if gov.is_defiant() {
-            " DEFIANT"
-        } else if gov.is_cooperative() {
-            " cooperative"
-        } else {
-            ""
-        };
-        let gov_is_board = state.board_members.iter().any(|bm| {
-            matches!(bm.role, crate::state::BoardRole::RegionGovernor { region_idx: ri } if ri == idx)
-        });
-        let gov_board_marker = if gov_is_board { " ★" } else { "" };
-        lines.push(Line::from(vec![
-            Span::styled(&gov.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::styled(gov_board_marker, Style::default().fg(Color::Yellow)),
-            Span::styled(
-                format!(" ({}) ", gov.personality.label()),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled("Co-Op: ", label),
-            Span::styled(
-                format!("{:.0}", gov.cooperation),
-                Style::default().fg(cooperation_color),
-            ),
-            Span::styled(
-                status,
-                Style::default().fg(cooperation_color).add_modifier(Modifier::BOLD),
-            ),
-            {
-                let eff = gov.policy_effectiveness();
-                if eff < 1.0 {
-                    Span::styled(
-                        format!(" (policies {:.0}% effective)", eff * 100.0),
-                        Style::default().fg(Color::Red),
-                    )
-                } else {
-                    Span::raw("")
-                }
-            },
-        ]));
+            let cooperation_color = if gov.is_defiant() {
+                Color::Red
+            } else if gov.is_cooperative() {
+                Color::Green
+            } else {
+                Color::Yellow
+            };
+            let status = if gov.is_defiant() {
+                " DEFIANT"
+            } else if gov.is_cooperative() {
+                " cooperative"
+            } else {
+                ""
+            };
+            let gov_is_board = state.board_members.iter().any(|bm| {
+                matches!(bm.role, crate::state::BoardRole::RegionGovernor { region_idx: ri } if ri == idx)
+            });
+            let gov_board_marker = if gov_is_board { " ★" } else { "" };
+            lines.push(Line::from(vec![
+                Span::styled(&gov.name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(gov_board_marker, Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    format!(" ({}) ", gov.personality.label()),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled("Co-Op: ", label),
+                Span::styled(
+                    format!("{:.0}", gov.cooperation),
+                    Style::default().fg(cooperation_color),
+                ),
+                Span::styled(
+                    status,
+                    Style::default().fg(cooperation_color).add_modifier(Modifier::BOLD),
+                ),
+                {
+                    let eff = gov.policy_effectiveness();
+                    if eff < 1.0 {
+                        Span::styled(
+                            format!(" (policies {:.0}% effective)", eff * 100.0),
+                            Style::default().fg(Color::Red),
+                        )
+                    } else {
+                        Span::raw("")
+                    }
+                },
+            ]));
+        }
     }
 
     // Local market — corporations headquartered in this region

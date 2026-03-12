@@ -354,6 +354,18 @@ pub(crate) fn process_events(state: &mut GameState) {
             GameEvent::GovernorAction { description, .. } => {
                 (4, description.clone(), description.clone())
             }
+            GameEvent::GovernorDied { region_idx, name } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let msg = format!("{} of {} has died. Region is leaderless.", name, region_name);
+                (1, msg.clone(), msg)
+            }
+            GameEvent::GovernorSucceeded { region_idx, name } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let msg = format!("New governor in {}: {}", region_name, name);
+                (2, msg.clone(), msg)
+            }
             GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");

@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::state::{
     CrisisKind, GameEvent, GameState, GovernorPersonality, RegionSpecialization, RegionTrait,
     ScreeningLevel,
@@ -340,6 +342,10 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
         let name = &state.regions[region_idx].name;
         return (Some(format!("{name} has collapsed. No governor to appease.")), false);
     }
+    if state.regions[region_idx].governor.is_dead() {
+        let name = &state.regions[region_idx].name;
+        return (Some(format!("{name} is leaderless. No governor to appease.")), false);
+    }
     if state.resources.funding < APPEASE_COST {
         return (Some(format!("Not enough funding (need ¥{APPEASE_COST:.0})")), false);
     }
@@ -363,6 +369,10 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
         return (Some(format!("{name} has collapsed")), false);
+    }
+    if state.regions[region_idx].governor.is_dead() {
+        let name = &state.regions[region_idx].name;
+        return (Some(format!("{name} is leaderless. No governor to bargain with.")), false);
     }
     if !state.regions[region_idx].governor.is_defiant() {
         return (Some("Governor is not defiant. No bargain needed.".into()), false);
@@ -454,6 +464,17 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
     let num_regions = state.regions.len();
     for i in 0..num_regions {
         if state.regions[i].collapsed {
+            continue;
+        }
+
+        // Handle governor succession: new governor arrives after the waiting period
+        if state.regions[i].governor.dead {
+            if let Some(succ_tick) = state.regions[i].governor.succession_tick {
+                if state.tick >= succ_tick {
+                    tick_governor_succession(state, i);
+                }
+            }
+            // Dead governors don't drift, don't fire crises, don't do anything
             continue;
         }
 
@@ -566,7 +587,86 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         if new_cooperation >= GOVERNOR_DEFIANCE_THRESHOLD && state.regions[i].governor.defiance_crisis_fired {
             state.regions[i].governor.defiance_crisis_fired = false;
         }
+
+        // Governor death: rare event in critically infected regions with significant deaths.
+        // Per-tick probability when infected > CRIT threshold AND death_frac > 5%.
+        // ~0.0002/tick = ~1.2% per day at CRIT. Only fires once (governor dies).
+        // Guard: don't fire if there's already a pending GovernorDeath for this region.
+        if infected > SEVERITY_CRIT_THRESHOLD && death_frac > 0.05 {
+            let already_pending = state.pending_crises.iter()
+                .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == i));
+            let already_active = state.active_crisis.as_ref()
+                .map_or(false, |c| matches!(c.kind, CrisisKind::GovernorDeath { region_idx: ri } if ri == i));
+            if !already_pending && !already_active {
+                let roll: f64 = state.rng_misc.r#gen();
+                if roll < 0.0002 {
+                    state.pending_crises.push((state.tick, CrisisKind::GovernorDeath { region_idx: i }));
+                }
+            }
+        }
     }
+}
+
+/// Handle governor succession: replace the dead governor with a new one.
+fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
+    use crate::state::{GovernorPersonality, SUCCESSOR_COOPERATION};
+
+    // Pick a random personality (different from the deceased)
+    let old_personality = state.regions[region_idx].governor.personality;
+    let personalities = [
+        GovernorPersonality::Buffoon,
+        GovernorPersonality::Blowhard,
+        GovernorPersonality::Recluse,
+        GovernorPersonality::Hardliner,
+        GovernorPersonality::Operative,
+        GovernorPersonality::Mobster,
+    ];
+    let candidates: Vec<_> = personalities.iter()
+        .filter(|&&p| p != old_personality)
+        .copied()
+        .collect();
+    let new_personality = candidates[state.rng_misc.gen_range(0..candidates.len())];
+
+    // Generate a successor name based on region
+    let successor_names: &[&str] = match state.regions[region_idx].name.as_str() {
+        "North America" => &["Gov. Reyes", "Gov. Mitchell", "Gov. Park", "Gov. Dubois"],
+        "South America" => &["Gov. Silva", "Gov. Mendoza", "Gov. Herrera", "Gov. Aguiar"],
+        "Europe" => &["Gov. Müller", "Gov. Johansson", "Gov. Moretti", "Gov. Kowalski"],
+        "Africa" => &["Gov. Diallo", "Gov. Mensah", "Gov. Ndung'u", "Gov. Balogun"],
+        "Asia" => &["Gov. Nakamura", "Gov. Singh", "Gov. Chen", "Gov. Patel"],
+        "Oceania" => &["Gov. Campbell", "Gov. Aroha", "Gov. Dawson", "Gov. Talbot"],
+        _ => &["Gov. Unknown"],
+    };
+    let old_name = state.regions[region_idx].governor.name.clone();
+    let mut new_name = successor_names[state.rng_misc.gen_range(0..successor_names.len())].to_string();
+    // Avoid picking the same name as the deceased
+    if new_name == old_name {
+        new_name = successor_names[(state.rng_misc.gen_range(0..successor_names.len()) + 1) % successor_names.len()].to_string();
+    }
+
+    // Replace the governor
+    let gov = &mut state.regions[region_idx].governor;
+    gov.name = new_name.clone();
+    gov.personality = new_personality;
+    gov.cooperation = SUCCESSOR_COOPERATION;
+    gov.dead = false;
+    gov.succession_tick = None;
+    gov.defiance_crisis_fired = false;
+    gov.last_action_tick = state.tick;
+    gov.bargain_count = 0;
+    gov.income_skim = 0.0;
+
+    // Update the board member if this governor sits on the board
+    for member in &mut state.board_members {
+        if matches!(member.role, crate::state::BoardRole::RegionGovernor { region_idx: ri } if ri == region_idx) {
+            member.name = new_name.clone();
+        }
+    }
+
+    state.events.push(GameEvent::GovernorSucceeded {
+        region_idx,
+        name: new_name,
+    });
 }
 
 /// Tick autonomous governor actions. Defiant governors periodically act against
@@ -584,6 +684,10 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
             continue;
         }
         let gov = &state.regions[i].governor;
+        // Dead governors can't take autonomous actions
+        if gov.dead {
+            continue;
+        }
         if gov.cooperation >= GOVERNOR_DEFIANCE_THRESHOLD {
             continue;
         }
@@ -1983,5 +2087,81 @@ mod tests {
         // Cannot enact again
         let (_, ok) = enact_decree(&mut state, 5, None);
         assert!(!ok, "should not enact twice");
+    }
+
+    // --- Governor death and succession tests ---
+
+    #[test]
+    fn dead_governor_reduces_policy_effectiveness() {
+        use crate::state::LEADERLESS_EFFECTIVENESS;
+        let mut state = GameState::new_default(42);
+        assert!(!state.regions[0].governor.is_dead());
+        assert!((state.regions[0].policy_effectiveness() - 1.0).abs() < 0.001);
+
+        state.regions[0].governor.dead = true;
+        assert!(state.regions[0].governor.is_dead());
+        assert!((state.regions[0].policy_effectiveness() - LEADERLESS_EFFECTIVENESS).abs() < 0.001);
+    }
+
+    #[test]
+    fn dead_governor_is_not_defiant() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.cooperation = 10.0; // well below threshold
+        assert!(state.regions[0].governor.is_defiant());
+
+        state.regions[0].governor.dead = true;
+        assert!(!state.regions[0].governor.is_defiant());
+        assert!(!state.regions[0].governor.is_cooperative());
+    }
+
+    #[test]
+    fn dead_governor_no_autonomous_actions() {
+        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
+        state.regions[0].governor.dead = true;
+        let events_before = state.events.len();
+
+        tick_governor_actions(&mut state);
+
+        assert_eq!(state.events.len(), events_before,
+            "Dead governor should not take autonomous actions");
+    }
+
+    #[test]
+    fn governor_succession_replaces_dead_governor() {
+        use crate::state::{SUCCESSOR_COOPERATION, TICKS_PER_DAY};
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.dead = true;
+        state.regions[0].governor.succession_tick = Some(100);
+        state.tick = 100;
+
+        tick_governor_cooperation(&mut state);
+
+        assert!(!state.regions[0].governor.is_dead(),
+            "Governor should be replaced after succession tick");
+        assert!((state.regions[0].governor.cooperation - SUCCESSOR_COOPERATION).abs() < 0.001);
+        assert!(state.events.iter().any(|e| matches!(e, GameEvent::GovernorSucceeded { .. })),
+            "Should fire GovernorSucceeded event");
+    }
+
+    #[test]
+    fn appease_blocked_for_dead_governor() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.dead = true;
+        state.resources.funding = 10000.0;
+
+        let (msg, ok) = appease_governor(&mut state, 0);
+        assert!(!ok, "Should not be able to appease a dead governor");
+        assert!(msg.unwrap().contains("leaderless"));
+    }
+
+    #[test]
+    fn bargain_blocked_for_dead_governor() {
+        let mut state = GameState::new_default(42);
+        state.regions[0].governor.dead = true;
+        state.regions[0].governor.cooperation = 10.0;
+
+        let (msg, ok) = bargain_with_governor(&mut state, 0);
+        assert!(!ok, "Should not be able to bargain with a dead governor");
+        assert!(msg.unwrap().contains("leaderless"));
     }
 }
