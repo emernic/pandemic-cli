@@ -1716,7 +1716,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                              {region_name} say the governor is bedridden. Policy enforcement has stalled."),
                         options: vec![ CrisisOption {
                             label: "Let them recover".into(),
-                            description: format!("Policy effectiveness at 30% in {} until resolved", region_name),
+                            description: format!("Cooperation drops in {}. Policies less effective until recovery.", region_name),
                             cost: None,
                         },
                         CrisisOption {
