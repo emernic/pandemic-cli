@@ -191,7 +191,7 @@ pub(super) fn assign_manufacturers(state: &mut GameState) {
 /// 2. Deduct operating costs from revenue to get profit
 /// 3. Add/subtract profit from reserves
 /// 4. If reserves hit 0, the corp goes bankrupt (permanent)
-pub(super) fn tick_corporations(state: &mut GameState) {
+pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
     if total_pop <= 0.0 {
         return;
@@ -292,14 +292,14 @@ pub(super) fn tick_corporations(state: &mut GameState) {
 
     // Update share prices once per day based on revenue performance + noise.
     if state.tick > 0 && state.tick % (TICKS_PER_DAY as u64) == 0 {
-        tick_share_prices(state);
+        tick_share_prices(state, rng_misc);
     }
 }
 
 /// Update share prices for all corporations.
 /// Price = f(revenue_ratio, reserves_fraction) + random walk noise.
 /// Called once per day from tick_corporations.
-fn tick_share_prices(state: &mut GameState) {
+fn tick_share_prices(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     for c_idx in 0..state.corporations.len() {
         let corp = &state.corporations[c_idx];
 
@@ -326,7 +326,7 @@ fn tick_share_prices(state: &mut GameState) {
         // Mean-revert toward fair value with random walk
         let old_price = corp.share_price;
         let reversion = 0.15 * (fair_value - old_price);
-        let noise = (state.rng_misc.r#gen::<f64>() - 0.5) * old_price * 0.08;
+        let noise = (rng_misc.r#gen::<f64>() - 0.5) * old_price * 0.08;
         let new_price = (old_price + reversion + noise).max(0.01);
 
         state.corporations[c_idx].share_price = new_price;
@@ -409,7 +409,8 @@ mod tests {
 
         // Manually collapse North America
         state.regions[0].collapsed = true;
-        tick_corporations(&mut state);
+        let mut rng = state.rng_misc.clone();
+        tick_corporations(&mut state, &mut rng);
 
         let na_corps: Vec<&Corporation> = state.corporations.iter()
             .filter(|c| c.region_idx == 0)

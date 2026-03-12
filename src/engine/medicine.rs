@@ -132,7 +132,7 @@ pub(super) fn deploy_medicine(
 /// Process arriving shipments. Called each tick. Delivers doses that have
 /// arrived and discards shipments to collapsed regions. Travel bans restrict
 /// civilian movement but do not block medical supply shipments.
-pub(super) fn tick_shipments(state: &mut GameState) {
+pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     let mut i = 0;
     while i < state.pending_shipments.len() {
         let reg_idx = state.pending_shipments[i].region_idx;
@@ -154,7 +154,7 @@ pub(super) fn tick_shipments(state: &mut GameState) {
 
         // Deliver the shipment
         let shipment = state.pending_shipments.remove(i);
-        deliver_shipment(state, &shipment);
+        deliver_shipment(state, &shipment, rng_misc);
         // don't increment i — the vec shifted
     }
 }
@@ -165,7 +165,7 @@ pub(super) fn tick_shipments(state: &mut GameState) {
 /// determine how many doses physically arrive, healthcare capacity determines
 /// how many can be administered. These multiply, so degraded regions receive
 /// far fewer effective doses. Wasted doses are lost permanently.
-fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
+fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     let med_idx = shipment.medicine_idx;
     let reg_idx = shipment.region_idx;
 
@@ -208,7 +208,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
                 .estimate_vaccination(susceptible, efficacy, vax_mult)
                 .min(effective_doses);
             if actual <= 0.0 { return; }
-            let (adverse, adverse_deaths) = adverse_check(&mut state.rng_misc, actual, is_tested, susceptible);
+            let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, susceptible);
             let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
             apply_immune_and_deaths(inf, actual, adverse_deaths);
             state.regions[reg_idx].dead += adverse_deaths;
@@ -222,7 +222,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment) {
                 .estimate_treatment(infected, efficacy)
                 .min(effective_doses);
             if actual <= 0.0 { return; }
-            let (adverse, adverse_deaths) = adverse_check(&mut state.rng_misc, actual, is_tested, infected);
+            let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, infected);
             let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
             inf.infected -= actual;
             apply_immune_and_deaths(inf, actual, adverse_deaths);
