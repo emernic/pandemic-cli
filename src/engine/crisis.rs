@@ -1455,14 +1455,15 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let income_day = offer.map(|c| c.income * TICKS_PER_DAY).unwrap_or(0.0);
             let condition_desc = offer.map(|c| c.condition.description()).unwrap_or_default();
             let contract_name = offer.map(|c| c.name.as_str()).unwrap_or("Contract");
+            let article = if contract_name.starts_with(|c: char| "AEIOUaeiou".contains(c)) { "an" } else { "a" };
             let other_count = state.board_members.len().saturating_sub(1);
 
             CrisisEvent {
                 title: format!("{}: Contract Offer", member_name),
                 description: format!(
-                    "{} is offering a {}.\n\nCondition: {}.\nIncome: +¥{:.0}/day.\n\n\
+                    "{} is offering {} {}.\n\nCondition: {}.\nIncome: +¥{:.0}/day.\n\n\
                      Accepting will anger the other {} board members.",
-                    member_name, contract_name, condition_desc, income_day, other_count,
+                    member_name, article, contract_name, condition_desc, income_day, other_count,
                 ),
                 options: vec![
                     CrisisOption {
