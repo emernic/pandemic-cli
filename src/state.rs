@@ -162,10 +162,6 @@ pub struct GameState {
     /// Cumulative doses deployed across all medicines and regions.
     #[serde(default)]
     pub total_doses_deployed: f64,
-    /// Active field operations (Recon, Emergency Response, Infrastructure Survey).
-    /// These cost personnel and time, not money.
-    #[serde(default)]
-    pub field_operations: Vec<FieldOperation>,
     /// Crisis response operations: temporary personnel commitments from crisis resolutions.
     /// Personnel are returned automatically when the operation completes.
     #[serde(default)]
@@ -1424,131 +1420,6 @@ pub const SUPPLY_STRESSED_COST_MULT: f64 = 1.5;
 /// Civil order: spread multiplier when at zero (anarchy).
 pub const CIVIL_ORDER_ANARCHY_SPREAD: f64 = 1.5;
 
-// --- Field Operations constants ---
-
-/// Recon Mission: reveals pathogen type without full identification cost.
-pub const OP_RECON_PERSONNEL: u32 = 2;
-pub const OP_RECON_TICKS: f64 = 180.0; // 1.5 days
-pub const OP_RECON_KNOWLEDGE: f64 = 0.25;
-
-/// Emergency Response: temporary lethality reduction in a region.
-pub const OP_EMERGENCY_PERSONNEL: u32 = 3;
-pub const OP_EMERGENCY_TICKS: f64 = 120.0; // 1 day to deploy
-pub const OP_EMERGENCY_EFFECT_TICKS: u64 = 360; // effect lasts 3 days
-pub const OP_EMERGENCY_LETHALITY_MULT: f64 = 0.75; // 25% lethality reduction
-
-/// Infrastructure Survey: free but slow infrastructure repair.
-pub const OP_SURVEY_PERSONNEL: u32 = 2;
-pub const OP_SURVEY_TICKS: f64 = 240.0; // 2 days
-pub const OP_SURVEY_REPAIR: f64 = 0.15; // restores 15%
-
-/// Supply Chain Reinforcement: funded investment to bolster supply lines in a region.
-/// Restores supply lines AND adds permanent resilience (reduces degradation rate).
-pub const OP_SUPPLY_PERSONNEL: u32 = 2;
-pub const OP_SUPPLY_TICKS: f64 = 360.0; // 3 days
-pub const OP_SUPPLY_COST: f64 = 800.0;
-pub const OP_SUPPLY_RESTORE: f64 = 0.20; // restores 20%
-pub const OP_SUPPLY_RESILIENCE: f64 = 0.25; // +25% degradation resistance per deployment
-
-/// Civil Order Stabilization: funded operation to shore up civil order in a region.
-/// Restores civil order AND adds permanent resilience (reduces degradation rate).
-pub const OP_CIVIL_PERSONNEL: u32 = 1;
-pub const OP_CIVIL_TICKS: f64 = 240.0; // 2 days
-pub const OP_CIVIL_COST: f64 = 600.0;
-pub const OP_CIVIL_RESTORE: f64 = 0.15; // restores 15%
-pub const OP_CIVIL_RESILIENCE: f64 = 0.25; // +25% degradation resistance per deployment
-
-/// Maximum resilience bonus from infrastructure investment (caps stacking).
-pub const MAX_INFRA_RESILIENCE: f64 = 0.75; // 75% max degradation reduction
-
-/// Evacuation Corridor: moves susceptible population out of a struggling region.
-/// Evacuees travel to a destination region — bringing disease risk with them.
-/// Reduces susceptible pool in source (slows future deaths), but may seed destination.
-pub const OP_EVAC_PERSONNEL: u32 = 2;
-pub const OP_EVAC_TICKS: f64 = 120.0; // 1 day to coordinate
-pub const OP_EVAC_COST: f64 = 600.0;
-/// Fraction of source susceptibles moved to destination.
-pub const OP_EVAC_FRACTION: f64 = 0.10;
-/// Each point of source infection rate adds this much to seeding probability (cap at 0.80).
-pub const OP_EVAC_SEED_RATE_FACTOR: f64 = 3.0;
-
-/// Number of deployable field operation types (Recon, Emergency, Survey, Supply, Civil, Evac).
-/// Must equal the number of match arms in `handle_operations_confirm()` (lib.rs) and
-/// the length of the `ops` array in `ui/operations.rs`. If you add a new op type,
-/// update this constant — otherwise `panel_selection_max()` will make the new type unreachable.
-pub const FIELD_OP_TYPE_COUNT: usize = 6;
-
-/// What kind of field operation is being conducted.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FieldOpKind {
-    /// Partial identification of an unidentified pathogen.
-    Recon { disease_idx: usize },
-    /// Emergency medical response in a region.
-    EmergencyResponse { region_idx: usize },
-    /// Infrastructure repair via engineering survey.
-    InfraSurvey { region_idx: usize },
-    /// Bolster supply lines in a region (funded).
-    SupplyChainReinforcement { region_idx: usize },
-    /// Shore up civil order in a region (funded).
-    CivilOrderStabilization { region_idx: usize },
-    /// Move susceptible population from a struggling region to a safer one (funded).
-    /// Reduces source susceptibles (fewer future deaths), but may seed destination.
-    EvacuationCorridor { source_idx: usize, dest_idx: usize },
-}
-
-impl FieldOpKind {
-    pub fn personnel(&self) -> u32 {
-        match self {
-            FieldOpKind::Recon { .. } => OP_RECON_PERSONNEL,
-            FieldOpKind::EmergencyResponse { .. } => OP_EMERGENCY_PERSONNEL,
-            FieldOpKind::InfraSurvey { .. } => OP_SURVEY_PERSONNEL,
-            FieldOpKind::SupplyChainReinforcement { .. } => OP_SUPPLY_PERSONNEL,
-            FieldOpKind::CivilOrderStabilization { .. } => OP_CIVIL_PERSONNEL,
-            FieldOpKind::EvacuationCorridor { .. } => OP_EVAC_PERSONNEL,
-        }
-    }
-
-    pub fn duration_ticks(&self) -> f64 {
-        match self {
-            FieldOpKind::Recon { .. } => OP_RECON_TICKS,
-            FieldOpKind::EmergencyResponse { .. } => OP_EMERGENCY_TICKS,
-            FieldOpKind::InfraSurvey { .. } => OP_SURVEY_TICKS,
-            FieldOpKind::SupplyChainReinforcement { .. } => OP_SUPPLY_TICKS,
-            FieldOpKind::CivilOrderStabilization { .. } => OP_CIVIL_TICKS,
-            FieldOpKind::EvacuationCorridor { .. } => OP_EVAC_TICKS,
-        }
-    }
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            FieldOpKind::Recon { .. } => "Recon Mission",
-            FieldOpKind::EmergencyResponse { .. } => "Emergency Response",
-            FieldOpKind::InfraSurvey { .. } => "Infrastructure Survey",
-            FieldOpKind::SupplyChainReinforcement { .. } => "Supply Reinforcement",
-            FieldOpKind::CivilOrderStabilization { .. } => "Civil Stabilization",
-            FieldOpKind::EvacuationCorridor { .. } => "Evacuation Corridor",
-        }
-    }
-
-    /// Funding cost to start this operation, if any. Free ops return None.
-    pub fn cost(&self) -> Option<f64> {
-        match self {
-            FieldOpKind::SupplyChainReinforcement { .. } => Some(OP_SUPPLY_COST),
-            FieldOpKind::CivilOrderStabilization { .. } => Some(OP_CIVIL_COST),
-            FieldOpKind::EvacuationCorridor { .. } => Some(OP_EVAC_COST),
-            _ => None,
-        }
-    }
-}
-
-/// An active field operation in progress.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FieldOperation {
-    pub kind: FieldOpKind,
-    pub personnel: u32,
-    pub ticks_remaining: f64,
-    pub total_ticks: f64,
-}
 
 impl Governor {
     /// Returns true if this governor is defiant (loyalty below threshold).
@@ -1667,18 +1538,6 @@ pub struct Region {
     /// first, CutOff regions are skipped entirely.
     #[serde(default)]
     pub deploy_priority: RegionPriority,
-    /// Permanent resilience bonus for supply lines (0.0-0.75). Reduces supply line
-    /// degradation rate. Stacks from Supply Reinforcement operations.
-    #[serde(default)]
-    pub supply_resilience: f64,
-    /// Permanent resilience bonus for civil order (0.0-0.75). Reduces civil order
-    /// degradation rate. Stacks from Civil Stabilization operations.
-    #[serde(default)]
-    pub civil_resilience: f64,
-    /// Tick at which an emergency response effect expires. While active,
-    /// lethality in this region is reduced by OP_EMERGENCY_LETHALITY_MULT.
-    #[serde(default)]
-    pub emergency_response_until: Option<u64>,
     /// Tick until which this region suffers network disruption from a neighboring collapse.
     /// While active: +50% medicine deployment costs (see DISRUPTION_MEDICINE_COST_MULT).
     /// Multiple collapses extend the duration (last-collapse-wins on end tick).
@@ -3565,11 +3424,6 @@ pub enum GameEvent {
         region_idx: usize,
         policy_name: String,
     },
-    /// A field operation completed.
-    FieldOpCompleted {
-        label: String,
-        result: String,
-    },
     /// A crisis response team returned — personnel freed.
     CrisisTeamReturned {
         label: String,
@@ -3633,8 +3487,6 @@ pub enum GameCommand {
     ToggleAutoDeploy { med_idx: usize },
     /// Toggle auto-research for a specific track.
     ToggleAutoResearch { track: ResearchTrack },
-    /// Start a field operation (costs personnel and time, not money).
-    StartFieldOp { kind: FieldOpKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
     /// Cycle a region's deployment priority (High → Normal → Low → CutOff → High).
@@ -3972,22 +3824,8 @@ pub enum ResearchUiState {
 /// Operations/Orders panel UI state machine.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OpsUiState {
-    /// Top level: browse active ops, available operation types, decrees, standing orders, loans.
+    /// Top level: browse decrees, standing orders, loans.
     BrowseOps,
-    /// Pick a target disease (for Recon).
-    SelectReconTarget,
-    /// Pick a target region (for Emergency Response).
-    SelectEmergencyTarget,
-    /// Pick a target region (for Infra Survey).
-    SelectSurveyTarget,
-    /// Pick a target region (for Supply Chain Reinforcement).
-    SelectSupplyTarget,
-    /// Pick a target region (for Civil Order Stabilization).
-    SelectCivilOrderTarget,
-    /// Step 1: pick the source region to evacuate FROM.
-    SelectEvacSource,
-    /// Step 2: pick the destination region to evacuate TO. source_idx is the chosen source.
-    SelectEvacDest { source_idx: usize },
     /// Confirm an emergency decree before enacting it.
     ConfirmDecree { decree_idx: usize },
     /// Select which region to sacrifice (for Sacrifice Region decree).
@@ -4010,12 +3848,12 @@ pub struct UiState {
     /// - `Panel::Research / BrowseCategories` → 0..RESEARCH_TRACK_COUNT-1 = track, RESEARCH_TRACK_COUNT = UpgradeLab
     /// - `Panel::Research / BrowseProjects`   → index into [active projects, then available projects]
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
-    /// - `Panel::Operations / BrowseOps`      → 0..n_active = active op, then 0..FIELD_OP_TYPE_COUNT = op types
+    /// - `Panel::Operations / BrowseOps`      → decrees, standing orders, loans
     ///
     /// Always bounded by `panel_selection_max()` and reset to 0 on every wizard step transition.
     ///
     /// **Adding items to a panel list:** update the corresponding `panel_selection_max()` branch.
-    /// Named constants (RESEARCH_TRACK_COUNT, STANDING_ORDER_COUNT, FIELD_OP_TYPE_COUNT, MANAGE_*)
+    /// Named constants (RESEARCH_TRACK_COUNT, STANDING_ORDER_COUNT, MANAGE_*)
     /// tie the max calculation to the renderer so changes propagate correctly.
     pub panel_selection: usize,
     #[serde(default)]
@@ -4193,21 +4031,10 @@ impl UiState {
             }
             Panel::Operations => {
                 match &self.operations_ui {
-                    Some(OpsUiState::SelectReconTarget)
-                    | Some(OpsUiState::SelectEmergencyTarget)
-                    | Some(OpsUiState::SelectSurveyTarget)
-                    | Some(OpsUiState::SelectSupplyTarget)
-                    | Some(OpsUiState::SelectCivilOrderTarget)
-                    | Some(OpsUiState::SelectEvacSource)
-                    | Some(OpsUiState::ConfirmDecree { .. })
+                    Some(OpsUiState::ConfirmDecree { .. })
                     | Some(OpsUiState::SelectSacrificeRegion)
                     | Some(OpsUiState::SelectFortifyRegion) => {
                         self.operations_ui = Some(OpsUiState::BrowseOps);
-                        self.panel_selection = 0;
-                    }
-                    Some(OpsUiState::SelectEvacDest { .. }) => {
-                        // Step 2 → back to step 1
-                        self.operations_ui = Some(OpsUiState::SelectEvacSource);
                         self.panel_selection = 0;
                     }
                     _ => {
@@ -4305,25 +4132,11 @@ impl UiState {
             },
             Panel::Operations => match &self.operations_ui {
                 Some(OpsUiState::BrowseOps) => {
-                    // Active ops + op types + decrees + standing orders + loans
-                    (state.field_operations.len() + FIELD_OP_TYPE_COUNT
-                        + DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len())
+                    // Decrees + standing orders + loans
+                    (DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len())
                         .saturating_sub(1)
                 }
-                Some(OpsUiState::SelectReconTarget) => {
-                    // Unidentified diseases
-                    state.diseases.iter()
-                        .filter(|d| d.detected && d.knowledge < KNOWLEDGE_NAME)
-                        .count()
-                        .saturating_sub(1)
-                }
-                Some(OpsUiState::SelectEmergencyTarget)
-                | Some(OpsUiState::SelectSurveyTarget)
-                | Some(OpsUiState::SelectSupplyTarget)
-                | Some(OpsUiState::SelectCivilOrderTarget)
-                | Some(OpsUiState::SelectEvacSource)
-                | Some(OpsUiState::SelectEvacDest { .. })
-                | Some(OpsUiState::SelectSacrificeRegion)
+                Some(OpsUiState::SelectSacrificeRegion)
                 | Some(OpsUiState::SelectFortifyRegion) => {
                     // Non-collapsed regions
                     state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
@@ -4574,9 +4387,6 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
-                supply_resilience: 0.0,
-                civil_resilience: 0.0,
-                emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -4614,9 +4424,6 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
-                supply_resilience: 0.0,
-                civil_resilience: 0.0,
-                emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -4654,9 +4461,6 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
-                supply_resilience: 0.0,
-                civil_resilience: 0.0,
-                emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -4694,9 +4498,6 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
-                supply_resilience: 0.0,
-                civil_resilience: 0.0,
-                emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -4734,9 +4535,6 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
-                supply_resilience: 0.0,
-                civil_resilience: 0.0,
-                emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -4774,9 +4572,6 @@ impl GameState {
                 supply_lines: 1.0,
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
-                supply_resilience: 0.0,
-                civil_resilience: 0.0,
-                emergency_response_until: None,
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -4905,7 +4700,6 @@ impl GameState {
             auto_research: [false; 3],
             auto_deploy: vec![],
             standing_orders: StandingOrders::default(),
-            field_operations: vec![],
             crisis_operations: vec![],
             pending_shipments: vec![],
             death_milestone_tier: vec![0; num_diseases],
@@ -5104,9 +4898,8 @@ impl GameState {
             1 => INTEL_STATION_PERSONNEL,
             _ => 0,
         }).sum();
-        let ops: u32 = self.field_operations.iter().map(|op| op.personnel).sum();
         let crisis_ops: u32 = self.crisis_operations.iter().map(|op| op.personnel).sum();
-        field + applied + basic + policy + hospitals + intel + ops + crisis_ops
+        field + applied + basic + policy + hospitals + intel + crisis_ops
     }
 
     pub fn personnel_available(&self) -> u32 {

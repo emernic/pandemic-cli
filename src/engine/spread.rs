@@ -37,7 +37,6 @@ pub(super) fn tick_spread_within(
     diseases: &[Disease],
     rng: &mut impl Rng,
 ) {
-    let current_tick = new.tick;
     for (region_idx, region) in new.regions.iter_mut().enumerate() {
         let pop = region.population as f64;
         let policy = new.policies.get(region_idx);
@@ -139,10 +138,6 @@ pub(super) fn tick_spread_within(
                     lethality *= crate::state::HEALTHCARE_CRITICAL_LETHALITY;
                 } else if region.healthcare_capacity < crate::state::INFRA_STRESSED {
                     lethality *= crate::state::HEALTHCARE_STRESSED_LETHALITY;
-                }
-                // Field operations: emergency response reduces lethality temporarily
-                if region.emergency_response_until.is_some_and(|t| t > current_tick) {
-                    lethality *= crate::state::OP_EMERGENCY_LETHALITY_MULT;
                 }
                 let mut new_deaths = (lethality * inf.infected * noise).max(0.0);
                 let mut new_recoveries = (disease.recovery_rate * inf.infected * noise).max(0.0);

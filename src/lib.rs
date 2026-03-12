@@ -7,8 +7,8 @@ pub mod ui;
 use action::Action;
 use engine::execute_command;
 use state::{
-    DeployTarget, DECREE_COUNT, FIELD_OP_TYPE_COUNT, FieldOpKind, GameCommand, GameOutcome, GameState,
-    KNOWLEDGE_NAME, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
+    DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
+    MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
 };
@@ -476,71 +476,11 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
 fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.operations_ui.clone() {
         Some(OpsUiState::BrowseOps) => {
-            let n_active = state.field_operations.len();
-            let op_type_base = n_active;
-            let decree_base = op_type_base + FIELD_OP_TYPE_COUNT;
+            let decree_base = 0;
             let so_base = decree_base + DECREE_COUNT;
             let loan_base = so_base + STANDING_ORDER_COUNT;
 
-            if ui.panel_selection < n_active {
-                // Selected an active op — no action (view only)
-                None
-            } else if ui.panel_selection < decree_base {
-                // Selected an operation type
-                match ui.panel_selection - op_type_base {
-                    0 => {
-                        // Recon — need to pick a disease
-                        let targets: Vec<usize> = state.diseases.iter().enumerate()
-                            .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_NAME)
-                            .map(|(i, _)| i)
-                            .collect();
-                        if targets.is_empty() {
-                            ui.status_message = Some("No unidentified pathogens".into());
-                            None
-                        } else if targets.len() == 1 {
-                            // Only one target — skip selection
-                            Some(GameCommand::StartFieldOp {
-                                kind: FieldOpKind::Recon { disease_idx: targets[0] },
-                            })
-                        } else {
-                            ui.operations_ui = Some(OpsUiState::SelectReconTarget);
-                            ui.panel_selection = 0;
-                            None
-                        }
-                    }
-                    1 => {
-                        // Emergency Response — pick a region
-                        ui.operations_ui = Some(OpsUiState::SelectEmergencyTarget);
-                        ui.panel_selection = 0;
-                        None
-                    }
-                    2 => {
-                        // Infra Survey — pick a region
-                        ui.operations_ui = Some(OpsUiState::SelectSurveyTarget);
-                        ui.panel_selection = 0;
-                        None
-                    }
-                    3 => {
-                        // Supply Chain Reinforcement — pick a region
-                        ui.operations_ui = Some(OpsUiState::SelectSupplyTarget);
-                        ui.panel_selection = 0;
-                        None
-                    }
-                    4 => {
-                        // Civil Order Stabilization — pick a region
-                        ui.operations_ui = Some(OpsUiState::SelectCivilOrderTarget);
-                        ui.panel_selection = 0;
-                        None
-                    }
-                    5 => {
-                        // Evacuation Corridor — pick source region first
-                        ui.operations_ui = Some(OpsUiState::SelectEvacSource);
-                        ui.panel_selection = 0;
-                        None
-                    }
-                    _ => None,
-                }
-            } else if ui.panel_selection >= loan_base {
+            if ui.panel_selection >= loan_base {
                 // Loan selected — repay in full
                 let loan_idx = ui.panel_selection - loan_base;
                 Some(GameCommand::RepayLoan { loan_idx })
@@ -594,101 +534,6 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                 .collect();
             if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
                 Some(GameCommand::EnactDecree { decree_idx: 4, region_idx: Some(region_idx) })
-            } else {
-                None
-            }
-        }
-        Some(OpsUiState::SelectReconTarget) => {
-            let targets: Vec<usize> = state.diseases.iter().enumerate()
-                .filter(|(_, d)| d.detected && d.knowledge < KNOWLEDGE_NAME)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&disease_idx) = targets.get(ui.panel_selection) {
-                Some(GameCommand::StartFieldOp {
-                    kind: FieldOpKind::Recon { disease_idx },
-                })
-            } else {
-                None
-            }
-        }
-        Some(OpsUiState::SelectEmergencyTarget) => {
-            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::StartFieldOp {
-                    kind: FieldOpKind::EmergencyResponse { region_idx },
-                })
-            } else {
-                None
-            }
-        }
-        Some(OpsUiState::SelectSurveyTarget) => {
-            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::StartFieldOp {
-                    kind: FieldOpKind::InfraSurvey { region_idx },
-                })
-            } else {
-                None
-            }
-        }
-        Some(OpsUiState::SelectSupplyTarget) => {
-            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::StartFieldOp {
-                    kind: FieldOpKind::SupplyChainReinforcement { region_idx },
-                })
-            } else {
-                None
-            }
-        }
-        Some(OpsUiState::SelectCivilOrderTarget) => {
-            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::StartFieldOp {
-                    kind: FieldOpKind::CivilOrderStabilization { region_idx },
-                })
-            } else {
-                None
-            }
-        }
-        Some(OpsUiState::SelectEvacSource) => {
-            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&source_idx) = non_collapsed.get(ui.panel_selection) {
-                ui.operations_ui = Some(OpsUiState::SelectEvacDest { source_idx });
-                ui.panel_selection = 0;
-            }
-            None
-        }
-        Some(OpsUiState::SelectEvacDest { source_idx }) => {
-            let source_idx = source_idx;
-            let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&dest_idx) = non_collapsed.get(ui.panel_selection) {
-                if dest_idx == source_idx {
-                    ui.status_message = Some("Source and destination must differ".into());
-                    None
-                } else {
-                    Some(GameCommand::StartFieldOp {
-                        kind: FieldOpKind::EvacuationCorridor { source_idx, dest_idx },
-                    })
-                }
             } else {
                 None
             }
