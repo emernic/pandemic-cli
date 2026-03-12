@@ -138,8 +138,8 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         // generic restriction drain. Creates a ~22-day window before anarchy kicks in,
         // forcing players to cycle quarantine on/off rather than set-and-forget.
         let quarantine_drain = if policy.quarantine { -0.0003 } else { 0.0 }; // ~0.036/day
-        // RNA virus panic: visible high-lethality RNA outbreaks cause extra civil
-        // order degradation from social panic (bodies piling up fast, compliance drops).
+        // RNA virus panic: visible large-scale RNA outbreaks cause extra civil
+        // order degradation from social panic (rapid spread is visibly alarming).
         // Only counts detected diseases — undetected spread doesn't cause visible panic.
         let rna_infected: f64 = state.regions[i].infections.iter()
             .filter(|inf| {
