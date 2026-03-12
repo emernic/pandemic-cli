@@ -837,7 +837,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchTrack, ResearchUiState};
+    use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
