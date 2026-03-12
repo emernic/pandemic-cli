@@ -8,6 +8,24 @@ use crate::state::{
     SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
+/// Queue a GovernorDeath crisis after a delay, unless the governor is already dead
+/// or a GovernorDeath is already pending/active for this region.
+fn queue_governor_death_followup(state: &mut GameState, region_idx: usize) {
+    let already_dead = state.regions.get(region_idx).map_or(true, |r| r.governor.dead);
+    if already_dead {
+        return;
+    }
+    let already_pending = state.pending_crises.iter()
+        .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
+    let already_active = state.active_crisis.as_ref()
+        .map_or(false, |c| matches!(c.kind, CrisisKind::GovernorDeath { region_idx: ri } if ri == region_idx));
+    if already_pending || already_active {
+        return;
+    }
+    let delay = (4.0 * TICKS_PER_DAY) as u64;
+    state.pending_crises.push((state.tick + delay, CrisisKind::GovernorDeath { region_idx }));
+}
+
 /// Scale a dollar amount relative to current funding.
 /// `fraction` is the target fraction of current funding (e.g., 0.15 = 15%).
 /// Result is clamped to [min, max] and rounded to nearest ¥10.
@@ -3409,6 +3427,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     } else if let Some(proj) = &mut state.applied_research {
                         proj.progress = (proj.progress - loss).max(0.0);
                     }
+                    queue_governor_death_followup(state, *region_idx);
                     "Spent a day and a half undoing the broadcast damage.".into()
                 }
                 (GovernorPersonality::Buffoon, _) => {
@@ -3434,6 +3453,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                     }
+                    queue_governor_death_followup(state, *region_idx);
                     "Refused. The broadcast was not flattering.".into()
                 }
                 (GovernorPersonality::Recluse, 0) => {
@@ -3441,6 +3461,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
                     }
+                    queue_governor_death_followup(state, *region_idx);
                     "Governor isolating. Region running on autopilot.".into()
                 }
                 (GovernorPersonality::Recluse, _) => {
@@ -3470,6 +3491,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                         region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
                     }
                     state.resources.board_approval -= 0.05;
+                    queue_governor_death_followup(state, *region_idx);
                     "Refused. Governor threatening to take matters into their own hands.".into()
                 }
                 (GovernorPersonality::Operative, 0) => {
@@ -3486,6 +3508,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                         region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                         region.governor.income_skim = (region.governor.income_skim + 0.03).min(0.30);
                     }
+                    queue_governor_death_followup(state, *region_idx);
                     "Refused. The governor is finding other ways to recoup.".into()
                 }
                 (GovernorPersonality::Mobster, 0) => {
@@ -3508,6 +3531,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 25.0).max(0.0);
                     }
+                    queue_governor_death_followup(state, *region_idx);
                     "Refused. This will cost you.".into()
                 }
             }
@@ -4254,5 +4278,83 @@ mod tests {
                 current.last_crisis_resolved_tick = current.tick;
             }
         }
+    }
+
+    #[test]
+    fn governor_sick_worst_case_queues_death() {
+        let mut state = GameState::new_default(42);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+
+        // Test each personality's worst-case option
+        let cases: Vec<(GovernorPersonality, usize)> = vec![
+            (GovernorPersonality::Buffoon, 0),    // Damage control
+            (GovernorPersonality::Blowhard, 1),   // Refuse
+            (GovernorPersonality::Recluse, 0),    // Let them recover
+            (GovernorPersonality::Hardliner, 2),  // Refuse
+            (GovernorPersonality::Operative, 1),  // Refuse
+            (GovernorPersonality::Mobster, 2),     // Refuse
+        ];
+
+        for (personality, worst_choice) in cases {
+            let mut s = state.clone();
+            s.pending_crises.clear();
+            let region_idx = 0;
+            s.regions[region_idx].governor.personality = personality;
+            s.regions[region_idx].governor.dead = false;
+
+            let kind = CrisisKind::GovernorSick { region_idx };
+            let crisis = build_crisis_event(&s, kind);
+            s.active_crisis = Some(crisis);
+            s.sim_state = SimState::Event { was_running: false };
+
+            let _msg = resolve_crisis(&mut s, worst_choice);
+
+            let has_death = s.pending_crises.iter()
+                .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
+            assert!(has_death,
+                "{:?} worst-case (choice {}) should queue GovernorDeath", personality, worst_choice);
+        }
+    }
+
+    #[test]
+    fn governor_sick_worst_case_skips_if_already_dead() {
+        let mut state = GameState::new_default(42);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+        state.regions[0].governor.personality = GovernorPersonality::Hardliner;
+        state.regions[0].governor.dead = true;
+
+        let kind = CrisisKind::GovernorSick { region_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = SimState::Event { was_running: false };
+
+        let _msg = resolve_crisis(&mut state, 2); // Refuse (worst-case)
+
+        let has_death = state.pending_crises.iter()
+            .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
+        assert!(!has_death, "should not queue GovernorDeath for already-dead governor");
+    }
+
+    #[test]
+    fn governor_sick_worst_case_skips_if_death_already_pending() {
+        let mut state = GameState::new_default(42);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+        state.regions[0].governor.personality = GovernorPersonality::Operative;
+        state.regions[0].governor.dead = false;
+
+        // Pre-existing pending GovernorDeath
+        state.pending_crises.push((state.tick + 100, CrisisKind::GovernorDeath { region_idx: 0 }));
+
+        let kind = CrisisKind::GovernorSick { region_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = SimState::Event { was_running: false };
+
+        let _msg = resolve_crisis(&mut state, 1); // Refuse (worst-case)
+
+        let death_count = state.pending_crises.iter()
+            .filter(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0))
+            .count();
+        assert_eq!(death_count, 1, "should not duplicate GovernorDeath");
     }
 }
