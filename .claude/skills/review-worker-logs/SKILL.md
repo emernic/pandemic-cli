@@ -19,10 +19,10 @@ Tell the user your branch name.
 
 ## Step 2: Find Recent Logs
 
-Worker logs live in `../<sibling-worktrees>/.worker-logs/`. Find them:
+Worker logs live in `../<sibling-worktrees>/.worker-logs/`. Find them relative to the current worktree:
 
 ```bash
-find /home/emernic -maxdepth 3 -name "*.log" -path "*/.worker-logs/*" -type f 2>/dev/null | head -30
+find "$(dirname "$PWD")" -maxdepth 3 -name "*.log" -path "*/.worker-logs/*" -type f 2>/dev/null | head -30
 ```
 
 Pick the directory with the most recent logs. List the last 10 by modification time:
@@ -33,9 +33,9 @@ ls -lt <log-dir>/*.log | head -10
 
 Report the log files found with their sizes and timestamps.
 
-## Step 3: High-Level Analysis (10 Parallel Agents)
+## Step 3: High-Level Analysis (Parallel Agents)
 
-Launch one Explore sub-agent per log file (all 10 in parallel). Each agent should parse the NDJSON log and report:
+Launch one Explore sub-agent per log file (all in parallel, up to 10). Each agent should parse the NDJSON log and report:
 
 1. **Session metadata**: Total cost, duration, num_turns (from the `result` event at end of log).
 
