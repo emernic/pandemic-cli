@@ -5417,9 +5417,7 @@ impl GameState {
         // Applies to regional income only (not contracts).
         income *= self.board_funding_multiplier;
         // Embezzlement penalty — board pulls funding if warned and still over-investing.
-        if self.embezzlement_warned
-            && self.non_board_portfolio_value() > self.cumulative_policy_spending + EMBEZZLEMENT_BUFFER
-        {
+        if self.embezzlement_warned && self.exceeds_embezzlement_threshold() {
             income *= EMBEZZLEMENT_FUNDING_PENALTY;
         }
         // Contract income — fixed, not affected by population health or board multiplier
@@ -5430,6 +5428,11 @@ impl GameState {
     /// Per-tick income from active contracts alone (for UI breakdown).
     pub fn contract_income_rate(&self) -> f64 {
         self.contracts.iter().map(|c| c.income).sum()
+    }
+
+    /// Whether the player's non-board stock positions exceed the embezzlement threshold.
+    pub fn exceeds_embezzlement_threshold(&self) -> bool {
+        self.non_board_portfolio_value() > self.cumulative_policy_spending + EMBEZZLEMENT_BUFFER
     }
 
     /// Market value of player's shares in non-board-seat corporations.

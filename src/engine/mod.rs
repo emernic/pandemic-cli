@@ -16,7 +16,6 @@ use crate::state::{
     CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
-    EMBEZZLEMENT_BUFFER,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
 };
@@ -389,7 +388,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // exceed cumulative policy spending + buffer. Only fires once.
     if new.active_crisis.is_none()
         && !new.embezzlement_warned
-        && new.non_board_portfolio_value() > new.cumulative_policy_spending + EMBEZZLEMENT_BUFFER
+        && new.exceeds_embezzlement_threshold()
     {
         let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardEmbezzlementWarning);
         crisis::activate_crisis(&mut new, crisis);
