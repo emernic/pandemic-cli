@@ -1347,6 +1347,51 @@ impl RegionTrait {
 
 }
 
+/// Unique per-region specialization that provides a local passive bonus.
+/// Lost permanently when the region collapses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RegionSpecialization {
+    /// Medicine deployment to this region costs 30% less.
+    PharmaHub,
+    /// Healthcare capacity in this region degrades 40% slower.
+    TropicalMedicine,
+    /// Policy funding costs in this region are 25% lower.
+    RegulatoryApparatus,
+    /// Civil order in this region degrades 40% slower.
+    CommunityNetworks,
+    /// Supply lines in this region degrade 40% slower.
+    LogisticsHub,
+    /// Screening convergence in this region is 50% faster.
+    SurveillanceNetwork,
+}
+
+impl RegionSpecialization {
+    /// Short label shown in the region detail panel.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::PharmaHub => "Pharma Hub: Deploy Cost -30%",
+            Self::TropicalMedicine => "Tropical Medicine: Healthcare Drain -40%",
+            Self::RegulatoryApparatus => "Regulatory Apparatus: Policy Cost -25%",
+            Self::CommunityNetworks => "Community Networks: Civil Order Drain -40%",
+            Self::LogisticsHub => "Logistics Hub: Supply Drain -40%",
+            Self::SurveillanceNetwork => "Surveillance Network: Screening +50%",
+        }
+    }
+}
+
+/// PharmaHub: medicine deployment cost multiplier for the specialized region.
+pub const PHARMA_HUB_DEPLOY_DISCOUNT: f64 = 0.7;
+/// RegulatoryApparatus: policy funding cost multiplier for the specialized region.
+pub const REGULATORY_APPARATUS_COST_MULT: f64 = 0.75;
+/// TropicalMedicine: healthcare capacity drain multiplier (lower = slower degradation).
+pub const TROPICAL_MEDICINE_HC_DRAIN_MULT: f64 = 0.6;
+/// CommunityNetworks: civil order drain multiplier (lower = slower degradation).
+pub const COMMUNITY_NETWORKS_CO_DRAIN_MULT: f64 = 0.6;
+/// LogisticsHub: supply line drain multiplier (lower = slower degradation).
+pub const LOGISTICS_HUB_SL_DRAIN_MULT: f64 = 0.6;
+/// SurveillanceNetwork: screening convergence rate multiplier (higher = faster convergence).
+pub const SURVEILLANCE_NETWORK_SCREENING_MULT: f64 = 1.5;
+
 /// Governor personality — character archetypes that determine how governors
 /// behave when loyal vs defiant. Each type requires a different player response.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1545,6 +1590,10 @@ pub struct Region {
     /// Regional traits that affect policy costs and effectiveness.
     #[serde(default)]
     pub traits: Vec<RegionTrait>,
+    /// Unique regional specialization providing a local passive bonus.
+    /// Lost when the region collapses.
+    #[serde(default)]
+    pub specialization: Option<RegionSpecialization>,
     /// Fraction of population that must remain alive to avoid collapse.
     /// E.g., 0.75 means the region collapses when alive drops below 75% of initial population.
     /// More developed regions have higher thresholds (fragile); less developed are more resilient.
@@ -1670,6 +1719,11 @@ fn default_collapse_threshold() -> f64 {
 impl Region {
     pub fn has_trait(&self, t: RegionTrait) -> bool {
         self.traits.contains(&t)
+    }
+
+    /// True if this region has the given specialization and hasn't collapsed.
+    pub fn has_specialization(&self, s: RegionSpecialization) -> bool {
+        !self.collapsed && self.specialization == Some(s)
     }
 
     /// True if this region is currently experiencing network disruption.
@@ -4475,6 +4529,7 @@ impl GameState {
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
+                specialization: Some(RegionSpecialization::PharmaHub),
                 collapse_threshold: 0.55, // Fragile — collapses at 45% dead
                 dead: 0.0,
                 collapsed: false,
@@ -4512,6 +4567,7 @@ impl GameState {
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
+                specialization: Some(RegionSpecialization::TropicalMedicine),
                 collapse_threshold: 0.55, // Moderate resilience — 45% dead
                 dead: 0.0,
                 collapsed: false,
@@ -4549,6 +4605,7 @@ impl GameState {
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
+                specialization: Some(RegionSpecialization::RegulatoryApparatus),
                 collapse_threshold: 0.50, // Developed infrastructure — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -4586,6 +4643,7 @@ impl GameState {
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
+                specialization: Some(RegionSpecialization::CommunityNetworks),
                 collapse_threshold: 0.50, // Resilient — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -4623,6 +4681,7 @@ impl GameState {
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
+                specialization: Some(RegionSpecialization::LogisticsHub),
                 collapse_threshold: 0.50, // Huge population — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -4660,6 +4719,7 @@ impl GameState {
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
+                specialization: Some(RegionSpecialization::SurveillanceNetwork),
                 collapse_threshold: 0.50, // Small but developed — 50% dead
                 dead: 0.0,
                 collapsed: false,
@@ -5049,7 +5109,15 @@ impl GameState {
                 let supply_mult = region.map(|r| {
                     if r.supply_lines < INFRA_STRESSED { SUPPLY_STRESSED_COST_MULT } else { 1.0 }
                 }).unwrap_or(1.0);
-                p.funding_cost(traits) * gov_mult * supply_mult
+                // RegulatoryApparatus specialization: policy costs 25% lower
+                let spec_mult = region.map(|r| {
+                    if r.has_specialization(RegionSpecialization::RegulatoryApparatus) {
+                        REGULATORY_APPARATUS_COST_MULT
+                    } else {
+                        1.0
+                    }
+                }).unwrap_or(1.0);
+                p.funding_cost(traits) * gov_mult * supply_mult * spec_mult
             })
             .sum()
     }
@@ -5819,44 +5887,17 @@ impl GameState {
         }
     }
 
-    // -- Regional specialization bonuses --
-    // Each region provides a unique passive bonus while it hasn't collapsed.
-    // Losing a region means losing its specialization permanently.
-
-    /// North America: Applied research hub. +20% applied research speed.
-    pub fn applied_research_bonus(&self) -> f64 {
-        if !self.regions[0].collapsed { 1.2 } else { 1.0 }
-    }
-
-    /// South America: Field research expertise. +20% field research speed.
-    pub fn field_research_bonus(&self) -> f64 {
-        if !self.regions[1].collapsed { 1.2 } else { 1.0 }
-    }
-
-    /// Europe: Manufacturing capacity. +20% bonus doses from manufacturing.
-    /// StabilizedFormulation tech adds an additional 25% multiplier (stacks multiplicatively).
+    /// Manufacturing yield bonus from StabilizedFormulation tech.
     pub fn manufacturing_yield_bonus(&self) -> f64 {
-        let base = if !self.regions[2].collapsed { 1.2 } else { 1.0 };
-        let tech_bonus = if self.unlocked_techs.contains(&BasicTech::StabilizedFormulation) {
+        if self.unlocked_techs.contains(&BasicTech::StabilizedFormulation) {
             1.25
         } else {
             1.0
-        };
-        base * tech_bonus
-    }
-
-    /// Africa: Basic research networks. +20% basic research speed.
-    pub fn basic_research_bonus(&self) -> f64 {
-        if !self.regions[3].collapsed { 1.2 } else { 1.0 }
-    }
-
-    /// Asia: Supply chain efficiency. 20% cheaper medicine deployment.
-    pub fn deployment_cost_bonus(&self) -> f64 {
-        if !self.regions[4].collapsed { 0.8 } else { 1.0 }
+        }
     }
 
     /// Actual medicine deploy cost for a specific (medicine, region) pair.
-    /// Applies disruption multiplier and regional deployment cost bonus.
+    /// Applies disruption multiplier and PharmaHub specialization discount.
     /// Use this for both UI affordability preview and engine-side validation
     /// so they can never drift apart.
     pub fn medicine_deploy_cost(&self, medicine_idx: usize, region_idx: usize) -> f64 {
@@ -5866,12 +5907,12 @@ impl GameState {
         } else {
             1.0
         };
-        base * disruption_mult * self.deployment_cost_bonus()
-    }
-
-    /// Oceania: Clinical trial infrastructure. +25% faster clinical trials.
-    pub fn clinical_trial_bonus(&self) -> f64 {
-        if !self.regions[5].collapsed { 0.75 } else { 1.0 }
+        let spec_mult = if self.regions[region_idx].has_specialization(RegionSpecialization::PharmaHub) {
+            PHARMA_HUB_DEPLOY_DISCOUNT
+        } else {
+            1.0
+        };
+        base * disruption_mult * spec_mult
     }
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
@@ -6440,31 +6481,16 @@ mod tests {
     }
 
     #[test]
-    fn distributed_storage_boosts_manufacturing_yield() {
+    fn stabilized_formulation_boosts_manufacturing_yield() {
         let mut state = GameState::new_default(42);
-        // Base: Europe alive = 1.2
         let base = state.manufacturing_yield_bonus();
-        assert!((base - 1.2).abs() < 0.001, "base yield should be 1.2 with Europe alive");
+        assert!((base - 1.0).abs() < 0.001, "base yield should be 1.0 without tech");
         state.unlocked_techs.push(BasicTech::StabilizedFormulation);
         let with_tech = state.manufacturing_yield_bonus();
         assert!(
-            (with_tech - 1.2 * 1.25).abs() < 0.001,
-            "StabilizedFormulation should stack multiplicatively with Europe: expected {}, got {}",
-            1.2 * 1.25,
+            (with_tech - 1.25).abs() < 0.001,
+            "StabilizedFormulation should give 1.25x yield: expected 1.25, got {}",
             with_tech
-        );
-    }
-
-    #[test]
-    fn distributed_storage_boost_applies_without_europe() {
-        let mut state = GameState::new_default(42);
-        state.regions[2].collapsed = true; // collapse Europe
-        state.unlocked_techs.push(BasicTech::StabilizedFormulation);
-        let bonus = state.manufacturing_yield_bonus();
-        assert!(
-            (bonus - 1.25).abs() < 0.001,
-            "StabilizedFormulation alone should give 1.25x yield: got {}",
-            bonus
         );
     }
 

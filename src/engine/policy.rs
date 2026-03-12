@@ -1,8 +1,10 @@
 use crate::state::{
-    CrisisKind, GameEvent, GameState, GovernorPersonality, RegionTrait, ScreeningLevel,
+    CrisisKind, GameEvent, GameState, GovernorPersonality, RegionSpecialization, RegionTrait,
+    ScreeningLevel,
     policy_display_name, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     QUARANTINE_COST, TRAVEL_BAN_COST,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
+    SURVEILLANCE_NETWORK_SCREENING_MULT,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST,
@@ -37,9 +39,18 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
             let traits = state.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
+            // Apply RegulatoryApparatus specialization discount to get true cost
+            let spec_mult = state.regions.get(i).map(|r| {
+                if r.has_specialization(crate::state::RegionSpecialization::RegulatoryApparatus) {
+                    crate::state::REGULATORY_APPARATUS_COST_MULT
+                } else {
+                    1.0
+                }
+            }).unwrap_or(1.0);
             for (idx, cost) in p.active_policy_costs(traits) {
-                if best.is_none() || cost > best.unwrap().2 {
-                    best = Some((i, idx, cost));
+                let effective = cost * spec_mult;
+                if best.is_none() || effective > best.unwrap().2 {
+                    best = Some((i, idx, effective));
                 }
             }
         }
@@ -964,7 +975,11 @@ pub(super) fn tick_screening(state: &mut GameState) {
 
         // Compute effective convergence rate
         let level_rate = screening.convergence_rate();
-        let effective_rate = none_rate + (level_rate - none_rate) * progress;
+        let mut effective_rate = none_rate + (level_rate - none_rate) * progress;
+        // SurveillanceNetwork specialization: screening converges 50% faster
+        if state.regions[i].has_specialization(RegionSpecialization::SurveillanceNetwork) {
+            effective_rate *= SURVEILLANCE_NETWORK_SCREENING_MULT;
+        }
 
         // Get real detected infected for this region.
         // Without antigen-level screening, exposed (incubating) people are invisible —

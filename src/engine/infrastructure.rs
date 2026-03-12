@@ -1,6 +1,7 @@
 use crate::state::{
-    GameEvent, GameState, InfraSystem, INFRA_CRITICAL, INFRA_STRESSED,
+    GameEvent, GameState, InfraSystem, RegionSpecialization, INFRA_CRITICAL, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
+    TROPICAL_MEDICINE_HC_DRAIN_MULT, COMMUNITY_NETWORKS_CO_DRAIN_MULT, LOGISTICS_HUB_SL_DRAIN_MULT,
 };
 
 /// Tick infrastructure degradation for all regions. Called once per tick.
@@ -56,7 +57,13 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_healthcare = state.regions[i].healthcare_capacity;
-        let new_healthcare = (old_healthcare + healthcare_drain + hospital_recovery
+        // TropicalMedicine specialization: healthcare degrades 40% slower
+        let hc_spec_mult = if state.regions[i].has_specialization(RegionSpecialization::TropicalMedicine) {
+            TROPICAL_MEDICINE_HC_DRAIN_MULT
+        } else {
+            1.0
+        };
+        let new_healthcare = (old_healthcare + healthcare_drain * hc_spec_mult + hospital_recovery
             + hospital_building_recovery + natural_healthcare_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].healthcare_capacity = new_healthcare;
@@ -87,7 +94,13 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
 
         let old_supply = state.regions[i].supply_lines;
         let supply_drain = death_drain + travel_ban_drain;
-        let new_supply = (old_supply + supply_drain + natural_supply_recovery)
+        // LogisticsHub specialization: supply lines degrade 40% slower
+        let sl_spec_mult = if state.regions[i].has_specialization(RegionSpecialization::LogisticsHub) {
+            LOGISTICS_HUB_SL_DRAIN_MULT
+        } else {
+            1.0
+        };
+        let new_supply = (old_supply + supply_drain * sl_spec_mult + natural_supply_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].supply_lines = new_supply;
         emit_breakpoint_events(state, i, InfraSystem::SupplyLines, old_supply, new_supply);
@@ -134,7 +147,13 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
 
         let old_civil = state.regions[i].civil_order;
         let civil_drain = civil_death_drain + restriction_drain + quarantine_drain + healthcare_cascade;
-        let new_civil = (old_civil + civil_drain + natural_civil_recovery)
+        // CommunityNetworks specialization: civil order degrades 40% slower
+        let co_spec_mult = if state.regions[i].has_specialization(RegionSpecialization::CommunityNetworks) {
+            COMMUNITY_NETWORKS_CO_DRAIN_MULT
+        } else {
+            1.0
+        };
+        let new_civil = (old_civil + civil_drain * co_spec_mult + natural_civil_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].civil_order = new_civil;
         emit_breakpoint_events(state, i, InfraSystem::CivilOrder, old_civil, new_civil);

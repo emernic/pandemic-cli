@@ -72,16 +72,11 @@ fn non_drawable_connections(state: &GameState, region_idx: usize) -> Vec<usize> 
         .collect()
 }
 
-/// Human-readable label for each region's specialization bonus.
-fn specialization_label(region_idx: usize) -> &'static str {
-    match region_idx {
-        0 => "Applied Research +20%",
-        1 => "Field Research +20%",
-        2 => "Manufacturing +20%",
-        3 => "Basic Research +20%",
-        4 => "Deploy Cost -20%",
-        5 => "Clinical Trials +25%",
-        _ => "None",
+/// Human-readable label for a region's specialization bonus.
+fn specialization_label(region: &crate::state::Region) -> &'static str {
+    match region.specialization {
+        Some(spec) => spec.label(),
+        None => "None",
     }
 }
 
@@ -455,7 +450,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled(format_number(dead), Style::default().fg(Color::DarkGray)),
             ]));
             // Show lost specialization even during information blackout
-            let spec_label = specialization_label(idx);
+            let spec_label = specialization_label(region);
             lines.push(Line::from(vec![
                 Span::styled("Specialization: ", label),
                 Span::styled(
@@ -595,7 +590,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         }
         lines.push(Line::from(econ_spans));
         // Regional specialization
-        let spec_label = specialization_label(idx);
+        let spec_label = specialization_label(region);
         let spec_color = if region.collapsed { Color::DarkGray } else { Color::Cyan };
         let spec_status = if region.collapsed { " (LOST)" } else { "" };
         lines.push(Line::from(vec![
