@@ -12,6 +12,23 @@ use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
 
 use crate::format_number;
 
+/// Compact sparkline for stock price history (used in region detail ticker).
+fn mini_sparkline(history: &[f64], width: usize) -> String {
+    if history.is_empty() {
+        return String::new();
+    }
+    let bars = [' ', '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+    let min = history.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max = history.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let range = (max - min).max(0.01);
+    let start = history.len().saturating_sub(width);
+    let slice = &history[start..];
+    slice.iter().map(|v| {
+        let normalized = ((v - min) / range * 7.0).round() as usize;
+        bars[normalized.min(8)]
+    }).collect()
+}
+
 #[derive(Clone, Copy)]
 enum ConnKind {
     Horizontal,
@@ -785,38 +802,56 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
-    // Corporations headquartered in this region
+    // Local market — corporations headquartered in this region
     {
         let corps = state.region_corporations(idx);
-        if !corps.is_empty() && lines.len() < inner.height as usize {
+        if !corps.is_empty() && lines.len() + 2 < inner.height as usize {
+            lines.push(Line::from(Span::styled(
+                "─── Local Market ───",
+                Style::default().fg(Color::DarkGray),
+            )));
             for corp in &corps {
                 if lines.len() >= inner.height as usize { break; }
-                // Stock price with trend
                 let change = corp.price_change_pct();
-                let (price_str, price_color) = if corp.bankrupt {
-                    ("BANKRUPT".to_string(), Color::Red)
+                let (ticker_str, price_color) = if corp.bankrupt {
+                    ("  BUST".to_string(), Color::Red)
                 } else {
-                    let arrow = if change > 0.5 { "▲" }
-                        else if change < -0.5 { "▼" }
-                        else { " " };
                     let color = if corp.share_price >= corp.ipo_price * 0.8 { Color::Green }
                         else if corp.share_price >= corp.ipo_price * 0.5 { Color::Yellow }
                         else { Color::LightRed };
-                    (format!("¥{:.0}{}", corp.share_price, arrow), color)
+                    (format!("¥{:.0}", corp.share_price), color)
                 };
+                let change_str = if corp.bankrupt {
+                    String::new()
+                } else if change > 0.5 {
+                    format!(" ▲{:+.1}%", change)
+                } else if change < -0.5 {
+                    format!(" ▼{:+.1}%", change)
+                } else {
+                    " ──".to_string()
+                };
+                let change_color = if change > 0.5 { Color::Green }
+                    else if change < -0.5 { Color::Red }
+                    else { Color::DarkGray };
                 let board_marker = if corp.board_seat { " ★" } else { "" };
+                // Mini sparkline (last 8 points)
+                let spark = mini_sparkline(&corp.price_history, 8);
                 lines.push(Line::from(vec![
                     Span::styled(
-                        format!("  {:<20}", corp.name),
+                        format!(" {:<18}", corp.name),
                         Style::default().fg(if corp.bankrupt { Color::DarkGray } else { Color::White }),
                     ),
                     Span::styled(
-                        format!("{:<11}", corp.sector.label()),
-                        Style::default().fg(Color::DarkGray),
+                        ticker_str,
+                        Style::default().fg(price_color),
                     ),
                     Span::styled(
-                        price_str,
-                        Style::default().fg(price_color),
+                        change_str,
+                        Style::default().fg(change_color),
+                    ),
+                    Span::styled(
+                        format!(" {}", spark),
+                        Style::default().fg(Color::DarkGray),
                     ),
                     Span::styled(
                         board_marker,
