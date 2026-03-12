@@ -1265,6 +1265,9 @@ pub struct BoardMember {
     /// Decays toward 0 at ~0.02/day so contract politics have a lasting but not permanent effect.
     #[serde(default)]
     pub satisfaction_modifier: f64,
+    /// Whether this member is the Chairman of the Board (2x satisfaction weight).
+    #[serde(default)]
+    pub is_chairman: bool,
 }
 
 fn format_large_number(n: f64) -> String {
@@ -5606,8 +5609,14 @@ impl GameState {
     pub fn board_satisfaction(&self) -> f64 {
         // Use individual board member satisfactions when available.
         if !self.board_members.is_empty() {
-            let total: f64 = self.board_members.iter().map(|m| m.satisfaction).sum();
-            return total / self.board_members.len() as f64;
+            let (weighted_total, weight_count) = self.board_members.iter().fold(
+                (0.0_f64, 0.0_f64),
+                |(total, count), m| {
+                    let w = if m.is_chairman { 2.0 } else { 1.0 };
+                    (total + m.satisfaction * w, count + w)
+                },
+            );
+            return weighted_total / weight_count;
         }
         // Fallback for states without board members (old saves being loaded).
         let board_corps: Vec<&Corporation> =
