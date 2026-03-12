@@ -26,6 +26,7 @@ use crate::state::{
     NUCLEAR_ANNIHILATION_COST,
     QUARANTINE_PERSONNEL,
     SCREENING_DECAY_RATE, SCREENING_RAMP_RATE,
+    TICKS_PER_DAY,
     TRAVEL_BAN_PERSONNEL,
     WATER_SANITATION_PERSONNEL,
 };
@@ -588,6 +589,19 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
             state.regions[i].governor.defiance_crisis_fired = false;
         }
 
+        // GovernorSick: fire when region has HIGH+ infections and cooldown has passed (~30 days).
+        // Skip dead governors.
+        if !state.regions[i].collapsed && !state.regions[i].governor.dead {
+            let region_infected: f64 = state.regions[i].infections.iter().map(|inf| inf.infected).sum();
+            let sick_cooldown = (30.0 * TICKS_PER_DAY) as u64;
+            let cooldown_ok = state.regions[i].governor.last_sick_tick
+                .map_or(true, |t| state.tick.saturating_sub(t) >= sick_cooldown);
+            if region_infected > SEVERITY_HIGH_THRESHOLD && cooldown_ok {
+                state.regions[i].governor.last_sick_tick = Some(state.tick);
+                state.pending_crises.push((state.tick, CrisisKind::GovernorSick { region_idx: i }));
+            }
+        }
+
         // Governor death: rare event in critically infected regions with significant deaths.
         // Per-tick probability when infected > CRIT threshold AND death_frac > 5%.
         // ~0.0002/tick = ~1.2% per day at CRIT. Only fires once (governor dies).
@@ -659,6 +673,7 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
     gov.last_action_tick = state.tick;
     gov.bargain_count = 0;
     gov.income_skim = 0.0;
+    gov.last_sick_tick = None;
 
     // Update the board member if this governor sits on the board
     for member in &mut state.board_members {
@@ -820,7 +835,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
     use crate::state::{
         decree_display_name, DECREE_APPROVAL_COSTS,
-        CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY, TICKS_PER_DAY,
+        CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
         SACRIFICE_INCOME_BONUS,
     };
 
