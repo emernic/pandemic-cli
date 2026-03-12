@@ -2,7 +2,8 @@ use rand::Rng;
 
 use crate::state::{
     ActiveLoan, BoardPersonality, BoardRole, CorporationSector, CrisisCost, CrisisEvent,
-    CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, LoanLender, ResearchKind,
+    CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, GovernorPersonality,
+    LoanLender, ResearchKind,
     ResearchTrack, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
@@ -1654,6 +1655,173 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::GovernorSick { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
+            let personality = state.regions.get(*region_idx)
+                .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Operative);
+
+            match personality {
+                GovernorPersonality::Buffoon => {
+                    let cost = scaled_cost(state, 0.12, 100.0, 500.0);
+                    CrisisEvent {
+                        title: format!("{}: Evacuation Panic", gov_name),
+                        description: format!(
+                            "{gov_name} tested positive and announced a personal evacuation from \
+                             {region_name} on live broadcast. A regional corporation is threatening \
+                             to follow suit."),
+                        options: vec![ CrisisOption {
+                            label: "Damage control".into(),
+                            description: "Lose 1.5 days of research progress containing the fallout".into(),
+                            cost: None,
+                        },
+                        CrisisOption {
+                            label: format!("PR containment (¥{cost:.0})"),
+                            description: "Hire a crisis team. Corporation stays put.".into(),
+                            cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                        },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                GovernorPersonality::Blowhard => {
+                    CrisisEvent {
+                        title: format!("{}: Demands Experimental Treatment", gov_name),
+                        description: format!(
+                            "{gov_name} is sick and broadcasting from a hospital bed in {region_name}, \
+                             demanding your agency send \"whatever you have in the lab.\""),
+                        options: vec![ CrisisOption {
+                            label: "Send samples".into(),
+                            description: "Lose 2 days of applied research progress".into(),
+                            cost: None,
+                        },
+                        CrisisOption {
+                            label: "Refuse".into(),
+                            description: "Board approval drops. They're threatening to go public with accusations.".into(),
+                            cost: None,
+                        },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                GovernorPersonality::Recluse => {
+                    CrisisEvent {
+                        title: format!("{}: Gone Dark", gov_name),
+                        description: format!(
+                            "{gov_name} has disappeared from all communications. Regional staff in \
+                             {region_name} say the governor is bedridden. Policy enforcement has stalled."),
+                        options: vec![ CrisisOption {
+                            label: "Let them recover".into(),
+                            description: format!("Policy effectiveness at 30% in {} until resolved", region_name),
+                            cost: None,
+                        },
+                        CrisisOption {
+                            label: "Send a management team (2 personnel for 5d)".into(),
+                            description: "Personnel run the region directly until the governor recovers.".into(),
+                            cost: Some(CrisisCost {
+                                funding: 0.0,
+                                personnel: 2,
+                                operation_days: Some(5.0),
+                                operation_label: Some("Regional Management Team".to_string()),
+                            }),
+                        },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                GovernorPersonality::Hardliner => {
+                    let cost = scaled_cost(state, 0.15, 120.0, 600.0);
+                    CrisisEvent {
+                        title: format!("{}: Priority Demand", gov_name),
+                        description: format!(
+                            "{gov_name} is ill and insisting your agency prioritize {region_name} \
+                             above all other regions. \"Send your people here or I will handle this myself.\""),
+                        options: vec![ CrisisOption {
+                            label: "Divert personnel (2 for 5d)".into(),
+                            description: "Comply with the demand. Team returns in 5 days.".into(),
+                            cost: Some(CrisisCost {
+                                funding: 0.0,
+                                personnel: 2,
+                                operation_days: Some(5.0),
+                                operation_label: Some("Priority Deployment".to_string()),
+                            }),
+                        },
+                        CrisisOption {
+                            label: format!("Emergency treatment (¥{cost:.0})"),
+                            description: "Fund an emergency treatment package. Governor calms down.".into(),
+                            cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                        },
+                        CrisisOption {
+                            label: "Refuse".into(),
+                            description: "Cooperation drops hard. Governor threatens federal oversight.".into(),
+                            cost: None,
+                        },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                GovernorPersonality::Operative => {
+                    let cost = scaled_cost(state, 0.18, 150.0, 700.0);
+                    CrisisEvent {
+                        title: format!("{}: Medical Expenses", gov_name),
+                        description: format!(
+                            "{gov_name} has been hospitalized in {region_name}. They're billing your \
+                             agency for ¥{cost:.0} in \"medical and security expenses.\""),
+                        options: vec![ CrisisOption {
+                            label: format!("Pay ¥{cost:.0}"),
+                            description: "Funds disappear into the governor's accounts. Business as usual.".into(),
+                            cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                        },
+                        CrisisOption {
+                            label: "Refuse".into(),
+                            description: "Board approval drops. Income skim increases.".into(),
+                            cost: None,
+                        },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                GovernorPersonality::Mobster => {
+                    let cost = scaled_cost(state, 0.25, 200.0, 1000.0);
+                    CrisisEvent {
+                        title: format!("{}: Protection Required", gov_name),
+                        description: format!(
+                            "{gov_name} is sick and wants protection. \"I need a security detail. \
+                             Or ¥{cost:.0}. Either works.\""),
+                        options: vec![ CrisisOption {
+                            label: "Send security detail (3 personnel for 5d)".into(),
+                            description: "Three staff babysit the governor. They return in 5 days.".into(),
+                            cost: Some(CrisisCost {
+                                funding: 0.0,
+                                personnel: 3,
+                                operation_days: Some(5.0),
+                                operation_label: Some("Governor Security Detail".to_string()),
+                            }),
+                        },
+                        CrisisOption {
+                            label: format!("Pay ¥{cost:.0}"),
+                            description: "Private healthcare arranged. Cooperation restored.".into(),
+                            cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                        },
+                        CrisisOption {
+                            label: "Refuse".into(),
+                            description: "Cooperation drops sharply. They won't forget this.".into(),
+                            cost: None,
+                        },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+            }
+        }
         CrisisKind::ArkProtocol { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -3169,6 +3337,125 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 region.governor.cooperation = (region.governor.cooperation + 15.0).min(100.0);
             }
             "Paid. They'll be back for more.".into()
+        }
+
+        // --- GovernorSick resolutions (personality-dependent) ---
+
+        (CrisisKind::GovernorSick { region_idx }, choice) => {
+            let personality = state.regions.get(*region_idx)
+                .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Operative);
+            match (personality, choice) {
+                (GovernorPersonality::Buffoon, 0) => {
+                    // Damage control: lose 1.5 days research progress
+                    let loss = (TICKS_PER_DAY * 1.5) as f64;
+                    if let Some(proj) = state.field_research.first_mut() {
+                        proj.progress = (proj.progress - loss).max(0.0);
+                    } else if let Some(proj) = &mut state.applied_research {
+                        proj.progress = (proj.progress - loss).max(0.0);
+                    }
+                    "Spent a day and a half undoing the broadcast damage.".into()
+                }
+                (GovernorPersonality::Buffoon, _) => {
+                    // PR containment: costs already deducted, corporation stays
+                    "Crisis team deployed. Corporation staying put. Governor recovering.".into()
+                }
+                (GovernorPersonality::Blowhard, 0) => {
+                    // Send samples: lose 2 days applied research progress
+                    let loss = (TICKS_PER_DAY * 2.0) as f64;
+                    if let Some(proj) = &mut state.applied_research {
+                        proj.progress = (proj.progress - loss).max(0.0);
+                    } else if let Some(proj) = state.field_research.first_mut() {
+                        proj.progress = (proj.progress - loss).max(0.0);
+                    }
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
+                    }
+                    "Samples sent. Research set back. Governor satisfied.".into()
+                }
+                (GovernorPersonality::Blowhard, _) => {
+                    // Refuse: POL loss
+                    state.resources.board_approval -= 0.08;
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
+                    }
+                    "Refused. The broadcast was not flattering.".into()
+                }
+                (GovernorPersonality::Recluse, 0) => {
+                    // Let them recover: reduced policy effectiveness handled by cooperation drop
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
+                    }
+                    "Governor isolating. Region running on autopilot.".into()
+                }
+                (GovernorPersonality::Recluse, _) => {
+                    // Send management team: personnel cost already deducted
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
+                    }
+                    "Management team dispatched. Policies back on track.".into()
+                }
+                (GovernorPersonality::Hardliner, 0) => {
+                    // Divert personnel: costs already deducted, cooperation boost
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 15.0).min(100.0);
+                    }
+                    "Personnel diverted. Governor appreciates the priority.".into()
+                }
+                (GovernorPersonality::Hardliner, 1) => {
+                    // Send untested medicine: costs deducted, cooperation boost but medicine
+                    // deployed with efficacy penalty. Find first available medicine for this region.
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
+                    }
+                    "Treatment package sent. Governor calmed down.".into()
+                }
+                (GovernorPersonality::Hardliner, _) => {
+                    // Refuse: hard cooperation drop
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
+                    }
+                    state.resources.board_approval -= 0.05;
+                    "Refused. Governor threatening to take matters into their own hands.".into()
+                }
+                (GovernorPersonality::Operative, 0) => {
+                    // Pay: costs already deducted, cooperation boost
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
+                    }
+                    "Expenses paid. The governor is grateful. Relatively.".into()
+                }
+                (GovernorPersonality::Operative, _) => {
+                    // Refuse: POL loss + income skim increase
+                    state.resources.board_approval -= 0.06;
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
+                        region.governor.income_skim = (region.governor.income_skim + 0.03).min(0.30);
+                    }
+                    "Refused. The governor is finding other ways to recoup.".into()
+                }
+                (GovernorPersonality::Mobster, 0) => {
+                    // Send security detail: personnel cost already deducted
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
+                    }
+                    "Security detail sent. Governor is comfortable.".into()
+                }
+                (GovernorPersonality::Mobster, 1) => {
+                    // Pay: costs already deducted, cooperation boost
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation + 15.0).min(100.0);
+                        region.governor.bargain_count += 1;
+                    }
+                    "Private healthcare arranged. They'll remember this.".into()
+                }
+                (GovernorPersonality::Mobster, _) => {
+                    // Refuse: hard cooperation drop
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation - 25.0).max(0.0);
+                    }
+                    "Refused. This will cost you.".into()
+                }
+            }
         }
 
         (CrisisKind::ArkProtocol { region_idx }, 0) => {
