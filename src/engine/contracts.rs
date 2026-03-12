@@ -9,11 +9,59 @@ use crate::state::{
     SEVERITY_HIGH_THRESHOLD,
 };
 
+/// When a contract template becomes contextually relevant (worth offering).
+/// Lives on the template so relevance rules can't drift out of sync with templates.
+enum RelevanceCheck {
+    /// Always relevant once the condition is met.
+    Always,
+    /// Spread has reached multiple regions or a large total count.
+    MultiRegionalSpread,
+    /// At least one non-collapsed region has significant infection prevalence (≥0.5%).
+    SignificantInfectionRate,
+    /// The specified emergency decree is unlocked.
+    DecreeUnlocked(usize),
+    /// At least one region has a high-severity infection.
+    HighSeverityRisk,
+    /// Total deaths have reached a threshold.
+    MinDeaths(f64),
+}
+
+impl RelevanceCheck {
+    fn is_relevant(&self, state: &GameState) -> bool {
+        match self {
+            RelevanceCheck::Always => true,
+            RelevanceCheck::MultiRegionalSpread => {
+                let infected_regions = state.regions.iter()
+                    .filter(|r| !r.collapsed)
+                    .filter(|r| r.infections.iter().any(|i| i.infected > 0.0))
+                    .count();
+                infected_regions >= 2 || state.total_infected() >= 10_000.0
+            }
+            RelevanceCheck::SignificantInfectionRate => {
+                state.regions.iter().any(|r| {
+                    !r.collapsed && {
+                        let infected: f64 = r.infections.iter().map(|i| i.infected).sum();
+                        r.population > 0 && infected / r.population as f64 >= 0.005
+                    }
+                })
+            }
+            RelevanceCheck::DecreeUnlocked(idx) => state.decree_unlocked(*idx),
+            RelevanceCheck::HighSeverityRisk => {
+                state.regions.iter().any(|r| {
+                    !r.collapsed && r.infections.iter().any(|i| i.infected >= SEVERITY_HIGH_THRESHOLD)
+                })
+            }
+            RelevanceCheck::MinDeaths(threshold) => state.total_dead() >= *threshold,
+        }
+    }
+}
+
 /// Contract template — conditions with attached income. Board member is assigned dynamically.
 struct Template {
     name: &'static str,
     income: f64,
     condition: FundingCondition,
+    relevance: RelevanceCheck,
 }
 
 /// Contract templates. Each has a unique template_id (0-based index).
@@ -24,46 +72,55 @@ const TEMPLATES: &[Template] = &[
         name: "Shipping Lane Guarantee",
         income: 2.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
+        relevance: RelevanceCheck::MultiRegionalSpread,
     },
     Template {
         name: "Hospitality Protection Fund",
         income: 2.0,
         condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
+        relevance: RelevanceCheck::SignificantInfectionRate,
     },
     Template {
         name: "Research Independence Pact",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree_idx: 0 }, // No Conscript Researchers
+        relevance: RelevanceCheck::DecreeUnlocked(0),
     },
     Template {
         name: "Stability Assurance Fund",
         income: 2.0,
         condition: FundingCondition::NoCollapse,
+        relevance: RelevanceCheck::HighSeverityRisk,
     },
     Template {
         name: "Confidence Fund",
         income: 1.8,
         condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 }, // under 50M dead
+        relevance: RelevanceCheck::MinDeaths(250_000.0),
     },
     Template {
         name: "Actuarial Pact",
         income: 1.5,
         condition: FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
+        relevance: RelevanceCheck::MinDeaths(2_500_000.0),
     },
     Template {
         name: "Equipment Lease",
         income: 1.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 2 }, // Discourage Hospitalization
+        relevance: RelevanceCheck::Always,
     },
     Template {
         name: "Border Security Contract",
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
+        relevance: RelevanceCheck::Always,
     },
     Template {
         name: "Ethics Protocols Grant",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree_idx: 1 }, // No Authorize Human Trials
+        relevance: RelevanceCheck::DecreeUnlocked(1),
     },
 ];
 
@@ -91,47 +148,11 @@ fn build_contract(template_id: u8, board_member_idx: usize, rng: &mut ChaCha8Rng
 }
 
 /// Whether a template is contextually relevant given the current game state.
-///
-/// Prevents offering contracts whose conditions are trivially met with no real risk —
-/// e.g., "keep deaths under 500M" when only 90 people have died, or "no Travel Bans"
-/// when spread hasn't reached a level where Travel Ban would actually be useful.
-/// Each template type becomes relevant once the game situation justifies its restriction.
+/// Delegates to the template's own relevance check — no magic index mapping needed.
 fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
-    match template_id {
-        // ForbidPolicy: Travel Ban — only relevant when spread is multi-regional or large-scale
-        // (player needs a reason to actually want a Travel Ban before forbidding it)
-        0 => {
-            let infected_regions = state.regions.iter()
-                .filter(|r| !r.collapsed)
-                .filter(|r| r.infections.iter().any(|i| i.infected > 0.0))
-                .count();
-            infected_regions >= 2 || state.total_infected() >= 10_000.0
-        }
-        // ForbidPolicy: Quarantine — only relevant when a region has significant infection
-        1 => state.regions.iter().any(|r| {
-            !r.collapsed && {
-                let infected: f64 = r.infections.iter().map(|i| i.infected).sum();
-                r.population > 0 && infected / r.population as f64 >= 0.005
-            }
-        }),
-        // Research Independence Pact (ForbidDecree: Conscript Researchers) — only relevant when
-        // that decree is unlocked (500K+ infected or 100K+ dead). Before then the constraint is meaningless.
-        2 => state.decree_unlocked(0),
-        // Stability Assurance Fund (NoCollapse) — only relevant when collapse is a real risk
-        3 => state.regions.iter().any(|r| {
-            !r.collapsed && r.infections.iter().any(|i| i.infected >= SEVERITY_HIGH_THRESHOLD)
-        }),
-        // Confidence Fund (MaxDeaths < 50M) — only when deaths are significant
-        4 => state.total_dead() >= 250_000.0,
-        // Actuarial Pact (MaxDeaths < 500M) — only when deaths substantial
-        5 => state.total_dead() >= 2_500_000.0,
-        // ForbidPolicy (Discourage Hosp.) / RequirePolicy (Border Controls) — always relevant
-        6 | 7 => true,
-        // Ethics Protocols Grant (ForbidDecree: Authorize Human Trials) — only relevant when
-        // that decree is unlocked (50M+ dead or 2+ CRITICAL regions).
-        8 => state.decree_unlocked(1),
-        _ => true,
-    }
+    TEMPLATES.get(template_id)
+        .map(|t| t.relevance.is_relevant(state))
+        .unwrap_or(true)
 }
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
