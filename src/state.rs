@@ -195,6 +195,10 @@ pub struct GameState {
     /// from board-seat corporations and selected governors.
     #[serde(default)]
     pub board_members: Vec<BoardMember>,
+    /// Tick when the next scheduled board meeting should fire.
+    /// Board meetings are proactive, recurring events on a fixed schedule (~every 7-10 days).
+    #[serde(default)]
+    pub next_board_meeting_tick: u64,
     /// Monotonically increasing counter for assigning sequence group IDs to
     /// wave-coordinated diseases. Incremented each time a new group is created.
     #[serde(default)]
@@ -3745,6 +3749,9 @@ pub enum CrisisKind {
     /// `severity` 0 = warning demand (satisfaction < 0.5), 1 = ultimatum (< 0.3).
     /// `member_idx` indexes into `GameState::board_members`.
     BoardDemand { severity: u8, member_idx: usize },
+    /// Scheduled board meeting. The most dissatisfied member raises a motion.
+    /// `member_idx` is the index into `board_members` of the member driving the agenda.
+    BoardMeeting { member_idx: usize },
 
     // --- Corporate detention crises ---
 
@@ -3835,6 +3842,7 @@ impl CrisisKind {
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardDemand { .. } => "board_demand",
+            CrisisKind::BoardMeeting { .. } => "board_meeting",
             CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",
@@ -4814,6 +4822,7 @@ impl GameState {
             last_contract_offer_tick: 0,
             corporations: Vec::new(),
             board_members: Vec::new(),
+            next_board_meeting_tick: 0, // initialized properly after RNG setup
             next_sequence_group: 0,
             loans: vec![],
             ui: UiState {

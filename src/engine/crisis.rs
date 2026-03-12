@@ -2005,6 +2005,173 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::BoardMeeting { member_idx } => {
+            let member = state.board_members.get(*member_idx);
+            let member_name = member.map(|m| m.name.as_str()).unwrap_or("A board member");
+            let member_title = member.map(|m| m.title.as_str()).unwrap_or("Unknown");
+            let day = tick as f64 / TICKS_PER_DAY;
+
+            match member.map(|m| &m.role) {
+                Some(BoardRole::CorporateLeader { corp_idx: cidx }) => {
+                    let corp = state.corporations.get(*cidx);
+                    let corp_name = corp.map(|c| c.name.as_str()).unwrap_or("their corporation");
+                    let region_idx = corp.map(|c| c.region_idx).unwrap_or(0);
+                    let region_name = state.regions.get(region_idx)
+                        .map(|r| r.name.as_str()).unwrap_or("the region");
+                    let has_quarantine = state.policies.get(region_idx)
+                        .map(|p| p.quarantine).unwrap_or(false);
+                    let has_border = state.policies.get(region_idx)
+                        .map(|p| p.border_controls).unwrap_or(false);
+
+                    let complaint = if has_quarantine || has_border {
+                        format!(
+                            "Current restrictions in {region_name} are cited as the primary cause. \
+                             {member_name} moves to lift containment measures in the region."
+                        )
+                    } else {
+                        format!(
+                            "{corp_name} revenue is down. \
+                             {member_name} moves for an emergency subsidy to stabilize operations."
+                        )
+                    };
+
+                    let subsidy_cost = scaled_cost(state, 0.12, 80.0, 500.0);
+
+                    CrisisEvent {
+                        title: "Board Meeting".into(),
+                        description: format!(
+                            "Day {day:.0} session called to order. \
+                             {member_name} ({member_title}) raises a motion. \
+                             {complaint}"
+                        ),
+                        options: vec![
+                            CrisisOption {
+                                label: "Comply".into(),
+                                description: if has_quarantine || has_border {
+                                    format!("Lift restrictions in {region_name}.")
+                                } else {
+                                    format!("Issue ¥{subsidy_cost:.0} subsidy to {corp_name}.")
+                                },
+                                cost: if has_quarantine || has_border {
+                                    None
+                                } else {
+                                    Some(CrisisCost { funding: subsidy_cost, personnel: 0, ..Default::default() })
+                                },
+                            },
+                            CrisisOption {
+                                label: "Table the motion".into(),
+                                description: "Defer to next session. The member is not pleased.".into(),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: "Overrule".into(),
+                                description: "Reject the motion outright. Significant political cost.".into(),
+                                cost: None,
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                Some(BoardRole::RegionGovernor { region_idx: ridx }) => {
+                    let region_name = state.regions.get(*ridx)
+                        .map(|r| r.name.as_str()).unwrap_or("the region");
+                    let infected: f64 = state.regions.get(*ridx)
+                        .map(|r| r.infections.iter().map(|inf| inf.infected).sum())
+                        .unwrap_or(0.0);
+                    let deploy_cost = scaled_cost(state, 0.10, 60.0, 400.0);
+                    let personnel_cost = 3u32.min(state.resources.personnel);
+
+                    CrisisEvent {
+                        title: "Board Meeting".into(),
+                        description: format!(
+                            "Day {day:.0} session called to order. \
+                             {member_name} ({member_title}) raises a motion. \
+                             {region_name} requires additional resources. \
+                             Current infected: {infected:.0}. \
+                             The governor demands a dedicated response team."
+                        ),
+                        options: vec![
+                            CrisisOption {
+                                label: "Deploy team".into(),
+                                description: format!(
+                                    "Send {personnel_cost} personnel and ¥{deploy_cost:.0} to {region_name}."
+                                ),
+                                cost: Some(CrisisCost {
+                                    funding: deploy_cost,
+                                    personnel: personnel_cost,
+                                    operation_days: Some(14.0),
+                                    operation_label: Some(format!("{region_name} response team")),
+                                }),
+                            },
+                            CrisisOption {
+                                label: "Table the motion".into(),
+                                description: "Defer to next session. The governor is not pleased.".into(),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: "Overrule".into(),
+                                description: "Resources stay where they are. Significant political cost.".into(),
+                                cost: None,
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                _ => {
+                    // IndependentAdvisor or unknown: demands action on worst global threat
+                    let worst_disease = state.diseases.iter().enumerate()
+                        .filter(|(_, d)| d.detected)
+                        .max_by(|(a_idx, _), (b_idx, _)| {
+                            let a_inf: f64 = state.regions.iter()
+                                .flat_map(|r| r.infections.iter())
+                                .filter(|inf| inf.disease_idx == *a_idx)
+                                .map(|inf| inf.infected)
+                                .sum();
+                            let b_inf: f64 = state.regions.iter()
+                                .flat_map(|r| r.infections.iter())
+                                .filter(|inf| inf.disease_idx == *b_idx)
+                                .map(|inf| inf.infected)
+                                .sum();
+                            a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    let disease_name = worst_disease.map(|(_, d)| d.name.as_str()).unwrap_or("the outbreak");
+                    let research_cost = scaled_cost(state, 0.15, 100.0, 600.0);
+
+                    CrisisEvent {
+                        title: "Board Meeting".into(),
+                        description: format!(
+                            "Day {day:.0} session called to order. \
+                             {member_name} ({member_title}) raises a motion. \
+                             {disease_name} remains insufficiently addressed. \
+                             The board is asked to authorize an accelerated research allocation."
+                        ),
+                        options: vec![
+                            CrisisOption {
+                                label: "Fund research".into(),
+                                description: format!(
+                                    "Allocate ¥{research_cost:.0} toward accelerated research on {disease_name}."
+                                ),
+                                cost: Some(CrisisCost { funding: research_cost, personnel: 0, ..Default::default() }),
+                            },
+                            CrisisOption {
+                                label: "Table the motion".into(),
+                                description: "Defer to next session. Noted in the minutes.".into(),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: "Overrule".into(),
+                                description: "Current allocation is sufficient. Significant political cost.".into(),
+                                cost: None,
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+            }
+        }
         CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("the region");
@@ -3252,6 +3419,78 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let pol_loss = if *severity >= 1 { 0.15 } else { 0.10 };
             state.resources.board_approval -= pol_loss;
             format!("{member_name} defied. Board approval drops {:.0}%.", pol_loss * 100.0)
+        }
+
+        // --- Board meeting crises ---
+
+        (CrisisKind::BoardMeeting { member_idx }, 0) => {
+            // Comply: do what the member wants.
+            let member = state.board_members.get(*member_idx).cloned();
+            match member.as_ref().map(|m| &m.role) {
+                Some(BoardRole::CorporateLeader { corp_idx }) => {
+                    let region_idx = state.corporations.get(*corp_idx)
+                        .map(|c| c.region_idx).unwrap_or(0);
+                    let has_quarantine = state.policies.get(region_idx)
+                        .map(|p| p.quarantine).unwrap_or(false);
+                    let has_border = state.policies.get(region_idx)
+                        .map(|p| p.border_controls).unwrap_or(false);
+                    let region_name = state.regions.get(region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+
+                    if has_quarantine || has_border {
+                        if let Some(p) = state.policies.get_mut(region_idx) {
+                            p.quarantine = false;
+                            p.border_controls = false;
+                        }
+                        format!("Motion carried. Restrictions lifted in {region_name}.")
+                    } else {
+                        // Subsidy: cost already deducted, boost the corp's reserves.
+                        if let Some(c) = state.corporations.get_mut(*corp_idx) {
+                            let boost = c.max_reserves * 0.15;
+                            c.reserves = (c.reserves + boost).min(c.max_reserves);
+                        }
+                        format!("Motion carried. Subsidy issued to {}.",
+                            state.corporations.get(*corp_idx)
+                                .map(|c| c.name.as_str()).unwrap_or("the corporation"))
+                    }
+                }
+                Some(BoardRole::RegionGovernor { region_idx }) => {
+                    // Deploy team: cost already deducted via CrisisCost with operation_days.
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+                    // Governor loyalty boost for fulfilling the request.
+                    if let Some(r) = state.regions.get_mut(*region_idx) {
+                        r.governor.loyalty = (r.governor.loyalty + 10.0).min(100.0);
+                    }
+                    format!("Motion carried. Response team deployed to {region_name}.")
+                }
+                _ => {
+                    // Independent advisor: fund research. Cost already deducted.
+                    // Boost applied research progress if active.
+                    if let Some(ref mut ar) = state.applied_research {
+                        ar.progress += 0.15;
+                    } else if let Some(ref mut br) = state.basic_research {
+                        br.progress += 0.15;
+                    }
+                    "Motion carried. Research allocation increased.".into()
+                }
+            }
+        }
+        (CrisisKind::BoardMeeting { member_idx }, 1) => {
+            // Table the motion: moderate satisfaction hit to that member, small approval hit.
+            if let Some(m) = state.board_members.get_mut(*member_idx) {
+                m.satisfaction = (m.satisfaction - 0.15).max(0.0);
+            }
+            state.resources.board_approval = (state.resources.board_approval - 0.03).max(0.0);
+            "Motion tabled. Noted in the minutes.".into()
+        }
+        (CrisisKind::BoardMeeting { member_idx }, _) => {
+            // Overrule: major satisfaction hit to that member, larger approval penalty.
+            if let Some(m) = state.board_members.get_mut(*member_idx) {
+                m.satisfaction = (m.satisfaction - 0.30).max(0.0);
+            }
+            state.resources.board_approval = (state.resources.board_approval - 0.08).max(0.0);
+            "Motion overruled. Expect consequences.".into()
         }
 
         // --- Corporate detention crises ---

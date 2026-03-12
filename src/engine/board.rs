@@ -61,6 +61,14 @@ pub fn generate_board_members(state: &mut GameState) {
     }
 
     state.board_members = members;
+
+    // Schedule the first board meeting around day 7 ± 1 day of jitter.
+    if state.next_board_meeting_tick == 0 {
+        let base = (7.0 * crate::state::TICKS_PER_DAY) as u64;
+        let jitter_range = (1.0 * crate::state::TICKS_PER_DAY) as u64;
+        let jitter = state.rng_misc.r#gen::<u64>() % (jitter_range * 2 + 1);
+        state.next_board_meeting_tick = base.saturating_sub(jitter_range) + jitter;
+    }
 }
 
 /// Extract a short surname from a corporation name for the board member display name.
@@ -197,5 +205,53 @@ mod tests {
 
         let sat = state.board_members[gov_idx].satisfaction;
         assert!((sat - 0.5).abs() < 0.01, "governor satisfaction should be ~0.5, got {sat}");
+    }
+
+    #[test]
+    fn board_meeting_scheduled_around_day_7() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        generate_board_members(&mut state);
+
+        let ticks_per_day = crate::state::TICKS_PER_DAY as u64;
+        let meeting_tick = state.next_board_meeting_tick;
+        // Should be scheduled between day 6 and day 8
+        assert!(meeting_tick >= 6 * ticks_per_day, "meeting too early: tick {meeting_tick}");
+        assert!(meeting_tick <= 8 * ticks_per_day, "meeting too late: tick {meeting_tick}");
+    }
+
+    #[test]
+    fn board_meeting_fires_on_schedule() {
+        use crate::engine::tick;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        generate_board_members(&mut state);
+
+        let meeting_tick = state.next_board_meeting_tick;
+        let original_next = state.next_board_meeting_tick;
+
+        // Advance until a board meeting fires or we pass the scheduled tick
+        let max_tick = meeting_tick + 100; // small buffer
+        let mut found_meeting = false;
+        while state.tick <= max_tick {
+            state = tick(&state);
+            if let Some(ref crisis) = state.active_crisis {
+                if crisis.kind.tag() == "board_meeting" {
+                    found_meeting = true;
+                    // Verify meeting has three options
+                    assert_eq!(crisis.options.len(), 3, "board meeting should have 3 options");
+                    assert_eq!(crisis.title, "Board Meeting");
+                    // Next meeting should have been rescheduled
+                    assert!(state.next_board_meeting_tick > original_next,
+                        "next meeting should be rescheduled after firing");
+                    break;
+                }
+                // Auto-resolve non-meeting crises to keep advancing
+                state.active_crisis = None;
+                state.last_crisis_resolved_tick = state.tick;
+            }
+        }
+        assert!(found_meeting, "board meeting should have fired by tick {max_tick}");
     }
 }
