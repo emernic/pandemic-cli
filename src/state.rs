@@ -1039,6 +1039,12 @@ pub struct FundingContract {
     /// Tick when last demand crisis was generated (cooldown tracking).
     #[serde(default)]
     pub last_demand_tick: u64,
+    /// Tick when this contract was accepted (added to `contracts` vec).
+    #[serde(default)]
+    pub accepted_tick: u64,
+    /// Whether a loyalty raise has already been offered for this contract.
+    #[serde(default)]
+    pub loyalty_raise_offered: bool,
 }
 
 /// Contract condition satisfaction thresholds and rates.
@@ -4202,6 +4208,10 @@ pub enum CrisisKind {
         lender: LoanLender,
         outstanding: f64,
     },
+    /// A board member offers to raise the price on a contract the player has held for 10+ days.
+    LoyaltyRaise {
+        template_id: u8,
+    },
 }
 
 impl CrisisKind {
@@ -4264,6 +4274,7 @@ impl CrisisKind {
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",
             CrisisKind::LoanCallIn { .. } => "loan_call_in",
+            CrisisKind::LoyaltyRaise { .. } => "loyalty_raise",
         }
     }
 }

@@ -101,9 +101,11 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // (so suspended screening is reflected).
     policy::tick_screening(&mut new);
 
-    // Funding contracts — check conditions (revoke violators), offer new contracts.
+    // Funding contracts — check conditions (revoke violators), offer new contracts,
+    // and check for loyalty raise eligibility on long-held contracts.
     contracts::tick_check_contracts(&mut new);
     contracts::tick_offer_contracts(&mut new, &mut rng_misc);
+    contracts::tick_loyalty_raises(&mut new, &mut rng_misc);
 
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
     corporations::tick_corporations(&mut new, &mut rng_misc);
@@ -3390,6 +3392,8 @@ mod tests {
             satisfaction: 0.4,
             warned: true,
             last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
         });
 
         // Set up the contract demand crisis as active
@@ -3439,6 +3443,8 @@ mod tests {
             satisfaction: 0.4,
             warned: true,
             last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
         });
 
         state.active_crisis = Some(CrisisEvent {
