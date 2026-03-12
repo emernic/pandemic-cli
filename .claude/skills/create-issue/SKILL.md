@@ -180,6 +180,8 @@ Before creating the issue, re-read your draft and check:
 
 Use `gh issue create` with appropriate labels. All issue types should have a priority label, with one exception: investigate issues that were filed by an AI agent (not requested by the user) should NOT have a priority label, since the outcome is uncertain. **Issues that come directly from the user ALWAYS get P0 or P1 priority, regardless of type — including investigate issues.** Anything requested directly by the user is highest priority and requires special careful consideration of their exact wording.
 
+**When the user requested an issue**, say "user" in the body — not "project owner," "maintainer," or other synonyms. Other agents search for the word "user" to identify these.
+
 ```bash
 gh issue create \
   --title "Title here" \
