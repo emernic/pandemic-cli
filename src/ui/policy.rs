@@ -261,7 +261,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            // No blank line after structurally-locked items to save panel space
+            lines.push(Line::from(""));
             continue;
         }
 
@@ -317,7 +317,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
-            // No blank line after locked items to save panel space
+            lines.push(Line::from(""));
             continue;
         }
 
