@@ -4141,6 +4141,9 @@ pub enum CrisisKind {
     /// Chairman calls a Vote of No Confidence after sustained hostility (<0.20 satisfaction
     /// for ~3 consecutive days). Player must make concessions or stand firm.
     VoteOfNoConfidence,
+    /// Board formally questions the player's inaction on research. Fires once around day 5
+    /// if no identification research has been started for any disease.
+    BoardResearchInquiry,
 
     // --- Corporate detention crises ---
 
@@ -4237,6 +4240,7 @@ impl CrisisKind {
             CrisisKind::BoardMeeting => "board_meeting",
             CrisisKind::BoardEmbezzlementWarning => "board_embezzlement_warning",
             CrisisKind::VoteOfNoConfidence => "vote_no_confidence",
+            CrisisKind::BoardResearchInquiry => "board_research_inquiry",
             CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",

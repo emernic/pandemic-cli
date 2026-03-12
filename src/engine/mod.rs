@@ -13,7 +13,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
+    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind, SimState,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
@@ -423,6 +423,31 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     {
         let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardEmbezzlementWarning);
         crisis::activate_crisis(&mut new, crisis);
+    }
+
+    // Board Research Inquiry: fires once around day 5 if no identification research has been
+    // started for any disease. A one-shot nudge from the board.
+    {
+        let day = new.tick as f64 / TICKS_PER_DAY;
+        let already_fired = new.crisis_cooldowns.contains_key("board_research_inquiry");
+        if new.active_crisis.is_none()
+            && crisis_gap_ok
+            && day >= 5.0
+            && !already_fired
+        {
+            // Check if any identification research has ever been started:
+            // either currently running as field research, or a disease has knowledge > 0
+            // (meaning identification completed or is in progress).
+            let any_identification_started = new.field_research.iter()
+                .any(|fr| matches!(fr.kind, ResearchKind::IdentifyThreat { .. }))
+                || new.diseases.iter().any(|d| d.detected && d.knowledge > 0.0);
+            if !any_identification_started {
+                // Mark as fired immediately so it never fires again, even if manually cleared.
+                new.crisis_cooldowns.insert("board_research_inquiry".to_string(), new.tick);
+                let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardResearchInquiry);
+                crisis::activate_crisis(&mut new, crisis);
+            }
+        }
     }
 
     // Vote of No Confidence: Chairman calls a vote after ~3 days of sustained hostility.
@@ -6094,6 +6119,68 @@ mod tests {
         });
 
         assert!(!result.success);
+    }
+
+    #[test]
+    fn board_research_inquiry_fires_when_no_identification_started() {
+        let mut state = GameState::new_default(42);
+        crate::engine::initialize_game(&mut state);
+        // Set tick to day 5, ensure no other crisis is active
+        state.tick = (5.0 * TICKS_PER_DAY) as u64;
+        state.active_crisis = None;
+        state.pending_crises.clear();
+        state.last_crisis_resolved_tick = 0; // no gap issue
+        state.next_board_meeting_tick = u64::MAX; // prevent board meetings
+        state.last_contract_offer_tick = state.tick; // prevent contract offers
+        // Ensure no identification has started: knowledge should be 0
+        for d in &mut state.diseases {
+            d.knowledge = 0.0;
+        }
+        state.field_research.clear();
+
+        // Tick until the inquiry fires (should be within a few ticks)
+        let mut found = false;
+        let mut current = state;
+        for _ in 0..20 {
+            current = tick(&current);
+            if let Some(ref crisis) = current.active_crisis {
+                if crisis.kind.tag() == "board_research_inquiry" {
+                    found = true;
+                    assert_eq!(crisis.title, "Board Inquiry: Research Status");
+                    assert_eq!(crisis.options.len(), 1);
+                    break;
+                }
+                // Auto-resolve other crises
+                current.active_crisis = None;
+                current.last_crisis_resolved_tick = current.tick;
+            }
+        }
+        assert!(found, "Board Research Inquiry should fire after day 5 with no identification started");
+    }
+
+    #[test]
+    fn board_research_inquiry_does_not_fire_when_identification_started() {
+        let mut state = GameState::new_default(42);
+        crate::engine::initialize_game(&mut state);
+        state.tick = (5.0 * TICKS_PER_DAY) as u64;
+        state.active_crisis = None;
+        state.pending_crises.clear();
+        state.last_crisis_resolved_tick = 0;
+        state.next_board_meeting_tick = u64::MAX;
+        state.last_contract_offer_tick = state.tick;
+        // Give the first disease some knowledge (identification started)
+        state.diseases[0].knowledge = 0.25;
+
+        let mut current = state;
+        for _ in 0..20 {
+            current = tick(&current);
+            if let Some(ref crisis) = current.active_crisis {
+                assert_ne!(crisis.kind.tag(), "board_research_inquiry",
+                    "Board Research Inquiry should NOT fire when identification has been started");
+                current.active_crisis = None;
+                current.last_crisis_resolved_tick = current.tick;
+            }
+        }
     }
 
 }
