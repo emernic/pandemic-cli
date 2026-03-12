@@ -629,15 +629,13 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     // Infrastructure status
     if !region.collapsed {
-        fn infra_status(val: f64) -> (&'static str, Color) {
-            if val <= 0.0 {
-                ("FAILED", Color::Red)
-            } else if val < crate::state::INFRA_CRITICAL {
-                ("CRITICAL", Color::Red)
+        fn infra_color(val: f64) -> Color {
+            if val <= 0.0 || val < crate::state::INFRA_CRITICAL {
+                Color::Red
             } else if val < crate::state::INFRA_STRESSED {
-                ("STRESSED", Color::Yellow)
+                Color::Yellow
             } else {
-                ("OK", Color::Green)
+                Color::Green
             }
         }
         let hc = region.healthcare_capacity;
@@ -645,25 +643,22 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         let co = region.civil_order;
         // Only show infrastructure when at least one system is degraded
         if hc < 1.0 || sl < 1.0 || co < 1.0 {
-            let hc_status = infra_status(hc);
-            let sl_status = infra_status(sl);
-            let co_status = infra_status(co);
             lines.push(Line::from(vec![
                 Span::styled("Infra: ", label),
                 Span::styled("HC ", label),
                 Span::styled(
                     format!("{}%", (hc * 100.0) as u32),
-                    Style::default().fg(hc_status.1),
+                    Style::default().fg(infra_color(hc)),
                 ),
                 Span::styled("  SL ", label),
                 Span::styled(
                     format!("{}%", (sl * 100.0) as u32),
-                    Style::default().fg(sl_status.1),
+                    Style::default().fg(infra_color(sl)),
                 ),
                 Span::styled("  CO ", label),
                 Span::styled(
                     format!("{}%", (co * 100.0) as u32),
-                    Style::default().fg(co_status.1),
+                    Style::default().fg(infra_color(co)),
                 ),
             ]));
             // Show effect warnings for stressed/critical systems
