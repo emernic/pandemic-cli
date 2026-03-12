@@ -4,7 +4,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    Disease, GameState, MAX_DISEASES, Medicine, MechanismOfAction, MutationMode,
+    Disease, GameState, MAX_DISEASES, Medicine, MutationMode,
     PathogenType, RegionDiseaseState, ScreeningLevel, TherapyType, TransmissionVector, TICKS_PER_DAY,
 };
 
@@ -326,14 +326,6 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         }
     }
 
-    // Pre-existing resistance: new diseases emerge partially resistant to
-    // mechanisms the player has deployed heavily. Invisible to the player —
-    // they just notice their old drugs don't work as well on new threats.
-    // Kicks in at day 20 to create a noticeable mid-game shift.
-    if day >= 20.0 {
-        seed_preexisting_resistance(state, disease_idx);
-    }
-
     // Anomalous mutation patterns for late-game diseases (day 25+).
     // Some pathogens exhibit locked or directional mutation — visible only in
     // the data. No UI commentary. A careful player comparing strain generations
@@ -368,57 +360,4 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     }
 
     Some(result)
-}
-
-/// Pre-seed a newly spawned disease with resistance to mechanisms the player
-/// has deployed most. Simulates evolutionary pressure from the player's
-/// medicine usage without announcing it.
-fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
-    let day = state.tick as f64 / TICKS_PER_DAY;
-    // Intensity ramps from 0 at day 20 to full at day 60
-    let intensity = ((day - 20.0) / 40.0).clamp(0.0, 1.0);
-
-    // Aggregate total deployments per mechanism across all medicines
-    let mut mech_deployments: HashMap<Option<MechanismOfAction>, u32> = HashMap::new();
-    for med in &state.medicines {
-        if med.deployed_count > 0 {
-            *mech_deployments.entry(med.mechanism).or_insert(0) += med.deployed_count;
-        }
-    }
-
-    if mech_deployments.is_empty() {
-        return;
-    }
-
-    let max_deploys = *mech_deployments.values().max().unwrap_or(&0);
-    if max_deploys == 0 {
-        return;
-    }
-
-    // For each mechanism the player has used, add proportional resistance.
-    // Broad-spectrum (None mechanism) caps at 50% because it's the universal
-    // tool every player deploys first. Targeted mechanisms cap at 30%.
-    // The higher BS cap creates the visible "this disease doesn't respond"
-    // moment that signals the mid-game shift.
-    for (&mechanism, &count) in &mech_deployments {
-        let deploy_fraction = count as f64 / max_deploys as f64;
-        // Only seed resistance for heavily-used mechanisms (>30% of max)
-        if deploy_fraction < 0.3 {
-            continue;
-        }
-        let cap = if mechanism.is_none() { 0.5 } else { 0.3 };
-        let resistance = (deploy_fraction * intensity * cap).min(cap);
-        if resistance > 0.01 {
-            state.diseases[disease_idx].add_resistance(mechanism, resistance);
-        }
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::state::GameState;
-    use rand::SeedableRng;
-
 }
