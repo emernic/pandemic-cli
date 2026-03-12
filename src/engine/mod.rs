@@ -1,3 +1,4 @@
+pub mod board;
 pub(crate) mod contracts;
 pub mod corporations;
 mod crisis;
@@ -96,6 +97,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     corporations::tick_corporations(&mut new);
     // Board satisfaction check — queue demand crises when corps are hurting.
     corporations::check_board_demands(&mut new);
+    // Update per-member board satisfaction from connected entities.
+    board::update_board_satisfaction(&mut new);
 
     // Passive resource generation (both degrade as deaths mount)
     let funding_income = new.funding_income_rate();
