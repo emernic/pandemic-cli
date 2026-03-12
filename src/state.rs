@@ -1202,6 +1202,19 @@ pub enum BoardRole {
     IndependentAdvisor,
 }
 
+/// What two rival board members are fighting about in a rival agenda meeting.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RivalConflict {
+    /// Corp leader wants quarantine/border controls lifted; governor wants them kept.
+    /// `region_idx` is the contested region.
+    Quarantine { region_idx: usize },
+    /// Two governors each want resources directed to their region.
+    ResourcePriority { region_a: usize, region_b: usize },
+    /// Corp leader wants restrictions lifted for economic recovery;
+    /// independent advisor wants them tightened for public health.
+    PolicyDirection { region_idx: usize },
+}
+
 /// A named individual on the NWHO board of directors.
 /// Satisfaction is computed from game state each tick based on the member's role
 /// and connections — it is not directly manipulable by the player.
@@ -3752,6 +3765,13 @@ pub enum CrisisKind {
     /// Scheduled board meeting. The most dissatisfied member raises a motion.
     /// `member_idx` is the index into `board_members` of the member driving the agenda.
     BoardMeeting { member_idx: usize },
+    /// Two board members want opposite things. Player must choose who to anger.
+    /// `member_a_idx` drives the meeting, `member_b_idx` opposes.
+    RivalAgenda {
+        member_a_idx: usize,
+        member_b_idx: usize,
+        conflict: RivalConflict,
+    },
 
     // --- Corporate detention crises ---
 
@@ -3843,6 +3863,7 @@ impl CrisisKind {
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardDemand { .. } => "board_demand",
             CrisisKind::BoardMeeting { .. } => "board_meeting",
+            CrisisKind::RivalAgenda { .. } => "rival_agenda",
             CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",

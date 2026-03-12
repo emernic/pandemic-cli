@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     ActiveLoan, BoardRole, CorporationSector, CrisisCost, CrisisEvent, CrisisKind, CrisisOption,
-    CrisisOperation, GameEvent, GameState, LoanLender, ScreeningLevel,
+    CrisisOperation, GameEvent, GameState, LoanLender, RivalConflict, ScreeningLevel,
     SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -2172,6 +2172,150 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 }
             }
         }
+        CrisisKind::RivalAgenda { member_a_idx, member_b_idx, conflict } => {
+            let member_a = state.board_members.get(*member_a_idx);
+            let member_b = state.board_members.get(*member_b_idx);
+            let name_a = member_a.map(|m| m.name.as_str()).unwrap_or("A board member");
+            let name_b = member_b.map(|m| m.name.as_str()).unwrap_or("Another member");
+            let title_a = member_a.map(|m| m.title.as_str()).unwrap_or("Unknown");
+            let title_b = member_b.map(|m| m.title.as_str()).unwrap_or("Unknown");
+            let day = tick as f64 / TICKS_PER_DAY;
+
+            match conflict {
+                RivalConflict::Quarantine { region_idx } => {
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.as_str()).unwrap_or("the region");
+                    let compromise_cost = scaled_cost(state, 0.08, 50.0, 300.0);
+
+                    CrisisEvent {
+                        title: "Board Meeting: Disputed Agenda".into(),
+                        description: format!(
+                            "Day {day:.0} session. {name_a} ({title_a}) moves to lift containment \
+                             in {region_name}. {name_b} ({title_b}) objects, citing ongoing \
+                             infection risk. The board waits for your decision."
+                        ),
+                        options: vec![
+                            CrisisOption {
+                                label: format!("Side with {name_a}"),
+                                description: format!(
+                                    "Lift quarantine and border controls in {region_name}."
+                                ),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: format!("Side with {name_b}"),
+                                description: format!(
+                                    "Keep all restrictions in {region_name}."
+                                ),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: "Compromise".into(),
+                                description: format!(
+                                    "Lift border controls but keep quarantine. \
+                                     Allocate \u{a5}{compromise_cost:.0} to offset economic losses."
+                                ),
+                                cost: Some(CrisisCost {
+                                    funding: compromise_cost,
+                                    personnel: 0,
+                                    ..Default::default()
+                                }),
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                RivalConflict::ResourcePriority { region_a, region_b } => {
+                    let region_a_name = state.regions.get(*region_a)
+                        .map(|r| r.name.as_str()).unwrap_or("one region");
+                    let region_b_name = state.regions.get(*region_b)
+                        .map(|r| r.name.as_str()).unwrap_or("another region");
+                    let split_cost = scaled_cost(state, 0.12, 80.0, 500.0);
+
+                    CrisisEvent {
+                        title: "Board Meeting: Disputed Agenda".into(),
+                        description: format!(
+                            "Day {day:.0} session. {name_a} ({title_a}) demands a response team \
+                             for {region_a_name}. {name_b} ({title_b}) insists {region_b_name} \
+                             should have priority. Resources are limited."
+                        ),
+                        options: vec![
+                            CrisisOption {
+                                label: format!("Prioritize {region_a_name}"),
+                                description: format!(
+                                    "Direct existing resources to {region_a_name}."
+                                ),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: format!("Prioritize {region_b_name}"),
+                                description: format!(
+                                    "Direct existing resources to {region_b_name}."
+                                ),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: "Split resources".into(),
+                                description: format!(
+                                    "Fund both regions. Costs \u{a5}{split_cost:.0}. Neither gets full support."
+                                ),
+                                cost: Some(CrisisCost {
+                                    funding: split_cost,
+                                    personnel: 0,
+                                    ..Default::default()
+                                }),
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+                RivalConflict::PolicyDirection { region_idx } => {
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.as_str()).unwrap_or("the region");
+                    let relief_cost = scaled_cost(state, 0.10, 60.0, 400.0);
+
+                    CrisisEvent {
+                        title: "Board Meeting: Disputed Agenda".into(),
+                        description: format!(
+                            "Day {day:.0} session. {name_a} ({title_a}) argues current \
+                             restrictions in {region_name} are unsustainable. \
+                             {name_b} ({title_b}) warns that lifting them will cost lives. \
+                             Both have the votes to block the other."
+                        ),
+                        options: vec![
+                            CrisisOption {
+                                label: format!("Side with {name_a}"),
+                                description: format!(
+                                    "Lift restrictions in {region_name}. Economic recovery begins."
+                                ),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: format!("Side with {name_b}"),
+                                description: "Keep restrictions. Public health takes priority.".into(),
+                                cost: None,
+                            },
+                            CrisisOption {
+                                label: "Compromise".into(),
+                                description: format!(
+                                    "Keep restrictions but issue \u{a5}{relief_cost:.0} in \
+                                     economic relief to {region_name}."
+                                ),
+                                cost: Some(CrisisCost {
+                                    funding: relief_cost,
+                                    personnel: 0,
+                                    ..Default::default()
+                                }),
+                            },
+                        ],
+                        kind,
+                        tick_created: tick,
+                    }
+                }
+            }
+        }
         CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("the region");
@@ -3491,6 +3635,148 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
             state.resources.board_approval = (state.resources.board_approval - 0.08).max(0.0);
             "Motion overruled. Expect consequences.".into()
+        }
+
+        // --- Rival agenda crises ---
+
+        (CrisisKind::RivalAgenda { member_a_idx, member_b_idx, conflict }, choice) => {
+            let sat_boost = 0.10;
+            let sat_penalty = 0.20;
+
+            match (conflict, choice) {
+                (RivalConflict::Quarantine { region_idx }, 0) => {
+                    // Side with A: lift restrictions
+                    if let Some(p) = state.policies.get_mut(*region_idx) {
+                        p.quarantine = false;
+                        p.border_controls = false;
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
+                    }
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+                    format!("Restrictions lifted in {region_name}.")
+                }
+                (RivalConflict::Quarantine { region_idx }, 1) => {
+                    // Side with B: keep restrictions
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
+                    }
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+                    format!("Restrictions maintained in {region_name}.")
+                }
+                (RivalConflict::Quarantine { region_idx }, _) => {
+                    // Compromise: lift border controls, keep quarantine, cost already deducted
+                    if let Some(p) = state.policies.get_mut(*region_idx) {
+                        p.border_controls = false;
+                        // quarantine stays
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
+                    }
+                    "Partial concession. Border controls lifted, quarantine remains.".into()
+                }
+                (RivalConflict::ResourcePriority { region_a, region_b: _ }, 0) => {
+                    // Deploy to region A
+                    if let Some(r) = state.regions.get_mut(*region_a) {
+                        r.governor.loyalty = (r.governor.loyalty + 10.0).min(100.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
+                    }
+                    let name = state.regions.get(*region_a)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+                    format!("Response team deployed to {name}.")
+                }
+                (RivalConflict::ResourcePriority { region_a: _, region_b }, 1) => {
+                    // Deploy to region B
+                    if let Some(r) = state.regions.get_mut(*region_b) {
+                        r.governor.loyalty = (r.governor.loyalty + 10.0).min(100.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
+                    }
+                    let name = state.regions.get(*region_b)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+                    format!("Response team deployed to {name}.")
+                }
+                (RivalConflict::ResourcePriority { region_a: ra, region_b: rb }, _) => {
+                    // Split: cost already deducted, both get partial loyalty
+                    // Smaller loyalty boost since resources are split
+                    for ridx in [*ra, *rb] {
+                        if let Some(r) = state.regions.get_mut(ridx) {
+                            r.governor.loyalty = (r.governor.loyalty + 5.0).min(100.0);
+                        }
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
+                    }
+                    "Resources split between both regions. Neither fully satisfied.".into()
+                }
+                (RivalConflict::PolicyDirection { region_idx }, 0) => {
+                    // Side with A (corp leader): lift restrictions
+                    if let Some(p) = state.policies.get_mut(*region_idx) {
+                        p.quarantine = false;
+                        p.border_controls = false;
+                        p.travel_ban = false;
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
+                    }
+                    let region_name = state.regions.get(*region_idx)
+                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
+                    format!("All restrictions lifted in {region_name}.")
+                }
+                (RivalConflict::PolicyDirection { region_idx: _ }, 1) => {
+                    // Side with B (advisor): keep restrictions
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
+                    }
+                    "Restrictions maintained. Public health takes priority.".into()
+                }
+                (RivalConflict::PolicyDirection { region_idx }, _) => {
+                    // Compromise: keep restrictions, issue economic relief (cost already deducted)
+                    // Boost the corp reserves in that region
+                    for corp in state.corporations.iter_mut() {
+                        if corp.region_idx == *region_idx {
+                            let boost = corp.max_reserves * 0.10;
+                            corp.reserves = (corp.reserves + boost).min(corp.max_reserves);
+                        }
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
+                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
+                    }
+                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
+                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
+                    }
+                    "Restrictions stay. Economic relief issued.".into()
+                }
+            }
         }
 
         // --- Corporate detention crises ---
