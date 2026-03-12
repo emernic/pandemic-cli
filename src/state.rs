@@ -1196,6 +1196,22 @@ impl Corporation {
         if profit >= 0.0 { return None; }
         Some(self.reserves / (-profit))
     }
+
+    /// Previous day's share price from price history, or IPO price if no history.
+    pub fn previous_price(&self) -> f64 {
+        if self.price_history.len() >= 2 {
+            self.price_history[self.price_history.len() - 2]
+        } else {
+            self.ipo_price
+        }
+    }
+
+    /// Stock price change percentage vs previous day.
+    pub fn price_change_pct(&self) -> f64 {
+        let prev = self.previous_price();
+        if prev <= 0.0 { return 0.0; }
+        (self.share_price - prev) / prev * 100.0
+    }
 }
 
 /// Fraction of corporate revenue collected as tax (player income).
@@ -5517,12 +5533,10 @@ impl GameState {
         true
     }
 
-    /// Board satisfaction: average reserve health of board-seat corporations (0.0–1.0).
-    /// Uses reserves_fraction rather than revenue because revenue drops immediately when
-    /// policies are applied (quarantine, border controls), which would create a perverse
-    /// incentive where good policies tank POL. Reserves deplete slowly over weeks, giving
-    /// the board's financial backing a natural lag that reflects long-term solvency.
-    /// Bankruptcies contribute 0.0; a healthy board with full reserves returns ~1.0.
+    /// Board satisfaction: average satisfaction across all board members (0.0–1.0).
+    /// Corporate leaders track stock price relative to IPO; governors track population
+    /// health. Stock price has natural lag via mean-reversion, avoiding the perverse
+    /// incentive where good policies instantly tank satisfaction.
     pub fn board_satisfaction(&self) -> f64 {
         // Use individual board member satisfactions when available.
         if !self.board_members.is_empty() {
@@ -5536,7 +5550,9 @@ impl GameState {
             return 0.0;
         }
         let total: f64 = board_corps.iter().map(|c| {
-            if c.bankrupt { 0.0 } else { c.reserves_fraction() }
+            if c.bankrupt { 0.0 } else {
+                (c.share_price / c.ipo_price).clamp(0.0, 1.0)
+            }
         }).sum();
         total / board_corps.len() as f64
     }
