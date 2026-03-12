@@ -226,6 +226,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             new.ui.research_ui = Some(ResearchUiState::BrowseAll);
                             new.ui.panel_selection = 0;
                         }
+                        GameCommand::UpgradeLab if result.success => {
+                            new.ui.research_ui = Some(ResearchUiState::BrowseAll);
+                            new.ui.panel_selection = 0;
+                        }
                         GameCommand::EnactDecree { .. } if result.success => {
                             // Return to BrowseOps after enacting (decrees are in the Orders panel)
                             new.ui.operations_ui = Some(OpsUiState::BrowseOps);
@@ -415,7 +419,9 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
             };
             match item {
                 ResearchFlatItem::UpgradeLab => {
-                    return Some(GameCommand::UpgradeLab);
+                    ui.research_ui = Some(ResearchUiState::ConfirmLabUpgrade);
+                    ui.panel_selection = 0;
+                    return None;
                 }
                 // Active projects: Enter is a no-op (info already visible)
                 ResearchFlatItem::FieldActive(_)
@@ -451,6 +457,9 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
         }
         Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
             Some(GameCommand::StartResearch { track, project_idx, double_personnel })
+        }
+        Some(ResearchUiState::ConfirmLabUpgrade) => {
+            Some(GameCommand::UpgradeLab)
         }
         None => None,
     }
