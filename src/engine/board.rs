@@ -7,7 +7,7 @@ use crate::state::{BoardMember, BoardRole, GameState};
 /// Called after corporations and regions are initialized.
 ///
 /// Board composition:
-/// - 6 corporate leaders (one per board-seat corporation)
+/// - 6 corporate leaders (randomly chosen — may stack in the same region)
 /// - 2-3 governors who also sit on the board (dual-role creates strategic tension)
 /// - Total: 8-9 members
 pub fn generate_board_members(state: &mut GameState) {

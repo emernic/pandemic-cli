@@ -1,4 +1,5 @@
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 use crate::state::{
     Corporation, CorporationSector, GameEvent, GameState,
@@ -119,16 +120,13 @@ pub fn generate_corporations(state: &mut GameState) {
 
     state.corporations = corps;
 
-    // Randomly assign one board seat per region
-    for r_idx in 0..state.regions.len() {
-        let region_corps: Vec<usize> = state.corporations.iter().enumerate()
-            .filter(|(_, c)| c.region_idx == r_idx)
-            .map(|(i, _)| i)
-            .collect();
-        if !region_corps.is_empty() {
-            let pick = state.rng_misc.r#gen::<usize>() % region_corps.len();
-            state.corporations[region_corps[pick]].board_seat = true;
-        }
+    // Randomly assign 6 board seats — no distribution constraints.
+    // Multiple board members can stack in the same region, creating
+    // strategic asymmetry where some regions matter more to the board.
+    let mut all_indices: Vec<usize> = (0..state.corporations.len()).collect();
+    all_indices.shuffle(&mut state.rng_misc);
+    for &idx in all_indices.iter().take(6) {
+        state.corporations[idx].board_seat = true;
     }
 
     // Assign manufacturing contracts to medicines.
@@ -358,15 +356,12 @@ mod tests {
     }
 
     #[test]
-    fn each_region_has_one_board_seat() {
+    fn six_random_board_seats_assigned() {
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
-        for r_idx in 0..6 {
-            let board_count = state.corporations.iter()
-                .filter(|c| c.region_idx == r_idx && c.board_seat)
-                .count();
-            assert_eq!(board_count, 1, "region {r_idx} should have exactly 1 board seat");
-        }
+        let board_count = state.corporations.iter().filter(|c| c.board_seat).count();
+        assert_eq!(board_count, 6, "should have exactly 6 board seats");
+        // Stacking is allowed — no per-region constraint
     }
 
     #[test]
@@ -504,48 +499,54 @@ mod tests {
 
     #[test]
     fn some_manufacturers_have_board_seats() {
-        let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
+        // With random board seat assignment, check across multiple seeds
+        // that both board-connected and non-board manufacturers exist
+        let mut found_board = false;
+        let mut found_non_board = false;
+        for seed in 0..10 {
+            let mut state = GameState::new_default(seed);
+            generate_corporations(&mut state);
 
-        let locked_with_mfg: Vec<_> = state.medicines.iter()
-            .filter(|m| !m.unlocked && m.manufacturer_corp_idx.is_some())
-            .collect();
-        assert!(!locked_with_mfg.is_empty(), "should have locked medicines with manufacturers");
-
-        let board_connected = locked_with_mfg.iter()
-            .filter(|m| {
-                let corp = &state.corporations[m.manufacturer_corp_idx.unwrap()];
-                corp.board_seat
-            })
-            .count();
-        let non_board = locked_with_mfg.len() - board_connected;
-
-        // Both board-connected and non-board manufacturers should exist
-        // to create strategic tension
-        assert!(board_connected > 0,
-            "at least one medicine should have a board-connected manufacturer");
-        assert!(non_board > 0,
-            "at least one medicine should have a non-board manufacturer");
+            for med in &state.medicines {
+                if !med.unlocked {
+                    if let Some(ci) = med.manufacturer_corp_idx {
+                        if state.corporations[ci].board_seat {
+                            found_board = true;
+                        } else {
+                            found_non_board = true;
+                        }
+                    }
+                }
+            }
+            if found_board && found_non_board { break; }
+        }
+        assert!(found_board, "across seeds, at least one medicine should have a board-connected manufacturer");
+        assert!(found_non_board, "across seeds, at least one medicine should have a non-board manufacturer");
     }
 
     #[test]
     fn develop_medicine_boosts_board_corp_reserves() {
         use crate::state::{ResearchKind, ResearchProject};
 
-        let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
-        state.diseases[0].knowledge = 1.0;
-
-        // Find a locked medicine with a board-seat manufacturer
-        let med_idx = state.medicines.iter()
-            .enumerate()
-            .find(|(_, m)| {
+        // Try multiple seeds to find one where a locked medicine has a board-seat manufacturer
+        let mut state = GameState::new_default(0);
+        let mut med_idx = 0;
+        let mut found = false;
+        for seed in 0..20 {
+            state = GameState::new_default(seed);
+            generate_corporations(&mut state);
+            state.diseases[0].knowledge = 1.0;
+            if let Some((i, _)) = state.medicines.iter().enumerate().find(|(_, m)| {
                 !m.unlocked && m.manufacturer_corp_idx.map_or(false, |ci| {
                     state.corporations.get(ci).map_or(false, |c| c.board_seat)
                 })
-            })
-            .map(|(i, _)| i)
-            .expect("should have a medicine with a board-seat manufacturer");
+            }) {
+                med_idx = i;
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "should find a seed with a board-seat manufacturer medicine");
 
         let corp_idx = state.medicines[med_idx].manufacturer_corp_idx.unwrap();
 
