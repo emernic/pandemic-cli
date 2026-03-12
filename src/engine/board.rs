@@ -7,9 +7,9 @@ use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState, MAX_FIEL
 /// Called after corporations and regions are initialized.
 ///
 /// Board composition:
-/// - 6 corporate leaders (randomly chosen — may stack in the same region)
-/// - 2-3 governors who also sit on the board (dual-role creates strategic tension)
-/// - Total: 8-9 members
+/// - 4 corporate leaders (randomly chosen — may stack in the same region)
+/// - 2 governors who also sit on the board (dual-role creates strategic tension)
+/// - Total: 6 members
 pub(super) fn generate_board_members(state: &mut GameState) {
     let mut members = Vec::new();
     let mut chairman_assigned = false;
@@ -51,7 +51,7 @@ pub(super) fn generate_board_members(state: &mut GameState) {
     let mut region_indices: Vec<usize> = (0..state.regions.len()).collect();
     region_indices.shuffle(&mut state.rng_misc);
 
-    let max_governor_members = 2 + (state.rng_misc.r#gen::<usize>() % 2); // 2 or 3
+    let max_governor_members = 2;
     let mut governor_count = 0;
     for &region_idx in &region_indices {
         if governor_count >= max_governor_members {
@@ -335,7 +335,7 @@ mod tests {
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
-        // Should have 6 corporate leaders + 3 governor members = 9
+        // Should have 4 corporate leaders + 2 governor members = 6
         assert!(!state.board_members.is_empty());
         let corp_leaders: Vec<_> = state.board_members.iter()
             .filter(|m| matches!(m.role, BoardRole::CorporateLeader { .. }))
@@ -344,9 +344,8 @@ mod tests {
             .filter(|m| matches!(m.role, BoardRole::RegionGovernor { .. }))
             .collect();
 
-        assert_eq!(corp_leaders.len(), 6, "should have 6 corporate leaders");
-        assert!(gov_members.len() >= 2 && gov_members.len() <= 3,
-            "should have 2-3 governor members, got {}", gov_members.len());
+        assert_eq!(corp_leaders.len(), 4, "should have 4 corporate leaders");
+        assert_eq!(gov_members.len(), 2, "should have 2 governor members");
     }
 
     #[test]

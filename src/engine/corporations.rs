@@ -120,12 +120,12 @@ pub(super) fn generate_corporations(state: &mut GameState) {
 
     state.corporations = corps;
 
-    // Randomly assign 6 board seats — no distribution constraints.
+    // Randomly assign 4 board seats — no distribution constraints.
     // Multiple board members can stack in the same region, creating
     // strategic asymmetry where some regions matter more to the board.
     let mut all_indices: Vec<usize> = (0..state.corporations.len()).collect();
     all_indices.shuffle(&mut state.rng_misc);
-    for &idx in all_indices.iter().take(6) {
+    for &idx in all_indices.iter().take(4) {
         state.corporations[idx].board_seat = true;
     }
 
@@ -356,11 +356,11 @@ mod tests {
     }
 
     #[test]
-    fn six_random_board_seats_assigned() {
+    fn four_random_board_seats_assigned() {
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
         let board_count = state.corporations.iter().filter(|c| c.board_seat).count();
-        assert_eq!(board_count, 6, "should have exactly 6 board seats");
+        assert_eq!(board_count, 4, "should have exactly 4 board seats");
         // Stacking is allowed — no per-region constraint
     }
 
@@ -451,7 +451,7 @@ mod tests {
         // Bankrupt half the board-seat corps
         let mut bankrupted = 0;
         for c in state.corporations.iter_mut().filter(|c| c.board_seat) {
-            if bankrupted < 3 {
+            if bankrupted < 2 {
                 c.bankrupt = true;
                 c.reserves = 0.0;
                 c.revenue = 0.0;
