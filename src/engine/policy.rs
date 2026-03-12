@@ -1018,6 +1018,8 @@ mod tests {
     /// Helper: set up a state with full POL and plenty of personnel for screening tests.
     fn screening_test_state() -> GameState {
         let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
         state.resources.board_approval = 1.0;
         state.resources.funding = 10_000.0;
         // Unlock research prerequisites for advanced screening tiers

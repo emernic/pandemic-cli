@@ -82,6 +82,13 @@ pub fn generate_board_members(state: &mut GameState) {
         let jitter = state.rng_misc.r#gen::<u64>() % (jitter_range * 2 + 1);
         state.next_board_meeting_tick = base.saturating_sub(jitter_range) + jitter;
     }
+
+    // Initialize board budget from corporate tax revenue at current satisfaction.
+    if state.board_budget_per_tick == 0.0 {
+        let board_sat = state.board_satisfaction();
+        state.board_budget_per_tick =
+            crate::engine::crisis::compute_board_budget_per_tick(state, board_sat);
+    }
 }
 
 

@@ -280,8 +280,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     // ── Budget breakdown ──
     {
         let gross = state.funding_income_rate() * TICKS_PER_DAY;
+        let board_budget = state.board_budget_per_tick * TICKS_PER_DAY;
         let contract_income = state.contract_income_rate() * TICKS_PER_DAY;
-        let regional_income = gross - contract_income;
         let upkeep = state.personnel_upkeep_rate() * TICKS_PER_DAY;
         let policy = state.total_policy_funding_cost() * TICKS_PER_DAY;
         let net = gross - upkeep - policy;
@@ -293,40 +293,12 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let green = Style::default().fg(Color::Green);
         let red_style = Style::default().fg(Color::Red);
 
-        // Income line — show travel ban and trade penalties separately when active
-        let alive_regions = state.regions.iter().filter(|r| !r.collapsed).count();
-        let ban_penalty = state.travel_ban_income_penalty() * TICKS_PER_DAY;
-        let trade_penalty = state.trade_income_penalty() * TICKS_PER_DAY;
-        let total_penalty = ban_penalty + trade_penalty;
-        if total_penalty > 0.0 {
-            // Show the pre-penalty income so the player can see the true cost
-            let base_income = regional_income + total_penalty;
-            lines.push(Line::from(vec![
-                Span::styled("  Income:   ", dim),
-                Span::styled(format!("+¥{:.0}/day", base_income), green),
-                Span::styled(format!("  ({} regions)", alive_regions), dim),
-            ]));
-            if ban_penalty > 0.0 {
-                lines.push(Line::from(vec![
-                    Span::styled("  Ban cost: ", dim),
-                    Span::styled(format!("-¥{:.0}/day", ban_penalty), red_style),
-                    Span::styled("  (halved income)", dim),
-                ]));
-            }
-            if trade_penalty >= 1.0 {
-                lines.push(Line::from(vec![
-                    Span::styled("  Trade:    ", dim),
-                    Span::styled(format!("-¥{:.0}/day", trade_penalty), Style::default().fg(Color::Yellow)),
-                    Span::styled("  (neighbors in crisis)", dim),
-                ]));
-            }
-        } else {
-            lines.push(Line::from(vec![
-                Span::styled("  Income:   ", dim),
-                Span::styled(format!("+¥{:.0}/day", regional_income), green),
-                Span::styled(format!("  ({} regions)", alive_regions), dim),
-            ]));
-        }
+        // Board budget line — fixed allocation from the board
+        lines.push(Line::from(vec![
+            Span::styled("  Board:    ", dim),
+            Span::styled(format!("+¥{:.0}/day", board_budget), green),
+            Span::styled("  (set at board meetings)", dim),
+        ]));
 
         // Contract income line
         if contract_income > 0.0 {

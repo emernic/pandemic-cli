@@ -202,11 +202,11 @@ pub struct GameState {
     /// Board meetings are proactive, recurring events on a fixed schedule (~every 7-10 days).
     #[serde(default)]
     pub next_board_meeting_tick: u64,
-    /// Board-set funding multiplier (0.5..1.2). Applied to base income each tick.
-    /// Set by board meeting outcomes based on overall satisfaction.
-    /// 1.0 = neutral (initial value), >1.0 = board is generous, <1.0 = budget slashed.
-    #[serde(default = "default_one")]
-    pub board_funding_multiplier: f64,
+    /// Fixed per-tick budget set by the board. Updated at board meetings based on
+    /// overall satisfaction. Between meetings this is constant — income doesn't
+    /// fluctuate with regional health. Contracts add on top of this.
+    #[serde(default)]
+    pub board_budget_per_tick: f64,
     /// Tick when the Chairman's satisfaction first dropped below the hostile threshold (0.20).
     /// Reset to None when satisfaction recovers. Used to trigger Vote of No Confidence
     /// after ~3 consecutive days of hostility.
@@ -290,12 +290,6 @@ pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
 /// Fraction of infected people who are too sick to contribute economically.
 /// 70% are incapacitated (hospitalized, quarantined, bedridden); 30% are mild/asymptomatic.
 pub const INFECTED_INCAPACITATION_RATE: f64 = 0.7;
-pub const TRAVEL_BAN_INCOME_PENALTY: f64 = 0.5;
-/// Fraction of regional income that depends on connected neighbors' economic health.
-/// Domestic = (1 - TRADE_INCOME_FRACTION), Trade = TRADE_INCOME_FRACTION × avg(neighbor health).
-/// Set to 0.25: a region with all neighbors healthy gets full income, but if all neighbors
-/// collapse, it loses 25% of income even if healthy itself.
-pub const TRADE_INCOME_FRACTION: f64 = 0.25;
 pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
@@ -1394,8 +1388,6 @@ pub enum RegionTrait {
 
 /// Travel ban cost multiplier for TradeDependent regions.
 pub const TRADE_DEPENDENT_TRAVEL_BAN_MULT: f64 = 2.0;
-/// Travel ban income retained factor for TradeDependent regions (25% retained vs normal 50%).
-pub const TRADE_DEPENDENT_INCOME_FACTOR: f64 = 0.25;
 
 impl RegionTrait {
     pub fn label(&self) -> &'static str {
@@ -5050,7 +5042,7 @@ impl GameState {
             portfolio: Vec::new(),
             board_members: Vec::new(),
             next_board_meeting_tick: 0, // initialized properly after RNG setup
-            board_funding_multiplier: 1.0,
+            board_budget_per_tick: 0.0, // set properly after corporations are generated
             chairman_hostile_since: None,
             next_sequence_group: 0,
             loans: vec![],
@@ -5294,30 +5286,6 @@ impl GameState {
             .sum()
     }
 
-    /// Per-region income contribution before travel ban modifier.
-    /// `total_pop` must be > 0 (caller checks).
-    /// Travel ban income factor for a region (1.0 = no ban, 0.3 or 0.5 = ban active).
-    fn region_travel_ban_factor(&self, region_idx: usize, region: &Region) -> f64 {
-        if self.policies.get(region_idx).is_some_and(|p| p.travel_ban) {
-            if region.has_trait(RegionTrait::TradeDependent) {
-                TRADE_DEPENDENT_INCOME_FACTOR
-            } else {
-                TRAVEL_BAN_INCOME_PENALTY
-            }
-        } else {
-            1.0
-        }
-    }
-
-    fn region_base_income(region: &Region, total_pop: f64) -> f64 {
-        let pop = region.population as f64;
-        let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
-        let incapacitated = region.dead + infected * INFECTED_INCAPACITATION_RATE;
-        let healthy_frac = (pop - incapacitated).max(0.0) / pop;
-        let region_share = pop / total_pop;
-        BASE_FUNDING_INCOME * region_share * healthy_frac * region.income_modifier
-    }
-
     /// Economic health factor for a region (0.0 = collapsed, up to 1.0 = fully healthy).
     /// Used by neighbors to compute trade income. Accounts for both active infections
     /// and cumulative deaths — a region that lost 30% of its population is economically
@@ -5369,63 +5337,9 @@ impl GameState {
         (base * policy_factor).clamp(0.0, 1.0)
     }
 
-    /// Average economic health of a region's connected neighbors (0.0 to 1.0).
-    fn neighbor_trade_health(&self, region_idx: usize) -> f64 {
-        let connections = &self.regions[region_idx].connections;
-        if connections.is_empty() {
-            return 1.0; // No neighbors = no trade dependency
-        }
-        let sum: f64 = connections
-            .iter()
-            .map(|&n| Self::region_economic_health(&self.regions[n]))
-            .sum();
-        sum / connections.len() as f64
-    }
-
-    /// Estimated funding income per tick, based on corporate tax and contracts.
-    ///
-    /// Corporate tax revenue from each region's corporations (already accounts for
-    /// workforce health, infrastructure, and policy effects). Governor skim and
-    /// inter-region trade modifiers apply on top.
-    ///
-    /// Falls back to the pre-corporation formula if no corporations exist (backwards compat).
-    /// Per-region raw income before decree modifiers (per tick).
-    /// Handles both corporate (normal) and legacy (pre-corporation save) paths.
-    /// Collapsed regions return 0. Called by both `funding_income_rate()` and
-    /// `per_region_income_breakdown()` to avoid duplicating the formula.
-    fn region_raw_income_pre_decree(&self, i: usize, region: &Region, total_pop: f64) -> f64 {
-        if region.collapsed { return 0.0; }
-        if self.corporations.is_empty() {
-            // Fallback: old abstract formula (for saves without corporations)
-            let base = Self::region_base_income(region, total_pop);
-            let after_ban = base * self.region_travel_ban_factor(i, region);
-            let skim_factor = 1.0 - region.governor.income_skim;
-            let after_skim = after_ban * skim_factor;
-            let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-            let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-            domestic + trade
-        } else {
-            // Corporate income: sum tax contributions per region, apply skim + trade
-            let region_corp_tax: f64 = self.corporations.iter()
-                .filter(|c| c.region_idx == i)
-                .map(|c| c.tax_contribution())
-                .sum();
-            let skim_factor = 1.0 - region.governor.income_skim;
-            let after_skim = region_corp_tax * skim_factor;
-            let domestic = after_skim * (1.0 - TRADE_INCOME_FRACTION);
-            let trade = after_skim * TRADE_INCOME_FRACTION * self.neighbor_trade_health(i);
-            domestic + trade
-        }
-    }
-
+    /// Per-tick funding income: fixed board budget + contracts + decree modifiers.
     pub fn funding_income_rate(&self) -> f64 {
-        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
-        if total_pop <= 0.0 {
-            return 0.0;
-        }
-        let mut income: f64 = self.regions.iter().enumerate()
-            .map(|(i, region)| self.region_raw_income_pre_decree(i, region, total_pop))
-            .sum();
+        let mut income = self.board_budget_per_tick;
         // Decree modifiers
         if self.enacted_decrees.sacrificed_region.is_some() {
             income *= SACRIFICE_INCOME_BONUS;
@@ -5433,14 +5347,11 @@ impl GameState {
         if self.enacted_decrees.conscript_researchers {
             income = (income - CONSCRIPT_INCOME_PENALTY).max(0.0);
         }
-        // Board funding multiplier — set by board meetings based on satisfaction.
-        // Applies to regional income only (not contracts).
-        income *= self.board_funding_multiplier;
         // Embezzlement penalty — board pulls funding if warned and still over-investing.
         if self.embezzlement_warned && self.exceeds_embezzlement_threshold() {
             income *= EMBEZZLEMENT_FUNDING_PENALTY;
         }
-        // Contract income — fixed, not affected by population health or board multiplier
+        // Contract income — fixed, not affected by board budget
         let contract_income: f64 = self.contracts.iter().map(|c| c.income).sum();
         income + contract_income
     }
@@ -5448,6 +5359,30 @@ impl GameState {
     /// Per-tick income from active contracts alone (for UI breakdown).
     pub fn contract_income_rate(&self) -> f64 {
         self.contracts.iter().map(|c| c.income).sum()
+    }
+
+    /// Compute the baseline board budget per tick from total corporate tax revenue.
+    /// This is the "neutral" budget at satisfaction 0.5 — what the board allocates
+    /// when they're neither happy nor angry. Used for initial calibration and as
+    /// the reference point for board meeting adjustments.
+    pub fn base_board_budget_per_tick(&self) -> f64 {
+        let total_corp_tax: f64 = self.corporations.iter()
+            .filter(|c| !self.regions.get(c.region_idx).is_some_and(|r| r.collapsed))
+            .map(|c| c.tax_contribution())
+            .sum();
+        // Apply governor skim per region (same as old system)
+        let mut skimmed_total = 0.0;
+        for region_idx in 0..self.regions.len() {
+            let region = &self.regions[region_idx];
+            if region.collapsed { continue; }
+            let region_tax: f64 = self.corporations.iter()
+                .filter(|c| c.region_idx == region_idx)
+                .map(|c| c.tax_contribution())
+                .sum();
+            let skim_factor = 1.0 - region.governor.income_skim;
+            skimmed_total += region_tax * skim_factor;
+        }
+        if skimmed_total > 0.0 { skimmed_total } else { total_corp_tax }
     }
 
     /// Whether the player's non-board stock positions exceed the embezzlement threshold.
@@ -5477,69 +5412,6 @@ impl GameState {
         self.loans.iter().map(|l| l.outstanding * l.daily_interest_rate).sum()
     }
 
-
-    /// Per-region income contribution per day (after all modifiers including decrees).
-    /// Returns a vec of (region_idx, income_per_day) for all regions in order.
-    /// Collapsed regions produce 0. Decree modifiers are applied proportionally.
-    pub fn per_region_income_breakdown(&self) -> Vec<(usize, f64)> {
-        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
-        if total_pop <= 0.0 {
-            return self.regions.iter().enumerate().map(|(i, _)| (i, 0.0)).collect();
-        }
-        let per_region_raw: Vec<f64> = self.regions.iter().enumerate()
-            .map(|(i, region)| self.region_raw_income_pre_decree(i, region, total_pop))
-            .collect();
-        let pre_decree_total: f64 = per_region_raw.iter().sum();
-        // Compute decree multiplier for regional income only. Subtract contract income
-        // (which is global, not regional) so contracts aren't distributed to regions.
-        // Contracts are displayed separately in the UI income breakdown.
-        let regional_income_after_decrees = self.funding_income_rate() - self.contract_income_rate();
-        let decree_factor = if pre_decree_total > 0.0 {
-            regional_income_after_decrees / pre_decree_total
-        } else {
-            1.0
-        };
-        per_region_raw.into_iter().enumerate()
-            .map(|(i, raw)| (i, raw * decree_factor * TICKS_PER_DAY))
-            .collect()
-    }
-
-    /// Trade income lost per tick due to neighbor health degradation.
-    /// Returns the difference between max possible trade income and actual trade income.
-    pub fn trade_income_penalty(&self) -> f64 {
-        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
-        if total_pop <= 0.0 {
-            return 0.0;
-        }
-        let mut penalty = 0.0;
-        for (i, region) in self.regions.iter().enumerate() {
-            if region.collapsed {
-                continue;
-            }
-            let base = Self::region_base_income(region, total_pop);
-            let after_ban = base * self.region_travel_ban_factor(i, region);
-            let trade_loss = after_ban * TRADE_INCOME_FRACTION * (1.0 - self.neighbor_trade_health(i));
-            penalty += trade_loss;
-        }
-        penalty
-    }
-
-    /// Income lost per tick due to travel ban penalties (halved region contributions).
-    /// Returns 0 if no travel bans are active.
-    pub fn travel_ban_income_penalty(&self) -> f64 {
-        let total_pop: f64 = self.regions.iter().map(|r| r.population as f64).sum();
-        if total_pop <= 0.0 {
-            return 0.0;
-        }
-        let mut penalty = 0.0;
-        for (i, region) in self.regions.iter().enumerate() {
-            if self.policies.get(i).is_some_and(|p| p.travel_ban) {
-                let factor = self.region_travel_ban_factor(i, region);
-                penalty += Self::region_base_income(region, total_pop) * (1.0 - factor);
-            }
-        }
-        penalty
-    }
 
     /// Measure of player's technological capability (0.0+).
     /// Each unlocked tech and deployed medicine increases disease emergence pressure.
@@ -6780,35 +6652,28 @@ mod tests {
     }
 
     #[test]
-    fn per_region_income_breakdown_excludes_contract_income() {
-        // Contract income is global, not regional. It must NOT be distributed into
-        // per-region breakdown numbers (which are displayed alongside a separate Contracts line in UI).
+    fn board_budget_is_fixed_between_meetings() {
+        // Board budget doesn't change when regions get infected — it's set at board meetings.
         let mut state = GameState::new_default(42);
-        let regional_sum_without_contract: f64 = state.per_region_income_breakdown()
-            .iter().map(|(_, v)| v).sum();
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
 
-        // Add a contract with known income
-        let contract_income_per_tick = 10.0;
-        state.contracts.push(FundingContract {
-            name: "Test Contract".to_string(),
-            board_member_idx: 0,
-            income: contract_income_per_tick,
-            condition: FundingCondition::NoCollapse,
-            template_id: 99,
-            satisfaction: 1.0,
-            warned: false,
-            last_demand_tick: 0,
+        let baseline = state.funding_income_rate();
+        assert!(baseline > 0.0, "should have positive income from board budget");
+
+        // Infect a region heavily — income should NOT change
+        let pop0 = state.regions[0].population as f64;
+        state.regions[0].infections.push(RegionDiseaseState {
+            disease_idx: 0,
+            exposed: 0.0,
+            infected: pop0 * 0.30,
+            dead: 0.0,
+            immune: 0.0,
         });
-
-        let regional_sum_with_contract: f64 = state.per_region_income_breakdown()
-            .iter().map(|(_, v)| v).sum();
-
-        // Adding a contract must not change per-region totals
+        let after_infection = state.funding_income_rate();
         assert!(
-            (regional_sum_with_contract - regional_sum_without_contract).abs() < 0.01,
-            "contract income should not be distributed into per-region breakdown: \
-             without contract={regional_sum_without_contract:.2}, \
-             with contract={regional_sum_with_contract:.2}"
+            (after_infection - baseline).abs() < 0.001,
+            "board budget should be fixed: baseline={baseline:.4}, after_infection={after_infection:.4}"
         );
     }
 }
