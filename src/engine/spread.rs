@@ -113,15 +113,14 @@ pub(super) fn tick_spread_within(
                 let exposed_to_infected = (inf.exposed * incubation_rate).min(inf.exposed);
 
                 let mut lethality = disease.lethality * region.healthcare_modifier;
-                // Discourage Hospitalization: people avoid hospitals, increasing lethality.
-                // StrongPublicHealth regions suffer a larger penalty (they relied on hospitals more).
+                // StrongPublicHealth: better hospitals reduce baseline lethality by 15%.
+                // Discourage Hospitalization cancels this bonus (can't benefit from
+                // hospitals you told people not to use) and adds a universal penalty.
+                if region.has_trait(RegionTrait::StrongPublicHealth) && !discourage_hosp {
+                    lethality *= 0.85; // 15% lethality reduction from superior hospitals
+                }
                 if discourage_hosp {
-                    let penalty = if region.has_trait(RegionTrait::StrongPublicHealth) {
-                        1.75 // +75% lethality (regions that depend heavily on hospitals)
-                    } else {
-                        1.50 // +50% lethality
-                    };
-                    lethality *= scale_policy_factor(penalty, gov_eff);
+                    lethality *= scale_policy_factor(1.50, gov_eff); // +50% lethality for all regions
                 }
                 if region.hospital_level >= 2 {
                     lethality *= 0.60; // Medical Center: 40% total lethality reduction

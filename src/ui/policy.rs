@@ -114,13 +114,14 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     ]));
     lines.push(Line::from(""));
 
-    // Show regional traits
-    if !region.traits.is_empty() {
-        let trait_labels: Vec<&str> = region.traits.iter().map(|t| t.label()).collect();
+    // Show regional traits with effects
+    for t in &region.traits {
         lines.push(Line::from(vec![
-            Span::raw("  Traits: "),
-            Span::styled(trait_labels.join(", "), Style::default().fg(Color::Yellow)),
+            Span::raw(format!("  {}: ", t.label())),
+            Span::styled(t.effect(), Style::default().fg(Color::Yellow)),
         ]));
+    }
+    if !region.traits.is_empty() {
         lines.push(Line::from(""));
     }
 

@@ -1386,7 +1386,7 @@ pub enum RegionTrait {
     IslandGeography,
     /// All policy personnel costs +1 (harder to staff programs).
     LowInfrastructure,
-    /// Hospital surge lethality reduction 60% instead of 50%.
+    /// Baseline lethality -15% (superior hospitals). Lost when Discourage Hospitalization is active.
     StrongPublicHealth,
     /// Collapse threshold -10pp (region endures more before collapsing).
     ResilientPopulation,
@@ -1409,6 +1409,16 @@ impl RegionTrait {
         }
     }
 
+    pub fn effect(&self) -> &'static str {
+        match self {
+            RegionTrait::TradeDependent => "Travel ban costs 2x, income -75%",
+            RegionTrait::DenseUrban => "Spread rate +30%",
+            RegionTrait::IslandGeography => "Inbound spread -50%",
+            RegionTrait::LowInfrastructure => "Policy personnel +1 each",
+            RegionTrait::StrongPublicHealth => "Lethality -15% (lost if hospitals discouraged)",
+            RegionTrait::ResilientPopulation => "Collapse threshold -10pp",
+        }
+    }
 }
 
 /// Unique per-region specialization that provides a local passive bonus.

@@ -1072,6 +1072,29 @@ mod tests {
     }
 
     #[test]
+    fn strong_public_health_reduces_lethality() {
+        use crate::state::RegionTrait;
+        let mut state = GameState::new_default(42);
+        let ri = primary_outbreak_region(&state);
+        // Ensure outbreak region has some infected to die
+        let inf = state.regions[ri].disease_state(0).unwrap();
+        assert!(inf.infected > 0.0, "need infected to measure lethality");
+
+        // Remove StrongPublicHealth, tick, measure deaths
+        state.regions[ri].traits.retain(|t| *t != RegionTrait::StrongPublicHealth);
+        let after_normal = tick(&state);
+        let deaths_normal = after_normal.regions[ri].dead - state.regions[ri].dead;
+
+        // Add StrongPublicHealth, tick from same starting state
+        state.regions[ri].traits.push(RegionTrait::StrongPublicHealth);
+        let after_sph = tick(&state);
+        let deaths_sph = after_sph.regions[ri].dead - state.regions[ri].dead;
+
+        assert!(deaths_sph < deaths_normal,
+            "StrongPublicHealth should reduce deaths: {} vs {}", deaths_sph, deaths_normal);
+    }
+
+    #[test]
     fn disease_can_spread_into_vaccinated_region() {
         let mut state = GameState::new_default(42);
         // Find a region WITHOUT disease 0 and pre-vaccinate it
