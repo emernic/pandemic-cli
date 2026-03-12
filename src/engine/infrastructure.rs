@@ -44,6 +44,18 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             0.0
         };
+        // Fungal infections contaminate hospital environments (spores on surfaces,
+        // HVAC systems, equipment). Even at low infection counts, active fungal
+        // presence slowly degrades healthcare capacity — a "contained" fungus
+        // is still silently eroding the region's ability to treat other diseases.
+        let fungal_count: usize = state.regions[i].infections.iter()
+            .filter(|inf| {
+                inf.infected > 0.0
+                    && state.diseases.get(inf.disease_idx)
+                        .is_some_and(|d| d.pathogen_type == PathogenType::Fungus)
+            })
+            .count();
+        let fungal_drain = -(fungal_count as f64) * 0.0002; // ~0.024/day per fungus — slow but persistent
         // Baseline: hospitals provide small passive healthcare recovery.
         // Discourage Hospitalization removes this benefit.
         let hospital_recovery = if state.policies[i].discourage_hosp {
@@ -71,7 +83,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             1.0
         };
-        let new_healthcare = (old_healthcare + healthcare_drain * resilience_mult * hc_spec_mult + hospital_recovery
+        let new_healthcare = (old_healthcare + (healthcare_drain + fungal_drain) * resilience_mult * hc_spec_mult + hospital_recovery
             + hospital_building_recovery + natural_healthcare_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].healthcare_capacity = new_healthcare;
@@ -553,6 +565,74 @@ mod tests {
         assert!(state_detected.regions[0].civil_order < state_undetected.regions[0].civil_order,
             "Detected RNA virus should drain more civil order: detected={} undetected={}",
             state_detected.regions[0].civil_order, state_undetected.regions[0].civil_order);
+    }
+
+    #[test]
+    fn fungal_infection_drains_healthcare_below_severity_threshold() {
+        use crate::state::PathogenType;
+        // A small fungal infection (below SEVERITY_MOD_THRESHOLD) should still drain healthcare
+        let mut state = GameState::new_default(42);
+        for r in &mut state.regions { r.infections.clear(); r.dead = 0.0; }
+        state.diseases[0].pathogen_type = PathogenType::Fungus;
+        // Set infected well below SEVERITY_MOD_THRESHOLD (1000)
+        state.regions[0].get_or_create_infection(0).infected = 100.0;
+
+        let initial_hc = state.regions[0].healthcare_capacity;
+        // Run for 30 days — natural recovery and hospital recovery will fight the drain
+        for _ in 0..(120 * 30) {
+            tick_infrastructure(&mut state);
+        }
+        // HC should be lower than initial despite being below normal drain thresholds
+        assert!(state.regions[0].healthcare_capacity < initial_hc,
+            "Fungal infection should drain HC even below MOD threshold: initial={} final={}",
+            initial_hc, state.regions[0].healthcare_capacity);
+    }
+
+    #[test]
+    fn fungal_drain_stacks_with_multiple_infections() {
+        use crate::state::PathogenType;
+        // One fungal infection
+        let mut state_one = GameState::new_default(42);
+        for r in &mut state_one.regions { r.infections.clear(); r.dead = 0.0; }
+        state_one.diseases[0].pathogen_type = PathogenType::Fungus;
+        state_one.regions[0].get_or_create_infection(0).infected = 100.0;
+
+        // Two fungal infections
+        let mut state_two = GameState::new_default(42);
+        for r in &mut state_two.regions { r.infections.clear(); r.dead = 0.0; }
+        state_two.diseases[0].pathogen_type = PathogenType::Fungus;
+        state_two.regions[0].get_or_create_infection(0).infected = 100.0;
+        // Need a second disease entry
+        if state_two.diseases.len() < 2 {
+            state_two.diseases.push(state_two.diseases[0].clone());
+        }
+        state_two.diseases[1].pathogen_type = PathogenType::Fungus;
+        state_two.regions[0].get_or_create_infection(1).infected = 100.0;
+
+        for _ in 0..(120 * 20) {
+            tick_infrastructure(&mut state_one);
+            tick_infrastructure(&mut state_two);
+        }
+        assert!(state_two.regions[0].healthcare_capacity < state_one.regions[0].healthcare_capacity,
+            "Two fungal infections should drain more than one: two={} one={}",
+            state_two.regions[0].healthcare_capacity, state_one.regions[0].healthcare_capacity);
+    }
+
+    #[test]
+    fn non_fungal_has_no_drain_below_severity_threshold() {
+        use crate::state::PathogenType;
+        let mut state = GameState::new_default(42);
+        for r in &mut state.regions { r.infections.clear(); r.dead = 0.0; }
+        state.diseases[0].pathogen_type = PathogenType::Bacterium;
+        state.regions[0].get_or_create_infection(0).infected = 100.0;
+
+        for _ in 0..(120 * 30) {
+            tick_infrastructure(&mut state);
+        }
+        // HC should be at or above initial (natural recovery with no real drain)
+        assert!(state.regions[0].healthcare_capacity >= 1.0 - 0.01,
+            "Non-fungal below MOD should not drain HC: {}",
+            state.regions[0].healthcare_capacity);
     }
 
     #[test]
