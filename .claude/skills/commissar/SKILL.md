@@ -49,7 +49,6 @@ When the commissar assesses whether a system is working, the question is NOT "is
 
 **Overlap between systems is depth, not a problem.** When governors, corporations, contracts, and infrastructure all interact with each other in complex ways, that is strategic depth. Flat systems with no second-order interactions are uninteresting. Never flag system overlap as "awkward" or "redundant" — ask whether the overlap creates interesting decisions.
 
-**Geography is secondary to power structures.** When proposing new features or system changes, do NOT make regions interesting through hard-coded geographic specializations or static capabilities. Regions become interesting because of the dynamic power structures present in them — which board members have corporate interests there, which varies per run. If you catch yourself proposing that "Asia should have the sequencing lab" or "North America should be the manufacturing hub," stop. That's geographic determinism. The board member whose corporation happens to operate in Asia this run is what makes Asia interesting this run.
 
 **Root causes before symptoms.** Before flagging any system as weak, ask whether it's a symptom of a deeper problem. Per-region policy repetition, infrastructure decorativeness, and governor maintenance being shallow were all symptoms of one root cause: regions lacked dynamic differentiation through power structures. Filing ten symptom issues wastes ten chains of agent work. Filing one root-cause issue solves the problem.
 
