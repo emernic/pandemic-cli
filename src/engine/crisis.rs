@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     ActiveLoan, BoardRole, CorporationSector, CrisisCost, CrisisEvent, CrisisKind, CrisisOption,
-    CrisisOperation, GameEvent, GameState, LoanLender, ScreeningLevel,
+    CrisisOperation, GameEvent, GameState, LoanLender, ResearchKind, ResearchTrack, ScreeningLevel,
     SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -2046,6 +2046,61 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::NewPathogenDetected { disease_idx } => {
+            // Find the region with the most infections for this disease
+            let origin_region = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .max_by(|(_, a), (_, b)| {
+                    let a_inf: f64 = a.infections.iter()
+                        .filter(|inf| inf.disease_idx == *disease_idx)
+                        .map(|inf| inf.infected).sum();
+                    let b_inf: f64 = b.infections.iter()
+                        .filter(|inf| inf.disease_idx == *disease_idx)
+                        .map(|inf| inf.infected).sum();
+                    a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(_, r)| r.name.as_str())
+                .unwrap_or("an unknown location");
+
+            // Check if identification is already in progress
+            let already_identifying = state.field_research.iter()
+                .any(|p| matches!(p.kind, ResearchKind::IdentifyThreat { disease_idx: d } if d == *disease_idx));
+
+            // Check if there's capacity for field research
+            let has_capacity = state.field_research_has_capacity();
+
+            let mut options = Vec::new();
+
+            if !already_identifying && has_capacity {
+                let identify_kind = ResearchKind::IdentifyThreat { disease_idx: *disease_idx };
+                let (_, _, funding_cost) = state.effective_costs(&identify_kind);
+                options.push(CrisisOption {
+                    label: format!("Begin identification (¥{:.0})", funding_cost),
+                    description: "Deploy field team to identify the pathogen immediately.".into(),
+                    // Cost is None here — start_research handles the funding deduction
+                    // and affordability check internally.
+                    cost: None,
+                });
+            }
+
+            options.push(CrisisOption {
+                label: "Acknowledge".into(),
+                description: "Noted. Continue current priorities.".into(),
+                cost: None,
+            });
+
+            CrisisEvent {
+                title: "New Pathogen Detected".into(),
+                description: format!(
+                    "Anomalous case clusters reported in {origin_region}. \
+                     Preliminary analysis indicates a novel pathogen not matching any known profile. \
+                     Field identification recommended before it spreads further.",
+                ),
+                options,
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::FieldTeamDetainedAgain { region_idx, corp_idx, fee, team_size: _ } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("the region");
@@ -3177,6 +3232,31 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
 
+        // --- Pathogen detection alert ---
+
+        (CrisisKind::NewPathogenDetected { disease_idx }, 0) if crisis.options.len() > 1 => {
+            // "Begin identification" — the first option (only present when identification
+            // is available). Funding cost was already deducted by CrisisCost.
+            // Start the identification research project.
+            let projects = state.available_projects(ResearchTrack::Field);
+            if let Some(idx) = projects.iter().position(|k| matches!(k, ResearchKind::IdentifyThreat { disease_idx: d } if *d == *disease_idx)) {
+                let (ok, msg) = super::research::start_research(state, ResearchTrack::Field, idx, false);
+                if ok {
+                    let name = state.diseases.get(*disease_idx)
+                        .map(|d| d.display_name(*disease_idx))
+                        .unwrap_or_else(|| format!("Pathogen #{}", disease_idx + 1));
+                    format!("Field identification of {} initiated.", name)
+                } else {
+                    msg.unwrap_or_else(|| "Could not start identification.".into())
+                }
+            } else {
+                "Identification no longer available.".into()
+            }
+        }
+        (CrisisKind::NewPathogenDetected { .. }, _) => {
+            "Alert acknowledged.".into()
+        }
+
         // --- Board meeting communiqué ---
 
         (CrisisKind::BoardMeeting, _) => {
@@ -3407,5 +3487,90 @@ mod tests {
         let personnel_before = state.resources.personnel;
         resolve_crisis(&mut state, 2); // Write them off
         assert_eq!(state.resources.personnel, personnel_before - 3, "write-off should lose team_size personnel");
+    }
+
+    #[test]
+    fn new_pathogen_detected_offers_identification() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = 0.0; // Unknown — needs identification
+        state.resources.funding = 2000.0;
+        state.resources.personnel = 20;
+
+        let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+
+        assert_eq!(crisis.title, "New Pathogen Detected");
+        // Should have 2 options: Begin identification + Acknowledge
+        assert_eq!(crisis.options.len(), 2,
+            "should offer identification and acknowledge");
+        assert!(crisis.options[0].label.contains("identification"),
+            "first option should be identification");
+        assert!(crisis.options[1].label.contains("Acknowledge"),
+            "second option should be acknowledge");
+    }
+
+    #[test]
+    fn new_pathogen_detected_begin_identification_starts_research() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = 0.0;
+        state.resources.funding = 2000.0;
+        state.resources.personnel = 20;
+
+        let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = crate::state::SimState::Event { was_running: false };
+
+        assert!(state.field_research.is_empty(), "no research before resolution");
+        let msg = resolve_crisis(&mut state, 0); // Begin identification
+        assert!(!state.field_research.is_empty(),
+            "identification research should start after choosing option A");
+        assert!(matches!(
+            &state.field_research[0].kind,
+            ResearchKind::IdentifyThreat { disease_idx: 0 }
+        ), "should be identifying disease 0");
+        assert!(msg.contains("initiated"), "message should confirm initiation: {}", msg);
+    }
+
+    #[test]
+    fn new_pathogen_detected_dismiss_does_nothing() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = 0.0;
+        state.resources.funding = 2000.0;
+
+        let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+        // Dismiss is option index 1 (when identification is available)
+        state.active_crisis = Some(crisis);
+        state.sim_state = crate::state::SimState::Event { was_running: false };
+
+        let funding_before = state.resources.funding;
+        resolve_crisis(&mut state, 1); // Acknowledge
+        assert!(state.field_research.is_empty(), "no research should start on dismiss");
+        assert_eq!(state.resources.funding, funding_before, "no funding should be deducted on dismiss");
+    }
+
+    #[test]
+    fn new_pathogen_detected_no_identification_when_already_researching() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = 0.0;
+        // Already identifying disease 0
+        state.field_research.push(crate::state::ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 5,
+        });
+
+        let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+
+        // Should only have "Acknowledge" option since identification is already running
+        assert_eq!(crisis.options.len(), 1,
+            "should only offer acknowledge when identification is already in progress");
     }
 }
