@@ -1369,6 +1369,16 @@ impl BoardPersonality {
         Self::Humanitarian,
         Self::Dealmaker,
     ];
+
+    /// Short description of the chairman-specific power granted by this personality.
+    pub fn chairman_effect_description(&self) -> &'static str {
+        match self {
+            Self::Profiteer => "Chairman effect: Budget swings ±15% (vs ±10%)",
+            Self::Technocrat => "Chairman effect: Research costs -10%",
+            Self::Humanitarian => "Chairman effect: Approval target +5%",
+            Self::Dealmaker => "Chairman effect: Stock trade reactions 2x for all members",
+        }
+    }
 }
 
 /// A named individual on the NWHO board of directors.
@@ -5592,6 +5602,14 @@ impl GameState {
         true
     }
 
+    /// The personality of the current chairman, if any.
+    /// Returns None if there's no chairman or the chairman is a governor (no personality).
+    pub fn chairman_personality(&self) -> Option<BoardPersonality> {
+        self.board_members.iter()
+            .find(|m| m.is_chairman)
+            .and_then(|m| m.personality)
+    }
+
     /// Board satisfaction: average satisfaction across all board members (0.0–1.0).
     /// Corporate leaders track stock price relative to IPO; governors track population
     /// health. Stock price has natural lag via mean-reversion, avoiding the perverse
@@ -5658,7 +5676,13 @@ impl GameState {
         let crisis_component = (infection_severity * 0.25 + death_severity * 0.20 + collapse_severity * 0.10).min(0.55);
 
         // Board satisfaction: happy board members are more generous (0.0–0.20)
-        let board_component = self.board_satisfaction() * 0.20;
+        // Humanitarian chairman adds +0.05 (slightly more forgiving approval trajectory)
+        let humanitarian_bonus = if self.chairman_personality() == Some(BoardPersonality::Humanitarian) {
+            0.05
+        } else {
+            0.0
+        };
+        let board_component = self.board_satisfaction() * 0.20 + humanitarian_bonus;
 
         // Contract confidence: contract condition compliance amplifies authority (0.0–0.20).
         // contract_confidence() returns 0.0 when no contracts exist.
@@ -6026,7 +6050,7 @@ impl GameState {
     ///   Corp health modifier (25% → 35%) tracked in #1381.
     /// - AutomatedSynthesis cuts ManufactureDoses duration by 35%.
     pub fn effective_costs(&self, kind: &ResearchKind) -> (u32, f64, f64) {
-        let (personnel, mut duration, funding) = kind.costs(&self.medicines);
+        let (personnel, mut duration, mut funding) = kind.costs(&self.medicines);
         if matches!(kind, ResearchKind::GenomicSequencing { .. })
             && self.unlocked_techs.contains(&BasicTech::RapidSequencing)
         {
@@ -6045,6 +6069,10 @@ impl GameState {
             && self.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
         {
             duration *= 0.65; // 35% faster
+        }
+        // Technocrat chairman: 10% research funding discount
+        if self.chairman_personality() == Some(BoardPersonality::Technocrat) {
+            funding *= 0.9;
         }
         (personnel, duration, funding)
     }

@@ -25,13 +25,18 @@ fn board_budget_satisfaction_mult(board_sat: f64) -> f64 {
 }
 
 /// Chairman mood shift applied on top of the budget multiplier.
-/// Content chairman (>0.7 satisfaction) steers meetings favorably: +0.1.
-/// Hostile chairman (<0.3 satisfaction) pushes for cuts: -0.1.
+/// Content chairman (>0.7 satisfaction) steers meetings favorably; hostile pushes for cuts.
+/// Profiteer chairman amplifies swings: ±0.15 instead of the default ±0.10.
 fn chairman_funding_shift(state: &GameState) -> f64 {
     let chairman = state.board_members.iter().find(|m| m.is_chairman);
+    let magnitude = if state.chairman_personality() == Some(crate::state::BoardPersonality::Profiteer) {
+        0.15
+    } else {
+        0.1
+    };
     match chairman {
-        Some(c) if c.satisfaction > 0.7 => 0.1,
-        Some(c) if c.satisfaction < 0.3 => -0.1,
+        Some(c) if c.satisfaction > 0.7 => magnitude,
+        Some(c) if c.satisfaction < 0.3 => -magnitude,
         _ => 0.0,
     }
 }
