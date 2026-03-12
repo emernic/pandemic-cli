@@ -985,9 +985,9 @@ pub(super) fn tick_screening(state: &mut GameState) {
         if state.regions[i].has_specialization(RegionSpecialization::SurveillanceNetwork) {
             effective_rate *= SURVEILLANCE_NETWORK_SCREENING_MULT;
         }
-        // DataInfra sector bonus: screening convergence up to 20% faster
+        // DataInfra sector bonus: screening convergence faster
         let data_bonus = state.sector_bonus(i, crate::state::CorporationSector::DataInfra);
-        effective_rate *= 1.0 + 0.20 * data_bonus;
+        effective_rate *= 1.0 + crate::state::CorporationSector::DataInfra.max_bonus_pct() / 100.0 * data_bonus;
 
         // Get real detected infected for this region.
         // Without antigen-level screening, exposed (incubating) people are invisible —

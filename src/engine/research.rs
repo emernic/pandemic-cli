@@ -80,11 +80,11 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
 
     let lab_mult = state.lab_speed_multiplier();
-    // Biotech sector bonus: best regional bonus gives up to 10% research speed
+    // Biotech sector bonus: best regional bonus boosts research speed
     let biotech_bonus = (0..state.regions.len())
         .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
         .fold(0.0_f64, f64::max);
-    let biotech_mult = 1.0 + 0.10 * biotech_bonus;
+    let biotech_mult = 1.0 + crate::state::CorporationSector::Biotech.max_bonus_pct() / 100.0 * biotech_bonus;
 
     // Advance all field research projects and collect completion effects
     for project in &mut state.field_research {
