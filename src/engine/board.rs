@@ -18,12 +18,9 @@ pub fn generate_board_members(state: &mut GameState) {
         if !corp.board_seat {
             continue;
         }
-        let region_name = state.regions.get(corp.region_idx)
-            .map(|r| r.name.as_str())
-            .unwrap_or("Unknown");
         members.push(BoardMember {
             name: format!("Dir. {}", corp_short_surname(&corp.name)),
-            title: format!("{} CEO, {} rep.", corp.name, region_name),
+            title: format!("CEO, {}", corp.name),
             role: BoardRole::CorporateLeader { corp_idx },
             corp_idx: Some(corp_idx),
             region_idx: Some(corp.region_idx),
