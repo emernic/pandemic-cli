@@ -104,12 +104,6 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let region = &state.regions[region_idx];
     let policy = state.policies.get(region_idx).cloned().unwrap_or_default();
 
-    lines.push(Line::from(Span::styled(
-        format!("  {}", region.name),
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
-
     let infected = region.screened_infected();
     let dead = region.detected_dead(&state.diseases);
     lines.push(Line::from(vec![
@@ -621,11 +615,6 @@ pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (St
 
     let mut lines: Vec<Line> = Vec::new();
 
-    lines.push(Line::from(Span::styled(
-        format!("  {}", name.to_uppercase()),
-        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-    )));
-    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  Once enacted, this decree is permanent.",
         Style::default().fg(Color::Red),
