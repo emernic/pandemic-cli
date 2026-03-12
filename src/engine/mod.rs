@@ -4537,21 +4537,21 @@ mod tests {
 
     #[test]
     fn board_health_drives_approval_target() {
-        // approval_target is now board-driven, not severity-driven.
-        // A healthy board (full reserves) gives approval_target ≈ 0.30 (no patrons).
-        // A bankrupt board gives approval_target ≈ severity_floor only (very low).
+        // approval_target = crisis_severity + board_satisfaction*0.20 + patron*0.20.
+        // At game start: crisis is tiny, board is healthy (0.20), no patrons.
+        // Target ≈ 0.20–0.25 (board + small crisis from starting infections).
         let mut state = GameState::new_default(42);
         corporations::generate_corporations(&mut state);
         board::generate_board_members(&mut state);
 
         let healthy_target = state.approval_target();
         assert!(
-            healthy_target >= 0.20 && healthy_target <= 0.40,
-            "approval_target with healthy board and no patrons should be 0.20–0.40, got {healthy_target:.3}"
+            healthy_target >= 0.15 && healthy_target <= 0.30,
+            "approval_target with healthy board and no patrons should be 0.15–0.30, got {healthy_target:.3}"
         );
 
         // Bankrupt all board-seat corporations and collapse governor-member regions:
-        // approval_target should drop significantly.
+        // approval_target should drop (board_component goes to 0).
         let mut damaged = state.clone();
         for c in damaged.corporations.iter_mut().filter(|c| c.board_seat) {
             c.bankrupt = true;
@@ -4568,10 +4568,6 @@ mod tests {
         board::update_board_satisfaction(&mut damaged);
         let damaged_target = damaged.approval_target();
         assert!(
-            damaged_target < 0.15,
-            "approval_target with bankrupt board should be low (<0.15), got {damaged_target:.3}"
-        );
-        assert!(
             damaged_target < healthy_target,
             "damaged board should give lower approval_target: healthy={healthy_target:.3} damaged={damaged_target:.3}"
         );
@@ -4579,9 +4575,8 @@ mod tests {
 
     #[test]
     fn pol_drifts_down_when_above_target() {
-        // With a fresh state and no corporations (board_satisfaction=0, patron=0),
-        // approval_target = severity_floor only (very low). POL above target must drift down.
-        // This also verifies the clamp keeps approval_target ≤ 0.90.
+        // With no corporations (board_satisfaction=0, patron=0),
+        // approval_target = crisis_component only. POL above target must drift down.
         let mut state = GameState::new_default(42);
         // Some deaths to give a small severity floor
         for region in &mut state.regions {

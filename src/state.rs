@@ -599,7 +599,7 @@ pub const POLICY_IDX_NUCLEAR: usize = 9;
 pub const POLICY_IDX_SCREENING_BASE: usize = 5;
 
 /// Minimum Board Approval (0.0–1.0) required to activate each policy.
-/// Starting approval is 0.50 (neutral board). 0% = furious, 100% = enraptured.
+/// Starting approval is 0.10 (skeptical board). Ramps up as crisis worsens.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
 pub const POLICY_APPROVAL_THRESHOLDS: [f64; POLICY_COUNT] = [
     0.40, // Travel Ban — basic containment, available near starting approval
@@ -4780,7 +4780,7 @@ impl GameState {
             resources: Resources {
                 funding: 500.0,
                 personnel: 20,
-                board_approval: 0.50,
+                board_approval: 0.10,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_funding_warning_tick: 0,
@@ -5406,40 +5406,43 @@ impl GameState {
         total / self.contracts.len() as f64
     }
 
-    /// Current approval drift target based on board confidence, patron relationships, and crisis severity.
+    /// Current approval drift target based on crisis severity, board confidence, and patron relationships.
     /// Approval drifts toward this value at ~50%/day. Called by engine::tick().
-    /// Returns (board_component, patron_component, severity_floor) that sum to approval_target().
+    /// Returns (crisis_component, board_component, patron_component) that sum to approval_target().
     /// Used by the dashboard to show a breakdown without duplicating the formula.
     ///
-    /// Board satisfaction is the primary driver — the board grants or withholds authority
-    /// based on how healthy their corporations are. Patron confidence amplifies this when
-    /// the player has active contracts. A severity floor ensures even a hostile board must
-    /// concede some emergency authority when deaths mount.
+    /// Crisis severity is the primary driver — the board starts skeptical and only grants
+    /// authority as infections, deaths, and collapses prove the crisis is real. Board
+    /// satisfaction and patron relationships act as secondary modifiers.
     pub fn approval_target_components(&self) -> (f64, f64, f64) {
-        let initial_pop = self.initial_population();
-        let death_frac = if initial_pop > 0.0 { self.total_dead_detected() / initial_pop } else { 0.0 };
+        let total_infected = self.total_infected();
+        let total_dead = self.total_dead_detected();
+        let collapsed = self.regions.iter().filter(|r| r.collapsed).count() as f64;
+        let total_regions = self.regions.len().max(1) as f64;
 
-        // Board satisfaction is the primary driver (0.0–0.30)
-        let board_component = self.board_satisfaction() * 0.30;
+        // Crisis severity: the primary driver of approval (0.0–0.55).
+        // Uses sqrt scaling for fast initial ramp that flattens as crisis deepens.
+        // Infections saturate at 100K (detectable outbreak in a 6B+ world).
+        // Deaths saturate at 20K (undeniable humanitarian crisis).
+        // Collapses directly signal existential threat.
+        let infection_severity = (total_infected / 100_000.0).min(1.0).sqrt();
+        let death_severity = (total_dead / 20_000.0).min(1.0).sqrt();
+        let collapse_severity = (collapsed / total_regions).min(1.0);
+        let crisis_component = (infection_severity * 0.25 + death_severity * 0.20 + collapse_severity * 0.10).min(0.55);
 
-        // Patron authority scales with patron confidence (0.0–0.40).
-        // patron_confidence() returns 0.0 when no contracts exist, so this is 0
-        // with no active patron relationships.
-        let patron_component = self.patron_confidence() * 0.40;
+        // Board satisfaction: happy board members are more generous (0.0–0.20)
+        let board_component = self.board_satisfaction() * 0.20;
 
-        // Severity floor: even a hostile board must grant some authority when people are dying
-        // Capped at 0.10 to prevent severity from dominating once board/patrons matter
-        let severity_floor = (death_frac.sqrt() * 0.3_f64).min(0.10);
+        // Patron confidence: patron relationships amplify authority (0.0–0.20).
+        // patron_confidence() returns 0.0 when no contracts exist.
+        let patron_component = self.patron_confidence() * 0.20;
 
-        (board_component, patron_component, severity_floor)
+        (crisis_component, board_component, patron_component)
     }
 
     pub fn approval_target(&self) -> f64 {
-        let (board_component, patron_component, severity_floor) = self.approval_target_components();
-        // Approval target is driven by board confidence + patron relationships + crisis severity.
-        // A healthy board with satisfied patrons can grant up to 70% approval.
-        // A failed board with no patrons is held to ~10% (severity floor only).
-        (board_component + patron_component + severity_floor).clamp(0.0, 0.90)
+        let (crisis_component, board_component, patron_component) = self.approval_target_components();
+        (crisis_component + board_component + patron_component).clamp(0.0, 0.90)
     }
 
     /// The next policy that would unlock with more approval. Returns (name, threshold)

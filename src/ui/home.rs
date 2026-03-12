@@ -404,7 +404,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let drift_per_day = (target - approval) * 0.50;
 
         // Decompose target into its constituent parts (single source of truth in state.rs)
-        let (board_component, patron_component, severity_floor) = state.approval_target_components();
+        let (crisis_component, board_component, patron_component) = state.approval_target_components();
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── BOARD APPROVAL ──", cyan)));
@@ -429,6 +429,13 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
 
         // Target breakdown: what's driving the target
+        if crisis_component >= 0.005 {
+            lines.push(Line::from(vec![
+                Span::styled("  Crisis:   ", dim),
+                Span::styled(format!("+{:.1}%", crisis_component * 100.0), Style::default().fg(Color::Red)),
+                Span::styled("  (pandemic severity)", dim),
+            ]));
+        }
         lines.push(Line::from(vec![
             Span::styled("  Board:    ", dim),
             Span::styled(format!("+{:.1}%", board_component * 100.0), Style::default().fg(Color::Cyan)),
@@ -439,13 +446,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled("  Patrons:  ", dim),
                 Span::styled(format!("+{:.1}%", patron_component * 100.0), Style::default().fg(Color::Green)),
                 Span::styled("  (patron satisfaction)", dim),
-            ]));
-        }
-        if severity_floor >= 0.005 {
-            lines.push(Line::from(vec![
-                Span::styled("  Severity: ", dim),
-                Span::styled(format!("+{:.1}%", severity_floor * 100.0), Style::default().fg(Color::Red)),
-                Span::styled("  (crisis severity)", dim),
             ]));
         }
 
