@@ -3405,6 +3405,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
+            BasicTech::ResilientGrids,
             BasicTech::RapidSequencing,
             BasicTech::MetagenomicSurveillance,
             BasicTech::VaccinePlatform,
@@ -3415,7 +3416,6 @@ impl BasicTech {
             BasicTech::GeneDriveContainment,
             BasicTech::AutomatedSynthesis,
             BasicTech::StabilizedFormulation,
-            BasicTech::ResilientGrids,
         ]
     }
 }
