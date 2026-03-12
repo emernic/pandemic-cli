@@ -192,8 +192,14 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let name = d.map(|d| d.name.clone()).unwrap_or_else(|| "?".to_string());
                 let ptype = d.map(|d| d.pathogen_type.label()).unwrap_or("Unknown");
                 let transmission = d.map(|d| d.transmission.label()).unwrap_or("Unknown");
-                let msg = format!("IDENTIFIED: {} [{} / {} transmission]", name, ptype, transmission);
-                (1, msg.clone(), msg)
+                let is_prion = d.is_some_and(|d| !d.pathogen_type.is_treatable());
+                let base = format!("IDENTIFIED: {} [{} / {} transmission]", name, ptype, transmission);
+                if is_prion {
+                    let msg = format!("{} — NO TREATMENT POSSIBLE, containment only", base);
+                    (3, msg.clone(), msg)
+                } else {
+                    (1, base.clone(), base)
+                }
             }
             GameEvent::MedicineDeveloped { medicine_idx } => {
                 let med = state.medicines.get(*medicine_idx);

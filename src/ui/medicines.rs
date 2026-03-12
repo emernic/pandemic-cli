@@ -440,10 +440,15 @@ fn render_select_disease(
         lines.push(Line::from(""));
         for &disease_idx in &incompatible {
             let name = state.diseases[disease_idx].display_name(disease_idx);
+            let reason = if !state.diseases[disease_idx].pathogen_type.is_treatable() {
+                "prion, untreatable".to_string()
+            } else {
+                format!("{}, incompatible", med.therapy_type.label())
+            };
             lines.push(Line::from(vec![
                 Span::styled(format!("  {}", name), Style::default().fg(Color::DarkGray)),
                 Span::styled(
-                    format!(" ({}, incompatible)", med.therapy_type.label()),
+                    format!(" ({})", reason),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
