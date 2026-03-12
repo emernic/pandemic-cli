@@ -4156,17 +4156,37 @@ mod tests {
     }
 
     #[test]
-    fn resource_diversion_option_a_gains_funding_no_knowledge_cost() {
+    fn resource_diversion_option_a_gains_funding_and_creates_operation() {
         let mut state = GameState::new_default(42);
         detect_all_diseases(&mut state);
         state.diseases[0].knowledge = 0.5;
         state.resources.funding = 1000.0;
+        let before_personnel = state.resources.personnel;
         setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0, share_reward: 250.0, refuse_cost: 150.0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.diseases[0].knowledge - 0.5).abs() < 0.001,
             "option A should not cost any knowledge");
         assert!((after.resources.funding - 1250.0).abs() < 1.0,
-            "option A should gain $250 funding (scaled)");
+            "option A should gain ¥250 funding");
+        // Personnel temporarily tied up in operation (created in resolve handler)
+        assert_eq!(after.resources.personnel, before_personnel,
+            "personnel not permanently deducted");
+        assert_eq!(after.crisis_operations.len(), 1,
+            "a crisis operation should be active");
+        assert_eq!(after.crisis_operations[0].personnel, 2);
+        assert_eq!(after.crisis_operations[0].label, "Data Transfer Team");
+    }
+
+    #[test]
+    fn resource_diversion_option_b_grants_approval_boost() {
+        let mut state = GameState::new_default(42);
+        detect_all_diseases(&mut state);
+        state.resources.funding = 1000.0;
+        state.resources.board_approval = 0.50;
+        setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0, share_reward: 250.0, refuse_cost: 150.0 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!((after.resources.board_approval - 0.53).abs() < 0.01,
+            "option B should grant +3% board approval, got {}", after.resources.board_approval);
     }
 
     #[test]
