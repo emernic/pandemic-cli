@@ -3264,6 +3264,10 @@ pub enum BasicTech {
     /// reduce cold-chain waste). Stacks multiplicatively with Europe's yield bonus.
     /// Prereq: AutomatedSynthesis.
     StabilizedFormulation,
+    /// Disease-caused infrastructure degradation (HC/SL/CO) is 20% slower globally.
+    /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
+    /// Prereq: TargetedDrugDesign.
+    ResilientGrids,
 }
 
 impl BasicTech {
@@ -3283,6 +3287,7 @@ impl BasicTech {
             BasicTech::GeneDriveContainment => "Gene Drive Containment",
             BasicTech::AutomatedSynthesis => "Automated Synthesis",
             BasicTech::StabilizedFormulation => "Stabilized Formulation",
+            BasicTech::ResilientGrids => "Resilient Grids",
         }
     }
 
@@ -3302,6 +3307,7 @@ impl BasicTech {
             BasicTech::GeneDriveContainment => "Self-propagating genetic modifications prevent pathogen establishment in new regions. Eliminates cross-region spread.",
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
             BasicTech::StabilizedFormulation => "Thermostable formulations reduce cold-chain waste. Each manufacturing run yields 25% more usable doses.",
+            BasicTech::ResilientGrids => "Hardened regional infrastructure protocols. Disease-caused infrastructure degradation 20% slower.",
         }
     }
 
@@ -3367,6 +3373,9 @@ impl BasicTech {
             BasicTech::StabilizedFormulation => {
                 state.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
             }
+            BasicTech::ResilientGrids => {
+                state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
+            }
         }
     }
 
@@ -3386,6 +3395,7 @@ impl BasicTech {
             BasicTech::GeneDriveContainment => "Directed Attenuation",
             BasicTech::AutomatedSynthesis => "Develop any targeted medicine",
             BasicTech::StabilizedFormulation => "Automated Synthesis",
+            BasicTech::ResilientGrids => "Targeted Drug Design",
         }
     }
 
@@ -3405,6 +3415,7 @@ impl BasicTech {
             BasicTech::GeneDriveContainment,
             BasicTech::AutomatedSynthesis,
             BasicTech::StabilizedFormulation,
+            BasicTech::ResilientGrids,
         ]
     }
 }
@@ -3453,6 +3464,7 @@ impl ResearchKind {
                 BasicTech::GeneDriveContainment => (12, 720.0, 2000.0),
                 BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
                 BasicTech::StabilizedFormulation => (5, 280.0, 700.0),
+                BasicTech::ResilientGrids => (3, 240.0, 550.0),
             },
             ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),

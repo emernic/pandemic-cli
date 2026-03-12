@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameState, InfraSystem, RegionSpecialization, INFRA_CRITICAL, INFRA_STRESSED,
+    BasicTech, GameEvent, GameState, InfraSystem, RegionSpecialization, INFRA_CRITICAL, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
     TROPICAL_MEDICINE_HC_DRAIN_MULT, COMMUNITY_NETWORKS_CO_DRAIN_MULT, LOGISTICS_HUB_SL_DRAIN_MULT,
 };
@@ -11,6 +11,13 @@ use crate::state::{
 /// - Supply lines: degrades from death rate and travel bans
 /// - Civil order: degrades from deaths, restrictive policies, and low healthcare
 pub(super) fn tick_infrastructure(state: &mut GameState) {
+    // ResilientGrids tech: disease-caused drains are 20% slower.
+    // When an Energy sector corp is healthy, could increase to 30% (#1381).
+    let resilience_mult = if state.unlocked_techs.contains(&BasicTech::ResilientGrids) {
+        0.80
+    } else {
+        1.0
+    };
     let num_regions = state.regions.len();
     for i in 0..num_regions {
         if state.regions[i].collapsed {
@@ -63,7 +70,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             1.0
         };
-        let new_healthcare = (old_healthcare + healthcare_drain * hc_spec_mult + hospital_recovery
+        let new_healthcare = (old_healthcare + healthcare_drain * resilience_mult * hc_spec_mult + hospital_recovery
             + hospital_building_recovery + natural_healthcare_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].healthcare_capacity = new_healthcare;
@@ -93,7 +100,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_supply = state.regions[i].supply_lines;
-        let supply_drain = death_drain + travel_ban_drain;
+        let supply_drain = death_drain * resilience_mult + travel_ban_drain;
         // LogisticsHub specialization: supply lines degrade 40% slower
         let sl_spec_mult = if state.regions[i].has_specialization(RegionSpecialization::LogisticsHub) {
             LOGISTICS_HUB_SL_DRAIN_MULT
@@ -146,7 +153,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_civil = state.regions[i].civil_order;
-        let civil_drain = civil_death_drain + restriction_drain + quarantine_drain + healthcare_cascade;
+        let civil_drain = civil_death_drain * resilience_mult + restriction_drain + quarantine_drain + healthcare_cascade;
         // CommunityNetworks specialization: civil order degrades 40% slower
         let co_spec_mult = if state.regions[i].has_specialization(RegionSpecialization::CommunityNetworks) {
             COMMUNITY_NETWORKS_CO_DRAIN_MULT
@@ -382,6 +389,132 @@ mod tests {
             "HC should be 0.10 + FIELD_OPS_RESTORE = 0.40, got {}", state.regions[0].healthcare_capacity);
         assert!(state.events.iter().any(|e| matches!(e,
             GameEvent::InfrastructureStabilized { region_idx: 0, system: InfraSystem::Healthcare })));
+    }
+
+    #[test]
+    fn resilient_grids_prereq_requires_targeted_drug_design() {
+        use crate::state::BasicTech;
+        let state = GameState::new_default(42);
+        // Without TargetedDrugDesign, prereq not met
+        assert!(!BasicTech::ResilientGrids.prerequisites_met(&state));
+
+        let mut state2 = GameState::new_default(42);
+        state2.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+        assert!(BasicTech::ResilientGrids.prerequisites_met(&state2));
+    }
+
+    #[test]
+    fn resilient_grids_slows_healthcare_degradation() {
+        use crate::state::BasicTech;
+        // Without tech
+        let mut state_no_tech = GameState::new_default(42);
+        state_no_tech.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        for _ in 0..(120 * 7) {
+            tick_infrastructure(&mut state_no_tech);
+        }
+        let hc_no_tech = state_no_tech.regions[0].healthcare_capacity;
+
+        // With tech
+        let mut state_tech = GameState::new_default(42);
+        state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
+        state_tech.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        for _ in 0..(120 * 7) {
+            tick_infrastructure(&mut state_tech);
+        }
+        let hc_tech = state_tech.regions[0].healthcare_capacity;
+
+        assert!(hc_tech > hc_no_tech,
+            "ResilientGrids should slow HC degradation: with={} without={}", hc_tech, hc_no_tech);
+    }
+
+    #[test]
+    fn resilient_grids_slows_supply_line_degradation() {
+        use crate::state::BasicTech;
+        let pop = {
+            let s = GameState::new_default(42);
+            s.regions[0].population as f64
+        };
+
+        // Without tech
+        let mut state_no_tech = GameState::new_default(42);
+        state_no_tech.regions[0].dead = pop * 0.06;
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_no_tech);
+        }
+        let sl_no_tech = state_no_tech.regions[0].supply_lines;
+
+        // With tech
+        let mut state_tech = GameState::new_default(42);
+        state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
+        state_tech.regions[0].dead = pop * 0.06;
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_tech);
+        }
+        let sl_tech = state_tech.regions[0].supply_lines;
+
+        assert!(sl_tech > sl_no_tech,
+            "ResilientGrids should slow SL degradation: with={} without={}", sl_tech, sl_no_tech);
+    }
+
+    #[test]
+    fn resilient_grids_slows_civil_order_degradation() {
+        use crate::state::BasicTech;
+        let pop = {
+            let s = GameState::new_default(42);
+            s.regions[0].population as f64
+        };
+
+        // Without tech
+        let mut state_no_tech = GameState::new_default(42);
+        state_no_tech.regions[0].dead = pop * 0.06;
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_no_tech);
+        }
+        let co_no_tech = state_no_tech.regions[0].civil_order;
+
+        // With tech
+        let mut state_tech = GameState::new_default(42);
+        state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
+        state_tech.regions[0].dead = pop * 0.06;
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_tech);
+        }
+        let co_tech = state_tech.regions[0].civil_order;
+
+        assert!(co_tech > co_no_tech,
+            "ResilientGrids should slow CO degradation: with={} without={}", co_tech, co_no_tech);
+    }
+
+    #[test]
+    fn resilient_grids_does_not_affect_policy_drain() {
+        use crate::state::BasicTech;
+        // Travel ban drain on supply lines should be unaffected
+        let mut state_no_tech = GameState::new_default(42);
+        // Clear infections so only policy drain acts
+        for r in &mut state_no_tech.regions {
+            r.infections.clear();
+            r.dead = 0.0;
+        }
+        state_no_tech.policies[0].travel_ban = true;
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_no_tech);
+        }
+        let sl_no_tech = state_no_tech.regions[0].supply_lines;
+
+        let mut state_tech = GameState::new_default(42);
+        state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
+        for r in &mut state_tech.regions {
+            r.infections.clear();
+            r.dead = 0.0;
+        }
+        state_tech.policies[0].travel_ban = true;
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_tech);
+        }
+        let sl_tech = state_tech.regions[0].supply_lines;
+
+        assert!((sl_tech - sl_no_tech).abs() < 0.001,
+            "ResilientGrids should NOT affect policy drain: with={} without={}", sl_tech, sl_no_tech);
     }
 
 }
