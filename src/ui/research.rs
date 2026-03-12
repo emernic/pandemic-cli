@@ -533,7 +533,7 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
 }
 
 /// Label showing the manufacturing corporation for a medicine.
-/// Returns " | Mfg: CorpName (Board)" or " | Mfg: CorpName" or "".
+/// Returns " | Mfg: CorpName (+Approval)" or " | Mfg: CorpName" or "".
 fn manufacturer_label(med: &Medicine, state: &GameState) -> String {
     let corp_idx = match med.manufacturer_corp_idx {
         Some(idx) => idx,
@@ -544,7 +544,7 @@ fn manufacturer_label(med: &Medicine, state: &GameState) -> String {
         None => return String::new(),
     };
     if corp.board_seat {
-        format!(" | Mfg: {} (Board)", corp.name)
+        format!(" | Mfg: {} (+Approval)", corp.name)
     } else {
         format!(" | Mfg: {}", corp.name)
     }
