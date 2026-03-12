@@ -1542,7 +1542,7 @@ impl RegionPriority {
 }
 
 /// Regional traits that make each region play differently.
-/// Each region has 1-2 traits that modify policy costs, spread rates, or resilience.
+/// Each region has 1-2 traits that modify policy costs, spread rates, or collapse thresholds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RegionTrait {
     /// Travel ban funding cost 1.5x, GDP penalty 30% instead of 20%.
@@ -4917,7 +4917,7 @@ impl GameState {
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
                 specialization: Some(RegionSpecialization::TropicalMedicine),
-                collapse_threshold: 0.55, // Moderate resilience — 45% dead
+                collapse_threshold: 0.55, // Moderate — collapses at 45% dead
                 dead: 0.0,
                 collapsed: false,
                 abandoned: false,

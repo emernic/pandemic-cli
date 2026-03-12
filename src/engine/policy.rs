@@ -223,7 +223,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if available_personnel >= ml_personnel {
                 state.policies[region_idx].martial_law = true;
                 super::board::on_gdp_policy_enacted(state, region_idx);
-                (Some(format!("{region_name}: Martial Law declared (+15% collapse resilience)")), true)
+                (Some(format!("{region_name}: Martial Law declared (collapse threshold −15%)")), true)
             } else {
                 (Some(format!(
                     "Not enough personnel for martial law (need {})", ml_personnel

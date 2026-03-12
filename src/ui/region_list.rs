@@ -168,7 +168,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let is_ark = state.ark_protocol == Some(idx);
         let is_abandoned = state.is_abandoned(idx);
         let board_count = state.board_members.iter().filter(|bm| bm.region_idx == Some(idx)).count();
-        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned, board_count);
+        let martial_law = state.policies.get(idx).is_some_and(|p| p.martial_law);
+        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned, board_count, martial_law);
     }
 
     // Detail panel below the grid for the selected region
@@ -191,6 +192,7 @@ fn render_region_box(
     is_ark: bool,
     is_abandoned: bool,
     board_count: usize,
+    martial_law: bool,
 ) {
     let border_color = if is_ark {
         Color::Cyan
@@ -386,7 +388,7 @@ fn render_region_box(
 
         // Line 4: Collapse threshold indicator below the bar
         if inner.height >= 4 && !region.collapsed {
-            let death_fraction_at_collapse = 1.0 - region.collapse_threshold;
+            let death_fraction_at_collapse = 1.0 - region.effective_collapse_threshold(martial_law);
             let collapse_pos = bar_w.saturating_sub(
                 (death_fraction_at_collapse * bar_w as f64).round() as usize
             );
@@ -530,7 +532,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     // Collapse threshold line
     if !region.collapsed {
         let death_pct = if pop > 0.0 { (dead / pop * 100.0).abs() } else { 0.0 };
-        let collapse_death_pct = (1.0 - region.collapse_threshold) * 100.0;
+        let martial_law = state.policies.get(idx).is_some_and(|p| p.martial_law);
+        let collapse_death_pct = (1.0 - region.effective_collapse_threshold(martial_law)) * 100.0;
         let proximity = if collapse_death_pct > 0.0 { death_pct / collapse_death_pct } else { 1.0 };
         let threshold_color = if proximity >= 0.75 {
             Color::Red
