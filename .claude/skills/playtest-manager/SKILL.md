@@ -57,8 +57,6 @@ Check `CronList` first — if a cron job for `/playtest-manager` already exists,
 CronCreate(schedule="7 */2 * * *", command="/playtest-manager")
 ```
 
-Playtests run every ~2 hours, not more frequently. The game is complex enough that each session costs significant tokens, and filing issues faster than workers can address them creates noise.
-
 ## Step 1: Fresh Branch From origin/master (EVERY TIME — NO EXCEPTIONS)
 
 ```bash
