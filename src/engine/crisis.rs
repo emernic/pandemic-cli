@@ -1937,7 +1937,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                                  {member_name} demands immediate medical deployment to the region.",
                             ),
                             format!("Deploy to {region_name}"),
-                            format!("Reassign 3 personnel to emergency field ops in {region_name}."),
+                            format!("Send 3 personnel to {region_name}. They will not return."),
                         )
                     } else {
                         (
@@ -1947,7 +1947,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                                  {member_name} wants more resources allocated to the region.",
                             ),
                             format!("Prioritize {region_name}"),
-                            format!("Reassign 2 personnel to field ops in {region_name}."),
+                            format!("Send 2 personnel to {region_name}. They will not return."),
                         )
                     }
                 }
@@ -1963,7 +1963,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                                 total_dead / 1_000_000.0,
                             ),
                             "Reallocate resources".into(),
-                            "Reassign 3 personnel to emergency response.".to_string(),
+                            "Lose 3 personnel to emergency redeployment.".to_string(),
                         )
                     } else {
                         (
@@ -1974,7 +1974,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                                 total_dead / 1_000_000.0,
                             ),
                             "Increase response".into(),
-                            "Reassign 2 personnel to field operations.".to_string(),
+                            "Lose 2 personnel to field redeployment.".to_string(),
                         )
                     }
                 }
@@ -3206,20 +3206,18 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     }
                 }
                 Some(BoardRole::RegionGovernor { region_idx }) => {
-                    // Deploy personnel to the governor's region
                     let personnel_cost = if *severity >= 1 { 3u32 } else { 2u32 };
                     let actual = personnel_cost.min(state.resources.personnel);
                     state.resources.personnel = state.resources.personnel.saturating_sub(actual);
                     let name = state.regions.get(region_idx)
                         .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                    format!("{actual} personnel reassigned to {name}. {member_name} satisfied.")
+                    format!("{actual} personnel sent to {name}. {member_name} satisfied.")
                 }
                 _ => {
-                    // Independent advisor: reassign personnel to general response
                     let personnel_cost = if *severity >= 1 { 3u32 } else { 2u32 };
                     let actual = personnel_cost.min(state.resources.personnel);
                     state.resources.personnel = state.resources.personnel.saturating_sub(actual);
-                    format!("{actual} personnel reassigned to emergency response. {member_name} satisfied.")
+                    format!("{actual} personnel lost to redeployment. {member_name} satisfied.")
                 }
             }
         }
