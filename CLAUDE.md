@@ -374,15 +374,15 @@ The user switches between many terminal tabs. They need to instantly see what wa
 
 ## Codebase Navigation Tips
 
-The core files (`src/state.rs`, `src/engine/crisis.rs`, `src/engine/mod.rs`) are large — 1000–6000+ lines. The single biggest time-waster in this codebase is repeatedly re-reading the same file with different offsets. Don't do that.
+The core files (`src/state.rs`, `src/engine/crisis.rs`, `src/engine/mod.rs`) are large — 1000–6000+ lines. Re-reading these files repeatedly is the single biggest source of wasted tool calls in this codebase.
 
-**Use `Grep` with context flags instead of grep + Read:**
+**Use `Grep -C` to get a function and its full context in one call:**
 
-```bash
-# Bad: grep for line number, then Read at offset, then Read more for context
-# Good: get the code and its context in one shot
-Grep pattern="fn deploy_medicine" path="src/engine" -C 30   # 30 lines before and after
 ```
+Grep pattern="fn deploy_medicine" path="src/engine" -C 40
+```
+
+This returns the match plus 40 lines above and below — typically the entire function body, doc comments, and neighboring code. Use `-C 30` to `-C 50` depending on expected function size. **This is your primary exploration tool for large files** — prefer it over Read when you know what you're looking for.
 
 **When you need a whole function, read generously on first access:**
 
@@ -393,6 +393,9 @@ Grep pattern="fn deploy_medicine" path="src/engine" -C 30   # 30 lines before an
 
 - Before starting to explore a system, decide what you need to understand and read it all upfront — not piecemeal as you discover you need more.
 - If you've already read a file in the current session, do NOT re-read it just because you've scrolled past it. Trust your memory.
+- If you need to revisit a specific function you already read, use `Grep -C` to pull just that function — don't re-read the entire file.
+
+**Batch your edits.** Before editing a file, plan ALL your changes to that file, then make them in as few Edit calls as possible. Don't make 10 sequential single-line edits to the same file when 2-3 edits would cover it.
 
 ## Launching Sub-Agents
 
