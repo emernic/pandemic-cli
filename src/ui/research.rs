@@ -67,12 +67,11 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
     }
 
     // Active field projects
-    for (i, project) in state.field_research.iter().enumerate() {
+    for project in &state.field_research {
         let selected = state.ui.panel_selection == item_idx;
         if selected { selected_line = Some(lines.len()); }
         render_active_project(&mut lines, project, selected, state);
         item_idx += 1;
-        let _ = i; // suppress unused warning
     }
 
     // Available field projects
