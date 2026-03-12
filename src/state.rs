@@ -214,6 +214,13 @@ pub struct GameState {
     /// Active emergency loans. Interest accrues each day; hostile action fires if unpaid.
     #[serde(default)]
     pub loans: Vec<ActiveLoan>,
+    /// Cumulative policy spending (sum of per-tick policy costs over the game).
+    /// Used by embezzlement detection to compare against non-board stock positions.
+    #[serde(default)]
+    pub cumulative_policy_spending: f64,
+    /// Whether the board has sent the formal embezzlement warning letter.
+    #[serde(default)]
+    pub embezzlement_warned: bool,
     pub ui: UiState,
 }
 
@@ -1225,6 +1232,14 @@ pub const CORP_STARTING_RESERVE_DAYS: f64 = 30.0;
 /// Operating costs as a fraction of base revenue.
 /// At 0.65, corps need ~35% revenue to break even.
 pub const CORP_COST_RATIO: f64 = 0.65;
+
+/// Buffer above cumulative policy spending before embezzlement detection triggers.
+/// Player can hold up to this much in non-board stocks without raising suspicion.
+pub const EMBEZZLEMENT_BUFFER: f64 = 1000.0;
+
+/// Funding income multiplier applied when the player continues investing in
+/// non-board corps after receiving the embezzlement warning letter.
+pub const EMBEZZLEMENT_FUNDING_PENALTY: f64 = 0.75;
 
 // Board member system — named individuals who sit on the NWHO board.
 // Each member has connections to existing game entities (corporations, regions,
@@ -3875,6 +3890,9 @@ pub enum CrisisKind {
     /// Single-option event: the board informs the player of decisions made.
     /// Funding level is adjusted based on overall board satisfaction.
     BoardMeeting,
+    /// Board sends a formal warning letter when non-board stock positions exceed
+    /// cumulative policy spending + ¥1000 buffer. If the player continues, funding is cut.
+    BoardEmbezzlementWarning,
 
     // --- Corporate detention crises ---
 
@@ -3966,6 +3984,7 @@ impl CrisisKind {
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardMeeting => "board_meeting",
+            CrisisKind::BoardEmbezzlementWarning => "board_embezzlement_warning",
             CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",
@@ -5012,6 +5031,8 @@ impl GameState {
             board_funding_multiplier: 1.0,
             next_sequence_group: 0,
             loans: vec![],
+            cumulative_policy_spending: 0.0,
+            embezzlement_warned: false,
             ui: UiState {
                 open_panel: Panel::None,
                 panel_selection: 0,
@@ -5392,6 +5413,12 @@ impl GameState {
         // Board funding multiplier — set by board meetings based on satisfaction.
         // Applies to regional income only (not contracts).
         income *= self.board_funding_multiplier;
+        // Embezzlement penalty — board pulls funding if warned and still over-investing.
+        if self.embezzlement_warned
+            && self.non_board_portfolio_value() > self.cumulative_policy_spending + EMBEZZLEMENT_BUFFER
+        {
+            income *= EMBEZZLEMENT_FUNDING_PENALTY;
+        }
         // Contract income — fixed, not affected by population health or board multiplier
         let contract_income: f64 = self.contracts.iter().map(|c| c.income).sum();
         income + contract_income
@@ -5400,6 +5427,18 @@ impl GameState {
     /// Per-tick income from active contracts alone (for UI breakdown).
     pub fn contract_income_rate(&self) -> f64 {
         self.contracts.iter().map(|c| c.income).sum()
+    }
+
+    /// Market value of player's shares in non-board-seat corporations.
+    pub fn non_board_portfolio_value(&self) -> f64 {
+        self.portfolio.iter().enumerate()
+            .filter_map(|(i, &shares)| {
+                if shares == 0 { return None; }
+                let corp = self.corporations.get(i)?;
+                if corp.board_seat { return None; }
+                Some(shares as f64 * corp.share_price)
+            })
+            .sum()
     }
 
     /// Total outstanding debt across all active loans.

@@ -1936,6 +1936,33 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::BoardEmbezzlementWarning => {
+            let non_board_value = state.non_board_portfolio_value();
+            CrisisEvent {
+                title: "Correspondence from the Board".into(),
+                description: format!(
+                    "Dear Director,\n\n\
+                     The Board has completed its quarterly review of NWHO operating accounts. \
+                     We note with interest that \u{00a5}{:.0} in agency funds have been allocated to \
+                     equity positions in entities outside the Board's portfolio. While the Board \
+                     encourages prudent financial management, we wish to remind you that all \
+                     NWHO funds are designated for pandemic response operations.\n\n\
+                     We trust this matter will resolve itself promptly. The Board would find it \
+                     regrettable if further review became necessary.\n\n\
+                     Regards,\nOffice of the Board Secretary",
+                    non_board_value
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: "Acknowledged".into(),
+                        description: "File the letter. The board is watching.".into(),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("the region");
@@ -3204,6 +3231,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Board communiqué filed.".into()
         }
 
+        (CrisisKind::BoardEmbezzlementWarning, _) => {
+            state.embezzlement_warned = true;
+            "Letter filed. The board will be monitoring fund allocations.".into()
+        }
 
         // --- Corporate detention crises ---
 
