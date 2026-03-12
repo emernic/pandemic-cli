@@ -1,0 +1,366 @@
+use ratatui::{
+    layout::Rect,
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Paragraph},
+    Frame,
+};
+
+use crate::state::{BoardRole, GameState};
+use crate::format_number;
+
+/// Satisfaction word and color for a satisfaction value (0.0-1.0).
+fn satisfaction_display(satisfaction: f64) -> (&'static str, Color) {
+    if satisfaction > 0.7 {
+        ("Content", Color::Green)
+    } else if satisfaction > 0.5 {
+        ("Wary", Color::Yellow)
+    } else if satisfaction > 0.3 {
+        ("Displeased", Color::LightRed)
+    } else {
+        ("Hostile", Color::Red)
+    }
+}
+
+pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+    let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
+
+    if state.board_members.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No board members.",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        // Overall board satisfaction header
+        let board_sat = state.board_satisfaction();
+        let (overall_word, overall_color) = satisfaction_display(board_sat);
+        lines.push(Line::from(vec![
+            Span::styled("  Board mood: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(overall_word, Style::default().fg(overall_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("  ({} members)", state.board_members.len()),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        lines.push(Line::from(""));
+
+        for (i, member) in state.board_members.iter().enumerate() {
+            let selected = state.ui.panel_selection == i;
+            if selected {
+                selected_line = Some(lines.len());
+            }
+            let marker = if selected { "\u{25b6} " } else { "  " };
+            let style = if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            // Name line
+            lines.push(Line::from(Span::styled(
+                format!("{}{}", marker, member.name),
+                style,
+            )));
+
+            // Title + satisfaction + connection indicators
+            let (sat_word, sat_color) = satisfaction_display(member.satisfaction);
+            let mut detail_spans: Vec<Span> = vec![
+                Span::styled(
+                    format!("    {}", member.title),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::raw("  "),
+                Span::styled(sat_word, Style::default().fg(sat_color)),
+            ];
+
+            // Connection indicators
+            let mut connections: Vec<String> = Vec::new();
+            if let Some(corp_idx) = member.corp_idx {
+                if let Some(corp) = state.corporations.get(corp_idx) {
+                    connections.push(format!("[{}]", corp.sector.label()));
+                }
+            }
+            if let Some(region_idx) = member.region_idx {
+                if let Some(region) = state.regions.get(region_idx) {
+                    if matches!(member.role, BoardRole::RegionGovernor { .. }) {
+                        connections.push(format!("[Gov: {}]", region.name));
+                    }
+                }
+            }
+            if !connections.is_empty() {
+                detail_spans.push(Span::styled(
+                    format!("  {}", connections.join(" ")),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+
+            lines.push(Line::from(detail_spans));
+
+            // Active demand summary (if board satisfaction is low enough that demands fire)
+            if member.satisfaction < 0.5 {
+                let demand_text = match &member.role {
+                    BoardRole::CorporateLeader { corp_idx } => {
+                        state.corporations.get(*corp_idx)
+                            .map(|c| if c.bankrupt {
+                                format!("Demands: Restore {} operations", c.name)
+                            } else {
+                                format!("Demands: Protect {} revenue", c.name)
+                            })
+                    }
+                    BoardRole::RegionGovernor { region_idx } => {
+                        state.regions.get(*region_idx)
+                            .map(|r| if r.collapsed {
+                                format!("Demands: Rebuild {}", r.name)
+                            } else {
+                                format!("Demands: Reduce deaths in {}", r.name)
+                            })
+                    }
+                    BoardRole::IndependentAdvisor => {
+                        Some("Demands: Reduce global death toll".to_string())
+                    }
+                };
+                if let Some(text) = demand_text {
+                    lines.push(Line::from(Span::styled(
+                        format!("    {}", text),
+                        Style::default().fg(Color::LightRed),
+                    )));
+                }
+            }
+
+            // Detail view for selected member
+            if selected {
+                render_member_detail(&mut lines, state, i);
+            }
+
+            lines.push(Line::from(""));
+        }
+    }
+
+    let block = Block::default()
+        .title(" Board ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = selected_line.map(|line| {
+        if line as u16 >= inner_height {
+            (line as u16).saturating_sub(inner_height * 2 / 3)
+        } else {
+            0
+        }
+    }).unwrap_or(0);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
+    f.render_widget(widget, area);
+}
+
+fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, member_idx: usize) {
+    let member = &state.board_members[member_idx];
+    let hdr = Style::default().fg(Color::DarkGray);
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "    \u{2500}\u{2500} Dossier \u{2500}\u{2500}",
+        Style::default().fg(Color::Cyan),
+    )));
+
+    // Role-specific detail
+    match &member.role {
+        BoardRole::CorporateLeader { corp_idx } => {
+            if let Some(corp) = state.corporations.get(*corp_idx) {
+                let region_name = state.regions.get(corp.region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+
+                lines.push(Line::from(vec![
+                    Span::styled("    Corporation: ", hdr),
+                    Span::styled(
+                        corp.name.clone(),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!("  ({})", region_name),
+                        hdr,
+                    ),
+                ]));
+
+                // Revenue trend
+                let profit = corp.daily_profit();
+                let profit_color = if profit >= 0.0 { Color::Green } else { Color::Red };
+                let status_word = if corp.bankrupt {
+                    "BANKRUPT"
+                } else if corp.reserves_fraction() < 0.25 {
+                    "Critical"
+                } else if corp.reserves_fraction() < 0.5 {
+                    "Stressed"
+                } else {
+                    "Healthy"
+                };
+                let status_color = if corp.bankrupt {
+                    Color::Red
+                } else if corp.reserves_fraction() < 0.25 {
+                    Color::LightRed
+                } else if corp.reserves_fraction() < 0.5 {
+                    Color::Yellow
+                } else {
+                    Color::Green
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled("    Status: ", hdr),
+                    Span::styled(status_word, Style::default().fg(status_color)),
+                    Span::styled(
+                        format!("  Reserves: {:.0}%", corp.reserves_fraction() * 100.0),
+                        hdr,
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled("    Revenue: ", hdr),
+                    Span::styled(
+                        format!("\u{00a5}{:.0}/day", corp.revenue),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled("  Profit: ", hdr),
+                    Span::styled(
+                        format!("{:+.0}/day", profit),
+                        Style::default().fg(profit_color),
+                    ),
+                ]));
+
+                // Satisfaction driver
+                lines.push(Line::from(Span::styled(
+                    "    Tracks corporate reserves",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+        BoardRole::RegionGovernor { region_idx } => {
+            if let Some(region) = state.regions.get(*region_idx) {
+                let alive = region.alive();
+                let pop = region.population as f64;
+                let alive_pct = if pop > 0.0 {
+                    (alive / pop) * 100.0
+                } else {
+                    0.0
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled("    Region: ", hdr),
+                    Span::styled(
+                        region.name.clone(),
+                        Style::default().fg(Color::White),
+                    ),
+                ]));
+
+                let status = if region.collapsed {
+                    ("COLLAPSED", Color::Red)
+                } else if alive_pct < 75.0 {
+                    ("Suffering", Color::LightRed)
+                } else if alive_pct < 90.0 {
+                    ("Strained", Color::Yellow)
+                } else {
+                    ("Stable", Color::Green)
+                };
+                lines.push(Line::from(vec![
+                    Span::styled("    Status: ", hdr),
+                    Span::styled(status.0, Style::default().fg(status.1)),
+                    Span::styled(
+                        format!("  Pop alive: {:.1}%", alive_pct),
+                        hdr,
+                    ),
+                ]));
+
+                // Infection summary
+                let total_infected: f64 = region.infections.iter()
+                    .map(|inf| inf.infected)
+                    .sum();
+                let total_dead: f64 = region.infections.iter()
+                    .map(|inf| inf.dead)
+                    .sum();
+                if total_infected > 0.0 || total_dead > 0.0 {
+                    lines.push(Line::from(vec![
+                        Span::styled("    Infected: ", hdr),
+                        Span::styled(
+                            format_number(total_infected),
+                            Style::default().fg(Color::LightRed),
+                        ),
+                        Span::styled("  Dead: ", hdr),
+                        Span::styled(
+                            format_number(total_dead),
+                            Style::default().fg(Color::Red),
+                        ),
+                    ]));
+                }
+
+                // Governor info
+                lines.push(Line::from(vec![
+                    Span::styled("    Governor: ", hdr),
+                    Span::styled(
+                        region.governor.name.clone(),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!("  ({})  Loyalty: {:.0}",
+                            region.governor.personality.label(),
+                            region.governor.loyalty),
+                        hdr,
+                    ),
+                ]));
+
+                lines.push(Line::from(Span::styled(
+                    "    Tracks region population health",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+        BoardRole::IndependentAdvisor => {
+            let total_alive: f64 = state.regions.iter().map(|r| r.alive()).sum();
+            let initial = state.initial_population();
+            let survival_pct = if initial > 0.0 { (total_alive / initial) * 100.0 } else { 0.0 };
+
+            lines.push(Line::from(vec![
+                Span::styled("    Role: ", hdr),
+                Span::styled(
+                    "Independent advisor",
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("    Global survival: ", hdr),
+                Span::styled(
+                    format!("{:.1}%", survival_pct),
+                    Style::default().fg(if survival_pct > 90.0 { Color::Green }
+                        else if survival_pct > 75.0 { Color::Yellow }
+                        else { Color::Red }),
+                ),
+            ]));
+            lines.push(Line::from(Span::styled(
+                "    Tracks global death rate",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+    }
+
+    // Connected corporation (for governor-members who also have a corp)
+    if matches!(member.role, BoardRole::RegionGovernor { .. }) {
+        if let Some(corp_idx) = member.corp_idx {
+            if let Some(corp) = state.corporations.get(corp_idx) {
+                lines.push(Line::from(vec![
+                    Span::styled("    Corp connection: ", hdr),
+                    Span::styled(
+                        corp.name.clone(),
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::styled(
+                        format!("  Reserves: {:.0}%", corp.reserves_fraction() * 100.0),
+                        hdr,
+                    ),
+                ]));
+            }
+        }
+    }
+
+
+}

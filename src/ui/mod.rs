@@ -1,3 +1,4 @@
+pub mod board;
 pub mod home;
 pub mod hotkey_bar;
 pub mod medicines;
@@ -465,6 +466,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
             Panel::Research => research::render(f, split[1], state),
             Panel::Policy => policy::render(f, split[1], state),
             Panel::Operations => operations::render(f, split[1], state),
+            Panel::Board => board::render(f, split[1], state),
             panel => render_placeholder_panel(f, split[1], panel),
         }
     }
@@ -592,6 +594,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),
             Line::from("  [O] Orders panel"),
+            Line::from("  [B] Board panel"),
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [Z] Speed up (1x→2x→4x→6x, pause resets)"),
             Line::from("  [X] Auto-resolve crisis (toggle during event)"),
