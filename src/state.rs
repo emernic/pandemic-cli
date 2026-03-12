@@ -188,6 +188,10 @@ pub struct GameState {
     /// Tick when the last contract was offered (for spacing offers).
     #[serde(default)]
     pub last_contract_offer_tick: u64,
+    /// How many times each template_id has been declined (indexed by template_id).
+    /// Used to escalate re-offer prices.
+    #[serde(default)]
+    pub contract_decline_counts: Vec<u8>,
     /// Regional corporations. 3 per region (18 total). Source of player income.
     #[serde(default)]
     pub corporations: Vec<Corporation>,
@@ -972,6 +976,18 @@ impl FundingCondition {
             Self::ForbidDecree { decree_idx } => {
                 format!("Do not enact {}", decree_display_name(*decree_idx))
             }
+        }
+    }
+
+    /// Return a discriminant tag for type-exclusivity grouping.
+    /// Contracts with the same condition_type() are mutually exclusive.
+    pub fn condition_type(&self) -> &'static str {
+        match self {
+            Self::ForbidPolicy { .. } => "forbid_policy",
+            Self::RequirePolicy { .. } => "require_policy",
+            Self::MaxDeaths { .. } => "max_deaths",
+            Self::NoCollapse => "no_collapse",
+            Self::ForbidDecree { .. } => "forbid_decree",
         }
     }
 
@@ -5255,6 +5271,7 @@ impl GameState {
             contracts: Vec::new(),
             contract_offer: None,
             last_contract_offer_tick: 0,
+            contract_decline_counts: Vec::new(),
             corporations: Vec::new(),
             portfolio: Vec::new(),
             board_members: Vec::new(),

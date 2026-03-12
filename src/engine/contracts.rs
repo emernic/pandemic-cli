@@ -131,14 +131,29 @@ const ACCEPT_OTHERS_PENALTY: f64 = 0.08;
 /// Satisfaction penalty applied to the offering board member when a contract is refused.
 const REFUSE_OFFERER_PENALTY: f64 = 0.12;
 
+/// Per-decline price escalation: each prior decline of this template adds 20% to base price.
+const DECLINE_ESCALATION: f64 = 0.20;
+/// Time-based price escalation: price increases ~2% per game day.
+const TIME_ESCALATION_PER_DAY: f64 = 0.02;
+
 /// Build a FundingContract from a template index, assigned to a specific board member.
-fn build_contract(template_id: u8, board_member_idx: usize, rng: &mut ChaCha8Rng) -> FundingContract {
+/// Prices escalate based on game day and how many times this template was previously declined.
+fn build_contract(template_id: u8, board_member_idx: usize, state: &GameState, rng: &mut ChaCha8Rng) -> FundingContract {
     let t = &TEMPLATES[template_id as usize];
     let variance = 0.8 + rng.r#gen::<f64>() * 0.4; // 0.8 to 1.2
+
+    let game_day = state.tick as f64 / TICKS_PER_DAY;
+    let time_mult = 1.0 + game_day * TIME_ESCALATION_PER_DAY;
+    let decline_count = state.contract_decline_counts
+        .get(template_id as usize)
+        .copied()
+        .unwrap_or(0) as f64;
+    let decline_mult = 1.0 + decline_count * DECLINE_ESCALATION;
+
     FundingContract {
         name: t.name.to_string(),
         board_member_idx,
-        income: t.income * variance,
+        income: t.income * variance * time_mult * decline_mult,
         condition: t.condition.clone(),
         template_id,
         satisfaction: 1.0,
@@ -250,11 +265,15 @@ pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) 
         return;
     }
 
-    // Pick a template that isn't already active, whose condition is met, and that is
-    // contextually relevant to the current game state (not trivially free money).
+    // Pick a template that isn't already active, whose condition type isn't already held
+    // (type exclusivity), whose condition is met, and that is contextually relevant.
     let active_ids: Vec<u8> = state.contracts.iter().map(|c| c.template_id).collect();
+    let active_types: Vec<&str> = state.contracts.iter()
+        .map(|c| c.condition.condition_type())
+        .collect();
     let eligible: Vec<u8> = (0..TEMPLATES.len() as u8)
         .filter(|id| !active_ids.contains(id))
+        .filter(|id| !active_types.contains(&TEMPLATES[*id as usize].condition.condition_type()))
         .filter(|id| TEMPLATES[*id as usize].condition.is_met(state))
         .filter(|id| is_contextually_relevant(*id as usize, state))
         .collect();
@@ -276,7 +295,7 @@ pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) 
 
     let pick = eligible[rng.r#gen::<usize>() % eligible.len()];
     let member_idx = eligible_members[rng.r#gen::<usize>() % eligible_members.len()];
-    let contract = build_contract(pick, member_idx, rng);
+    let contract = build_contract(pick, member_idx, state, rng);
 
     let template_id = contract.template_id;
     state.events.push(GameEvent::ContractOffered {
@@ -327,7 +346,8 @@ pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
 }
 
 /// Reject (dismiss) the current contract offer.
-/// Refusing penalizes the offering board member's satisfaction.
+/// Refusing penalizes the offering board member's satisfaction and records the decline
+/// so future re-offers of the same template come at a higher price.
 pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
     if let Some(contract) = state.contract_offer.take() {
         let offerer_idx = contract.board_member_idx;
@@ -339,6 +359,13 @@ pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
         if let Some(member) = state.board_members.get_mut(offerer_idx) {
             member.satisfaction_modifier -= REFUSE_OFFERER_PENALTY;
         }
+
+        // Track the decline for price escalation on re-offers
+        let tid = contract.template_id as usize;
+        if state.contract_decline_counts.len() <= tid {
+            state.contract_decline_counts.resize(tid + 1, 0);
+        }
+        state.contract_decline_counts[tid] = state.contract_decline_counts[tid].saturating_add(1);
 
         let msg = format!("{} is displeased — contract refused.", offerer_name);
         (true, Some(msg))
@@ -744,5 +771,94 @@ mod tests {
         // Others should have zero modifier
         assert!((state.board_members[0].satisfaction_modifier).abs() < 0.01);
         assert!((state.board_members[2].satisfaction_modifier).abs() < 0.01);
+    }
+
+    #[test]
+    fn decline_records_template_for_escalation() {
+        let mut state = GameState::new_default(42);
+        make_offer(&mut state); // template_id = 4
+        assert!(state.contract_decline_counts.is_empty());
+
+        reject_contract(&mut state);
+        assert_eq!(state.contract_decline_counts.get(4).copied(), Some(1));
+
+        // Decline again — count should increment
+        make_offer(&mut state);
+        reject_contract(&mut state);
+        assert_eq!(state.contract_decline_counts[4], 2);
+    }
+
+    #[test]
+    fn escalating_prices_increase_with_declines() {
+        let mut state = GameState::new_default(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(99);
+
+        // Build contract with no declines
+        let c1 = build_contract(4, 0, &state, &mut rng);
+        let income1 = c1.income;
+
+        // Record 2 declines
+        state.contract_decline_counts.resize(9, 0);
+        state.contract_decline_counts[4] = 2;
+        let mut rng2 = ChaCha8Rng::seed_from_u64(99); // same seed for same variance
+        let c2 = build_contract(4, 0, &state, &mut rng2);
+        let income2 = c2.income;
+
+        assert!(income2 > income1,
+            "Income should increase after declines: {income1} vs {income2}");
+    }
+
+    #[test]
+    fn escalating_prices_increase_with_game_day() {
+        let mut state = GameState::new_default(42);
+
+        // Day 0
+        let mut rng1 = ChaCha8Rng::seed_from_u64(99);
+        let c1 = build_contract(4, 0, &state, &mut rng1);
+
+        // Day 30
+        state.tick = (30.0 * TICKS_PER_DAY) as u64;
+        let mut rng2 = ChaCha8Rng::seed_from_u64(99);
+        let c2 = build_contract(4, 0, &state, &mut rng2);
+
+        assert!(c2.income > c1.income,
+            "Day 30 income should exceed day 0: {} vs {}", c1.income, c2.income);
+    }
+
+    #[test]
+    fn type_exclusivity_blocks_same_condition_type() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        state.tick = CONTRACT_FIRST_OFFER_TICK;
+
+        // Accept a ForbidPolicy contract (template 0 = Shipping Lane Guarantee)
+        state.contracts.push(FundingContract {
+            name: "Shipping Lane Guarantee".to_string(),
+            board_member_idx: 0,
+            income: 2.5,
+            condition: FundingCondition::ForbidPolicy { policy_idx: 0 },
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+        });
+
+        // Set deaths so MaxDeaths templates are relevant
+        state.regions[0].dead = 3_000_000.0;
+
+        // Try to generate an offer — it should NOT offer any other ForbidPolicy templates
+        // (templates 1, 6 are also ForbidPolicy)
+        for _ in 0..50 {
+            state.contract_offer = None;
+            state.last_contract_offer_tick = 0;
+            tick_offer_contracts(&mut state, &mut rng);
+            if let Some(ref offer) = state.contract_offer {
+                let offer_type = TEMPLATES[offer.template_id as usize].condition.condition_type();
+                assert_ne!(offer_type, "forbid_policy",
+                    "Should not offer ForbidPolicy when one is already active (got template {})",
+                    offer.template_id);
+            }
+        }
     }
 }
