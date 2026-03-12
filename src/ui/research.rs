@@ -17,10 +17,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let (t, l) = render_confirm(state, *track, *project_idx, *double_personnel);
             (t, l, None)
         }
-        Some(ResearchUiState::ViewActive { track, slot_idx }) => {
-            let (t, l) = render_active(state, *track, *slot_idx);
-            (t, l, None)
-        }
         None => (" Research ".to_string(), vec![], None),
     };
 
@@ -535,91 +531,6 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
 
     (" Confirm Research ".to_string(), lines)
 }
-
-fn render_active(state: &GameState, track: ResearchTrack, slot_idx: usize) -> (String, Vec<Line<'static>>) {
-    let mut lines: Vec<Line> = Vec::new();
-    let project = match track {
-        ResearchTrack::Field => state.field_research.get(slot_idx),
-        _ => state.research_slot(track),
-    };
-
-    if let Some(project) = project {
-        let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
-        let remaining = (project.required_ticks - project.progress).max(0.0);
-
-        // Breadcrumb
-        lines.push(Line::from(Span::styled(
-            format!("  Research > {} > Active", track_name(track)),
-            Style::default().fg(Color::DarkGray),
-        )));
-        lines.push(Line::from(""));
-
-        lines.push(Line::from(Span::styled(
-            format!("  {}", project.kind.display_label(&state.diseases, &state.medicines, &state.regions)),
-            Style::default().fg(Color::Cyan),
-        )));
-        lines.push(Line::from(""));
-
-        // Progress bar
-        let bar_width = 30;
-        let filled = (pct / 100.0 * bar_width as f64) as usize;
-        let empty = bar_width - filled;
-        lines.push(Line::from(vec![
-            Span::raw("  "),
-            Span::styled(
-                "█".repeat(filled),
-                Style::default().fg(Color::Green),
-            ),
-            Span::styled(
-                "░".repeat(empty),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::raw(format!(" {:.0}%", pct)),
-        ]));
-        let speed = project.speed(&state.medicines);
-        let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            format!("  {} remaining", format_days(effective_remaining)),
-            Style::default().fg(Color::White),
-        )));
-        let speed_color = if speed >= 1.4 { Color::Green } else if speed >= 1.0 { Color::Cyan } else { Color::Red };
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {} personnel assigned", project.personnel_assigned),
-                Style::default().fg(Color::Cyan),
-            ),
-            Span::styled(
-                format!("  ({:.1}x speed)", speed),
-                Style::default().fg(speed_color),
-            ),
-        ]));
-
-        if !project.is_complete() {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled("  [Enter] Back to projects", Style::default().fg(Color::DarkGray))));
-        }
-    } else {
-        lines.push(Line::from(Span::styled(
-            "  No active project.",
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [Esc] Back",
-        Style::default().fg(Color::DarkGray),
-    )));
-
-    let title = match track {
-        ResearchTrack::Field => " Active: Field ",
-        ResearchTrack::Applied => " Active: Applied ",
-        ResearchTrack::Basic => " Active: Basic ",
-    };
-    (title.to_string(), lines)
-}
-
 
 /// Supplementary detail line for a research project (targets, knowledge, etc).
 fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {

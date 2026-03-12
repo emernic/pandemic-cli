@@ -3818,8 +3818,6 @@ pub enum ResearchUiState {
     BrowseProjects { track: ResearchTrack },
     /// Confirming a project before starting it.
     ConfirmProject { track: ResearchTrack, project_idx: usize, double_personnel: bool },
-    /// Viewing an active project. `slot_idx` selects which field project (0 for Applied/Basic).
-    ViewActive { track: ResearchTrack, slot_idx: usize },
 }
 
 /// Operations/Orders panel UI state machine.
@@ -4014,10 +4012,6 @@ impl UiState {
                         self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
                         self.panel_selection = 0;
                     }
-                    Some(ResearchUiState::ViewActive { track, .. }) => {
-                        self.research_ui = Some(ResearchUiState::BrowseProjects { track: *track });
-                        self.panel_selection = 0;
-                    }
                     Some(ResearchUiState::BrowseProjects { track }) => {
                         let track_idx = track.index();
                         self.research_ui = Some(ResearchUiState::BrowseCategories);
@@ -4115,7 +4109,6 @@ impl UiState {
                     }
                 }
                 Some(ResearchUiState::ConfirmProject { .. }) => 0,
-                Some(ResearchUiState::ViewActive { .. }) => 0,
                 None => 0,
             },
             Panel::Policy => match &self.policy_ui {
