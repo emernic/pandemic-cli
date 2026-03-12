@@ -300,13 +300,34 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             Span::styled("  (set at board meetings)", dim),
         ]));
 
-        // Contract income line
-        if contract_income > 0.0 {
+        // Contract income — list each contract individually with conditions
+        if !state.contracts.is_empty() {
             lines.push(Line::from(vec![
                 Span::styled("  Contracts:", dim),
                 Span::styled(format!("+¥{:.0}/day", contract_income), green),
                 Span::styled(format!("  ({} active)", state.contracts.len()), dim),
             ]));
+            for contract in &state.contracts {
+                let member_name = state.board_members.get(contract.board_member_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or(&contract.name);
+                let income_day = contract.income * TICKS_PER_DAY;
+                let sat_color = if contract.satisfaction > 0.7 {
+                    Color::Green
+                } else if contract.satisfaction > 0.5 {
+                    Color::Yellow
+                } else {
+                    Color::Red
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(format!("    {} ", contract.name), Style::default().fg(sat_color)),
+                    Span::styled(format!("+¥{:.0}/day", income_day), green),
+                    Span::styled(format!("  ({})", member_name), dim),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(format!("      {}", contract.condition.description()), dim),
+                ]));
+            }
         }
 
         // Upkeep line
