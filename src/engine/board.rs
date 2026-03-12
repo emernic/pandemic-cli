@@ -12,20 +12,35 @@ use crate::state::{BoardMember, BoardRole, GameState};
 /// - Total: 8-9 members
 pub fn generate_board_members(state: &mut GameState) {
     let mut members = Vec::new();
+    let mut chairman_assigned = false;
 
-    // Corporate leaders: one per board-seat corporation
+    // Corporate leaders: one per board-seat corporation.
+    // The first corporate leader becomes Chairman of the Board.
     for (corp_idx, corp) in state.corporations.iter().enumerate() {
         if !corp.board_seat {
             continue;
         }
+        let is_chairman = !chairman_assigned;
+        if is_chairman {
+            chairman_assigned = true;
+        }
         members.push(BoardMember {
-            name: format!("Dir. {}", corp.director_surname),
-            title: format!("CEO, {}", corp.name),
+            name: if is_chairman {
+                format!("Chairman {}", corp.director_surname)
+            } else {
+                format!("Dir. {}", corp.director_surname)
+            },
+            title: if is_chairman {
+                format!("Chairman of the Board, {}", corp.name)
+            } else {
+                format!("CEO, {}", corp.name)
+            },
             role: BoardRole::CorporateLeader { corp_idx },
             corp_idx: Some(corp_idx),
             region_idx: Some(corp.region_idx),
             satisfaction: 1.0,
             satisfaction_modifier: 0.0,
+            is_chairman,
         });
     }
 
@@ -53,6 +68,7 @@ pub fn generate_board_members(state: &mut GameState) {
             region_idx: Some(region_idx),
             satisfaction: 1.0,
             satisfaction_modifier: 0.0,
+            is_chairman: false,
         });
         governor_count += 1;
     }
