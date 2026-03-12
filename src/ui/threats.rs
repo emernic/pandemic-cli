@@ -114,6 +114,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ];
                 push_disease_indicators(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
+                if disease.pathogen_type == PathogenType::Fungus {
+                    lines.push(Line::from(Span::styled(
+                        "    [!] Degrades medical infrastructure",
+                        Style::default().fg(Color::Yellow),
+                    )));
+                }
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
@@ -143,6 +149,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ];
                 push_disease_indicators(&mut type_spans, state, i);
                 lines.push(Line::from(type_spans));
+                if disease.pathogen_type == PathogenType::Fungus {
+                    lines.push(Line::from(Span::styled(
+                        "    [!] Degrades medical infrastructure",
+                        Style::default().fg(Color::Yellow),
+                    )));
+                }
                 // Full stats visible
                 lines.push(Line::from(vec![
                     Span::raw("    "),
