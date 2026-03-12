@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
+use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, TICKS_PER_DAY, grid_reading_order};
 use crate::format_number;
 
 /// Maximum selection index for the threats panel.
@@ -234,6 +234,20 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     format!("    {med_text}"),
                     Style::default().fg(med_color),
                 )));
+
+                // 5-day death projection (requires EpidemiologicalForecasting tech)
+                if state.has_forecasting() {
+                    let projected = state.projected_deaths(i, 5.0);
+                    if projected >= 1.0 {
+                        let proj_color = if projected >= 10_000.0 { Color::Red }
+                            else if projected >= 1_000.0 { Color::Yellow }
+                            else { Color::White };
+                        lines.push(Line::from(Span::styled(
+                            format!("    Projected +{} deaths / 5 days", format_number(projected)),
+                            Style::default().fg(proj_color),
+                        )));
+                    }
+                }
             }
 
             // Sequence homology: Rapid Sequencing reveals shared genetic markers between
@@ -375,6 +389,7 @@ fn medicine_status_for_disease(state: &GameState, disease_idx: usize) -> MedStat
 
 fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: usize) {
     let hdr = Style::default().fg(Color::DarkGray);
+    let has_forecast = state.has_forecasting();
     // Check if any region has sub-100% visibility (screening not maxed)
     let any_estimated = state.regions.iter().enumerate().any(|(i, _)| {
         state.screening_visibility(i) < 1.0
@@ -382,7 +397,7 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
     let infected_label = if any_estimated { "Infected~" } else { "Infected" };
     // Check if any region has Antigen+ screening (shows immune counts)
     let any_shows_immune = state.policies.iter().any(|p| p.screening.shows_immune());
-    lines.push(Line::from(vec![
+    let mut header_spans = vec![
         Span::raw("    "),
         Span::styled(format!("{:<16}", "Region"), hdr),
         Span::raw("  "),
@@ -391,11 +406,18 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
         Span::styled(format!("{:>8}", "Immune"), hdr),
         Span::raw("  "),
         Span::styled(format!("{:>8}", "Dead"), hdr),
-    ]));
+    ];
+    if has_forecast {
+        header_spans.push(Span::raw("  "));
+        header_spans.push(Span::styled(format!("{:>8}", "Proj 5d"), hdr));
+    }
+    lines.push(Line::from(header_spans));
 
+    let disease = &state.diseases[disease_idx];
     let mut total_infected = 0.0;
     let mut total_immune = 0.0;
     let mut total_dead = 0.0;
+    let mut total_projected = 0.0;
 
     let order = grid_reading_order(state.regions.len());
     for &region_idx in &order {
@@ -424,7 +446,7 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
             total_dead += inf.dead;
 
             let name = format!("{:<16}", region.name);
-            lines.push(Line::from(vec![
+            let mut row = vec![
                 Span::raw("    "),
                 Span::styled(name, Style::default().fg(Color::White)),
                 Span::raw("  "),
@@ -442,18 +464,35 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
                     format!("{:>8}", format_number(inf.dead)),
                     Style::default().fg(Color::DarkGray),
                 ),
-            ]));
+            ];
+            if has_forecast {
+                let proj = inf.infected * disease.lethality * TICKS_PER_DAY * 5.0;
+                total_projected += proj;
+                let proj_color = if proj >= 10_000.0 { Color::Red }
+                    else if proj >= 1_000.0 { Color::Yellow }
+                    else { Color::White };
+                row.push(Span::raw("  "));
+                row.push(Span::styled(
+                    format!("{:>8}", if proj >= 1.0 { format!("+{}", format_number(proj)) } else { "—".to_string() }),
+                    Style::default().fg(proj_color),
+                ));
+            }
+            lines.push(Line::from(row));
         }
     }
 
     // Totals
-    lines.push(Line::from(vec![
+    let mut sep = vec![
         Span::styled("    ────────────────", Style::default().fg(Color::DarkGray)),
         Span::styled("──────────", Style::default().fg(Color::DarkGray)),
         Span::styled("──────────", Style::default().fg(Color::DarkGray)),
         Span::styled("──────────", Style::default().fg(Color::DarkGray)),
-    ]));
-    lines.push(Line::from(vec![
+    ];
+    if has_forecast {
+        sep.push(Span::styled("──────────", Style::default().fg(Color::DarkGray)));
+    }
+    lines.push(Line::from(sep));
+    let mut totals = vec![
         Span::raw("    "),
         Span::styled(
             format!("{:<16}", "TOTAL"),
@@ -474,5 +513,16 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
             format!("{:>8}", format_number(total_dead)),
             Style::default().fg(Color::DarkGray),
         ),
-    ]));
+    ];
+    if has_forecast {
+        let proj_color = if total_projected >= 10_000.0 { Color::Red }
+            else if total_projected >= 1_000.0 { Color::Yellow }
+            else { Color::White };
+        totals.push(Span::raw("  "));
+        totals.push(Span::styled(
+            format!("{:>8}", if total_projected >= 1.0 { format!("+{}", format_number(total_projected)) } else { "—".to_string() }),
+            Style::default().fg(proj_color),
+        ));
+    }
+    lines.push(Line::from(totals));
 }
