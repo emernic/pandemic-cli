@@ -164,7 +164,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
             } else if available_personnel >= personnel {
                 state.policies[region_idx].set_bool(policy_idx, true);
                 // Profiteer board members penalized when GDP-hurting policies enacted
-                if matches!(policy_idx, 0 | 1 | 8) {
+                if matches!(policy_idx, 0 | 1) {
                     super::board::on_gdp_policy_enacted(state, region_idx);
                 }
                 (Some(format!("{region_name}: {on_msg}")), true)
