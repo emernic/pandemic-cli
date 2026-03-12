@@ -4,7 +4,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    BasicTech, Disease, GameState, MAX_DISEASES, Medicine, MechanismOfAction, MutationMode,
+    Disease, GameState, MAX_DISEASES, Medicine, MechanismOfAction, MutationMode,
     PathogenType, RegionDiseaseState, ScreeningLevel, TherapyType, TransmissionVector, TICKS_PER_DAY,
 };
 
@@ -353,10 +353,6 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         }
     }
 
-    // Mild tech-aware adaptations: new diseases reflect the player's toolkit
-    // but benefits of each tech always outweigh the adaptation penalty.
-    adapt_disease_to_player_tech(state, disease_idx);
-
     // Auto-register new diseases with broad-spectrum medicines. These are
     // known drug classes that work against any pathogen type, so they don't
     // need per-disease clinical trials.
@@ -418,67 +414,6 @@ fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
     }
 }
 
-/// Adapt a newly spawned disease to the player's current technological
-/// capabilities. New diseases reflect the player's unlocked techs:
-/// VaccinePlatform causes +1 strain drift, CompetitiveDisplacement and
-/// DirectedAttenuation cause slight lethality increases, etc.
-///
-/// DESIGN PRINCIPLE: adaptations must be mild enough that the player
-/// always feels NET stronger after unlocking a tech. A tech that costs
-/// more than it gives is a trap, not an interesting decision. The
-/// natural difficulty ramp (more diseases, mutations, infrastructure
-/// decay, delivery efficiency loss) provides the real late-game pressure.
-/// Adaptations add variety, not punishment.
-fn adapt_disease_to_player_tech(state: &mut GameState, disease_idx: usize) {
-    let techs = state.unlocked_techs.clone();
-
-    if !techs.is_empty() {
-        let d = &mut state.diseases[disease_idx];
-
-        // VaccinePlatform (3x vaccination): diseases emerge +1 strain generation
-        // ahead. The player's 3x vaccination far outweighs ~15% efficacy drift.
-        if techs.contains(&BasicTech::VaccinePlatform) {
-            d.strain_generation += 1;
-        }
-
-        // RapidSequencing (2x sequencing speed): no adaptation.
-        // Faster identification is a speed benefit, not a combat multiplier.
-        // Punishing faster diagnostics with faster spread is illogical.
-
-        // CombinationTherapy (halves resistance buildup): diseases start with
-        // slightly elevated mechanism resistance. The 50% reduction in ongoing
-        // resistance accumulation dominates this small starting penalty.
-        if techs.contains(&BasicTech::CombinationTherapy) {
-            for entry in &mut d.mechanism_resistance {
-                if entry.level > 0.01 {
-                    entry.level = (entry.level * 1.2).min(0.4);
-                }
-            }
-        }
-
-        // CompetitiveDisplacement (unlocks Suppress: -20% infectivity per project):
-        // diseases emerge slightly more lethal. One Suppress project more than
-        // compensates for a 15% lethality increase.
-        if techs.contains(&BasicTech::CompetitiveDisplacement) {
-            d.lethality *= 1.15;
-        }
-
-        // DirectedAttenuation (unlocks Attenuate: -30% lethality per project):
-        // diseases emerge slightly more lethal. One Attenuate project (-30%)
-        // more than compensates for a 20% lethality increase.
-        if techs.contains(&BasicTech::DirectedAttenuation) {
-            d.lethality *= 1.2;
-        }
-
-        // GeneDriveContainment (unlocks Interdict: eliminates cross-region spread):
-        // diseases spread somewhat faster across regions. Interdict completely
-        // eliminates spread for one disease, far outweighing a 30% increase.
-        if techs.contains(&BasicTech::GeneDriveContainment) {
-            d.cross_region_spread *= 1.3;
-        }
-    }
-
-}
 
 #[cfg(test)]
 mod tests {
@@ -486,79 +421,4 @@ mod tests {
     use crate::state::GameState;
     use rand::SeedableRng;
 
-    #[test]
-    fn tech_adaptations_are_mild() {
-        // Design invariant: with ALL techs unlocked, the combined adaptation
-        // multipliers on a disease should be mild enough that benefits outweigh costs.
-        // Test by applying adaptations to a known disease and checking multipliers.
-        let mut state = GameState::new_default(42);
-
-        // Record disease 0's base stats
-        let base_lethality = state.diseases[0].lethality;
-        let base_spread = state.diseases[0].cross_region_spread;
-        let base_gen = state.diseases[0].strain_generation;
-
-        // Unlock all techs, then apply adaptations to disease 0
-        state.unlocked_techs = vec![
-            BasicTech::VaccinePlatform,
-            BasicTech::RapidSequencing,
-            BasicTech::CombinationTherapy,
-            BasicTech::CompetitiveDisplacement,
-            BasicTech::DirectedAttenuation,
-            BasicTech::GeneDriveContainment,
-        ];
-        adapt_disease_to_player_tech(&mut state, 0);
-
-        // Combined lethality: CompetitiveDisplacement 1.15 × DirectedAttenuation 1.2 = 1.38x
-        let lethality_ratio = state.diseases[0].lethality / base_lethality;
-        assert!(
-            lethality_ratio < 1.5,
-            "combined lethality adaptation {:.2}x should be < 1.5x (got {:.4} from {:.4})",
-            lethality_ratio, state.diseases[0].lethality, base_lethality
-        );
-
-        // Cross-region spread: only GeneDriveContainment 1.3x (RapidSequencing removed)
-        let spread_ratio = state.diseases[0].cross_region_spread / base_spread;
-        assert!(
-            spread_ratio < 1.5,
-            "combined spread adaptation {:.2}x should be < 1.5x (got {:.4} from {:.4})",
-            spread_ratio, state.diseases[0].cross_region_spread, base_spread
-        );
-
-        // VaccinePlatform: exactly +1 strain generation
-        assert_eq!(
-            state.diseases[0].strain_generation, base_gen + 1,
-            "VaccinePlatform should add exactly +1 strain generation"
-        );
-    }
-
-    #[test]
-    fn rapid_sequencing_has_no_adaptation() {
-        // RapidSequencing should not penalize new diseases at all.
-        let mut state = GameState::new_default(42);
-        let mut rng = ChaCha8Rng::seed_from_u64(99);
-
-        // Spawn baseline disease with no techs
-        let base_result = spawn_disease(&mut state, &mut rng);
-
-        // Reset and try with only RapidSequencing
-        let mut state2 = GameState::new_default(42);
-        let mut rng2 = ChaCha8Rng::seed_from_u64(99);
-        state2.unlocked_techs = vec![BasicTech::RapidSequencing];
-        let seq_result = spawn_disease(&mut state2, &mut rng2);
-
-        let (Some((bi, _)), Some((si, _))) = (base_result, seq_result) else {
-            panic!("spawn_disease should succeed for both baseline and RapidSequencing");
-        };
-        let base_d = &state.diseases[bi];
-        let seq_d = &state2.diseases[si];
-        assert_eq!(
-            base_d.cross_region_spread, seq_d.cross_region_spread,
-            "RapidSequencing should not affect cross-region spread"
-        );
-        assert_eq!(
-            base_d.lethality, seq_d.lethality,
-            "RapidSequencing should not affect lethality"
-        );
-    }
 }
