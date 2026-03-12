@@ -370,30 +370,41 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                 }
 
                 // Governor info
-                lines.push(Line::from(vec![
-                    Span::styled("    Governor: ", hdr),
-                    Span::styled(
-                        region.governor.name.clone(),
-                        Style::default().fg(Color::White),
-                    ),
-                    Span::styled(
-                        format!("  ({})  Co-Op: {:.0}",
-                            region.governor.personality.label(),
-                            region.governor.cooperation),
-                        hdr,
-                    ),
-                    {
-                        let eff = region.policy_effectiveness();
-                        if eff < 1.0 {
-                            Span::styled(
-                                format!("  (policies {:.0}%)", eff * 100.0),
-                                Style::default().fg(Color::Red),
-                            )
-                        } else {
-                            Span::raw("")
-                        }
-                    },
-                ]));
+                if region.governor.is_dead() {
+                    lines.push(Line::from(vec![
+                        Span::styled("    Governor: ", hdr),
+                        Span::styled("LEADERLESS", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            format!("  (policies {:.0}%)", region.policy_effectiveness() * 100.0),
+                            Style::default().fg(Color::Red),
+                        ),
+                    ]));
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::styled("    Governor: ", hdr),
+                        Span::styled(
+                            region.governor.name.clone(),
+                            Style::default().fg(Color::White),
+                        ),
+                        Span::styled(
+                            format!("  ({})  Co-Op: {:.0}",
+                                region.governor.personality.label(),
+                                region.governor.cooperation),
+                            hdr,
+                        ),
+                        {
+                            let eff = region.policy_effectiveness();
+                            if eff < 1.0 {
+                                Span::styled(
+                                    format!("  (policies {:.0}%)", eff * 100.0),
+                                    Style::default().fg(Color::Red),
+                                )
+                            } else {
+                                Span::raw("")
+                            }
+                        },
+                    ]));
+                }
 
                 lines.push(Line::from(Span::styled(
                     format!("    Tracks regional GDP (base: {:.0}k)", region.base_gdp),

@@ -436,65 +436,84 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         } else {
             Style::default().fg(Color::White)
         };
-        let cooperation_color = if gov.is_defiant() {
-            Color::Red
-        } else if gov.is_cooperative() {
-            Color::Green
+        if gov.is_dead() {
+            lines.push(Line::from(vec![
+                Span::styled(marker.to_string(), name_style),
+                Span::styled("Governor: ", name_style),
+                Span::styled("LEADERLESS", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            ]));
         } else {
-            Color::Yellow
-        };
-        let status_label = if gov.is_defiant() {
-            "DEFIANT"
-        } else if gov.is_cooperative() {
-            "cooperative"
-        } else {
-            ""
-        };
-        lines.push(Line::from(vec![
-            Span::styled(marker.to_string(), name_style),
-            Span::styled(
-                format!("Appease {} ", gov.name),
-                name_style,
-            ),
-            Span::styled(
-                format!("(Co-Op: {:.0}", gov.cooperation),
-                Style::default().fg(cooperation_color),
-            ),
-            if !status_label.is_empty() {
+            let cooperation_color = if gov.is_defiant() {
+                Color::Red
+            } else if gov.is_cooperative() {
+                Color::Green
+            } else {
+                Color::Yellow
+            };
+            let status_label = if gov.is_defiant() {
+                "DEFIANT"
+            } else if gov.is_cooperative() {
+                "cooperative"
+            } else {
+                ""
+            };
+            lines.push(Line::from(vec![
+                Span::styled(marker.to_string(), name_style),
                 Span::styled(
-                    format!(", {}", status_label),
-                    Style::default().fg(cooperation_color).add_modifier(Modifier::BOLD),
-                )
-            } else {
-                Span::raw("")
-            },
-            Span::styled(")", Style::default().fg(cooperation_color)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::raw("      "),
-            Span::styled(
-                format!("Cost: ¥{:.0}  →  +{:.0} co-op", APPEASE_COST, APPEASE_COOPERATION_GAIN),
-                Style::default().fg(Color::Yellow),
-            ),
-        ]));
-        {
+                    format!("Appease {} ", gov.name),
+                    name_style,
+                ),
+                Span::styled(
+                    format!("(Co-Op: {:.0}", gov.cooperation),
+                    Style::default().fg(cooperation_color),
+                ),
+                if !status_label.is_empty() {
+                    Span::styled(
+                        format!(", {}", status_label),
+                        Style::default().fg(cooperation_color).add_modifier(Modifier::BOLD),
+                    )
+                } else {
+                    Span::raw("")
+                },
+                Span::styled(")", Style::default().fg(cooperation_color)),
+            ]));
+        }
+        if gov.is_dead() {
             let eff = gov.policy_effectiveness();
-            if eff < 1.0 {
-                lines.push(Line::from(vec![
-                    Span::raw("      "),
-                    Span::styled(
-                        format!("⚠ Defiance: policies only {:.0}% effective in this region", eff * 100.0),
-                        Style::default().fg(Color::Red),
-                    ),
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(
+                    format!("⚠ Leaderless: policies only {:.0}% effective", eff * 100.0),
+                    Style::default().fg(Color::Red),
+                ),
+            ]));
+        } else {
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(
+                    format!("Cost: ¥{:.0}  →  +{:.0} co-op", APPEASE_COST, APPEASE_COOPERATION_GAIN),
+                    Style::default().fg(Color::Yellow),
+                ),
+            ]));
+            {
+                let eff = gov.policy_effectiveness();
+                if eff < 1.0 {
+                    lines.push(Line::from(vec![
+                        Span::raw("      "),
+                        Span::styled(
+                            format!("⚠ Defiance: policies only {:.0}% effective in this region", eff * 100.0),
+                            Style::default().fg(Color::Red),
+                        ),
+                    ]));
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::raw("      "),
+                        Span::styled(
+                            "Below 40 co-op → defiance → policies lose 30–60% effectiveness",
+                            Style::default().fg(Color::DarkGray),
+                        ),
                 ]));
-            } else {
-                lines.push(Line::from(vec![
-                    Span::raw("      "),
-                    Span::styled(
-                        "Below 40 co-op → defiance → policies lose 30–60% effectiveness",
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
+            }
             }
         }
         lines.push(Line::from(""));
