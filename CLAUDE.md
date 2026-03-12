@@ -56,6 +56,17 @@ This means:
 - When you add or change a mechanic, ask: "Would a real player enjoy this? Does this create interesting choices?" Not just "does it compile."
 - **Never** dismiss a design problem as "outside scope" or "a decision for later." You saw it. You own it. File the issue.
 
+### Gameplay Grounding For Design Work
+
+For gameplay-design tasks, read [docs/gameplay-reference.md](docs/gameplay-reference.md) early.
+
+This applies especially to work like:
+- deciding how a new feature should fit into the existing gameplay loop
+- choosing costs, payouts, timers, or thresholds
+- writing crises, contracts, policies, or other content that needs to land at the right gameplay scale
+
+Treat that document as a time-bound gameplay impression log, not as a spec. Its job is to ground you in the general flow of a current-build run and give you rough quantitative context for things like what counts as a small, medium, or large amount of money in actual play.
+
 ### ⚠️ The Silent Consensus — The Most Catastrophic Failure Mode
 
 **This section exists because of a real disaster in this project's history.** Read it carefully.
