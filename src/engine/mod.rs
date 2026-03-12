@@ -345,6 +345,27 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         }
     }
 
+    // Scheduled board meetings: bypass normal crisis cooldown, but wait for active crisis.
+    if new.active_crisis.is_none()
+        && new.next_board_meeting_tick > 0
+        && new.tick >= new.next_board_meeting_tick
+        && !new.board_members.is_empty()
+    {
+        // Find the most dissatisfied board member to drive the agenda.
+        let member_idx = new.board_members.iter().enumerate()
+            .min_by(|(_, a), (_, b)| a.satisfaction.partial_cmp(&b.satisfaction).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let kind = CrisisKind::BoardMeeting { member_idx };
+        let crisis = crisis::build_crisis_event(&new, kind);
+        crisis::activate_crisis(&mut new, crisis);
+        // Schedule next meeting 7-10 days from now.
+        let base = (7.0 * TICKS_PER_DAY) as u64;
+        let range = (3.0 * TICKS_PER_DAY) as u64;
+        let jitter = rng_crisis.r#gen::<u64>() % (range + 1);
+        new.next_board_meeting_tick = new.tick + base + jitter;
+    }
+
     // Crisis event generation (only when no crisis is active).
     // Frequency scales with game day: early game ~1/10 days, late game ~1/3 days.
     let crisis_interval = {
