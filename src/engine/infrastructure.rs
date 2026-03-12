@@ -1,5 +1,5 @@
 use crate::state::{
-    BasicTech, GameEvent, GameState, InfraSystem, PathogenType, RegionSpecialization,
+    BasicTech, CorporationSector, GameEvent, GameState, InfraSystem, PathogenType, RegionSpecialization,
     INFRA_CRITICAL, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
     TROPICAL_MEDICINE_HC_DRAIN_MULT, COMMUNITY_NETWORKS_CO_DRAIN_MULT, LOGISTICS_HUB_SL_DRAIN_MULT,
@@ -13,7 +13,6 @@ use crate::state::{
 /// - Civil order: degrades from deaths, restrictive policies, and low healthcare
 pub(super) fn tick_infrastructure(state: &mut GameState) {
     // ResilientGrids tech: disease-caused drains are 20% slower.
-    // When an Energy sector corp is healthy, could increase to 30% (#1381).
     let resilience_mult = if state.unlocked_techs.contains(&BasicTech::ResilientGrids) {
         0.80
     } else {
@@ -32,6 +31,13 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         let infected = state.regions[i].total_infected();
         let pop = state.regions[i].population as f64;
         let death_frac = if pop > 0.0 { state.regions[i].dead / pop } else { 0.0 };
+
+        // Energy sector bonus: infrastructure drains up to 15% slower
+        let energy_bonus = state.sector_bonus(i, CorporationSector::Energy);
+        let energy_drain_mult = 1.0 - 0.15 * energy_bonus;
+        // Mining sector bonus: natural recovery rates up to 50% faster
+        let mining_bonus = state.sector_bonus(i, CorporationSector::Mining);
+        let mining_recovery_mult = 1.0 + 0.50 * mining_bonus;
 
         // --- Healthcare Capacity ---
         // Degrades from infection load (absolute thresholds matching severity levels)
@@ -83,8 +89,8 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             1.0
         };
-        let new_healthcare = (old_healthcare + (healthcare_drain + fungal_drain) * resilience_mult * hc_spec_mult + hospital_recovery
-            + hospital_building_recovery + natural_healthcare_recovery)
+        let new_healthcare = (old_healthcare + (healthcare_drain + fungal_drain) * resilience_mult * hc_spec_mult * energy_drain_mult
+            + (hospital_recovery + hospital_building_recovery + natural_healthcare_recovery) * mining_recovery_mult)
             .clamp(0.0, 1.0);
         state.regions[i].healthcare_capacity = new_healthcare;
         emit_breakpoint_events(state, i, InfraSystem::Healthcare, old_healthcare, new_healthcare);
@@ -120,7 +126,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             1.0
         };
-        let new_supply = (old_supply + supply_drain * sl_spec_mult + natural_supply_recovery)
+        let new_supply = (old_supply + supply_drain * sl_spec_mult * energy_drain_mult + natural_supply_recovery * mining_recovery_mult)
             .clamp(0.0, 1.0);
         state.regions[i].supply_lines = new_supply;
         emit_breakpoint_events(state, i, InfraSystem::SupplyLines, old_supply, new_supply);
@@ -191,7 +197,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         } else {
             1.0
         };
-        let new_civil = (old_civil + civil_drain * co_spec_mult + natural_civil_recovery)
+        let new_civil = (old_civil + civil_drain * co_spec_mult * energy_drain_mult + natural_civil_recovery * mining_recovery_mult)
             .clamp(0.0, 1.0);
         state.regions[i].civil_order = new_civil;
         emit_breakpoint_events(state, i, InfraSystem::CivilOrder, old_civil, new_civil);

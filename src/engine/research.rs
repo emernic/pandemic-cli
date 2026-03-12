@@ -80,11 +80,16 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
 
     let lab_mult = state.lab_speed_multiplier();
+    // Biotech sector bonus: best regional bonus gives up to 10% research speed
+    let biotech_bonus = (0..state.regions.len())
+        .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
+        .fold(0.0_f64, f64::max);
+    let biotech_mult = 1.0 + 0.10 * biotech_bonus;
 
     // Advance all field research projects and collect completion effects
     for project in &mut state.field_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult;
+        project.progress += speed * lab_mult * biotech_mult;
     }
     // Process completions (drain_filter pattern via retain)
     let mut completed_fields: Vec<ResearchProject> = Vec::new();
@@ -242,7 +247,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
     if let Some(ref mut project) = state.applied_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult;
+        project.progress += speed * lab_mult * biotech_mult;
     }
     if state.applied_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.applied_research.take().unwrap();
@@ -301,7 +306,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
     if let Some(ref mut project) = state.basic_research {
         let speed = project.speed(&state.medicines);
-        project.progress += speed * lab_mult;
+        project.progress += speed * lab_mult * biotech_mult;
     }
     if state.basic_research.as_ref().is_some_and(|p| p.is_complete()) {
         let project = state.basic_research.take().unwrap();

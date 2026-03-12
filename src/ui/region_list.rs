@@ -845,6 +845,29 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         }
     }
 
+    // Sector bonuses from local corporations
+    {
+        let bonuses = state.active_sector_bonuses(idx);
+        if !bonuses.is_empty() && lines.len() + 1 < inner.height as usize {
+            let mut bonus_spans: Vec<Span> = vec![
+                Span::styled("Sector: ", label),
+            ];
+            for (j, (sector, strength)) in bonuses.iter().enumerate() {
+                if j > 0 {
+                    bonus_spans.push(Span::styled("  ", label));
+                }
+                let color = if *strength > 0.7 { Color::Green }
+                    else if *strength > 0.3 { Color::Yellow }
+                    else { Color::DarkGray };
+                bonus_spans.push(Span::styled(
+                    sector.bonus_text(*strength),
+                    Style::default().fg(color),
+                ));
+            }
+            lines.push(Line::from(bonus_spans));
+        }
+    }
+
     // Co-infection warning (only show detected diseases — don't leak undetected info)
     {
         let coinfection_count = region.infections.iter()
