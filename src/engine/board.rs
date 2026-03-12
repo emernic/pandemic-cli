@@ -19,7 +19,7 @@ pub fn generate_board_members(state: &mut GameState) {
             continue;
         }
         members.push(BoardMember {
-            name: format!("Dir. {}", corp_short_surname(&corp.name)),
+            name: format!("Dir. {}", corp.director_surname),
             title: format!("CEO, {}", corp.name),
             role: BoardRole::CorporateLeader { corp_idx },
             corp_idx: Some(corp_idx),
@@ -68,11 +68,6 @@ pub fn generate_board_members(state: &mut GameState) {
     }
 }
 
-/// Extract a short surname from a corporation name for the board member display name.
-/// "Helion Power" -> "Helion", "Seraph Genomics" -> "Seraph", etc.
-fn corp_short_surname(corp_name: &str) -> &str {
-    corp_name.split_whitespace().next().unwrap_or(corp_name)
-}
 
 /// Decay rate for satisfaction modifier: ~0.02/day = modifier halves in ~35 days.
 const MODIFIER_DECAY_RATE: f64 = 0.02 / crate::state::TICKS_PER_DAY;
