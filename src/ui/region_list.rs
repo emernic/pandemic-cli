@@ -549,12 +549,17 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     // Region traits (income and healthcare modifiers)
     {
-        let income_label = if region.income_modifier >= 1.5 {
-            ("High", Color::Green)
-        } else if region.income_modifier >= 1.0 {
-            ("Moderate", Color::Yellow)
+        let gdp_frac = region.gdp_fraction();
+        let gdp_status = if region.collapsed {
+            ("COLLAPSED", Color::Red)
+        } else if gdp_frac < 0.40 {
+            ("Depression", Color::Red)
+        } else if gdp_frac < 0.60 {
+            ("Recession", Color::LightRed)
+        } else if gdp_frac < 0.80 {
+            ("Strained", Color::Yellow)
         } else {
-            ("Low", Color::Red)
+            ("Stable", Color::Green)
         };
         let healthcare_label = if region.healthcare_modifier <= 0.80 {
             ("Excellent", Color::Green)
@@ -566,10 +571,14 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
             ("Strained", Color::Red)
         };
         let mut econ_spans = vec![
-            Span::styled("Economy: ", label),
+            Span::styled("GDP: ", label),
             Span::styled(
-                format!("{} ({:.1}x)", income_label.0, region.income_modifier),
-                Style::default().fg(income_label.1),
+                format!("{:.0}k", region.gdp),
+                Style::default().fg(gdp_status.1),
+            ),
+            Span::styled(
+                format!(" ({})", gdp_status.0),
+                Style::default().fg(Color::DarkGray),
             ),
             Span::styled("  Healthcare: ", label),
             Span::styled(

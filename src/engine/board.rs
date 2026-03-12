@@ -151,12 +151,12 @@ fn compute_member_satisfaction(state: &GameState, member_idx: usize) -> f64 {
                 .unwrap_or(0.0)
         }
         BoardRole::RegionGovernor { region_idx } => {
-            // Satisfaction tracks regional GDP (0.0–1.0).
+            // Satisfaction tracks GDP as a fraction of base (0.0–1.0).
             // GDP accounts for disease burden, deaths, and active containment
             // policies — creating tension where containment saves lives but
             // tanks the economy and makes governors unhappy.
             state.regions.get(*region_idx)
-                .map(|r| if r.collapsed { 0.0 } else { r.gdp.clamp(0.0, 1.0) })
+                .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
                 .unwrap_or(0.0)
         }
         BoardRole::IndependentAdvisor => {
@@ -315,20 +315,22 @@ mod tests {
             _ => unreachable!(),
         };
 
-        // Set GDP to 0.5 (simulating economic damage from disease + policies)
-        state.regions[region_idx].gdp = 0.5;
+        // Set GDP to 50% of base (simulating economic damage from disease + policies)
+        let base = state.regions[region_idx].base_gdp;
+        state.regions[region_idx].gdp = base * 0.5;
         update_board_satisfaction(&mut state);
 
         let sat = state.board_members[gov_idx].satisfaction;
-        assert!((sat - 0.5).abs() < 0.01, "governor satisfaction should track GDP ~0.5, got {sat}");
+        assert!((sat - 0.5).abs() < 0.01, "governor satisfaction should track GDP fraction ~0.5, got {sat}");
     }
 
     #[test]
     fn gdp_target_drops_with_containment_policies() {
         let state = GameState::new_default(42);
-        // No policies: GDP target should be close to 1.0 (no disease yet)
-        let base = state.gdp_target(0);
-        assert!(base > 0.9, "baseline GDP target should be high, got {base}");
+        let base_gdp = state.regions[0].base_gdp;
+        // No policies: GDP target should be close to base_gdp (no disease yet)
+        let target = state.gdp_target(0);
+        assert!(target > base_gdp * 0.9, "baseline GDP target should be near base_gdp, got {target}");
 
         // With quarantine + travel ban: GDP target should drop significantly
         let mut state2 = state.clone();
@@ -336,7 +338,7 @@ mod tests {
         state2.policies[0].travel_ban = true;
         let reduced = state2.gdp_target(0);
         // quarantine 0.80 × travel_ban 0.70 = 0.56 of base
-        assert!(reduced < base * 0.60, "GDP target with containment should drop, got {reduced}");
+        assert!(reduced < target * 0.60, "GDP target with containment should drop, got {reduced}");
         assert!(reduced > 0.0, "GDP target should not be zero");
     }
 

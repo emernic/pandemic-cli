@@ -1792,10 +1792,15 @@ pub struct Region {
     /// MassRapid). Makes unscreened data genuinely wrong, not just late.
     #[serde(default)]
     pub screening_noise_bias: f64,
-    /// Regional GDP as a fraction of potential (0.0–1.0). Starts at 1.0.
+    /// Base GDP for this region (in abstract game units, displayed with "k" suffix).
+    /// Reflects the region's economic scale — wealthier/larger economies have higher
+    /// base GDP. This is the starting value; actual GDP fluctuates around it.
+    #[serde(default = "default_one")]
+    pub base_gdp: f64,
+    /// Current regional GDP (in same units as base_gdp). Starts at base_gdp.
     /// Affected by population alive, disease burden, and active containment policies.
     /// Smoothed via exponential decay toward a computed target each tick.
-    /// Governors care about this — it drives their board satisfaction.
+    /// Governors care about the ratio gdp/base_gdp — it drives their board satisfaction.
     #[serde(default = "default_one")]
     pub gdp: f64,
     /// Cached recent death rate (deaths per day), updated once per day
@@ -1851,6 +1856,12 @@ impl Region {
 
     pub fn alive(&self) -> f64 {
         (self.population as f64 - self.total_dead()).max(0.0)
+    }
+
+    /// GDP as a fraction of base (0.0–1.0). Used for governor satisfaction
+    /// and status labels. Equivalent to the old 0.0–1.0 GDP field.
+    pub fn gdp_fraction(&self) -> f64 {
+        if self.base_gdp > 0.0 { (self.gdp / self.base_gdp).clamp(0.0, 1.0) } else { 0.0 }
     }
 
     /// Policy effectiveness multiplier based on governor cooperation and personality.
@@ -4723,7 +4734,8 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
-                gdp: 1.0,
+                base_gdp: 280.0,  // Large, wealthy economy
+                gdp: 280.0,
             },
             Region {
                 name: "South America".into(),
@@ -4762,7 +4774,8 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
-                gdp: 1.0,
+                base_gdp: 45.0,   // Moderate economy
+                gdp: 45.0,
             },
             Region {
                 name: "Europe".into(),
@@ -4801,7 +4814,8 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
-                gdp: 1.0,
+                base_gdp: 210.0,  // Strong, hub economy
+                gdp: 210.0,
             },
             Region {
                 name: "Africa".into(),
@@ -4840,7 +4854,8 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
-                gdp: 1.0,
+                base_gdp: 30.0,   // Lower per-capita economy
+                gdp: 30.0,
             },
             Region {
                 name: "Asia".into(),
@@ -4879,7 +4894,8 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
-                gdp: 1.0,
+                base_gdp: 380.0,  // Largest total economy
+                gdp: 380.0,
             },
             Region {
                 name: "Oceania".into(),
@@ -4918,7 +4934,8 @@ impl GameState {
                 disrupted_until: None,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
-                gdp: 1.0,
+                base_gdp: 18.0,   // Small but developed economy
+                gdp: 18.0,
             },
         ];
 
@@ -5327,17 +5344,17 @@ impl GameState {
         (1.0 - damage).clamp(0.1, 1.0)
     }
 
-    /// Compute the GDP target for a region (0.0–1.0).
-    /// Combines economic health (disease burden) with policy penalties.
+    /// Compute the GDP target for a region (actual value, not a fraction).
+    /// Combines base_gdp × economic health × policy penalties.
     /// The actual `region.gdp` smoothly tracks toward this target each tick.
     pub fn gdp_target(&self, region_idx: usize) -> f64 {
         let region = &self.regions[region_idx];
-        let base = Self::region_economic_health(region);
+        let health = Self::region_economic_health(region);
 
         // Active containment policies reduce GDP — the core tension.
         let policy = match self.policies.get(region_idx) {
             Some(p) => p,
-            None => return base,
+            None => return region.base_gdp * health,
         };
         let mut policy_factor = 1.0;
         if policy.quarantine {
@@ -5354,7 +5371,7 @@ impl GameState {
             policy_factor *= 0.85; // 15% GDP hit — curfews, restricted movement
         }
 
-        (base * policy_factor).clamp(0.0, 1.0)
+        (region.base_gdp * health * policy_factor).max(0.0)
     }
 
     /// Per-tick funding income: fixed board budget + contracts + decree modifiers.
