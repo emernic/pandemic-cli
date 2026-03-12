@@ -88,12 +88,12 @@ pub fn generate_board_members(state: &mut GameState) {
 /// Decay rate for satisfaction modifier: ~0.02/day = modifier halves in ~35 days.
 const MODIFIER_DECAY_RATE: f64 = 0.02 / crate::state::TICKS_PER_DAY;
 
-/// Update each board member's satisfaction based on their connected entities
-/// plus any relationship modifier from contract decisions.
-/// Called once per tick from the main tick loop.
 /// Chairman satisfaction threshold below which the hostility timer starts.
 const CHAIRMAN_HOSTILE_THRESHOLD: f64 = 0.20;
 
+/// Update each board member's satisfaction based on their connected entities
+/// plus any relationship modifier from contract decisions.
+/// Called once per tick from the main tick loop.
 pub(super) fn update_board_satisfaction(state: &mut GameState) {
     for i in 0..state.board_members.len() {
         let base_sat = compute_member_satisfaction(&state, i);
