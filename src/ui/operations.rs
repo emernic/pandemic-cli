@@ -14,20 +14,33 @@ use crate::state::{
 use super::hint_line;
 use super::policy::{decree_description, render_confirm_decree, render_region_select};
 
+/// Number of "field operations" items (Emergency Sample Delivery).
+const FIELD_OPS_COUNT: usize = 1;
+
+/// Returns eligible medicine indices for emergency sample delivery.
+pub fn emergency_delivery_medicines(state: &GameState) -> Vec<usize> {
+    state.medicines.iter().enumerate()
+        .filter(|(_, m)| m.unlocked && m.doses > 0.0)
+        .map(|(i, _)| i)
+        .collect()
+}
+
 /// Maximum selection index for the operations panel in its current sub-state.
 pub fn selection_max(ui_state: &OpsUiState, state: &GameState) -> usize {
     match ui_state {
         OpsUiState::BrowseOps => {
-            // Decrees + standing orders + loans
-            (DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len())
+            (DECREE_COUNT + STANDING_ORDER_COUNT + FIELD_OPS_COUNT + state.loans.len())
                 .saturating_sub(1)
         }
         OpsUiState::SelectSacrificeRegion
         | OpsUiState::SelectFortifyRegion => {
-            // Non-collapsed regions
             state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
         }
         OpsUiState::ConfirmDecree { .. } => 0,
+        OpsUiState::SelectEmergencyMedicine => {
+            emergency_delivery_medicines(state).len().saturating_sub(1)
+        }
+        OpsUiState::ConfirmEmergencyDelivery { .. } => 0,
     }
 }
 
@@ -55,6 +68,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 "Choose a region to restore to full infrastructure. All other regions suffer a permanent infrastructure penalty.",
             );
             render_panel(f, area, &title, lines);
+        }
+        Some(OpsUiState::SelectEmergencyMedicine) => {
+            render_select_medicine(f, area, state);
+        }
+        Some(OpsUiState::ConfirmEmergencyDelivery { medicine_idx }) => {
+            render_confirm_delivery(f, area, state, *medicine_idx);
         }
     }
 }
@@ -181,6 +200,51 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         row += 1;
     }
 
+    // Field Operations
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "  Field Operations",
+        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+    )));
+
+    // COUPLING CHECK: must equal FIELD_OPS_COUNT (= 1)
+    {
+        let is_selected = row == selected;
+        let marker = if is_selected { "▶ " } else { "  " };
+        let has_medicine = !emergency_delivery_medicines(state).is_empty();
+        let name_color = if !has_medicine {
+            Color::DarkGray
+        } else if is_selected {
+            Color::Yellow
+        } else {
+            Color::Green
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "Emergency Sample Delivery",
+                Style::default().fg(name_color).add_modifier(Modifier::BOLD),
+            ),
+            if !has_medicine {
+                Span::styled("  (no medicines available)", Style::default().fg(Color::DarkGray))
+            } else {
+                Span::styled(
+                    format!("  (to {})", state.regions[state.ui.map_selection].name),
+                    Style::default().fg(Color::DarkGray),
+                )
+            },
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                "Send experimental samples to a regional governor. Costs doses and personnel.",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        row += 1;
+    }
+
     // Outstanding Loans
     if !state.loans.is_empty() {
         lines.push(Line::raw(""));
@@ -217,6 +281,153 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         .title(" ORDERS ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+fn render_select_medicine(f: &mut Frame, area: Rect, state: &GameState) {
+    let eligible = emergency_delivery_medicines(state);
+    let selected = state.ui.panel_selection;
+    let region_name = &state.regions[state.ui.map_selection].name;
+    let gov_name = &state.regions[state.ui.map_selection].governor.name;
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled("  Target: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{} ({})", gov_name, region_name),
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        ),
+    ]));
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "  Select medicine to send:",
+        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+    )));
+
+    for (row, &med_idx) in eligible.iter().enumerate() {
+        let med = &state.medicines[med_idx];
+        let is_selected = row == selected;
+        let marker = if is_selected { "▶ " } else { "  " };
+        let name_color = if is_selected { Color::Yellow } else { Color::White };
+
+        let dose_cost = (med.max_doses * 0.10).min(50.0).min(med.doses);
+        let funding_cost = state.medicine_deploy_cost(med_idx, state.ui.map_selection) * 0.5;
+
+        // Check if tested against diseases in the target region
+        let region_diseases: Vec<usize> = state.regions[state.ui.map_selection].infections.iter()
+            .map(|inf| inf.disease_idx)
+            .collect();
+        let any_untested = region_diseases.iter()
+            .any(|d_idx| !med.tested_against.contains(d_idx));
+        let status = if region_diseases.is_empty() {
+            "no active diseases in region"
+        } else if any_untested {
+            "UNTESTED: adverse reaction risk"
+        } else {
+            "tested"
+        };
+        let status_color = if any_untested && !region_diseases.is_empty() {
+            Color::Red
+        } else {
+            Color::DarkGray
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(&med.name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("  ({:.0} doses, ¥{:.0})", dose_cost, funding_cost),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(status, Style::default().fg(status_color)),
+        ]));
+    }
+
+    if eligible.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  No medicines available. Develop one first.",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    lines.push(hint_line(state, "Select", "Back"));
+
+    let block = Block::default()
+        .title(" EMERGENCY SAMPLE DELIVERY ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Green));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+fn render_confirm_delivery(f: &mut Frame, area: Rect, state: &GameState, medicine_idx: usize) {
+    let med = &state.medicines[medicine_idx];
+    let region_idx = state.ui.map_selection;
+    let region = &state.regions[region_idx];
+    let gov = &region.governor;
+
+    let dose_cost = (med.max_doses * 0.10).min(50.0).min(med.doses);
+    let funding_cost = state.medicine_deploy_cost(medicine_idx, region_idx) * 0.5;
+
+    let region_diseases: Vec<usize> = region.infections.iter()
+        .map(|inf| inf.disease_idx)
+        .collect();
+    let any_untested = region_diseases.iter()
+        .any(|d_idx| !med.tested_against.contains(d_idx));
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::styled(
+        format!("  Send {} to {}?", med.name, gov.name),
+        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![
+        Span::styled("  Region: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(&region.name, Style::default().fg(Color::White)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  Cooperation: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(format!("{:.0}", gov.cooperation), Style::default().fg(Color::White)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{:.0} doses + ¥{:.0} + 2 personnel (1 day)", dose_cost, funding_cost),
+            Style::default().fg(Color::Yellow),
+        ),
+    ]));
+
+    if any_untested && !region_diseases.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            "  WARNING: Untested against local pathogens.",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(Span::styled(
+            "  25% chance of adverse reaction. Governor cooperation will drop if it goes wrong.",
+            Style::default().fg(Color::Red),
+        )));
+    } else {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            "  Tested medicine. Low risk, strong cooperation boost.",
+            Style::default().fg(Color::Green),
+        )));
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(hint_line(state, "Confirm", "Back"));
+
+    let block = Block::default()
+        .title(" CONFIRM DELIVERY ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Green));
 
     let widget = Paragraph::new(lines).block(block);
     f.render_widget(widget, area);

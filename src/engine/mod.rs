@@ -858,6 +858,14 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             }
             CommandResult { message: Some(msg), success: true }
         }
+        GameCommand::EmergencySampleDelivery { medicine_idx, region_idx } => {
+            let mut rng = state.rng_misc.clone();
+            let (success, msg) = medicine::emergency_sample_delivery(
+                state, *medicine_idx, *region_idx, &mut rng,
+            );
+            state.rng_misc = rng;
+            CommandResult { message: msg, success }
+        }
     }
 }
 
@@ -5948,6 +5956,69 @@ mod tests {
         let penalized_income = state.funding_income_rate();
         assert!(penalized_income < baseline_income,
             "income should be reduced: baseline={baseline_income:.2}, penalized={penalized_income:.2}");
+    }
+
+    #[test]
+    fn emergency_sample_delivery_boosts_cooperation() {
+        let mut state = GameState::new_default(42);
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 500.0;
+        state.medicines[0].max_doses = 500.0;
+        state.medicines[0].tested_against = vec![0]; // tested against disease 0
+        state.resources.funding = 10_000.0;
+        state.regions[0].get_or_create_infection(0).infected = 1000.0;
+
+        let coop_before = state.regions[0].governor.cooperation;
+
+        let result = execute_command(&mut state, &GameCommand::EmergencySampleDelivery {
+            medicine_idx: 0,
+            region_idx: 0,
+        });
+
+        assert!(result.success, "delivery should succeed");
+        assert!(result.message.is_some());
+
+        // Tested medicine: +20 cooperation
+        let coop_after = state.regions[0].governor.cooperation;
+        assert!(coop_after > coop_before,
+            "cooperation should increase: before={coop_before}, after={coop_after}");
+
+        // Doses should be consumed
+        assert!(state.medicines[0].doses < 500.0, "doses should be consumed");
+
+        // Personnel should be tied up in a crisis operation
+        assert!(!state.crisis_operations.is_empty(), "should have an active operation");
+        assert_eq!(state.crisis_operations[0].personnel, 2);
+    }
+
+    #[test]
+    fn emergency_delivery_fails_without_doses() {
+        let mut state = GameState::new_default(42);
+        state.medicines[0].unlocked = true;
+        state.medicines[0].doses = 0.0;
+        state.resources.funding = 10_000.0;
+
+        let result = execute_command(&mut state, &GameCommand::EmergencySampleDelivery {
+            medicine_idx: 0,
+            region_idx: 0,
+        });
+
+        assert!(!result.success);
+    }
+
+    #[test]
+    fn emergency_delivery_fails_for_locked_medicine() {
+        let mut state = GameState::new_default(42);
+        state.medicines[0].unlocked = false;
+        state.medicines[0].doses = 500.0;
+        state.resources.funding = 10_000.0;
+
+        let result = execute_command(&mut state, &GameCommand::EmergencySampleDelivery {
+            medicine_idx: 0,
+            region_idx: 0,
+        });
+
+        assert!(!result.success);
     }
 
 }

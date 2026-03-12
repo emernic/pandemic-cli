@@ -1,8 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    DeployTarget, GameEvent, GameOutcome, GameState, RegionDiseaseState, Shipment,
-    SHIPPING_TICKS,
+    CrisisOperation, DeployTarget, GameEvent, GameOutcome, GameState, RegionDiseaseState,
+    Shipment, SHIPPING_TICKS, TICKS_PER_DAY,
 };
 
 /// Dispatch a medicine shipment: deduct funds and doses, create in-transit
@@ -299,6 +299,137 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
     if let Some(disease) = state.diseases.get_mut(disease_idx) {
         disease.add_resistance(mechanism, gain);
     }
+}
+
+/// Send experimental medicine samples to a region's governor. This is a
+/// political action, not a mass deployment. Consumes a small number of doses
+/// and ties up personnel for delivery. Boosts governor cooperation, but
+/// untested medicines risk adverse reactions that backfire politically.
+///
+/// Returns (success, message).
+pub(super) fn emergency_sample_delivery(
+    state: &mut GameState,
+    medicine_idx: usize,
+    region_idx: usize,
+    rng: &mut impl Rng,
+) -> (bool, Option<String>) {
+    if state.outcome != GameOutcome::Playing {
+        return (false, None);
+    }
+    let Some(region) = state.regions.get(region_idx) else {
+        return (false, Some("Invalid region.".into()));
+    };
+    if region.collapsed {
+        return (false, Some(format!("{} has collapsed.", region.name)));
+    }
+    let Some(med) = state.medicines.get(medicine_idx) else {
+        return (false, Some("Invalid medicine.".into()));
+    };
+    if !med.unlocked {
+        return (false, Some("Medicine not yet developed.".into()));
+    }
+    if med.doses <= 0.0 {
+        return (false, Some(format!("No doses remaining for {}.", med.name)));
+    }
+
+    // Cost: 50 doses or 10% of max, whichever is smaller. Plus half a normal deploy cost.
+    let dose_cost = (med.max_doses * 0.10).min(50.0).min(med.doses);
+    let funding_cost = state.medicine_deploy_cost(medicine_idx, region_idx) * 0.5;
+
+    if state.resources.funding < funding_cost {
+        return (false, Some(insufficient_funds_message(funding_cost, state.resources.funding)));
+    }
+
+    let delivery_personnel: u32 = 2;
+    if state.personnel_available() < delivery_personnel {
+        return (false, Some("Not enough available personnel for a delivery team.".into()));
+    }
+
+    let med_name = med.name.clone();
+    let region_name = region.name.clone();
+    let gov_name = region.governor.name.clone();
+
+    // Check if the medicine is tested against any disease active in this region
+    let active_diseases: Vec<usize> = state.regions[region_idx].infections.iter()
+        .map(|inf| inf.disease_idx)
+        .collect();
+    let has_tested_match = active_diseases.iter()
+        .any(|d_idx| state.medicines[medicine_idx].tested_against.contains(d_idx));
+    let has_untested_match = active_diseases.iter()
+        .any(|d_idx| !state.medicines[medicine_idx].tested_against.contains(d_idx));
+
+    // Deduct resources
+    state.resources.funding -= funding_cost;
+    state.medicines[medicine_idx].doses -= dose_cost;
+
+    // Tie up personnel for 1 day
+    state.crisis_operations.push(CrisisOperation {
+        label: format!("Sample Delivery to {}", region_name),
+        personnel: delivery_personnel,
+        ticks_remaining: TICKS_PER_DAY,
+    });
+
+    // Determine outcome
+    let cooperation_change: f64;
+    let mut adverse = false;
+
+    if has_untested_match {
+        // Untested medicine: 25% chance of adverse reaction
+        let roll: f64 = rng.r#gen();
+        if roll < 0.25 {
+            // Adverse reaction: governor loses trust
+            adverse = true;
+            cooperation_change = -10.0;
+        } else {
+            // Untested but no reaction: moderate cooperation boost
+            cooperation_change = 10.0;
+        }
+
+        // Set strain calibration 2 generations behind for untested diseases (like TrialShortcut)
+        for &d_idx in &active_diseases {
+            if !state.medicines[medicine_idx].tested_against.contains(&d_idx) {
+                if let Some(pos) = state.medicines[medicine_idx].target_diseases.iter().position(|&d| d == d_idx) {
+                    let current_gen = state.diseases.get(d_idx)
+                        .map_or(0, |d| d.strain_generation) as i32;
+                    while state.medicines[medicine_idx].strain_generations.len() <= pos {
+                        state.medicines[medicine_idx].strain_generations.push(0);
+                    }
+                    state.medicines[medicine_idx].strain_generations[pos] = current_gen - 2;
+                }
+            }
+        }
+    } else if has_tested_match {
+        // Tested medicine for an active disease: strong cooperation boost
+        cooperation_change = 20.0;
+    } else {
+        // No active diseases in region or medicine doesn't target them: small boost
+        cooperation_change = 8.0;
+    }
+
+    // Apply cooperation change
+    state.regions[region_idx].governor.cooperation =
+        (state.regions[region_idx].governor.cooperation + cooperation_change).clamp(0.0, 100.0);
+
+    state.events.push(GameEvent::EmergencySampleDelivered {
+        medicine_idx,
+        region_idx,
+        cooperation_change,
+        adverse,
+    });
+
+    let msg = if adverse {
+        format!(
+            "Adverse reaction to {} samples in {}. {} cooperation fell.",
+            med_name, region_name, gov_name,
+        )
+    } else {
+        format!(
+            "Delivered {} samples to {} in {} (-¥{:.0}, {:.0} doses). Cooperation improved.",
+            med_name, gov_name, region_name, funding_cost, dose_cost,
+        )
+    };
+
+    (true, Some(msg))
 }
 
 pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {

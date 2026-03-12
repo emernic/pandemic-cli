@@ -3760,6 +3760,13 @@ pub enum GameEvent {
         /// People actually protected (vaccinated from susceptible pool). 0 if treatment.
         people_protected: f64,
     },
+    /// Emergency sample delivery sent to a region's governor.
+    EmergencySampleDelivered {
+        medicine_idx: usize,
+        region_idx: usize,
+        cooperation_change: f64,
+        adverse: bool,
+    },
     /// Emergency consolidation activated — all resources consolidated into one region.
     ArkProtocolActivated {
         region_idx: usize,
@@ -3854,6 +3861,10 @@ pub enum GameCommand {
     BuyShares { corp_idx: usize, quantity: u32 },
     /// Sell shares in a corporation. Proceeds = share_price × quantity.
     SellShares { corp_idx: usize, quantity: u32 },
+    /// Send experimental medicine samples to a specific region's governor.
+    /// Bypasses full clinical trial pipeline — boosts governor cooperation
+    /// but risks adverse reactions for untested medicines.
+    EmergencySampleDelivery { medicine_idx: usize, region_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -4243,6 +4254,10 @@ pub enum OpsUiState {
     SelectSacrificeRegion,
     /// Select which region to fortify (for Fortify Region decree).
     SelectFortifyRegion,
+    /// Select which medicine to send as an emergency sample delivery.
+    SelectEmergencyMedicine,
+    /// Confirm emergency sample delivery to the currently selected map region.
+    ConfirmEmergencyDelivery { medicine_idx: usize },
 }
 
 /// Board panel UI state machine. Information-only panel — no wizard steps.
@@ -4471,6 +4486,14 @@ impl UiState {
                     Some(OpsUiState::ConfirmDecree { .. })
                     | Some(OpsUiState::SelectSacrificeRegion)
                     | Some(OpsUiState::SelectFortifyRegion) => {
+                        self.operations_ui = Some(OpsUiState::BrowseOps);
+                        self.panel_selection = 0;
+                    }
+                    Some(OpsUiState::ConfirmEmergencyDelivery { .. }) => {
+                        self.operations_ui = Some(OpsUiState::SelectEmergencyMedicine);
+                        self.panel_selection = 0;
+                    }
+                    Some(OpsUiState::SelectEmergencyMedicine) => {
                         self.operations_ui = Some(OpsUiState::BrowseOps);
                         self.panel_selection = 0;
                     }
