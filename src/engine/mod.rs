@@ -5749,17 +5749,17 @@ mod tests {
         use crate::state::BasicTech;
         use rand::SeedableRng;
 
-        // Spawn disease WITHOUT PathogenSuppression
+        // Spawn disease WITHOUT CompetitiveDisplacement
         let mut state1 = GameState::new_default(42);
         state1.tick = 3000;
         let mut rng1 = ChaCha8Rng::seed_from_u64(77);
         let count1 = state1.diseases.len();
         disease::spawn_disease_scaled(&mut state1, &mut rng1);
 
-        // Spawn disease WITH PathogenSuppression (same seed for comparable params)
+        // Spawn disease WITH CompetitiveDisplacement (same seed for comparable params)
         let mut state2 = GameState::new_default(42);
         state2.tick = 3000;
-        state2.unlocked_techs.push(BasicTech::PathogenSuppression);
+        state2.unlocked_techs.push(BasicTech::CompetitiveDisplacement);
         state2.unlocked_techs.push(BasicTech::VaccinePlatform);
         state2.unlocked_techs.push(BasicTech::CombinationTherapy);
         let mut rng2 = ChaCha8Rng::seed_from_u64(77);
@@ -5770,7 +5770,7 @@ mod tests {
             let d1 = &state1.diseases[count1];
             let d2 = &state2.diseases[count2];
             assert!(d2.lethality > d1.lethality,
-                "disease with PathogenSuppression should be deadlier: {:.4} vs {:.4}",
+                "disease with CompetitiveDisplacement should be deadlier: {:.4} vs {:.4}",
                 d2.lethality, d1.lethality);
         }
     }
@@ -5780,18 +5780,18 @@ mod tests {
         use crate::state::BasicTech;
         use rand::SeedableRng;
 
-        // Spawn with PathogenSuppression only
+        // Spawn with CompetitiveDisplacement only
         let mut state1 = GameState::new_default(42);
         state1.tick = 3000;
-        state1.unlocked_techs.push(BasicTech::PathogenSuppression);
+        state1.unlocked_techs.push(BasicTech::CompetitiveDisplacement);
         let mut rng1 = ChaCha8Rng::seed_from_u64(77);
         let count1 = state1.diseases.len();
         disease::spawn_disease_scaled(&mut state1, &mut rng1);
 
-        // Spawn with PathogenSuppression + DirectedAttenuation (same seed)
+        // Spawn with CompetitiveDisplacement + DirectedAttenuation (same seed)
         let mut state2 = GameState::new_default(42);
         state2.tick = 3000;
-        state2.unlocked_techs.push(BasicTech::PathogenSuppression);
+        state2.unlocked_techs.push(BasicTech::CompetitiveDisplacement);
         state2.unlocked_techs.push(BasicTech::DirectedAttenuation);
         let mut rng2 = ChaCha8Rng::seed_from_u64(77);
         let count2 = state2.diseases.len();
@@ -5811,17 +5811,17 @@ mod tests {
         use crate::state::BasicTech;
         use rand::SeedableRng;
 
-        // Spawn without GenomicInterdiction
+        // Spawn without GeneDriveContainment
         let mut state1 = GameState::new_default(42);
         state1.tick = 3000;
         let mut rng1 = ChaCha8Rng::seed_from_u64(77);
         let count1 = state1.diseases.len();
         disease::spawn_disease_scaled(&mut state1, &mut rng1);
 
-        // Spawn with GenomicInterdiction
+        // Spawn with GeneDriveContainment
         let mut state2 = GameState::new_default(42);
         state2.tick = 3000;
-        state2.unlocked_techs.push(BasicTech::GenomicInterdiction);
+        state2.unlocked_techs.push(BasicTech::GeneDriveContainment);
         state2.unlocked_techs.push(BasicTech::DirectedAttenuation);
         let mut rng2 = ChaCha8Rng::seed_from_u64(77);
         let count2 = state2.diseases.len();
@@ -5831,7 +5831,7 @@ mod tests {
             let d1 = &state1.diseases[count1];
             let d2 = &state2.diseases[count2];
             assert!(d2.cross_region_spread > d1.cross_region_spread,
-                "disease with GenomicInterdiction should spread faster: {:.4} vs {:.4}",
+                "disease with GeneDriveContainment should spread faster: {:.4} vs {:.4}",
                 d2.cross_region_spread, d1.cross_region_spread);
         }
     }

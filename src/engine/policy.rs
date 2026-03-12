@@ -1007,7 +1007,7 @@ mod tests {
         state.resources.funding = 10_000.0;
         // Unlock research prerequisites for advanced screening tiers
         state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
-        state.unlocked_techs.push(crate::state::BasicTech::PredictiveSurveillance);
+        state.unlocked_techs.push(crate::state::BasicTech::MetagenomicSurveillance);
         // Unlock all decrees by satisfying every severity threshold:
         // - 3 collapses → unlocks decrees 4,5
         // - 600K infected across 2 regions → unlocks decree 0 (500K+ infected)
