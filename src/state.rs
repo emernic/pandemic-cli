@@ -1156,6 +1156,9 @@ pub struct Corporation {
     /// Current share price. Derived from revenue performance and market sentiment.
     #[serde(default = "default_share_price")]
     pub share_price: f64,
+    /// IPO price at game start. Used for fair value calculation and P/L display.
+    #[serde(default = "default_share_price")]
+    pub ipo_price: f64,
     /// Price history for sparkline display (last 30 data points, sampled daily).
     #[serde(default)]
     pub price_history: Vec<f64>,

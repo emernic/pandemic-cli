@@ -131,8 +131,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
         // P/L for held shares (vs IPO price)
         let pl_str = if held > 0 {
-            let ipo = corp.price_history.first().copied().unwrap_or(corp.share_price);
-            let pl = (corp.share_price - ipo) * held as f64;
+            let pl = (corp.share_price - corp.ipo_price) * held as f64;
             if pl >= 0.0 { format!("+{}", format_number(pl)) } else { format_number(pl) }
         } else {
             "-".to_string()
