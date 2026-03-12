@@ -1035,8 +1035,8 @@ impl CorporationSector {
             Self::Logistics => "Logistics",
             Self::Biotech => "Biotech",
             Self::Mining => "Mining",
-            Self::DataInfra => "Data",
-            Self::Automation => "Auto",
+            Self::DataInfra => "Data/Infra",
+            Self::Automation => "Automation",
         }
     }
 
