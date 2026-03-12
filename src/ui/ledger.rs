@@ -62,8 +62,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let total_shares: u32 = state.portfolio.iter().sum();
 
     lines.push(Line::from(vec![
-        Span::styled("  S.P.L. ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("Shenzhen Private Ledger", hdr),
+        Span::styled("  Shenzhen Private Ledger", hdr),
     ]));
     if total_shares > 0 {
         lines.push(Line::from(vec![
