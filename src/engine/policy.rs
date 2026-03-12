@@ -688,7 +688,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
     use crate::state::{
-        decree_display_name,
+        decree_display_name, DECREE_APPROVAL_COSTS,
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY, TICKS_PER_DAY,
         SACRIFICE_INCOME_BONUS,
     };
@@ -710,7 +710,9 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
         )), false);
     }
 
-    match decree_idx {
+    let approval_cost = DECREE_APPROVAL_COSTS[decree_idx];
+
+    let (msg, success) = match decree_idx {
         0 => {
             // Conscript Researchers: +personnel, permanent income penalty
             state.enacted_decrees.conscript_researchers = true;
@@ -872,7 +874,14 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
             )), true)
         }
         _ => (None, false),
+    };
+
+    // Deduct board approval cost only on successful enactment
+    if success {
+        state.resources.board_approval = (state.resources.board_approval - approval_cost).max(0.0);
     }
+
+    (msg, success)
 }
 
 /// Execute standing orders for policy automation. Fires each tick.

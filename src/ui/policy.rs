@@ -25,6 +25,7 @@ use crate::state::{
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
+    DECREE_APPROVAL_COSTS,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
     BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
@@ -538,6 +539,8 @@ pub(crate) fn decree_description(decree_idx: usize) -> String {
 pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let name = decree_display_name(decree_idx);
     let desc = decree_description(decree_idx);
+    let cost_pct = (DECREE_APPROVAL_COSTS[decree_idx] * 100.0) as u32;
+    let new_approval = (state.resources.board_approval - DECREE_APPROVAL_COSTS[decree_idx]).max(0.0);
 
     let mut lines: Vec<Line> = Vec::new();
 
@@ -555,6 +558,19 @@ pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (St
         format!("  {}", desc),
         Style::default().fg(Color::DarkGray),
     )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(
+            format!("  Approval cost: -{}%", cost_pct),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("  (current: {:.0}% → {:.0}%)",
+                state.resources.board_approval * 100.0,
+                new_approval * 100.0),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Confirm", "Cancel"));
 
