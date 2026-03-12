@@ -332,9 +332,8 @@ pub(super) fn emergency_sample_delivery(
         return (false, Some(format!("No doses remaining for {}.", med.name)));
     }
 
-    // Cost: 50 doses or 10% of max, whichever is smaller. Plus half a normal deploy cost.
-    let dose_cost = (med.max_doses * 0.10).min(50.0).min(med.doses);
-    let funding_cost = state.medicine_deploy_cost(medicine_idx, region_idx) * 0.5;
+    let dose_cost = state.emergency_delivery_dose_cost(medicine_idx);
+    let funding_cost = state.emergency_delivery_funding_cost(medicine_idx, region_idx);
 
     if state.resources.funding < funding_cost {
         return (false, Some(insufficient_funds_message(funding_cost, state.resources.funding)));

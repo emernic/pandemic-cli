@@ -312,8 +312,8 @@ fn render_select_medicine(f: &mut Frame, area: Rect, state: &GameState) {
         let marker = if is_selected { "▶ " } else { "  " };
         let name_color = if is_selected { Color::Yellow } else { Color::White };
 
-        let dose_cost = (med.max_doses * 0.10).min(50.0).min(med.doses);
-        let funding_cost = state.medicine_deploy_cost(med_idx, state.ui.map_selection) * 0.5;
+        let dose_cost = state.emergency_delivery_dose_cost(med_idx);
+        let funding_cost = state.emergency_delivery_funding_cost(med_idx, state.ui.map_selection);
 
         // Check if tested against diseases in the target region
         let region_diseases: Vec<usize> = state.regions[state.ui.map_selection].infections.iter()
@@ -372,8 +372,8 @@ fn render_confirm_delivery(f: &mut Frame, area: Rect, state: &GameState, medicin
     let region = &state.regions[region_idx];
     let gov = &region.governor;
 
-    let dose_cost = (med.max_doses * 0.10).min(50.0).min(med.doses);
-    let funding_cost = state.medicine_deploy_cost(medicine_idx, region_idx) * 0.5;
+    let dose_cost = state.emergency_delivery_dose_cost(medicine_idx);
+    let funding_cost = state.emergency_delivery_funding_cost(medicine_idx, region_idx);
 
     let region_diseases: Vec<usize> = region.infections.iter()
         .map(|inf| inf.disease_idx)
