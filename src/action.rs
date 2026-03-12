@@ -38,7 +38,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('p') | KeyCode::Char('P') => Some(Action::OpenPolicy),
         KeyCode::Char('o') | KeyCode::Char('O') => Some(Action::OpenOperations),
         KeyCode::Char('b') | KeyCode::Char('B') => Some(Action::OpenBoard),
-        KeyCode::Char('L') => Some(Action::OpenLedger),
+        KeyCode::Char('l') | KeyCode::Char('L') => Some(Action::OpenLedger),
         KeyCode::Char('?') => Some(Action::OpenHelp),
         KeyCode::Esc => Some(Action::ClosePanel),
         KeyCode::Down => Some(Action::SelectNext),
@@ -59,10 +59,6 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
 /// Map a string key name (from --key flag) to an Action.
 /// Case-insensitive for named keys (space, esc, enter, etc.).
 pub fn string_to_action(s: &str) -> Option<Action> {
-    // Check case-sensitive keys before lowercasing.
-    if s == "L" {
-        return Some(Action::OpenLedger);
-    }
     let lower = s.to_lowercase();
     match lower.as_str() {
         " " | "space" => Some(Action::TogglePause),
@@ -72,7 +68,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "p" => Some(Action::OpenPolicy),
         "o" => Some(Action::OpenOperations),
         "b" => Some(Action::OpenBoard),
-        "ledger" => Some(Action::OpenLedger),
+        "l" | "ledger" => Some(Action::OpenLedger),
         "?" => Some(Action::OpenHelp),
         "esc" => Some(Action::ClosePanel),
         "down" => Some(Action::SelectNext),
@@ -121,6 +117,10 @@ mod tests {
         assert_eq!(string_to_action("T"), Some(Action::OpenThreats));
         assert_eq!(string_to_action("M"), Some(Action::OpenMedicines));
         assert_eq!(string_to_action("Q"), Some(Action::Quit));
+
+        assert_eq!(string_to_action("l"), Some(Action::OpenLedger));
+        assert_eq!(string_to_action("L"), Some(Action::OpenLedger));
+        assert_eq!(string_to_action("ledger"), Some(Action::OpenLedger));
 
         assert_eq!(string_to_action("home"), Some(Action::GoHome));
         assert_eq!(string_to_action("Home"), Some(Action::GoHome));
