@@ -3801,6 +3801,12 @@ pub enum CrisisKind {
     /// Mobster governor escalates demands.
     GovernorMobster { region_idx: usize },
 
+    // --- Detection alert types ---
+
+    /// New unknown pathogen detected. Interrupts with alert offering immediate identification.
+    /// Bypasses normal crisis cooldown — fires immediately on detection.
+    NewPathogenDetected { disease_idx: usize },
+
     // --- Endgame crisis types ---
 
     /// Emergency consolidation: pull all resources into one surviving region.
@@ -3911,6 +3917,7 @@ impl CrisisKind {
             CrisisKind::GovernorOperative { .. } => "gov_operative",
             CrisisKind::GovernorBuffoon { .. } => "gov_buffoon",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
+            CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
             CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",

@@ -253,6 +253,15 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                     / crate::state::TICKS_PER_DAY;
                 new.diseases[disease_idx].detected = true;
                 new.events.push(GameEvent::DiseaseDetected { disease_idx, silent_days });
+                // Schedule pathogen detection alert crisis. Fires immediately if no
+                // other crisis is active; otherwise queues as pending.
+                let kind = CrisisKind::NewPathogenDetected { disease_idx };
+                if new.active_crisis.is_none() {
+                    let alert = crisis::build_crisis_event(&new, kind);
+                    crisis::activate_crisis(&mut new, alert);
+                } else {
+                    new.pending_crises.push((new.tick, kind));
+                }
             }
         }
     }
@@ -333,6 +342,18 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // Gap check is skipped if no crisis has ever been resolved (tick 0 = no prior crisis).
     let crisis_gap_ok = new.last_crisis_resolved_tick == 0
         || new.tick.saturating_sub(new.last_crisis_resolved_tick) >= CRISIS_MIN_GAP;
+
+    // Fire pending pathogen detection alerts immediately — these bypass the normal
+    // crisis gap because the player needs to know about new threats ASAP.
+    if new.active_crisis.is_none() {
+        if let Some(idx) = new.pending_crises.iter().position(|(tick, kind)|
+            *tick <= new.tick && matches!(kind, CrisisKind::NewPathogenDetected { .. }))
+        {
+            let (_, kind) = new.pending_crises.remove(idx);
+            let crisis = crisis::build_crisis_event(&new, kind);
+            crisis::activate_crisis(&mut new, crisis);
+        }
+    }
 
     // Fire scheduled follow-up crises (from previous crisis choices).
     // These take priority over random crisis generation.
