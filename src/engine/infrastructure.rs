@@ -32,12 +32,12 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         let pop = state.regions[i].population as f64;
         let death_frac = if pop > 0.0 { state.regions[i].dead / pop } else { 0.0 };
 
-        // Energy sector bonus: infrastructure drains up to 15% slower
+        // Energy sector bonus: infrastructure drains slower
         let energy_bonus = state.sector_bonus(i, CorporationSector::Energy);
-        let energy_drain_mult = 1.0 - 0.15 * energy_bonus;
-        // Mining sector bonus: natural recovery rates up to 50% faster
+        let energy_drain_mult = 1.0 - CorporationSector::Energy.max_bonus_pct() / 100.0 * energy_bonus;
+        // Mining sector bonus: natural recovery rates faster
         let mining_bonus = state.sector_bonus(i, CorporationSector::Mining);
-        let mining_recovery_mult = 1.0 + 0.50 * mining_bonus;
+        let mining_recovery_mult = 1.0 + CorporationSector::Mining.max_bonus_pct() / 100.0 * mining_bonus;
 
         // --- Healthcare Capacity ---
         // Degrades from infection load (absolute thresholds matching severity levels)

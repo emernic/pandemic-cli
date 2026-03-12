@@ -104,9 +104,9 @@ pub(super) fn deploy_medicine(
     } else {
         1.0
     };
-    // Logistics sector bonus: delivery up to 25% faster
+    // Logistics sector bonus: delivery faster
     let logistics_bonus = state.sector_bonus(region_idx, crate::state::CorporationSector::Logistics);
-    let logistics_mult = 1.0 - 0.25 * logistics_bonus;
+    let logistics_mult = 1.0 - crate::state::CorporationSector::Logistics.max_bonus_pct() / 100.0 * logistics_bonus;
     let arrive_tick = state.tick + (SHIPPING_TICKS as f64 * supply_mult * logistics_mult) as u64;
     state.pending_shipments.push(Shipment {
         medicine_idx,

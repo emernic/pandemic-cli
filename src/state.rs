@@ -1209,16 +1209,42 @@ impl CorporationSector {
         }
     }
 
+    /// Maximum bonus percentage this sector provides at full health.
+    /// Used by both the engine (to apply the bonus) and UI (to display it).
+    pub fn max_bonus_pct(&self) -> f64 {
+        match self {
+            Self::Energy => 15.0,     // Infrastructure drains reduced
+            Self::Logistics => 25.0,  // Medicine delivery faster
+            Self::Biotech => 10.0,    // Research speed increased
+            Self::Mining => 50.0,     // Infrastructure recovery boosted
+            Self::DataInfra => 20.0,  // Screening convergence faster
+            Self::Automation => 10.0, // Policy costs reduced
+        }
+    }
+
+    /// Short label describing what this sector's bonus does.
+    pub fn bonus_label(&self) -> &'static str {
+        match self {
+            Self::Energy => "Infra drain",
+            Self::Logistics => "Delivery",
+            Self::Biotech => "Research",
+            Self::Mining => "Infra recovery",
+            Self::DataInfra => "Screening",
+            Self::Automation => "Policy cost",
+        }
+    }
+
+    /// Sign prefix for the bonus display (- for reductions, + for increases).
+    fn bonus_sign(&self) -> &'static str {
+        match self {
+            Self::Energy | Self::Automation => "-",
+            _ => "+",
+        }
+    }
+
     /// Formatted bonus text showing the effective bonus at the given strength (0.0–1.0).
     pub fn bonus_text(&self, strength: f64) -> String {
-        match self {
-            Self::Energy => format!("Infra drain -{:.0}%", 15.0 * strength),
-            Self::Logistics => format!("Delivery +{:.0}%", 25.0 * strength),
-            Self::Biotech => format!("Research +{:.0}%", 10.0 * strength),
-            Self::Mining => format!("Infra recovery +{:.0}%", 50.0 * strength),
-            Self::DataInfra => format!("Screening +{:.0}%", 20.0 * strength),
-            Self::Automation => format!("Policy cost -{:.0}%", 10.0 * strength),
-        }
+        format!("{} {}{:.0}%", self.bonus_label(), self.bonus_sign(), self.max_bonus_pct() * strength)
     }
 }
 
@@ -5393,9 +5419,9 @@ impl GameState {
                         1.0
                     }
                 }).unwrap_or(1.0);
-                // Automation sector bonus: policy costs up to 10% lower
+                // Automation sector bonus: policy costs lower
                 let auto_bonus = self.sector_bonus(i, CorporationSector::Automation);
-                let auto_mult = 1.0 - 0.10 * auto_bonus;
+                let auto_mult = 1.0 - CorporationSector::Automation.max_bonus_pct() / 100.0 * auto_bonus;
                 p.funding_cost(traits) * gov_mult * supply_mult * spec_mult * auto_mult
             })
             .sum()
