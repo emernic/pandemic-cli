@@ -308,12 +308,6 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     let mut selected_line: Option<usize> = None;
     let med = &state.medicines[medicine_idx];
 
-    lines.push(Line::from(Span::styled(
-        format!("  Deploy: {}", med.name),
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
-
     let order = grid_reading_order(state.regions.len());
     for (display_pos, &region_idx) in order.iter().enumerate() {
         let region = &state.regions[region_idx];
@@ -391,12 +385,6 @@ fn render_select_disease(
     let mut lines: Vec<Line> = Vec::new();
     let med = &state.medicines[medicine_idx];
     let region = &state.regions[region_idx];
-
-    lines.push(Line::from(Span::styled(
-        format!("  {} → {}", med.name, region.name),
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
 
     let deployable = med.deployable_diseases(&state.diseases);
     for (i, &disease_idx) in deployable.iter().enumerate() {
@@ -481,12 +469,6 @@ fn render_select_target(
     let disease_name = state.diseases.get(disease_idx)
         .map(|d| d.display_name(disease_idx))
         .unwrap_or_else(|| "Unknown".to_string());
-
-    lines.push(Line::from(Span::styled(
-        format!("  {} → {} → {}", med.name, region.name, disease_name),
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
 
     let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
 

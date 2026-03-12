@@ -41,7 +41,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let board_sat = state.board_satisfaction();
         let (overall_word, overall_color) = satisfaction_display(board_sat);
         lines.push(Line::from(vec![
-            Span::styled("  Board mood: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Mood: ", Style::default().fg(Color::DarkGray)),
             Span::styled(overall_word, Style::default().fg(overall_color).add_modifier(Modifier::BOLD)),
             Span::styled(
                 format!("  ({} members)", state.board_members.len()),
