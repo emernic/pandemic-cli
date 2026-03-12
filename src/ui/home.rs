@@ -188,12 +188,13 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     let bar_width = (area.width as usize).saturating_sub(6).min(40);
 
     // Collapse proximity: fraction of the way to collapse for the worst-off region
-    let max_proximity = state.regions.iter()
-        .filter(|r| !r.collapsed)
-        .map(|r| {
+    let max_proximity = state.regions.iter().enumerate()
+        .filter(|(_, r)| !r.collapsed)
+        .map(|(i, r)| {
             let pop = r.population as f64;
             let death_frac = if pop > 0.0 { (r.total_dead() / pop).min(1.0) } else { 0.0 };
-            let collapse_death_frac = 1.0 - r.collapse_threshold;
+            let martial_law = state.policies.get(i).is_some_and(|p| p.martial_law);
+            let collapse_death_frac = 1.0 - r.effective_collapse_threshold(martial_law);
             if collapse_death_frac > 0.0 { (death_frac / collapse_death_frac).min(1.0) } else { 1.0 }
         })
         .fold(0.0_f64, f64::max);
@@ -228,18 +229,19 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     let detail = if collapsed_count > 0 {
         format!("  Regions fallen: {} / {}", collapsed_count, total_regions)
     } else {
-        let worst_region = state.regions.iter()
-            .filter(|r| !r.collapsed)
-            .max_by(|a, b| {
-                let proximity = |r: &crate::state::Region| {
+        let worst_region = state.regions.iter().enumerate()
+            .filter(|(_, r)| !r.collapsed)
+            .max_by(|(ai, a), (bi, b)| {
+                let proximity = |i: usize, r: &crate::state::Region| {
                     let pop = r.population as f64;
                     let death_frac = if pop > 0.0 { (r.total_dead() / pop).min(1.0) } else { 0.0 };
-                    let collapse_death_frac = 1.0 - r.collapse_threshold;
+                    let martial_law = state.policies.get(i).is_some_and(|p| p.martial_law);
+                    let collapse_death_frac = 1.0 - r.effective_collapse_threshold(martial_law);
                     if collapse_death_frac > 0.0 { death_frac / collapse_death_frac } else { 1.0 }
                 };
-                proximity(a).partial_cmp(&proximity(b)).unwrap_or(std::cmp::Ordering::Equal)
+                proximity(*ai, a).partial_cmp(&proximity(*bi, b)).unwrap_or(std::cmp::Ordering::Equal)
             })
-            .map(|r| r.name.as_str())
+            .map(|(_, r)| r.name.as_str())
             .unwrap_or("Unknown");
         format!("  Most at risk: {}", worst_region)
     };
