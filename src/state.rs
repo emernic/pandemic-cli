@@ -343,7 +343,7 @@ pub const LAB_LEVEL_1_COST: f64 = 150.0;
 pub const LAB_LEVEL_2_COST: f64 = 300.0;
 
 /// Disease surveillance intensity. Each tier reveals different information
-/// and only Mass Rapid screening actively reduces disease spread.
+/// and reduces disease spread (higher tiers = greater reduction).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 pub enum ScreeningLevel {
     #[default]
@@ -484,11 +484,13 @@ impl ScreeningLevel {
     }
 
     /// Spread reduction factor (1.0 = no reduction, lower = less spread).
-    /// Only Mass Rapid screening actively reduces disease transmission.
+    /// Any level of screening identifies and isolates cases, reducing transmission.
     pub fn spread_factor(&self) -> f64 {
         match self {
-            ScreeningLevel::MassRapid => 0.75, // 25% spread reduction
-            _ => 1.0,
+            ScreeningLevel::None => 1.0,
+            ScreeningLevel::Basic => 0.90,      // 10% spread reduction
+            ScreeningLevel::Antigen => 0.80,    // 20% spread reduction
+            ScreeningLevel::MassRapid => 0.70,  // 30% spread reduction
         }
     }
 }

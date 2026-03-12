@@ -87,7 +87,7 @@ pub(super) fn tick_spread_within(
                     let f = disease.transmission.water_sanitation_factor();
                     infectivity *= scale_policy_factor(f, gov_eff);
                 }
-                // Mass Rapid screening identifies and isolates cases, reducing spread
+                // Screening identifies and isolates cases, reducing spread
                 let screening_factor = policy
                     .map(|p| scale_policy_factor(p.screening.spread_factor(), gov_eff))
                     .unwrap_or(1.0);
