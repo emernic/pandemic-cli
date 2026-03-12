@@ -4178,6 +4178,8 @@ pub enum ResearchUiState {
     BrowseAll,
     /// Confirming a project before starting it.
     ConfirmProject { track: ResearchTrack, project_idx: usize, double_personnel: bool },
+    /// Confirming a lab upgrade before purchasing.
+    ConfirmLabUpgrade,
 }
 
 /// A selectable item in the flat research panel list.
@@ -4434,7 +4436,8 @@ impl UiState {
             }
             Panel::Research => {
                 match &self.research_ui {
-                    Some(ResearchUiState::ConfirmProject { .. }) => {
+                    Some(ResearchUiState::ConfirmProject { .. })
+                    | Some(ResearchUiState::ConfirmLabUpgrade) => {
                         self.research_ui = Some(ResearchUiState::BrowseAll);
                         self.panel_selection = 0;
                     }

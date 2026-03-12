@@ -15,7 +15,7 @@ pub fn selection_max(ui_state: &ResearchUiState, state: &GameState) -> usize {
         ResearchUiState::BrowseAll => {
             state.research_flat_items().len().saturating_sub(1)
         }
-        ResearchUiState::ConfirmProject { .. } => 0,
+        ResearchUiState::ConfirmProject { .. } | ResearchUiState::ConfirmLabUpgrade => 0,
     }
 }
 
@@ -24,6 +24,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Some(ResearchUiState::BrowseAll) => render_flat(state),
         Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
             let (t, l) = render_confirm(state, *track, *project_idx, *double_personnel);
+            (t, l, None)
+        }
+        Some(ResearchUiState::ConfirmLabUpgrade) => {
+            let (t, l) = render_confirm_lab_upgrade(state);
             (t, l, None)
         }
         None => (" Research ".to_string(), vec![], None),
@@ -225,14 +229,14 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
         let selected = state.ui.panel_selection == item_idx;
         if selected { selected_line = Some(lines.len()); }
         let marker = if selected { "▶ " } else { "  " };
-        let style = if selected {
+        let upgrade_style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::White)
+            Style::default().fg(Color::Magenta)
         };
         lines.push(Line::from(Span::styled(
-            format!("{}Upgrade Research Lab", marker),
-            style,
+            format!("{}[PURCHASE] Upgrade Research Lab", marker),
+            upgrade_style,
         )));
         let (cost, next_name, pct) = if state.lab_level == 0 {
             (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
@@ -419,6 +423,56 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
     }
 
     (" Confirm Research ".to_string(), lines)
+}
+
+fn render_confirm_lab_upgrade(state: &GameState) -> (String, Vec<Line<'static>>) {
+    let mut lines: Vec<Line> = Vec::new();
+    let (cost, next_name, pct) = if state.lab_level == 0 {
+        (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
+    } else {
+        (LAB_LEVEL_2_COST, "Advanced Genomics Center", 60)
+    };
+    let can_afford = state.resources.funding >= cost;
+
+    lines.push(Line::from(Span::styled(
+        "  Research > Lab Upgrade > Confirm",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("  Upgrade: {} → {}", state.lab_level_name(), next_name),
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(Span::styled(
+        format!("  All research runs {}% faster", pct),
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::raw("  Cost: "),
+        Span::styled(format!("¥{:.0}", cost), Style::default().fg(
+            if can_afford { Color::Green } else { Color::Red }
+        )),
+        Span::styled(
+            format!("  (have ¥{:.0})", state.resources.funding),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+    lines.push(Line::from(""));
+    if can_afford {
+        lines.push(hint_line(state, "Confirm", "Back"));
+    } else {
+        lines.push(Line::from(Span::styled(
+            "  Insufficient funding!",
+            Style::default().fg(Color::Red),
+        )));
+        lines.push(Line::from(Span::styled(
+            "  [Esc] Back",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    (" Confirm Lab Upgrade ".to_string(), lines)
 }
 
 /// Label showing the manufacturing corporation for a medicine.
