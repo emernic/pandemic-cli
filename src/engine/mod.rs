@@ -2527,7 +2527,6 @@ mod tests {
             detected: true,
             spawned_at_tick: 0,
             mechanism_resistance: vec![],
-            mutation_mode: crate::state::MutationMode::Normal,
             sequence_group: None,
             incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
         }];
@@ -2560,85 +2559,6 @@ mod tests {
         };
         let eff2 = med_current.strain_efficacy(0, &diseases);
         assert!((eff2 - 1.0).abs() < 0.001, "expected 1.0, got {eff2}");
-    }
-
-    #[test]
-    fn locked_diseases_never_mutate() {
-        use crate::state::{Disease, MutationMode, PathogenType};
-        let disease = Disease {
-            name: "Test".into(),
-            pathogen_type: PathogenType::RnaVirus,
-            transmission: crate::state::TransmissionVector::Airborne,
-            infectivity: 0.05,
-            lethality: 0.01,
-            cross_region_spread: 0.01,
-            recovery_rate: 0.03,
-            knowledge: 1.0,
-            strain_generation: 0,
-            sequencing_count: 0,
-            detected: true,
-            spawned_at_tick: 0,
-            mechanism_resistance: vec![],
-            mutation_mode: MutationMode::Locked,
-            sequence_group: None,
-            incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
-        };
-        assert_eq!(disease.effective_mutation_rate(), 0.0,
-            "Locked diseases must have zero mutation rate regardless of pathogen type");
-        assert_eq!(disease.effective_mutation_rate(), 0.0,
-            "Locked diseases must have zero mutation rate regardless of sequencing count");
-    }
-
-    #[test]
-    fn directed_lethality_mode_only_increases_lethality() {
-        use rand::SeedableRng;
-        use rand_chacha::ChaCha8Rng;
-        use crate::state::{Disease, MutationMode, PathogenType};
-        use crate::engine::spread::tick_mutation;
-
-        let initial_infectivity = 0.05_f64;
-        let initial_lethality = 0.01_f64;
-
-        // Create a state with one DirectedLethality disease that has a very high mutation rate
-        // We use a pathogen type with a guaranteed mutation by giving it rate 1.0 (not possible
-        // via mutation rate, so instead run many ticks and check the pattern)
-        // Just run the tick directly with a known disease state
-        let mut state = GameState::new_default(1);
-        state.diseases.clear();
-        state.diseases.push(Disease {
-            name: "TestDirected".into(),
-            pathogen_type: PathogenType::RnaVirus,
-            transmission: crate::state::TransmissionVector::Airborne,
-            infectivity: initial_infectivity,
-            lethality: initial_lethality,
-            cross_region_spread: 0.01,
-            recovery_rate: 0.03,
-            knowledge: 1.0,
-            strain_generation: 0,
-            sequencing_count: 0,
-            detected: true,
-            spawned_at_tick: 0,
-            mechanism_resistance: vec![],
-            mutation_mode: MutationMode::DirectedLethality,
-            sequence_group: None,
-            incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
-        });
-
-        // Run many mutation ticks so some mutations are guaranteed to occur
-        let mut rng = ChaCha8Rng::seed_from_u64(42);
-        for _ in 0..1000 {
-            tick_mutation(&mut state, &mut rng);
-        }
-
-        let d = &state.diseases[0];
-        // With 1000 ticks and RNA virus mutation rate, mutations must have occurred
-        assert!(d.strain_generation > 0, "Expected mutations to occur after 1000 ticks, got none");
-        // Infectivity must be unchanged (1.0 factors applied)
-        assert!((d.infectivity - initial_infectivity).abs() < 0.001,
-            "DirectedLethality must not change infectivity: expected {initial_infectivity}, got {}", d.infectivity);
-        // Lethality must have increased (only positive factors)
-        assert!(d.lethality > initial_lethality,
-            "DirectedLethality lethality must increase: started {initial_lethality}, got {}", d.lethality);
     }
 
     #[test]
