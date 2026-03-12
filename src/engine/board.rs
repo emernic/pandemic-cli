@@ -25,6 +25,7 @@ pub fn generate_board_members(state: &mut GameState) {
             corp_idx: Some(corp_idx),
             region_idx: Some(corp.region_idx),
             satisfaction: 1.0,
+            satisfaction_modifier: 0.0,
         });
     }
 
@@ -51,6 +52,7 @@ pub fn generate_board_members(state: &mut GameState) {
             corp_idx: None,
             region_idx: Some(region_idx),
             satisfaction: 1.0,
+            satisfaction_modifier: 0.0,
         });
         governor_count += 1;
     }
@@ -72,12 +74,25 @@ fn corp_short_surname(corp_name: &str) -> &str {
     corp_name.split_whitespace().next().unwrap_or(corp_name)
 }
 
-/// Update each board member's satisfaction based on their connected entities.
+/// Decay rate for satisfaction modifier: ~0.02/day = modifier halves in ~35 days.
+const MODIFIER_DECAY_RATE: f64 = 0.02 / crate::state::TICKS_PER_DAY;
+
+/// Update each board member's satisfaction based on their connected entities
+/// plus any relationship modifier from contract decisions.
 /// Called once per tick from the main tick loop.
 pub(super) fn update_board_satisfaction(state: &mut GameState) {
     for i in 0..state.board_members.len() {
-        let new_sat = compute_member_satisfaction(&state, i);
-        state.board_members[i].satisfaction = new_sat;
+        let base_sat = compute_member_satisfaction(&state, i);
+        // Decay modifier toward 0
+        let modifier = state.board_members[i].satisfaction_modifier;
+        if modifier.abs() > 0.001 {
+            let decay = modifier.signum() * MODIFIER_DECAY_RATE;
+            state.board_members[i].satisfaction_modifier =
+                if modifier.abs() <= MODIFIER_DECAY_RATE { 0.0 }
+                else { modifier - decay };
+        }
+        state.board_members[i].satisfaction =
+            (base_sat + state.board_members[i].satisfaction_modifier).clamp(0.0, 1.0);
     }
 }
 

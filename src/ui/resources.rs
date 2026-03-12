@@ -188,12 +188,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 if i > 0 {
                     spans.push(Span::styled("  ", Style::default()));
                 }
-                let patron_short = if !contract.patron.is_empty() {
-                    contract.patron.split(',').next().unwrap_or(&contract.patron)
-                        .split_whitespace().last().unwrap_or(&contract.patron)
-                } else {
-                    &contract.name
-                };
+                let member_short = state.board_members.get(contract.board_member_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or(&contract.name);
                 let income_day = contract.income * TICKS_PER_DAY;
                 let sat_color = if contract.satisfaction > 0.7 {
                     Color::Green
@@ -202,7 +199,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 } else {
                     Color::Red
                 };
-                spans.push(Span::styled(patron_short.to_string(), Style::default().fg(sat_color)));
+                spans.push(Span::styled(member_short.to_string(), Style::default().fg(sat_color)));
                 spans.push(Span::styled(
                     format!(" +¥{:.0}", income_day),
                     Style::default().fg(Color::Green),

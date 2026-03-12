@@ -920,32 +920,32 @@ fn default_satisfaction() -> f64 {
     1.0
 }
 
-/// A funding contract: external income with strings attached.
-/// Each contract is backed by a named patron NPC.
+/// A funding contract: income with strings attached, offered by a board member.
+/// Accepting pleases the offering member but angers every other board member.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FundingContract {
     pub name: String,
-    /// Named NPC behind this contract (e.g., "Elena Vasquez, Logistics Magnate").
+    /// Index into `GameState::board_members` identifying who offered this contract.
     #[serde(default)]
-    pub patron: String,
+    pub board_member_idx: usize,
     /// Per-tick income while contract is active.
     pub income: f64,
     pub condition: FundingCondition,
     /// Unique template index (used to avoid duplicate offers).
     pub template_id: u8,
-    /// Patron satisfaction (0.0–1.0). Degrades when condition violated, recovers when met.
+    /// Contract condition satisfaction (0.0–1.0). Degrades when condition violated, recovers when met.
     #[serde(default = "default_satisfaction")]
     pub satisfaction: f64,
     /// Whether the low-satisfaction warning has fired (resets when satisfaction recovers).
     #[serde(default)]
     pub warned: bool,
-    /// Tick when last patron demand crisis was generated (cooldown tracking).
+    /// Tick when last demand crisis was generated (cooldown tracking).
     #[serde(default)]
     pub last_demand_tick: u64,
 }
 
-/// Satisfaction thresholds and rates for the patron system.
-pub const PATRON_SATISFACTION_WARN: f64 = 0.5;
+/// Contract condition satisfaction thresholds and rates.
+pub const CONTRACT_CONDITION_WARN: f64 = 0.5;
 
 // Emergency loan system — governors and corporations offer loans when the player is broke.
 // If unpaid by the due date, the lender takes hostile action.
@@ -991,13 +991,13 @@ pub const LOAN_DUE_DAYS: f64 = 10.0;
 pub const LOAN_MAX_SIMULTANEOUS: usize = 2;
 /// Minimum ticks between loan offer crises.
 pub const LOAN_OFFER_COOLDOWN: u64 = 240; // ~2 days
-pub const PATRON_SATISFACTION_REVOKE: f64 = 0.2;
+pub const CONTRACT_CONDITION_REVOKE: f64 = 0.2;
 /// Per-tick degradation when condition is violated (~0.05/day = 16 days from 1.0 to revocation).
-pub const PATRON_DEGRADE_RATE: f64 = 0.05 / 120.0;
+pub const CONTRACT_DEGRADE_RATE: f64 = 0.05 / 120.0;
 /// Per-tick recovery when condition is met (~0.02/day).
-pub const PATRON_RECOVER_RATE: f64 = 0.02 / 120.0;
-/// Minimum ticks between patron demand crises from the same patron (~5 days).
-pub const PATRON_DEMAND_COOLDOWN: u64 = 600;
+pub const CONTRACT_RECOVER_RATE: f64 = 0.02 / 120.0;
+/// Minimum ticks between contract demand crises from the same contract (~5 days).
+pub const CONTRACT_DEMAND_COOLDOWN: u64 = 600;
 
 // Corporation system — regional economic entities.
 // Each region hosts 3 corporations from different sectors. Their financial health
@@ -1225,8 +1225,8 @@ pub enum BoardRole {
 
 
 /// A named individual on the NWHO board of directors.
-/// Satisfaction is computed from game state each tick based on the member's role
-/// and connections — it is not directly manipulable by the player.
+/// Satisfaction combines entity-driven base satisfaction with a relationship modifier
+/// from contract decisions. The modifier decays toward 0 over time.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BoardMember {
     /// Display name (e.g., "Dir. Torres" or "CEO Helion Power").
@@ -1241,8 +1241,12 @@ pub struct BoardMember {
     /// Region index this member governs (if any). Same as RegionGovernor.region_idx
     /// when role is RegionGovernor, but corp-leaders may be linked to their corp's region.
     pub region_idx: Option<usize>,
-    /// Individual satisfaction (0.0–1.0). Updated each tick from connected entity health.
+    /// Individual satisfaction (0.0–1.0). Computed as base (from entity health) + modifier.
     pub satisfaction: f64,
+    /// Relationship modifier from contract accept/refuse decisions. Can be negative.
+    /// Decays toward 0 at ~0.02/day so contract politics have a lasting but not permanent effect.
+    #[serde(default)]
+    pub satisfaction_modifier: f64,
 }
 
 fn format_large_number(n: f64) -> String {
@@ -1263,7 +1267,7 @@ pub struct Resources {
     pub personnel: u32,
     /// Board Approval (0.0–1.0). The board's collective assessment of your performance.
     /// 0% = furious, 50% = neutral (starting value), 100% = enraptured.
-    /// Drifts toward a board/patron-driven target (~50%/day). Crisis choices modify
+    /// Drifts toward a board/contract-driven target (~50%/day). Crisis choices modify
     /// this directly, so approval hits take real time to recover from.
     #[serde(default)]
     pub board_approval: f64,
@@ -3467,9 +3471,9 @@ pub enum GameEvent {
     /// The actual outcome is on `GameState::outcome`; this just signals the transition.
     /// A new funding contract offer is available.
     ContractOffered { name: String },
-    /// A patron is unhappy — satisfaction dropped to warning level.
-    ContractWarning { patron: String, reason: String },
-    /// A contract was revoked because patron satisfaction bottomed out.
+    /// A board member is unhappy — contract condition satisfaction dropped to warning level.
+    ContractWarning { member_name: String, reason: String },
+    /// A contract was revoked because condition satisfaction bottomed out.
     ContractRevoked { name: String, reason: String },
     /// A corporation went bankrupt (permanent).
     CorporationBankrupt { corp_idx: usize, region_idx: usize },
@@ -3770,13 +3774,13 @@ pub enum CrisisKind {
     /// Congressional hearing about your handling of the crisis.
     CongressionalHearing,
 
-    // --- Patron/contract crises ---
+    // --- Contract crises ---
 
-    /// A funding patron offers a new contract. Interrupts gameplay so the player
+    /// A board member offers a new contract. Interrupts gameplay so the player
     /// must accept or reject the terms. Replaces the old policy-panel-only flow.
     ContractOffer { template_id: u8 },
-    /// Funding patron makes demands when satisfaction drops to warning zone.
-    PatronDemand { template_id: u8 },
+    /// Board member makes demands when contract condition satisfaction drops to warning zone.
+    ContractDemand { template_id: u8 },
 
     // --- Governor defiance crises (fired when loyalty drops below threshold) ---
 
@@ -3900,7 +3904,7 @@ impl CrisisKind {
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
             CrisisKind::ContractOffer { .. } => "contract_offer",
-            CrisisKind::PatronDemand { .. } => "patron_demand",
+            CrisisKind::ContractDemand { .. } => "contract_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
             CrisisKind::GovernorBlowhard { .. } => "gov_blowhard",
             CrisisKind::GovernorRecluse { .. } => "gov_recluse",
@@ -5528,11 +5532,10 @@ impl GameState {
         total / board_corps.len() as f64
     }
 
-    /// Patron confidence: average satisfaction across active funding contracts (0.0–1.0).
-    /// Returns 0.0 when no contracts exist — no patron relationships means no patron
-    /// authority contribution. This is neutral (not negative): new players who haven't
-    /// signed contracts yet simply have no patron influence on approval_target.
-    pub fn patron_confidence(&self) -> f64 {
+    /// Contract confidence: average condition-satisfaction across active contracts (0.0–1.0).
+    /// Returns 0.0 when no contracts exist — no contracts means no contract-based
+    /// authority contribution. This is neutral (not negative).
+    pub fn contract_confidence(&self) -> f64 {
         if self.contracts.is_empty() {
             return 0.0;
         }
@@ -5540,14 +5543,14 @@ impl GameState {
         total / self.contracts.len() as f64
     }
 
-    /// Current approval drift target based on crisis severity, board confidence, and patron relationships.
+    /// Current approval drift target based on crisis severity, board confidence, and contract compliance.
     /// Approval drifts toward this value at ~50%/day. Called by engine::tick().
-    /// Returns (crisis_component, board_component, patron_component) that sum to approval_target().
+    /// Returns (crisis_component, board_component, contract_component) that sum to approval_target().
     /// Used by the dashboard to show a breakdown without duplicating the formula.
     ///
     /// Crisis severity is the primary driver — the board starts skeptical and only grants
     /// authority as infections, deaths, and collapses prove the crisis is real. Board
-    /// satisfaction and patron relationships act as secondary modifiers.
+    /// satisfaction and contract compliance act as secondary modifiers.
     pub fn approval_target_components(&self) -> (f64, f64, f64) {
         let total_infected = self.total_infected();
         let total_dead = self.total_dead_detected();
@@ -5567,16 +5570,16 @@ impl GameState {
         // Board satisfaction: happy board members are more generous (0.0–0.20)
         let board_component = self.board_satisfaction() * 0.20;
 
-        // Patron confidence: patron relationships amplify authority (0.0–0.20).
-        // patron_confidence() returns 0.0 when no contracts exist.
-        let patron_component = self.patron_confidence() * 0.20;
+        // Contract confidence: contract condition compliance amplifies authority (0.0–0.20).
+        // contract_confidence() returns 0.0 when no contracts exist.
+        let contract_component = self.contract_confidence() * 0.20;
 
-        (crisis_component, board_component, patron_component)
+        (crisis_component, board_component, contract_component)
     }
 
     pub fn approval_target(&self) -> f64 {
-        let (crisis_component, board_component, patron_component) = self.approval_target_components();
-        (crisis_component + board_component + patron_component).clamp(0.0, 0.90)
+        let (crisis_component, board_component, contract_component) = self.approval_target_components();
+        (crisis_component + board_component + contract_component).clamp(0.0, 0.90)
     }
 
     /// The next policy that would unlock with more approval. Returns (name, threshold)
@@ -6585,7 +6588,7 @@ mod tests {
         let contract_income_per_tick = 10.0;
         state.contracts.push(FundingContract {
             name: "Test Contract".to_string(),
-            patron: "Test Patron".to_string(),
+            board_member_idx: 0,
             income: contract_income_per_tick,
             condition: FundingCondition::NoCollapse,
             template_id: 99,

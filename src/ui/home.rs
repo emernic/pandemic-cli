@@ -404,7 +404,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let drift_per_day = (target - approval) * 0.50;
 
         // Decompose target into its constituent parts (single source of truth in state.rs)
-        let (crisis_component, board_component, patron_component) = state.approval_target_components();
+        let (crisis_component, board_component, contract_component) = state.approval_target_components();
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── BOARD APPROVAL ──", cyan)));
@@ -441,11 +441,11 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             Span::styled(format!("+{:.1}%", board_component * 100.0), Style::default().fg(Color::Cyan)),
             Span::styled("  (corporate health)", dim),
         ]));
-        if patron_component >= 0.005 {
+        if contract_component >= 0.005 {
             lines.push(Line::from(vec![
-                Span::styled("  Patrons:  ", dim),
-                Span::styled(format!("+{:.1}%", patron_component * 100.0), Style::default().fg(Color::Green)),
-                Span::styled("  (patron satisfaction)", dim),
+                Span::styled("  Contracts:", dim),
+                Span::styled(format!("+{:.1}%", contract_component * 100.0), Style::default().fg(Color::Green)),
+                Span::styled("  (contract compliance)", dim),
             ]));
         }
 

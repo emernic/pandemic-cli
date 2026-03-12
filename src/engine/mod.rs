@@ -122,7 +122,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         new.resources.attrition_accum = 0.0;
     }
 
-    // Authority: drifts toward a board/patron-driven target.
+    // Authority: drifts toward a board/contract-driven target.
     // Target = f(board_satisfaction, patron_confidence, severity). See GameState::approval_target().
     // AUTH moves toward target at ~50%/day, so crisis hits take 2-3 days to recover.
     {
@@ -3411,7 +3411,7 @@ mod tests {
     }
 
     #[test]
-    fn patron_demand_placate_boosts_satisfaction() {
+    fn contract_demand_placate_boosts_satisfaction() {
         use crate::state::{
             CrisisCost, CrisisEvent, CrisisKind, CrisisOption, FundingCondition,
             FundingContract, SimState,
@@ -3422,7 +3422,7 @@ mod tests {
         // Add a contract with low satisfaction
         state.contracts.push(FundingContract {
             name: "Media Transparency Pledge".to_string(),
-            patron: "Sarah Kowalski, World Press Group".to_string(),
+            board_member_idx: 0,
             income: 1.8,
             condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
             template_id: 4,
@@ -3433,7 +3433,7 @@ mod tests {
 
         // Set up the patron demand crisis as active
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PatronDemand { template_id: 4 },
+            kind: CrisisKind::ContractDemand { template_id: 4 },
             title: "Kowalski: Demands".into(),
             description: "Test".into(),
             options: vec![
@@ -3464,14 +3464,14 @@ mod tests {
     }
 
     #[test]
-    fn patron_demand_refuse_drops_satisfaction() {
+    fn contract_demand_refuse_drops_satisfaction() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, FundingCondition, FundingContract, SimState};
 
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.contracts.push(FundingContract {
             name: "Media Transparency Pledge".to_string(),
-            patron: "Sarah Kowalski, World Press Group".to_string(),
+            board_member_idx: 0,
             income: 1.8,
             condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
             template_id: 4,
@@ -3481,7 +3481,7 @@ mod tests {
         });
 
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PatronDemand { template_id: 4 },
+            kind: CrisisKind::ContractDemand { template_id: 4 },
             title: "Kowalski: Demands".into(),
             description: "Test".into(),
             options: vec![

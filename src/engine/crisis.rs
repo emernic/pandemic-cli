@@ -1449,27 +1449,33 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::ContractOffer { .. } => {
             let offer = state.contract_offer.as_ref();
-            let patron_name = offer.map(|c| c.patron.as_str()).unwrap_or("Unknown Patron");
-            let short_name = patron_name.split(',').next().unwrap_or(patron_name);
+            let member_idx = offer.map(|c| c.board_member_idx).unwrap_or(0);
+            let member_name = state.board_members.get(member_idx)
+                .map(|m| m.name.as_str()).unwrap_or("Board member");
             let income_day = offer.map(|c| c.income * TICKS_PER_DAY).unwrap_or(0.0);
             let condition_desc = offer.map(|c| c.condition.description()).unwrap_or_default();
             let contract_name = offer.map(|c| c.name.as_str()).unwrap_or("Contract");
+            let other_count = state.board_members.len().saturating_sub(1);
 
             CrisisEvent {
-                title: format!("{}: Terms", short_name),
+                title: format!("{}: Contract Offer", member_name),
                 description: format!(
-                    "{} has authorized {}.\nCondition: {}.\nIncome: +¥{:.0}/day.",
-                    patron_name, contract_name, condition_desc, income_day,
+                    "{} is offering a {}.\nCondition: {}.\nIncome: +¥{:.0}/day.\n\
+                     Accepting will anger the other {} board members.",
+                    member_name, contract_name, condition_desc, income_day, other_count,
                 ),
                 options: vec![
                     CrisisOption {
                         label: format!("Accept (+¥{:.0}/day)", income_day),
-                        description: format!("Sign the {}. Income starts immediately.", contract_name),
+                        description: format!(
+                            "Sign the {}. {} is pleased, but the rest of the board resents it.",
+                            contract_name, member_name,
+                        ),
                         cost: None,
                     },
                     CrisisOption {
                         label: "Decline".into(),
-                        description: format!("Turn down {}. No penalty.", short_name),
+                        description: format!("{} will not be happy.", member_name),
                         cost: None,
                     },
                 ],
@@ -1477,111 +1483,34 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::PatronDemand { template_id } => {
+        CrisisKind::ContractDemand { template_id } => {
             let contract = state.contracts.iter()
                 .find(|c| c.template_id == *template_id);
-            let patron_name = contract.map(|c| c.patron.as_str()).unwrap_or("Unknown Patron");
-            let short_name = patron_name.split(',').next().unwrap_or(patron_name);
+            let member_idx = contract.map(|c| c.board_member_idx).unwrap_or(0);
+            let member_name = state.board_members.get(member_idx)
+                .map(|m| m.name.as_str()).unwrap_or("Board member");
+            let condition_desc = contract.map(|c| c.condition.description())
+                .unwrap_or_default();
             let placate_cost = scaled_cost(state, 0.15, 100.0, 600.0);
 
-            let (description, placate_desc) = match template_id {
-                // Liang Wei — Shipping Lane Guarantee (forbid travel ban)
-                0 => (
-                    format!(
-                        "{} says three of his container ships are sitting idle. \
-                         He wants travel restrictions lifted or he pulls funding.",
-                        short_name,
-                    ),
-                    "Pay his port fees and rerouting costs. Buys time.".to_string(),
-                ),
-                // Viktor Saldanha — Saldanha Hospitality Fund (forbid quarantine)
-                1 => (
-                    format!(
-                        "{} is on the phone. His lawyers are drafting a withdrawal \
-                         over the quarantine measures.",
-                        short_name,
-                    ),
-                    "Cover his property insurance premiums. Buys time.".to_string(),
-                ),
-                // Ines Caron — Helion Research Partnership (forbid conscript researchers)
-                2 => (
-                    format!(
-                        "{} has seen the conscription order. Helion's board is calling it a compliance breach.",
-                        short_name,
-                    ),
-                    "Issue a statement distancing N.W.H.O. from the policy. Buys time.".to_string(),
-                ),
-                // Marcus Holt — Holt Stability Fund (no collapse)
-                3 => (
-                    format!(
-                        "{} is watching the markets. His fund lost 8% this week \
-                         and he wants assurances.",
-                        short_name,
-                    ),
-                    "Provide his analysts with regional stability projections. Buys time.".to_string(),
-                ),
-                // David Okafor — Pinnacle Confidence Fund (max threat 3)
-                4 => (
-                    format!(
-                        "{} says bookings are down 60%. The threat level needs to \
-                         come down or he walks.",
-                        short_name,
-                    ),
-                    "Buy ad space through his media channels. Buys time.".to_string(),
-                ),
-                // Riko Tanaka — Pacific Mutual Actuarial Pact (max deaths)
-                5 => (
-                    format!(
-                        "{} says the actuarial tables are breaking. Pacific Mutual \
-                         cannot sustain this payout rate.",
-                        short_name,
-                    ),
-                    "Co-sign a reinsurance arrangement. Buys time.".to_string(),
-                ),
-                // Margaret Aldridge — Aldridge Equipment Lease (forbid discourage hospitalization)
-                6 => (
-                    format!(
-                        "{} says you're shutting down her customers. \
-                         Hospitals need equipment. Don't discourage hospitalization.",
-                        short_name,
-                    ),
-                    "Place a partial equipment order from her inventory. Buys time.".to_string(),
-                ),
-                // Col. Raymond Cross — Aegis Border Contract (require border controls)
-                7 => (
-                    format!(
-                        "{} wants border controls enforced. His personnel are \
-                         deployed and billing.",
-                        short_name,
-                    ),
-                    "Pay his standby deployment fees. Buys time.".to_string(),
-                ),
-                // Dr. Ingrid Caldwell — Caldwell Protocols Grant (forbid authorize human trials)
-                8 => (
-                    format!(
-                        "{} has seen the authorization order. She is calling this a breach of the grant terms.",
-                        short_name,
-                    ),
-                    "Provide written assurance that trials will return to full protocol. Buys time.".to_string(),
-                ),
-                _ => (
-                    format!("{} is unhappy with your performance.", short_name),
-                    "Make concessions.".to_string(),
-                ),
-            };
+            let description = format!(
+                "{} says the contract terms are being violated: {}. \
+                 Continued noncompliance will lead to withdrawal.",
+                member_name, condition_desc,
+            );
 
             CrisisEvent {
-                title: format!("{}: Demands", short_name),
+                title: format!("{}: Demands", member_name),
                 description,
                 options: vec![
                     CrisisOption {
                         label: format!("Placate (¥{:.0})", placate_cost),
-                        description: placate_desc,
+                        description: "Pay to buy time. Contract satisfaction recovers.".to_string(),
                         cost: Some(CrisisCost { funding: placate_cost, personnel: 0, ..Default::default() }),
                     },
                     CrisisOption {
                         label: "Refuse".into(),
-                        description: format!("{} moves closer to pulling out.", short_name),
+                        description: format!("{} moves closer to pulling out.", member_name),
                         cost: None,
                     },
                 ],
@@ -2924,32 +2853,40 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             msg.unwrap_or_else(|| "Contract offer declined.".into())
         }
 
-        // --- Patron demand resolutions ---
+        // --- Contract demand resolutions ---
 
-        (CrisisKind::PatronDemand { template_id }, 0) => {
-            // Placate — boost satisfaction back toward safe zone (cost already deducted)
-            let short_name = if let Some(c) = state.contracts.iter_mut()
+        (CrisisKind::ContractDemand { template_id }, 0) => {
+            // Placate: boost contract condition satisfaction (cost already deducted)
+            let member_idx = state.contracts.iter()
+                .find(|c| c.template_id == *template_id)
+                .map(|c| c.board_member_idx);
+            let member_name = member_idx
+                .and_then(|idx| state.board_members.get(idx))
+                .map(|m| m.name.clone())
+                .unwrap_or_else(|| "Board member".to_string());
+            if let Some(c) = state.contracts.iter_mut()
                 .find(|c| c.template_id == *template_id)
             {
                 c.satisfaction = (c.satisfaction + 0.25).min(1.0);
                 c.warned = false;
-                c.patron.split(',').next().unwrap_or(&c.patron).to_string()
-            } else {
-                "Patron".to_string()
-            };
-            format!("{} placated. Contract stable.", short_name)
+            }
+            format!("{} placated. Contract stable.", member_name)
         }
-        (CrisisKind::PatronDemand { template_id }, _) => {
-            // Refuse — satisfaction drops sharply
-            let short_name = if let Some(c) = state.contracts.iter_mut()
+        (CrisisKind::ContractDemand { template_id }, _) => {
+            // Refuse: contract condition satisfaction drops sharply
+            let member_idx = state.contracts.iter()
+                .find(|c| c.template_id == *template_id)
+                .map(|c| c.board_member_idx);
+            let member_name = member_idx
+                .and_then(|idx| state.board_members.get(idx))
+                .map(|m| m.name.clone())
+                .unwrap_or_else(|| "Board member".to_string());
+            if let Some(c) = state.contracts.iter_mut()
                 .find(|c| c.template_id == *template_id)
             {
                 c.satisfaction = (c.satisfaction - 0.15).max(0.0);
-                c.patron.split(',').next().unwrap_or(&c.patron).to_string()
-            } else {
-                "Patron".to_string()
-            };
-            format!("{} rebuffed. Satisfaction dropped.", short_name)
+            }
+            format!("{} rebuffed. Contract satisfaction dropped.", member_name)
         }
 
         (CrisisKind::GovernorHardliner { region_idx }, 0) => {
