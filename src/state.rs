@@ -1393,16 +1393,6 @@ impl BoardPersonality {
         }
     }
 
-    /// Description of what this personality cares about, shown in detail view.
-    pub fn interests(&self, corp_name: &str) -> String {
-        match self {
-            Self::Profiteer => "Tracks stock performance".to_string(),
-            Self::Technocrat => "Values research progress and scientific breakthroughs".to_string(),
-            Self::Humanitarian => "Concerned with global survival rates".to_string(),
-            Self::Dealmaker => format!("Seeks direct investment in {}", corp_name),
-        }
-    }
-
     /// All variants, for random selection.
     pub const ALL: [BoardPersonality; 4] = [
         Self::Profiteer,
@@ -5846,6 +5836,78 @@ impl GameState {
     pub fn approval_target(&self) -> f64 {
         let (crisis_component, board_component, contract_component) = self.approval_target_components();
         (crisis_component + board_component + contract_component).clamp(0.0, 0.90)
+    }
+
+    /// Returns a list of (label, value, weight) tuples describing the factors that
+    /// drive a board member's satisfaction. Used by the UI to show an approval breakdown.
+    /// The `value` is 0.0–1.0, `weight` is the fraction of base satisfaction from this factor.
+    /// Also returns the satisfaction_modifier as a separate entry if nonzero.
+    pub fn member_satisfaction_factors(&self, member_idx: usize) -> Vec<(&'static str, f64, f64)> {
+        let member = &self.board_members[member_idx];
+        let mut factors = Vec::new();
+
+        match &member.role {
+            BoardRole::CorporateLeader { corp_idx } => {
+                let stock = self.corporations.get(*corp_idx)
+                    .map(|c| if c.bankrupt { 0.0 } else {
+                        (c.share_price / c.ipo_price).clamp(0.0, 1.0)
+                    })
+                    .unwrap_or(0.0);
+
+                match member.personality {
+                    Some(BoardPersonality::Profiteer) | None => {
+                        factors.push(("Stock performance", stock, 1.0));
+                    }
+                    Some(BoardPersonality::Technocrat) => {
+                        let field_active = self.field_research.len() as f64;
+                        let field_max = MAX_FIELD_RESEARCH as f64;
+                        let applied_active = if self.applied_research.is_some() { 1.0 } else { 0.0 };
+                        let basic_active = if self.basic_research.is_some() { 1.0 } else { 0.0 };
+                        let total_active = field_active + applied_active + basic_active;
+                        let total_max = field_max + 1.0 + 1.0;
+                        let research = (total_active / total_max).clamp(0.0, 1.0);
+                        factors.push(("Stock performance", stock, 0.6));
+                        factors.push(("Research utilization", research, 0.4));
+                    }
+                    Some(BoardPersonality::Humanitarian) => {
+                        let survival = {
+                            let initial_pop = self.initial_population();
+                            if initial_pop <= 0.0 { 0.0 }
+                            else { ((initial_pop - self.total_dead()) / initial_pop).clamp(0.0, 1.0) }
+                        };
+                        factors.push(("Stock performance", stock, 0.5));
+                        factors.push(("Global survival", survival, 0.5));
+                    }
+                    Some(BoardPersonality::Dealmaker) => {
+                        let owns_shares = self.portfolio.get(*corp_idx)
+                            .map_or(0.0, |&shares| if shares > 0 { 1.0 } else { 0.0 });
+                        factors.push(("Stock performance", stock, 0.7));
+                        factors.push(("Player investment", owns_shares, 0.3));
+                    }
+                }
+            }
+            BoardRole::RegionGovernor { region_idx } => {
+                let gdp = self.regions.get(*region_idx)
+                    .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
+                    .unwrap_or(0.0);
+                factors.push(("Regional GDP", gdp, 1.0));
+            }
+            BoardRole::IndependentAdvisor => {
+                let survival = {
+                    let initial_pop = self.initial_population();
+                    if initial_pop <= 0.0 { 0.0 }
+                    else { ((initial_pop - self.total_dead()) / initial_pop).clamp(0.0, 1.0) }
+                };
+                factors.push(("Global survival", survival, 1.0));
+            }
+        }
+
+        // Include relationship modifier if nonzero
+        if member.satisfaction_modifier.abs() > 0.001 {
+            factors.push(("Relationship modifier", member.satisfaction_modifier, 1.0));
+        }
+
+        factors
     }
 
     /// The next policy that would unlock with more approval. Returns (name, threshold)

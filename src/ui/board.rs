@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{BoardPersonality, BoardRole, GameState, TICKS_PER_DAY};
-use crate::format_number;
+
 
 /// Maximum selection index for the board panel.
 pub fn selection_max(state: &GameState) -> usize {
@@ -225,18 +225,11 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
     match &member.role {
         BoardRole::CorporateLeader { corp_idx } => {
             if let Some(corp) = state.corporations.get(*corp_idx) {
-                let region_name = state.regions.get(corp.region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("?");
-
                 lines.push(Line::from(vec![
-                    Span::styled("    Corporation: ", hdr),
+                    Span::styled("    Company: ", hdr),
                     Span::styled(
                         corp.name.clone(),
                         Style::default().fg(Color::White),
-                    ),
-                    Span::styled(
-                        format!("  ({})", region_name),
-                        hdr,
                     ),
                 ]));
 
@@ -245,9 +238,9 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                 let trend_arrow = if corp.bankrupt {
                     ""
                 } else if change_pct > 0.5 {
-                    " ▲"
+                    " \u{25b2}"
                 } else if change_pct < -0.5 {
-                    " ▼"
+                    " \u{25bc}"
                 } else {
                     ""
                 };
@@ -264,42 +257,12 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                 let price_str = if corp.bankrupt {
                     "BANKRUPT".to_string()
                 } else {
-                    format!("¥{:.0}{} ({:+.1}%)", corp.share_price, trend_arrow, change_pct)
+                    format!("\u{00a5}{:.0}{} ({:+.1}%)", corp.share_price, trend_arrow, change_pct)
                 };
                 lines.push(Line::from(vec![
                     Span::styled("    Stock: ", hdr),
                     Span::styled(price_str, Style::default().fg(price_color)),
-                    Span::styled(
-                        format!("  IPO: ¥{:.0}", corp.ipo_price),
-                        Style::default().fg(Color::DarkGray),
-                    ),
                 ]));
-
-                // Revenue and profit (scaled to ~10x funding for corporate scale feel)
-                let profit = corp.daily_profit();
-                let profit_color = if profit >= 0.0 { Color::Green } else { Color::Red };
-                lines.push(Line::from(vec![
-                    Span::styled("    Revenue: ", hdr),
-                    Span::styled(
-                        format!("¥{:.0}/day", corp.revenue * 10.0),
-                        Style::default().fg(Color::White),
-                    ),
-                    Span::styled("  Profit: ", hdr),
-                    Span::styled(
-                        format!("{:+.0}/day", profit * 10.0),
-                        Style::default().fg(profit_color),
-                    ),
-                ]));
-
-                // Satisfaction driver / personality interests
-                let interests = match &member.personality {
-                    Some(p) => p.interests(&corp.name),
-                    None => "Tracks stock performance".to_string(),
-                };
-                lines.push(Line::from(Span::styled(
-                    format!("    {}", interests),
-                    Style::default().fg(Color::DarkGray),
-                )));
 
                 // Chairman effect (personality-specific power)
                 if member.is_chairman {
@@ -346,70 +309,6 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                         hdr,
                     ),
                 ]));
-
-                // Infection summary
-                let total_infected: f64 = region.infections.iter()
-                    .map(|inf| inf.infected)
-                    .sum();
-                let total_dead: f64 = region.infections.iter()
-                    .map(|inf| inf.dead)
-                    .sum();
-                if total_infected > 0.0 || total_dead > 0.0 {
-                    lines.push(Line::from(vec![
-                        Span::styled("    Infected: ", hdr),
-                        Span::styled(
-                            format_number(total_infected),
-                            Style::default().fg(Color::LightRed),
-                        ),
-                        Span::styled("  Dead: ", hdr),
-                        Span::styled(
-                            format_number(total_dead),
-                            Style::default().fg(Color::Red),
-                        ),
-                    ]));
-                }
-
-                // Governor info
-                if region.governor.is_dead() {
-                    lines.push(Line::from(vec![
-                        Span::styled("    Governor: ", hdr),
-                        Span::styled("LEADERLESS", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-                        Span::styled(
-                            format!("  (policies {:.0}%)", region.policy_effectiveness() * 100.0),
-                            Style::default().fg(Color::Red),
-                        ),
-                    ]));
-                } else {
-                    lines.push(Line::from(vec![
-                        Span::styled("    Governor: ", hdr),
-                        Span::styled(
-                            region.governor.name.clone(),
-                            Style::default().fg(Color::White),
-                        ),
-                        Span::styled(
-                            format!("  ({})  Co-Op: {:.0}",
-                                region.governor.personality.label(),
-                                region.governor.cooperation),
-                            hdr,
-                        ),
-                        {
-                            let eff = region.policy_effectiveness();
-                            if eff < 1.0 {
-                                Span::styled(
-                                    format!("  (policies {:.0}%)", eff * 100.0),
-                                    Style::default().fg(Color::Red),
-                                )
-                            } else {
-                                Span::raw("")
-                            }
-                        },
-                    ]));
-                }
-
-                lines.push(Line::from(Span::styled(
-                    format!("    Tracks regional GDP (base: {:.0}k)", region.base_gdp),
-                    Style::default().fg(Color::DarkGray),
-                )));
             }
         }
         BoardRole::IndependentAdvisor => {
@@ -433,10 +332,6 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                         else { Color::Red }),
                 ),
             ]));
-            lines.push(Line::from(Span::styled(
-                "    Tracks global death rate",
-                Style::default().fg(Color::DarkGray),
-            )));
         }
     }
 
@@ -446,33 +341,83 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
             if let Some(corp) = state.corporations.get(corp_idx) {
                 let change = corp.price_change_pct();
                 let arrow = if corp.bankrupt { "" }
-                    else if change > 0.5 { " ▲" }
-                    else if change < -0.5 { " ▼" }
+                    else if change > 0.5 { " \u{25b2}" }
+                    else if change < -0.5 { " \u{25bc}" }
                     else { "" };
                 let stock_str = if corp.bankrupt {
                     "BANKRUPT".to_string()
                 } else {
-                    format!("¥{:.0}{}", corp.share_price, arrow)
+                    format!("\u{00a5}{:.0}{}", corp.share_price, arrow)
                 };
                 let stock_color = if corp.bankrupt { Color::Red }
                     else if corp.share_price >= corp.ipo_price * 0.8 { Color::Green }
                     else if corp.share_price >= corp.ipo_price * 0.5 { Color::Yellow }
                     else { Color::LightRed };
                 lines.push(Line::from(vec![
-                    Span::styled("    Corp connection: ", hdr),
+                    Span::styled("    Corp: ", hdr),
                     Span::styled(
                         corp.name.clone(),
                         Style::default().fg(Color::White),
                     ),
-                    Span::styled(
-                        format!("  Stock: "),
-                        hdr,
-                    ),
+                    Span::styled("  Stock: ", hdr),
                     Span::styled(stock_str, Style::default().fg(stock_color)),
                 ]));
             }
         }
     }
+
+    // Approval breakdown
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "    \u{2500}\u{2500} Approval \u{2500}\u{2500}",
+        Style::default().fg(Color::Cyan),
+    )));
+
+    let factors = state.member_satisfaction_factors(member_idx);
+    for &(label, value, weight) in &factors {
+        if label == "Relationship modifier" {
+            // Show modifier as +/- value, not a percentage
+            let mod_color = if value > 0.0 { Color::Green } else { Color::Red };
+            lines.push(Line::from(vec![
+                Span::styled(format!("    {}: ", label), hdr),
+                Span::styled(
+                    format!("{:+.0}%", value * 100.0),
+                    Style::default().fg(mod_color),
+                ),
+            ]));
+        } else {
+            let pct = value * 100.0;
+            let val_color = if pct > 70.0 { Color::Green }
+                else if pct > 40.0 { Color::Yellow }
+                else { Color::Red };
+            let weight_str = if weight < 1.0 {
+                format!(" ({:.0}%)", weight * 100.0)
+            } else {
+                String::new()
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("    {}{}: ", label, weight_str), hdr),
+                Span::styled(
+                    format!("{:.0}%", pct),
+                    Style::default().fg(val_color),
+                ),
+            ]));
+        }
+    }
+
+    // Show final satisfaction
+    let (sat_word, sat_color) = satisfaction_display(member.satisfaction);
+    lines.push(Line::from(vec![
+        Span::styled("    Result: ", hdr),
+        Span::styled(
+            format!("{:.0}%", member.satisfaction * 100.0),
+            Style::default().fg(sat_color),
+        ),
+        Span::styled(
+            format!("  ({})", sat_word),
+            Style::default().fg(sat_color),
+        ),
+    ]));
 
 
 }
