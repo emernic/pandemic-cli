@@ -81,11 +81,11 @@ These are one-way doors. The game doesn't tell you whether they were worth it.
 
 ### Governors
 
-Each region has a governor with a name, personality, and loyalty score.
+Each region has a governor with a name, personality, and cooperation score.
 
-**Personalities**: Buffoon, Blowhard, Recluse, Hardliner, Operative, Mobster. Each has a unique bargain cost, loyalty pattern, and defiance behavior. A Blowhard hates restrictions but is cheap to buy off. A Hardliner is angry about both restrictions and suffering. An Operative demands permanent income cuts. A Mobster's price doubles every time you pay.
+**Personalities**: Buffoon, Blowhard, Recluse, Hardliner, Operative, Mobster. Each has a unique bargain cost, cooperation pattern, and defiance behavior. A Blowhard hates restrictions but is cheap to buy off. A Hardliner is angry about both restrictions and suffering. An Operative demands permanent income cuts. A Mobster's price doubles every time you pay.
 
-**Loyalty** drifts continuously based on regional conditions, your policy choices, and personality. High loyalty means cheaper policies and cooperation. Low loyalty means defiance — governors can lift your quarantines, block your research, or demand military escalation. You can appease them with money, but you can't control them.
+**Cooperation** drifts continuously based on regional conditions, your policy choices, and personality. High cooperation means cheaper policies and cooperation. Low cooperation means defiance — governors can lift your quarantines, block your research, or demand military escalation. You can appease them with money, but you can't control them.
 
 ### Crises
 
@@ -157,6 +157,6 @@ Format: descriptions are 1-3 sentences, option labels describe the action, and o
 ## Design Priorities
 
 1. **Interesting decisions under pressure.** Every action should have a meaningful trade-off. If there's a clearly correct choice, the design is wrong.
-2. **Emergent complexity from simple systems.** Individual mechanics should be straightforward. The complexity comes from their interactions — mutation pressure drives re-trials which consume research capacity which leaves new threats unidentified which causes governor loyalty to drop which causes policy defiance which accelerates spread.
+2. **Emergent complexity from simple systems.** Individual mechanics should be straightforward. The complexity comes from their interactions — mutation pressure drives re-trials which consume research capacity which leaves new threats unidentified which causes governor cooperation to drop which causes policy defiance which accelerates spread.
 3. **The game should feel different at day 30 than at day 1.** Not because the rules changed, but because the situation has evolved in ways that create qualitatively different decisions.
 4. **Respect the player's intelligence.** Don't explain. Don't editorialize. Show the situation, give the tools, let the player act.

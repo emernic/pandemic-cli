@@ -338,9 +338,9 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                         Style::default().fg(Color::White),
                     ),
                     Span::styled(
-                        format!("  ({})  Loyalty: {:.0}",
+                        format!("  ({})  Co-Op: {:.0}",
                             region.governor.personality.label(),
-                            region.governor.loyalty),
+                            region.governor.cooperation),
                         hdr,
                     ),
                 ]));

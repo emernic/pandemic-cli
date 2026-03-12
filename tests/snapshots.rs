@@ -53,7 +53,7 @@ fn bargain_shown_for_defiant_governor() {
     let mut state = GameState::new_default(42);
     // Force Hardliner governor to be defiant
     state.regions[0].governor.personality = GovernorPersonality::Hardliner;
-    state.regions[0].governor.loyalty = 20.0;
+    state.regions[0].governor.cooperation = 20.0;
     // Open policy panel for region 0, then scroll down to the bargain item
     // (panel viewport is small, need to move selection to bring bargain into view)
     let mut steps: Vec<String> = vec!["p".to_string(), "enter".to_string()];

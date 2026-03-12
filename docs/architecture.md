@@ -43,7 +43,7 @@ engine/
   mod.rs       — tick() orchestrator, execute_command() dispatcher, defeat/collapse checks
   research.rs  — start_research(), add/remove_personnel(), tick_research()
   medicine.rs  — deploy_medicine(), tick_shipments(), try_auto_deploy()
-  policy.rs    — toggle_policy(), tick_enforce_costs(), tick_governor_loyalty()
+  policy.rs    — toggle_policy(), tick_enforce_costs(), tick_governor_cooperation()
   crisis.rs    — generate_crisis(), activate_crisis(), resolve_crisis()
   spread.rs    — tick_spread_within(), tick_spread_cross_region(), tick_mutation()
   disease.rs   — spawn_disease_scaled() (mid-game new threat emergence)
@@ -89,7 +89,7 @@ tick() in engine/mod.rs:
   6.  medicine::try_auto_deploy()      — auto-deploy triggered by trial completions
   7.  medicine::tick_shipments()       — deliver in-transit medicine shipments
   8.  policy::tick_enforce_costs()     — suspend unaffordable policies, deduct costs
-  9.  policy::tick_governor_loyalty()  — governor loyalty drift
+  9.  policy::tick_governor_cooperation()  — governor cooperation drift
   10. policy::tick_governor_actions()  — defiant governor consequences
   11. Resource income, personnel upkeep, board approval drift
   12. Disease detection, threat escalation

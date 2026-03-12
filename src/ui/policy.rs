@@ -29,8 +29,8 @@ use crate::state::{
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
     DECREE_APPROVAL_COSTS,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
-    policy_display_order, APPEASE_COST, APPEASE_LOYALTY_GAIN,
-    BARGAIN_LOYALTY_GAIN, BARGAIN_BLOWHARD_LOYALTY_GAIN,
+    policy_display_order, APPEASE_COST, APPEASE_COOPERATION_GAIN,
+    BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
     BARGAIN_OPERATIVE_INCOME_CUT, BARGAIN_MOBSTER_BASE_COST,
@@ -189,8 +189,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
              _ => format!("{} pers. ongoing", MEDICAL_CENTER_PERSONNEL),
          },
          match region.hospital_level {
-             0 => "25% lethality reduction, +10 governor loyalty",
-             1 => "40% lethality reduction, +25% medicine efficacy, +10 loyalty",
+             0 => "25% lethality reduction, +10 co-op",
+             1 => "40% lethality reduction, +25% medicine efficacy, +10 co-op",
              _ => "40% lethality reduction, +25% medicine efficacy",
          },
          None, 0.0),
@@ -420,7 +420,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         } else {
             Style::default().fg(Color::White)
         };
-        let loyalty_color = if gov.is_defiant() {
+        let cooperation_color = if gov.is_defiant() {
             Color::Red
         } else if gov.is_cooperative() {
             Color::Green
@@ -441,23 +441,23 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 name_style,
             ),
             Span::styled(
-                format!("(Loyalty: {:.0}", gov.loyalty),
-                Style::default().fg(loyalty_color),
+                format!("(Co-Op: {:.0}", gov.cooperation),
+                Style::default().fg(cooperation_color),
             ),
             if !status_label.is_empty() {
                 Span::styled(
                     format!(", {}", status_label),
-                    Style::default().fg(loyalty_color).add_modifier(Modifier::BOLD),
+                    Style::default().fg(cooperation_color).add_modifier(Modifier::BOLD),
                 )
             } else {
                 Span::raw("")
             },
-            Span::styled(")", Style::default().fg(loyalty_color)),
+            Span::styled(")", Style::default().fg(cooperation_color)),
         ]));
         lines.push(Line::from(vec![
             Span::raw("      "),
             Span::styled(
-                format!("Cost: ¥{:.0}  →  +{:.0} loyalty", APPEASE_COST, APPEASE_LOYALTY_GAIN),
+                format!("Cost: ¥{:.0}  →  +{:.0} co-op", APPEASE_COST, APPEASE_COOPERATION_GAIN),
                 Style::default().fg(Color::Yellow),
             ),
         ]));
@@ -475,31 +475,31 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Style::default().fg(Color::Cyan)
             };
 
-            let (bargain_name, cost_desc, loyalty_gain) = match gov.personality {
+            let (bargain_name, cost_desc, cooperation_gain) = match gov.personality {
                 GovernorPersonality::Buffoon => (
                     "Public Praise",
                     format!("-{:.0}% board approval", BARGAIN_BUFFOON_APPROVAL_COST * 100.0),
-                    BARGAIN_LOYALTY_GAIN,
+                    BARGAIN_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Blowhard => (
                     "Token Concession",
                     format!("-¥{:.0}", BARGAIN_BLOWHARD_FUNDING_COST),
-                    BARGAIN_BLOWHARD_LOYALTY_GAIN,
+                    BARGAIN_BLOWHARD_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Recluse => (
                     "Send Manager",
                     format!("-{} personnel", BARGAIN_RECLUSE_PERSONNEL_COST),
-                    BARGAIN_LOYALTY_GAIN,
+                    BARGAIN_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Hardliner => (
                     "Grant Authority",
                     format!("-¥{:.0}", BARGAIN_HARDLINER_FUNDING_COST),
-                    BARGAIN_LOYALTY_GAIN,
+                    BARGAIN_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Operative => (
                     "Income Cut",
                     format!("-{:.0}% of regional income", BARGAIN_OPERATIVE_INCOME_CUT * 100.0),
-                    BARGAIN_LOYALTY_GAIN,
+                    BARGAIN_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Mobster => {
                     let count = gov.bargain_count;
@@ -507,7 +507,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     (
                         "Protection Money",
                         format!("-¥{:.0}", cost),
-                        BARGAIN_LOYALTY_GAIN,
+                        BARGAIN_COOPERATION_GAIN,
                     )
                 }
             };
@@ -526,7 +526,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             lines.push(Line::from(vec![
                 Span::raw("      "),
                 Span::styled(
-                    format!("Cost: {}  →  +{:.0} loyalty", cost_desc, loyalty_gain),
+                    format!("Cost: {}  →  +{:.0} co-op", cost_desc, cooperation_gain),
                     Style::default().fg(Color::Cyan),
                 ),
             ]));

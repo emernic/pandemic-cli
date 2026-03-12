@@ -1429,7 +1429,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Field teams are operating without local authorization."),
                 options: vec![ CrisisOption {
                     label: "Work around them".into(),
-                    description: format!("Policy effectiveness reduced in {} until loyalty recovers", region_name),
+                    description: format!("Policy effectiveness reduced in {} until cooperation recovers", region_name),
                     cost: None,
                 },
                  CrisisOption {
@@ -1776,7 +1776,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             if can_repay {
                                 CrisisOption {
                                     label: format!("Repay ¥{repay_amount:.0}"),
-                                    description: "Settle the debt. Gov. loyalty improves slightly.".into(),
+                                    description: "Settle the debt. Gov. cooperation improves slightly.".into(),
                                     cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
                                 }
                             } else {
@@ -1790,7 +1790,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                                 label: "Default".into(),
                                 description: format!(
                                     "Gov. {lender_name} cancels your {policy_name} in {region_name} \
-                                     and loyalty drops 20.",
+                                     and cooperation drops 20.",
                                 ),
                                 cost: None,
                             },
@@ -2462,13 +2462,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
-            // Mandate — lose POL + governor loyalty drops + possible nationalist rebellion
+            // Mandate — lose POL + governor cooperation drops + possible nationalist rebellion
             state.resources.board_approval -= 0.10;
             let mut governor_rebels = false;
             if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.loyalty = (region.governor.loyalty - 15.0).max(0.0);
-                // If loyalty drops below 30, governor may rebel against federal overreach
-                if region.governor.loyalty < 30.0 {
+                region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
+                // If cooperation drops below 30, governor may rebel against federal overreach
+                if region.governor.cooperation < 30.0 {
                     governor_rebels = true;
                 }
             }
@@ -2887,12 +2887,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::GovernorRecluse { .. }, 0) => {
             // Work around them — accept reduced policy effectiveness
-            "Operating without local support. Policies less effective until loyalty recovers.".into()
+            "Operating without local support. Policies less effective until cooperation recovers.".into()
         }
         (CrisisKind::GovernorRecluse { region_idx }, _) => {
-            // Send delegation — personnel cost already deducted, +10 loyalty
+            // Send delegation — personnel cost already deducted, +10 cooperation
             if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.loyalty = (region.governor.loyalty + 10.0).min(100.0);
+                region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
             }
             "Delegation sent. Governor engaged. Policy enforcement resuming.".into()
         }
@@ -2995,7 +2995,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Pay: costs already deducted, increment bargain count
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.bargain_count += 1;
-                region.governor.loyalty = (region.governor.loyalty + 15.0).min(100.0);
+                region.governor.cooperation = (region.governor.cooperation + 15.0).min(100.0);
             }
             "Paid. They'll be back for more.".into()
         }
@@ -3101,10 +3101,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(pos) = state.loans.iter().position(|l| l.lender == *lender_ref) {
                 state.loans.remove(pos);
             }
-            // Governor: small loyalty boost for honoring the debt
+            // Governor: small cooperation boost for honoring the debt
             if let LoanLender::Governor { region_idx } = lender {
                 if let Some(region) = state.regions.get_mut(*region_idx) {
-                    region.governor.loyalty = (region.governor.loyalty + 5.0).min(100.0);
+                    region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
                 }
             }
             format!("Debt repaid to {}. Obligation cleared.", lender_name)
@@ -3118,7 +3118,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
             match lender {
                 LoanLender::Governor { region_idx } => {
-                    // Cancel most expensive policy in their region + loyalty drop
+                    // Cancel most expensive policy in their region + cooperation drop
                     let mut cancelled_name = None;
                     if let Some(region) = state.regions.get(*region_idx) {
                         let traits = region.traits.as_slice();
@@ -3143,16 +3143,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                         }
                     }
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.loyalty = (region.governor.loyalty - 20.0).max(0.0);
+                        region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
                     }
                     let region_name = state.regions.get(*region_idx)
                         .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
                     match cancelled_name {
                         Some(name) => format!(
-                            "Gov. {lender_name} defaulted. {name} cancelled in {region_name}. Loyalty −20.",
+                            "Gov. {lender_name} defaulted. {name} cancelled in {region_name}. Co-Op −20.",
                         ),
                         None => format!(
-                            "Gov. {lender_name} defaulted. Loyalty −20 in {region_name}.",
+                            "Gov. {lender_name} defaulted. Co-Op −20 in {region_name}.",
                         ),
                     }
                 }

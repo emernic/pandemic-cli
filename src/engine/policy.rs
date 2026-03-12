@@ -6,10 +6,10 @@ use crate::state::{
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
     REGULATORY_APPARATUS_COST_MULT, SURVEILLANCE_NETWORK_SCREENING_MULT,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
-    BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_LOYALTY_GAIN,
+    BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST,
     BARGAIN_HARDLINER_FUNDING_COST,
-    BARGAIN_LOYALTY_GAIN,
+    BARGAIN_COOPERATION_GAIN,
     BARGAIN_MOBSTER_BASE_COST,
     BARGAIN_OPERATIVE_INCOME_CUT,
     BARGAIN_RECLUSE_PERSONNEL_COST,
@@ -267,7 +267,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 } else {
                     state.resources.funding -= FIELD_HOSPITAL_COST;
                     state.regions[region_idx].hospital_level = 1;
-                    state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
+                    state.regions[region_idx].governor.cooperation = (state.regions[region_idx].governor.cooperation + 10.0).min(100.0);
                     (Some(format!("{region_name}: Field Hospital operational (reduces mortality 25%)")), true)
                 }
             } else if region.hospital_level == 1 {
@@ -279,7 +279,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 } else {
                     state.resources.funding -= MEDICAL_CENTER_COST;
                     state.regions[region_idx].hospital_level = 2;
-                    state.regions[region_idx].governor.loyalty = (state.regions[region_idx].governor.loyalty + 10.0).min(100.0);
+                    state.regions[region_idx].governor.cooperation = (state.regions[region_idx].governor.cooperation + 10.0).min(100.0);
                     (Some(format!("{region_name}: Medical Center operational (mortality -40%, efficacy +25%)")), true)
                 }
             } else {
@@ -321,9 +321,9 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
     }
 }
 
-/// Spend funds to boost a governor's loyalty.
+/// Spend funds to boost a governor's cooperation.
 pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
-    use crate::state::{APPEASE_COST, APPEASE_LOYALTY_GAIN};
+    use crate::state::{APPEASE_COST, APPEASE_COOPERATION_GAIN};
 
     if region_idx >= state.regions.len() {
         return (None, false);
@@ -340,10 +340,10 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
     }
     state.resources.funding -= APPEASE_COST;
     let gov = &mut state.regions[region_idx].governor;
-    gov.loyalty = (gov.loyalty + APPEASE_LOYALTY_GAIN).min(100.0);
+    gov.cooperation = (gov.cooperation + APPEASE_COOPERATION_GAIN).min(100.0);
     let name = &state.regions[region_idx].governor.name;
-    let loyalty = state.regions[region_idx].governor.loyalty;
-    (Some(format!("{name} appeased. Loyalty now {loyalty:.0}. (-¥{APPEASE_COST:.0})")), true)
+    let cooperation = state.regions[region_idx].governor.cooperation;
+    (Some(format!("{name} appeased. Co-Op now {cooperation:.0}. (-¥{APPEASE_COST:.0})")), true)
 }
 
 /// Personality-specific bargain with a defiant governor. Free in funding
@@ -368,23 +368,23 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 
     match personality {
         GovernorPersonality::Buffoon => {
-            // Public Praise — cheap POL cost, loyalty decays fast (tracked in tick)
+            // Public Praise — cheap POL cost, cooperation decays fast (tracked in tick)
             state.resources.board_approval = (state.resources.board_approval - BARGAIN_BUFFOON_APPROVAL_COST).max(0.0);
             let gov = &mut state.regions[region_idx].governor;
-            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: praised publicly. Loyalty {loyalty:.0} (won't last).")), true)
+            gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
+            let cooperation = gov.cooperation;
+            (Some(format!("{gov_name}: praised publicly. Co-Op {cooperation:.0} (won't last).")), true)
         }
         GovernorPersonality::Blowhard => {
-            // Token Concession — small funding, large loyalty gain
+            // Token Concession — small funding, large cooperation gain
             if state.resources.funding < BARGAIN_BLOWHARD_FUNDING_COST {
                 return (Some(format!("Not enough funding (need ¥{BARGAIN_BLOWHARD_FUNDING_COST:.0})")), false);
             }
             state.resources.funding -= BARGAIN_BLOWHARD_FUNDING_COST;
             let gov = &mut state.regions[region_idx].governor;
-            gov.loyalty = (gov.loyalty + BARGAIN_BLOWHARD_LOYALTY_GAIN).min(100.0);
-            let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: given a token victory. Loyalty {loyalty:.0}.")), true)
+            gov.cooperation = (gov.cooperation + BARGAIN_BLOWHARD_COOPERATION_GAIN).min(100.0);
+            let cooperation = gov.cooperation;
+            (Some(format!("{gov_name}: given a token victory. Co-Op {cooperation:.0}.")), true)
         }
         GovernorPersonality::Recluse => {
             // Send a Manager — personnel cost
@@ -394,9 +394,9 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             }
             state.resources.personnel -= cost;
             let gov = &mut state.regions[region_idx].governor;
-            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: manager sent. Loyalty {loyalty:.0}. (-{cost} personnel)")), true)
+            gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
+            let cooperation = gov.cooperation;
+            (Some(format!("{gov_name}: manager sent. Co-Op {cooperation:.0}. (-{cost} personnel)")), true)
         }
         GovernorPersonality::Hardliner => {
             // Grant Authority — expensive funding
@@ -405,18 +405,18 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             }
             state.resources.funding -= BARGAIN_HARDLINER_FUNDING_COST;
             let gov = &mut state.regions[region_idx].governor;
-            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: granted expanded authority. Loyalty {loyalty:.0}.")), true)
+            gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
+            let cooperation = gov.cooperation;
+            (Some(format!("{gov_name}: granted expanded authority. Co-Op {cooperation:.0}.")), true)
         }
         GovernorPersonality::Operative => {
             // Income Cut: permanent skim on regional income
             let gov = &mut state.regions[region_idx].governor;
             gov.income_skim += BARGAIN_OPERATIVE_INCOME_CUT;
-            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = gov.loyalty;
+            gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
+            let cooperation = gov.cooperation;
             let total_skim = gov.income_skim * 100.0;
-            (Some(format!("{gov_name}: cut agreed. Loyalty {loyalty:.0}. (now skimming {total_skim:.0}% of income)")), true)
+            (Some(format!("{gov_name}: cut agreed. Co-Op {cooperation:.0}. (now skimming {total_skim:.0}% of income)")), true)
         }
         GovernorPersonality::Mobster => {
             // Protection Money — escalating cost
@@ -428,20 +428,20 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
             state.resources.funding -= cost;
             let gov = &mut state.regions[region_idx].governor;
             gov.bargain_count += 1;
-            gov.loyalty = (gov.loyalty + BARGAIN_LOYALTY_GAIN).min(100.0);
-            let loyalty = gov.loyalty;
-            (Some(format!("{gov_name}: paid ¥{cost:.0}. Loyalty {loyalty:.0}. Next time will cost more.")), true)
+            gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
+            let cooperation = gov.cooperation;
+            (Some(format!("{gov_name}: paid ¥{cost:.0}. Co-Op {cooperation:.0}. Next time will cost more.")), true)
         }
     }
 }
 
-/// Tick governor loyalty drift. Called once per tick from tick().
+/// Tick governor cooperation drift. Called once per tick from tick().
 ///
-/// Loyalty drifts based on infection severity, cumulative deaths, active
+/// Cooperation drifts based on infection severity, cumulative deaths, active
 /// restrictive policies, and personality. Governors react to the same
 /// severity thresholds the player sees (CRIT/HIGH/MOD/LOW/OK), so there
 /// is a clear mental model: "region is CRIT → governor is angry."
-pub(super) fn tick_governor_loyalty(state: &mut GameState) {
+pub(super) fn tick_governor_cooperation(state: &mut GameState) {
     // Suspend Regional Authority: all governors frozen under central command
     if state.enacted_decrees.suspend_regional_authority {
         return;
@@ -454,7 +454,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
 
         let policy = &state.policies[i];
         let personality = state.regions[i].governor.personality;
-        let current = state.regions[i].governor.loyalty;
+        let current = state.regions[i].governor.cooperation;
 
         // Count active restrictive policies (travel ban, quarantine, martial law, border controls)
         let restrictive_count = [
@@ -487,7 +487,7 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         // Death drain: cumulative deaths erode trust (linear, not sqrt)
         let death_drain = -death_frac * 0.03; // ~0.036/day at 1% dead, ~0.36/day at 10%
 
-        // Policy pressure: each restrictive policy drains loyalty
+        // Policy pressure: each restrictive policy drains cooperation
         let policy_drain = -restrictive_count * 0.005; // ~0.6/day per policy
 
         // Personality modifiers
@@ -525,13 +525,13 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
                 restriction_anger + suffering_anger
             }
             GovernorPersonality::Operative => {
-                // Passive loyalty gain when being paid (income_skim > 0).
+                // Passive cooperation gain when being paid (income_skim > 0).
                 // Otherwise neutral.
                 let skim = state.regions[i].governor.income_skim;
                 if skim > 0.0 { 0.002 } else { 0.0 }
             }
             GovernorPersonality::Mobster => {
-                // Loyalty decays constantly — always wants more money.
+                // Cooperation decays constantly — always wants more money.
                 // Decays faster the more bargains you've made (addiction escalation).
                 let count = state.regions[i].governor.bargain_count as f64;
                 -0.002 * (1.0 + count * 0.5) // ~0.24/day base, grows with each bargain
@@ -539,11 +539,11 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
         };
 
         let total_drift = base_drift + severity_drain + death_drain + policy_drain + personality_mod;
-        let new_loyalty = (current + total_drift).clamp(0.0, 100.0);
-        state.regions[i].governor.loyalty = new_loyalty;
+        let new_cooperation = (current + total_drift).clamp(0.0, 100.0);
+        state.regions[i].governor.cooperation = new_cooperation;
 
-        // Fire a personality-specific crisis when loyalty first drops below defiance threshold
-        if new_loyalty < GOVERNOR_DEFIANCE_THRESHOLD && !state.regions[i].governor.defiance_crisis_fired {
+        // Fire a personality-specific crisis when cooperation first drops below defiance threshold
+        if new_cooperation < GOVERNOR_DEFIANCE_THRESHOLD && !state.regions[i].governor.defiance_crisis_fired {
             state.regions[i].governor.defiance_crisis_fired = true;
             let kind = match personality {
                 GovernorPersonality::Buffoon => CrisisKind::GovernorBuffoon { region_idx: i },
@@ -557,8 +557,8 @@ pub(super) fn tick_governor_loyalty(state: &mut GameState) {
             state.pending_crises.push((state.tick, kind));
         }
 
-        // Reset the flag when loyalty recovers above defiance threshold
-        if new_loyalty >= GOVERNOR_DEFIANCE_THRESHOLD && state.regions[i].governor.defiance_crisis_fired {
+        // Reset the flag when cooperation recovers above defiance threshold
+        if new_cooperation >= GOVERNOR_DEFIANCE_THRESHOLD && state.regions[i].governor.defiance_crisis_fired {
             state.regions[i].governor.defiance_crisis_fired = false;
         }
     }
@@ -579,7 +579,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
             continue;
         }
         let gov = &state.regions[i].governor;
-        if gov.loyalty >= GOVERNOR_DEFIANCE_THRESHOLD {
+        if gov.cooperation >= GOVERNOR_DEFIANCE_THRESHOLD {
             continue;
         }
         // Check cooldown
@@ -808,12 +808,12 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
         }
         3 => {
             // Suspend Regional Authority: neutralize all governors and freeze them.
-            // Set loyalty to 50 (neutral — no defiance, no cooperation bonuses)
-            // then tick_governor_loyalty/tick_governor_actions early-return permanently.
+            // Set cooperation to 50 (neutral — no defiance, no cooperation bonuses)
+            // then tick_governor_cooperation/tick_governor_actions early-return permanently.
             state.enacted_decrees.suspend_regional_authority = true;
             for region in &mut state.regions {
                 if !region.collapsed {
-                    region.governor.loyalty = 50.0;
+                    region.governor.cooperation = 50.0;
                     region.governor.defiance_crisis_fired = false;
                 }
             }
@@ -1403,15 +1403,15 @@ mod tests {
     }
 
     #[test]
-    fn appease_governor_boosts_loyalty() {
+    fn appease_governor_boosts_cooperation() {
         let mut state = screening_test_state();
-        state.regions[0].governor.loyalty = 50.0;
+        state.regions[0].governor.cooperation = 50.0;
         let funding_before = state.resources.funding;
 
         let (msg, ok) = appease_governor(&mut state, 0);
         assert!(ok, "should succeed with sufficient funds");
         assert!(msg.unwrap().contains("appeased"));
-        assert!((state.regions[0].governor.loyalty - 65.0).abs() < 0.01);
+        assert!((state.regions[0].governor.cooperation - 65.0).abs() < 0.01);
         assert!((state.resources.funding - (funding_before - crate::state::APPEASE_COST)).abs() < 0.01);
     }
 
@@ -1437,46 +1437,46 @@ mod tests {
     #[test]
     fn appease_governor_caps_at_100() {
         let mut state = screening_test_state();
-        state.regions[0].governor.loyalty = 95.0;
+        state.regions[0].governor.cooperation = 95.0;
 
         let (_, ok) = appease_governor(&mut state, 0);
         assert!(ok);
-        assert!((state.regions[0].governor.loyalty - 100.0).abs() < 0.01,
-            "loyalty should cap at 100: got {}", state.regions[0].governor.loyalty);
+        assert!((state.regions[0].governor.cooperation - 100.0).abs() < 0.01,
+            "cooperation should cap at 100: got {}", state.regions[0].governor.cooperation);
     }
 
     #[test]
-    fn governor_loyalty_drifts_with_restrictive_policies() {
+    fn governor_cooperation_drifts_with_restrictive_policies() {
         let mut state = screening_test_state();
-        state.regions[0].governor.loyalty = 60.0;
+        state.regions[0].governor.cooperation = 60.0;
         state.policies[0].travel_ban = true;
         state.policies[0].quarantine = true;
         state.policies[0].martial_law = true;
 
-        let before = state.regions[0].governor.loyalty;
-        // Tick loyalty for ~1 day (120 ticks)
+        let before = state.regions[0].governor.cooperation;
+        // Tick cooperation for ~1 day (120 ticks)
         for _ in 0..120 {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        assert!(state.regions[0].governor.loyalty < before,
-            "loyalty should decrease with restrictive policies: was {before}, now {}",
-            state.regions[0].governor.loyalty);
+        assert!(state.regions[0].governor.cooperation < before,
+            "cooperation should decrease with restrictive policies: was {before}, now {}",
+            state.regions[0].governor.cooperation);
     }
 
     #[test]
-    fn governor_loyalty_drops_fast_in_crit_region() {
+    fn governor_cooperation_drops_fast_in_crit_region() {
         let mut state = screening_test_state();
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         // Put >100K infected so severity = CRIT
         state.regions[0].get_or_create_infection(0).infected = 200_000.0;
 
         // Tick for 20 days
         for _ in 0..(120 * 20) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        assert!(state.regions[0].governor.loyalty < 45.0,
-            "CRIT region should drive loyalty well below 45 in 20 days, got {}",
-            state.regions[0].governor.loyalty);
+        assert!(state.regions[0].governor.cooperation < 45.0,
+            "CRIT region should drive cooperation well below 45 in 20 days, got {}",
+            state.regions[0].governor.cooperation);
     }
 
     #[test]
@@ -1486,22 +1486,22 @@ mod tests {
 
         // Test Hardliner — angry about both restrictions AND suffering
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Hardliner;
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 15) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let hardliner_loyalty = state.regions[0].governor.loyalty;
+        let hardliner_cooperation = state.regions[0].governor.cooperation;
 
         // Test Operative — neutral when no income skim
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 15) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let operative_loyalty = state.regions[0].governor.loyalty;
+        let operative_cooperation = state.regions[0].governor.cooperation;
 
-        assert!(hardliner_loyalty < operative_loyalty,
-            "Hardliner ({hardliner_loyalty:.1}) should lose loyalty faster than Operative ({operative_loyalty:.1}) in a CRIT region");
+        assert!(hardliner_cooperation < operative_cooperation,
+            "Hardliner ({hardliner_cooperation:.1}) should lose cooperation faster than Operative ({operative_cooperation:.1}) in a CRIT region");
     }
 
     #[test]
@@ -1509,11 +1509,11 @@ mod tests {
         use crate::state::GOVERNOR_DEFIANCE_THRESHOLD;
 
         let mut state = screening_test_state();
-        state.regions[0].governor.loyalty = GOVERNOR_DEFIANCE_THRESHOLD - 1.0;
+        state.regions[0].governor.cooperation = GOVERNOR_DEFIANCE_THRESHOLD - 1.0;
         assert!(state.regions[0].governor.is_defiant());
         assert!(state.regions[0].policy_effectiveness() < 1.0);
 
-        state.regions[0].governor.loyalty = GOVERNOR_DEFIANCE_THRESHOLD + 1.0;
+        state.regions[0].governor.cooperation = GOVERNOR_DEFIANCE_THRESHOLD + 1.0;
         assert!(!state.regions[0].governor.is_defiant());
         assert!((state.regions[0].policy_effectiveness() - 1.0).abs() < 0.001);
     }
@@ -1525,12 +1525,12 @@ mod tests {
         let mut state = screening_test_state();
         state.policies[0].discourage_hosp = true;
 
-        // Normal loyalty — full cost
-        state.regions[0].governor.loyalty = 50.0;
+        // Normal cooperation — full cost
+        state.regions[0].governor.cooperation = 50.0;
         let normal_cost = state.total_policy_funding_cost();
 
-        // Cooperative loyalty — reduced cost
-        state.regions[0].governor.loyalty = GOVERNOR_COOPERATION_THRESHOLD + 1.0;
+        // Cooperative cooperation — reduced cost
+        state.regions[0].governor.cooperation = GOVERNOR_COOPERATION_THRESHOLD + 1.0;
         let coop_cost = state.total_policy_funding_cost();
 
         assert!(coop_cost < normal_cost,
@@ -1546,22 +1546,22 @@ mod tests {
 
         // Blowhard with restrictions — extra drain
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Blowhard;
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 10) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let blowhard_loyalty = state.regions[0].governor.loyalty;
+        let blowhard_cooperation = state.regions[0].governor.cooperation;
 
         // Operative with same restrictions (baseline — neutral personality mod)
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 10) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let operative_loyalty = state.regions[0].governor.loyalty;
+        let operative_cooperation = state.regions[0].governor.cooperation;
 
-        assert!(blowhard_loyalty < operative_loyalty,
-            "Blowhard ({blowhard_loyalty:.1}) should lose loyalty faster than Operative ({operative_loyalty:.1}) with restrictions");
+        assert!(blowhard_cooperation < operative_cooperation,
+            "Blowhard ({blowhard_cooperation:.1}) should lose cooperation faster than Operative ({operative_cooperation:.1}) with restrictions");
     }
 
     #[test]
@@ -1570,65 +1570,65 @@ mod tests {
         // Low infections, no restrictions — blowhard's calm bonus kicks in
         state.regions[0].get_or_create_infection(0).infected = 100.0;
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Blowhard;
-        state.regions[0].governor.loyalty = 50.0;
+        state.regions[0].governor.cooperation = 50.0;
 
         for _ in 0..(120 * 5) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        assert!(state.regions[0].governor.loyalty > 50.0,
-            "Blowhard should gain loyalty with no restrictions and low infections, got {}",
-            state.regions[0].governor.loyalty);
+        assert!(state.regions[0].governor.cooperation > 50.0,
+            "Blowhard should gain cooperation with no restrictions and low infections, got {}",
+            state.regions[0].governor.cooperation);
     }
 
     #[test]
-    fn mobster_loyalty_decays_faster_with_bargains() {
+    fn mobster_cooperation_decays_faster_with_bargains() {
         let mut state = screening_test_state();
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Mobster;
 
         // No bargains — base decay
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         state.regions[0].governor.bargain_count = 0;
         for _ in 0..(120 * 10) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let no_bargain_loyalty = state.regions[0].governor.loyalty;
+        let no_bargain_cooperation = state.regions[0].governor.cooperation;
 
         // After 3 bargains — faster decay
-        state.regions[0].governor.loyalty = 70.0;
+        state.regions[0].governor.cooperation = 70.0;
         state.regions[0].governor.bargain_count = 3;
         for _ in 0..(120 * 10) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let many_bargain_loyalty = state.regions[0].governor.loyalty;
+        let many_bargain_cooperation = state.regions[0].governor.cooperation;
 
-        assert!(many_bargain_loyalty < no_bargain_loyalty,
-            "Mobster with 3 bargains ({many_bargain_loyalty:.1}) should decay faster than with 0 ({no_bargain_loyalty:.1})");
+        assert!(many_bargain_cooperation < no_bargain_cooperation,
+            "Mobster with 3 bargains ({many_bargain_cooperation:.1}) should decay faster than with 0 ({no_bargain_cooperation:.1})");
     }
 
     #[test]
-    fn operative_gains_loyalty_when_skimming() {
+    fn operative_gains_cooperation_when_skimming() {
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 100.0; // low infections
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
 
         // Without income skim — neutral
         state.regions[0].governor.income_skim = 0.0;
-        state.regions[0].governor.loyalty = 50.0;
+        state.regions[0].governor.cooperation = 50.0;
         for _ in 0..(120 * 10) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let no_skim_loyalty = state.regions[0].governor.loyalty;
+        let no_skim_cooperation = state.regions[0].governor.cooperation;
 
-        // With income skim — passive loyalty gain
+        // With income skim — passive cooperation gain
         state.regions[0].governor.income_skim = 0.10;
-        state.regions[0].governor.loyalty = 50.0;
+        state.regions[0].governor.cooperation = 50.0;
         for _ in 0..(120 * 10) {
-            tick_governor_loyalty(&mut state);
+            tick_governor_cooperation(&mut state);
         }
-        let skim_loyalty = state.regions[0].governor.loyalty;
+        let skim_cooperation = state.regions[0].governor.cooperation;
 
-        assert!(skim_loyalty > no_skim_loyalty,
-            "Operative with income skim ({skim_loyalty:.1}) should have higher loyalty than without ({no_skim_loyalty:.1})");
+        assert!(skim_cooperation > no_skim_cooperation,
+            "Operative with income skim ({skim_cooperation:.1}) should have higher cooperation than without ({no_skim_cooperation:.1})");
     }
 
     // --- Governor autonomous action tests ---
@@ -1636,7 +1636,7 @@ mod tests {
     fn defiant_governor_state(personality: GovernorPersonality) -> GameState {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = personality;
-        state.regions[0].governor.loyalty = 20.0; // well below defiance threshold (40)
+        state.regions[0].governor.cooperation = 20.0; // well below defiance threshold (40)
         state.regions[0].governor.last_action_tick = 0;
         state.tick = GOVERNOR_ACTION_INTERVAL + 1; // past cooldown
         state
@@ -1763,7 +1763,7 @@ mod tests {
     #[test]
     fn governor_actions_only_fire_when_defiant() {
         let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
-        state.regions[0].governor.loyalty = 50.0; // above threshold
+        state.regions[0].governor.cooperation = 50.0; // above threshold
 
         tick_governor_actions(&mut state);
 
@@ -1851,32 +1851,32 @@ mod tests {
     #[test]
     fn suspend_regional_authority_freezes_governors() {
         let mut state = screening_test_state();
-        state.regions[0].governor.loyalty = 20.0; // defiant
-        state.regions[1].governor.loyalty = 90.0; // cooperative
+        state.regions[0].governor.cooperation = 20.0; // defiant
+        state.regions[1].governor.cooperation = 90.0; // cooperative
 
         let (msg, ok) = enact_decree(&mut state, 3, None);
         assert!(ok, "should succeed");
         assert!(msg.unwrap().contains("suspended"));
         assert!(state.enacted_decrees.suspend_regional_authority);
 
-        // All governors should be at neutral loyalty (50)
+        // All governors should be at neutral cooperation (50)
         for region in &state.regions {
             if !region.collapsed {
-                assert!((region.governor.loyalty - 50.0).abs() < 0.01,
-                    "governor loyalty should be 50, got {}", region.governor.loyalty);
+                assert!((region.governor.cooperation - 50.0).abs() < 0.01,
+                    "governor cooperation should be 50, got {}", region.governor.cooperation);
             }
         }
 
-        // Loyalty should not drift after decree
-        let loyalty_before: Vec<f64> = state.regions.iter().map(|r| r.governor.loyalty).collect();
-        tick_governor_loyalty(&mut state);
+        // Cooperation should not drift after decree
+        let cooperation_before: Vec<f64> = state.regions.iter().map(|r| r.governor.cooperation).collect();
+        tick_governor_cooperation(&mut state);
         for (i, region) in state.regions.iter().enumerate() {
-            assert!((region.governor.loyalty - loyalty_before[i]).abs() < 0.001,
-                "loyalty should not drift after decree");
+            assert!((region.governor.cooperation - cooperation_before[i]).abs() < 0.001,
+                "cooperation should not drift after decree");
         }
 
         // Governor actions should not fire
-        state.regions[0].governor.loyalty = 10.0; // Force below threshold for test
+        state.regions[0].governor.cooperation = 10.0; // Force below threshold for test
         state.regions[0].governor.last_action_tick = 0;
         let policies_before = state.policies[0].clone();
         tick_governor_actions(&mut state);
