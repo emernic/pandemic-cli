@@ -28,6 +28,7 @@ pub fn generate_board_members(state: &mut GameState) {
             corp_idx: Some(corp_idx),
             region_idx: Some(corp.region_idx),
             satisfaction: 1.0,
+            last_demand_tick: 0,
         });
     }
 
@@ -54,6 +55,7 @@ pub fn generate_board_members(state: &mut GameState) {
             corp_idx: None,
             region_idx: Some(region_idx),
             satisfaction: 1.0,
+            last_demand_tick: 0,
         });
         governor_count += 1;
     }

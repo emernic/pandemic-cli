@@ -195,9 +195,6 @@ pub struct GameState {
     /// from board-seat corporations and selected governors.
     #[serde(default)]
     pub board_members: Vec<BoardMember>,
-    /// Tick when the last board demand crisis fired (cooldown tracking).
-    #[serde(default)]
-    pub last_board_demand_tick: u64,
     /// Monotonically increasing counter for assigning sequence group IDs to
     /// wave-coordinated diseases. Incremented each time a new group is created.
     #[serde(default)]
@@ -1220,6 +1217,9 @@ pub struct BoardMember {
     pub region_idx: Option<usize>,
     /// Individual satisfaction (0.0–1.0). Updated each tick from connected entity health.
     pub satisfaction: f64,
+    /// Tick when this member last fired a demand crisis. Per-member cooldown.
+    #[serde(default)]
+    pub last_demand_tick: u64,
 }
 
 fn format_large_number(n: f64) -> String {
@@ -3741,9 +3741,10 @@ pub enum CrisisKind {
 
     // --- Corporate crises ---
 
-    /// Board of directors demands action when board satisfaction drops too low.
+    /// A specific board member demands action when their individual satisfaction drops.
     /// `severity` 0 = warning demand (satisfaction < 0.5), 1 = ultimatum (< 0.3).
-    BoardDemand { severity: u8 },
+    /// `member_idx` indexes into `GameState::board_members`.
+    BoardDemand { severity: u8, member_idx: usize },
 
     // --- Corporate detention crises ---
 
@@ -4813,7 +4814,6 @@ impl GameState {
             last_contract_offer_tick: 0,
             corporations: Vec::new(),
             board_members: Vec::new(),
-            last_board_demand_tick: 0,
             next_sequence_group: 0,
             loans: vec![],
             ui: UiState {
