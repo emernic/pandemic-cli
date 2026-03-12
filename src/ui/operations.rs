@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::state::{
     GameState, OpsUiState, TICKS_PER_DAY,
-    DECREE_COUNT,
+    DECREE_COUNT, DECREE_APPROVAL_COSTS,
     decree_display_name,
 };
 use super::hint_line;
@@ -91,12 +91,13 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             (Color::DarkGray, Color::DarkGray)
         };
 
+        let cost_pct = (DECREE_APPROVAL_COSTS[decree_idx] * 100.0) as u32;
         let suffix = if enacted {
             " [ENACTED]".to_string()
         } else if !unlocked {
             format!(" [{}]", GameState::decree_unlock_hint(decree_idx))
         } else {
-            String::new()
+            format!(" [-{}% approval]", cost_pct)
         };
 
         lines.push(Line::from(vec![

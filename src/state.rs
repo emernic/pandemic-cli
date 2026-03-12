@@ -387,6 +387,19 @@ pub const COUNTERMEASURE_KILL_FRACTION: f64 = 0.10;
 pub const COUNTERMEASURE_INFECTIVITY_MULT: f64 = 0.50;
 /// Emergency Countermeasure: cross-region spread multiplier applied to all diseases.
 pub const COUNTERMEASURE_SPREAD_MULT: f64 = 0.25;
+/// Board approval cost for each decree (subtracted immediately on enactment).
+/// Indexed by decree_idx. Costs escalate: early decrees are cheap, late-game
+/// decrees are expensive. Taking 2+ decrees in quick succession drops the player
+/// below policy approval thresholds (Quarantine=45%, Travel Ban=40%).
+pub const DECREE_APPROVAL_COSTS: [f64; DECREE_COUNT] = [
+    0.05, // Conscript Researchers — early/mild, small political cost
+    0.10, // Authorize Human Trials — ethically controversial
+    0.10, // Sacrifice Region — dramatic but situational
+    0.15, // Suspend Regional Authority — major power grab
+    0.10, // Fortify Region — picking favorites, moderate cost
+    0.20, // Emergency Countermeasure — kills civilians, massive political cost
+];
+
 /// Per-tick cost for each screening level (halved from original — screening
 /// is now genuinely useful since it provides real fog-of-war rather than
 /// a transparent multiplier).
