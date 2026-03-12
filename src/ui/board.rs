@@ -422,5 +422,31 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
         ),
     ]));
 
-
+    // Active contract with this board member (if any)
+    if let Some(contract) = state.contracts.iter().find(|c| c.board_member_idx == member_idx) {
+        let income_per_day = contract.income * TICKS_PER_DAY;
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "    \u{2500}\u{2500} Contract \u{2500}\u{2500}",
+            Style::default().fg(Color::Cyan),
+        )));
+        lines.push(Line::from(vec![
+            Span::styled("    Income: ", hdr),
+            Span::styled(
+                format!("+\u{00a5}{:.0}/day", income_per_day),
+                Style::default().fg(Color::Green),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("    Condition: ", hdr),
+            Span::styled(
+                contract.condition.description(),
+                Style::default().fg(Color::White),
+            ),
+        ]));
+        lines.push(Line::from(Span::styled(
+            "    [X] Cancel contract",
+            Style::default().fg(Color::Yellow),
+        )));
+    }
 }

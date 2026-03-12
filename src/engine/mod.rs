@@ -891,6 +891,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             state.rng_misc = rng;
             CommandResult { message: msg, success }
         }
+        GameCommand::CancelContract { board_member_idx } => {
+            let (success, msg) = contracts::cancel_contract(state, *board_member_idx);
+            CommandResult { message: msg, success }
+        }
     }
 }
 

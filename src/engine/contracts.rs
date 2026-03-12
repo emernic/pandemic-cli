@@ -130,6 +130,8 @@ const ACCEPT_OFFERER_BOOST: f64 = 0.15;
 const ACCEPT_OTHERS_PENALTY: f64 = 0.08;
 /// Satisfaction penalty applied to the offering board member when a contract is refused.
 const REFUSE_OFFERER_PENALTY: f64 = 0.12;
+/// Satisfaction penalty applied to the offering board member when an active contract is canceled.
+const CANCEL_PENALTY: f64 = 0.20;
 
 /// Per-decline price escalation: each prior decline of this template adds 20% to base price.
 const DECLINE_ESCALATION: f64 = 0.20;
@@ -371,6 +373,31 @@ pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
         (true, Some(msg))
     } else {
         (false, Some("No contract offer to reject.".to_string()))
+    }
+}
+
+/// Cancel an active contract by board member index.
+/// Removes the contract, frees the slot, and penalizes the offering member's satisfaction.
+pub(super) fn cancel_contract(state: &mut GameState, board_member_idx: usize) -> (bool, Option<String>) {
+    let pos = state.contracts.iter().position(|c| c.board_member_idx == board_member_idx);
+    if let Some(idx) = pos {
+        let contract = state.contracts.remove(idx);
+        let member_name = state.board_members.get(board_member_idx)
+            .map(|m| m.name.clone())
+            .unwrap_or_else(|| "Board member".to_string());
+
+        // Penalize the offering member for breaking the deal
+        if let Some(member) = state.board_members.get_mut(board_member_idx) {
+            member.satisfaction_modifier -= CANCEL_PENALTY;
+        }
+
+        let msg = format!(
+            "Canceled {}. {} is upset.",
+            contract.name, member_name,
+        );
+        (true, Some(msg))
+    } else {
+        (false, Some("No active contract with this board member.".to_string()))
     }
 }
 
@@ -860,5 +887,41 @@ mod tests {
                     offer.template_id);
             }
         }
+    }
+
+    #[test]
+    fn cancel_contract_removes_and_penalizes() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+
+        // Add a contract from board member 0
+        state.contracts.push(FundingContract {
+            name: "Test Lease".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 3,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+        });
+        assert_eq!(state.contracts.len(), 1);
+
+        let (ok, msg) = cancel_contract(&mut state, 0);
+        assert!(ok);
+        assert!(msg.unwrap().contains("Canceled"));
+        assert_eq!(state.contracts.len(), 0);
+        assert!((state.board_members[0].satisfaction_modifier - (-CANCEL_PENALTY)).abs() < 0.01,
+            "offerer should receive cancel penalty");
+    }
+
+    #[test]
+    fn cancel_contract_fails_without_contract() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+
+        let (ok, msg) = cancel_contract(&mut state, 0);
+        assert!(!ok);
+        assert!(msg.unwrap().contains("No active contract"));
     }
 }

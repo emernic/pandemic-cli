@@ -179,6 +179,16 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     _ => {}
                 }
             }
+            // Board: cancel the selected member's contract
+            else if new.ui.open_panel == Panel::Board {
+                let board_member_idx = new.ui.panel_selection;
+                if new.contracts.iter().any(|c| c.board_member_idx == board_member_idx) {
+                    let result = execute_command(&mut new, &GameCommand::CancelContract { board_member_idx });
+                    if new.ui.status_message.is_none() {
+                        new.ui.status_message = result.message;
+                    }
+                }
+            }
             // Toggle "Assign 2x personnel" on research confirm screen (pure UI state)
             else if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
                 *double_personnel = !*double_personnel;
