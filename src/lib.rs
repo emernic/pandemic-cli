@@ -174,7 +174,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         ResearchTrack::from_index(new.ui.panel_selection)
                     }
                     Some(ResearchUiState::BrowseProjects { track }) => Some(*track),
-                    Some(ResearchUiState::ViewActive { track, .. }) => Some(*track),
                     _ => None,
                 };
                 if let Some(track) = track {
@@ -399,11 +398,7 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
             if track == ResearchTrack::Field {
                 // Field track: list shows active projects first, then available.
                 let n_active = state.field_research.len();
-                if ui.panel_selection < n_active {
-                    // Selected an active project → view it
-                    ui.research_ui = Some(ResearchUiState::ViewActive { track, slot_idx: ui.panel_selection });
-                    ui.panel_selection = 0;
-                } else {
+                if ui.panel_selection >= n_active {
                     // Selected an available project
                     let project_idx = ui.panel_selection - n_active;
                     let count = state.available_projects(track).len();
@@ -416,12 +411,10 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                         ui.panel_selection = 0;
                     }
                 }
+                // Enter on an active project is a no-op (info already visible in the list)
             } else {
-                // Applied/Basic: single-slot behavior
-                if state.research_slot(track).is_some() {
-                    ui.research_ui = Some(ResearchUiState::ViewActive { track, slot_idx: 0 });
-                    ui.panel_selection = 0;
-                } else {
+                // Applied/Basic: single-slot behavior — Enter only works when starting new research
+                if state.research_slot(track).is_none() {
                     let count = state.available_projects(track).len();
                     if count > 0 {
                         ui.research_ui = Some(ResearchUiState::ConfirmProject {
@@ -437,12 +430,6 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
         }
         Some(ResearchUiState::ConfirmProject { track, project_idx, double_personnel }) => {
             Some(GameCommand::StartResearch { track, project_idx, double_personnel })
-        }
-        Some(ResearchUiState::ViewActive { track, .. }) => {
-            // Confirm from ViewActive goes back to project list
-            ui.research_ui = Some(ResearchUiState::BrowseProjects { track });
-            ui.panel_selection = 0;
-            None
         }
         None => None,
     }
