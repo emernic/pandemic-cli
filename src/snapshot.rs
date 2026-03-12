@@ -136,7 +136,7 @@ pub fn run_snapshot(
                     }
                     None => {
                         return Err(format!(
-                            "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, left, right, h, l, enter, z, x, q, 1-9, 0 (jump to list item)",
+                            "Unknown key: {:?}. Valid keys: space, t, r, m, p, ?, esc, up, down, left, right, enter, z, x, q, 1-9, 0 (jump to list item)",
                             key_str
                         ));
                     }
@@ -383,7 +383,7 @@ mod tests {
         // Open policy panel (goes directly to region management), navigate down to Appease.
         // Appease is at position MANAGE_APPEASE_POS = POLICY_COUNT + 1 = 13.
         let steps: Vec<String> = std::iter::once("p")
-            .chain(std::iter::repeat("j").take(crate::state::MANAGE_APPEASE_POS))
+            .chain(std::iter::repeat("down").take(crate::state::MANAGE_APPEASE_POS))
             .map(|s| s.to_string())
             .collect();
         let result = run_snapshot(state, &steps).unwrap();

@@ -211,7 +211,7 @@ cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half 
 
 ### Navigation Convention — Left/Right Always Controls Regions
 
-**Left/right arrow keys (h/l) always navigate the region map**, even when a panel is open. Up/down arrow keys (j/k) navigate panel items when a panel is open, or the map when no panel is open.
+**Left/right arrow keys always navigate the region map**, even when a panel is open. Up/down arrow keys navigate panel items when a panel is open, or the map when no panel is open.
 
 - **Never use left/right for panel item navigation.** All panel lists (threats, research categories, medicines, policies) must use up/down only.
 - Left/right use **reading order with wrap-around**: NA → Europe → Asia → SA → Africa → Oceania → NA (and reverse).
