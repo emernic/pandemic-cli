@@ -214,52 +214,60 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                     ),
                 ]));
 
-                // Revenue trend
-                let profit = corp.daily_profit();
-                let profit_color = if profit >= 0.0 { Color::Green } else { Color::Red };
-                let status_word = if corp.bankrupt {
-                    "BANKRUPT"
-                } else if corp.reserves_fraction() < 0.25 {
-                    "Critical"
-                } else if corp.reserves_fraction() < 0.5 {
-                    "Stressed"
+                // Stock price with trend arrow
+                let change_pct = corp.price_change_pct();
+                let trend_arrow = if corp.bankrupt {
+                    ""
+                } else if change_pct > 0.5 {
+                    " ▲"
+                } else if change_pct < -0.5 {
+                    " ▼"
                 } else {
-                    "Healthy"
+                    ""
                 };
-                let status_color = if corp.bankrupt {
+                let price_color = if corp.bankrupt {
                     Color::Red
-                } else if corp.reserves_fraction() < 0.25 {
-                    Color::LightRed
-                } else if corp.reserves_fraction() < 0.5 {
+                } else if corp.share_price >= corp.ipo_price * 0.8 {
+                    Color::Green
+                } else if corp.share_price >= corp.ipo_price * 0.5 {
                     Color::Yellow
                 } else {
-                    Color::Green
+                    Color::LightRed
                 };
 
+                let price_str = if corp.bankrupt {
+                    "BANKRUPT".to_string()
+                } else {
+                    format!("¥{:.0}{} ({:+.1}%)", corp.share_price, trend_arrow, change_pct)
+                };
                 lines.push(Line::from(vec![
-                    Span::styled("    Status: ", hdr),
-                    Span::styled(status_word, Style::default().fg(status_color)),
+                    Span::styled("    Stock: ", hdr),
+                    Span::styled(price_str, Style::default().fg(price_color)),
                     Span::styled(
-                        format!("  Reserves: {:.0}%", corp.reserves_fraction() * 100.0),
-                        hdr,
+                        format!("  IPO: ¥{:.0}", corp.ipo_price),
+                        Style::default().fg(Color::DarkGray),
                     ),
                 ]));
+
+                // Revenue and profit (scaled to ~10x funding for corporate scale feel)
+                let profit = corp.daily_profit();
+                let profit_color = if profit >= 0.0 { Color::Green } else { Color::Red };
                 lines.push(Line::from(vec![
                     Span::styled("    Revenue: ", hdr),
                     Span::styled(
-                        format!("\u{00a5}{:.0}/day", corp.revenue),
+                        format!("¥{:.0}/day", corp.revenue * 10.0),
                         Style::default().fg(Color::White),
                     ),
                     Span::styled("  Profit: ", hdr),
                     Span::styled(
-                        format!("{:+.0}/day", profit),
+                        format!("{:+.0}/day", profit * 10.0),
                         Style::default().fg(profit_color),
                     ),
                 ]));
 
                 // Satisfaction driver
                 lines.push(Line::from(Span::styled(
-                    "    Tracks corporate reserves",
+                    "    Tracks stock performance",
                     Style::default().fg(Color::DarkGray),
                 )));
             }
@@ -375,6 +383,20 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
     if matches!(member.role, BoardRole::RegionGovernor { .. }) {
         if let Some(corp_idx) = member.corp_idx {
             if let Some(corp) = state.corporations.get(corp_idx) {
+                let change = corp.price_change_pct();
+                let arrow = if corp.bankrupt { "" }
+                    else if change > 0.5 { " ▲" }
+                    else if change < -0.5 { " ▼" }
+                    else { "" };
+                let stock_str = if corp.bankrupt {
+                    "BANKRUPT".to_string()
+                } else {
+                    format!("¥{:.0}{}", corp.share_price, arrow)
+                };
+                let stock_color = if corp.bankrupt { Color::Red }
+                    else if corp.share_price >= corp.ipo_price * 0.8 { Color::Green }
+                    else if corp.share_price >= corp.ipo_price * 0.5 { Color::Yellow }
+                    else { Color::LightRed };
                 lines.push(Line::from(vec![
                     Span::styled("    Corp connection: ", hdr),
                     Span::styled(
@@ -382,9 +404,10 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                         Style::default().fg(Color::White),
                     ),
                     Span::styled(
-                        format!("  Reserves: {:.0}%", corp.reserves_fraction() * 100.0),
+                        format!("  Stock: "),
                         hdr,
                     ),
+                    Span::styled(stock_str, Style::default().fg(stock_color)),
                 ]));
             }
         }

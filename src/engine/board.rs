@@ -96,10 +96,13 @@ fn compute_member_satisfaction(state: &GameState, member_idx: usize) -> f64 {
     let member = &state.board_members[member_idx];
     match &member.role {
         BoardRole::CorporateLeader { corp_idx } => {
-            // Satisfaction tracks corporation reserve health.
-            // Bankrupt corps contribute 0.0.
+            // Satisfaction tracks stock price relative to IPO price.
+            // Stock price already incorporates revenue and reserves via fair
+            // value calculation, with natural mean-reversion lag.
             state.corporations.get(*corp_idx)
-                .map(|c| if c.bankrupt { 0.0 } else { c.reserves_fraction() })
+                .map(|c| if c.bankrupt { 0.0 } else {
+                    (c.share_price / c.ipo_price).clamp(0.0, 1.0)
+                })
                 .unwrap_or(0.0)
         }
         BoardRole::RegionGovernor { region_idx } => {

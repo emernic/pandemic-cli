@@ -693,43 +693,18 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         if !corps.is_empty() && lines.len() < inner.height as usize {
             for corp in &corps {
                 if lines.len() >= inner.height as usize { break; }
-                let (status, status_color) = if corp.bankrupt {
-                    ("BANKRUPT", Color::Red)
-                } else if corp.reserves_fraction() < 0.25 {
-                    ("FAILING", Color::Red)
-                } else if corp.reserves_fraction() < 0.50 {
-                    ("STRESSED", Color::Yellow)
+                // Stock price with trend
+                let change = corp.price_change_pct();
+                let (price_str, price_color) = if corp.bankrupt {
+                    ("BANKRUPT".to_string(), Color::Red)
                 } else {
-                    ("OK", Color::Green)
-                };
-                let profit = corp.daily_profit();
-                let profit_str = if corp.bankrupt {
-                    String::new()
-                } else if profit >= 0.0 {
-                    format!("  +¥{:.0}/d", profit)
-                } else {
-                    format!("  ¥{:.0}/d", profit)
-                };
-                // Days of runway when burning reserves
-                let runway = corp.days_of_runway();
-                // Trend arrow: shows when reserves are actively changing.
-                // Only shown when recovering (below max) or burning — not at stable max.
-                let recovering = runway.is_none() && !corp.bankrupt && corp.reserves_fraction() < 0.99;
-                let (trend, trend_color) = if runway.is_some() {
-                    (" ↓", Color::Red)
-                } else if recovering {
-                    (" ↑", Color::Green)
-                } else {
-                    ("", Color::DarkGray)
-                };
-                let runway_str = match runway {
-                    Some(days) => format!("  ~{:.0}d", days),
-                    None => String::new(),
-                };
-                let runway_color = match runway {
-                    Some(days) if days < 7.0 => Color::Red,
-                    Some(_) => Color::Yellow,
-                    None => Color::DarkGray,
+                    let arrow = if change > 0.5 { "▲" }
+                        else if change < -0.5 { "▼" }
+                        else { " " };
+                    let color = if corp.share_price >= corp.ipo_price * 0.8 { Color::Green }
+                        else if corp.share_price >= corp.ipo_price * 0.5 { Color::Yellow }
+                        else { Color::LightRed };
+                    (format!("¥{:.0}{}", corp.share_price, arrow), color)
                 };
                 let board_marker = if corp.board_seat { " ★" } else { "" };
                 lines.push(Line::from(vec![
@@ -742,20 +717,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::DarkGray),
                     ),
                     Span::styled(
-                        status,
-                        Style::default().fg(status_color),
-                    ),
-                    Span::styled(
-                        trend,
-                        Style::default().fg(trend_color),
-                    ),
-                    Span::styled(
-                        profit_str,
-                        Style::default().fg(if profit >= 0.0 { Color::Green } else { Color::Red }),
-                    ),
-                    Span::styled(
-                        runway_str,
-                        Style::default().fg(runway_color),
+                        price_str,
+                        Style::default().fg(price_color),
                     ),
                     Span::styled(
                         board_marker,
