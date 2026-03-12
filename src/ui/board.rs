@@ -91,11 +91,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
-            // Name line
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", marker, member.name),
-                style,
-            )));
+            // Name line (with personality in gray parentheses, like governor personalities)
+            let mut name_spans: Vec<Span> = vec![
+                Span::styled(format!("{}{}", marker, member.name), style),
+            ];
+            if let Some(personality) = &member.personality {
+                name_spans.push(Span::styled(
+                    format!(" ({})", personality.label()),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+            lines.push(Line::from(name_spans));
 
             // Title + satisfaction + connection indicators
             let (sat_word, sat_color) = satisfaction_display(member.satisfaction);
@@ -121,9 +127,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         connections.push(format!("[Gov: {}]", region.name));
                     }
                 }
-            }
-            if let Some(personality) = &member.personality {
-                connections.push(format!("[{}]", personality.label()));
             }
             if state.contracts.iter().any(|c| c.board_member_idx == i) {
                 connections.push("[Contract]".to_string());
