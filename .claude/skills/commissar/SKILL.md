@@ -143,7 +143,7 @@ Do these in order. Stop when you have done enough.
 
 Do NOT iterate by filing, getting it wrong, and refiling. Get it right the first time. If you aren't confident in an issue, don't file it — think more, or discuss it with the user first.
 
-**Close issues** that push the game in the wrong direction. 0 to 3 per cycle.
+**Close issues** that push the game in the wrong direction. 0 to 3 per cycle. Before closing, search the body for "user" — if the user requested it, do not close it without asking first.
 
 **Bump priorities** on issues that are thematically critical and sitting untouched.
 
