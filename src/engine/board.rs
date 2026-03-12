@@ -238,6 +238,13 @@ pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<St
         None => return None,
     };
 
+    // Dealmaker chairman doubles stock trade reactions for ALL board members
+    let dealmaker_mult = if state.chairman_personality() == Some(BoardPersonality::Dealmaker) {
+        2.0
+    } else {
+        1.0
+    };
+
     let mut pleased: Option<String> = None;
     let mut displeased_count = 0usize;
 
@@ -252,11 +259,11 @@ pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<St
             } else {
                 INVEST_OWN_CORP_BOOST
             };
-            member.satisfaction_modifier += boost;
+            member.satisfaction_modifier += boost * dealmaker_mult;
             pleased = Some(member.name.clone());
         } else if let Some(member_corp) = state.corporations.get(member_corp_idx) {
             if member_corp.sector == bought_sector {
-                member.satisfaction_modifier -= INVEST_RIVAL_PENALTY;
+                member.satisfaction_modifier -= INVEST_RIVAL_PENALTY * dealmaker_mult;
                 displeased_count += 1;
             }
         }
@@ -274,6 +281,12 @@ pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<St
 /// Only the member whose corp was sold reacts (negatively).
 /// Returns a short reaction hint for the transaction message.
 pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<String> {
+    // Dealmaker chairman doubles stock trade reactions for ALL board members
+    let dealmaker_mult = if state.chairman_personality() == Some(BoardPersonality::Dealmaker) {
+        2.0
+    } else {
+        1.0
+    };
     let mut displeased: Option<String> = None;
     for member in state.board_members.iter_mut() {
         let member_corp_idx = match member.role {
@@ -281,7 +294,7 @@ pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<S
             _ => continue,
         };
         if member_corp_idx == corp_idx {
-            member.satisfaction_modifier -= SELL_OWN_CORP_PENALTY;
+            member.satisfaction_modifier -= SELL_OWN_CORP_PENALTY * dealmaker_mult;
             displeased = Some(member.name.clone());
         }
     }

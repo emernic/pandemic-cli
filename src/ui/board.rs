@@ -300,6 +300,16 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                     format!("    {}", interests),
                     Style::default().fg(Color::DarkGray),
                 )));
+
+                // Chairman effect (personality-specific power)
+                if member.is_chairman {
+                    if let Some(personality) = &member.personality {
+                        lines.push(Line::from(Span::styled(
+                            format!("    {}", personality.chairman_effect_description()),
+                            Style::default().fg(Color::Magenta),
+                        )));
+                    }
+                }
             }
         }
         BoardRole::RegionGovernor { region_idx } => {
