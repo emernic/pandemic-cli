@@ -117,6 +117,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     }
                 }
             }
+            if let Some(personality) = &member.personality {
+                connections.push(format!("[{}]", personality.label()));
+            }
             if !connections.is_empty() {
                 detail_spans.push(Span::styled(
                     format!("  {}", connections.join(" ")),
@@ -268,9 +271,13 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                     ),
                 ]));
 
-                // Satisfaction driver
+                // Satisfaction driver / personality interests
+                let interests = match &member.personality {
+                    Some(p) => p.interests(&corp.name),
+                    None => "Tracks stock performance".to_string(),
+                };
                 lines.push(Line::from(Span::styled(
-                    "    Tracks stock performance",
+                    format!("    {}", interests),
                     Style::default().fg(Color::DarkGray),
                 )));
             }

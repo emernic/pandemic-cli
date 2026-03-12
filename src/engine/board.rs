@@ -1,7 +1,7 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::state::{BoardMember, BoardRole, GameState};
+use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState};
 
 /// Generate board members from existing game entities at game start.
 /// Called after corporations and regions are initialized.
@@ -24,6 +24,8 @@ pub fn generate_board_members(state: &mut GameState) {
         if is_chairman {
             chairman_assigned = true;
         }
+        let personality_idx = state.rng_misc.r#gen::<usize>() % BoardPersonality::ALL.len();
+        let personality = BoardPersonality::ALL[personality_idx];
         members.push(BoardMember {
             name: if is_chairman {
                 format!("Chairman {}", corp.director_surname)
@@ -41,6 +43,7 @@ pub fn generate_board_members(state: &mut GameState) {
             satisfaction: 1.0,
             satisfaction_modifier: 0.0,
             is_chairman,
+            personality: Some(personality),
         });
     }
 
@@ -69,6 +72,7 @@ pub fn generate_board_members(state: &mut GameState) {
             satisfaction: 1.0,
             satisfaction_modifier: 0.0,
             is_chairman: false,
+            personality: None,
         });
         governor_count += 1;
     }

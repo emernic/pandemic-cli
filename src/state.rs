@@ -1255,6 +1255,49 @@ pub enum BoardRole {
     IndependentAdvisor,
 }
 
+/// Personality archetype for corporate board members.
+/// Determines what the member cares about beyond pure stock performance.
+/// Governor board members do NOT get a BoardPersonality — they have GovernorPersonality.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BoardPersonality {
+    /// Pure stock maximizer. The default corporate mindset, amplified.
+    Profiteer,
+    /// Values R&D and scientific progress over pure profit.
+    Technocrat,
+    /// Rare corporate leader who actually cares about lives saved.
+    Humanitarian,
+    /// Transactional. Wants the player to do business with their corporation.
+    Dealmaker,
+}
+
+impl BoardPersonality {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Profiteer => "Profiteer",
+            Self::Technocrat => "Technocrat",
+            Self::Humanitarian => "Humanitarian",
+            Self::Dealmaker => "Dealmaker",
+        }
+    }
+
+    /// Description of what this personality cares about, shown in detail view.
+    pub fn interests(&self, corp_name: &str) -> String {
+        match self {
+            Self::Profiteer => "Tracks stock performance".to_string(),
+            Self::Technocrat => "Values research progress and scientific breakthroughs".to_string(),
+            Self::Humanitarian => "Concerned with global survival rates".to_string(),
+            Self::Dealmaker => format!("Seeks direct investment in {}", corp_name),
+        }
+    }
+
+    /// All variants, for random selection.
+    pub const ALL: [BoardPersonality; 4] = [
+        Self::Profiteer,
+        Self::Technocrat,
+        Self::Humanitarian,
+        Self::Dealmaker,
+    ];
+}
 
 /// A named individual on the NWHO board of directors.
 /// Satisfaction combines entity-driven base satisfaction with a relationship modifier
@@ -1282,6 +1325,9 @@ pub struct BoardMember {
     /// Whether this member is the Chairman of the Board (2x satisfaction weight).
     #[serde(default)]
     pub is_chairman: bool,
+    /// Personality archetype for corporate leaders. None for governor members.
+    #[serde(default)]
+    pub personality: Option<BoardPersonality>,
 }
 
 fn format_large_number(n: f64) -> String {
