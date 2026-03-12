@@ -419,6 +419,73 @@ pub const DECREE_APPROVAL_COSTS: [f64; DECREE_COUNT] = [
     0.20, // Emergency Countermeasure — kills civilians, massive political cost
 ];
 
+/// Single source of truth for decree unlock conditions.
+/// All fields are OR'd — meeting ANY threshold unlocks the decree.
+#[derive(Default)]
+pub struct DecreeUnlockCondition {
+    pub min_infected: Option<f64>,
+    pub min_dead: Option<f64>,
+    pub min_crit_regions: Option<usize>,
+    pub min_collapsed_regions: Option<usize>,
+}
+
+impl DecreeUnlockCondition {
+    /// Check whether this condition is met given the current game state.
+    pub fn is_met(&self, state: &GameState) -> bool {
+        if let Some(threshold) = self.min_infected {
+            if state.total_infected() >= threshold { return true; }
+        }
+        if let Some(threshold) = self.min_dead {
+            if state.total_dead() >= threshold { return true; }
+        }
+        if let Some(threshold) = self.min_crit_regions {
+            let crit_count = state.regions.iter()
+                .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
+                .count();
+            if crit_count >= threshold { return true; }
+        }
+        if let Some(threshold) = self.min_collapsed_regions {
+            let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
+            if collapsed_count >= threshold { return true; }
+        }
+        false
+    }
+
+    /// Human-readable description of the unlock condition.
+    pub fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(v) = self.min_infected {
+            parts.push(format!("{}+ infected", Self::format_threshold(v)));
+        }
+        if let Some(v) = self.min_dead {
+            parts.push(format!("{}+ dead", Self::format_threshold(v)));
+        }
+        if let Some(v) = self.min_crit_regions {
+            if v == 1 {
+                parts.push("any region at CRITICAL".to_string());
+            } else {
+                parts.push(format!("{}+ regions at CRITICAL", v));
+            }
+        }
+        if let Some(v) = self.min_collapsed_regions {
+            parts.push(format!("{}+ regions collapsed", v));
+        }
+        parts.join(" or ")
+    }
+
+    fn format_threshold(v: f64) -> String {
+        if v >= 1_000_000_000.0 {
+            format!("{}B", (v / 1_000_000_000.0) as u64)
+        } else if v >= 1_000_000.0 {
+            format!("{}M", (v / 1_000_000.0) as u64)
+        } else if v >= 1_000.0 {
+            format!("{}K", (v / 1_000.0) as u64)
+        } else {
+            format!("{}", v as u64)
+        }
+    }
+}
+
 /// Per-tick cost for each screening level (halved from original — screening
 /// is now genuinely useful since it provides real fog-of-war rather than
 /// a transparent multiplier).
@@ -5517,44 +5584,39 @@ impl GameState {
             && self.resources.board_approval >= self.effective_approval_threshold(region_idx, policy_idx)
     }
 
-    /// Whether a decree is unlocked based on current crisis severity.
-    /// Decrees become available when conditions are dire enough to justify them.
-    /// Human-readable unlock condition for a decree, shown in the policy panel when locked.
-    /// Must stay in sync with `decree_unlocked`.
-    pub fn decree_unlock_hint(decree_idx: usize) -> &'static str {
+    /// Single source of truth for decree unlock conditions.
+    /// Returns None for invalid decree indices.
+    pub fn decree_unlock_condition(decree_idx: usize) -> Option<DecreeUnlockCondition> {
         match decree_idx {
-            0 => "Unlocks: 500K+ infected or 100K+ dead",
-            1 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
-            2 => "Unlocks: any region at CRITICAL (100K+ infected) or 500M+ dead",
-            3 => "Unlocks: 50M+ dead or 2+ regions at CRITICAL",
-            4 => "Unlocks: any region at CRITICAL (100K+ infected) or 500M+ dead",
-            5 => "Unlocks: 3+ regions collapsed or 2B+ dead",
-            _ => "",
+            // Conscript Researchers
+            0 => Some(DecreeUnlockCondition { min_infected: Some(500_000.0), min_dead: Some(100_000.0), ..Default::default() }),
+            // Authorize Human Trials
+            1 => Some(DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() }),
+            // Sacrifice Region
+            2 => Some(DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() }),
+            // Suspend Regional Authority
+            3 => Some(DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() }),
+            // Fortify Region
+            4 => Some(DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() }),
+            // Emergency Countermeasure
+            5 => Some(DecreeUnlockCondition { min_dead: Some(2_000_000_000.0), min_collapsed_regions: Some(3), ..Default::default() }),
+            _ => None,
         }
     }
 
-    pub fn decree_unlocked(&self, decree_idx: usize) -> bool {
-        let total_infected = self.total_infected();
-        let total_dead = self.total_dead();
-        let collapsed_count = self.regions.iter().filter(|r| r.collapsed).count();
-        let crit_count = self.regions.iter()
-            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
-            .count();
+    /// Human-readable unlock condition for a decree, shown in the policy panel when locked.
+    pub fn decree_unlock_hint(decree_idx: usize) -> String {
+        match Self::decree_unlock_condition(decree_idx) {
+            Some(cond) => format!("Unlocks: {}", cond.describe()),
+            None => String::new(),
+        }
+    }
 
-        match decree_idx {
-            // Conscript Researchers: 500K+ infected OR 100K+ dead
-            0 => total_infected >= 500_000.0 || total_dead >= 100_000.0,
-            // Authorize Human Trials: 50M+ dead OR 2+ regions at CRIT severity
-            1 => total_dead >= 50_000_000.0 || crit_count >= 2,
-            // Sacrifice Region: any region at CRITICAL (100K+ infected) OR 500M+ dead
-            2 => crit_count >= 1 || total_dead >= 500_000_000.0,
-            // Suspend Regional Authority: 50M+ dead OR 2+ regions at CRIT severity
-            3 => total_dead >= 50_000_000.0 || crit_count >= 2,
-            // Fortify Region: any region at CRITICAL (100K+ infected) OR 500M+ dead
-            4 => crit_count >= 1 || total_dead >= 500_000_000.0,
-            // Emergency Countermeasure: 3+ regions collapsed OR 2B+ dead
-            5 => collapsed_count >= 3 || total_dead >= 2_000_000_000.0,
-            _ => false,
+    /// Whether a decree is unlocked based on current crisis severity.
+    pub fn decree_unlocked(&self, decree_idx: usize) -> bool {
+        match Self::decree_unlock_condition(decree_idx) {
+            Some(cond) => cond.is_met(self),
+            None => false,
         }
     }
 
