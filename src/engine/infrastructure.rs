@@ -1,5 +1,6 @@
 use crate::state::{
-    BasicTech, GameEvent, GameState, InfraSystem, RegionSpecialization, INFRA_CRITICAL, INFRA_STRESSED,
+    BasicTech, GameEvent, GameState, InfraSystem, PathogenType, RegionSpecialization,
+    INFRA_CRITICAL, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
     TROPICAL_MEDICINE_HC_DRAIN_MULT, COMMUNITY_NETWORKS_CO_DRAIN_MULT, LOGISTICS_HUB_SL_DRAIN_MULT,
 };
@@ -137,6 +138,24 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         // generic restriction drain. Creates a ~22-day window before anarchy kicks in,
         // forcing players to cycle quarantine on/off rather than set-and-forget.
         let quarantine_drain = if policy.quarantine { -0.0003 } else { 0.0 }; // ~0.036/day
+        // RNA virus panic: visible high-lethality RNA outbreaks cause extra civil
+        // order degradation from social panic (bodies piling up fast, compliance drops).
+        // Only counts detected diseases — undetected spread doesn't cause visible panic.
+        let rna_infected: f64 = state.regions[i].infections.iter()
+            .filter(|inf| {
+                state.diseases.get(inf.disease_idx)
+                    .is_some_and(|d| d.detected && d.pathogen_type == PathogenType::RnaVirus)
+            })
+            .map(|inf| inf.infected)
+            .sum();
+        let rna_panic_drain = if rna_infected > SEVERITY_CRIT_THRESHOLD {
+            -0.0003 // ~0.036/day — visible mass casualties from fast-moving RNA virus
+        } else if rna_infected > SEVERITY_HIGH_THRESHOLD {
+            -0.00012 // ~0.014/day — growing unrest from RNA outbreak
+        } else {
+            0.0
+        };
+
         // Healthcare collapse accelerates civil breakdown
         let healthcare_cascade = if new_healthcare < INFRA_CRITICAL {
             -0.0003 // ~0.036/day — people see hospitals failing
@@ -153,7 +172,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_civil = state.regions[i].civil_order;
-        let civil_drain = civil_death_drain * resilience_mult + restriction_drain + quarantine_drain + healthcare_cascade;
+        let civil_drain = civil_death_drain * resilience_mult + restriction_drain + quarantine_drain + healthcare_cascade + rna_panic_drain * resilience_mult;
         // CommunityNetworks specialization: civil order degrades 40% slower
         let co_spec_mult = if state.regions[i].has_specialization(RegionSpecialization::CommunityNetworks) {
             COMMUNITY_NETWORKS_CO_DRAIN_MULT
@@ -483,6 +502,57 @@ mod tests {
 
         assert!(co_tech > co_no_tech,
             "ResilientGrids should slow CO degradation: with={} without={}", co_tech, co_no_tech);
+    }
+
+    #[test]
+    fn rna_virus_causes_extra_civil_order_drain() {
+        use crate::state::PathogenType;
+        // Set up two identical states: one with an RNA virus, one with a bacterium
+        let mut state_rna = GameState::new_default(42);
+        for r in &mut state_rna.regions { r.infections.clear(); r.dead = 0.0; }
+        state_rna.diseases[0].pathogen_type = PathogenType::RnaVirus;
+        state_rna.diseases[0].detected = true;
+        state_rna.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+
+        let mut state_bact = GameState::new_default(42);
+        for r in &mut state_bact.regions { r.infections.clear(); r.dead = 0.0; }
+        state_bact.diseases[0].pathogen_type = PathogenType::Bacterium;
+        state_bact.diseases[0].detected = true;
+        state_bact.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_rna);
+            tick_infrastructure(&mut state_bact);
+        }
+
+        assert!(state_rna.regions[0].civil_order < state_bact.regions[0].civil_order,
+            "RNA virus should cause more civil order drain than bacterium: rna={} bact={}",
+            state_rna.regions[0].civil_order, state_bact.regions[0].civil_order);
+    }
+
+    #[test]
+    fn rna_panic_only_affects_detected_diseases() {
+        use crate::state::PathogenType;
+        let mut state_detected = GameState::new_default(42);
+        for r in &mut state_detected.regions { r.infections.clear(); r.dead = 0.0; }
+        state_detected.diseases[0].pathogen_type = PathogenType::RnaVirus;
+        state_detected.diseases[0].detected = true;
+        state_detected.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+
+        let mut state_undetected = GameState::new_default(42);
+        for r in &mut state_undetected.regions { r.infections.clear(); r.dead = 0.0; }
+        state_undetected.diseases[0].pathogen_type = PathogenType::RnaVirus;
+        state_undetected.diseases[0].detected = false;
+        state_undetected.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+
+        for _ in 0..(120 * 10) {
+            tick_infrastructure(&mut state_detected);
+            tick_infrastructure(&mut state_undetected);
+        }
+
+        assert!(state_detected.regions[0].civil_order < state_undetected.regions[0].civil_order,
+            "Detected RNA virus should drain more civil order: detected={} undetected={}",
+            state_detected.regions[0].civil_order, state_undetected.regions[0].civil_order);
     }
 
     #[test]
