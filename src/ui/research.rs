@@ -9,6 +9,16 @@ use ratatui::{
 use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
+/// Maximum selection index for the research panel in its current sub-state.
+pub fn selection_max(ui_state: &ResearchUiState, state: &GameState) -> usize {
+    match ui_state {
+        ResearchUiState::BrowseAll => {
+            state.research_flat_items().len().saturating_sub(1)
+        }
+        ResearchUiState::ConfirmProject { .. } => 0,
+    }
+}
+
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines, selected_line) = match &state.ui.research_ui {
         Some(ResearchUiState::BrowseAll) => render_flat(state),

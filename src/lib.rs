@@ -135,11 +135,11 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::ClosePanel => new.ui.close_panel(&new.medicines, &new.diseases),
         Action::GoHome => new.ui.go_home(),
         Action::SelectNext => {
-            let max = new.ui.panel_selection_max(&new);
+            let max = ui::panel_selection_max(&new.ui, &new);
             new.ui.select_next(new.regions.len(), max);
         }
         Action::SelectPrev => {
-            let max = new.ui.panel_selection_max(&new);
+            let max = ui::panel_selection_max(&new.ui, &new);
             new.ui.select_prev(new.regions.len(), max);
         }
         Action::SelectLeft => {
@@ -151,7 +151,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::JumpToItem { index } => {
             // Jump directly to item N in the current panel list (only when a panel is open).
             if new.ui.open_panel != Panel::None {
-                let max = new.ui.panel_selection_max(&new);
+                let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.panel_selection = (*index).min(max);
             }
         }

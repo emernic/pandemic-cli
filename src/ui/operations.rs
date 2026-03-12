@@ -8,11 +8,28 @@ use ratatui::{
 
 use crate::state::{
     GameState, OpsUiState, TICKS_PER_DAY,
-    DECREE_COUNT, DECREE_APPROVAL_COSTS,
+    DECREE_COUNT, DECREE_APPROVAL_COSTS, STANDING_ORDER_COUNT,
     decree_display_name,
 };
 use super::hint_line;
 use super::policy::{decree_description, render_confirm_decree, render_region_select};
+
+/// Maximum selection index for the operations panel in its current sub-state.
+pub fn selection_max(ui_state: &OpsUiState, state: &GameState) -> usize {
+    match ui_state {
+        OpsUiState::BrowseOps => {
+            // Decrees + standing orders + loans
+            (DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len())
+                .saturating_sub(1)
+        }
+        OpsUiState::SelectSacrificeRegion
+        | OpsUiState::SelectFortifyRegion => {
+            // Non-collapsed regions
+            state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
+        }
+        OpsUiState::ConfirmDecree { .. } => 0,
+    }
+}
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     match &state.ui.operations_ui {

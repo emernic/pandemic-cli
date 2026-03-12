@@ -382,9 +382,9 @@ pub enum ScreeningLevel {
 pub const DECREE_COUNT: usize = 6;
 /// Number of standing orders shown in the Orders panel.
 /// Must equal the length of the `standing_orders` array in `ui/policy.rs`.
-/// Used by `panel_selection_max()` to bound navigation — if you add a standing
-/// order in policy.rs without updating this constant, the new item will be
-/// silently unreachable via keyboard navigation.
+/// Used by `ui::operations::selection_max()` to bound navigation — if you add
+/// a standing order in policy.rs without updating this constant, the new item
+/// will be silently unreachable via keyboard navigation.
 pub const STANDING_ORDER_COUNT: usize = 2;
 /// Conscript Researchers: immediately gain personnel, permanent income penalty.
 pub const CONSCRIPT_PERSONNEL_GAIN: u32 = 10;
@@ -4246,11 +4246,10 @@ pub struct UiState {
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → decrees, standing orders, loans
     ///
-    /// Always bounded by `panel_selection_max()` and reset to 0 on every wizard step transition.
+    /// Always bounded by `ui::panel_selection_max()` and reset to 0 on every wizard step transition.
     ///
-    /// **Adding items to a panel list:** update the corresponding `panel_selection_max()` branch.
-    /// Named constants (RESEARCH_TRACK_COUNT, STANDING_ORDER_COUNT, MANAGE_*)
-    /// tie the max calculation to the renderer so changes propagate correctly.
+    /// **Adding items to a panel list:** update the `selection_max()` function in the
+    /// corresponding `ui/` module — the item-count logic lives alongside each renderer.
     pub panel_selection: usize,
     #[serde(default)]
     pub medicine_ui: Option<MedicineUiState>,
@@ -4311,7 +4310,7 @@ impl UiState {
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
                 Panel::Ledger => matches!(self.ledger_ui, Some(LedgerUiState::BrowseStocks) | None),
-                _ => true,
+                Panel::None | Panel::Threats | Panel::Help => true,
             };
             if at_top {
                 self.open_panel = Panel::None;
@@ -4323,7 +4322,7 @@ impl UiState {
                     Panel::Operations => self.operations_ui = None,
                     Panel::Board => self.board_ui = None,
                     Panel::Ledger => self.ledger_ui = None,
-                    _ => {}
+                    Panel::None | Panel::Threats | Panel::Help => {}
                 }
             } else {
                 // Reset to top level of this panel
@@ -4337,7 +4336,7 @@ impl UiState {
                     Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
                     Panel::Board => self.board_ui = Some(BoardUiState::BrowseMembers),
                     Panel::Ledger => self.ledger_ui = Some(LedgerUiState::BrowseStocks),
-                    _ => {}
+                    Panel::None | Panel::Threats | Panel::Help => {}
                 }
             }
         } else {
@@ -4362,7 +4361,7 @@ impl UiState {
                 Panel::Ledger => {
                     self.ledger_ui = Some(LedgerUiState::BrowseStocks);
                 }
-                _ => {}
+                Panel::None | Panel::Threats | Panel::Help => {}
             }
         }
     }
@@ -4408,7 +4407,7 @@ impl UiState {
                         self.medicine_ui = Some(MedicineUiState::BrowseMedicines);
                         self.panel_selection = 0;
                     }
-                    _ => {
+                    Some(MedicineUiState::BrowseMedicines) | None => {
                         self.open_panel = Panel::None;
                         self.panel_selection = 0;
                         self.medicine_ui = None;
@@ -4427,7 +4426,7 @@ impl UiState {
                         self.research_ui = Some(ResearchUiState::BrowseAll);
                         self.panel_selection = 0;
                     }
-                    _ => {
+                    Some(ResearchUiState::BrowseAll) | None => {
                         self.open_panel = Panel::None;
                         self.panel_selection = 0;
                         self.research_ui = None;
@@ -4442,7 +4441,7 @@ impl UiState {
                         self.operations_ui = Some(OpsUiState::BrowseOps);
                         self.panel_selection = 0;
                     }
-                    _ => {
+                    Some(OpsUiState::BrowseOps) | None => {
                         self.open_panel = Panel::None;
                         self.panel_selection = 0;
                         self.operations_ui = None;
@@ -4460,14 +4459,14 @@ impl UiState {
                         self.ledger_ui = Some(LedgerUiState::BrowseStocks);
                         self.panel_selection = 0;
                     }
-                    _ => {
+                    Some(LedgerUiState::BrowseStocks) | None => {
                         self.open_panel = Panel::None;
                         self.panel_selection = 0;
                         self.ledger_ui = None;
                     }
                 }
             }
-            _ => {
+            Panel::None | Panel::Threats | Panel::Help => {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
                 self.medicine_ui = None;
@@ -4495,73 +4494,6 @@ impl UiState {
         self.ledger_ui = None;
     }
 
-    /// Maximum selection index for the current panel and UI sub-state.
-    /// Used by navigation (SelectNext) to bounds-check panel_selection.
-    pub fn panel_selection_max(&self, state: &GameState) -> usize {
-        match self.open_panel {
-            Panel::Threats => state.diseases.len().saturating_sub(1),
-            Panel::Medicines => match &self.medicine_ui {
-                Some(MedicineUiState::BrowseMedicines) => {
-                    state.unlocked_medicine_indices().len().saturating_sub(1)
-                }
-                Some(MedicineUiState::SelectRegion { .. }) => {
-                    state.regions.len().saturating_sub(1)
-                }
-                Some(MedicineUiState::SelectDisease { medicine_idx, .. }) => {
-                    state.medicines[*medicine_idx]
-                        .deployable_diseases(&state.diseases).len()
-                        .saturating_sub(1)
-                }
-                Some(MedicineUiState::SelectTarget { .. }) => {
-                    1 // vaccinate (0) or treat (1)
-                }
-                Some(MedicineUiState::ConfirmDeploy { .. })
-                | Some(MedicineUiState::DeployResult { .. })
-                | None => 0,
-            },
-            Panel::Research => match &self.research_ui {
-                Some(ResearchUiState::BrowseAll) => {
-                    state.research_flat_items().len().saturating_sub(1)
-                }
-                Some(ResearchUiState::ConfirmProject { .. }) => 0,
-                None => 0,
-            },
-            Panel::Policy => match &self.policy_ui {
-                // Repair/Appease/Bargain hidden for collapsed regions.
-                Some(PolicyUiState::ManagePolicies { region_idx }) => {
-                    if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
-                        POLICY_COUNT - 1
-                    } else if state.bargain_available(*region_idx) {
-                        MANAGE_BARGAIN_POS
-                    } else {
-                        MANAGE_APPEASE_POS
-                    }
-                }
-                None => 0,
-            },
-            Panel::Operations => match &self.operations_ui {
-                Some(OpsUiState::BrowseOps) => {
-                    // Decrees + standing orders + loans
-                    (DECREE_COUNT + STANDING_ORDER_COUNT + state.loans.len())
-                        .saturating_sub(1)
-                }
-                Some(OpsUiState::SelectSacrificeRegion)
-                | Some(OpsUiState::SelectFortifyRegion) => {
-                    // Non-collapsed regions
-                    state.regions.iter().filter(|r| !r.collapsed).count().saturating_sub(1)
-                }
-                Some(OpsUiState::ConfirmDecree { .. }) => 0,
-                None => 0,
-            },
-            Panel::Board => state.board_members.len().saturating_sub(1),
-            Panel::Ledger => match &self.ledger_ui {
-                Some(LedgerUiState::BrowseStocks) => state.corporations.len().saturating_sub(1),
-                Some(LedgerUiState::ConfirmBuy { .. }) | Some(LedgerUiState::ConfirmSell { .. }) => 0,
-                None => 0,
-            },
-            _ => 0,
-        }
-    }
 
     /// Navigate down (in map) or to the next item (in a panel).
     /// `num_regions` is needed for map navigation; `panel_max` bounds panel selection.
