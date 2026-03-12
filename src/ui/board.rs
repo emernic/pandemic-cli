@@ -140,8 +140,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         state.regions.get(*region_idx)
                             .map(|r| if r.collapsed {
                                 format!("Demands: Rebuild {}", r.name)
+                            } else if r.gdp < 0.6 {
+                                format!("Demands: Restore {} economy", r.name)
                             } else {
-                                format!("Demands: Reduce deaths in {}", r.name)
+                                format!("Demands: Protect {} economy", r.name)
                             })
                     }
                     BoardRole::IndependentAdvisor => {
@@ -274,13 +276,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
         }
         BoardRole::RegionGovernor { region_idx } => {
             if let Some(region) = state.regions.get(*region_idx) {
-                let alive = region.alive();
-                let pop = region.population as f64;
-                let alive_pct = if pop > 0.0 {
-                    (alive / pop) * 100.0
-                } else {
-                    0.0
-                };
+                let gdp_pct = region.gdp * 100.0;
 
                 lines.push(Line::from(vec![
                     Span::styled("    Region: ", hdr),
@@ -292,18 +288,23 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
 
                 let status = if region.collapsed {
                     ("COLLAPSED", Color::Red)
-                } else if alive_pct < 75.0 {
-                    ("Suffering", Color::LightRed)
-                } else if alive_pct < 90.0 {
+                } else if gdp_pct < 40.0 {
+                    ("Depression", Color::Red)
+                } else if gdp_pct < 60.0 {
+                    ("Recession", Color::LightRed)
+                } else if gdp_pct < 80.0 {
                     ("Strained", Color::Yellow)
                 } else {
                     ("Stable", Color::Green)
                 };
                 lines.push(Line::from(vec![
-                    Span::styled("    Status: ", hdr),
-                    Span::styled(status.0, Style::default().fg(status.1)),
+                    Span::styled("    GDP: ", hdr),
                     Span::styled(
-                        format!("  Pop alive: {:.1}%", alive_pct),
+                        format!("{:.0}%", gdp_pct),
+                        Style::default().fg(status.1),
+                    ),
+                    Span::styled(
+                        format!("  ({})", status.0),
                         hdr,
                     ),
                 ]));
@@ -346,7 +347,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
                 ]));
 
                 lines.push(Line::from(Span::styled(
-                    "    Tracks region population health",
+                    "    Tracks regional GDP",
                     Style::default().fg(Color::DarkGray),
                 )));
             }

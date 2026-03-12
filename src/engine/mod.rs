@@ -94,6 +94,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
 
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
     corporations::tick_corporations(&mut new);
+    // Update regional GDP — smoothly tracks toward target based on disease + policies.
+    // Must run before board satisfaction so governors see current GDP.
+    tick_gdp(&mut new);
     // Board satisfaction check — queue demand crises when corps are hurting.
     // Update per-member board satisfaction from connected entities.
     board::update_board_satisfaction(&mut new);
@@ -594,6 +597,25 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     new
+}
+
+/// GDP smoothing rate: ~10% convergence per day toward target.
+/// Slow enough that GDP doesn't spike instantly when policies toggle,
+/// fast enough that the player sees the effect within a few days.
+const GDP_SMOOTHING: f64 = 0.10 / crate::state::TICKS_PER_DAY;
+
+/// Update each region's GDP toward its computed target.
+fn tick_gdp(state: &mut GameState) {
+    for i in 0..state.regions.len() {
+        if state.regions[i].collapsed {
+            state.regions[i].gdp = 0.0;
+            continue;
+        }
+        let target = state.gdp_target(i);
+        let current = state.regions[i].gdp;
+        // Exponential smoothing toward target
+        state.regions[i].gdp = current + (target - current) * GDP_SMOOTHING;
+    }
 }
 
 /// Result of executing a game command. Contains feedback message and whether
