@@ -22,7 +22,7 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    POLICY_APPROVAL_THRESHOLDS, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
+    POLICY_APPROVAL_THRESHOLDS, POLICY_COUNT, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
@@ -38,6 +38,21 @@ use crate::state::{
 };
 use crate::ui::hint_line;
 use crate::format_number;
+
+/// Maximum selection index for the policy panel in its current sub-state.
+pub fn selection_max(ui_state: &PolicyUiState, state: &GameState) -> usize {
+    match ui_state {
+        PolicyUiState::ManagePolicies { region_idx } => {
+            if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
+                POLICY_COUNT - 1
+            } else if state.bargain_available(*region_idx) {
+                MANAGE_BARGAIN_POS
+            } else {
+                MANAGE_APPEASE_POS
+            }
+        }
+    }
+}
 
 /// Section header labels for the policy panel, keyed by display position.
 /// Returns Some(header) at the start of each group, None otherwise.

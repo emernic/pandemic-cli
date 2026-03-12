@@ -9,6 +9,11 @@ use ratatui::{
 use crate::state::{BoardPersonality, BoardRole, GameState, TICKS_PER_DAY};
 use crate::format_number;
 
+/// Maximum selection index for the board panel.
+pub fn selection_max(state: &GameState) -> usize {
+    state.board_members.len().saturating_sub(1)
+}
+
 /// Satisfaction word and color for a satisfaction value (0.0-1.0).
 fn satisfaction_display(satisfaction: f64) -> (&'static str, Color) {
     if satisfaction > 0.7 {

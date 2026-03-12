@@ -18,8 +18,39 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, UiState, ticks_to_days};
 use crate::format_number;
+
+/// Maximum selection index for the current panel and UI sub-state.
+/// Dispatches to each panel module's `selection_max` so item-count logic
+/// lives alongside the renderers instead of being centralised in state.rs.
+pub fn panel_selection_max(ui: &UiState, state: &GameState) -> usize {
+    match ui.open_panel {
+        Panel::Threats => threats::selection_max(state),
+        Panel::Medicines => match &ui.medicine_ui {
+            Some(s) => medicines::selection_max(s, state),
+            None => 0,
+        },
+        Panel::Research => match &ui.research_ui {
+            Some(s) => research::selection_max(s, state),
+            None => 0,
+        },
+        Panel::Policy => match &ui.policy_ui {
+            Some(s) => policy::selection_max(s, state),
+            None => 0,
+        },
+        Panel::Operations => match &ui.operations_ui {
+            Some(s) => operations::selection_max(s, state),
+            None => 0,
+        },
+        Panel::Board => board::selection_max(state),
+        Panel::Ledger => match &ui.ledger_ui {
+            Some(s) => ledger::selection_max(s, state),
+            None => 0,
+        },
+        Panel::None | Panel::Help => 0,
+    }
+}
 
 const EVENT_LOG_MAX: usize = 50;
 

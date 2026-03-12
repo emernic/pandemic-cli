@@ -9,6 +9,11 @@ use ratatui::{
 use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, grid_reading_order};
 use crate::format_number;
 
+/// Maximum selection index for the threats panel.
+pub fn selection_max(state: &GameState) -> usize {
+    state.diseases.len().saturating_sub(1)
+}
+
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;

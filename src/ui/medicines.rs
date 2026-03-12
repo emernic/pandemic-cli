@@ -10,6 +10,28 @@ use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, ResearchK
 use crate::ui::hint_line;
 use crate::format_number;
 
+/// Maximum selection index for the medicines panel in its current sub-state.
+pub fn selection_max(ui_state: &MedicineUiState, state: &GameState) -> usize {
+    match ui_state {
+        MedicineUiState::BrowseMedicines => {
+            state.unlocked_medicine_indices().len().saturating_sub(1)
+        }
+        MedicineUiState::SelectRegion { .. } => {
+            state.regions.len().saturating_sub(1)
+        }
+        MedicineUiState::SelectDisease { medicine_idx, .. } => {
+            state.medicines[*medicine_idx]
+                .deployable_diseases(&state.diseases).len()
+                .saturating_sub(1)
+        }
+        MedicineUiState::SelectTarget { .. } => {
+            1 // vaccinate (0) or treat (1)
+        }
+        MedicineUiState::ConfirmDeploy { .. }
+        | MedicineUiState::DeployResult { .. } => 0,
+    }
+}
+
 fn dose_color(med: &Medicine) -> Color {
     if med.doses <= 0.0 {
         Color::Red

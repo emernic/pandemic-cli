@@ -9,6 +9,14 @@ use ratatui::{
 use crate::state::{GameState, LedgerUiState};
 use crate::format_number;
 
+/// Maximum selection index for the ledger panel in its current sub-state.
+pub fn selection_max(ui_state: &LedgerUiState, state: &GameState) -> usize {
+    match ui_state {
+        LedgerUiState::BrowseStocks => state.corporations.len().saturating_sub(1),
+        LedgerUiState::ConfirmBuy { .. } | LedgerUiState::ConfirmSell { .. } => 0,
+    }
+}
+
 /// Render a tiny sparkline from price history using Unicode block chars.
 fn sparkline(history: &[f64], width: usize) -> String {
     if history.is_empty() {
