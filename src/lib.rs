@@ -8,7 +8,7 @@ use action::Action;
 use engine::execute_command;
 use state::{
     DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
-    MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
+    LedgerUiState, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
 };
@@ -130,6 +130,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy, new.regions.len()),
         Action::OpenOperations => new.ui.toggle_panel(Panel::Operations, new.regions.len()),
         Action::OpenBoard => new.ui.toggle_panel(Panel::Board, new.regions.len()),
+        Action::OpenLedger => new.ui.toggle_panel(Panel::Ledger, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(&new.medicines, &new.diseases),
         Action::GoHome => new.ui.go_home(),
@@ -155,8 +156,29 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             }
         }
         Action::ToggleExtra => {
+            // Ledger: switch between Buy and Sell confirmation
+            if new.ui.open_panel == Panel::Ledger {
+                match &new.ui.ledger_ui {
+                    Some(LedgerUiState::BrowseStocks) => {
+                        // X on browse = sell selected stock
+                        let corp_idx = new.ui.panel_selection;
+                        let held = new.portfolio.get(corp_idx).copied().unwrap_or(0);
+                        if corp_idx < new.corporations.len() && held > 0 {
+                            new.ui.ledger_ui = Some(LedgerUiState::ConfirmSell { corp_idx });
+                            new.ui.panel_selection = 0;
+                        }
+                    }
+                    Some(LedgerUiState::ConfirmBuy { corp_idx }) => {
+                        new.ui.ledger_ui = Some(LedgerUiState::ConfirmSell { corp_idx: *corp_idx });
+                    }
+                    Some(LedgerUiState::ConfirmSell { corp_idx }) => {
+                        new.ui.ledger_ui = Some(LedgerUiState::ConfirmBuy { corp_idx: *corp_idx });
+                    }
+                    _ => {}
+                }
+            }
             // Toggle "Assign 2x personnel" on research confirm screen (pure UI state)
-            if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
+            else if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
                 *double_personnel = !*double_personnel;
             }
             // Toggle auto-deploy when browsing medicines
@@ -263,6 +285,7 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
         Panel::Research => handle_research_confirm(ui, state),
         Panel::Policy => handle_policy_confirm(ui, state),
         Panel::Operations => handle_operations_confirm(ui, state),
+        Panel::Ledger => handle_ledger_confirm(ui, state),
         _ => None,
     }
 }
@@ -524,6 +547,31 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
             } else {
                 None
             }
+        }
+        None => None,
+    }
+}
+
+/// Buy quantity: 10 shares per confirm press. Keeps the interaction snappy.
+const LEDGER_TRADE_QUANTITY: u32 = 10;
+
+fn handle_ledger_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    match ui.ledger_ui.clone() {
+        Some(LedgerUiState::BrowseStocks) => {
+            let corp_idx = ui.panel_selection;
+            if corp_idx < state.corporations.len() && !state.corporations[corp_idx].bankrupt {
+                ui.ledger_ui = Some(LedgerUiState::ConfirmBuy { corp_idx });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        Some(LedgerUiState::ConfirmBuy { corp_idx }) => {
+            ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
+            Some(GameCommand::BuyShares { corp_idx, quantity: LEDGER_TRADE_QUANTITY })
+        }
+        Some(LedgerUiState::ConfirmSell { corp_idx }) => {
+            ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
+            Some(GameCommand::SellShares { corp_idx, quantity: LEDGER_TRADE_QUANTITY })
         }
         None => None,
     }
