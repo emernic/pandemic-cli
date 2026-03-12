@@ -452,23 +452,28 @@ impl DecreeUnlockCondition {
     }
 
     /// Human-readable description of the unlock condition.
+    /// Region-based conditions are listed first (more actionable for the player),
+    /// followed by raw population thresholds.
     pub fn describe(&self) -> String {
         let mut parts = Vec::new();
         if let Some(v) = self.min_infected {
             parts.push(format!("{}+ infected", Self::format_threshold(v)));
         }
-        if let Some(v) = self.min_dead {
-            parts.push(format!("{}+ dead", Self::format_threshold(v)));
-        }
         if let Some(v) = self.min_crit_regions {
             if v == 1 {
-                parts.push("any region at CRITICAL".to_string());
+                parts.push(format!(
+                    "any region at CRITICAL ({}+ infected)",
+                    Self::format_threshold(SEVERITY_CRIT_THRESHOLD)
+                ));
             } else {
                 parts.push(format!("{}+ regions at CRITICAL", v));
             }
         }
         if let Some(v) = self.min_collapsed_regions {
             parts.push(format!("{}+ regions collapsed", v));
+        }
+        if let Some(v) = self.min_dead {
+            parts.push(format!("{}+ dead", Self::format_threshold(v)));
         }
         parts.join(" or ")
     }
