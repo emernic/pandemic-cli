@@ -4019,7 +4019,7 @@ pub enum CrisisKind {
     NamingRights { disease_idx: usize, payout: f64 },
     /// Unpaid intern claims a breakthrough. 50/50 gamble.
     InternDiscovery { cost: f64 },
-    /// Congressional hearing about your handling of the crisis.
+    /// Oversight commission summons you for a formal review.
     CongressionalHearing,
 
     // --- Contract crises ---
@@ -4063,7 +4063,7 @@ pub enum CrisisKind {
 
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
-    /// Follow-up to CongressionalHearing (Send deputy): contempt charges.
+    /// Follow-up to CongressionalHearing (Send deputy): formal censure.
     ContemptOfCongress { fine: f64 },
     /// Follow-up to BlackMarketMedicine (Allow): counterfeit drugs killing people.
     CounterfeitEpidemic { region_idx: usize },
