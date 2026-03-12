@@ -17,7 +17,7 @@ use crate::state::{
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
-    MAX_DISEASES, TICKS_PER_DAY,
+    MAX_DISEASES, TICKS_PER_DAY, WAVE_CLUSTER_WINDOW_TICKS,
 };
 
 /// Advance the simulation by one tick.
@@ -195,7 +195,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 .map(|(i, d)| (Some(i), d.spawned_at_tick))
                 .unwrap_or((None, 0));
             let ticks_since = new.tick.saturating_sub(most_recent_spawn);
-            if ticks_since > 0 && ticks_since < 200 {
+            if ticks_since > 0 && ticks_since < WAVE_CLUSTER_WINDOW_TICKS {
                 // Ramp: 2.0 at day 24 → 4.0 at day 50+
                 let ramp = ((day - 24.0) / 26.0).clamp(0.0, 1.0);
                 (2.0 + ramp * 2.0, trigger_idx)
@@ -5800,7 +5800,7 @@ mod tests {
             .max()
             .unwrap_or(0);
         let ticks_since = state.tick.saturating_sub(most_recent);
-        assert!(ticks_since < 200, "should be within wave window");
+        assert!(ticks_since < crate::state::WAVE_CLUSTER_WINDOW_TICKS, "should be within wave window");
 
         // At day 30 (fully ramped), wave boost is 4.0
         let wave_boost = 4.0;
