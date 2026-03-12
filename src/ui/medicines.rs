@@ -511,6 +511,12 @@ fn render_select_target(
                 Style::default().fg(Color::DarkGray),
             )));
         }
+        if state.has_resistance_surveillance() {
+            lines.push(Line::from(Span::styled(
+                "    Resistance pressure: Low",
+                Style::default().fg(Color::Green),
+            )));
+        }
     }
 
     // Option 1: Treat
@@ -550,6 +556,12 @@ fn render_select_target(
             lines.push(Line::from(Span::styled(
                 format!("    {:.0}% of infected", pct),
                 Style::default().fg(Color::DarkGray),
+            )));
+        }
+        if state.has_resistance_surveillance() {
+            lines.push(Line::from(Span::styled(
+                "    Resistance pressure: High (6x vs. preventive)",
+                Style::default().fg(Color::Yellow),
             )));
         }
     }
