@@ -165,7 +165,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         let held = new.portfolio.get(corp_idx).copied().unwrap_or(0);
                         if corp_idx < new.corporations.len() && held > 0 {
                             new.ui.ledger_ui = Some(LedgerUiState::ConfirmSell { corp_idx });
-                            new.ui.panel_selection = 0;
                         }
                     }
                     Some(LedgerUiState::ConfirmBuy { corp_idx }) => {
@@ -559,7 +558,6 @@ fn handle_ledger_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
             let corp_idx = ui.panel_selection;
             if corp_idx < state.corporations.len() && !state.corporations[corp_idx].bankrupt {
                 ui.ledger_ui = Some(LedgerUiState::ConfirmBuy { corp_idx });
-                ui.panel_selection = 0;
             }
             None
         }
