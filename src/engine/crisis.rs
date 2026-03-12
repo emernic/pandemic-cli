@@ -1460,7 +1460,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: format!("{}: Contract Offer", member_name),
                 description: format!(
-                    "{} is offering a {}.\nCondition: {}.\nIncome: +¥{:.0}/day.\n\
+                    "{} is offering a {}.\n\nCondition: {}.\nIncome: +¥{:.0}/day.\n\
                      Accepting will anger the other {} board members.",
                     member_name, contract_name, condition_desc, income_day, other_count,
                 ),
