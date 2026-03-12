@@ -14,9 +14,9 @@ fn scaled_cost(state: &GameState, fraction: f64, min: f64, max: f64) -> f64 {
     (raw / 10.0).round() * 10.0
 }
 
-/// Compute the board funding multiplier from satisfaction.
+/// Compute the base board funding multiplier from satisfaction.
 /// sat 1.0 => 1.2x (generous), sat 0.5 => 1.0x (neutral), sat 0.0 => 0.5x (slashed).
-fn board_meeting_funding_multiplier(board_sat: f64) -> f64 {
+fn board_meeting_funding_multiplier_base(board_sat: f64) -> f64 {
     // Linear interpolation: 0.0 -> 0.5, 0.5 -> 1.0, 1.0 -> 1.2
     if board_sat >= 0.5 {
         // 0.5..1.0 maps to 1.0..1.2
@@ -25,6 +25,26 @@ fn board_meeting_funding_multiplier(board_sat: f64) -> f64 {
         // 0.0..0.5 maps to 0.5..1.0
         0.5 + board_sat
     }
+}
+
+/// Chairman mood shift applied on top of the base funding multiplier.
+/// Content chairman (>0.7 satisfaction) steers meetings favorably: +0.1.
+/// Hostile chairman (<0.3 satisfaction) pushes for cuts: -0.1.
+/// Returns 0.0 if no chairman exists or chairman is neutral.
+fn chairman_funding_shift(state: &GameState) -> f64 {
+    let chairman = state.board_members.iter().find(|m| m.is_chairman);
+    match chairman {
+        Some(c) if c.satisfaction > 0.7 => 0.1,
+        Some(c) if c.satisfaction < 0.3 => -0.1,
+        _ => 0.0,
+    }
+}
+
+/// Compute the full board funding multiplier including chairman influence.
+fn board_meeting_funding_multiplier(state: &GameState, board_sat: f64) -> f64 {
+    let base = board_meeting_funding_multiplier_base(board_sat);
+    let shift = chairman_funding_shift(state);
+    (base + shift).clamp(0.3, 1.4)
 }
 
 /// Compute the per-day funding rate the board will set at this satisfaction level.
@@ -37,7 +57,7 @@ fn board_meeting_funding_rate(state: &GameState, board_sat: f64) -> f64 {
     } else {
         base_rate
     };
-    raw_base * board_meeting_funding_multiplier(board_sat)
+    raw_base * board_meeting_funding_multiplier(state, board_sat)
 }
 
 /// POL cost for closing borders on a refugee wave (escalates with each collapse).
@@ -1857,6 +1877,24 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 rate_word, new_funding_rate
             ));
 
+            // Chairman influence on funding outcome
+            let chair_shift = chairman_funding_shift(state);
+            if chair_shift != 0.0 {
+                if let Some(chairman) = state.board_members.iter().find(|m| m.is_chairman) {
+                    if chair_shift > 0.0 {
+                        memo_lines.push(format!(
+                            "{} steered discussion toward a generous allocation.",
+                            chairman.name
+                        ));
+                    } else {
+                        memo_lines.push(format!(
+                            "{} pushed for deeper cuts to your operating budget.",
+                            chairman.name
+                        ));
+                    }
+                }
+            }
+
             // Note unhappy members and their concerns
             let mut concerns: Vec<String> = Vec::new();
             for member in &state.board_members {
@@ -3227,7 +3265,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::BoardMeeting, _) => {
             // Single option: Acknowledged. Apply funding multiplier.
             let board_sat = state.board_satisfaction();
-            state.board_funding_multiplier = board_meeting_funding_multiplier(board_sat);
+            state.board_funding_multiplier = board_meeting_funding_multiplier(state, board_sat);
             "Board communiqué filed.".into()
         }
 
@@ -3541,5 +3579,63 @@ mod tests {
         // Should only have "Acknowledge" option since identification is already running
         assert_eq!(crisis.options.len(), 1,
             "should only offer acknowledge when identification is already in progress");
+    }
+
+    #[test]
+    fn chairman_mood_shifts_funding_multiplier() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        // Find the chairman
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman)
+            .expect("should have a chairman");
+
+        // Baseline: neutral satisfaction (0.5) with neutral chairman
+        state.board_members[chair_idx].satisfaction = 0.5;
+        let base_mult = board_meeting_funding_multiplier(&state, 0.5);
+        let base_shift = chairman_funding_shift(&state);
+        assert_eq!(base_shift, 0.0, "neutral chairman should have no shift");
+
+        // Content chairman (>0.7) should add +0.1
+        state.board_members[chair_idx].satisfaction = 0.9;
+        let content_shift = chairman_funding_shift(&state);
+        assert_eq!(content_shift, 0.1, "content chairman should shift +0.1");
+        let content_mult = board_meeting_funding_multiplier(&state, 0.5);
+        assert!((content_mult - (base_mult + 0.1)).abs() < 0.001,
+            "content chairman should increase multiplier by 0.1");
+
+        // Hostile chairman (<0.3) should add -0.1
+        state.board_members[chair_idx].satisfaction = 0.1;
+        let hostile_shift = chairman_funding_shift(&state);
+        assert_eq!(hostile_shift, -0.1, "hostile chairman should shift -0.1");
+        let hostile_mult = board_meeting_funding_multiplier(&state, 0.5);
+        assert!((hostile_mult - (base_mult - 0.1)).abs() < 0.001,
+            "hostile chairman should decrease multiplier by 0.1");
+    }
+
+    #[test]
+    fn chairman_text_appears_in_board_communique() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        // Make chairman content
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman)
+            .expect("should have a chairman");
+        let chair_name = state.board_members[chair_idx].name.clone();
+        state.board_members[chair_idx].satisfaction = 0.9;
+
+        let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
+        assert!(crisis.description.contains(&chair_name),
+            "communiqué should mention chairman by name: {}", crisis.description);
+        assert!(crisis.description.contains("generous allocation"),
+            "content chairman text should mention generous allocation: {}", crisis.description);
+
+        // Make chairman hostile
+        state.board_members[chair_idx].satisfaction = 0.1;
+        let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
+        assert!(crisis.description.contains("deeper cuts"),
+            "hostile chairman text should mention cuts: {}", crisis.description);
     }
 }
