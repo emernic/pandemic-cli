@@ -151,6 +151,28 @@ Key files: `src/state.rs` (data structures + derived computations), `src/engine/
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
+### Architectural Direction — THIS IS YOUR JOB
+
+The UI/engine separation is done. The engine god file has been broken into subsystem modules. See `docs/target-architecture.md` for the full picture. The short version:
+
+- **state.rs is NOT just passive data** — it contains three things: (1) raw data structures, (2) derived computations (read-only methods needed by both engine AND UI — `approval_target()`, `funding_income_rate()`, `decree_unlocked()`, `policy_unlocked()`, etc.), and (3) UI state machines. The split between engine/ and state.rs is "mutations + orchestration" vs "data + derived computation" — NOT "game logic" vs "passive data."
+- **engine/ contains all game-state mutations** — `tick()` orchestrates subsystems, `execute_command()` dispatches player commands. Subsystem modules (research.rs, medicine.rs, policy.rs, crisis.rs) handle domain-specific mutations with `pub(super)` visibility. The rule is: engine/ mutates, state.rs computes read-only views.
+- **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into `GameCommand`s.
+- **Layering: state.rs ← engine/ ← ui/ ← lib.rs ← main.rs** — Each layer only imports from layers below it. UI and engine are peers that both depend on state.rs but never on each other.
+
+**This structure must be actively maintained.** Every time you touch this codebase:
+1. Don't add UI state machine logic to engine/. Ever.
+2. Don't add engine imports to UI modules. Ever.
+3. New game systems get their own `engine/newsystem.rs` module following the subsystem pattern.
+4. If you see a violation, file an issue or fix it. Not "maybe someday" — now.
+5. Read `docs/target-architecture.md` if you haven't. It describes the subsystem conventions.
+
+### Key Game Systems
+
+- **Research pipeline**: Unknown threat → Identify (field research) → Develop medicine (applied research) → Clinical trial (field) → Deploy. Three tracks run simultaneously: field, applied, and basic. Don't touch research without understanding this full lifecycle.
+- **Therapy/pathogen matching**: Medicines have a `TherapyType` (Antiviral, Antibiotic, BroadSpectrum), diseases have a `PathogenType` (RnaVirus, DnaVirus, Bacterium, Prion). Efficacy depends on the match. This affects deployment, balance, and player strategy.
+- **Mutation system**: Diseases mutate over time based on pathogen type. Medicines track which strain generation they were calibrated against. Drift reduces efficacy, prompting re-trials. This creates ongoing pressure even after developing a medicine.
+
 ### Game Balance Thresholds — DO NOT NERF DISEASES
 
 **These come directly from the project owner. They are non-negotiable. Do not weaken diseases.**
@@ -187,7 +209,13 @@ cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half a day
 ```
 
-Note: Left/right control region selection. Up/down control selection of options within a menu.
+### Navigation Convention — Left/Right Always Controls Regions
+
+**Left/right arrow keys (h/l) always navigate the region map**, even when a panel is open. Up/down arrow keys (j/k) navigate panel items when a panel is open, or the map when no panel is open.
+
+- **Never use left/right for panel item navigation.** All panel lists (threats, research categories, medicines, policies) must use up/down only.
+- Left/right use **reading order with wrap-around**: NA → Europe → Asia → SA → Africa → Oceania → NA (and reverse).
+- Up/down on the map move within the same column (no wrap).
 
 ### Chaining steps with `--do`
 
