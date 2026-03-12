@@ -1156,8 +1156,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Naming Rights".into(),
                 description: format!(
-                    "A pharmaceutical consortium offers ¥{:.0} for the naming rights to {}. \
-                     Their legal team assures you this is \"standard brand integration.\"",
+                    "A pharmaceutical consortium offers ¥{:.0} for the naming rights to {}.",
                     payout, disease_name,
                 ),
                 options: vec![ CrisisOption {
@@ -1428,14 +1427,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let short_name = patron_name.split(',').next().unwrap_or(patron_name);
             let income_day = offer.map(|c| c.income * TICKS_PER_DAY).unwrap_or(0.0);
             let condition_desc = offer.map(|c| c.condition.description()).unwrap_or_default();
-            let source = offer.map(|c| c.source.as_str()).unwrap_or("");
             let contract_name = offer.map(|c| c.name.as_str()).unwrap_or("Contract");
 
             CrisisEvent {
                 title: format!("{}: Terms", short_name),
                 description: format!(
-                    "{} has authorized {}.\nCondition: {}.\nIncome: +¥{:.0}/day.\n\"{}\"",
-                    patron_name, contract_name, condition_desc, income_day, source,
+                    "{} has authorized {}.\nCondition: {}.\nIncome: +¥{:.0}/day.",
+                    patron_name, contract_name, condition_desc, income_day,
                 ),
                 options: vec![
                     CrisisOption {

@@ -15,7 +15,6 @@ struct Template {
     patron: &'static str,
     income: f64,
     condition: FundingCondition,
-    source: &'static str,
 }
 
 /// Contract templates. Each has a unique template_id (0-based index).
@@ -27,14 +26,12 @@ const TEMPLATES: &[Template] = &[
         patron: "Liang Wei, Transpacific Freight CEO",
         income: 2.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
-        source: "My ships move or your funding stops.",
     },
     Template {
         name: "Saldanha Hospitality Fund",
         patron: "Viktor Saldanha, Saldanha Resorts",
         income: 2.0,
         condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
-        source: "Nobody quarantines a Saldanha property.",
     },
     // Medium-value: forbid specific emergency decrees
     Template {
@@ -42,14 +39,12 @@ const TEMPLATES: &[Template] = &[
         patron: "Ines Caron, Helion Pharmaceuticals VP",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree_idx: 0 }, // No Conscript Researchers
-        source: "One headline about forced labor in our supply chain and the board pulls out. That clause stays.",
     },
     Template {
         name: "Holt Stability Fund",
         patron: "Marcus Holt, Holt Capital Group",
         income: 2.0,
         condition: FundingCondition::NoCollapse,
-        source: "Every collapsed region costs me a trillion. Keep them standing.",
     },
     // Threshold-based: lost when situation deteriorates
     Template {
@@ -57,14 +52,12 @@ const TEMPLATES: &[Template] = &[
         patron: "David Okafor, Pinnacle Entertainment",
         income: 1.8,
         condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 }, // under 50M dead
-        source: "Nobody spends money when they think they're dying.",
     },
     Template {
         name: "Pacific Mutual Actuarial Pact",
         patron: "Riko Tanaka, Pacific Mutual Insurance",
         income: 1.5,
         condition: FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
-        source: "Every death is a claim. Keep it under half a billion.",
     },
     // Policy-requiring: force spending
     Template {
@@ -72,14 +65,12 @@ const TEMPLATES: &[Template] = &[
         patron: "Margaret Aldridge, Aldridge Medical Systems",
         income: 1.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 2 }, // Discourage Hospitalization
-        source: "We supply the hospital beds. Don't shut down our customers.",
     },
     Template {
         name: "Aegis Border Contract",
         patron: "Col. Raymond Cross, Aegis Security Group",
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
-        source: "My people are at the checkpoints. Keep the policy active.",
     },
     // High-value: forbid fast-tracking clinical trials
     Template {
@@ -87,7 +78,6 @@ const TEMPLATES: &[Template] = &[
         patron: "Dr. Ingrid Caldwell, Caldwell Medical Ethics Foundation",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree_idx: 1 }, // No Authorize Human Trials
-        source: "Every grant we issue requires full authorization. We didn't build that standard to have it waived.",
     },
 ];
 
@@ -100,7 +90,6 @@ fn build_contract(template_id: u8, rng: &mut ChaCha8Rng) -> FundingContract {
         patron: t.patron.to_string(),
         income: t.income * variance,
         condition: t.condition.clone(),
-        source: t.source.to_string(),
         template_id,
         satisfaction: 1.0,
         warned: false,
@@ -300,7 +289,7 @@ mod tests {
             patron: "Test Patron, Testing Dept".to_string(),
             income: 2.0,
             condition,
-            source: "For testing.".to_string(),
+
             template_id: 4,
             satisfaction: 1.0,
             warned: false,
@@ -358,7 +347,7 @@ mod tests {
                 patron: format!("Patron {i}"),
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
-                source: String::new(),
+
                 template_id: i as u8,
                 satisfaction: 1.0,
                 warned: false,
@@ -447,7 +436,6 @@ mod tests {
             patron: "Stable Patron".to_string(),
             income: 2.0,
             condition: FundingCondition::NoCollapse,
-            source: String::new(),
             template_id: 3,
             satisfaction: 1.0,
             warned: false,
@@ -490,7 +478,7 @@ mod tests {
                 patron: format!("Patron {i}"),
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
-                source: String::new(),
+
                 template_id: i as u8,
                 satisfaction: 1.0,
                 warned: false,
