@@ -3767,6 +3767,8 @@ mod tests {
 
         // Make chairman hostile (satisfaction < 0.20)
         let chair_idx = state.board_members.iter().position(|m| m.is_chairman).unwrap();
+        // Force Profiteer so satisfaction = pure stock performance (0.0 when bankrupt)
+        state.board_members[chair_idx].personality = Some(crate::state::BoardPersonality::Profiteer);
         let corp_idx = match &state.board_members[chair_idx].role {
             crate::state::BoardRole::CorporateLeader { corp_idx } => *corp_idx,
             _ => panic!("chairman should be corporate leader"),
@@ -3809,6 +3811,7 @@ mod tests {
 
         // Chairman is hostile for 3+ days
         let chair_idx = state.board_members.iter().position(|m| m.is_chairman).unwrap();
+        state.board_members[chair_idx].personality = Some(crate::state::BoardPersonality::Profiteer);
         let corp_idx = match &state.board_members[chair_idx].role {
             crate::state::BoardRole::CorporateLeader { corp_idx } => *corp_idx,
             _ => panic!("chairman should be corporate leader"),
