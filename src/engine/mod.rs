@@ -74,8 +74,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
     loans::tick_loans(&mut new);
 
-    // Governor loyalty drift — reacts to policies, deaths, and personality.
-    policy::tick_governor_loyalty(&mut new);
+    // Governor cooperation drift — reacts to policies, deaths, and personality.
+    policy::tick_governor_cooperation(&mut new);
 
     // Governor autonomous actions — defiant governors act against the player.
     policy::tick_governor_actions(&mut new);
@@ -5645,38 +5645,38 @@ mod tests {
     fn bargain_buffoon_costs_pol() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Buffoon;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         state.resources.board_approval = 0.50;
         let initial_pol = state.resources.board_approval;
-        let initial_loyalty = state.regions[0].governor.loyalty;
+        let initial_cooperation = state.regions[0].governor.cooperation;
 
         let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(ok, "bargain should succeed");
         assert!(msg.unwrap().contains("praised publicly"));
         assert!(state.resources.board_approval < initial_pol);
-        assert!(state.regions[0].governor.loyalty > initial_loyalty);
+        assert!(state.regions[0].governor.cooperation > initial_cooperation);
     }
 
     #[test]
-    fn bargain_blowhard_costs_funding_gains_big_loyalty() {
+    fn bargain_blowhard_costs_funding_gains_big_cooperation() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Blowhard;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         let initial_funding = state.resources.funding;
 
         let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(ok, "bargain should succeed");
         assert!(msg.unwrap().contains("token victory"));
         assert!(state.resources.funding < initial_funding);
-        // Blowhard gets +30 loyalty (BARGAIN_BLOWHARD_LOYALTY_GAIN)
-        assert!((state.regions[0].governor.loyalty - 50.0).abs() < 0.01);
+        // Blowhard gets +30 cooperation (BARGAIN_BLOWHARD_COOPERATION_GAIN)
+        assert!((state.regions[0].governor.cooperation - 50.0).abs() < 0.01);
     }
 
     #[test]
     fn bargain_blowhard_fails_without_funding() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Blowhard;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 50.0; // less than BARGAIN_BLOWHARD_FUNDING_COST (100)
 
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
@@ -5687,22 +5687,22 @@ mod tests {
     fn bargain_recluse_costs_personnel() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Recluse;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         let initial_personnel = state.resources.personnel;
-        let initial_loyalty = state.regions[0].governor.loyalty;
+        let initial_cooperation = state.regions[0].governor.cooperation;
 
         let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(ok, "bargain should succeed");
         assert!(msg.unwrap().contains("manager sent"));
         assert_eq!(state.resources.personnel, initial_personnel - 2);
-        assert!(state.regions[0].governor.loyalty > initial_loyalty);
+        assert!(state.regions[0].governor.cooperation > initial_cooperation);
     }
 
     #[test]
     fn bargain_recluse_fails_without_personnel() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Recluse;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         state.resources.personnel = 1; // less than BARGAIN_RECLUSE_PERSONNEL_COST (2)
 
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
@@ -5713,7 +5713,7 @@ mod tests {
     fn bargain_hardliner_costs_funding() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         let initial_funding = state.resources.funding;
 
         let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
@@ -5726,7 +5726,7 @@ mod tests {
     fn bargain_hardliner_fails_without_funding() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 100.0; // less than BARGAIN_HARDLINER_FUNDING_COST (400)
 
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
@@ -5737,7 +5737,7 @@ mod tests {
     fn bargain_operative_adds_income_skim() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Operative;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         assert_eq!(state.regions[0].governor.income_skim, 0.0);
 
         let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
@@ -5745,7 +5745,7 @@ mod tests {
         assert!(msg.unwrap().contains("cut agreed"));
         assert!((state.regions[0].governor.income_skim - 0.10).abs() < 0.001);
         // Second bargain stacks
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         let (_, ok2) = policy::bargain_with_governor(&mut state, 0);
         assert!(ok2);
         assert!((state.regions[0].governor.income_skim - 0.20).abs() < 0.001);
@@ -5755,7 +5755,7 @@ mod tests {
     fn bargain_mobster_escalates_cost() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Mobster;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 10000.0;
 
         // First bargain: 200
@@ -5765,7 +5765,7 @@ mod tests {
         assert_eq!(state.regions[0].governor.bargain_count, 1);
 
         // Second bargain: 400
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         let (_, ok2) = policy::bargain_with_governor(&mut state, 0);
         assert!(ok2);
         assert!((state.resources.funding - 9400.0).abs() < 0.01);
@@ -5776,7 +5776,7 @@ mod tests {
     fn bargain_mobster_fails_without_funding() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Mobster;
-        state.regions[0].governor.loyalty = 20.0;
+        state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 100.0; // less than BARGAIN_MOBSTER_BASE_COST (200)
 
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
@@ -5786,7 +5786,7 @@ mod tests {
     #[test]
     fn bargain_fails_when_not_defiant() {
         let mut state = GameState::new_default(42);
-        state.regions[0].governor.loyalty = 60.0; // above defiance threshold
+        state.regions[0].governor.cooperation = 60.0; // above defiance threshold
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(!ok, "bargain should fail when governor isn't defiant");
     }

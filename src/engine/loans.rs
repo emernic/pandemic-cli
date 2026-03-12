@@ -59,7 +59,7 @@ pub(super) fn repay_loan(state: &mut GameState, loan_idx: usize) -> f64 {
 /// Check whether a loan offer should fire. Called from `tick_enforce_costs` context
 /// (after a policy has been suspended due to insufficient funds).
 ///
-/// Selects the best available lender: prefers a high-loyalty governor; falls back
+/// Selects the best available lender: prefers a high-cooperation governor; falls back
 /// to a healthy corporation. Returns a CrisisKind if a loan offer should be queued.
 pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
     // Rate limit
@@ -89,7 +89,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
     let amount = (net_burn * 3.0).clamp(100.0, 600.0);
     let amount = (amount / 10.0).round() * 10.0; // round to nearest ¥10
 
-    // Try governor lender first (prefers highest loyalty among non-collapsed regions)
+    // Try governor lender first (prefers highest cooperation among non-collapsed regions)
     let governor_lender = state.regions.iter().enumerate()
         .filter(|(_, r)| !r.collapsed)
         .filter(|(i, _)| {
@@ -97,9 +97,9 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
             !state.loans.iter().any(|l| matches!(l.lender, LoanLender::Governor { region_idx } if region_idx == *i))
         })
         .max_by(|(_, a), (_, b)| {
-            a.governor.loyalty.partial_cmp(&b.governor.loyalty).unwrap_or(std::cmp::Ordering::Equal)
+            a.governor.cooperation.partial_cmp(&b.governor.cooperation).unwrap_or(std::cmp::Ordering::Equal)
         })
-        .filter(|(_, r)| r.governor.loyalty >= 40.0) // Only willing governors
+        .filter(|(_, r)| r.governor.cooperation >= 40.0) // Only willing governors
         .map(|(i, r)| (i, r.governor.name.clone()));
 
     // Try corporation lender (prefers most financially healthy, non-bankrupt)
@@ -192,9 +192,9 @@ mod tests {
         // Advance tick past the cooldown window
         state.tick = LOAN_OFFER_COOLDOWN + 100;
         state.resources.last_loan_offer_tick = 0; // ensure cooldown has elapsed
-        // Ensure some governors have sufficient loyalty
+        // Ensure some governors have sufficient cooperation
         for r in &mut state.regions {
-            r.governor.loyalty = 70.0;
+            r.governor.cooperation = 70.0;
         }
 
         maybe_queue_loan_offer(&mut state);

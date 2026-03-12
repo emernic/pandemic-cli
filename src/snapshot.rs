@@ -372,8 +372,8 @@ mod tests {
         // Governor name and personality should be visible in the selected region's detail
         assert!(screen.contains("Gov."),
             "region detail should show governor name");
-        assert!(screen.contains("Loyalty:"),
-            "region detail should show governor loyalty");
+        assert!(screen.contains("Co-Op:"),
+            "region detail should show governor cooperation");
     }
 
     #[test]
