@@ -6197,6 +6197,17 @@ impl GameState {
         base * disruption_mult * spec_mult
     }
 
+    /// Dose cost for an emergency sample delivery. Returns the number of doses consumed.
+    pub fn emergency_delivery_dose_cost(&self, medicine_idx: usize) -> f64 {
+        let med = &self.medicines[medicine_idx];
+        (med.max_doses * 0.10).min(50.0).min(med.doses)
+    }
+
+    /// Funding cost for an emergency sample delivery (half of a normal deployment).
+    pub fn emergency_delivery_funding_cost(&self, medicine_idx: usize, region_idx: usize) -> f64 {
+        self.medicine_deploy_cost(medicine_idx, region_idx) * 0.5
+    }
+
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
     pub fn available_basic_projects(&self) -> Vec<ResearchKind> {
         let active_kind = self.basic_research.as_ref().map(|p| &p.kind);
