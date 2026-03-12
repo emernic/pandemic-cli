@@ -4,7 +4,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    Disease, GameState, MAX_DISEASES, Medicine, MutationMode,
+    Disease, GameState, MAX_DISEASES, Medicine,
     PathogenType, RegionDiseaseState, ScreeningLevel, TherapyType, TransmissionVector, TICKS_PER_DAY,
 };
 
@@ -323,25 +323,6 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
                 let seed_count = base_seed + rng.r#gen::<f64>() * base_seed;
                 state.regions[region_idx].get_or_create_infection(disease_idx).infected += seed_count;
             }
-        }
-    }
-
-    // Anomalous mutation patterns for late-game diseases (day 25+).
-    // Some pathogens exhibit locked or directional mutation — visible only in
-    // the data. No UI commentary. A careful player comparing strain generations
-    // across diseases can spot the discrepancy.
-    if day >= 25.0 {
-        // Probability ramps from 0% at day 25 to 50% at day 60.
-        let anomaly_prob = ((day - 25.0) / 35.0).clamp(0.0, 1.0) * 0.5;
-        if rng.r#gen::<f64>() < anomaly_prob {
-            let mode_roll = rng.r#gen::<f64>();
-            state.diseases[disease_idx].mutation_mode = if mode_roll < 0.4 {
-                MutationMode::Locked
-            } else if mode_roll < 0.7 {
-                MutationMode::DirectedLethality
-            } else {
-                MutationMode::DirectedInfectivity
-            };
         }
     }
 

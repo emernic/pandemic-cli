@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, MutationMode, PathogenType, RegionTrait,
+    Disease, GameEvent, GameState, PathogenType, RegionTrait,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
     HOSPITAL_EXPOSURE_FACTOR, TICKS_PER_DAY,
 };
@@ -409,21 +409,11 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
         let mutation_chance = disease.effective_mutation_rate();
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
-            // Always consume two RNG values for consistent sequencing,
-            // but apply them based on mutation mode.
+            // ±10% random walk on infectivity and lethality.
             let raw_inf = rng.r#gen::<f64>();
             let raw_leth = rng.r#gen::<f64>();
-            let (inf_factor, leth_factor) = match disease.mutation_mode {
-                MutationMode::Normal => (
-                    1.0 + (raw_inf - 0.5) * 0.2,
-                    1.0 + (raw_leth - 0.5) * 0.2,
-                ),
-                MutationMode::Locked => unreachable!("Locked diseases return 0.0 from effective_mutation_rate"),
-                // Lethality always increases; infectivity is unchanged.
-                MutationMode::DirectedLethality => (1.0, 1.0 + raw_leth * 0.2),
-                // Infectivity always increases; lethality is unchanged.
-                MutationMode::DirectedInfectivity => (1.0 + raw_inf * 0.2, 1.0),
-            };
+            let inf_factor = 1.0 + (raw_inf - 0.5) * 0.2;
+            let leth_factor = 1.0 + (raw_leth - 0.5) * 0.2;
             disease.infectivity = (disease.infectivity * inf_factor).max(0.001);
             disease.lethality = (disease.lethality * leth_factor).max(0.0001);
             new.events.push(GameEvent::DiseaseMutated {

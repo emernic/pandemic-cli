@@ -2331,23 +2331,6 @@ impl TransmissionVector {
     }
 }
 
-/// Controls how a disease mutates over time.
-/// Most diseases follow a normal random walk; late-game engineered pathogens
-/// may show anomalous patterns that a careful player can detect from the data.
-/// No UI commentary — the anomaly is only visible in the numbers.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MutationMode {
-    /// Standard ±10% random walk on infectivity and lethality.
-    #[default]
-    Normal,
-    /// Disease does not mutate. Strain generation stays fixed.
-    Locked,
-    /// Lethality increases on every mutation; infectivity stays fixed.
-    DirectedLethality,
-    /// Infectivity increases on every mutation; lethality stays fixed.
-    DirectedInfectivity,
-}
-
 /// Stat ranges for procedural disease generation.
 struct DiseaseStatRanges {
     infectivity: (f64, f64),
@@ -2392,10 +2375,6 @@ pub struct Disease {
     /// sharing that mechanism. Broad-spectrum drugs (mechanism=None) track separately.
     #[serde(default)]
     pub mechanism_resistance: Vec<ResistanceEntry>,
-    /// Mutation behavior pattern. Normal diseases random-walk; anomalous late-game
-    /// pathogens may be locked (no mutation) or directed (one-way drift).
-    #[serde(default)]
-    pub mutation_mode: MutationMode,
     /// Wave origin marker. Diseases that emerge in the same coordinated wave (post
     /// day 24 wave clustering) share a sequence_group ID. None = naturally independent.
     /// Visible in the Threats panel when Rapid Sequencing is unlocked and knowledge >= 0.66.
@@ -2456,11 +2435,7 @@ impl Disease {
 
     /// Effective mutation rate after genomic sequencing reductions.
     /// Each sequencing halves the rate: base_rate * 0.5^sequencing_count.
-    /// Locked diseases always return 0.0 regardless of sequencing.
     pub fn effective_mutation_rate(&self) -> f64 {
-        if self.mutation_mode == MutationMode::Locked {
-            return 0.0;
-        }
         self.pathogen_type.mutation_rate() * 0.5_f64.powi(self.sequencing_count as i32)
     }
 
@@ -2520,7 +2495,6 @@ impl Disease {
             detected: true, // callers override to false for new diseases
             spawned_at_tick: 0, // callers override to current tick when spawning
             mechanism_resistance: vec![],
-            mutation_mode: MutationMode::Normal,
             sequence_group: None,
             incubation_ticks,
         }
