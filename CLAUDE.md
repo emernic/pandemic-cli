@@ -283,7 +283,9 @@ Only use the playtest agent for **extended** playtesting if you really need it.
 
 ## Task Tracking
 
-**For any non-trivial task, create a to-do list up front and maintain it as you work.** Long tasks are where things get lost — steps get skipped, cleanup gets forgotten, PRs sit unmerged. The to-do list is your guardrail.
+**For non-trivial tasks, create a to-do list up front and maintain it as you work.** Long tasks are where things get lost — steps get skipped, cleanup gets forgotten, PRs sit unmerged. The to-do list is your guardrail.
+
+**Skip the todo list for small tasks.** If the task is a single well-defined fix touching 1–2 files (a bug fix, a config tweak, a comment cleanup), just do it — the list adds overhead without value. Use a todo list when you have 4+ distinct steps, are touching 3+ files, or when the task has enough moving parts that you'd genuinely lose track without one.
 
 Your to-do list should always include the operational steps, not just the coding. A typical feature task looks like:
 

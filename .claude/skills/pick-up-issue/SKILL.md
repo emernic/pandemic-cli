@@ -193,9 +193,9 @@ When you fix a bug, ask: **why did this bug matter?** If the answer reveals a de
 
 ## Step 7: Make a Task List, Then Implement
 
-**Before writing code, write down your plan as a task list.** This keeps you honest about what's actually involved and prevents the "I'll just change this one thing" trap where you miss follow-up work.
+**For non-trivial tasks, write down your plan as a task list before coding.** This keeps you honest about what's actually involved and prevents the "I'll just change this one thing" trap where you miss follow-up work. Skip the list for small, well-defined fixes touching 1–2 files — just do the work directly.
 
-A good task list for a typical issue:
+A good task list for a typical multi-file feature:
 
 1. Research the system (Step 5 — you just did this)
 2. Decide on approach (Step 6 — you just did this)
