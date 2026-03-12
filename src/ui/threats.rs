@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, TICKS_PER_DAY, grid_reading_order};
+use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, PathogenType, TICKS_PER_DAY, grid_reading_order};
 use crate::format_number;
 
 /// Maximum selection index for the threats panel.
@@ -334,7 +334,7 @@ fn push_disease_indicators(
     disease_idx: usize,
 ) {
     let disease = &state.diseases[disease_idx];
-    if disease.pathogen_type == crate::state::PathogenType::RnaVirus {
+    if disease.pathogen_type == PathogenType::RnaVirus {
         spans.push(Span::styled(
             "  Causes social disruption".to_string(),
             Style::default().fg(Color::Yellow),
