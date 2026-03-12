@@ -2669,7 +2669,7 @@ impl TherapyType {
             (TherapyType::Antiviral, PathogenType::DnaVirus) => 0.8,
             (TherapyType::Antibiotic, PathogenType::Bacterium) => 1.0,
             (TherapyType::Antifungal, PathogenType::Fungus) => 1.0,
-            // Broad-spectrum: weak efficacy against everything except prions.
+            // Broad-spectrum: weak efficacy against treatable pathogens, zero against prions.
             // A blunt bandaid — slows disease but can't stop it. Forces research investment.
             (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.0,
             (TherapyType::BroadSpectrum, _) => 0.15,
