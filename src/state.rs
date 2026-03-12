@@ -290,7 +290,7 @@ pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
 /// Fraction of infected people who are too sick to contribute economically.
 /// 70% are incapacitated (hospitalized, quarantined, bedridden); 30% are mild/asymptomatic.
 pub const INFECTED_INCAPACITATION_RATE: f64 = 0.7;
-pub const TRAVEL_BAN_COST: f64 = 1.0;
+pub const TRAVEL_BAN_COST: f64 = 0.7;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
@@ -1490,7 +1490,7 @@ impl RegionPriority {
 /// Each region has 1-2 traits that modify policy costs, spread rates, or resilience.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RegionTrait {
-    /// Travel ban funding cost 2x, income penalty 75% instead of 50%.
+    /// Travel ban funding cost 1.5x, GDP penalty 30% instead of 20%.
     TradeDependent,
     /// Within-region spread rate +30% (crowded cities, public transit).
     DenseUrban,
@@ -1505,7 +1505,7 @@ pub enum RegionTrait {
 }
 
 /// Travel ban cost multiplier for TradeDependent regions.
-pub const TRADE_DEPENDENT_TRAVEL_BAN_MULT: f64 = 2.0;
+pub const TRADE_DEPENDENT_TRAVEL_BAN_MULT: f64 = 1.5;
 
 impl RegionTrait {
     pub fn label(&self) -> &'static str {
@@ -1521,7 +1521,7 @@ impl RegionTrait {
 
     pub fn effect(&self) -> &'static str {
         match self {
-            RegionTrait::TradeDependent => "Travel ban costs 2x, income -75%",
+            RegionTrait::TradeDependent => "Travel ban costs 1.5x, GDP -30%",
             RegionTrait::DenseUrban => "Spread rate +30%",
             RegionTrait::IslandGeography => "Inbound spread -50%",
             RegionTrait::LowInfrastructure => "Policy personnel +1 each",
@@ -5377,7 +5377,12 @@ impl GameState {
             policy_factor *= 0.80; // 20% GDP hit — people can't work freely
         }
         if policy.travel_ban {
-            policy_factor *= 0.70; // 30% GDP hit — trade disrupted
+            let trade_dep = region.traits.contains(&RegionTrait::TradeDependent);
+            if trade_dep {
+                policy_factor *= 0.70; // 30% GDP hit — trade-dependent economy hit harder
+            } else {
+                policy_factor *= 0.80; // 20% GDP hit — trade disrupted
+            }
         }
         if policy.border_controls && !policy.travel_ban {
             // Border controls are superseded by travel ban
@@ -6530,8 +6535,8 @@ mod tests {
         let trade_cost = policy.funding_cost(&[RegionTrait::TradeDependent]);
         assert!(trade_cost > base_cost,
             "TradeDependent should increase travel ban cost: {} vs {}", trade_cost, base_cost);
-        assert!((trade_cost - base_cost * 2.0).abs() < 0.01,
-            "TradeDependent should double travel ban cost");
+        assert!((trade_cost - base_cost * 1.5).abs() < 0.01,
+            "TradeDependent should multiply travel ban cost by 1.5x");
     }
 
     #[test]

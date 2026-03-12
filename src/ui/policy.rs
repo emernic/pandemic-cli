@@ -161,8 +161,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let policies: Vec<(usize, &str, bool, String, &str, Option<u32>, f64)> = vec![
         (0, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
-         if trade_dep { "Blocks 50-95% cross-region spread (varies by pathogen), 75% income penalty" }
-         else { "Blocks 50-95% cross-region spread (varies by pathogen), halves income" },
+         if trade_dep { "Blocks 50-95% cross-region spread (varies by pathogen), 30% GDP penalty" }
+         else { "Blocks 50-95% cross-region spread (varies by pathogen), 20% GDP penalty" },
          Some(TRAVEL_BAN_PERSONNEL + infra_extra), tb_cost),
         (1, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * spec_mult * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),

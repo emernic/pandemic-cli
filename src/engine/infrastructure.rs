@@ -88,12 +88,12 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             0.0
         };
         let travel_ban_drain = if state.policies[i].travel_ban {
-            -0.0002 // ~0.024/day — trade disruption hurts logistics
+            -0.0001 // ~0.012/day — trade disruption hurts logistics
         } else {
             0.0
         };
-        // Natural recovery when deaths are low
-        let natural_supply_recovery = if death_frac < 0.001 && !state.policies[i].travel_ban {
+        // Natural recovery when deaths are low (travel ban no longer blocks this)
+        let natural_supply_recovery = if death_frac < 0.001 {
             0.00005 // ~0.006/day
         } else {
             0.0
