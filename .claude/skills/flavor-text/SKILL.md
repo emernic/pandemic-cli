@@ -10,7 +10,7 @@ You are writing user-facing text for a sci-fi pandemic defense game. This includ
 
 **Read this skill BEFORE writing the text.** Internalize the principles, THEN write. Do not write first and check against this later.
 
-## The #1 Problem: AI-Generated Text Sounds Like AI
+## The Core Problem: AI-Generated Text Sounds Like AI
 
 The examples below are from a cyberpunk hacking game, but the failure modes are universal. Study the BAD vs GOOD examples carefully — the BAD versions represent exactly what you will produce by default if you don't actively fight against it.
 

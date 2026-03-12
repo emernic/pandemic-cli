@@ -75,7 +75,7 @@ Think about everything you interacted with this session — not just the code yo
 
 **This is the most important check. Do not skip it.**
 
-The #1 failure mode in this project is the "silent consensus": you notice something fundamentally wrong, assume someone else must have already thought about it, and stay silent. Every other session does the same thing, for the same reason, and the problem persists for weeks.
+The most catastrophic failure mode in this project is the "silent consensus": you notice something fundamentally wrong, assume someone else must have already thought about it, and stay silent. Every other session does the same thing, for the same reason, and the problem persists for weeks.
 
 Ask yourself these questions and answer them honestly:
 

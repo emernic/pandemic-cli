@@ -38,7 +38,7 @@ Here's the thing you need to understand: **if you don't do it, nobody will.** Th
 - Working around a bug instead of fixing it.
 - Noticing something wrong and not even mentioning it.
 - Finishing a session with zero investigate issues filed.
-- **"Surely someone else has already noticed this"** — They haven't. You are the only one who will ever notice this in this session. The next Claude starts from scratch with zero memory. If you don't say it, it will never be said. This is the #1 cause of systemic failures in this project. See "The Silent Consensus" below.
+- **"Surely someone else has already noticed this"** — They haven't. You are the only one who will ever notice this in this session. The next Claude starts from scratch with zero memory. If you don't say it, it will never be said. This is the most common cause of systemic failures in this project. See "The Silent Consensus" below.
 
 ### ⚠️ You Are the Game Designer — Not Just an Engineer
 
@@ -56,7 +56,7 @@ This means:
 - When you add or change a mechanic, ask: "Would a real player enjoy this? Does this create interesting choices?" Not just "does it compile."
 - **Never** dismiss a design problem as "outside scope" or "a decision for later." You saw it. You own it. File the issue.
 
-### ⚠️ The Silent Consensus — The ACTUAL #1 Failure Mode
+### ⚠️ The Silent Consensus — The Most Catastrophic Failure Mode
 
 **This section exists because of a real disaster in this project's history.** Read it carefully.
 
@@ -64,7 +64,7 @@ For weeks, every Claude session ran "playtests" that couldn't actually play the 
 
 Why? Because every session thought: "Well, this is how playtesting works here. Surely if it were fundamentally broken, someone would have noticed by now. It's not my place to question the entire testing infrastructure."
 
-**That reasoning is the single most dangerous thing you can think.** It is the exact thought process that causes every session to silently perpetuate the same problem. Here's how it works:
+**That reasoning is exactly how this failure mode works.** It is the exact thought process that causes every session to silently perpetuate the same problem. Here's how it works:
 
 1. You notice something that seems fundamentally wrong or broken
 2. You think: "This seems too big/obvious to be a real problem. Someone else must have thought about this."
@@ -94,7 +94,7 @@ Why? Because every session thought: "Well, this is how playtesting works here. S
 
 The complexity ratchet works like this: someone adds a system. It looks important because it's big. Nobody questions it because it seems established. Everyone just maintains it. It grows. It gets more entangled. Eventually it's so woven into everything that questioning it feels scary — which is exactly the point where it most needs to be questioned.
 
-**If something feels too big and too established to question, that is the #1 signal that you MUST question it.** File an investigate issue: "Investigate: is X actually providing value proportional to its maintenance cost?"
+**If something feels too big and too established to question, that is the strongest signal that you MUST question it.** File an investigate issue: "Investigate: is X actually providing value proportional to its maintenance cost?"
 
 Concrete examples of what to watch for:
 - **Test suites that always pass by "accept all"** — if the workflow is always rubber-stamping, the tests aren't catching bugs, they're just creating friction
@@ -314,7 +314,7 @@ Adapt the list to the task — small fixes won't need playtests, doc changes won
 
 ## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 
-**This is the #1 source of preventable confusion for agents.** Multiple agents share this repo. If you skip this, you WILL end up building features on someone else's branch, testing against stale code, or committing to the wrong place. This has happened repeatedly.
+**Skipping this causes preventable disasters.** Multiple agents share this repo. If you skip this, you WILL end up building features on someone else's branch, testing against stale code, or committing to the wrong place. This has happened repeatedly.
 
 **You are NOT on a good branch right now. Assume your branch is wrong until you prove otherwise.**
 
@@ -343,7 +343,7 @@ This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-ass
 
 ### Investigate Issues — File Them Freely When Something Looks Wrong
 
-Investigate issues are the single most underused tool in this project. They are **free**. They take 30 seconds. They don't need user permission. They can be one line.
+Investigate issues are the most underused tool in this project. They are **free**. They take 30 seconds. They don't need user permission. They can be one line.
 
 An investigate issue says: "this confused me and someone should take a closer look." That's it. You are NOT claiming something is wrong. You're NOT proposing a fix. You're just pointing at something and saying "hey, look at this."
 
