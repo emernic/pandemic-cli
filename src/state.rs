@@ -1135,6 +1135,8 @@ impl CorporationSector {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Corporation {
     pub name: String,
+    /// Surname of the corporation's director/CEO (for board member display).
+    pub director_surname: String,
     pub sector: CorporationSector,
     pub region_idx: usize,
     /// Revenue per day at full health (before condition modifiers).
@@ -1229,7 +1231,7 @@ pub enum BoardRole {
 /// from contract decisions. The modifier decays toward 0 over time.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BoardMember {
-    /// Display name (e.g., "Dir. Torres" or "CEO Helion Power").
+    /// Display name (e.g., "Dir. Caldwell" or "Gov. Torres").
     pub name: String,
     /// Short title/role description for UI display.
     pub title: String,
@@ -4742,7 +4744,7 @@ impl GameState {
                 population: 4_700_000_000,
                 connections: vec![2, 3, 5],
                 governor: Governor {
-                    name: "Gov. Chen".into(),
+                    name: "Gov. Subramaniam".into(),
                     personality: GovernorPersonality::Recluse,
                     loyalty: 70.0,
                     defiance_crisis_fired: false,

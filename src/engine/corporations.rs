@@ -9,43 +9,44 @@ use crate::state::{
 const PRICE_HISTORY_MAX: usize = 30;
 
 /// Corporation templates per region. Each region gets 3 corps from different sectors.
+/// Tuple: (sector, corp_name, director_surname).
 /// Index matches region order: NA=0, SA=1, EU=2, AF=3, AS=4, OC=5.
-const REGION_CORPS: [[(CorporationSector, &str); 3]; 6] = [
-    // North America: tech hub, biotech center, energy
+const REGION_CORPS: [[(CorporationSector, &str, &str); 3]; 6] = [
+    // North America
     [
-        (CorporationSector::Energy, "Helion Power"),
-        (CorporationSector::Biotech, "Seraph Genomics"),
-        (CorporationSector::DataInfra, "Lattice Systems"),
+        (CorporationSector::Energy, "Helion Power", "Caldwell"),
+        (CorporationSector::Biotech, "Seraph Genomics", "Prewitt"),
+        (CorporationSector::DataInfra, "Lattice Systems", "Nakamura"),
     ],
-    // South America: mining, automation, energy
+    // South America
     [
-        (CorporationSector::Mining, "Crucible Materials"),
-        (CorporationSector::Automation, "Volant Industries"),
-        (CorporationSector::Energy, "Corriente"),
+        (CorporationSector::Mining, "Crucible Materials", "Ferreira"),
+        (CorporationSector::Automation, "Volant Industries", "Salazar"),
+        (CorporationSector::Energy, "Corriente", "Arriaga"),
     ],
-    // Europe: logistics hub, biotech, automation
+    // Europe
     [
-        (CorporationSector::Logistics, "Corridor Group"),
-        (CorporationSector::Biotech, "Caliber Bioscience"),
-        (CorporationSector::Automation, "Irongate Manufacturing"),
+        (CorporationSector::Logistics, "Corridor Group", "Tessier"),
+        (CorporationSector::Biotech, "Caliber Bioscience", "Mertens"),
+        (CorporationSector::Automation, "Irongate Manufacturing", "Sokolova"),
     ],
-    // Africa: mining, logistics, data infrastructure
+    // Africa
     [
-        (CorporationSector::Mining, "Obsidian Extractive"),
-        (CorporationSector::Logistics, "Kestrel Freight"),
-        (CorporationSector::DataInfra, "Parallax Data"),
+        (CorporationSector::Mining, "Obsidian Extractive", "Diallo"),
+        (CorporationSector::Logistics, "Kestrel Freight", "Mensah"),
+        (CorporationSector::DataInfra, "Parallax Data", "Okoro"),
     ],
-    // Asia: automation powerhouse, energy, mining
+    // Asia
     [
-        (CorporationSector::Automation, "Motive Systems"),
-        (CorporationSector::Energy, "Volta Systems"),
-        (CorporationSector::Mining, "Tarim Extraction"),
+        (CorporationSector::Automation, "Motive Systems", "Fujimoto"),
+        (CorporationSector::Energy, "Volta Systems", "Bhandari"),
+        (CorporationSector::Mining, "Tarim Extraction", "Kuznetsov"),
     ],
-    // Oceania: biotech, data, mining (small but specialized)
+    // Oceania
     [
-        (CorporationSector::Biotech, "Optera"),
-        (CorporationSector::DataInfra, "Conduit Systems"),
-        (CorporationSector::Mining, "Deep Vein Corp"),
+        (CorporationSector::Biotech, "Optera", "Macalister"),
+        (CorporationSector::DataInfra, "Conduit Systems", "Rangi"),
+        (CorporationSector::Mining, "Deep Vein Corp", "Whitford"),
     ],
 ];
 
@@ -78,7 +79,7 @@ pub fn generate_corporations(state: &mut GameState) {
         let total_daily_revenue = old_income_per_tick * TICKS_PER_DAY / CORPORATE_TAX_RATE;
 
         let templates = &REGION_CORPS[r_idx];
-        for (i, (sector, name)) in templates.iter().enumerate() {
+        for (i, (sector, name, director_surname)) in templates.iter().enumerate() {
             // Distribute revenue unevenly: first corp gets 40%, second 35%, third 25%
             let share = match i {
                 0 => 0.40,
@@ -98,6 +99,7 @@ pub fn generate_corporations(state: &mut GameState) {
             let ipo_price = (base_revenue * 1.5).clamp(20.0, 500.0);
             corps.push(Corporation {
                 name: name.to_string(),
+                director_surname: director_surname.to_string(),
                 sector: *sector,
                 region_idx: r_idx,
                 base_revenue,
