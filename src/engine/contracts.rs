@@ -20,7 +20,6 @@ struct Template {
 /// Income values are per-tick (multiply by 120 for per-day).
 /// The offering board member is chosen at runtime from the current board.
 const TEMPLATES: &[Template] = &[
-    // High-value: forbid powerful tools
     Template {
         name: "Shipping Lane Guarantee",
         income: 2.5,
@@ -31,7 +30,6 @@ const TEMPLATES: &[Template] = &[
         income: 2.0,
         condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
     },
-    // Medium-value: forbid specific emergency decrees
     Template {
         name: "Research Independence Pact",
         income: 2.0,
@@ -42,7 +40,6 @@ const TEMPLATES: &[Template] = &[
         income: 2.0,
         condition: FundingCondition::NoCollapse,
     },
-    // Threshold-based: lost when situation deteriorates
     Template {
         name: "Confidence Fund",
         income: 1.8,
@@ -53,7 +50,6 @@ const TEMPLATES: &[Template] = &[
         income: 1.5,
         condition: FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
     },
-    // Policy-requiring: force spending
     Template {
         name: "Equipment Lease",
         income: 1.5,
@@ -64,7 +60,6 @@ const TEMPLATES: &[Template] = &[
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
     },
-    // High-value: forbid fast-tracking clinical trials
     Template {
         name: "Ethics Protocols Grant",
         income: 2.0,

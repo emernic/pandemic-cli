@@ -685,11 +685,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 title: "Research Data Leaked".into(),
                 description: "Classified pathogen sequencing data has surfaced on external networks. Rivals and foreign intelligence are already analyzing it.".into(),
                 options: vec![ CrisisOption {
-                    label: "Issue a statement (2 personnel for 2d)".into(),
+                    label: "Issue a statement (5 personnel for 2d)".into(),
                     description: "Dedicate a response team to manage disclosure. +5% board approval. Staff return in 2 days.".into(),
                     cost: Some(CrisisCost {
                         funding: 0.0,
-                        personnel: 2,
+                        personnel: 5,
                         operation_days: Some(2.0),
                         operation_label: Some("Response Team".to_string()),
                     }),
