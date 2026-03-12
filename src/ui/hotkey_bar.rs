@@ -15,6 +15,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ("M", "Medicines", Panel::Medicines),
         ("P", "Policy", Panel::Policy),
         ("O", "Orders", Panel::Operations),
+        ("B", "Board", Panel::Board),
     ];
 
     let mut spans: Vec<Span> = Vec::new();

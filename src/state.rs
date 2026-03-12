@@ -3861,6 +3861,7 @@ pub enum Panel {
     Medicines,
     Policy,
     Operations,
+    Board,
     Help,
 }
 
@@ -3906,6 +3907,13 @@ pub enum OpsUiState {
     SelectSacrificeRegion,
     /// Select which region to fortify (for Fortify Region decree).
     SelectFortifyRegion,
+}
+
+/// Board panel UI state machine. Information-only panel — no wizard steps.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BoardUiState {
+    /// Top level: browse board members.
+    BrowseMembers,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3956,6 +3964,9 @@ pub struct UiState {
     /// Operations panel wizard state.
     #[serde(default)]
     pub operations_ui: Option<OpsUiState>,
+    /// Board panel state.
+    #[serde(default)]
+    pub board_ui: Option<BoardUiState>,
     /// Whether the home splash animation has completed (or been skipped).
     /// Once true, the home panel renders fully without animation.
     #[serde(default)]
@@ -3981,6 +3992,7 @@ impl UiState {
                 Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseCategories) | None),
                 Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::ManagePolicies { .. }) | None),
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
+                Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
                 _ => true,
             };
             if at_top {
@@ -3991,6 +4003,7 @@ impl UiState {
                     Panel::Research => self.research_ui = None,
                     Panel::Policy => self.policy_ui = None,
                     Panel::Operations => self.operations_ui = None,
+                    Panel::Board => self.board_ui = None,
                     _ => {}
                 }
             } else {
@@ -4003,6 +4016,7 @@ impl UiState {
                         self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: self.map_selection });
                     }
                     Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
+                    Panel::Board => self.board_ui = Some(BoardUiState::BrowseMembers),
                     _ => {}
                 }
             }
@@ -4021,6 +4035,9 @@ impl UiState {
                 }
                 Panel::Operations => {
                     self.operations_ui = Some(OpsUiState::BrowseOps);
+                }
+                Panel::Board => {
+                    self.board_ui = Some(BoardUiState::BrowseMembers);
                 }
                 _ => {}
             }
@@ -4114,6 +4131,11 @@ impl UiState {
                     }
                 }
             }
+            Panel::Board => {
+                self.open_panel = Panel::None;
+                self.panel_selection = 0;
+                self.board_ui = None;
+            }
             _ => {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
@@ -4121,6 +4143,7 @@ impl UiState {
                 self.research_ui = None;
                 self.policy_ui = None;
                 self.operations_ui = None;
+                self.board_ui = None;
             }
         }
     }
@@ -4136,6 +4159,7 @@ impl UiState {
         self.research_ui = None;
         self.policy_ui = None;
         self.operations_ui = None;
+        self.board_ui = None;
     }
 
     /// Maximum selection index for the current panel and UI sub-state.
@@ -4213,6 +4237,7 @@ impl UiState {
                 Some(OpsUiState::ConfirmDecree { .. }) => 0,
                 None => 0,
             },
+            Panel::Board => state.board_members.len().saturating_sub(1),
             _ => 0,
         }
     }
@@ -4800,6 +4825,7 @@ impl GameState {
                 crisis_selection: 0,
                 crisis_auto_resolve: false,
                 operations_ui: None,
+                board_ui: None,
                 home_splash_done: false,
                 speed_multiplier: 1,
             },
