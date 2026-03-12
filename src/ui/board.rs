@@ -57,19 +57,20 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             ]));
         }
 
-        // Board funding multiplier display
-        let mult = state.board_funding_multiplier;
-        if (mult - 1.0).abs() > 0.01 {
-            let (mult_text, mult_color) = if mult > 1.0 {
-                (format!("  Budget: +{:.0}%", (mult - 1.0) * 100.0), Color::Green)
-            } else {
-                (format!("  Budget: {:.0}%", (mult - 1.0) * 100.0), Color::Red)
-            };
-            lines.push(Line::from(Span::styled(
-                mult_text,
-                Style::default().fg(mult_color),
-            )));
-        }
+        // Board budget display
+        let budget_day = state.board_budget_per_tick * TICKS_PER_DAY;
+        let base_day = state.base_board_budget_per_tick() * TICKS_PER_DAY;
+        let budget_color = if budget_day > base_day * 1.05 {
+            Color::Green
+        } else if budget_day < base_day * 0.95 {
+            Color::Red
+        } else {
+            Color::White
+        };
+        lines.push(Line::from(Span::styled(
+            format!("  Budget: ¥{:.0}/day", budget_day),
+            Style::default().fg(budget_color),
+        )));
 
         lines.push(Line::from(""));
 

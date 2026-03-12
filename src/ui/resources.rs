@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days, grid_reading_order};
+use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: 4 rows (stats + income + research + border).
@@ -136,51 +136,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]);
 
-    // Income breakdown: show per-region contribution in map grid order (left→right, top→bottom)
-    // so players can visually associate each entry with the corresponding region on the map.
-    // Shows gross income (before personnel/policy costs) — the net is shown as (+¥N/day) above.
+    // Board budget line: fixed budget from the board + any active contracts
     let income_line = {
-        let breakdown = state.per_region_income_breakdown();
-        // Index the breakdown by region_idx for fast lookup
-        let mut by_region = vec![0.0f64; state.regions.len()];
-        for &(idx, income) in &breakdown {
-            by_region[idx] = income;
-        }
-        let display_order = grid_reading_order(state.regions.len());
-        // Label as "Gross income" to distinguish from the net (+¥N/day) shown on line 1
-        let mut spans: Vec<Span> = vec![Span::styled("Gross income: ", Style::default().fg(Color::DarkGray))];
-        for (i, region_idx) in display_order.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::styled("  ", Style::default().fg(Color::DarkGray)));
-            }
-            let region = &state.regions[*region_idx];
-            let income_per_day = by_region[*region_idx];
-            // Abbreviate: first letter of each word (e.g. "North America" → "NA", "Asia" → "AS")
-            let abbrev: String = region.name.split_whitespace()
-                .map(|w| w.chars().next().unwrap_or('?'))
-                .take(3)
-                .collect::<String>()
-                .to_uppercase();
-            let abbrev = if abbrev.len() == 1 {
-                // Single-word names: use first 2 chars
-                region.name.chars().take(2).collect::<String>().to_uppercase()
-            } else {
-                abbrev
-            };
-            let (income_str, color) = if region.collapsed {
-                ("—".to_string(), Color::DarkGray)
-            } else {
-                let per_day = income_per_day.round() as i64;
-                let color = if per_day >= 200 { Color::Green }
-                    else if per_day >= 50 { Color::Yellow }
-                    else { Color::Red };
-                (format!("¥{per_day}"), color)
-            };
-            spans.push(Span::styled(abbrev, Style::default().fg(Color::DarkGray)));
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(income_str, Style::default().fg(color)));
-        }
-        // Funding contracts — show after regional income if any are active
+        let board_budget_day = state.board_budget_per_tick * TICKS_PER_DAY;
+        let mut spans: Vec<Span> = vec![
+            Span::styled("Board budget: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("¥{:.0}/day", board_budget_day),
+                Style::default().fg(if board_budget_day >= 200.0 { Color::Green } else if board_budget_day >= 100.0 { Color::Yellow } else { Color::Red }),
+            ),
+        ];
+        // Funding contracts — show after board budget if any are active
         if !state.contracts.is_empty() {
             spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
             spans.push(Span::styled("Contracts: ", Style::default().fg(Color::DarkGray)));

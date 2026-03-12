@@ -365,16 +365,19 @@ mod tests {
     }
 
     #[test]
-    fn corporate_tax_approximates_old_income() {
+    fn board_budget_set_after_initialization() {
         let mut state = GameState::new_default(42);
-        let old_income = state.funding_income_rate();
         generate_corporations(&mut state);
-        let new_income = state.funding_income_rate();
-        // Should be within 20% of old income (RNG variance + trade modifiers can differ)
-        let ratio = new_income / old_income;
+        crate::engine::board::generate_board_members(&mut state);
+        let income = state.funding_income_rate();
         assert!(
-            (0.8..=1.2).contains(&ratio),
-            "corporate income {new_income:.1} should approximate old income {old_income:.1}, ratio={ratio:.2}"
+            income > 0.0,
+            "board budget should produce positive income after init: {income:.4}"
+        );
+        let budget_day = state.board_budget_per_tick * TICKS_PER_DAY;
+        assert!(
+            budget_day > 100.0 && budget_day < 1000.0,
+            "daily board budget should be reasonable: ¥{budget_day:.0}"
         );
     }
 
@@ -416,13 +419,14 @@ mod tests {
     }
 
     #[test]
-    fn bankrupt_corps_contribute_no_tax() {
+    fn bankrupt_corps_dont_affect_fixed_budget() {
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
 
         let income_before = state.funding_income_rate();
 
-        // Bankrupt all NA corps manually
+        // Bankrupt all NA corps — should NOT change income (board budget is fixed)
         for c in state.corporations.iter_mut().filter(|c| c.region_idx == 0) {
             c.bankrupt = true;
             c.revenue = 0.0;
@@ -430,8 +434,8 @@ mod tests {
 
         let income_after = state.funding_income_rate();
         assert!(
-            income_after < income_before,
-            "bankrupting corps should reduce income: before={income_before:.1} after={income_after:.1}"
+            (income_after - income_before).abs() < 0.001,
+            "board budget should be fixed: before={income_before:.1} after={income_after:.1}"
         );
     }
 

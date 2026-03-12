@@ -2169,39 +2169,6 @@ mod tests {
     }
 
     #[test]
-    fn travel_ban_reduces_funding_income() {
-        use crate::state::TRAVEL_BAN_COST;
-        let mut state = GameState::new_default(42);
-        // Remove infections so income is purely population-based
-        for r in &mut state.regions {
-            r.infections.clear();
-        }
-        // Use a known starting value with enough to cover policy costs
-        state.resources.funding = 1000.0;
-        let upkeep = state.personnel_upkeep_rate();
-
-        // Tick without any travel bans
-        let no_ban = tick(&state);
-        let income_no_ban = no_ban.resources.funding - 1000.0 + upkeep; // add back upkeep to isolate income
-
-        // Tick with travel ban on Asia (largest region, ~60% of world pop)
-        state.policies[4].travel_ban = true;
-        let with_ban = tick(&state);
-        let income_with_ban = with_ban.resources.funding - 1000.0 + TRAVEL_BAN_COST + upkeep; // add back policy cost and upkeep
-
-        assert!(
-            income_with_ban < income_no_ban,
-            "travel ban should reduce income: {income_with_ban:.2} vs {income_no_ban:.2}"
-        );
-        // Asia is ~60% of pop, ban halves its contribution, so income should drop ~30%
-        let reduction = 1.0 - income_with_ban / income_no_ban;
-        assert!(
-            reduction > 0.2 && reduction < 0.4,
-            "Asia travel ban should reduce income by ~30%, got {:.0}%", reduction * 100.0
-        );
-    }
-
-    #[test]
     fn travel_ban_does_not_block_medicine_shipments() {
         use crate::state::DeployTarget;
         let mut state = GameState::new_default(42);
@@ -2283,6 +2250,8 @@ mod tests {
     #[test]
     fn pol_based_personnel_zero_pol_no_gain() {
         let mut state = GameState::new_default(42);
+        corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
         // Clear infections so POL target stays near 0
         for r in &mut state.regions {
             r.infections.clear();
@@ -2298,7 +2267,7 @@ mod tests {
 
         // With no infections, POL target is near 0 (only time_frac contributes).
         // Personnel gain should be minimal.
-        let gained = s.resources.personnel - initial_personnel;
+        let gained = s.resources.personnel.saturating_sub(initial_personnel);
         assert!(
             gained <= 1,
             "with zero POL and no infections, personnel should barely increase, gained {gained}"
@@ -4743,46 +4712,7 @@ mod tests {
             "POL should drift down toward severity-only target, got {:.3}", s.resources.board_approval);
     }
 
-    #[test]
-    fn infections_reduce_funding_income() {
-        use crate::state::INFECTED_INCAPACITATION_RATE;
-        let mut state = GameState::new_default(42);
-        // Clear all infections to get baseline
-        for r in &mut state.regions {
-            r.infections.clear();
-        }
-        let baseline_income = state.funding_income_rate();
 
-        // Infect 10% of region 0's population
-        let pop = state.regions[0].population as f64;
-        let infected = pop * 0.10;
-        state.regions[0].infections.push(crate::state::RegionDiseaseState {
-            disease_idx: 0,
-            exposed: 0.0,
-            infected,
-            dead: 0.0,
-            immune: 0.0,
-        });
-
-        let infected_income = state.funding_income_rate();
-        assert!(
-            infected_income < baseline_income,
-            "income should drop with infections: {infected_income:.4} vs {baseline_income:.4}"
-        );
-
-        // The drop should be approximately proportional to the infected fraction × incapacitation rate.
-        // Trade network effects add a small additional penalty (neighbors see reduced trade health),
-        // but at 10% infection in one region, the trade effect is within tolerance.
-        let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
-        let expected_drop_frac = (infected * INFECTED_INCAPACITATION_RATE) / total_pop;
-        let actual_drop_frac = 1.0 - infected_income / baseline_income;
-        assert!(
-            (actual_drop_frac - expected_drop_frac).abs() < 0.01,
-            "income drop {:.1}% should be close to expected {:.1}%",
-            actual_drop_frac * 100.0,
-            expected_drop_frac * 100.0,
-        );
-    }
 
     #[test]
     fn horizontal_gene_transfer_between_bacteria() {
@@ -4864,12 +4794,12 @@ mod tests {
     }
 
     #[test]
-    fn collapse_kills_income_and_loses_personnel() {
+    fn collapse_loses_personnel() {
         let mut state = GameState::new_default(42);
+        corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
         detect_all_diseases(&mut state);
-        let initial_income = state.funding_income_rate();
         let initial_personnel = state.resources.personnel;
-        assert!(initial_income > 0.0);
 
         // Force a region to collapse
         let region_idx = primary_outbreak_region(&state);
@@ -4880,104 +4810,11 @@ mod tests {
         state = tick(&state);
         assert!(state.regions[region_idx].collapsed, "region should have collapsed");
 
-        // Income should drop (collapsed region contributes nothing)
-        let post_collapse_income = state.funding_income_rate();
-        assert!(
-            post_collapse_income < initial_income,
-            "income should drop after collapse: was {initial_income}, now {post_collapse_income}"
-        );
-
         // Personnel should be reduced by 2
         assert_eq!(
             state.resources.personnel,
             initial_personnel - 2,
             "should lose 2 personnel on collapse"
-        );
-    }
-
-    #[test]
-    fn trade_network_reduces_income_when_neighbors_sick() {
-        use crate::state::RegionDiseaseState;
-        let mut state = GameState::new_default(42);
-        // Clear all infections to get baseline
-        for r in &mut state.regions {
-            r.infections.clear();
-        }
-        let baseline = state.funding_income_rate();
-        assert!(baseline > 0.0);
-
-        // Now heavily infect region 0 (North America) — 30% of population
-        let pop0 = state.regions[0].population as f64;
-        state.regions[0].infections.push(RegionDiseaseState {
-            disease_idx: 0,
-            exposed: 0.0,
-            infected: pop0 * 0.30,
-            dead: 0.0,
-            immune: 0.0,
-        });
-        let with_sick_neighbor = state.funding_income_rate();
-
-        // Region 0's OWN income drops (from direct infection)
-        // But also: neighbors of region 0 (Europe=2, South America=1) lose trade income
-        // because their neighbor (NA) is unhealthy.
-        // The overall income should be LESS than if we only accounted for NA's direct loss.
-        assert!(
-            with_sick_neighbor < baseline,
-            "income should drop: {with_sick_neighbor:.4} vs {baseline:.4}"
-        );
-
-        // Verify trade penalty is non-zero
-        let trade_penalty = state.trade_income_penalty();
-        assert!(
-            trade_penalty > 0.0,
-            "trade penalty should be positive when a region is heavily infected: {trade_penalty:.4}"
-        );
-
-        // Now collapse region 0 — its neighbors should lose ALL trade from that connection
-        state.regions[0].collapsed = true;
-        let with_collapsed = state.funding_income_rate();
-        assert!(
-            with_collapsed < with_sick_neighbor,
-            "collapse should reduce income further: {with_collapsed:.4} vs {with_sick_neighbor:.4}"
-        );
-
-        // The trade penalty from collapse should be larger than from sickness
-        let collapse_penalty = state.trade_income_penalty();
-        assert!(
-            collapse_penalty > trade_penalty,
-            "collapse trade penalty {collapse_penalty:.4} > sickness penalty {trade_penalty:.4}"
-        );
-    }
-
-    #[test]
-    fn trade_network_hub_region_matters_more() {
-        let mut state = GameState::new_default(42);
-        for r in &mut state.regions {
-            r.infections.clear();
-        }
-        let baseline = state.funding_income_rate();
-
-        // Collapse Oceania (index 5, 1 connection — peripheral)
-        let mut state_oceania = state.clone();
-        state_oceania.regions[5].collapsed = true;
-        let income_after_oceania = state_oceania.funding_income_rate();
-
-        // Collapse Europe (index 2, 3 connections — hub)
-        let mut state_europe = state.clone();
-        state_europe.regions[2].collapsed = true;
-        let income_after_europe = state_europe.funding_income_rate();
-
-        // Both should reduce income from baseline
-        assert!(income_after_oceania < baseline);
-        assert!(income_after_europe < baseline);
-
-        // Europe collapse should cause MORE trade penalty than Oceania collapse
-        // (Europe is a hub with 3 connections; Oceania has 1)
-        let penalty_oceania = baseline - income_after_oceania;
-        let penalty_europe = baseline - income_after_europe;
-        assert!(
-            penalty_europe > penalty_oceania,
-            "hub collapse penalty ({penalty_europe:.4}) should exceed peripheral ({penalty_oceania:.4})"
         );
     }
 

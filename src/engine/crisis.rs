@@ -14,23 +14,19 @@ fn scaled_cost(state: &GameState, fraction: f64, min: f64, max: f64) -> f64 {
     (raw / 10.0).round() * 10.0
 }
 
-/// Compute the base board funding multiplier from satisfaction.
+/// Satisfaction-based budget multiplier.
 /// sat 1.0 => 1.2x (generous), sat 0.5 => 1.0x (neutral), sat 0.0 => 0.5x (slashed).
-fn board_meeting_funding_multiplier_base(board_sat: f64) -> f64 {
-    // Linear interpolation: 0.0 -> 0.5, 0.5 -> 1.0, 1.0 -> 1.2
+fn board_budget_satisfaction_mult(board_sat: f64) -> f64 {
     if board_sat >= 0.5 {
-        // 0.5..1.0 maps to 1.0..1.2
         1.0 + (board_sat - 0.5) * 0.4
     } else {
-        // 0.0..0.5 maps to 0.5..1.0
         0.5 + board_sat
     }
 }
 
-/// Chairman mood shift applied on top of the base funding multiplier.
+/// Chairman mood shift applied on top of the budget multiplier.
 /// Content chairman (>0.7 satisfaction) steers meetings favorably: +0.1.
 /// Hostile chairman (<0.3 satisfaction) pushes for cuts: -0.1.
-/// Returns 0.0 if no chairman exists or chairman is neutral.
 fn chairman_funding_shift(state: &GameState) -> f64 {
     let chairman = state.board_members.iter().find(|m| m.is_chairman);
     match chairman {
@@ -40,24 +36,15 @@ fn chairman_funding_shift(state: &GameState) -> f64 {
     }
 }
 
-/// Compute the full board funding multiplier including chairman influence.
-fn board_meeting_funding_multiplier(state: &GameState, board_sat: f64) -> f64 {
-    let base = board_meeting_funding_multiplier_base(board_sat);
+/// Compute the per-tick board budget at a given satisfaction level.
+/// Uses the base corporate tax revenue (at full health) as the reference point,
+/// then scales by satisfaction + chairman influence.
+pub fn compute_board_budget_per_tick(state: &GameState, board_sat: f64) -> f64 {
+    let base = state.base_board_budget_per_tick();
+    let mult = board_budget_satisfaction_mult(board_sat);
     let shift = chairman_funding_shift(state);
-    (base + shift).clamp(0.3, 1.4)
-}
-
-/// Compute the per-day funding rate the board will set at this satisfaction level.
-/// Used for display in the communiqué text.
-fn board_meeting_funding_rate(state: &GameState, board_sat: f64) -> f64 {
-    let base_rate = state.funding_income_rate() * TICKS_PER_DAY;
-    // Undo current multiplier to get raw base, then apply new multiplier
-    let raw_base = if state.board_funding_multiplier > 0.0 {
-        base_rate / state.board_funding_multiplier
-    } else {
-        base_rate
-    };
-    raw_base * board_meeting_funding_multiplier(state, board_sat)
+    let full_mult = (mult + shift).clamp(0.3, 1.4);
+    base * full_mult
 }
 
 /// POL cost for closing borders on a refugee wave (escalates with each collapse).
@@ -1859,8 +1846,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::BoardMeeting => {
             let day = tick as f64 / TICKS_PER_DAY;
             let board_sat = state.board_satisfaction();
-            let new_funding_rate = board_meeting_funding_rate(state, board_sat);
-            let current_rate = state.funding_income_rate() * TICKS_PER_DAY;
+            let new_budget_per_tick = compute_board_budget_per_tick(state, board_sat);
+            let new_funding_rate = new_budget_per_tick * TICKS_PER_DAY;
+            let current_rate = state.board_budget_per_tick * TICKS_PER_DAY;
 
             let mut memo_lines: Vec<String> = Vec::new();
 
@@ -3302,9 +3290,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         // --- Board meeting communiqué ---
 
         (CrisisKind::BoardMeeting, _) => {
-            // Single option: Acknowledged. Apply funding multiplier.
+            // Single option: Acknowledged. Set the new fixed board budget.
             let board_sat = state.board_satisfaction();
-            state.board_funding_multiplier = board_meeting_funding_multiplier(state, board_sat);
+            state.board_budget_per_tick = compute_board_budget_per_tick(state, board_sat);
             "Board communiqué filed.".into()
         }
 
@@ -3323,9 +3311,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Concessions accepted. The Chairman withdraws the motion.".into()
         }
         (CrisisKind::VoteOfNoConfidence, _) => {
-            // Stand firm: board approval hit + temporary funding multiplier penalty
+            // Stand firm: board approval hit + immediate 20% budget cut
             state.resources.board_approval = (state.resources.board_approval - 0.15).max(0.0);
-            state.board_funding_multiplier = (state.board_funding_multiplier - 0.20).max(0.3);
+            state.board_budget_per_tick *= 0.80;
             "Motion defeated, but the board has slashed your budget.".into()
         }
 
@@ -3637,7 +3625,7 @@ mod tests {
     }
 
     #[test]
-    fn chairman_mood_shifts_funding_multiplier() {
+    fn chairman_mood_shifts_board_budget() {
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
@@ -3648,25 +3636,25 @@ mod tests {
 
         // Baseline: neutral satisfaction (0.5) with neutral chairman
         state.board_members[chair_idx].satisfaction = 0.5;
-        let base_mult = board_meeting_funding_multiplier(&state, 0.5);
+        let base_budget = compute_board_budget_per_tick(&state, 0.5);
         let base_shift = chairman_funding_shift(&state);
         assert_eq!(base_shift, 0.0, "neutral chairman should have no shift");
 
-        // Content chairman (>0.7) should add +0.1
+        // Content chairman (>0.7) should increase budget
         state.board_members[chair_idx].satisfaction = 0.9;
         let content_shift = chairman_funding_shift(&state);
         assert_eq!(content_shift, 0.1, "content chairman should shift +0.1");
-        let content_mult = board_meeting_funding_multiplier(&state, 0.5);
-        assert!((content_mult - (base_mult + 0.1)).abs() < 0.001,
-            "content chairman should increase multiplier by 0.1");
+        let content_budget = compute_board_budget_per_tick(&state, 0.5);
+        assert!(content_budget > base_budget,
+            "content chairman should increase budget: base={base_budget}, content={content_budget}");
 
-        // Hostile chairman (<0.3) should add -0.1
+        // Hostile chairman (<0.3) should decrease budget
         state.board_members[chair_idx].satisfaction = 0.1;
         let hostile_shift = chairman_funding_shift(&state);
         assert_eq!(hostile_shift, -0.1, "hostile chairman should shift -0.1");
-        let hostile_mult = board_meeting_funding_multiplier(&state, 0.5);
-        assert!((hostile_mult - (base_mult - 0.1)).abs() < 0.001,
-            "hostile chairman should decrease multiplier by 0.1");
+        let hostile_budget = compute_board_budget_per_tick(&state, 0.5);
+        assert!(hostile_budget < base_budget,
+            "hostile chairman should decrease budget: base={base_budget}, hostile={hostile_budget}");
     }
 
     #[test]
@@ -3753,7 +3741,7 @@ mod tests {
         crate::engine::board::generate_board_members(&mut state);
         state.resources.funding = 5000.0;
         state.resources.board_approval = 0.60;
-        state.board_funding_multiplier = 1.0;
+        let budget_before = state.board_budget_per_tick;
 
         let kind = CrisisKind::VoteOfNoConfidence;
         let crisis_event = build_crisis_event(&state, kind);
@@ -3762,8 +3750,8 @@ mod tests {
 
         assert!(state.resources.board_approval < 0.50,
             "board approval should drop, got {}", state.resources.board_approval);
-        assert!(state.board_funding_multiplier < 0.85,
-            "funding multiplier should drop, got {}", state.board_funding_multiplier);
+        assert!(state.board_budget_per_tick < budget_before * 0.85,
+            "board budget should drop, got {:.2} (was {:.2})", state.board_budget_per_tick, budget_before);
     }
 
     #[test]
