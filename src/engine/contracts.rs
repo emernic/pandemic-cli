@@ -4,90 +4,88 @@ use rand_chacha::ChaCha8Rng;
 use crate::state::{
     CrisisKind, FundingCondition, FundingContract, GameEvent, GameState,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
-    PATRON_SATISFACTION_WARN, PATRON_SATISFACTION_REVOKE,
-    PATRON_DEGRADE_RATE, PATRON_RECOVER_RATE, PATRON_DEMAND_COOLDOWN,
+    CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
+    CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
     SEVERITY_HIGH_THRESHOLD,
 };
 
-/// Contract template with named patron.
+/// Contract template — conditions with attached income. Board member is assigned dynamically.
 struct Template {
     name: &'static str,
-    patron: &'static str,
     income: f64,
     condition: FundingCondition,
 }
 
 /// Contract templates. Each has a unique template_id (0-based index).
 /// Income values are per-tick (multiply by 120 for per-day).
+/// The offering board member is chosen at runtime from the current board.
 const TEMPLATES: &[Template] = &[
     // High-value: forbid powerful tools
     Template {
         name: "Shipping Lane Guarantee",
-        patron: "Liang Wei, Transpacific Freight CEO",
         income: 2.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
     },
     Template {
-        name: "Saldanha Hospitality Fund",
-        patron: "Viktor Saldanha, Saldanha Resorts",
+        name: "Hospitality Protection Fund",
         income: 2.0,
         condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
     },
     // Medium-value: forbid specific emergency decrees
     Template {
-        name: "Helion Research Partnership",
-        patron: "Ines Caron, Helion Pharmaceuticals VP",
+        name: "Research Independence Pact",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree_idx: 0 }, // No Conscript Researchers
     },
     Template {
-        name: "Holt Stability Fund",
-        patron: "Marcus Holt, Holt Capital Group",
+        name: "Stability Assurance Fund",
         income: 2.0,
         condition: FundingCondition::NoCollapse,
     },
     // Threshold-based: lost when situation deteriorates
     Template {
-        name: "Pinnacle Confidence Fund",
-        patron: "David Okafor, Pinnacle Entertainment",
+        name: "Confidence Fund",
         income: 1.8,
         condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 }, // under 50M dead
     },
     Template {
-        name: "Pacific Mutual Actuarial Pact",
-        patron: "Riko Tanaka, Pacific Mutual Insurance",
+        name: "Actuarial Pact",
         income: 1.5,
         condition: FundingCondition::MaxDeaths { threshold: 500_000_000.0 },
     },
     // Policy-requiring: force spending
     Template {
-        name: "Aldridge Equipment Lease",
-        patron: "Margaret Aldridge, Aldridge Medical Systems",
+        name: "Equipment Lease",
         income: 1.5,
         condition: FundingCondition::ForbidPolicy { policy_idx: 2 }, // Discourage Hospitalization
     },
     Template {
-        name: "Aegis Border Contract",
-        patron: "Col. Raymond Cross, Aegis Security Group",
+        name: "Border Security Contract",
         income: 1.5,
         condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
     },
     // High-value: forbid fast-tracking clinical trials
     Template {
-        name: "Caldwell Protocols Grant",
-        patron: "Dr. Ingrid Caldwell, Caldwell Medical Ethics Foundation",
+        name: "Ethics Protocols Grant",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree_idx: 1 }, // No Authorize Human Trials
     },
 ];
 
-/// Build a FundingContract from a template index, with ±20% income variance.
-fn build_contract(template_id: u8, rng: &mut ChaCha8Rng) -> FundingContract {
+/// Satisfaction boost given to the offering board member when a contract is accepted.
+const ACCEPT_OFFERER_BOOST: f64 = 0.15;
+/// Satisfaction penalty applied to every OTHER board member when a contract is accepted.
+const ACCEPT_OTHERS_PENALTY: f64 = 0.08;
+/// Satisfaction penalty applied to the offering board member when a contract is refused.
+const REFUSE_OFFERER_PENALTY: f64 = 0.12;
+
+/// Build a FundingContract from a template index, assigned to a specific board member.
+fn build_contract(template_id: u8, board_member_idx: usize, rng: &mut ChaCha8Rng) -> FundingContract {
     let t = &TEMPLATES[template_id as usize];
     let variance = 0.8 + rng.r#gen::<f64>() * 0.4; // 0.8 to 1.2
     FundingContract {
         name: t.name.to_string(),
-        patron: t.patron.to_string(),
+        board_member_idx,
         income: t.income * variance,
         condition: t.condition.clone(),
         template_id,
@@ -141,7 +139,7 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
     }
 }
 
-/// Tick patron satisfaction and revoke contracts when satisfaction bottoms out.
+/// Tick contract condition satisfaction and revoke contracts when it bottoms out.
 pub fn tick_check_contracts(state: &mut GameState) {
     // First pass: compute satisfaction changes (need immutable borrow for is_met)
     let updates: Vec<(usize, bool)> = state.contracts.iter().enumerate()
@@ -149,45 +147,48 @@ pub fn tick_check_contracts(state: &mut GameState) {
         .collect();
 
     // Second pass: apply satisfaction drift, warnings, and revocations
-    let mut to_revoke: Vec<(usize, String, String, String)> = Vec::new();
+    let mut to_revoke: Vec<(usize, String, usize, String)> = Vec::new();
 
     for (i, met) in &updates {
         let c = &mut state.contracts[*i];
         if *met {
-            c.satisfaction = (c.satisfaction + PATRON_RECOVER_RATE).min(1.0);
+            c.satisfaction = (c.satisfaction + CONTRACT_RECOVER_RATE).min(1.0);
             // Reset warning flag when satisfaction recovers above threshold
-            if c.satisfaction > PATRON_SATISFACTION_WARN + 0.1 {
+            if c.satisfaction > CONTRACT_CONDITION_WARN + 0.1 {
                 c.warned = false;
             }
         } else {
-            c.satisfaction = (c.satisfaction - PATRON_DEGRADE_RATE).max(0.0);
+            c.satisfaction = (c.satisfaction - CONTRACT_DEGRADE_RATE).max(0.0);
 
             // Fire warning when crossing threshold
-            if c.satisfaction <= PATRON_SATISFACTION_WARN && !c.warned {
+            if c.satisfaction <= CONTRACT_CONDITION_WARN && !c.warned {
                 c.warned = true;
+                let member_name = state.board_members.get(c.board_member_idx)
+                    .map(|m| m.name.clone())
+                    .unwrap_or_else(|| "Board member".to_string());
                 state.events.push(GameEvent::ContractWarning {
-                    patron: c.patron.clone(),
+                    member_name,
                     reason: c.condition.description(),
                 });
 
-                // Queue a patron demand crisis if cooldown has passed
+                // Queue a contract demand crisis if cooldown has passed
                 let cooldown_ok = c.last_demand_tick == 0
-                    || state.tick.saturating_sub(c.last_demand_tick) >= PATRON_DEMAND_COOLDOWN;
+                    || state.tick.saturating_sub(c.last_demand_tick) >= CONTRACT_DEMAND_COOLDOWN;
                 if cooldown_ok {
                     c.last_demand_tick = state.tick;
                     state.pending_crises.push((
                         state.tick,
-                        CrisisKind::PatronDemand { template_id: c.template_id },
+                        CrisisKind::ContractDemand { template_id: c.template_id },
                     ));
                 }
             }
 
             // Revoke when satisfaction bottoms out
-            if c.satisfaction <= PATRON_SATISFACTION_REVOKE {
+            if c.satisfaction <= CONTRACT_CONDITION_REVOKE {
                 to_revoke.push((
                     *i,
                     c.name.clone(),
-                    c.patron.clone(),
+                    c.board_member_idx,
                     c.condition.description(),
                 ));
             }
@@ -195,16 +196,21 @@ pub fn tick_check_contracts(state: &mut GameState) {
     }
 
     // Remove in reverse order to preserve indices
-    for (i, name, patron, reason) in to_revoke.iter().rev() {
+    for (i, name, member_idx, reason) in to_revoke.iter().rev() {
         state.contracts.remove(*i);
+        let member_name = state.board_members.get(*member_idx)
+            .map(|m| m.name.as_str())
+            .unwrap_or("Board member");
         state.events.push(GameEvent::ContractRevoked {
-            name: format!("{} pulled out: {}", patron, name),
+            name: format!("{} pulled out: {}", member_name, name),
             reason: reason.clone(),
         });
     }
 }
 
 /// Generate a new contract offer if enough time has passed and slots are available.
+/// The offering board member is chosen randomly from members who don't already have
+/// an active contract.
 pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
     // Don't offer if already have a pending offer
     if state.contract_offer.is_some() {
@@ -212,6 +218,10 @@ pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
     }
     // Don't offer if at max contracts
     if state.contracts.len() >= MAX_CONTRACTS {
+        return;
+    }
+    // Need board members to source contracts from
+    if state.board_members.is_empty() {
         return;
     }
     // Timing: first offer at day ~1, then every ~5 days
@@ -237,8 +247,20 @@ pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
         return;
     }
 
+    // Pick a board member who doesn't already have an active contract
+    let members_with_contracts: Vec<usize> = state.contracts.iter()
+        .map(|c| c.board_member_idx)
+        .collect();
+    let eligible_members: Vec<usize> = (0..state.board_members.len())
+        .filter(|idx| !members_with_contracts.contains(idx))
+        .collect();
+    if eligible_members.is_empty() {
+        return;
+    }
+
     let pick = eligible[rng.r#gen::<usize>() % eligible.len()];
-    let contract = build_contract(pick, rng);
+    let member_idx = eligible_members[rng.r#gen::<usize>() % eligible_members.len()];
+    let contract = build_contract(pick, member_idx, rng);
 
     let template_id = contract.template_id;
     state.events.push(GameEvent::ContractOffered {
@@ -253,6 +275,7 @@ pub fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
 }
 
 /// Accept the current contract offer. Returns (success, message).
+/// Accepting boosts the offering board member's satisfaction and penalizes all others.
 /// Called from crisis resolution (ContractOffer) and unit tests.
 pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
     if let Some(contract) = state.contract_offer.take() {
@@ -261,7 +284,25 @@ pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
             return (false, Some("Maximum contracts reached.".to_string()));
         }
         let income_per_day = contract.income * TICKS_PER_DAY;
-        let msg = format!("Accepted: {} (+¥{:.0}/day)", contract.name, income_per_day);
+        let offerer_idx = contract.board_member_idx;
+        let offerer_name = state.board_members.get(offerer_idx)
+            .map(|m| m.name.clone())
+            .unwrap_or_else(|| "Board member".to_string());
+
+        // Board politics: accepting one member's contract angers the rest.
+        // Uses satisfaction_modifier so the effect persists across entity-driven updates.
+        for (i, member) in state.board_members.iter_mut().enumerate() {
+            if i == offerer_idx {
+                member.satisfaction_modifier += ACCEPT_OFFERER_BOOST;
+            } else {
+                member.satisfaction_modifier -= ACCEPT_OTHERS_PENALTY;
+            }
+        }
+
+        let msg = format!(
+            "Accepted {}'s {}: +¥{:.0}/day. Other board members are displeased.",
+            offerer_name, contract.name, income_per_day,
+        );
         state.contracts.push(contract);
         (true, Some(msg))
     } else {
@@ -270,9 +311,21 @@ pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
 }
 
 /// Reject (dismiss) the current contract offer.
+/// Refusing penalizes the offering board member's satisfaction.
 pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
-    if state.contract_offer.take().is_some() {
-        (true, Some("Contract offer dismissed.".to_string()))
+    if let Some(contract) = state.contract_offer.take() {
+        let offerer_idx = contract.board_member_idx;
+        let offerer_name = state.board_members.get(offerer_idx)
+            .map(|m| m.name.clone())
+            .unwrap_or_else(|| "Board member".to_string());
+
+        // Refusing angers the offering board member
+        if let Some(member) = state.board_members.get_mut(offerer_idx) {
+            member.satisfaction_modifier -= REFUSE_OFFERER_PENALTY;
+        }
+
+        let msg = format!("{} is displeased — contract refused.", offerer_name);
+        (true, Some(msg))
     } else {
         (false, Some("No contract offer to reject.".to_string()))
     }
@@ -286,10 +339,9 @@ mod tests {
     fn make_test_contract(condition: FundingCondition) -> FundingContract {
         FundingContract {
             name: "Test Contract".to_string(),
-            patron: "Test Patron, Testing Dept".to_string(),
+            board_member_idx: 0,
             income: 2.0,
             condition,
-
             template_id: 4,
             satisfaction: 1.0,
             warned: false,
@@ -344,7 +396,7 @@ mod tests {
         for i in 0..MAX_CONTRACTS {
             state.contracts.push(FundingContract {
                 name: format!("Contract {i}"),
-                patron: format!("Patron {i}"),
+                board_member_idx: 0,
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
 
@@ -378,7 +430,7 @@ mod tests {
         }
         assert_eq!(state.contracts.len(), 1, "Should not be revoked after only 100 ticks");
         assert!(state.contracts[0].satisfaction < 1.0, "Satisfaction should have dropped");
-        assert!(state.contracts[0].satisfaction > PATRON_SATISFACTION_REVOKE,
+        assert!(state.contracts[0].satisfaction > CONTRACT_CONDITION_REVOKE,
             "Should not have hit revocation yet");
     }
 
@@ -400,7 +452,7 @@ mod tests {
     fn warning_fires_at_threshold() {
         let mut state = GameState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
-        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5; // Just above warning
+        c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5; // Just above warning
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
@@ -417,7 +469,7 @@ mod tests {
     fn revocation_at_low_satisfaction() {
         let mut state = GameState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
-        c.satisfaction = PATRON_SATISFACTION_REVOKE + 0.0001; // Just above revocation
+        c.satisfaction = CONTRACT_CONDITION_REVOKE + 0.0001; // Just above revocation
         c.warned = true;
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
@@ -433,7 +485,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.contracts.push(FundingContract {
             name: "Stable Deal".to_string(),
-            patron: "Stable Patron".to_string(),
+            board_member_idx: 0,
             income: 2.0,
             condition: FundingCondition::NoCollapse,
             template_id: 3,
@@ -447,9 +499,16 @@ mod tests {
         assert!((state.contracts[0].satisfaction - 1.0).abs() < 0.001);
     }
 
+    /// Set up board members for tests that need them (tick_offer_contracts requires board members)
+    fn setup_board(state: &mut GameState) {
+        crate::engine::corporations::generate_corporations(state);
+        crate::engine::board::generate_board_members(state);
+    }
+
     #[test]
     fn offer_generated_at_first_offer_tick() {
         let mut state = GameState::new_default(42);
+        setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         // Set deaths so MaxDeaths templates are contextually relevant
         state.regions[0].dead = 3_000_000.0;
@@ -461,9 +520,10 @@ mod tests {
         state.tick = CONTRACT_FIRST_OFFER_TICK;
         tick_offer_contracts(&mut state, &mut rng);
         assert!(state.contract_offer.is_some());
-        // Verify offer has patron name
+        // Verify offer is linked to a valid board member
         let offer = state.contract_offer.as_ref().unwrap();
-        assert!(!offer.patron.is_empty(), "Offer should have a patron name");
+        assert!(offer.board_member_idx < state.board_members.len(),
+            "Offer should reference a valid board member");
     }
 
     #[test]
@@ -475,7 +535,7 @@ mod tests {
         for i in 0..MAX_CONTRACTS {
             state.contracts.push(FundingContract {
                 name: format!("C{i}"),
-                patron: format!("Patron {i}"),
+                board_member_idx: 0,
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
 
@@ -493,6 +553,7 @@ mod tests {
     #[test]
     fn no_duplicate_offer_while_pending() {
         let mut state = GameState::new_default(42);
+        setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
         // Set deaths so MaxDeaths templates are contextually relevant
@@ -507,11 +568,11 @@ mod tests {
     }
 
     #[test]
-    fn warning_queues_patron_demand_crisis() {
+    fn warning_queues_contract_demand_crisis() {
         let mut state = GameState::new_default(42);
         state.tick = 500;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
-        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
+        c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5;
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
@@ -523,18 +584,18 @@ mod tests {
         assert_eq!(state.pending_crises.len(), 1);
         assert!(matches!(
             state.pending_crises[0].1,
-            CrisisKind::PatronDemand { template_id: 4 }
+            CrisisKind::ContractDemand { template_id: 4 }
         ));
         assert_eq!(state.contracts[0].last_demand_tick, 500);
     }
 
     #[test]
-    fn patron_demand_cooldown_prevents_repeat() {
+    fn contract_demand_cooldown_prevents_repeat() {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         // Already warned recently, satisfaction recovered and dropped again
-        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
+        c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5;
         c.last_demand_tick = 800; // Only 200 ticks ago, cooldown is 600
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
@@ -548,11 +609,11 @@ mod tests {
     }
 
     #[test]
-    fn patron_demand_fires_after_cooldown_expires() {
+    fn contract_demand_fires_after_cooldown_expires() {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
-        c.satisfaction = PATRON_SATISFACTION_WARN + PATRON_DEGRADE_RATE * 0.5;
+        c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5;
         c.last_demand_tick = 300; // 700 ticks ago, cooldown is 600
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
@@ -566,6 +627,7 @@ mod tests {
     #[test]
     fn offer_queues_crisis_interrupt() {
         let mut state = GameState::new_default(42);
+        setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
         // Set deaths so MaxDeaths templates are contextually relevant
@@ -617,8 +679,54 @@ mod tests {
         state.active_crisis = Some(crisis_event);
 
         let msg = crisis::resolve_crisis(&mut state, 1);
-        assert!(msg.contains("dismissed"), "msg: {msg}");
+        assert!(msg.contains("displeased") || msg.contains("refused"), "msg: {msg}");
         assert!(state.contract_offer.is_none(), "offer should be cleared");
         assert!(state.contracts.is_empty());
+    }
+
+    #[test]
+    fn accept_boosts_offerer_penalizes_others() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+
+        // Create offer from board member 0
+        let mut offer = make_test_contract(FundingCondition::NoCollapse);
+        offer.board_member_idx = 0;
+        state.contract_offer = Some(offer);
+
+        let (ok, msg) = accept_contract(&mut state);
+        assert!(ok, "should accept");
+        assert!(msg.unwrap().contains("displeased"), "should mention others are displeased");
+
+        // Offerer should have positive modifier
+        assert!((state.board_members[0].satisfaction_modifier - ACCEPT_OFFERER_BOOST).abs() < 0.01,
+            "offerer modifier should be +{}", ACCEPT_OFFERER_BOOST);
+        // Others should have negative modifier
+        for (i, m) in state.board_members.iter().enumerate() {
+            if i != 0 {
+                assert!((m.satisfaction_modifier - (-ACCEPT_OTHERS_PENALTY)).abs() < 0.01,
+                    "member {} modifier should be -{}, got {}", i, ACCEPT_OTHERS_PENALTY, m.satisfaction_modifier);
+            }
+        }
+    }
+
+    #[test]
+    fn refuse_penalizes_offerer_only() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+
+        let mut offer = make_test_contract(FundingCondition::NoCollapse);
+        offer.board_member_idx = 1;
+        state.contract_offer = Some(offer);
+
+        let (ok, _) = reject_contract(&mut state);
+        assert!(ok);
+
+        // Offerer (idx 1) should have negative modifier
+        assert!((state.board_members[1].satisfaction_modifier - (-REFUSE_OFFERER_PENALTY)).abs() < 0.01);
+
+        // Others should have zero modifier
+        assert!((state.board_members[0].satisfaction_modifier).abs() < 0.01);
+        assert!((state.board_members[2].satisfaction_modifier).abs() < 0.01);
     }
 }

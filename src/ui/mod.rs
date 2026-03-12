@@ -376,8 +376,8 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("TERMS RECEIVED: {}. Respond via crisis popup", name);
                 (5, msg.clone(), msg)
             }
-            GameEvent::ContractWarning { patron, reason } => {
-                let msg = format!("NOTICE: {}: {}", patron, reason);
+            GameEvent::ContractWarning { member_name, reason } => {
+                let msg = format!("NOTICE: {}: {}", member_name, reason);
                 (2, msg.clone(), msg)
             }
             GameEvent::ContractRevoked { name, reason } => {
