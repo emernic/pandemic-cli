@@ -5023,12 +5023,12 @@ impl GameState {
             mechanism: None,
             target_diseases: all_disease_indices.clone(),
             cost: 10.0,
-            doses: 25_000_000.0,
-            max_doses: 25_000_000.0,
+            doses: 500_000.0,
+            max_doses: 500_000.0,
             unlocked: true,
             // Broad-spectrum starts unlocked at limited supply: a blunt bandaid
             // that slows early disease spread while the player develops targeted medicines.
-            // 25M doses depletes quickly in multi-region outbreaks, forcing investment
+            // 500K doses depletes within ~10 days as infections grow, forcing investment
             // in the research pipeline. Targeted medicines are 6–7x more effective.
             tested_against: all_disease_indices.clone(),
             strain_generations: vec![],
