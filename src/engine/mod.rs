@@ -2362,7 +2362,7 @@ mod tests {
 
         // Now tick with travel ban
         let funding_before = state.resources.funding;
-        state.policies[0].travel_ban = true; // $6/tick, also halves region 0 income
+        state.policies[0].travel_ban = true; // $0.7/tick, also reduces region 0 GDP
         state = tick(&state);
         let net_change = state.resources.funding - funding_before;
 
@@ -2376,8 +2376,8 @@ mod tests {
     #[test]
     fn policy_funding_crisis_suspends_most_expensive_first() {
         let mut state = GameState::new_default(42);
-        state.resources.funding = 0.8; // Enough for quarantine ($0.6) but not both ($1.6)
-        state.policies[0].travel_ban = true; // $1.0/tick — most expensive
+        state.resources.funding = 0.8; // Enough for quarantine ($0.6) but not both ($1.3)
+        state.policies[0].travel_ban = true; // $0.7/tick — most expensive
         state.policies[0].quarantine = true; // $0.6/tick
         state = tick(&state);
         // Should have suspended travel ban (most expensive) but kept quarantine
