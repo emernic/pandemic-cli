@@ -2405,6 +2405,7 @@ mod tests {
             deployed_count: 0,
             total_treated: 0.0,
             total_protected: 0.0,
+            manufacturer_corp_idx: None,
         };
 
         // 3 generations behind = 1.0 - 3*0.15 = 0.55

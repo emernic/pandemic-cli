@@ -2630,6 +2630,12 @@ pub struct Medicine {
     /// Cumulative people protected (vaccinated) across all deployments.
     #[serde(default)]
     pub total_protected: f64,
+    /// Index into `GameState::corporations` for this medicine's manufacturing partner.
+    /// `None` for the starting broad-spectrum medicine (no specific manufacturer).
+    /// When development completes and the manufacturer has a board seat, the board
+    /// member's satisfaction increases (via a reserves boost to their corporation).
+    #[serde(default)]
+    pub manufacturer_corp_idx: Option<usize>,
 }
 
 //// A medicine deployment in transit to a region. Created when the player
@@ -2692,6 +2698,7 @@ impl Medicine {
                     deployed_count: 0,
                     total_treated: 0.0,
                     total_protected: 0.0,
+                    manufacturer_corp_idx: None,
                 }];
             }
         };
@@ -2712,6 +2719,7 @@ impl Medicine {
                 deployed_count: 0,
                 total_treated: 0.0,
                 total_protected: 0.0,
+                manufacturer_corp_idx: None,
             }
         }).collect()
     }
@@ -4681,6 +4689,7 @@ impl GameState {
             deployed_count: 0,
             total_treated: 0.0,
             total_protected: 0.0,
+            manufacturer_corp_idx: None, // assigned in generate_corporations
         });
 
         let num_diseases = diseases.len();

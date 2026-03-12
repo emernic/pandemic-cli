@@ -145,9 +145,19 @@ pub(crate) fn process_events(state: &mut GameState) {
                 (1, msg.clone(), msg)
             }
             GameEvent::MedicineDeveloped { medicine_idx } => {
-                let med_name = state.medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str()).unwrap_or("Unknown");
-                let msg = format!("BREAKTHROUGH: {} developed. Ready for clinical trials.", med_name);
+                let med = state.medicines.get(*medicine_idx);
+                let med_name = med.map(|m| m.name.as_str()).unwrap_or("Unknown");
+                let contract_note = med.and_then(|m| m.manufacturer_corp_idx)
+                    .and_then(|ci| state.corporations.get(ci))
+                    .map(|corp| {
+                        if corp.board_seat {
+                            format!(" Mfg contract: {} (board satisfied)", corp.name)
+                        } else {
+                            format!(" Mfg contract: {}", corp.name)
+                        }
+                    })
+                    .unwrap_or_default();
+                let msg = format!("BREAKTHROUGH: {} developed.{} Ready for clinical trials.", med_name, contract_note);
                 (2, msg.clone(), msg)
             }
             GameEvent::TrialCompleted { medicine_idx, disease_idx } => {
