@@ -918,13 +918,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     disease_name,
                 ),
                 options: vec![ CrisisOption {
-                    label: format!("Share data (+¥{:.0})", share_reward),
-                    description: format!("Transfer sequencing data. Receive ¥{:.0}.", share_reward),
-                    cost: None,
+                    label: format!("Share data (+¥{:.0}, −2 personnel for 2 days)", share_reward),
+                    description: format!("Transfer sequencing data. Receive ¥{:.0}. Staff diverted to package and verify data.", share_reward),
+                    cost: None, // Personnel operation applied in resolve
                 },
                  CrisisOption {
-                    label: "Refuse".into(),
-                    description: format!("Keep your data, lose ¥{:.0} in foreign aid", refuse_cost),
+                    label: "Refuse (+3% approval)".into(),
+                    description: format!("Keep your data, lose ¥{:.0} in foreign aid. Board respects your independence.", refuse_cost),
                     cost: Some(CrisisCost { funding: *refuse_cost, personnel: 0, ..Default::default() }),
                 },
                 ],
@@ -2622,11 +2622,18 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
         (CrisisKind::ResourceDiversion { share_reward, .. }, 0) => {
             state.resources.funding += share_reward;
-            format!("Research data shared. Received ¥{:.0}.", share_reward)
+            // Temporary personnel operation: 2 staff for 2 days to package data
+            state.crisis_operations.push(CrisisOperation {
+                label: "Data Transfer Team".to_string(),
+                personnel: 2,
+                ticks_remaining: 2.0 * TICKS_PER_DAY,
+            });
+            format!("Research data shared. Received ¥{:.0}. 2 personnel diverted for 2 days.", share_reward)
         }
         (CrisisKind::ResourceDiversion { .. }, _) => {
-            // Refuse — costs already deducted
-            "Refused to share research. Foreign aid reduced.".into()
+            // Refuse — funding cost already deducted, grant approval boost
+            state.resources.board_approval = (state.resources.board_approval + 0.03).min(1.0);
+            "Refused to share research. Foreign aid reduced. Board approves your independence.".into()
         }
 
         (CrisisKind::ExhaustionEpidemic { region_idx, .. }, 0) => {
