@@ -7,3 +7,4 @@ playtest-*.json
 playtest_*.json
 saves/
 .worker-logs/
+.snapshot_count
