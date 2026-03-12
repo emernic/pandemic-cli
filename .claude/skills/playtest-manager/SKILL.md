@@ -83,7 +83,7 @@ Agent(subagent_type=playtest, prompt=...)
 
 **The game is designed to be unwinnable.** Survival/endurance challenge. 20+ days decent, 40+ good, 100+ exceptional. Do NOT file issues about "can't win." DO file issues about the experience — was losing interesting? Were there meaningful decisions?
 
-### ⚠️ DON'T BIAS THE PLAYTESTER — THIS IS THE #1 FAILURE MODE
+### ⚠️ DON'T BIAS THE PLAYTESTER — THIS IS THE BIGGEST FAILURE MODE
 
 **Most playtests should be fully unguided.** Just tell the agent: "Play the game. Make your own decisions. Report what you notice." Full stop. No focus area. No list of things to test. Let the player discover what the game actually is, not what you already think it is.
 
@@ -143,7 +143,7 @@ You are reading the notes of a first-time player who has never seen the game bef
 
 ### ⚠️ Balance opinions from AI playtests should almost never become issues
 
-**This is the single most important triage rule.** AI playtesters play for a few minutes, see a tiny fraction of the game, and confidently declare the economy "too loose" or diseases "too weak." These balance impressions are nearly worthless. The AI has no intuition for game feel, no memory of previous sessions, and no ability to distinguish "I played badly" from "the game is unbalanced."
+**This is critical.** AI playtesters play for a few minutes, see a tiny fraction of the game, and confidently declare the economy "too loose" or diseases "too weak." These balance impressions are nearly worthless. The AI has no intuition for game feel, no memory of previous sessions, and no ability to distinguish "I played badly" from "the game is unbalanced."
 
 **Balance issues are the least actionable category of playtest feedback.** They require 3+ independent sessions confirming the same direction with different seeds and strategies before they're even worth considering. A single session's balance impression is noise — always.
 
