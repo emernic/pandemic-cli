@@ -114,7 +114,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         // --- Dark comedy: ramp in mid-to-late game ---
         // Performance review is funniest when things are falling apart
         "performance_review" => ramp_up(20.0, 36.0),
-        // Congressional hearing is a late-game absurdity
+        // Oversight summons is a late-game absurdity
         "congress" => ramp_up(36.0, 50.0),
         // Naming rights and intern are mid-game comedy
         "naming_rights" | "intern" => ramp_up(10.0, 20.0) * fade_out(50.0, 70.0),
@@ -419,7 +419,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::InternDiscovery { cost });
     }
 
-    // Congressional hearing: day 40+, requires 2+ regions in critical state
+    // Oversight summons: day 40+, requires 2+ regions in critical state
     if day > 40.0 {
         let crit_regions = state.regions.iter()
             .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
@@ -613,7 +613,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         CrisisKind::InternationalAid { funding, personnel } => {
             CrisisEvent {
                 title: "Emergency Aid Package".into(),
-                description: "The N.W.H.O. emergency reserve has authorized a disbursement.".into(),
+                description: "A discretionary emergency fund has been released.".into(),
                 options: vec![ CrisisOption {
                     label: format!("Emergency funding (+¥{:.0})", funding),
                     description: "Direct financial support".into(),
@@ -951,7 +951,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Research Data Request".into(),
                 description: format!(
-                    "A member state is demanding access to your sequencing data on {}.",
+                    "A regional governor is demanding access to your sequencing data on {}.",
                     disease_name,
                 ),
                 options: vec![ CrisisOption {
@@ -1280,11 +1280,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::CongressionalHearing => {
             CrisisEvent {
-                title: "Congressional Subpoena".into(),
+                title: "Oversight Summons".into(),
                 description:
-                    "You have been subpoenaed to appear before the Senate Committee on Pandemic \
-                     Preparedness and Catering Oversight. Your testimony is expected to take \
-                     several days. Attendance is technically mandatory.".into(),
+                    "The N.W.H.O. Oversight Commission has summoned you for a formal review. \
+                     Agenda includes your crisis response record and the cafeteria budget. \
+                     Attendance is technically mandatory.".into(),
                 options: vec![ CrisisOption {
                     label: "Testify in person".into(),
                     description: "Lose 2 days of all research. +10% board approval.".into(),
@@ -1292,12 +1292,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Send a deputy".into(),
-                    description: "+2% board approval. 40% chance of contempt charges.".into(),
+                    description: "+2% board approval. 40% chance of formal censure.".into(),
                     cost: None,
                 },
                 CrisisOption {
-                    label: "Ignore the subpoena".into(),
-                    description: "Guaranteed contempt charges. −15% board approval. Research uninterrupted.".into(),
+                    label: "Ignore the summons".into(),
+                    description: "Guaranteed censure. −15% board approval. Research uninterrupted.".into(),
                     cost: None,
                 },
                 ],
@@ -1307,10 +1307,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::ContemptOfCongress { fine } => {
             CrisisEvent {
-                title: "Contempt of Congress".into(),
+                title: "Formal Censure".into(),
                 description: format!(
-                    "The Senate committee was not satisfied with your deputy's testimony. \
-                     You have been held in contempt. Fine: ¥{:.0}.",
+                    "The Oversight Commission was not satisfied with your deputy's testimony. \
+                     You have been formally censured. Fine: ¥{:.0}.",
                     fine,
                 ),
                 options: vec![ CrisisOption {
@@ -2388,7 +2388,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::InternationalAid { personnel, .. }, _) => {
             state.resources.personnel += personnel;
-            format!("Received {} personnel from N.W.H.O. reserve", personnel)
+            format!("Received {} emergency personnel", personnel)
         }
         (CrisisKind::MutationSurge { .. }, 0) => {
             "Mutation surge ignored".into()
@@ -2929,7 +2929,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             state.resources.board_approval += 0.10;
-            "Testimony concluded. Committee thanks you for your cooperation.".into()
+            "Review concluded. Commission notes your cooperation.".into()
         }
         (CrisisKind::CongressionalHearing, 1) => {
             // Send deputy — small POL gain, 40% chance of contempt follow-up
@@ -2938,9 +2938,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let fine = scaled_cost(state, 0.15, 200.0, 600.0);
                 state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
-                "Deputy testified. The committee has requested a follow-up session.".into()
+                "Deputy testified. The commission has requested a follow-up session.".into()
             } else {
-                "Deputy testified. Committee satisfied.".into()
+                "Deputy testified. Commission satisfied.".into()
             }
         }
         (CrisisKind::CongressionalHearing, _) => {
@@ -2949,7 +2949,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let followup_tick = state.tick + (2.0 * TICKS_PER_DAY) as u64;
             let fine = scaled_cost(state, 0.20, 300.0, 800.0);
             state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
-            "Subpoena ignored. Contempt charges filed.".into()
+            "Summons ignored. Censure proceedings filed.".into()
         }
 
         (CrisisKind::ContemptOfCongress { fine }, 0) => {
