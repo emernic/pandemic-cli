@@ -493,6 +493,18 @@ impl ScreeningLevel {
             ScreeningLevel::MassRapid => 0.70,  // 30% spread reduction
         }
     }
+
+    /// Medicine targeting efficiency at full screening progress.
+    /// Without surveillance, doses are wasted on the wrong people.
+    /// Returns the fraction of delivered doses that reach valid targets.
+    pub fn targeting_efficiency(&self) -> f64 {
+        match self {
+            ScreeningLevel::None => 0.50,       // 50% waste — blind deployment
+            ScreeningLevel::Basic => 0.75,      // 25% waste
+            ScreeningLevel::Antigen => 0.90,    // 10% waste
+            ScreeningLevel::MassRapid => 1.0,   // no waste — perfect targeting
+        }
+    }
 }
 
 /// Per-region policy toggles. Each costs funding (and optionally personnel) per tick.
@@ -3395,6 +3407,8 @@ pub enum GameEvent {
         doses: f64,
         adverse: bool,
         efficiency: f64,
+        /// Doses lost to poor targeting (no surveillance to identify who needs treatment).
+        doses_wasted: f64,
         /// People actually treated (moved from infected to immune). 0 if vaccination.
         people_treated: f64,
         /// People actually protected (vaccinated from susceptible pool). 0 if treatment.
@@ -4832,6 +4846,17 @@ impl GameState {
         self.policies.get(region_idx)
             .map(|p| p.screening.shows_immune() && p.screening_progress > 0.5)
             .unwrap_or(false)
+    }
+
+    /// Medicine targeting efficiency for a region, accounting for screening_progress.
+    /// Returns the fraction of delivered doses that reach valid targets (1.0 = perfect).
+    /// Without screening, 50% of doses are wasted on the wrong people.
+    pub fn targeting_efficiency(&self, region_idx: usize) -> f64 {
+        let (level_eff, progress) = self.policies.get(region_idx)
+            .map(|p| (p.screening.targeting_efficiency(), p.screening_progress))
+            .unwrap_or((ScreeningLevel::None.targeting_efficiency(), 0.0));
+        let base = ScreeningLevel::None.targeting_efficiency();
+        base + (level_eff - base) * progress
     }
 
     /// Best screening level across all regions — used for detection threshold.

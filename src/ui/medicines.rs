@@ -627,6 +627,24 @@ fn render_select_target(
         ),
     ]));
 
+    // Show targeting efficiency (screening-dependent dose waste)
+    let targeting_eff = state.targeting_efficiency(region_idx);
+    if targeting_eff < 0.99 {
+        let waste_pct = ((1.0 - targeting_eff) * 100.0) as u32;
+        let color = if targeting_eff < 0.60 { Color::Red } else if targeting_eff < 0.80 { Color::Yellow } else { Color::DarkGray };
+        lines.push(Line::from(vec![
+            Span::styled("  Targeting: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{:.0}%", targeting_eff * 100.0),
+                Style::default().fg(color),
+            ),
+            Span::styled(
+                format!(" ({waste_pct}% dose waste — improve screening to reduce)"),
+                Style::default().fg(color),
+            ),
+        ]));
+    }
+
     lines.push(Line::from(""));
     lines.push(hint_line(state, "Deploy", "Back"));
 
