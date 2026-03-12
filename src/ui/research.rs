@@ -117,7 +117,11 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
         item_idx += 1;
     } else {
         let applied_available = state.available_projects(ResearchTrack::Applied);
-        if applied_available.is_empty() {
+        // Filter out TrainPersonnel — it's shown in the Lab section instead
+        let applied_non_train: Vec<_> = applied_available.iter()
+            .filter(|k| !matches!(k, ResearchKind::TrainPersonnel))
+            .collect();
+        if applied_non_train.is_empty() {
             // Show hints about why nothing is available
             let blocked = state.blocked_medicine_developments();
             if !blocked.is_empty() {
@@ -159,6 +163,9 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
             }
         } else {
             for kind in &applied_available {
+                if matches!(kind, ResearchKind::TrainPersonnel) {
+                    continue;
+                }
                 let selected = state.ui.panel_selection == item_idx;
                 if selected { selected_line = Some(lines.len()); }
                 render_available_project(&mut lines, kind, selected, state);
@@ -210,8 +217,8 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
     }
 
     // ─── Lab ───
+    lines.push(Line::from(""));
     if state.lab_level >= 2 {
-        lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             format!("  ─── {} (max) ───", state.lab_level_name()),
             Style::default().fg(Color::DarkGray),
@@ -221,11 +228,27 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  ─── Lab Upgrade ───",
+            "  ─── Lab ───",
             Style::default().fg(Color::DarkGray),
         )));
+    }
+
+    // Train Personnel (shown here if applied slot is free)
+    if state.research_slot(ResearchTrack::Applied).is_none() {
+        let applied_projects = state.available_projects(ResearchTrack::Applied);
+        for kind in &applied_projects {
+            if matches!(kind, ResearchKind::TrainPersonnel) {
+                let selected = state.ui.panel_selection == item_idx;
+                if selected { selected_line = Some(lines.len()); }
+                render_available_project(&mut lines, kind, selected, state);
+                item_idx += 1;
+            }
+        }
+    }
+
+    // Lab upgrade button
+    if state.lab_level < 2 {
         let selected = state.ui.panel_selection == item_idx;
         if selected { selected_line = Some(lines.len()); }
         let marker = if selected { "▶ " } else { "  " };

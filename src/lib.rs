@@ -447,6 +447,14 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                     });
                     ui.panel_selection = 0;
                 }
+                ResearchFlatItem::TrainPersonnel(project_idx) => {
+                    ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                        track: ResearchTrack::Applied,
+                        project_idx: *project_idx,
+                        double_personnel: false,
+                    });
+                    ui.panel_selection = 0;
+                }
             }
             None
         }
