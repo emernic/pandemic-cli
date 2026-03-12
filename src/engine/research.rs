@@ -258,6 +258,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                         .collect();
                 }
                 state.events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
+                super::board::on_research_completed(state);
 
                 // Manufacturing contract: boost the manufacturer's reserves if they have a board seat.
                 // This is a one-time reward representing the lucrative manufacturing contract,
@@ -309,6 +310,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             if !state.unlocked_techs.contains(&tech) {
                 state.unlocked_techs.push(tech);
                 state.events.push(GameEvent::TechUnlocked { tech });
+                super::board::on_research_completed(state);
             }
         }
         try_auto_start(state, ResearchTrack::Basic);

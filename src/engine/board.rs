@@ -1,7 +1,7 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState};
+use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState, MAX_FIELD_RESEARCH};
 
 /// Generate board members from existing game entities at game start.
 /// Called after corporations and regions are initialized.
@@ -136,38 +136,69 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
     }
 }
 
+/// Stock performance component: share_price / ipo_price, clamped 0–1.
+fn stock_performance(state: &GameState, corp_idx: usize) -> f64 {
+    state.corporations.get(corp_idx)
+        .map(|c| if c.bankrupt { 0.0 } else {
+            (c.share_price / c.ipo_price).clamp(0.0, 1.0)
+        })
+        .unwrap_or(0.0)
+}
+
+/// Research pipeline utilization: fraction of research slots actively in use
+/// across field, applied, and basic tracks.
+fn research_utilization(state: &GameState) -> f64 {
+    let field_active = state.field_research.len() as f64;
+    let field_max = MAX_FIELD_RESEARCH as f64;
+    let applied_active = if state.applied_research.is_some() { 1.0 } else { 0.0 };
+    let basic_active = if state.basic_research.is_some() { 1.0 } else { 0.0 };
+    let total_active = field_active + applied_active + basic_active;
+    let total_max = field_max + 1.0 + 1.0;
+    (total_active / total_max).clamp(0.0, 1.0)
+}
+
+/// Global survival rate: fraction of initial population still alive.
+fn global_survival_rate(state: &GameState) -> f64 {
+    let initial_pop = state.initial_population();
+    if initial_pop <= 0.0 {
+        0.0
+    } else {
+        let alive = initial_pop - state.total_dead();
+        (alive / initial_pop).clamp(0.0, 1.0)
+    }
+}
+
 /// Compute satisfaction for a single board member from game state.
+/// Corporate leaders blend stock performance with personality-specific factors.
 fn compute_member_satisfaction(state: &GameState, member_idx: usize) -> f64 {
     let member = &state.board_members[member_idx];
     match &member.role {
         BoardRole::CorporateLeader { corp_idx } => {
-            // Satisfaction tracks stock price relative to IPO price.
-            // Stock price already incorporates revenue and reserves via fair
-            // value calculation, with natural mean-reversion lag.
-            state.corporations.get(*corp_idx)
-                .map(|c| if c.bankrupt { 0.0 } else {
-                    (c.share_price / c.ipo_price).clamp(0.0, 1.0)
-                })
-                .unwrap_or(0.0)
+            let stock = stock_performance(state, *corp_idx);
+            match member.personality {
+                Some(BoardPersonality::Profiteer) | None => {
+                    stock
+                }
+                Some(BoardPersonality::Technocrat) => {
+                    0.6 * stock + 0.4 * research_utilization(state)
+                }
+                Some(BoardPersonality::Humanitarian) => {
+                    0.5 * stock + 0.5 * global_survival_rate(state)
+                }
+                Some(BoardPersonality::Dealmaker) => {
+                    let owns_shares = state.portfolio.get(*corp_idx)
+                        .map_or(0.0, |&shares| if shares > 0 { 1.0 } else { 0.0 });
+                    0.7 * stock + 0.3 * owns_shares
+                }
+            }
         }
         BoardRole::RegionGovernor { region_idx } => {
-            // Satisfaction tracks GDP as a fraction of base (0.0–1.0).
-            // GDP accounts for disease burden, deaths, and active containment
-            // policies — creating tension where containment saves lives but
-            // tanks the economy and makes governors unhappy.
             state.regions.get(*region_idx)
                 .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
                 .unwrap_or(0.0)
         }
         BoardRole::IndependentAdvisor => {
-            // Satisfaction tracks global survival: fraction of total population alive.
-            let initial_pop = state.initial_population();
-            if initial_pop <= 0.0 {
-                0.0
-            } else {
-                let alive = initial_pop - state.total_dead();
-                (alive / initial_pop).clamp(0.0, 1.0)
-            }
+            global_survival_rate(state)
         }
     }
 }
@@ -183,6 +214,18 @@ const INVEST_RIVAL_PENALTY: f64 = 0.03;
 /// Satisfaction penalty when player sells shares of a board member's own corporation.
 /// A mild rebuke — selling is less provocative than investing in a rival.
 const SELL_OWN_CORP_PENALTY: f64 = 0.03;
+
+/// Amplified satisfaction boost for Dealmaker personality when player buys their corp's shares.
+/// 2x the normal boost — Dealmakers care deeply about direct investment.
+const INVEST_DEALMAKER_BOOST: f64 = 0.10;
+
+/// Satisfaction penalty for Profiteer personality when GDP-hurting policy is enacted
+/// in their corporation's region.
+const PROFITEER_POLICY_PENALTY: f64 = 0.05;
+
+/// Satisfaction boost for Technocrat personality when research completes
+/// (medicine developed or basic research unlocked).
+const TECHNOCRAT_RESEARCH_BOOST: f64 = 0.03;
 
 /// Apply board member satisfaction modifiers when player buys shares.
 /// Board members with CorporateLeader role react:
@@ -204,7 +247,12 @@ pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<St
             _ => continue,
         };
         if member_corp_idx == corp_idx {
-            member.satisfaction_modifier += INVEST_OWN_CORP_BOOST;
+            let boost = if member.personality == Some(BoardPersonality::Dealmaker) {
+                INVEST_DEALMAKER_BOOST
+            } else {
+                INVEST_OWN_CORP_BOOST
+            };
+            member.satisfaction_modifier += boost;
             pleased = Some(member.name.clone());
         } else if let Some(member_corp) = state.corporations.get(member_corp_idx) {
             if member_corp.sector == bought_sector {
@@ -238,6 +286,29 @@ pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<S
         }
     }
     displeased.map(|name| format!("{} disapproves.", name))
+}
+
+/// Apply satisfaction penalty to Profiteer board members when a GDP-hurting policy
+/// is enacted in their corporation's region.
+/// GDP-hurting policies: travel ban (0), quarantine (1), martial law (8).
+pub(super) fn on_gdp_policy_enacted(state: &mut GameState, region_idx: usize) {
+    for member in state.board_members.iter_mut() {
+        if member.personality != Some(BoardPersonality::Profiteer) {
+            continue;
+        }
+        if member.region_idx == Some(region_idx) {
+            member.satisfaction_modifier -= PROFITEER_POLICY_PENALTY;
+        }
+    }
+}
+
+/// Apply satisfaction boost to Technocrat board members when research completes.
+pub(super) fn on_research_completed(state: &mut GameState) {
+    for member in state.board_members.iter_mut() {
+        if member.personality == Some(BoardPersonality::Technocrat) {
+            member.satisfaction_modifier += TECHNOCRAT_RESEARCH_BOOST;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -292,7 +363,15 @@ mod tests {
         let leader = state.board_members.iter()
             .find(|m| matches!(m.role, BoardRole::CorporateLeader { corp_idx } if corp_idx == board_corp_idx))
             .expect("should have a board member for the bankrupted corp");
-        assert_eq!(leader.satisfaction, 0.0, "bankrupt corp leader should have 0 satisfaction");
+        // Profiteers get 0.0, others blend stock (0.0 from bankruptcy) with other factors
+        match leader.personality {
+            Some(BoardPersonality::Profiteer) | None => {
+                assert_eq!(leader.satisfaction, 0.0, "bankrupt Profiteer should have 0 satisfaction");
+            }
+            _ => {
+                assert!(leader.satisfaction < 0.7, "bankrupt corp leader should have reduced satisfaction, got {}", leader.satisfaction);
+            }
+        }
 
         // Overall board satisfaction should drop
         let sat = state.board_satisfaction();

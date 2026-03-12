@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BoardRole, GameState, TICKS_PER_DAY};
+use crate::state::{BoardPersonality, BoardRole, GameState, TICKS_PER_DAY};
 use crate::format_number;
 
 /// Satisfaction word and color for a satisfaction value (0.0-1.0).
@@ -133,12 +133,24 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             if member.satisfaction < 0.5 {
                 let demand_text = match &member.role {
                     BoardRole::CorporateLeader { corp_idx } => {
-                        state.corporations.get(*corp_idx)
-                            .map(|c| if c.bankrupt {
-                                format!("Demands: Restore {} operations", c.name)
-                            } else {
-                                format!("Demands: Protect {} revenue", c.name)
+                        let corp_name = state.corporations.get(*corp_idx)
+                            .map(|c| c.name.as_str()).unwrap_or("corporation");
+                        let bankrupt = state.corporations.get(*corp_idx)
+                            .map_or(false, |c| c.bankrupt);
+                        if bankrupt {
+                            Some(format!("Demands: Restore {} operations", corp_name))
+                        } else {
+                            Some(match member.personality {
+                                Some(BoardPersonality::Technocrat) =>
+                                    "Demands: Staff research programs".to_string(),
+                                Some(BoardPersonality::Humanitarian) =>
+                                    "Demands: Prioritize disease containment".to_string(),
+                                Some(BoardPersonality::Dealmaker) =>
+                                    format!("Demands: Invest in {}", corp_name),
+                                Some(BoardPersonality::Profiteer) | None =>
+                                    "Demands: Roll back restrictive policies".to_string(),
                             })
+                        }
                     }
                     BoardRole::RegionGovernor { region_idx } => {
                         state.regions.get(*region_idx)
