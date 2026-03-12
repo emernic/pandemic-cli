@@ -703,6 +703,17 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 status,
                 Style::default().fg(cooperation_color).add_modifier(Modifier::BOLD),
             ),
+            {
+                let eff = gov.policy_effectiveness();
+                if eff < 1.0 {
+                    Span::styled(
+                        format!(" (policies {:.0}% effective)", eff * 100.0),
+                        Style::default().fg(Color::Red),
+                    )
+                } else {
+                    Span::raw("")
+                }
+            },
         ]));
     }
 

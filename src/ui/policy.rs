@@ -462,6 +462,26 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Style::default().fg(Color::Yellow),
             ),
         ]));
+        {
+            let eff = gov.policy_effectiveness();
+            if eff < 1.0 {
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled(
+                        format!("⚠ Defiance: policies only {:.0}% effective in this region", eff * 100.0),
+                        Style::default().fg(Color::Red),
+                    ),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled(
+                        "Below 40 co-op → defiance → policies lose 30–60% effectiveness",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
+        }
         lines.push(Line::from(""));
 
         // Bargain option (below Appease, only when governor is defiant and bargain available)
