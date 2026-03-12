@@ -912,8 +912,6 @@ pub struct FundingContract {
     /// Per-tick income while contract is active.
     pub income: f64,
     pub condition: FundingCondition,
-    /// Patron's personality-driven explanation for the deal.
-    pub source: String,
     /// Unique template index (used to avoid duplicate offers).
     pub template_id: u8,
     /// Patron satisfaction (0.0–1.0). Degrades when condition violated, recovers when met.
@@ -6382,7 +6380,6 @@ mod tests {
             patron: "Test Patron".to_string(),
             income: contract_income_per_tick,
             condition: FundingCondition::NoCollapse,
-            source: "test".to_string(),
             template_id: 99,
             satisfaction: 1.0,
             warned: false,
