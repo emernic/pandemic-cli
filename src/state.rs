@@ -2216,13 +2216,6 @@ pub struct Disease {
     /// sharing that mechanism. Broad-spectrum drugs (mechanism=None) track separately.
     #[serde(default)]
     pub mechanism_resistance: Vec<ResistanceEntry>,
-    /// How much this disease has adapted to containment measures (quarantine, travel bans).
-    /// 0.0 = no adaptation, 1.0 = fully adapted (containment half as effective).
-    /// Builds when disease has active infections in contained regions; decays when
-    /// containment is lifted. Creates pressure to rotate strategies rather than
-    /// relying on quarantine forever.
-    #[serde(default)]
-    pub containment_adaptation: f64,
     /// Mutation behavior pattern. Normal diseases random-walk; anomalous late-game
     /// pathogens may be locked (no mutation) or directed (one-way drift).
     #[serde(default)]
@@ -2351,7 +2344,6 @@ impl Disease {
             detected: true, // callers override to false for new diseases
             spawned_at_tick: 0, // callers override to current tick when spawning
             mechanism_resistance: vec![],
-            containment_adaptation: 0.0,
             mutation_mode: MutationMode::Normal,
             sequence_group: None,
             incubation_ticks,
@@ -3489,12 +3481,6 @@ pub enum GameEvent {
         people_treated: f64,
         /// People actually protected (vaccinated from susceptible pool). 0 if treatment.
         people_protected: f64,
-    },
-    /// A disease has adapted to containment measures — quarantine/travel ban less effective.
-    ContainmentAdaptation {
-        disease_idx: usize,
-        /// Adaptation level (0.0–1.0) at the time of the event.
-        level: f64,
     },
     /// Emergency consolidation activated — all resources consolidated into one region.
     ArkProtocolActivated {

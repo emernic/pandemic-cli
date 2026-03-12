@@ -68,9 +68,7 @@ pub(super) fn tick_spread_within(
                 let noise: f64 = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.1;
                 let mut infectivity = if quarantine_active {
                     let base_f = disease.transmission.quarantine_factor();
-                    // Containment adaptation weakens quarantine: factor moves toward 1.0
-                    let f = base_f + (1.0 - base_f) * disease.containment_adaptation;
-                    disease.infectivity * scale_policy_factor(f, gov_eff)
+                    disease.infectivity * scale_policy_factor(base_f, gov_eff)
                 } else {
                     disease.infectivity
                 };
@@ -264,9 +262,7 @@ pub(super) fn tick_spread_cross_region(
                     let eff = dest_gov_eff.min(source_gov_eff);
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
                         let base_f = disease.transmission.travel_ban_factor();
-                        // Containment adaptation weakens travel bans
-                        let adapted_f = base_f + (1.0 - base_f) * disease.containment_adaptation;
-                        scale_policy_factor(adapted_f, eff)
+                        scale_policy_factor(base_f, eff)
                     } else if source_has_border_controls || dest_has_border_controls {
                         scale_policy_factor(0.5, eff)
                     } else {
@@ -398,58 +394,6 @@ pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
     }
 }
 
-/// Update containment adaptation for each disease. When a disease has active
-/// infections in quarantined or travel-banned regions, it gradually adapts to
-/// bypass those containment measures. When containment is lifted, adaptation
-/// decays — the selective pressure is gone and the adapted traits are costly
-/// for the pathogen to maintain.
-///
-/// Rate: +0.005 per contained region per day (6 regions all contained → +0.03/day,
-/// reaching 0.3 after 10 days). RNA viruses adapt 2x faster.
-/// Decay: -0.02 per day when no regions are contained.
-pub(super) fn tick_containment_adaptation(new: &mut GameState) {
-    let adapt_rate_per_region = 0.005 / TICKS_PER_DAY;
-    let decay_rate = 0.02 / TICKS_PER_DAY;
-
-    for d_idx in 0..new.diseases.len() {
-        // Count regions where this disease has active infections AND containment is active
-        let contained_regions = new.regions.iter().enumerate()
-            .filter(|(r_idx, region)| {
-                let has_infection = region.disease_state(d_idx)
-                    .is_some_and(|inf| inf.infected > 100.0);
-                let has_containment = new.policies.get(*r_idx)
-                    .is_some_and(|p| p.quarantine || p.travel_ban);
-                has_infection && has_containment
-            })
-            .count();
-
-        let prev = new.diseases[d_idx].containment_adaptation;
-        if contained_regions > 0 {
-            // RNA viruses adapt faster (higher mutation rate = faster evolution)
-            let type_mult = if new.diseases[d_idx].pathogen_type == PathogenType::RnaVirus {
-                2.0
-            } else {
-                1.0
-            };
-            let gain = adapt_rate_per_region * contained_regions as f64 * type_mult;
-            new.diseases[d_idx].containment_adaptation =
-                (prev + gain).min(1.0);
-
-            // Fire event at 0.25 and 0.50 thresholds
-            let new_level = new.diseases[d_idx].containment_adaptation;
-            if (prev < 0.25 && new_level >= 0.25) || (prev < 0.50 && new_level >= 0.50) {
-                new.events.push(GameEvent::ContainmentAdaptation {
-                    disease_idx: d_idx,
-                    level: new_level,
-                });
-            }
-        } else if prev > 0.0 {
-            // Decay when no containment pressure
-            new.diseases[d_idx].containment_adaptation =
-                (prev - decay_rate).max(0.0);
-        }
-    }
-}
 
 /// Apply disease mutation. Each disease has a chance to mutate per tick,
 /// drifting infectivity and lethality parameters slightly.

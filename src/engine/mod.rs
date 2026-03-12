@@ -43,12 +43,11 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     let mut rng_research = new.rng_research.clone();
     let mut rng_misc = new.rng_misc.clone();
 
-    // Disease spread, mutation, and adaptation
+    // Disease spread and mutation
     spread::tick_spread_within(&mut new, &state.diseases, &mut rng_spread);
     spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng_spread);
     spread::tick_mutation(&mut new, &mut rng_spread);
     spread::tick_horizontal_gene_transfer(&mut new);
-    spread::tick_containment_adaptation(&mut new);
 
     // Research progress
     research::tick_research(&mut new, &mut rng_research);
@@ -2391,7 +2390,6 @@ mod tests {
             detected: true,
             spawned_at_tick: 0,
             mechanism_resistance: vec![],
-            containment_adaptation: 0.0,
             mutation_mode: crate::state::MutationMode::Normal,
             sequence_group: None,
             incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
@@ -2444,7 +2442,6 @@ mod tests {
             detected: true,
             spawned_at_tick: 0,
             mechanism_resistance: vec![],
-            containment_adaptation: 0.0,
             mutation_mode: MutationMode::Locked,
             sequence_group: None,
             incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
@@ -2485,7 +2482,6 @@ mod tests {
             detected: true,
             spawned_at_tick: 0,
             mechanism_resistance: vec![],
-            containment_adaptation: 0.0,
             mutation_mode: MutationMode::DirectedLethality,
             sequence_group: None,
             incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
@@ -5421,77 +5417,6 @@ mod tests {
     }
 
     #[test]
-    fn containment_adaptation_builds_under_quarantine() {
-        let mut state = GameState::new_default(42);
-        // Set up: disease 0 in region 0 with quarantine active
-        state.regions[0].get_or_create_infection(0).infected = 10_000.0;
-        state.policies[0].quarantine = true;
-
-        assert_eq!(state.diseases[0].containment_adaptation, 0.0);
-
-        // Run for 5 days (600 ticks)
-        let mut s = state;
-        for _ in 0..600 {
-            s = tick(&s);
-        }
-
-        // Adaptation should have built up
-        assert!(s.diseases[0].containment_adaptation > 0.01,
-            "adaptation should increase under quarantine: got {}", s.diseases[0].containment_adaptation);
-    }
-
-    #[test]
-    fn containment_adaptation_decays_without_containment() {
-        let mut state = GameState::new_default(42);
-        // Pre-set some adaptation
-        state.diseases[0].containment_adaptation = 0.5;
-        // No quarantine or travel ban active
-
-        // Run for 5 days
-        let mut s = state;
-        for _ in 0..600 {
-            s = tick(&s);
-        }
-
-        // Adaptation should have decayed
-        assert!(s.diseases[0].containment_adaptation < 0.5,
-            "adaptation should decay without containment: got {}", s.diseases[0].containment_adaptation);
-    }
-
-    #[test]
-    fn containment_adaptation_weakens_quarantine() {
-        let mut state = GameState::new_default(42);
-        state.regions[0].get_or_create_infection(0).infected = 100_000.0;
-        state.policies[0].quarantine = true;
-
-        // Run baseline (no adaptation) for 1 day
-        let baseline = {
-            let mut s = state.clone();
-            s.diseases[0].containment_adaptation = 0.0;
-            for _ in 0..120 {
-                s = tick(&s);
-            }
-            let inf = s.regions[0].disease_state(0).unwrap();
-            inf.exposed + inf.infected
-        };
-
-        // Run with high adaptation for 1 day
-        let adapted = {
-            let mut s = state.clone();
-            s.diseases[0].containment_adaptation = 0.8;
-            for _ in 0..120 {
-                s = tick(&s);
-            }
-            let inf = s.regions[0].disease_state(0).unwrap();
-            inf.exposed + inf.infected
-        };
-
-        // With adaptation, quarantine is weaker → more infections
-        assert!(adapted > baseline,
-            "adapted disease should spread more under quarantine: adapted={} baseline={}", adapted, baseline);
-    }
-
-    #[test]
     fn ark_protocol_schedules_when_two_regions_collapse() {
         let mut state = GameState::new_default(42);
         // Collapse regions 0 and 1
@@ -5826,28 +5751,6 @@ mod tests {
             assert!(d2.lethality > d1.lethality,
                 "disease with PathogenSuppression should be deadlier: {:.4} vs {:.4}",
                 d2.lethality, d1.lethality);
-        }
-    }
-
-    #[test]
-    fn quarantine_adaptation_seeded_for_new_diseases() {
-        use rand::SeedableRng;
-        let mut state = GameState::new_default(42);
-        state.tick = 3000;
-        // Activate quarantines in 3 regions
-        state.policies[0].quarantine = true;
-        state.policies[1].quarantine = true;
-        state.policies[2].quarantine = true;
-
-        let mut rng = ChaCha8Rng::seed_from_u64(55);
-        let initial_count = state.diseases.len();
-        disease::spawn_disease_scaled(&mut state, &mut rng);
-
-        if state.diseases.len() > initial_count {
-            let new_d = &state.diseases[initial_count];
-            assert!(new_d.containment_adaptation > 0.0,
-                "new disease should have containment adaptation when quarantines active, got {}",
-                new_d.containment_adaptation);
         }
     }
 
