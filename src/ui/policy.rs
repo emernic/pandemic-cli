@@ -9,7 +9,7 @@ use ratatui::{
 use crate::state::{
     GameState, PolicyUiState, RegionPriority, RegionSpecialization, RegionTrait,
     ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
-    REGULATORY_APPARATUS_COST_MULT,
+    REGULATORY_APPARATUS_COST_MULT, KNOWLEDGE_PARTIAL_STATS,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, HOSPITAL_EXPOSURE_FACTOR,
@@ -150,7 +150,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          Some(TRAVEL_BAN_PERSONNEL + infra_extra), tb_cost),
         (1, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * spec_mult * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
-         "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST * spec_mult),
+         "Reduces infection rate within the region", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST * spec_mult),
         (2, "Discourage Hospitalization", policy.discourage_hosp,
          format!("¥{:.0}/day + {} pers.", DISCOURAGE_HOSP_COST * spec_mult * TICKS_PER_DAY, DISCOURAGE_HOSP_PERSONNEL + infra_extra),
          "Removes hospital spread penalty, +50% lethality (no hospital care)",
@@ -660,14 +660,16 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
     let region = &state.regions[region_idx];
     let gov_eff = region.policy_effectiveness();
 
-    // Collect detected diseases with active infections in this region
+    // Collect identified diseases with active infections in this region.
+    // Uses KNOWLEDGE_PARTIAL_STATS threshold to match the threats panel —
+    // transmission vector is only revealed at partial stats level.
     let active_diseases: Vec<(String, TransmissionVector)> = region
         .infections
         .iter()
         .filter(|inf| inf.infected > 0.0)
         .filter_map(|inf| {
             let disease = state.diseases.get(inf.disease_idx)?;
-            if disease.detected {
+            if disease.knowledge >= KNOWLEDGE_PARTIAL_STATS {
                 Some((disease.display_name(inf.disease_idx), disease.transmission))
             } else {
                 None
@@ -744,7 +746,7 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
         let Some(disease) = state.diseases.get(inf.disease_idx) else {
             continue;
         };
-        if !disease.detected {
+        if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
             continue;
         }
 
