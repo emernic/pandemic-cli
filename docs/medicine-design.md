@@ -95,7 +95,7 @@ Vaccinate options first, then treat. With one target disease (the common case), 
 
 1. Check `funding >= medicine.cost` — show error message if insufficient
 2. Find or create `RegionDiseaseState` for the target disease in the region
-3. Compute `effective_doses = doses × therapy_efficacy × strain_efficacy`
+3. Compute `effective_doses = doses × therapy_efficacy × mechanism_efficacy × strain_efficacy × cross_reactive_penalty × resistance_factor`
 4. Compute `actual_doses = min(effective_doses, available_targets)`
 5. If `actual_doses == 0`, show message and stay on SelectTarget
 6. If untested: require confirmation via ConfirmDeploy step
