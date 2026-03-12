@@ -560,9 +560,9 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let warning = if (millis / 500) % 2 == 0 { "⚠" } else { " " };
+    let warning = if (millis / 500) % 2 == 0 { "⚠" } else { "  " };
     lines.push(Line::from(Span::styled(
-        format!("  {} {} {}", warning, crisis.title, warning),
+        format!("  {}  {}  {}", warning, crisis.title, warning),
         Style::default().fg(Color::Yellow),
     )));
     lines.push(Line::from(""));
