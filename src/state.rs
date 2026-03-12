@@ -3273,6 +3273,10 @@ pub enum BasicTech {
     /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
     /// Prereq: TargetedDrugDesign.
     ResilientGrids,
+    /// Unlocks 5-day death projections in the Threats panel for each detected disease.
+    /// Shows where the outbreak is heading, not just where it is.
+    /// Prereq: RapidSequencing + ResistanceSurveillance.
+    EpidemiologicalForecasting,
 }
 
 impl BasicTech {
@@ -3293,6 +3297,7 @@ impl BasicTech {
             BasicTech::AutomatedSynthesis => "Automated Synthesis",
             BasicTech::StabilizedFormulation => "Stabilized Formulation",
             BasicTech::ResilientGrids => "Resilient Grids",
+            BasicTech::EpidemiologicalForecasting => "Epidemiological Forecasting",
         }
     }
 
@@ -3313,6 +3318,7 @@ impl BasicTech {
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
             BasicTech::StabilizedFormulation => "Thermostable formulations reduce cold-chain waste. Each manufacturing run yields 25% more usable doses.",
             BasicTech::ResilientGrids => "Hardened regional infrastructure protocols. Disease-caused infrastructure degradation 20% slower.",
+            BasicTech::EpidemiologicalForecasting => "Predictive outbreak modeling. Threats panel shows projected deaths over 5 days for each active disease.",
         }
     }
 
@@ -3381,6 +3387,10 @@ impl BasicTech {
             BasicTech::ResilientGrids => {
                 state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
             }
+            BasicTech::EpidemiologicalForecasting => {
+                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
+                    && state.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
+            }
         }
     }
 
@@ -3401,6 +3411,7 @@ impl BasicTech {
             BasicTech::AutomatedSynthesis => "Develop any targeted medicine",
             BasicTech::StabilizedFormulation => "Automated Synthesis",
             BasicTech::ResilientGrids => "Targeted Drug Design",
+            BasicTech::EpidemiologicalForecasting => "Rapid Sequencing + Resistance Surveillance",
         }
     }
 
@@ -3415,6 +3426,7 @@ impl BasicTech {
             BasicTech::MetagenomicSurveillance,
             BasicTech::VaccinePlatform,
             BasicTech::ResistanceSurveillance,
+            BasicTech::EpidemiologicalForecasting,
             BasicTech::CombinationTherapy,
             BasicTech::CompetitiveDisplacement,
             BasicTech::DirectedAttenuation,
@@ -3470,6 +3482,7 @@ impl ResearchKind {
                 BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
                 BasicTech::StabilizedFormulation => (5, 280.0, 700.0),
                 BasicTech::ResilientGrids => (3, 240.0, 550.0),
+                BasicTech::EpidemiologicalForecasting => (4, 280.0, 700.0),
             },
             ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
@@ -6084,6 +6097,26 @@ impl GameState {
     /// True if the player has unlocked Resistance Surveillance (can see resistance levels).
     pub fn has_resistance_surveillance(&self) -> bool {
         self.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
+    }
+
+    /// True if the player has unlocked Epidemiological Forecasting (death projections).
+    pub fn has_forecasting(&self) -> bool {
+        self.unlocked_techs.contains(&BasicTech::EpidemiologicalForecasting)
+    }
+
+    /// Projected deaths over the next `days` for a specific disease across all regions.
+    /// Uses current infected * lethality as an instantaneous death rate estimate.
+    /// Returns 0.0 if the disease has no active infections.
+    pub fn projected_deaths(&self, disease_idx: usize, days: f64) -> f64 {
+        let disease = match self.diseases.get(disease_idx) {
+            Some(d) => d,
+            None => return 0.0,
+        };
+        let deaths_per_tick: f64 = self.regions.iter()
+            .filter_map(|r| r.disease_state(disease_idx))
+            .map(|inf| inf.infected * disease.lethality)
+            .sum();
+        deaths_per_tick * TICKS_PER_DAY * days
     }
 
     /// Research speed multiplier from lab infrastructure (1.0 / 1.3 / 1.6).
