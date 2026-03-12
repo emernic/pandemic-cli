@@ -13,7 +13,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    BoardRole, CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, RivalConflict, SimState,
+    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
@@ -95,7 +95,6 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
     corporations::tick_corporations(&mut new);
     // Board satisfaction check — queue demand crises when corps are hurting.
-    corporations::check_board_demands(&mut new);
     // Update per-member board satisfaction from connected entities.
     board::update_board_satisfaction(&mut new);
 
@@ -351,17 +350,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         && new.tick >= new.next_board_meeting_tick
         && !new.board_members.is_empty()
     {
-        // Find the most dissatisfied board member to drive the agenda.
-        let member_idx = new.board_members.iter().enumerate()
-            .min_by(|(_, a), (_, b)| a.satisfaction.partial_cmp(&b.satisfaction).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(i, _)| i)
-            .unwrap_or(0);
-
-        // Try to find a rival — a second member with naturally opposing interests.
-        let kind = find_rival_conflict(&new, member_idx, &mut rng_crisis)
-            .unwrap_or(CrisisKind::BoardMeeting { member_idx });
-
-        let crisis = crisis::build_crisis_event(&new, kind);
+        let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardMeeting);
         crisis::activate_crisis(&mut new, crisis);
         // Schedule next meeting 7-10 days from now.
         let base = (7.0 * TICKS_PER_DAY) as u64;
@@ -709,139 +698,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
     }
 }
 
-/// Try to find a natural conflict between the driving member and another board member.
-/// Returns `Some(RivalAgenda { .. })` if a conflict exists, `None` otherwise
-/// (caller falls back to single-member `BoardMeeting`).
-///
-/// Role conventions for consistent resolution:
-/// - Quarantine: member_a = wants restrictions lifted (corp leader), member_b = wants them kept (governor)
-/// - PolicyDirection: member_a = wants restrictions lifted (corp leader), member_b = wants them kept (advisor)
-/// - ResourcePriority: member_a = wants region_a prioritized, member_b = wants region_b
-fn find_rival_conflict(
-    state: &GameState,
-    driving_member_idx: usize,
-    rng: &mut impl Rng,
-) -> Option<CrisisKind> {
-    let driving = state.board_members.get(driving_member_idx)?;
-
-    // Each candidate is (member_a_idx, member_b_idx, conflict).
-    // A and B may differ from "driving member" vs "other" when roles need swapping.
-    let mut candidates: Vec<(usize, usize, RivalConflict)> = Vec::new();
-
-    match &driving.role {
-        BoardRole::CorporateLeader { corp_idx } => {
-            // Corp leader drives: they want restrictions lifted (they are A)
-            let region_idx = state.corporations.get(*corp_idx)
-                .map(|c| c.region_idx).unwrap_or(0);
-            let has_restrictions = state.policies.get(region_idx)
-                .map(|p| p.quarantine || p.border_controls).unwrap_or(false);
-
-            if has_restrictions {
-                for (i, m) in state.board_members.iter().enumerate() {
-                    if i == driving_member_idx { continue; }
-                    if let BoardRole::RegionGovernor { region_idx: gov_region } = &m.role {
-                        if *gov_region == region_idx || state.regions.get(*gov_region)
-                            .map(|r| r.infections.iter().any(|inf| inf.infected > 100.0))
-                            .unwrap_or(false)
-                        {
-                            // Corp leader is A (lift), governor is B (keep)
-                            candidates.push((driving_member_idx, i, RivalConflict::Quarantine { region_idx }));
-                        }
-                    }
-                }
-            }
-
-            // Corp leader vs independent advisor on policy direction
-            if candidates.is_empty() {
-                let corp_region = state.corporations.get(*corp_idx)
-                    .map(|c| c.region_idx).unwrap_or(0);
-                let has_restriction_in_region = state.policies.get(corp_region)
-                    .map(|p| p.quarantine || p.border_controls || p.travel_ban)
-                    .unwrap_or(false);
-                if has_restriction_in_region {
-                    for (i, m) in state.board_members.iter().enumerate() {
-                        if i == driving_member_idx { continue; }
-                        if m.role == BoardRole::IndependentAdvisor {
-                            // Corp leader is A (lift), advisor is B (keep)
-                            candidates.push((driving_member_idx, i, RivalConflict::PolicyDirection { region_idx: corp_region }));
-                        }
-                    }
-                }
-            }
-        }
-        BoardRole::RegionGovernor { region_idx } => {
-            // Governor drives, but for Quarantine conflicts the corp leader is A (wants lift).
-            let has_restrictions = state.policies.get(*region_idx)
-                .map(|p| p.quarantine || p.border_controls).unwrap_or(false);
-            let has_infections = state.regions.get(*region_idx)
-                .map(|r| r.infections.iter().any(|inf| inf.infected > 100.0))
-                .unwrap_or(false);
-
-            if has_restrictions && has_infections {
-                for (i, m) in state.board_members.iter().enumerate() {
-                    if i == driving_member_idx { continue; }
-                    if let BoardRole::CorporateLeader { corp_idx } = &m.role {
-                        let corp_region = state.corporations.get(*corp_idx)
-                            .map(|c| c.region_idx).unwrap_or(usize::MAX);
-                        if corp_region == *region_idx {
-                            // Swap: corp leader is A (lift), governor is B (keep)
-                            candidates.push((i, driving_member_idx, RivalConflict::Quarantine { region_idx: *region_idx }));
-                        }
-                    }
-                }
-            }
-
-            // Governor vs governor: both want resources for their region
-            if candidates.is_empty() && has_infections {
-                for (i, m) in state.board_members.iter().enumerate() {
-                    if i == driving_member_idx { continue; }
-                    if let BoardRole::RegionGovernor { region_idx: other_region } = &m.role {
-                        let other_infected = state.regions.get(*other_region)
-                            .map(|r| r.infections.iter().map(|inf| inf.infected).sum::<f64>())
-                            .unwrap_or(0.0);
-                        if other_infected > 100.0 {
-                            // Driving member is A (their region first)
-                            candidates.push((driving_member_idx, i, RivalConflict::ResourcePriority {
-                                region_a: *region_idx,
-                                region_b: *other_region,
-                            }));
-                        }
-                    }
-                }
-            }
-        }
-        BoardRole::IndependentAdvisor => {
-            // Advisor drives, but for PolicyDirection the corp leader is A (wants lift).
-            for (i, m) in state.board_members.iter().enumerate() {
-                if i == driving_member_idx { continue; }
-                if let BoardRole::CorporateLeader { corp_idx } = &m.role {
-                    let region_idx = state.corporations.get(*corp_idx)
-                        .map(|c| c.region_idx).unwrap_or(0);
-                    let has_restrictions = state.policies.get(region_idx)
-                        .map(|p| p.quarantine || p.border_controls || p.travel_ban)
-                        .unwrap_or(false);
-                    if has_restrictions {
-                        // Swap: corp leader is A (lift), advisor is B (keep)
-                        candidates.push((i, driving_member_idx, RivalConflict::PolicyDirection { region_idx }));
-                    }
-                }
-            }
-        }
-    }
-
-    if candidates.is_empty() {
-        return None;
-    }
-
-    let idx = rng.r#gen::<usize>() % candidates.len();
-    let (member_a_idx, member_b_idx, conflict) = candidates.remove(idx);
-
-    Some(CrisisKind::RivalAgenda {
-        member_a_idx,
-        member_b_idx,
-        conflict,
-    })
-}
 
 #[cfg(test)]
 mod tests {

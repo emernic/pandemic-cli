@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     ActiveLoan, BoardRole, CorporationSector, CrisisCost, CrisisEvent, CrisisKind, CrisisOption,
-    CrisisOperation, GameEvent, GameState, LoanLender, RivalConflict, ScreeningLevel,
+    CrisisOperation, GameEvent, GameState, LoanLender, ScreeningLevel,
     SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -12,6 +12,32 @@ use crate::state::{
 fn scaled_cost(state: &GameState, fraction: f64, min: f64, max: f64) -> f64 {
     let raw = (state.resources.funding * fraction).clamp(min, max);
     (raw / 10.0).round() * 10.0
+}
+
+/// Compute the board funding multiplier from satisfaction.
+/// sat 1.0 => 1.2x (generous), sat 0.5 => 1.0x (neutral), sat 0.0 => 0.5x (slashed).
+fn board_meeting_funding_multiplier(board_sat: f64) -> f64 {
+    // Linear interpolation: 0.0 -> 0.5, 0.5 -> 1.0, 1.0 -> 1.2
+    if board_sat >= 0.5 {
+        // 0.5..1.0 maps to 1.0..1.2
+        1.0 + (board_sat - 0.5) * 0.4
+    } else {
+        // 0.0..0.5 maps to 0.5..1.0
+        0.5 + board_sat
+    }
+}
+
+/// Compute the per-day funding rate the board will set at this satisfaction level.
+/// Used for display in the communiqué text.
+fn board_meeting_funding_rate(state: &GameState, board_sat: f64) -> f64 {
+    let base_rate = state.funding_income_rate() * TICKS_PER_DAY;
+    // Undo current multiplier to get raw base, then apply new multiplier
+    let raw_base = if state.board_funding_multiplier > 0.0 {
+        base_rate / state.board_funding_multiplier
+    } else {
+        base_rate
+    };
+    raw_base * board_meeting_funding_multiplier(board_sat)
 }
 
 /// POL cost for closing borders on a refugee wave (escalates with each collapse).
@@ -1880,440 +1906,104 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 }
             }
         }
-        CrisisKind::BoardDemand { severity, member_idx } => {
-            let placate_cost = if *severity >= 1 {
-                scaled_cost(state, 0.25, 200.0, 1000.0)
+        CrisisKind::BoardMeeting => {
+            let day = tick as f64 / TICKS_PER_DAY;
+            let board_sat = state.board_satisfaction();
+            let new_funding_rate = board_meeting_funding_rate(state, board_sat);
+            let current_rate = state.funding_income_rate() * TICKS_PER_DAY;
+
+            let mut memo_lines: Vec<String> = Vec::new();
+
+            // Funding decision
+            let rate_word = if new_funding_rate > current_rate * 1.05 {
+                "increased"
+            } else if new_funding_rate < current_rate * 0.95 {
+                "reduced"
             } else {
-                scaled_cost(state, 0.15, 100.0, 600.0)
+                "maintained"
             };
+            memo_lines.push(format!(
+                "Your operating budget has been {} to \u{00a5}{:.0} per day, effective immediately.",
+                rate_word, new_funding_rate
+            ));
 
-            let member = state.board_members.get(*member_idx);
-            let member_name = member.map(|m| m.name.as_str()).unwrap_or("The board");
-            let is_ultimatum = *severity >= 1;
-
-            // Generate role-specific title, description, and comply option
-            let (title, description, comply_label, comply_desc) = match member.map(|m| &m.role) {
-                Some(BoardRole::CorporateLeader { corp_idx }) => {
-                    let corp_name = state.corporations.get(*corp_idx)
-                        .map(|c| c.name.as_str()).unwrap_or("their corporation");
-                    let region_name = member.and_then(|m| m.region_idx)
-                        .and_then(|r| state.regions.get(r))
-                        .map(|r| r.name.as_str()).unwrap_or("the region");
-                    let reserves_pct = state.corporations.get(*corp_idx)
-                        .map(|c| c.reserves_fraction() * 100.0).unwrap_or(0.0);
-                    if is_ultimatum {
-                        (
-                            format!("{member_name}: Ultimatum"),
-                            format!(
-                                "{corp_name} reserves at {reserves_pct:.0}%. \
-                                 {member_name} demands all containment restrictions be lifted immediately.",
-                            ),
-                            "Lift all restrictions".into(),
-                            "Disable quarantine and border controls globally.".to_string(),
-                        )
-                    } else {
-                        (
-                            format!("{member_name}: Demands"),
-                            format!(
-                                "{corp_name} reserves at {reserves_pct:.0}%. \
-                                 {member_name} wants restrictions eased in {region_name}.",
-                            ),
-                            "Ease restrictions".into(),
-                            format!("Lift quarantine and border controls in {region_name}."),
-                        )
+            // Note unhappy members and their concerns
+            let mut concerns: Vec<String> = Vec::new();
+            for member in &state.board_members {
+                if member.satisfaction >= 0.5 { continue; }
+                match &member.role {
+                    BoardRole::CorporateLeader { corp_idx } => {
+                        let corp_name = state.corporations.get(*corp_idx)
+                            .map(|c| c.name.as_str()).unwrap_or("a corporation");
+                        concerns.push(format!(
+                            "{} has noted continued pressure on {} operations.",
+                            member.name, corp_name
+                        ));
+                    }
+                    BoardRole::RegionGovernor { region_idx } => {
+                        let region_name = state.regions.get(*region_idx)
+                            .map(|r| r.name.as_str()).unwrap_or("a region");
+                        concerns.push(format!(
+                            "{} has raised the deteriorating situation in {}.",
+                            member.name, region_name
+                        ));
+                    }
+                    BoardRole::IndependentAdvisor => {
+                        concerns.push(format!(
+                            "{} has questioned the adequacy of current containment measures.",
+                            member.name
+                        ));
                     }
                 }
-                Some(BoardRole::RegionGovernor { region_idx }) => {
-                    let region = state.regions.get(*region_idx);
-                    let region_name = region.map(|r| r.name.as_str()).unwrap_or("the region");
-                    let death_pct = region.map(|r| {
-                        if r.population > 0 { (r.dead / r.population as f64) * 100.0 } else { 0.0 }
-                    }).unwrap_or(0.0);
-                    if is_ultimatum {
-                        (
-                            format!("{member_name}: Ultimatum"),
-                            format!(
-                                "{region_name} death toll at {death_pct:.1}% of population. \
-                                 {member_name} demands immediate medical deployment to the region.",
-                            ),
-                            format!("Deploy to {region_name}"),
-                            format!("Send 3 personnel to {region_name}. They will not return."),
-                        )
-                    } else {
-                        (
-                            format!("{member_name}: Demands"),
-                            format!(
-                                "{region_name} is losing people. \
-                                 {member_name} wants more resources allocated to the region.",
-                            ),
-                            format!("Prioritize {region_name}"),
-                            format!("Send 2 personnel to {region_name}. They will not return."),
-                        )
-                    }
-                }
-                _ => {
-                    // IndependentAdvisor or missing member: generic fallback
-                    let total_dead = state.total_dead();
-                    if is_ultimatum {
-                        (
-                            format!("{member_name}: Ultimatum"),
-                            format!(
-                                "Global death toll has passed {:.0}M. \
-                                 {member_name} demands a complete strategy review.",
-                                total_dead / 1_000_000.0,
-                            ),
-                            "Reallocate resources".into(),
-                            "Lose 3 personnel to emergency redeployment.".to_string(),
-                        )
-                    } else {
-                        (
-                            format!("{member_name}: Demands"),
-                            format!(
-                                "Global death toll at {:.0}M and rising. \
-                                 {member_name} questions your containment strategy.",
-                                total_dead / 1_000_000.0,
-                            ),
-                            "Increase response".into(),
-                            "Lose 2 personnel to field redeployment.".to_string(),
-                        )
-                    }
-                }
-            };
+            }
 
-            let refuse_loss = if is_ultimatum { "15%" } else { "10%" };
+            // Note collapsed regions
+            for region in &state.regions {
+                if region.collapsed {
+                    concerns.push(format!(
+                        "The collapse of {} has been noted. Compensation for affected operations has been deducted from your budget.",
+                        region.name
+                    ));
+                }
+            }
+
+            // Positive note if things are going well
+            let content_count = state.board_members.iter()
+                .filter(|m| m.satisfaction > 0.7).count();
+            if content_count > 0 && concerns.is_empty() {
+                memo_lines.push(
+                    "The Board has expressed general confidence in your current approach.".into()
+                );
+            }
+
+            for concern in concerns.iter().take(3) {
+                memo_lines.push(concern.clone());
+            }
+
+            if board_sat < 0.3 {
+                memo_lines.push(
+                    "The Board expects measurable improvement before the next review period.".into()
+                );
+            }
+
+            let description = format!(
+                "Day {:.0} review. {}",
+                day,
+                memo_lines.join(" ")
+            );
+
             CrisisEvent {
-                title,
+                title: "Board Communiqu\u{00e9}".into(),
                 description,
                 options: vec![
                     CrisisOption {
-                        label: comply_label,
-                        description: comply_desc,
-                        cost: None,
-                    },
-                    CrisisOption {
-                        label: format!("Concession payment (¥{placate_cost:.0})"),
-                        description: format!("Pay off {member_name}. Buys time."),
-                        cost: Some(CrisisCost { funding: placate_cost, personnel: 0, ..Default::default() }),
-                    },
-                    CrisisOption {
-                        label: "Refuse".into(),
-                        description: format!("Defy {member_name}. Lose {refuse_loss} board approval."),
+                        label: "Acknowledged".into(),
+                        description: "File and proceed.".into(),
                         cost: None,
                     },
                 ],
                 kind,
                 tick_created: tick,
-            }
-        }
-        CrisisKind::BoardMeeting { member_idx } => {
-            let member = state.board_members.get(*member_idx);
-            let member_name = member.map(|m| m.name.as_str()).unwrap_or("A board member");
-            let member_title = member.map(|m| m.title.as_str()).unwrap_or("Unknown");
-            let day = tick as f64 / TICKS_PER_DAY;
-
-            match member.map(|m| &m.role) {
-                Some(BoardRole::CorporateLeader { corp_idx: cidx }) => {
-                    let corp = state.corporations.get(*cidx);
-                    let corp_name = corp.map(|c| c.name.as_str()).unwrap_or("their corporation");
-                    let region_idx = corp.map(|c| c.region_idx).unwrap_or(0);
-                    let region_name = state.regions.get(region_idx)
-                        .map(|r| r.name.as_str()).unwrap_or("the region");
-                    let has_quarantine = state.policies.get(region_idx)
-                        .map(|p| p.quarantine).unwrap_or(false);
-                    let has_border = state.policies.get(region_idx)
-                        .map(|p| p.border_controls).unwrap_or(false);
-
-                    let complaint = if has_quarantine || has_border {
-                        format!(
-                            "Current restrictions in {region_name} are cited as the primary cause. \
-                             {member_name} moves to lift containment measures in the region."
-                        )
-                    } else {
-                        format!(
-                            "{corp_name} revenue is down. \
-                             {member_name} moves for an emergency subsidy to stabilize operations."
-                        )
-                    };
-
-                    let subsidy_cost = scaled_cost(state, 0.12, 80.0, 500.0);
-
-                    CrisisEvent {
-                        title: "Board Meeting".into(),
-                        description: format!(
-                            "Day {day:.0} session called to order. \
-                             {member_name} ({member_title}) raises a motion. \
-                             {complaint}"
-                        ),
-                        options: vec![
-                            CrisisOption {
-                                label: "Comply".into(),
-                                description: if has_quarantine || has_border {
-                                    format!("Lift restrictions in {region_name}.")
-                                } else {
-                                    format!("Issue ¥{subsidy_cost:.0} subsidy to {corp_name}.")
-                                },
-                                cost: if has_quarantine || has_border {
-                                    None
-                                } else {
-                                    Some(CrisisCost { funding: subsidy_cost, personnel: 0, ..Default::default() })
-                                },
-                            },
-                            CrisisOption {
-                                label: "Table the motion".into(),
-                                description: "Defer to next session. The member is not pleased.".into(),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: "Overrule".into(),
-                                description: "Reject the motion outright. Significant political cost.".into(),
-                                cost: None,
-                            },
-                        ],
-                        kind,
-                        tick_created: tick,
-                    }
-                }
-                Some(BoardRole::RegionGovernor { region_idx: ridx }) => {
-                    let region_name = state.regions.get(*ridx)
-                        .map(|r| r.name.as_str()).unwrap_or("the region");
-                    let infected: f64 = state.regions.get(*ridx)
-                        .map(|r| r.infections.iter().map(|inf| inf.infected).sum())
-                        .unwrap_or(0.0);
-                    let deploy_cost = scaled_cost(state, 0.10, 60.0, 400.0);
-                    let personnel_cost = 3u32.min(state.resources.personnel);
-
-                    CrisisEvent {
-                        title: "Board Meeting".into(),
-                        description: format!(
-                            "Day {day:.0} session called to order. \
-                             {member_name} ({member_title}) raises a motion. \
-                             {region_name} requires additional resources. \
-                             Current infected: {infected:.0}. \
-                             The governor demands a dedicated response team."
-                        ),
-                        options: vec![
-                            CrisisOption {
-                                label: "Deploy team".into(),
-                                description: format!(
-                                    "Send {personnel_cost} personnel and ¥{deploy_cost:.0} to {region_name}."
-                                ),
-                                cost: Some(CrisisCost {
-                                    funding: deploy_cost,
-                                    personnel: personnel_cost,
-                                    operation_days: Some(14.0),
-                                    operation_label: Some(format!("{region_name} response team")),
-                                }),
-                            },
-                            CrisisOption {
-                                label: "Table the motion".into(),
-                                description: "Defer to next session. The governor is not pleased.".into(),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: "Overrule".into(),
-                                description: "Resources stay where they are. Significant political cost.".into(),
-                                cost: None,
-                            },
-                        ],
-                        kind,
-                        tick_created: tick,
-                    }
-                }
-                _ => {
-                    // IndependentAdvisor or unknown: demands action on worst global threat
-                    let worst_disease = state.diseases.iter().enumerate()
-                        .filter(|(_, d)| d.detected)
-                        .max_by(|(a_idx, _), (b_idx, _)| {
-                            let a_inf: f64 = state.regions.iter()
-                                .flat_map(|r| r.infections.iter())
-                                .filter(|inf| inf.disease_idx == *a_idx)
-                                .map(|inf| inf.infected)
-                                .sum();
-                            let b_inf: f64 = state.regions.iter()
-                                .flat_map(|r| r.infections.iter())
-                                .filter(|inf| inf.disease_idx == *b_idx)
-                                .map(|inf| inf.infected)
-                                .sum();
-                            a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-                    let disease_name = worst_disease.map(|(_, d)| d.name.as_str()).unwrap_or("the outbreak");
-                    let research_cost = scaled_cost(state, 0.15, 100.0, 600.0);
-
-                    CrisisEvent {
-                        title: "Board Meeting".into(),
-                        description: format!(
-                            "Day {day:.0} session called to order. \
-                             {member_name} ({member_title}) raises a motion. \
-                             {disease_name} remains insufficiently addressed. \
-                             The board is asked to authorize an accelerated research allocation."
-                        ),
-                        options: vec![
-                            CrisisOption {
-                                label: "Fund research".into(),
-                                description: format!(
-                                    "Allocate ¥{research_cost:.0} toward accelerated research on {disease_name}."
-                                ),
-                                cost: Some(CrisisCost { funding: research_cost, personnel: 0, ..Default::default() }),
-                            },
-                            CrisisOption {
-                                label: "Table the motion".into(),
-                                description: "Defer to next session. Noted in the minutes.".into(),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: "Overrule".into(),
-                                description: "Current allocation is sufficient. Significant political cost.".into(),
-                                cost: None,
-                            },
-                        ],
-                        kind,
-                        tick_created: tick,
-                    }
-                }
-            }
-        }
-        CrisisKind::RivalAgenda { member_a_idx, member_b_idx, conflict } => {
-            let member_a = state.board_members.get(*member_a_idx);
-            let member_b = state.board_members.get(*member_b_idx);
-            let name_a = member_a.map(|m| m.name.as_str()).unwrap_or("A board member");
-            let name_b = member_b.map(|m| m.name.as_str()).unwrap_or("Another member");
-            let title_a = member_a.map(|m| m.title.as_str()).unwrap_or("Unknown");
-            let title_b = member_b.map(|m| m.title.as_str()).unwrap_or("Unknown");
-            let day = tick as f64 / TICKS_PER_DAY;
-
-            match conflict {
-                RivalConflict::Quarantine { region_idx } => {
-                    let region_name = state.regions.get(*region_idx)
-                        .map(|r| r.name.as_str()).unwrap_or("the region");
-                    let compromise_cost = scaled_cost(state, 0.08, 50.0, 300.0);
-
-                    CrisisEvent {
-                        title: "Board Meeting: Disputed Agenda".into(),
-                        description: format!(
-                            "Day {day:.0} session. {name_a} ({title_a}) moves to lift containment \
-                             in {region_name}. {name_b} ({title_b}) objects, citing ongoing \
-                             infection risk. The board waits for your decision."
-                        ),
-                        options: vec![
-                            CrisisOption {
-                                label: format!("Side with {name_a}"),
-                                description: format!(
-                                    "Lift quarantine and border controls in {region_name}."
-                                ),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: format!("Side with {name_b}"),
-                                description: format!(
-                                    "Keep all restrictions in {region_name}."
-                                ),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: "Compromise".into(),
-                                description: format!(
-                                    "Lift border controls but keep quarantine. \
-                                     Allocate \u{a5}{compromise_cost:.0} to offset economic losses."
-                                ),
-                                cost: Some(CrisisCost {
-                                    funding: compromise_cost,
-                                    personnel: 0,
-                                    ..Default::default()
-                                }),
-                            },
-                        ],
-                        kind,
-                        tick_created: tick,
-                    }
-                }
-                RivalConflict::ResourcePriority { region_a, region_b } => {
-                    let region_a_name = state.regions.get(*region_a)
-                        .map(|r| r.name.as_str()).unwrap_or("one region");
-                    let region_b_name = state.regions.get(*region_b)
-                        .map(|r| r.name.as_str()).unwrap_or("another region");
-                    let split_cost = scaled_cost(state, 0.12, 80.0, 500.0);
-
-                    CrisisEvent {
-                        title: "Board Meeting: Disputed Agenda".into(),
-                        description: format!(
-                            "Day {day:.0} session. {name_a} ({title_a}) demands a response team \
-                             for {region_a_name}. {name_b} ({title_b}) insists {region_b_name} \
-                             should have priority. Resources are limited."
-                        ),
-                        options: vec![
-                            CrisisOption {
-                                label: format!("Prioritize {region_a_name}"),
-                                description: format!(
-                                    "Direct existing resources to {region_a_name}."
-                                ),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: format!("Prioritize {region_b_name}"),
-                                description: format!(
-                                    "Direct existing resources to {region_b_name}."
-                                ),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: "Split resources".into(),
-                                description: format!(
-                                    "Fund both regions. Costs \u{a5}{split_cost:.0}. Neither gets full support."
-                                ),
-                                cost: Some(CrisisCost {
-                                    funding: split_cost,
-                                    personnel: 0,
-                                    ..Default::default()
-                                }),
-                            },
-                        ],
-                        kind,
-                        tick_created: tick,
-                    }
-                }
-                RivalConflict::PolicyDirection { region_idx } => {
-                    let region_name = state.regions.get(*region_idx)
-                        .map(|r| r.name.as_str()).unwrap_or("the region");
-                    let relief_cost = scaled_cost(state, 0.10, 60.0, 400.0);
-
-                    CrisisEvent {
-                        title: "Board Meeting: Disputed Agenda".into(),
-                        description: format!(
-                            "Day {day:.0} session. {name_a} ({title_a}) argues current \
-                             restrictions in {region_name} are unsustainable. \
-                             {name_b} ({title_b}) warns that lifting them will cost lives. \
-                             Both have the votes to block the other."
-                        ),
-                        options: vec![
-                            CrisisOption {
-                                label: format!("Side with {name_a}"),
-                                description: format!(
-                                    "Lift restrictions in {region_name}. Economic recovery begins."
-                                ),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: format!("Side with {name_b}"),
-                                description: "Keep restrictions. Public health takes priority.".into(),
-                                cost: None,
-                            },
-                            CrisisOption {
-                                label: "Compromise".into(),
-                                description: format!(
-                                    "Keep restrictions but issue \u{a5}{relief_cost:.0} in \
-                                     economic relief to {region_name}."
-                                ),
-                                cost: Some(CrisisCost {
-                                    funding: relief_cost,
-                                    personnel: 0,
-                                    ..Default::default()
-                                }),
-                            },
-                        ],
-                        kind,
-                        tick_created: tick,
-                    }
-                }
             }
         }
         CrisisKind::FieldTeamDetained { region_idx, corp_idx, fee, team_size } => {
@@ -3486,298 +3176,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
         }
 
-        // --- Board demand crises (per-member) ---
 
-        (CrisisKind::BoardDemand { severity, member_idx }, 0) => {
-            // Comply: role-specific concession
-            let member_name = state.board_members.get(*member_idx)
-                .map(|m| m.name.clone()).unwrap_or_else(|| "The board".into());
-            let role = state.board_members.get(*member_idx).map(|m| m.role.clone());
+        // --- Board meeting communiqué ---
 
-            match role {
-                Some(BoardRole::CorporateLeader { corp_idx }) => {
-                    if *severity >= 1 {
-                        // Ultimatum: lift ALL quarantines and border controls
-                        for p in state.policies.iter_mut() {
-                            p.quarantine = false;
-                            p.border_controls = false;
-                        }
-                        format!("All restrictions lifted. {member_name} satisfied.")
-                    } else {
-                        // Standard: lift restrictions in this member's region
-                        let r_idx = state.corporations.get(corp_idx)
-                            .map(|c| c.region_idx).unwrap_or(0);
-                        if let Some(p) = state.policies.get_mut(r_idx) {
-                            p.quarantine = false;
-                            p.border_controls = false;
-                        }
-                        let name = state.regions.get(r_idx)
-                            .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                        format!("Restrictions lifted in {name}. {member_name} backs down.")
-                    }
-                }
-                Some(BoardRole::RegionGovernor { region_idx }) => {
-                    let personnel_cost = if *severity >= 1 { 3u32 } else { 2u32 };
-                    let actual = personnel_cost.min(state.resources.personnel);
-                    state.resources.personnel = state.resources.personnel.saturating_sub(actual);
-                    let name = state.regions.get(region_idx)
-                        .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                    format!("{actual} personnel sent to {name}. {member_name} satisfied.")
-                }
-                _ => {
-                    let personnel_cost = if *severity >= 1 { 3u32 } else { 2u32 };
-                    let actual = personnel_cost.min(state.resources.personnel);
-                    state.resources.personnel = state.resources.personnel.saturating_sub(actual);
-                    format!("{actual} personnel lost to redeployment. {member_name} satisfied.")
-                }
-            }
-        }
-        (CrisisKind::BoardDemand { severity, member_idx }, 1) => {
-            // Placate: pay concession (cost already deducted)
-            let member_name = state.board_members.get(*member_idx)
-                .map(|m| m.name.clone()).unwrap_or_else(|| "The board".into());
-            let role = state.board_members.get(*member_idx).map(|m| m.role.clone());
-
-            match role {
-                Some(BoardRole::CorporateLeader { corp_idx }) => {
-                    // Boost this member's corporation reserves
-                    let boost_amount = if *severity >= 1 { 0.3 } else { 0.2 };
-                    if let Some(c) = state.corporations.get_mut(corp_idx) {
-                        if !c.bankrupt {
-                            let boost = c.max_reserves * boost_amount;
-                            c.reserves = (c.reserves + boost).min(c.max_reserves);
-                        }
-                    }
-                    format!("Relief payment sent to {member_name}'s corporation.")
-                }
-                _ => {
-                    // Governor/independent: generic concession payment
-                    format!("Concession payment accepted. {member_name} backs down for now.")
-                }
-            }
-        }
-        (CrisisKind::BoardDemand { severity, member_idx }, _) => {
-            // Refuse: lose board approval
-            let member_name = state.board_members.get(*member_idx)
-                .map(|m| m.name.clone()).unwrap_or_else(|| "The board".into());
-            let pol_loss = if *severity >= 1 { 0.15 } else { 0.10 };
-            state.resources.board_approval -= pol_loss;
-            format!("{member_name} defied. Board approval drops {:.0}%.", pol_loss * 100.0)
+        (CrisisKind::BoardMeeting, _) => {
+            // Single option: Acknowledged. Apply funding multiplier.
+            let board_sat = state.board_satisfaction();
+            state.board_funding_multiplier = board_meeting_funding_multiplier(board_sat);
+            "Board communiqué filed.".into()
         }
 
-        // --- Board meeting crises ---
-
-        (CrisisKind::BoardMeeting { member_idx }, 0) => {
-            // Comply: do what the member wants.
-            let member = state.board_members.get(*member_idx).cloned();
-            match member.as_ref().map(|m| &m.role) {
-                Some(BoardRole::CorporateLeader { corp_idx }) => {
-                    let region_idx = state.corporations.get(*corp_idx)
-                        .map(|c| c.region_idx).unwrap_or(0);
-                    let has_quarantine = state.policies.get(region_idx)
-                        .map(|p| p.quarantine).unwrap_or(false);
-                    let has_border = state.policies.get(region_idx)
-                        .map(|p| p.border_controls).unwrap_or(false);
-                    let region_name = state.regions.get(region_idx)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-
-                    if has_quarantine || has_border {
-                        if let Some(p) = state.policies.get_mut(region_idx) {
-                            p.quarantine = false;
-                            p.border_controls = false;
-                        }
-                        format!("Motion carried. Restrictions lifted in {region_name}.")
-                    } else {
-                        // Subsidy: cost already deducted, boost the corp's reserves.
-                        if let Some(c) = state.corporations.get_mut(*corp_idx) {
-                            let boost = c.max_reserves * 0.15;
-                            c.reserves = (c.reserves + boost).min(c.max_reserves);
-                        }
-                        format!("Motion carried. Subsidy issued to {}.",
-                            state.corporations.get(*corp_idx)
-                                .map(|c| c.name.as_str()).unwrap_or("the corporation"))
-                    }
-                }
-                Some(BoardRole::RegionGovernor { region_idx }) => {
-                    // Deploy team: cost already deducted via CrisisCost with operation_days.
-                    let region_name = state.regions.get(*region_idx)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-                    // Governor loyalty boost for fulfilling the request.
-                    if let Some(r) = state.regions.get_mut(*region_idx) {
-                        r.governor.loyalty = (r.governor.loyalty + 10.0).min(100.0);
-                    }
-                    format!("Motion carried. Response team deployed to {region_name}.")
-                }
-                _ => {
-                    // Independent advisor: fund research. Cost already deducted.
-                    // Boost applied research progress if active.
-                    if let Some(ref mut ar) = state.applied_research {
-                        ar.progress += 0.15;
-                    } else if let Some(ref mut br) = state.basic_research {
-                        br.progress += 0.15;
-                    }
-                    "Motion carried. Research allocation increased.".into()
-                }
-            }
-        }
-        (CrisisKind::BoardMeeting { member_idx }, 1) => {
-            // Table the motion: moderate satisfaction hit to that member, small approval hit.
-            if let Some(m) = state.board_members.get_mut(*member_idx) {
-                m.satisfaction = (m.satisfaction - 0.15).max(0.0);
-            }
-            state.resources.board_approval = (state.resources.board_approval - 0.03).max(0.0);
-            "Motion tabled. Noted in the minutes.".into()
-        }
-        (CrisisKind::BoardMeeting { member_idx }, _) => {
-            // Overrule: major satisfaction hit to that member, larger approval penalty.
-            if let Some(m) = state.board_members.get_mut(*member_idx) {
-                m.satisfaction = (m.satisfaction - 0.30).max(0.0);
-            }
-            state.resources.board_approval = (state.resources.board_approval - 0.08).max(0.0);
-            "Motion overruled. Expect consequences.".into()
-        }
-
-        // --- Rival agenda crises ---
-
-        (CrisisKind::RivalAgenda { member_a_idx, member_b_idx, conflict }, choice) => {
-            let sat_boost = 0.10;
-            let sat_penalty = 0.20;
-
-            match (conflict, choice) {
-                (RivalConflict::Quarantine { region_idx }, 0) => {
-                    // Side with A: lift restrictions
-                    if let Some(p) = state.policies.get_mut(*region_idx) {
-                        p.quarantine = false;
-                        p.border_controls = false;
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
-                    }
-                    let region_name = state.regions.get(*region_idx)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-                    format!("Restrictions lifted in {region_name}.")
-                }
-                (RivalConflict::Quarantine { region_idx }, 1) => {
-                    // Side with B: keep restrictions
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
-                    }
-                    let region_name = state.regions.get(*region_idx)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-                    format!("Restrictions maintained in {region_name}.")
-                }
-                (RivalConflict::Quarantine { region_idx }, _) => {
-                    // Compromise: lift border controls, keep quarantine, cost already deducted
-                    if let Some(p) = state.policies.get_mut(*region_idx) {
-                        p.border_controls = false;
-                        // quarantine stays
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
-                    }
-                    "Partial concession. Border controls lifted, quarantine remains.".into()
-                }
-                (RivalConflict::ResourcePriority { region_a, region_b: _ }, 0) => {
-                    // Deploy to region A
-                    if let Some(r) = state.regions.get_mut(*region_a) {
-                        r.governor.loyalty = (r.governor.loyalty + 10.0).min(100.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
-                    }
-                    let name = state.regions.get(*region_a)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-                    format!("Response team deployed to {name}.")
-                }
-                (RivalConflict::ResourcePriority { region_a: _, region_b }, 1) => {
-                    // Deploy to region B
-                    if let Some(r) = state.regions.get_mut(*region_b) {
-                        r.governor.loyalty = (r.governor.loyalty + 10.0).min(100.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
-                    }
-                    let name = state.regions.get(*region_b)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-                    format!("Response team deployed to {name}.")
-                }
-                (RivalConflict::ResourcePriority { region_a: ra, region_b: rb }, _) => {
-                    // Split: cost already deducted, both get partial loyalty
-                    // Smaller loyalty boost since resources are split
-                    for ridx in [*ra, *rb] {
-                        if let Some(r) = state.regions.get_mut(ridx) {
-                            r.governor.loyalty = (r.governor.loyalty + 5.0).min(100.0);
-                        }
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
-                    }
-                    "Resources split between both regions. Neither fully satisfied.".into()
-                }
-                (RivalConflict::PolicyDirection { region_idx }, 0) => {
-                    // Side with A (corp leader): lift restrictions
-                    if let Some(p) = state.policies.get_mut(*region_idx) {
-                        p.quarantine = false;
-                        p.border_controls = false;
-                        p.travel_ban = false;
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
-                    }
-                    let region_name = state.regions.get(*region_idx)
-                        .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
-                    format!("All restrictions lifted in {region_name}.")
-                }
-                (RivalConflict::PolicyDirection { region_idx: _ }, 1) => {
-                    // Side with B (advisor): keep restrictions
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction + sat_boost).min(1.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction - sat_penalty).max(0.0);
-                    }
-                    "Restrictions maintained. Public health takes priority.".into()
-                }
-                (RivalConflict::PolicyDirection { region_idx }, _) => {
-                    // Compromise: keep restrictions, issue economic relief (cost already deducted)
-                    // Boost the corp reserves in that region
-                    for corp in state.corporations.iter_mut() {
-                        if corp.region_idx == *region_idx {
-                            let boost = corp.max_reserves * 0.10;
-                            corp.reserves = (corp.reserves + boost).min(corp.max_reserves);
-                        }
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_a_idx) {
-                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
-                    }
-                    if let Some(m) = state.board_members.get_mut(*member_b_idx) {
-                        m.satisfaction = (m.satisfaction - 0.08).max(0.0);
-                    }
-                    "Restrictions stay. Economic relief issued.".into()
-                }
-            }
-        }
 
         // --- Corporate detention crises ---
 

@@ -25,7 +25,6 @@ pub fn generate_board_members(state: &mut GameState) {
             corp_idx: Some(corp_idx),
             region_idx: Some(corp.region_idx),
             satisfaction: 1.0,
-            last_demand_tick: 0,
         });
     }
 
@@ -52,7 +51,6 @@ pub fn generate_board_members(state: &mut GameState) {
             corp_idx: None,
             region_idx: Some(region_idx),
             satisfaction: 1.0,
-            last_demand_tick: 0,
         });
         governor_count += 1;
     }
@@ -236,9 +234,10 @@ mod tests {
             if let Some(ref crisis) = state.active_crisis {
                 if crisis.kind.tag() == "board_meeting" {
                     found_meeting = true;
-                    // Verify meeting has three options
-                    assert_eq!(crisis.options.len(), 3, "board meeting should have 3 options");
-                    assert_eq!(crisis.title, "Board Meeting");
+                    // Board meetings are now single-option communiqués
+                    assert_eq!(crisis.options.len(), 1, "board communiqué should have 1 option");
+                    assert_eq!(crisis.options[0].label, "Acknowledged");
+                    assert_eq!(crisis.title, "Board Communiqué");
                     // Next meeting should have been rescheduled
                     assert!(state.next_board_meeting_tick > original_next,
                         "next meeting should be rescheduled after firing");

@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BoardRole, GameState};
+use crate::state::{BoardRole, GameState, TICKS_PER_DAY};
 use crate::format_number;
 
 /// Satisfaction word and color for a satisfaction value (0.0-1.0).
@@ -43,6 +43,34 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
+
+        // Next board meeting countdown
+        if state.next_board_meeting_tick > state.tick {
+            let ticks_remaining = state.next_board_meeting_tick - state.tick;
+            let days_remaining = ticks_remaining as f64 / TICKS_PER_DAY;
+            lines.push(Line::from(vec![
+                Span::styled("  Next meeting in: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{:.1} days", days_remaining),
+                    Style::default().fg(if days_remaining < 2.0 { Color::Yellow } else { Color::White }),
+                ),
+            ]));
+        }
+
+        // Board funding multiplier display
+        let mult = state.board_funding_multiplier;
+        if (mult - 1.0).abs() > 0.01 {
+            let (mult_text, mult_color) = if mult > 1.0 {
+                (format!("  Budget: +{:.0}%", (mult - 1.0) * 100.0), Color::Green)
+            } else {
+                (format!("  Budget: {:.0}%", (mult - 1.0) * 100.0), Color::Red)
+            };
+            lines.push(Line::from(Span::styled(
+                mult_text,
+                Style::default().fg(mult_color),
+            )));
+        }
+
         lines.push(Line::from(""));
 
         for (i, member) in state.board_members.iter().enumerate() {
