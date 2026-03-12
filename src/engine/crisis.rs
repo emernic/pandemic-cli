@@ -1177,12 +1177,10 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::InternDiscovery { cost } => {
             CrisisEvent {
-                title: "The Intern Has a Theory".into(),
+                title: "Unsolicited Research Proposal".into(),
                 description: format!(
-                    "One of your unpaid interns has submitted a 47-page research proposal. \
-                     They found it while reorganizing your filing cabinet. \
-                     Your lead researcher calls it \"possibly brilliant, probably nonsense.\" \
-                     Verification would cost ¥{:.0}.",
+                    "A junior analyst has submitted a research proposal through internal channels. \
+                     Preliminary review is inconclusive. Verification would cost ¥{:.0}.",
                     cost,
                 ),
                 options: vec![ CrisisOption {
