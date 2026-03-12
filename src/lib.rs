@@ -203,6 +203,11 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             }
         }
         Action::Confirm => {
+            // Skip typewriter animation on the splash screen
+            if !new.ui.home_splash_done {
+                new.ui.home_splash_done = true;
+                return new;
+            }
             if new.outcome == GameOutcome::Playing {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
