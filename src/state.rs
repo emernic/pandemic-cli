@@ -1208,6 +1208,18 @@ impl CorporationSector {
             Self::Automation => 0.4,  // Factories targeted
         }
     }
+
+    /// Formatted bonus text showing the effective bonus at the given strength (0.0–1.0).
+    pub fn bonus_text(&self, strength: f64) -> String {
+        match self {
+            Self::Energy => format!("Infra drain -{:.0}%", 15.0 * strength),
+            Self::Logistics => format!("Delivery +{:.0}%", 25.0 * strength),
+            Self::Biotech => format!("Research +{:.0}%", 10.0 * strength),
+            Self::Mining => format!("Infra recovery +{:.0}%", 50.0 * strength),
+            Self::DataInfra => format!("Screening +{:.0}%", 20.0 * strength),
+            Self::Automation => format!("Policy cost -{:.0}%", 10.0 * strength),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -5381,7 +5393,10 @@ impl GameState {
                         1.0
                     }
                 }).unwrap_or(1.0);
-                p.funding_cost(traits) * gov_mult * supply_mult * spec_mult
+                // Automation sector bonus: policy costs up to 10% lower
+                let auto_bonus = self.sector_bonus(i, CorporationSector::Automation);
+                let auto_mult = 1.0 - 0.10 * auto_bonus;
+                p.funding_cost(traits) * gov_mult * supply_mult * spec_mult * auto_mult
             })
             .sum()
     }
@@ -6198,6 +6213,49 @@ impl GameState {
             1.0
         };
         base * disruption_mult * spec_mult
+    }
+
+    /// Passive bonus strength for a sector in a region (0.0–1.0).
+    /// Returns 0.0 if no non-bankrupt corp of that sector exists in the region.
+    /// Scales with average revenue health (revenue / base_revenue) of matching corps.
+    pub fn sector_bonus(&self, region_idx: usize, sector: CorporationSector) -> f64 {
+        let mut total_health = 0.0;
+        let mut count = 0;
+        for corp in &self.corporations {
+            if corp.region_idx == region_idx && corp.sector == sector && !corp.bankrupt {
+                let health = if corp.base_revenue > 0.0 {
+                    (corp.revenue / corp.base_revenue).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                total_health += health;
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return 0.0;
+        }
+        total_health / count as f64
+    }
+
+    /// All active sector bonuses for a region. Returns (sector, strength) pairs
+    /// for sectors with at least one non-bankrupt corp.
+    pub fn active_sector_bonuses(&self, region_idx: usize) -> Vec<(CorporationSector, f64)> {
+        let mut bonuses = Vec::new();
+        for &sector in &[
+            CorporationSector::Energy,
+            CorporationSector::Logistics,
+            CorporationSector::Biotech,
+            CorporationSector::Mining,
+            CorporationSector::DataInfra,
+            CorporationSector::Automation,
+        ] {
+            let strength = self.sector_bonus(region_idx, sector);
+            if strength > 0.0 {
+                bonuses.push((sector, strength));
+            }
+        }
+        bonuses
     }
 
     /// Dose cost for an emergency sample delivery. Returns the number of doses consumed.

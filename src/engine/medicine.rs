@@ -104,7 +104,10 @@ pub(super) fn deploy_medicine(
     } else {
         1.0
     };
-    let arrive_tick = state.tick + (SHIPPING_TICKS as f64 * supply_mult) as u64;
+    // Logistics sector bonus: delivery up to 25% faster
+    let logistics_bonus = state.sector_bonus(region_idx, crate::state::CorporationSector::Logistics);
+    let logistics_mult = 1.0 - 0.25 * logistics_bonus;
+    let arrive_tick = state.tick + (SHIPPING_TICKS as f64 * supply_mult * logistics_mult) as u64;
     state.pending_shipments.push(Shipment {
         medicine_idx,
         region_idx,
@@ -116,7 +119,7 @@ pub(super) fn deploy_medicine(
     state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
 
     let doses_str = crate::format_number(doses_to_ship);
-    let days = (SHIPPING_TICKS as f64 * supply_mult) / crate::state::TICKS_PER_DAY;
+    let days = (SHIPPING_TICKS as f64 * supply_mult * logistics_mult) / crate::state::TICKS_PER_DAY;
     let efficiency = state.regions[region_idx].delivery_efficiency();
     let eff_warning = if efficiency < 0.90 {
         format!(" ({:.0}% delivery efficiency)", efficiency * 100.0)
