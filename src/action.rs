@@ -41,10 +41,10 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('L') => Some(Action::OpenLedger),
         KeyCode::Char('?') => Some(Action::OpenHelp),
         KeyCode::Esc => Some(Action::ClosePanel),
-        KeyCode::Down | KeyCode::Char('j') => Some(Action::SelectNext),
-        KeyCode::Up | KeyCode::Char('k') => Some(Action::SelectPrev),
-        KeyCode::Left | KeyCode::Char('h') => Some(Action::SelectLeft),
-        KeyCode::Right | KeyCode::Char('l') => Some(Action::SelectRight),
+        KeyCode::Down => Some(Action::SelectNext),
+        KeyCode::Up => Some(Action::SelectPrev),
+        KeyCode::Left => Some(Action::SelectLeft),
+        KeyCode::Right => Some(Action::SelectRight),
         KeyCode::Enter => Some(Action::Confirm),
         KeyCode::Char('x') | KeyCode::Char('X') => Some(Action::ToggleExtra),
         KeyCode::Char('z') | KeyCode::Char('Z') => Some(Action::SpeedUp),
@@ -60,7 +60,6 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
 /// Case-insensitive for named keys (space, esc, enter, etc.).
 pub fn string_to_action(s: &str) -> Option<Action> {
     // Check case-sensitive keys before lowercasing.
-    // Uppercase L = Ledger (lowercase l = vim-right).
     if s == "L" {
         return Some(Action::OpenLedger);
     }
@@ -76,10 +75,10 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "ledger" => Some(Action::OpenLedger),
         "?" => Some(Action::OpenHelp),
         "esc" => Some(Action::ClosePanel),
-        "down" | "j" => Some(Action::SelectNext),
-        "up" | "k" => Some(Action::SelectPrev),
-        "left" | "h" => Some(Action::SelectLeft),
-        "right" | "l" => Some(Action::SelectRight),
+        "down" => Some(Action::SelectNext),
+        "up" => Some(Action::SelectPrev),
+        "left" => Some(Action::SelectLeft),
+        "right" => Some(Action::SelectRight),
         "enter" => Some(Action::Confirm),
         "x" => Some(Action::ToggleExtra),
         "z" => Some(Action::SpeedUp),
