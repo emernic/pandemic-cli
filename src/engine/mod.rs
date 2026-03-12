@@ -1510,6 +1510,7 @@ mod tests {
         for seed in &seeds {
             let mut state = GameState::new_default(*seed);
             corporations::generate_corporations(&mut state);
+            board::generate_board_members(&mut state);
             let max_ticks = 90 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
@@ -1561,6 +1562,7 @@ mod tests {
         fn simulate_competent(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
             corporations::generate_corporations(&mut state);
+            board::generate_board_members(&mut state);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             let mut total_deploys = 0u32;
             for _ in 0..max_ticks {
@@ -1717,6 +1719,7 @@ mod tests {
         fn simulate_passive(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
             corporations::generate_corporations(&mut state);
+            board::generate_board_members(&mut state);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = tick(&state);
@@ -4463,6 +4466,7 @@ mod tests {
         // Starting from 0, POL should drift well above 0.10 within 5 days.
         let mut state = GameState::new_default(42);
         corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
         state.resources.board_approval = 0.0;
 
         let mut s = state.clone();
@@ -4483,6 +4487,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Healthy board creates a non-zero POL target (~0.30)
         corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
         state.tick = 0; // prevent new disease spawns
 
         // Let POL reach a steady state over 3 days
@@ -4520,6 +4525,7 @@ mod tests {
         // A bankrupt board gives approval_target ≈ severity_floor only (very low).
         let mut state = GameState::new_default(42);
         corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
 
         let healthy_target = state.approval_target();
         assert!(
@@ -4527,13 +4533,22 @@ mod tests {
             "approval_target with healthy board and no patrons should be 0.20–0.40, got {healthy_target:.3}"
         );
 
-        // Bankrupt all board-seat corporations: approval_target should drop significantly
+        // Bankrupt all board-seat corporations and collapse governor-member regions:
+        // approval_target should drop significantly.
         let mut damaged = state.clone();
         for c in damaged.corporations.iter_mut().filter(|c| c.board_seat) {
             c.bankrupt = true;
             c.reserves = 0.0;
             c.revenue = 0.0;
         }
+        // Collapse the regions whose governors sit on the board
+        for member in &damaged.board_members {
+            if let crate::state::BoardRole::RegionGovernor { region_idx } = &member.role {
+                damaged.regions[*region_idx].collapsed = true;
+            }
+        }
+        // Recompute member satisfaction from damaged state
+        board::update_board_satisfaction(&mut damaged);
         let damaged_target = damaged.approval_target();
         assert!(
             damaged_target < 0.15,
