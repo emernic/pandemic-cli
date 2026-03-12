@@ -191,7 +191,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "    \u{2500}\u{2500} Dossier \u{2500}\u{2500}",
+        "    \u{2500}\u{2500} Interests \u{2500}\u{2500}",
         Style::default().fg(Color::Cyan),
     )));
 
