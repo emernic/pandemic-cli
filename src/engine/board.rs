@@ -44,6 +44,7 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             satisfaction_modifier: 0.0,
             is_chairman,
             personality: Some(personality),
+            initial_skepticism: INITIAL_SKEPTICISM,
         });
     }
 
@@ -73,6 +74,7 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             satisfaction_modifier: 0.0,
             is_chairman: false,
             personality: None,
+            initial_skepticism: INITIAL_SKEPTICISM,
         });
         governor_count += 1;
     }
@@ -99,6 +101,13 @@ pub(super) fn generate_board_members(state: &mut GameState) {
 /// Decay rate for satisfaction modifier: ~0.02/day = modifier halves in ~35 days.
 const MODIFIER_DECAY_RATE: f64 = 0.02 / crate::state::TICKS_PER_DAY;
 
+/// Initial skepticism penalty applied to all board members at game start.
+/// Represents the board not yet trusting the player (~30% satisfaction hit).
+const INITIAL_SKEPTICISM: f64 = 0.30;
+
+/// Rate at which initial skepticism wanes: ~1%/day, gone by ~day 30.
+const SKEPTICISM_DECAY_RATE: f64 = 0.01 / crate::state::TICKS_PER_DAY;
+
 /// Chairman satisfaction threshold below which the hostility timer starts.
 const CHAIRMAN_HOSTILE_THRESHOLD: f64 = 0.20;
 
@@ -116,8 +125,16 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                 if modifier.abs() <= MODIFIER_DECAY_RATE { 0.0 }
                 else { modifier - decay };
         }
+        // Decay initial skepticism toward 0
+        let skepticism = state.board_members[i].initial_skepticism;
+        if skepticism > 0.001 {
+            state.board_members[i].initial_skepticism =
+                (skepticism - SKEPTICISM_DECAY_RATE).max(0.0);
+        } else if skepticism != 0.0 {
+            state.board_members[i].initial_skepticism = 0.0;
+        }
         state.board_members[i].satisfaction =
-            (base_sat + state.board_members[i].satisfaction_modifier).clamp(0.0, 1.0);
+            (base_sat + state.board_members[i].satisfaction_modifier - state.board_members[i].initial_skepticism).clamp(0.0, 1.0);
     }
 
     // Track chairman hostility duration for Vote of No Confidence
@@ -350,14 +367,16 @@ mod tests {
 
     #[test]
     fn board_satisfaction_matches_old_aggregate() {
-        // After generation, corporate leaders should have satisfaction 1.0
-        // (full reserves), so board_satisfaction() should return ~1.0
+        // After generation, corporate leaders should have satisfaction 1.0 minus
+        // initial skepticism (0.30), so board_satisfaction() should return ~0.70
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
+        // Run one tick to compute satisfaction with skepticism
+        update_board_satisfaction(&mut state);
 
         let sat = state.board_satisfaction();
-        assert!(sat > 0.9, "initial board satisfaction should be high, got {sat}");
+        assert!((sat - 0.70).abs() < 0.05, "initial board satisfaction should be ~0.70 with skepticism, got {sat}");
     }
 
     #[test]
@@ -412,7 +431,9 @@ mod tests {
         update_board_satisfaction(&mut state);
 
         let sat = state.board_members[gov_idx].satisfaction;
-        assert!((sat - 0.5).abs() < 0.01, "governor satisfaction should track GDP fraction ~0.5, got {sat}");
+        // GDP fraction 0.5 minus initial skepticism 0.30 = 0.20
+        let expected = 0.5 - INITIAL_SKEPTICISM;
+        assert!((sat - expected).abs() < 0.01, "governor satisfaction should be GDP(0.5) - skepticism({INITIAL_SKEPTICISM}) = {expected}, got {sat}");
     }
 
     #[test]

@@ -1441,6 +1441,10 @@ pub struct BoardMember {
     /// Personality archetype for corporate leaders. None for governor members.
     #[serde(default)]
     pub personality: Option<BoardPersonality>,
+    /// Initial skepticism penalty (0.0–1.0). Starts at ~0.30 and wanes at ~1%/day,
+    /// representing the board not yet trusting the player. Gone by ~day 30.
+    #[serde(default)]
+    pub initial_skepticism: f64,
 }
 
 fn format_large_number(n: f64) -> String {
@@ -5900,6 +5904,11 @@ impl GameState {
                 };
                 factors.push(("Global survival", survival, 1.0));
             }
+        }
+
+        // Include initial skepticism if still active
+        if member.initial_skepticism > 0.001 {
+            factors.push(("Initial skepticism", -member.initial_skepticism, 1.0));
         }
 
         // Include relationship modifier if nonzero
