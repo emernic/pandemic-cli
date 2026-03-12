@@ -259,20 +259,20 @@ fn render_region_box(
     let name = &region.name;
     let stars = "★".repeat(board_count);
     let threat_len = threat.0.len();
-    let stars_len = board_count; // each ★ is 1 display column
-    let max_name = iw.saturating_sub(threat_len + stars_len + if stars_len > 0 { 2 } else { 1 });
+    let stars_with_space = if board_count > 0 { board_count + 1 } else { 0 }; // space + ★s
+    let max_name = iw.saturating_sub(threat_len + stars_with_space + 1);
     let display_name: &str = if name.len() > max_name {
         &name[..max_name]
     } else {
         name
     };
-    let used = display_name.len() + stars_len + threat_len;
+    let used = display_name.len() + stars_with_space + threat_len;
     let padding = iw.saturating_sub(used);
     let mut name_spans = vec![
         Span::styled(display_name.to_string(), name_style),
     ];
     if board_count > 0 {
-        name_spans.push(Span::styled(stars, Style::default().fg(Color::Yellow)));
+        name_spans.push(Span::styled(format!(" {}", stars), Style::default().fg(Color::Yellow)));
     }
     name_spans.push(Span::raw(" ".repeat(padding)));
     name_spans.push(Span::styled(
