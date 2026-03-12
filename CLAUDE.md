@@ -147,15 +147,9 @@ All game state lives in one `GameState` struct (src/state.rs). Two pure function
 
 Both clone-and-mutate. Deterministic via seeded ChaCha8Rng.
 
-Key files: `src/state.rs` (data structures + derived computations — NOT just passive data; see below), `src/engine/` (mutations + orchestration — research.rs, medicine.rs, policy.rs, crisis.rs), `src/lib.rs` (action routing), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
+Key files: `src/state.rs` (data structures + derived computations), `src/engine/` (mutations + orchestration — research.rs, medicine.rs, policy.rs, crisis.rs), `src/lib.rs` (action routing), `src/ui/` (rendering), `src/snapshot.rs` (snapshot mode).
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
-
-### Key Game Systems
-
-- **Research pipeline**: Unknown threat → Identify (field research) → Develop medicine (applied research) → Clinical trial (field) → Deploy. Three tracks run simultaneously: field, applied, and basic. Don't touch research without understanding this full lifecycle.
-- **Therapy/pathogen matching**: Medicines have a `TherapyType` (Antiviral, Antibiotic, BroadSpectrum), diseases have a `PathogenType` (RnaVirus, DnaVirus, Bacterium, Prion). Efficacy depends on the match. This affects deployment, balance, and player strategy.
-- **Mutation system**: Diseases mutate over time based on pathogen type. Medicines track which strain generation they were calibrated against. Drift reduces efficacy, prompting re-trials. This creates ongoing pressure even after developing a medicine.
 
 ### Game Balance Thresholds — DO NOT NERF DISEASES
 
@@ -179,35 +173,12 @@ The `game_is_lost_within_90_days_without_intervention` test enforces the 90-day 
 
 **Governor-imposed policies (quarantine, border controls, martial law) are GOOD and should stay.** They create interesting dynamics. If policies are keeping the game alive too long, the answer is MORE lethal diseases, not weaker governors.
 
-### Navigation Convention — Left/Right Always Controls Regions
-
-**Left/right arrow keys (h/l) always navigate the region map**, even when a panel is open. Up/down arrow keys (j/k) navigate panel items when a panel is open, or the map when no panel is open. This split lets players browse threats/research/medicines/policies with up/down while simultaneously cycling through regions with left/right.
-
-- **Never use left/right for panel item navigation.** All panel lists (threats, research categories, medicines, policies) must use up/down only.
-- Left/right use **reading order with wrap-around**: NA → Europe → Asia → SA → Africa → Oceania → NA (and reverse). This means players can reach any region with just left/right arrows.
-- Up/down on the map move within the same column (no wrap).
-
-### Architectural Direction — THIS IS YOUR JOB
-
-The UI/engine separation is done. The engine god file has been broken into subsystem modules. See `docs/target-architecture.md` for the full picture. The short version:
-
-- **state.rs is NOT just passive data** — it contains three things: (1) raw data structures, (2) derived computations (read-only methods needed by both engine AND UI — `approval_target()`, `funding_income_rate()`, `decree_unlocked()`, `policy_unlocked()`, etc.), and (3) UI state machines. The split between engine/ and state.rs is "mutations + orchestration" vs "data + derived computation" — NOT "game logic" vs "passive data."
-- **engine/ contains all game-state mutations** — `tick()` orchestrates subsystems, `execute_command()` dispatches player commands. Subsystem modules (research.rs, medicine.rs, policy.rs, crisis.rs) handle domain-specific mutations with `pub(super)` visibility. The rule is: engine/ mutates, state.rs computes read-only views.
-- **UI owns its own state machines** — Panel open/close, wizard forward/back, selection bounds. The UI layer translates user intent into `GameCommand`s.
-- **Layering: state.rs ← engine/ ← ui/ ← lib.rs ← main.rs** — Each layer only imports from layers below it. UI and engine are peers that both depend on state.rs but never on each other.
-
-**This structure must be actively maintained.** Every time you touch this codebase:
-1. Don't add UI state machine logic to engine/. Ever.
-2. Don't add engine imports to UI modules. Ever.
-3. New game systems get their own `engine/newsystem.rs` module following the subsystem pattern.
-4. If you see a violation, file an issue or fix it. Not "maybe someday" — now.
-5. Read `docs/target-architecture.md` if you haven't. It describes the subsystem conventions.
 
 ## Play the Game Yourself
 
 **Before starting any feature or bug fix, play a few frames of the game yourself.** Not a sub-agent. Not the playtest agent. YOU. Run snapshot commands directly with the Bash tool so you see the rendered output with your own eyes. This grounds you in what the game actually looks like and how it behaves right now.
 
-**⚠️ CRITICAL: Keep in mind, this is your FIRST TIME EVER playing the game.** These instructions exist so you can test things out and see a tiny sliver of how things work for yourself, but you should **NOT** walk away from your own playtests assuming you fully understand how to make game balance changes. Do not make assertive statements like "I confirmed from playtesting that early research is weak." There is **NO** way for you to verify something like that in a tiny playtest where you just opened the game for the first time. **Balance information comes from:** (1) reading existing issues to see consistent patterns across many independent playtests, and (2) occasionally, careful analysis of the math in the code — NOT from your one 30-second snapshot session.
+**⚠️ CRITICAL: Keep in mind, this is your FIRST TIME EVER playing the game.** These instructions exist so you can test things out and see a tiny sliver of how things work for yourself, but you should **NOT** walk away from your own playtests assuming you fully understand how to make game balance changes. Do not make assertive statements like "I confirmed from playtesting that early research is weak." There is **NO** way for you to verify something like that in a tiny playtest where you just opened the game for the first time. **Balance information comes from:** (1) reading existing issues to see consistent patterns across many independent playtests, and (2) occasionally, careful analysis of the math in the code — NOT from your one 30-second snapshot session. You should generally focus more on building interesting systems and strategic depth rather than balance anyway.
 
 ```bash
 cargo run -- --snapshot                          # see initial state (auto-creates a resumable save under saves/)
@@ -216,22 +187,24 @@ cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half a day
 ```
 
+Note: Left/right control region selection. Up/down control selection of options within a menu.
+
 ### Chaining steps with `--do`
 
 The `--do` flag chains steps in a single invocation. Use `d<N>` for days, anything else is a key. Key steps must come **before** any time-advance step — once time has been advanced, the invocation ends so you can read the output before deciding what to do next.
 
 ```bash
 # Keys before a time advance — fine:
-cargo run -- --snapshot --do r --do enter --do d1    # open research, start something, then advance 1 day
+cargo run -- --snapshot --do r --do enter --do d1 # open research, start something, then advance 1 day
 
 # Time advance alone — fine:
-cargo run -- --snapshot --do d2                      # advance 2 days; read the output
+cargo run -- --snapshot --do d2 # advance 2 days; read the output
 
 # Keys with no time advance — fine:
 cargo run -- --snapshot --do r --do enter --do enter # open research and navigate
 
 # Keys AFTER a time advance — ERROR:
-# cargo run -- --snapshot --do d1 --do r             # rejected: can't issue keys without reading output first
+# cargo run -- --snapshot --do d1 --do r # rejected: can't issue keys without reading output first
 ```
 
 ### Snapshot mode event handling
@@ -241,23 +214,13 @@ Crisis events **interrupt tick advancement**, exactly as they do in interactive 
 1. Tick advancement stops immediately.
 2. The rendered screen shows the full crisis popup — read it before pressing anything.
 
-Game over also stops execution immediately.
-
 **Crisis events are gameplay decisions, not interruptions to bypass.** Read the full text and all options before pressing anything. Navigate to your chosen option with `--key up`/`--key down`, then confirm with `--key enter`.
-
-**Never put `--do enter` in the same invocation as `--do d<N>`.** You cannot know what crisis is coming before it fires. A pre-chained enter will either navigate somewhere unintended (no crisis fired) or dismiss a crisis you never read (crisis fired). The correct pattern:
-
-```bash
-cargo run -- --snapshot --do d2          # advance; read full output
-cargo run -- --snapshot --key enter      # respond to crisis (use --key up/down first if not taking default option)
-cargo run -- --snapshot --do d2          # continue
-```
 
 **Do NOT add code that silently skips events in snapshot mode.** If an event would pause a human player, it must also pause snapshot mode. The whole point of snapshot playtesting is to experience the game as a player would.
 
 **⛔ NEVER add an `--auto-crises` flag or any equivalent.** This has been implemented and deleted multiple times. Crisis events are a core gameplay mechanic. Playtests must handle them, not bypass them — if playtest agents complain about crises, the answer is to improve the crisis events, not skip them. Any flag, option, or code path that auto-resolves or skips crisis events in snapshot mode is permanently off-limits.
 
-### Snapshot persistence and real playtesting
+### Snapshot persistence and quickly playing the game yourself
 
 `--snapshot` always plays a real sequence of inputs. The only question is whether you want to continue that same run later.
 
@@ -277,11 +240,11 @@ cargo run -- --snapshot --days 1
 cargo run -- saves/playtest-12345-67890.json --snapshot --key r --key enter
 ```
 
-Do this **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game.
+Do this quickly to get a peak at how the relevant features appear in game **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game. Keep in mind, you are **NOT** going to be able to make nuanced balanced judgement calls based on your first 5 seconds of gameplay (you should rely on reading issues and consistent playtest feedback for that), but it's extremely helpful to ground yourself in a small slice of the interface. DO NOT start making confident judgement calls like "the threat interface is underdeveloped and strategically flat currently, it just shows question marks" based on opening the game for the first time ever and taking one look at one screen.
 
-For extended playtesting (e.g., as a final check after a feature is complete), use the playtest agent. Tell it specifically what to test — describe the feature you built, the key behaviors to verify, and suggest specific snapshot commands to exercise it. A guided playtest catches far more issues than a generic one. Tell the playtest agent to keep using the printed `saves/...` file if the flow spans multiple commands.
+Only use the playtest agent for **extended** playtesting if you really need it.
 
-**AI playtester color blindness:** Playtest agents cannot see console colors (ANSI codes, background colors, border highlights). Many playtest reports about "missing indicators" are actually color-based indicators that work fine for human players. When filing or evaluating playtest issues, consider whether the "problem" is just color blindness. That said, the game should strive to be playable without color — use structural indicators (border styles, text markers, symbols) in addition to color, not instead of it.
+**AI playtester color blindness:** Playtest agent (and you) cannot see console colors (ANSI codes, background colors, border highlights). Many playtest reports about "missing indicators" are actually color-based indicators that work fine for human players. When filing or evaluating playtest issues, consider whether the "problem" is just color blindness. That said, the game should strive to be playable without color — use structural indicators (border styles, text markers, symbols) in addition to color, not instead of it.
 
 ## Merging
 
@@ -289,7 +252,6 @@ For extended playtesting (e.g., as a final check after a feature is complete), u
 
 - When your tests pass and you're happy with the changes, merge immediately with `gh pr merge --squash`.
 - **One PR at a time.** Never create a second PR while your first is unmerged — the first merge changes master, causing rebase conflicts in the second. File investigate issues for anything you discover mid-task. Follow-up PRs after merging are fine (fresh branch from `origin/master`).
-- The only exception: if you're genuinely unsure whether a change is correct (e.g., it might break something you can't test), flag it. But this should be rare.
 
 ## Task Tracking
 
@@ -297,20 +259,18 @@ For extended playtesting (e.g., as a final check after a feature is complete), u
 
 Your to-do list should always include the operational steps, not just the coding. A typical feature task looks like:
 
-1. Read the issue / understand requirements
-2. Play the game yourself (snapshot mode)
-3. Create a fresh branch from `origin/master`
+1. Create a fresh branch from `origin/master`
+2. Read the issue / understand requirements
+3. Play a couple turns of the game yourself (snapshot mode) just to see what it looks like and what we're talking about
 4. Implement the feature
 5. Run tests, fix failures
 6. Play the game again to verify it looks right
 7. Commit
-8. Run `/reflect` to catch issues
-9. Fix anything found in reflection, commit
-10. Push, create PR
-11. Run a guided playtest (playtest agent)
-12. Rebase onto latest `origin/master` if needed, fix conflicts
-13. Merge the PR
-14. Close the issue if not auto-closed
+8. Fix anything found in reflection, commit
+9. Push, create PR
+11. Rebase onto latest `origin/master` if needed, fix conflicts
+12. Merge the PR
+13. Close the issue
 
 Adapt the list to the task — small fixes won't need playtests, doc changes won't need game testing. But always include the full lifecycle: **the task isn't done until the PR is merged and the issue is closed.**
 
@@ -326,7 +286,7 @@ Adapt the list to the task — small fixes won't need playtests, doc changes won
 
 ## ⚠️ Session Start Checklist — READ THIS CAREFULLY
 
-**This is the #1 source of preventable disasters in this project.** Multiple agents share this repo. If you skip this, you WILL end up building features on someone else's branch, testing against stale code, or committing to the wrong place. This has happened repeatedly.
+**This is the #1 source of preventable confusion for agents.** Multiple agents share this repo. If you skip this, you WILL end up building features on someone else's branch, testing against stale code, or committing to the wrong place. This has happened repeatedly.
 
 **You are NOT on a good branch right now. Assume your branch is wrong until you prove otherwise.**
 
@@ -353,7 +313,7 @@ This is the ONLY mechanism for claiming work. Never use `gh issue edit --add-ass
 
 **Before filing ANY issue, ask: "Is this a symptom of something else?"** If the game lasts 5 minutes instead of 60, don't file 10 issues about mid-game UX — the mid-game doesn't exist yet. File ONE issue about the broken game duration. Ten symptom issues are worth less than one root-cause issue. This applies to everything: bugs, enhancements, investigate issues. Always look for the upstream cause.
 
-### Investigate Issues — File Them Constantly
+### Investigate Issues — File Them Freely When Something Looks Wrong
 
 Investigate issues are the single most underused tool in this project. They are **free**. They take 30 seconds. They don't need user permission. They can be one line.
 
