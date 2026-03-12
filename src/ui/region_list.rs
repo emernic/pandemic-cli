@@ -609,15 +609,11 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(spec_color),
             ),
         ]));
-        // Regional traits
-        if !region.traits.is_empty() {
-            let trait_labels: Vec<&str> = region.traits.iter().map(|t| t.label()).collect();
+        // Regional traits with effects
+        for t in &region.traits {
             lines.push(Line::from(vec![
-                Span::styled("Traits: ", label),
-                Span::styled(
-                    trait_labels.join(", "),
-                    Style::default().fg(Color::Yellow),
-                ),
+                Span::styled(format!("{}: ", t.label()), label),
+                Span::styled(t.effect(), Style::default().fg(Color::Yellow)),
             ]));
         }
     }
