@@ -1,3 +1,6 @@
+use rand::Rng;
+use rand::seq::SliceRandom;
+
 use crate::state::{BoardMember, BoardRole, GameState};
 
 /// Generate board members from existing game entities at game start.
@@ -28,18 +31,13 @@ pub fn generate_board_members(state: &mut GameState) {
         });
     }
 
-    // Governor-members: select 2-3 governors as dual-role board members.
-    // Pick the governors of the most populous regions (they have the most
-    // political weight). Skip regions that are already well-represented
-    // by their corporate leader to maximize strategic overlap variety.
-    let mut region_by_pop: Vec<usize> = (0..state.regions.len()).collect();
-    region_by_pop.sort_by(|&a, &b| {
-        state.regions[b].population.cmp(&state.regions[a].population)
-    });
+    // Governor-members: randomly select 2-3 governors as dual-role board members.
+    let mut region_indices: Vec<usize> = (0..state.regions.len()).collect();
+    region_indices.shuffle(&mut state.rng_misc);
 
+    let max_governor_members = 2 + (state.rng_misc.r#gen::<usize>() % 2); // 2 or 3
     let mut governor_count = 0;
-    let max_governor_members = 3;
-    for &region_idx in &region_by_pop {
+    for &region_idx in &region_indices {
         if governor_count >= max_governor_members {
             break;
         }
@@ -137,7 +135,8 @@ mod tests {
             .collect();
 
         assert_eq!(corp_leaders.len(), 6, "should have 6 corporate leaders");
-        assert_eq!(gov_members.len(), 3, "should have 3 governor members");
+        assert!(gov_members.len() >= 2 && gov_members.len() <= 3,
+            "should have 2-3 governor members, got {}", gov_members.len());
     }
 
     #[test]
@@ -159,11 +158,15 @@ mod tests {
         generate_board_members(&mut state);
 
         // Bankrupt the first board-seat corp
-        state.corporations[0].bankrupt = true;
+        let board_corp_idx = state.corporations.iter().position(|c| c.board_seat)
+            .expect("should have a board-seat corp");
+        state.corporations[board_corp_idx].bankrupt = true;
         update_board_satisfaction(&mut state);
 
-        let first_leader = &state.board_members[0];
-        assert_eq!(first_leader.satisfaction, 0.0, "bankrupt corp leader should have 0 satisfaction");
+        let leader = state.board_members.iter()
+            .find(|m| matches!(m.role, BoardRole::CorporateLeader { corp_idx } if corp_idx == board_corp_idx))
+            .expect("should have a board member for the bankrupted corp");
+        assert_eq!(leader.satisfaction, 0.0, "bankrupt corp leader should have 0 satisfaction");
 
         // Overall board satisfaction should drop
         let sat = state.board_satisfaction();

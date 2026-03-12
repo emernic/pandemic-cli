@@ -42,13 +42,19 @@ struct Cli {
     #[arg(long = "do")]
     steps: Vec<String>,
 
-    /// RNG seed for new games
-    #[arg(long, default_value = "42")]
-    seed: u64,
+    /// RNG seed for new games (random if not specified)
+    #[arg(long)]
+    seed: Option<u64>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    let seed = cli.seed.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as u64
+    });
 
     let mut snapshot_autosave_notice = None;
     // Use explicit path, or default to ./save.json for interactive mode.
@@ -68,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if std::path::Path::new(path).exists() {
             let data = fs::read_to_string(path)?;
             if data.trim().is_empty() {
-                GameState::new_default(cli.seed)
+                GameState::new_default(seed)
             } else {
                 let mut s: GameState = serde_json::from_str(&data)
                     .map_err(|e| format!(
@@ -79,10 +85,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 s
             }
         } else {
-            GameState::new_default(cli.seed)
+            GameState::new_default(seed)
         }
     } else {
-        GameState::new_default(cli.seed)
+        GameState::new_default(seed)
     };
 
     // Generate corporations for new games (loaded saves already have them)
