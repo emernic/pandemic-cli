@@ -628,7 +628,7 @@ pub struct RegionPolicy {
     /// Discourages hospitalization: +50% lethality (no hospital care)
     /// but reduces spread by 20% (no hospital exposure).
     pub discourage_hosp: bool,
-    /// Reduces cross-region spread by 50%, no income penalty.
+    /// Reduces cross-region spread by 30%, no income penalty.
     /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
     #[serde(default, alias = "border_screening")]
     pub border_controls: bool,

@@ -263,7 +263,7 @@ pub(super) fn tick_spread_cross_region(
                         let base_f = disease.transmission.travel_ban_factor();
                         scale_policy_factor(base_f, eff)
                     } else if source_has_border_controls || dest_has_border_controls {
-                        scale_policy_factor(0.5, eff)
+                        scale_policy_factor(0.7, eff)
                     } else {
                         1.0
                     };
