@@ -347,10 +347,6 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("Standing order: {policy_name} auto-activated");
                 (8, msg.clone(), msg)
             }
-            GameEvent::FieldOpCompleted { label, result } => {
-                let msg = format!("{}: {}", label, result);
-                (3, msg.clone(), msg)
-            }
             GameEvent::NetworkDisruption { disrupted_region_idx, collapsed_region_idx } => {
                 let disrupted = state.regions.get(*disrupted_region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
@@ -576,7 +572,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from("  [R] Research panel"),
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),
-            Line::from("  [O] Field operations"),
+            Line::from("  [O] Orders panel"),
             Line::from("  [Space] Pause/Resume"),
             Line::from("  [Z] Speed up (1x→2x→4x→6x, pause resets)"),
             Line::from("  [X] Auto-resolve crisis (toggle during event)"),

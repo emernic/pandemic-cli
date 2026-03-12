@@ -5,7 +5,6 @@ mod disease;
 mod infrastructure;
 mod loans;
 mod medicine;
-mod operations;
 mod policy;
 mod research;
 mod spread;
@@ -61,9 +60,6 @@ pub(crate) fn tick(state: &GameState) -> GameState {
 
     // Infrastructure degradation — hospitals overwhelm, supply lines break, civil order erodes.
     infrastructure::tick_infrastructure(&mut new);
-
-    // Field operations — recon, emergency response, infrastructure survey.
-    operations::tick_field_operations(&mut new);
 
     // Crisis operations — temporary personnel commitments from crisis resolutions.
     crisis::tick_crisis_operations(&mut new);
@@ -632,10 +628,6 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let idx = track.index();
             state.auto_research[idx] = !state.auto_research[idx];
             CommandResult { message: None, success: true }
-        }
-        GameCommand::StartFieldOp { kind } => {
-            let (success, msg) = operations::start_field_op(state, kind.clone());
-            CommandResult { message: msg, success }
         }
         GameCommand::UpgradeLab => {
             let (success, msg) = research::upgrade_lab(state);
@@ -4927,14 +4919,10 @@ mod tests {
         for i in 3..6 { state.regions[i].collapsed = true; }
         state.regions[0].get_or_create_infection(0).infected = 600_000.0;
 
-        // Open Orders panel, navigate past 5 op types to first decree (FIELD_OP_TYPE_COUNT = 5)
+        // Open Orders panel — first item is the first decree (Conscript Researchers)
         state = apply_action(&state, &Action::OpenOperations);
         assert_eq!(state.ui.open_panel, Panel::Operations);
-        for _ in 0..crate::state::FIELD_OP_TYPE_COUNT {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        // panel_selection should be FIELD_OP_TYPE_COUNT (first decree: Conscript Researchers)
-        assert_eq!(state.ui.panel_selection, crate::state::FIELD_OP_TYPE_COUNT);
+        assert_eq!(state.ui.panel_selection, 0);
 
         let personnel_before = state.resources.personnel;
         // First Confirm goes to the confirmation screen
@@ -4958,9 +4946,9 @@ mod tests {
         for i in 3..6 { state.regions[i].collapsed = true; }
         state.regions[0].get_or_create_infection(0).infected = 600_000.0;
 
-        // Open Orders panel, navigate to Sacrifice Region (FIELD_OP_TYPE_COUNT + 2 = 7)
+        // Open Orders panel, navigate to Sacrifice Region (decree index 2)
         state = apply_action(&state, &Action::OpenOperations);
-        let sacrifice_idx = crate::state::FIELD_OP_TYPE_COUNT + 2;
+        let sacrifice_idx = 2;
         for _ in 0..sacrifice_idx {
             state = apply_action(&state, &Action::SelectNext);
         }
