@@ -173,6 +173,19 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PersonnelCrisis { amount });
     }
 
+    // Personnel sickness: staff catch whatever they're fighting. Requires significant
+    // infections and at least 4 personnel. Softer than PersonnelCrisis (temporary, not permanent).
+    let total_infected = state.total_infected();
+    if total_infected >= 10_000.0 && state.resources.personnel >= 4 {
+        // 1-3 staff get sick, scaling with infection severity
+        let severity = (total_infected / 500_000.0).min(1.0);
+        let amount = (1.0 + severity * 2.0).round() as u32;
+        let amount = amount.min(state.resources.personnel / 3).max(1);
+        // Recovery takes 3-7 days depending on severity
+        let recovery_days = 3.0 + severity * 4.0;
+        candidates.push(CrisisKind::PersonnelSick { amount, recovery_days });
+    }
+
     // International aid: meaningful funding vs modest personnel boost
     let funding = scaled_cost(state, 0.30, 800.0, 1500.0);
     let personnel = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(3, 5);
@@ -568,6 +581,30 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     description: "Workers stay.".into(),
                     cost: Some(CrisisCost { funding: retention_cost, personnel: 0, ..Default::default() }),
                 },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
+        CrisisKind::PersonnelSick { amount, recovery_days } => {
+            let treatment_cost = scaled_cost(state, 0.10, 100.0, 400.0);
+            CrisisEvent {
+                title: "Staff Illness".into(),
+                description: format!(
+                    "{} personnel are showing symptoms. They need to be pulled from active duty.",
+                    amount,
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: format!("Sick leave ({} staff, {:.0} days)", amount, recovery_days),
+                        description: "They'll recover on their own.".into(),
+                        cost: None,
+                    },
+                    CrisisOption {
+                        label: format!("Medical treatment (¥{:.0})", treatment_cost),
+                        description: format!("Faster recovery ({:.0} days).", recovery_days * 0.5),
+                        cost: Some(CrisisCost { funding: treatment_cost, personnel: 0, ..Default::default() }),
+                    },
                 ],
                 kind,
                 tick_created: tick,
@@ -2321,6 +2358,29 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::PersonnelCrisis { .. }, _) => {
             "Retention bonuses paid. Attrition stabilized.".into()
+        }
+        (CrisisKind::PersonnelSick { amount, recovery_days }, choice) => {
+            let days = if choice == 0 { *recovery_days } else { *recovery_days * 0.5 };
+            let ticks = days * TICKS_PER_DAY;
+            // Extend existing sick leave operation rather than stacking
+            if let Some(op) = state.crisis_operations.iter_mut().find(|op| op.label == "Sick Leave") {
+                op.personnel += amount;
+                if ticks > op.ticks_remaining {
+                    op.ticks_remaining = ticks;
+                }
+                format!("{} more staff on sick leave. {} total out.", amount, op.personnel)
+            } else {
+                state.crisis_operations.push(CrisisOperation {
+                    label: "Sick Leave".into(),
+                    personnel: *amount,
+                    ticks_remaining: ticks,
+                });
+                if choice == 0 {
+                    format!("{} staff on sick leave for {:.0} days.", amount, days)
+                } else {
+                    format!("{} staff receiving treatment. Back in {:.0} days.", amount, days)
+                }
+            }
         }
         (CrisisKind::InternationalAid { funding, .. }, 0) => {
             state.resources.funding += funding;

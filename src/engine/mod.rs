@@ -3769,6 +3769,82 @@ mod tests {
     }
 
     #[test]
+    fn personnel_sick_creates_temporary_operation() {
+        let mut state = GameState::new_default(42);
+        let before_personnel = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::PersonnelSick { amount: 2, recovery_days: 5.0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+
+        // Personnel count unchanged (not permanently lost)
+        assert_eq!(after.resources.personnel, before_personnel);
+        // But a crisis operation ties them up
+        assert_eq!(after.crisis_operations.len(), 1);
+        assert_eq!(after.crisis_operations[0].label, "Sick Leave");
+        assert_eq!(after.crisis_operations[0].personnel, 2);
+        assert!((after.crisis_operations[0].ticks_remaining - 5.0 * TICKS_PER_DAY).abs() < 1.0);
+        // Personnel should show as unavailable
+        assert_eq!(after.personnel_available(), before_personnel - 2);
+    }
+
+    #[test]
+    fn personnel_sick_medical_treatment_halves_recovery() {
+        let mut state = GameState::new_default(42);
+        setup_crisis(&mut state, CrisisKind::PersonnelSick { amount: 2, recovery_days: 6.0 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
+
+        assert_eq!(after.crisis_operations.len(), 1);
+        // Treatment halves recovery time
+        assert!((after.crisis_operations[0].ticks_remaining - 3.0 * TICKS_PER_DAY).abs() < 1.0);
+    }
+
+    #[test]
+    fn personnel_sick_extends_existing_operation() {
+        let mut state = GameState::new_default(42);
+        // Pre-existing sick leave operation
+        state.crisis_operations.push(crate::state::CrisisOperation {
+            label: "Sick Leave".into(),
+            personnel: 3,
+            ticks_remaining: 2.0 * TICKS_PER_DAY,
+        });
+        setup_crisis(&mut state, CrisisKind::PersonnelSick { amount: 2, recovery_days: 5.0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+
+        // Should merge into existing operation, not create a second one
+        assert_eq!(after.crisis_operations.iter().filter(|op| op.label == "Sick Leave").count(), 1);
+        let op = after.crisis_operations.iter().find(|op| op.label == "Sick Leave").unwrap();
+        assert_eq!(op.personnel, 5); // 3 existing + 2 new
+        // Recovery time extended to the longer duration
+        assert!((op.ticks_remaining - 5.0 * TICKS_PER_DAY).abs() < 1.0);
+    }
+
+    #[test]
+    fn personnel_sick_recover_after_duration() {
+        let mut state = GameState::new_default(42);
+        let before_personnel = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::PersonnelSick { amount: 2, recovery_days: 1.0 }, 0);
+        let mut state = apply_action(&state, &Action::Confirm);
+
+        // Tick until the operation completes, checking events on each tick
+        let max_ticks = (2.0 * TICKS_PER_DAY) as u32;
+        let mut saw_recovery_event = false;
+        for _ in 0..max_ticks {
+            state = tick(&state);
+            if state.events.iter().any(|e| matches!(e,
+                GameEvent::CrisisTeamReturned { label, .. } if label == "Sick Leave"
+            )) {
+                saw_recovery_event = true;
+                break;
+            }
+        }
+
+        assert!(saw_recovery_event, "should fire CrisisTeamReturned event on recovery");
+        assert!(state.crisis_operations.iter().all(|op| op.label != "Sick Leave"),
+            "sick leave operation should be complete");
+        assert_eq!(state.personnel_available(), before_personnel,
+            "personnel should be fully available after recovery");
+    }
+
+    #[test]
     fn mutation_surge_option_b_gains_knowledge() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
