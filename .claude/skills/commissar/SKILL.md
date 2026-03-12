@@ -18,6 +18,43 @@ The game does not comment on its themes. It embodies them. A crisis event that w
 
 ---
 
+## THE WORLD OF THIS GAME
+
+Read DO_NOT_READ.md before every cycle. What follows is the operational version — how the world translates into concrete design direction.
+
+**It is 2050.** Not 2020. Not the 20th century. Institutions are gone or irrelevant. Power is concentrated in individuals who control energy, technology, and physical infrastructure. The N.W.H.O. is not the WHO. It is a body that exists because these powerful individuals allow it to exist, staffed by people who serve at their pleasure.
+
+**The player is an employee.** The board members are your bosses. They tell you what to do. You comply or you get fired (game over). Your mechanical goal is board satisfaction, not saving lives. Saving lives is sometimes useful because a plague that disrupts regional operations is bad for your board members' bottom line. But "save the most people" is not the objective. "Keep your bosses happy" is the objective. The player who figures this out is playing correctly. The player who doesn't will lose and wonder why.
+
+**Nothing is being "warped" or "distorted."** This is the most important thing to internalize. There is no "medically optimal" decision being corrupted by corporate interests. There is no pure science being politicized. There is no heroic path that the board is blocking. This is just how things work. The board's priorities ARE the priorities. The player who frames their situation as "I'm trying to save lives but these greedy corporations are getting in the way" has misunderstood the world. The game never corrects this. It plays completely straight.
+
+**Everyone understands the score.** The masses out there dying to a supervirus know how things work. The board members know. The player character knows. There is no reveal, no awakening, no "oh my god, the system is corrupt." The system is the system. It has always been the system. The interesting question is not "is this right or wrong" — it is "what do you do within it."
+
+**When you evaluate game systems, write issues, or give design direction:** never frame anything as "the player's real goal is X but the board prevents it." The board does not prevent anything. The board IS the game. Frame everything from within the system, not from outside looking in with moral judgment.
+
+---
+
+## EVALUATING GAME SYSTEMS
+
+When the commissar assesses whether a system is working, the question is NOT "is this balanced?" It is: **"Does this create interesting decisions with genuine strategic depth?"**
+
+**Decision topology, not balance.** A system that creates no interesting decisions is structurally weak regardless of how you tune the numbers. A system with interesting decision topology but wrong numbers just needs adjustment. When you identify a weak system, ask: "Is this a tuning problem (numbers are wrong) or a topology problem (no amount of tuning creates interesting choices)?" Only flag topology problems. Leave tuning to workers.
+
+**What makes a decision interesting:**
+- Choosing A forecloses B (genuine opportunity cost)
+- Different game states produce different correct answers (contextual, not universal)
+- Consequences are legible (player can learn from their choices)
+- The decision connects to something the player cares about
+- Second-order consequences exist (every solution creates a new problem)
+
+**Overlap between systems is depth, not a problem.** When governors, corporations, contracts, and infrastructure all interact with each other in complex ways, that is strategic depth. Flat systems with no second-order interactions are uninteresting. Never flag system overlap as "awkward" or "redundant" — ask whether the overlap creates interesting decisions.
+
+**Geography is secondary to power structures.** When proposing new features or system changes, do NOT make regions interesting through hard-coded geographic specializations or static capabilities. Regions become interesting because of the dynamic power structures present in them — which board members have corporate interests there, which varies per run. If you catch yourself proposing that "Asia should have the sequencing lab" or "North America should be the manufacturing hub," stop. That's geographic determinism. The board member whose corporation happens to operate in Asia this run is what makes Asia interesting this run.
+
+**Root causes before symptoms.** Before flagging any system as weak, ask whether it's a symptom of a deeper problem. Per-region policy repetition, infrastructure decorativeness, and governor maintenance being shallow were all symptoms of one root cause: regions lacked dynamic differentiation through power structures. Filing ten symptom issues wastes ten chains of agent work. Filing one root-cause issue solves the problem.
+
+---
+
 ## PROCESS
 
 ### 1. Ensure the loop is running
@@ -101,6 +138,10 @@ Do these in order. Stop when you have done enough.
 **Edit documents directly** if you see something wrong in CLAUDE.md, the commissar skill, flavor-text, or any document that is read frequently and shapes how workers build the game. Short, high-density corrections to these documents are exactly what you should handle directly — they multiply across every future session. **DO NOT edit DO_NOT_READ.md** — that document is the user's, not yours.
 
 **Open issues** for everything else: text that needs overhauling, systems heading in the wrong direction, mechanics that need steering. Use `/create-issue` — do not use `gh issue create` directly. **All commissar issues are P1 at minimum.** If it wasn't worth a P1, it wasn't worth filing.
+
+**Every issue you file triggers a massive chain of downstream agent work.** Workers will claim it, implement it, test it, merge it, and file follow-ups. A badly framed issue doesn't just waste the time it took to write — it wastes all that downstream time too. Think carefully before filing. Use extended thinking. If you aren't spending real time on each issue, you are burning resources at scale.
+
+Do NOT iterate by filing, getting it wrong, and refiling. Get it right the first time. If you aren't confident in an issue, don't file it — think more, or discuss it with the user first.
 
 **Close issues** that push the game in the wrong direction. 0 to 3 per cycle.
 
