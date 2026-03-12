@@ -629,7 +629,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     // Infrastructure status
     if !region.collapsed {
-        fn infra_label(val: f64) -> (&'static str, Color) {
+        fn infra_status(val: f64) -> (&'static str, Color) {
             if val <= 0.0 {
                 ("FAILED", Color::Red)
             } else if val < crate::state::INFRA_CRITICAL {
@@ -640,29 +640,76 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 ("OK", Color::Green)
             }
         }
-        let hc = infra_label(region.healthcare_capacity);
-        let sl = infra_label(region.supply_lines);
-        let co = infra_label(region.civil_order);
-        // Only show infrastructure line when at least one system is degraded
-        if region.healthcare_capacity < 1.0 || region.supply_lines < 1.0 || region.civil_order < 1.0 {
+        let hc = region.healthcare_capacity;
+        let sl = region.supply_lines;
+        let co = region.civil_order;
+        // Only show infrastructure when at least one system is degraded
+        if hc < 1.0 || sl < 1.0 || co < 1.0 {
+            let hc_status = infra_status(hc);
+            let sl_status = infra_status(sl);
+            let co_status = infra_status(co);
             lines.push(Line::from(vec![
                 Span::styled("Infra: ", label),
                 Span::styled("HC ", label),
                 Span::styled(
-                    format!("{}%", (region.healthcare_capacity * 100.0) as u32),
-                    Style::default().fg(hc.1),
+                    format!("{}%", (hc * 100.0) as u32),
+                    Style::default().fg(hc_status.1),
                 ),
                 Span::styled("  SL ", label),
                 Span::styled(
-                    format!("{}%", (region.supply_lines * 100.0) as u32),
-                    Style::default().fg(sl.1),
+                    format!("{}%", (sl * 100.0) as u32),
+                    Style::default().fg(sl_status.1),
                 ),
                 Span::styled("  CO ", label),
                 Span::styled(
-                    format!("{}%", (region.civil_order * 100.0) as u32),
-                    Style::default().fg(co.1),
+                    format!("{}%", (co * 100.0) as u32),
+                    Style::default().fg(co_status.1),
                 ),
             ]));
+            // Show effect warnings for stressed/critical systems
+            let mut effects: Vec<Span> = Vec::new();
+            if hc < crate::state::INFRA_CRITICAL {
+                effects.push(Span::styled(
+                    format!("  HC: {}x lethality", crate::state::HEALTHCARE_CRITICAL_LETHALITY as u32),
+                    Style::default().fg(Color::Red),
+                ));
+            } else if hc < crate::state::INFRA_STRESSED {
+                effects.push(Span::styled(
+                    format!("  HC: {}x lethality", crate::state::HEALTHCARE_STRESSED_LETHALITY as u32),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
+            if sl < crate::state::INFRA_CRITICAL {
+                effects.push(Span::styled(
+                    "  SL: 2x deploy time, 1.5x policy cost",
+                    Style::default().fg(Color::Red),
+                ));
+            } else if sl < crate::state::INFRA_STRESSED {
+                effects.push(Span::styled(
+                    "  SL: 1.5x policy cost",
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
+            if !effects.is_empty() {
+                let mut effect_line = vec![Span::styled("Effects:", label)];
+                effect_line.extend(effects);
+                lines.push(Line::from(effect_line));
+            }
+            // Show delivery efficiency when impaired
+            let eff = region.delivery_efficiency();
+            if eff < 0.95 {
+                lines.push(Line::from(vec![
+                    Span::styled("Delivery efficiency: ", label),
+                    Span::styled(
+                        format!("{:.0}%", eff * 100.0),
+                        Style::default().fg(if eff < 0.5 { Color::Red } else { Color::Yellow }),
+                    ),
+                    Span::styled(
+                        " (HC × SL)",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
         }
     }
 
