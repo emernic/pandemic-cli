@@ -777,11 +777,8 @@ mod tests {
 
         state = apply_action(&state, &Action::OpenResearch);
         let items = state.research_flat_items();
-        let applied_projects = state.available_projects(ResearchTrack::Applied);
         let train_flat_idx = items.iter().position(|item| {
-            if let ResearchFlatItem::AppliedAvailable(idx) = item {
-                matches!(applied_projects.get(*idx), Some(ResearchKind::TrainPersonnel))
-            } else { false }
+            matches!(item, ResearchFlatItem::TrainPersonnel(_))
         }).expect("should have train personnel available");
         state.ui.panel_selection = train_flat_idx;
         state = apply_action(&state, &Action::Confirm); // ConfirmProject

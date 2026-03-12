@@ -4327,6 +4327,9 @@ pub enum ResearchFlatItem {
     BasicAvailable(usize),
     /// The lab upgrade button.
     UpgradeLab,
+    /// Train Personnel — displayed in Lab section but uses the Applied research slot.
+    /// The usize is the index into `available_projects(Applied)`.
+    TrainPersonnel(usize),
 }
 
 impl ResearchFlatItem {
@@ -4337,6 +4340,7 @@ impl ResearchFlatItem {
             Self::AppliedActive | Self::AppliedAvailable(_) => Some(ResearchTrack::Applied),
             Self::BasicActive | Self::BasicAvailable(_) => Some(ResearchTrack::Basic),
             Self::UpgradeLab => None,
+            Self::TrainPersonnel(_) => Some(ResearchTrack::Applied),
         }
     }
 }
@@ -6245,10 +6249,15 @@ impl GameState {
         }
 
         // Applied Research: active project OR available projects
+        // TrainPersonnel is skipped here — it appears in the Lab section instead.
+        let applied_projects = self.available_projects(ResearchTrack::Applied);
         if self.research_slot(ResearchTrack::Applied).is_some() {
             items.push(ResearchFlatItem::AppliedActive);
         } else {
-            for i in 0..self.available_projects(ResearchTrack::Applied).len() {
+            for i in 0..applied_projects.len() {
+                if matches!(applied_projects[i], ResearchKind::TrainPersonnel) {
+                    continue;
+                }
                 items.push(ResearchFlatItem::AppliedAvailable(i));
             }
         }
@@ -6262,7 +6271,15 @@ impl GameState {
             }
         }
 
-        // Lab upgrade (always present unless max level)
+        // Lab section: Train Personnel (if applied slot is free) and lab upgrade
+        if self.research_slot(ResearchTrack::Applied).is_none() {
+            let applied_projects = self.available_projects(ResearchTrack::Applied);
+            for (i, kind) in applied_projects.iter().enumerate() {
+                if matches!(kind, ResearchKind::TrainPersonnel) {
+                    items.push(ResearchFlatItem::TrainPersonnel(i));
+                }
+            }
+        }
         if self.lab_level < 2 {
             items.push(ResearchFlatItem::UpgradeLab);
         }
