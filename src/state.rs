@@ -191,6 +191,10 @@ pub struct GameState {
     /// Regional corporations. 3 per region (18 total). Source of player income.
     #[serde(default)]
     pub corporations: Vec<Corporation>,
+    /// Named board members with individual satisfaction. Generated at game start
+    /// from board-seat corporations and selected governors.
+    #[serde(default)]
+    pub board_members: Vec<BoardMember>,
     /// Tick when the last board demand crisis fired (cooldown tracking).
     #[serde(default)]
     pub last_board_demand_tick: u64,
@@ -1175,6 +1179,42 @@ pub const CORP_STARTING_RESERVE_DAYS: f64 = 30.0;
 /// Operating costs as a fraction of base revenue.
 /// At 0.65, corps need ~35% revenue to break even.
 pub const CORP_COST_RATIO: f64 = 0.65;
+
+// Board member system — named individuals who sit on the NWHO board.
+// Each member has connections to existing game entities (corporations, regions,
+// contracts) and individual satisfaction driven by those connections.
+
+/// What role a board member plays, determining what drives their satisfaction.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BoardRole {
+    /// Owns a board-seat corporation. Satisfaction tracks corp reserves.
+    CorporateLeader { corp_idx: usize },
+    /// Also a regional governor. Satisfaction tracks region population health.
+    RegionGovernor { region_idx: usize },
+    /// Independent figure with global concerns. Satisfaction tracks overall death rate.
+    IndependentAdvisor,
+}
+
+/// A named individual on the NWHO board of directors.
+/// Satisfaction is computed from game state each tick based on the member's role
+/// and connections — it is not directly manipulable by the player.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BoardMember {
+    /// Display name (e.g., "Dir. Torres" or "CEO Helion Power").
+    pub name: String,
+    /// Short title/role description for UI display.
+    pub title: String,
+    /// Primary role determining satisfaction driver.
+    pub role: BoardRole,
+    /// Corporation index this member owns (if any). Same as CorporateLeader.corp_idx
+    /// when role is CorporateLeader, but governor-members may also own a corp.
+    pub corp_idx: Option<usize>,
+    /// Region index this member governs (if any). Same as RegionGovernor.region_idx
+    /// when role is RegionGovernor, but corp-leaders may be linked to their corp's region.
+    pub region_idx: Option<usize>,
+    /// Individual satisfaction (0.0–1.0). Updated each tick from connected entity health.
+    pub satisfaction: f64,
+}
 
 fn format_large_number(n: f64) -> String {
     if n >= 1_000_000_000.0 {
@@ -4744,6 +4784,7 @@ impl GameState {
             contract_offer: None,
             last_contract_offer_tick: 0,
             corporations: Vec::new(),
+            board_members: Vec::new(),
             last_board_demand_tick: 0,
             next_sequence_group: 0,
             loans: vec![],
@@ -5270,6 +5311,12 @@ impl GameState {
     /// the board's financial backing a natural lag that reflects long-term solvency.
     /// Bankruptcies contribute 0.0; a healthy board with full reserves returns ~1.0.
     pub fn board_satisfaction(&self) -> f64 {
+        // Use individual board member satisfactions when available.
+        if !self.board_members.is_empty() {
+            let total: f64 = self.board_members.iter().map(|m| m.satisfaction).sum();
+            return total / self.board_members.len() as f64;
+        }
+        // Fallback for states without board members (old saves being loaded).
         let board_corps: Vec<&Corporation> =
             self.corporations.iter().filter(|c| c.board_seat).collect();
         if board_corps.is_empty() {

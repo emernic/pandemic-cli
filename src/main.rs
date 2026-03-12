@@ -90,6 +90,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pandemic_cli_lib::engine::corporations::generate_corporations(&mut state);
     }
 
+    // Generate board members for new games (loaded saves already have them)
+    if state.board_members.is_empty() {
+        pandemic_cli_lib::engine::board::generate_board_members(&mut state);
+    }
+
     if cli.snapshot {
         // Build step sequence: --do takes priority if provided, otherwise
         // fall back to legacy --key/--ticks args
