@@ -1,6 +1,7 @@
 pub mod board;
 pub mod home;
 pub mod hotkey_bar;
+pub mod ledger;
 pub mod medicines;
 pub mod operations;
 pub mod policy;
@@ -459,6 +460,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
             Panel::Policy => policy::render(f, split[1], state),
             Panel::Operations => operations::render(f, split[1], state),
             Panel::Board => board::render(f, split[1], state),
+            Panel::Ledger => ledger::render(f, split[1], state),
             panel => render_placeholder_panel(f, split[1], panel),
         }
     }

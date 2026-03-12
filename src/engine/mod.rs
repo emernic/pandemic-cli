@@ -706,6 +706,61 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 success: true,
             }
         }
+        GameCommand::BuyShares { corp_idx, quantity } => {
+            if *corp_idx >= state.corporations.len() {
+                return CommandResult { message: Some("Invalid corporation".to_string()), success: false };
+            }
+            let corp = &state.corporations[*corp_idx];
+            if corp.bankrupt {
+                return CommandResult { message: Some("Corporation is bankrupt".to_string()), success: false };
+            }
+            let cost = corp.share_price * (*quantity as f64);
+            if state.resources.funding < cost {
+                return CommandResult {
+                    message: Some(format!(
+                        "Insufficient funds: need ¥{:.0}, have ¥{:.0}",
+                        cost, state.resources.funding
+                    )),
+                    success: false,
+                };
+            }
+            state.resources.funding -= cost;
+            while state.portfolio.len() <= *corp_idx {
+                state.portfolio.push(0);
+            }
+            state.portfolio[*corp_idx] += quantity;
+            let name = state.corporations[*corp_idx].name.clone();
+            CommandResult {
+                message: Some(format!(
+                    "Bought {} shares of {} at ¥{:.1}/share (¥{:.0} total)",
+                    quantity, name, state.corporations[*corp_idx].share_price, cost
+                )),
+                success: true,
+            }
+        }
+        GameCommand::SellShares { corp_idx, quantity } => {
+            if *corp_idx >= state.corporations.len() {
+                return CommandResult { message: Some("Invalid corporation".to_string()), success: false };
+            }
+            let held = state.portfolio.get(*corp_idx).copied().unwrap_or(0);
+            if held < *quantity {
+                return CommandResult {
+                    message: Some(format!("Only hold {} shares", held)),
+                    success: false,
+                };
+            }
+            let proceeds = state.corporations[*corp_idx].share_price * (*quantity as f64);
+            state.resources.funding += proceeds;
+            state.portfolio[*corp_idx] -= quantity;
+            let name = state.corporations[*corp_idx].name.clone();
+            CommandResult {
+                message: Some(format!(
+                    "Sold {} shares of {} at ¥{:.1}/share (¥{:.0} proceeds)",
+                    quantity, name, state.corporations[*corp_idx].share_price, proceeds
+                )),
+                success: true,
+            }
+        }
     }
 }
 

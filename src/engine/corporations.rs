@@ -5,6 +5,9 @@ use crate::state::{
     CORPORATE_TAX_RATE, CORP_COST_RATIO, CORP_STARTING_RESERVE_DAYS, TICKS_PER_DAY,
 };
 
+/// Maximum number of daily price samples kept in price_history for sparkline.
+const PRICE_HISTORY_MAX: usize = 30;
+
 /// Corporation templates per region. Each region gets 3 corps from different sectors.
 /// Index matches region order: NA=0, SA=1, EU=2, AF=3, AS=4, OC=5.
 const REGION_CORPS: [[(CorporationSector, &str); 3]; 6] = [
@@ -91,6 +94,8 @@ pub fn generate_corporations(state: &mut GameState) {
             // Board seat assigned randomly after all corps are created (see below)
             let board_seat = false;
 
+            // IPO price scales with revenue: target ~¥50-200 range
+            let ipo_price = (base_revenue * 1.5).clamp(20.0, 500.0);
             corps.push(Corporation {
                 name: name.to_string(),
                 sector: *sector,
@@ -103,6 +108,8 @@ pub fn generate_corporations(state: &mut GameState) {
                 bankrupt: false,
                 bankrupt_at_tick: None,
                 board_seat,
+                share_price: ipo_price,
+                price_history: vec![ipo_price],
             });
         }
     }
@@ -279,6 +286,53 @@ pub(super) fn tick_corporations(state: &mut GameState) {
                 corp_idx: c_idx,
                 region_idx: r_idx,
             });
+        }
+    }
+
+    // Update share prices once per day based on revenue performance + noise.
+    if state.tick > 0 && state.tick % (TICKS_PER_DAY as u64) == 0 {
+        tick_share_prices(state);
+    }
+}
+
+/// Update share prices for all corporations.
+/// Price = f(revenue_ratio, reserves_fraction) + random walk noise.
+/// Called once per day from tick_corporations.
+fn tick_share_prices(state: &mut GameState) {
+    for c_idx in 0..state.corporations.len() {
+        let corp = &state.corporations[c_idx];
+
+        if corp.bankrupt {
+            // Bankrupt corps crash to near-zero
+            state.corporations[c_idx].share_price = 0.01;
+            state.corporations[c_idx].price_history.push(0.01);
+            if state.corporations[c_idx].price_history.len() > PRICE_HISTORY_MAX {
+                state.corporations[c_idx].price_history.remove(0);
+            }
+            continue;
+        }
+
+        let revenue_ratio = if corp.base_revenue > 0.0 {
+            corp.revenue / corp.base_revenue
+        } else {
+            0.0
+        };
+        let reserves_frac = corp.reserves_fraction();
+
+        // Fair value: IPO price × weighted performance
+        let ipo_price = corp.price_history.first().copied().unwrap_or(100.0);
+        let fair_value = ipo_price * (0.6 * revenue_ratio + 0.4 * reserves_frac);
+
+        // Mean-revert toward fair value with random walk
+        let old_price = corp.share_price;
+        let reversion = 0.15 * (fair_value - old_price);
+        let noise = (state.rng_misc.r#gen::<f64>() - 0.5) * old_price * 0.08;
+        let new_price = (old_price + reversion + noise).max(0.01);
+
+        state.corporations[c_idx].share_price = new_price;
+        state.corporations[c_idx].price_history.push(new_price);
+        if state.corporations[c_idx].price_history.len() > PRICE_HISTORY_MAX {
+            state.corporations[c_idx].price_history.remove(0);
         }
     }
 }

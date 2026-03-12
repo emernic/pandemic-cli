@@ -9,6 +9,7 @@ pub enum Action {
     OpenPolicy,
     OpenOperations,
     OpenBoard,
+    OpenLedger,
     OpenHelp,
     ClosePanel,
     SelectNext,
@@ -37,6 +38,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('p') | KeyCode::Char('P') => Some(Action::OpenPolicy),
         KeyCode::Char('o') | KeyCode::Char('O') => Some(Action::OpenOperations),
         KeyCode::Char('b') | KeyCode::Char('B') => Some(Action::OpenBoard),
+        KeyCode::Char('L') => Some(Action::OpenLedger),
         KeyCode::Char('?') => Some(Action::OpenHelp),
         KeyCode::Esc => Some(Action::ClosePanel),
         KeyCode::Down | KeyCode::Char('j') => Some(Action::SelectNext),
@@ -57,6 +59,11 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
 /// Map a string key name (from --key flag) to an Action.
 /// Case-insensitive for named keys (space, esc, enter, etc.).
 pub fn string_to_action(s: &str) -> Option<Action> {
+    // Check case-sensitive keys before lowercasing.
+    // Uppercase L = Ledger (lowercase l = vim-right).
+    if s == "L" {
+        return Some(Action::OpenLedger);
+    }
     let lower = s.to_lowercase();
     match lower.as_str() {
         " " | "space" => Some(Action::TogglePause),
@@ -66,6 +73,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "p" => Some(Action::OpenPolicy),
         "o" => Some(Action::OpenOperations),
         "b" => Some(Action::OpenBoard),
+        "ledger" => Some(Action::OpenLedger),
         "?" => Some(Action::OpenHelp),
         "esc" => Some(Action::ClosePanel),
         "down" | "j" => Some(Action::SelectNext),

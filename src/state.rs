@@ -191,6 +191,9 @@ pub struct GameState {
     /// Regional corporations. 3 per region (18 total). Source of player income.
     #[serde(default)]
     pub corporations: Vec<Corporation>,
+    /// Player's stock portfolio — shares owned per corporation index.
+    #[serde(default)]
+    pub portfolio: Vec<u32>,
     /// Named board members with individual satisfaction. Generated at game start
     /// from board-seat corporations and selected governors.
     #[serde(default)]
@@ -1145,6 +1148,16 @@ pub struct Corporation {
     pub bankrupt_at_tick: Option<u64>,
     /// Whether this corporation's leader sits on the NWHO board.
     pub board_seat: bool,
+    /// Current share price. Derived from revenue performance and market sentiment.
+    #[serde(default = "default_share_price")]
+    pub share_price: f64,
+    /// Price history for sparkline display (last 30 data points, sampled daily).
+    #[serde(default)]
+    pub price_history: Vec<f64>,
+}
+
+fn default_share_price() -> f64 {
+    100.0
 }
 
 impl Corporation {
@@ -3643,6 +3656,10 @@ pub enum GameCommand {
     CycleDeployPriority { region_idx: usize },
     /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
     RepayLoan { loan_idx: usize },
+    /// Buy shares in a corporation. Cost = share_price × quantity.
+    BuyShares { corp_idx: usize, quantity: u32 },
+    /// Sell shares in a corporation. Proceeds = share_price × quantity.
+    SellShares { corp_idx: usize, quantity: u32 },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -3949,6 +3966,7 @@ pub enum Panel {
     Policy,
     Operations,
     Board,
+    Ledger,
     Help,
 }
 
@@ -4003,6 +4021,17 @@ pub enum BoardUiState {
     BrowseMembers,
 }
 
+/// Ledger (S.P.L.) panel UI state machine.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LedgerUiState {
+    /// Top level: browse all corporations and their share prices.
+    BrowseStocks,
+    /// Confirm a buy order for the selected corporation.
+    ConfirmBuy { corp_idx: usize },
+    /// Confirm a sell order for the selected corporation.
+    ConfirmSell { corp_idx: usize },
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiState {
     pub open_panel: Panel,
@@ -4054,6 +4083,9 @@ pub struct UiState {
     /// Board panel state.
     #[serde(default)]
     pub board_ui: Option<BoardUiState>,
+    /// Ledger panel state.
+    #[serde(default)]
+    pub ledger_ui: Option<LedgerUiState>,
     /// Whether the home splash animation has completed (or been skipped).
     /// Once true, the home panel renders fully without animation.
     #[serde(default)]
@@ -4080,6 +4112,7 @@ impl UiState {
                 Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::ManagePolicies { .. }) | None),
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
+                Panel::Ledger => matches!(self.ledger_ui, Some(LedgerUiState::BrowseStocks) | None),
                 _ => true,
             };
             if at_top {
@@ -4091,6 +4124,7 @@ impl UiState {
                     Panel::Policy => self.policy_ui = None,
                     Panel::Operations => self.operations_ui = None,
                     Panel::Board => self.board_ui = None,
+                    Panel::Ledger => self.ledger_ui = None,
                     _ => {}
                 }
             } else {
@@ -4104,6 +4138,7 @@ impl UiState {
                     }
                     Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
                     Panel::Board => self.board_ui = Some(BoardUiState::BrowseMembers),
+                    Panel::Ledger => self.ledger_ui = Some(LedgerUiState::BrowseStocks),
                     _ => {}
                 }
             }
@@ -4125,6 +4160,9 @@ impl UiState {
                 }
                 Panel::Board => {
                     self.board_ui = Some(BoardUiState::BrowseMembers);
+                }
+                Panel::Ledger => {
+                    self.ledger_ui = Some(LedgerUiState::BrowseStocks);
                 }
                 _ => {}
             }
@@ -4223,6 +4261,19 @@ impl UiState {
                 self.panel_selection = 0;
                 self.board_ui = None;
             }
+            Panel::Ledger => {
+                match &self.ledger_ui {
+                    Some(LedgerUiState::ConfirmBuy { .. }) | Some(LedgerUiState::ConfirmSell { .. }) => {
+                        self.ledger_ui = Some(LedgerUiState::BrowseStocks);
+                        self.panel_selection = 0;
+                    }
+                    _ => {
+                        self.open_panel = Panel::None;
+                        self.panel_selection = 0;
+                        self.ledger_ui = None;
+                    }
+                }
+            }
             _ => {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
@@ -4231,6 +4282,7 @@ impl UiState {
                 self.policy_ui = None;
                 self.operations_ui = None;
                 self.board_ui = None;
+                self.ledger_ui = None;
             }
         }
     }
@@ -4247,6 +4299,7 @@ impl UiState {
         self.policy_ui = None;
         self.operations_ui = None;
         self.board_ui = None;
+        self.ledger_ui = None;
     }
 
     /// Maximum selection index for the current panel and UI sub-state.
@@ -4325,6 +4378,11 @@ impl UiState {
                 None => 0,
             },
             Panel::Board => state.board_members.len().saturating_sub(1),
+            Panel::Ledger => match &self.ledger_ui {
+                Some(LedgerUiState::BrowseStocks) => state.corporations.len().saturating_sub(1),
+                Some(LedgerUiState::ConfirmBuy { .. }) | Some(LedgerUiState::ConfirmSell { .. }) => 0,
+                None => 0,
+            },
             _ => 0,
         }
     }
@@ -4902,6 +4960,7 @@ impl GameState {
             contract_offer: None,
             last_contract_offer_tick: 0,
             corporations: Vec::new(),
+            portfolio: Vec::new(),
             board_members: Vec::new(),
             next_board_meeting_tick: 0, // initialized properly after RNG setup
             next_sequence_group: 0,
@@ -4919,6 +4978,7 @@ impl GameState {
                 crisis_auto_resolve: false,
                 operations_ui: None,
                 board_ui: None,
+                ledger_ui: None,
                 home_splash_done: false,
                 speed_multiplier: 1,
             },
