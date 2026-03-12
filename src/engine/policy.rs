@@ -638,11 +638,15 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
         _ => &["Gov. Unknown"],
     };
     let old_name = state.regions[region_idx].governor.name.clone();
-    let mut new_name = successor_names[state.rng_misc.gen_range(0..successor_names.len())].to_string();
-    // Avoid picking the same name as the deceased
-    if new_name == old_name {
-        new_name = successor_names[(state.rng_misc.gen_range(0..successor_names.len()) + 1) % successor_names.len()].to_string();
-    }
+    // Filter out the deceased governor's name, then pick randomly
+    let name_candidates: Vec<&&str> = successor_names.iter()
+        .filter(|&&n| n != old_name)
+        .collect();
+    let new_name = if name_candidates.is_empty() {
+        successor_names[0].to_string()
+    } else {
+        name_candidates[state.rng_misc.gen_range(0..name_candidates.len())].to_string()
+    };
 
     // Replace the governor
     let gov = &mut state.regions[region_idx].governor;
@@ -2128,7 +2132,7 @@ mod tests {
 
     #[test]
     fn governor_succession_replaces_dead_governor() {
-        use crate::state::{SUCCESSOR_COOPERATION, TICKS_PER_DAY};
+        use crate::state::SUCCESSOR_COOPERATION;
         let mut state = GameState::new_default(42);
         state.regions[0].governor.dead = true;
         state.regions[0].governor.succession_tick = Some(100);
