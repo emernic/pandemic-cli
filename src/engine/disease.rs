@@ -420,7 +420,7 @@ fn seed_preexisting_resistance(state: &mut GameState, disease_idx: usize) {
 
 /// Adapt a newly spawned disease to the player's current technological
 /// capabilities. New diseases reflect the player's unlocked techs:
-/// VaccinePlatform causes +1 strain drift, PathogenSuppression and
+/// VaccinePlatform causes +1 strain drift, CompetitiveDisplacement and
 /// DirectedAttenuation cause slight lethality increases, etc.
 ///
 /// DESIGN PRINCIPLE: adaptations must be mild enough that the player
@@ -456,10 +456,10 @@ fn adapt_disease_to_player_tech(state: &mut GameState, disease_idx: usize) {
             }
         }
 
-        // PathogenSuppression (unlocks Suppress: -20% infectivity per project):
+        // CompetitiveDisplacement (unlocks Suppress: -20% infectivity per project):
         // diseases emerge slightly more lethal. One Suppress project more than
         // compensates for a 15% lethality increase.
-        if techs.contains(&BasicTech::PathogenSuppression) {
+        if techs.contains(&BasicTech::CompetitiveDisplacement) {
             d.lethality *= 1.15;
         }
 
@@ -470,10 +470,10 @@ fn adapt_disease_to_player_tech(state: &mut GameState, disease_idx: usize) {
             d.lethality *= 1.2;
         }
 
-        // GenomicInterdiction (unlocks Interdict: eliminates cross-region spread):
+        // GeneDriveContainment (unlocks Interdict: eliminates cross-region spread):
         // diseases spread somewhat faster across regions. Interdict completely
         // eliminates spread for one disease, far outweighing a 30% increase.
-        if techs.contains(&BasicTech::GenomicInterdiction) {
+        if techs.contains(&BasicTech::GeneDriveContainment) {
             d.cross_region_spread *= 1.3;
         }
     }
@@ -503,13 +503,13 @@ mod tests {
             BasicTech::VaccinePlatform,
             BasicTech::RapidSequencing,
             BasicTech::CombinationTherapy,
-            BasicTech::PathogenSuppression,
+            BasicTech::CompetitiveDisplacement,
             BasicTech::DirectedAttenuation,
-            BasicTech::GenomicInterdiction,
+            BasicTech::GeneDriveContainment,
         ];
         adapt_disease_to_player_tech(&mut state, 0);
 
-        // Combined lethality: PathogenSuppression 1.15 × DirectedAttenuation 1.2 = 1.38x
+        // Combined lethality: CompetitiveDisplacement 1.15 × DirectedAttenuation 1.2 = 1.38x
         let lethality_ratio = state.diseases[0].lethality / base_lethality;
         assert!(
             lethality_ratio < 1.5,
@@ -517,7 +517,7 @@ mod tests {
             lethality_ratio, state.diseases[0].lethality, base_lethality
         );
 
-        // Cross-region spread: only GenomicInterdiction 1.3x (RapidSequencing removed)
+        // Cross-region spread: only GeneDriveContainment 1.3x (RapidSequencing removed)
         let spread_ratio = state.diseases[0].cross_region_spread / base_spread;
         assert!(
             spread_ratio < 1.5,

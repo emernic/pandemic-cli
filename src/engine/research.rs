@@ -1235,22 +1235,22 @@ mod tests {
         // No prereqs — not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::PathogenSuppression }
-        )), "PathogenSuppression should not be available without VaccinePlatform + CombinationTherapy");
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CompetitiveDisplacement }
+        )), "CompetitiveDisplacement should not be available without VaccinePlatform + CombinationTherapy");
 
         // Only VaccinePlatform — still not available
         state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::PathogenSuppression }
-        )), "PathogenSuppression requires both techs, not just VaccinePlatform");
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CompetitiveDisplacement }
+        )), "CompetitiveDisplacement requires both techs, not just VaccinePlatform");
 
         // Both prereqs — available
         state.unlocked_techs.push(crate::state::BasicTech::CombinationTherapy);
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::PathogenSuppression }
-        )), "PathogenSuppression should be available with VaccinePlatform + CombinationTherapy");
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CompetitiveDisplacement }
+        )), "CompetitiveDisplacement should be available with VaccinePlatform + CombinationTherapy");
     }
 
     #[test]
@@ -1292,18 +1292,18 @@ mod tests {
     fn directed_attenuation_prereqs() {
         let mut state = GameState::new_default(42);
 
-        // Without PathogenSuppression — not available
+        // Without CompetitiveDisplacement — not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
             ResearchKind::BasicResearch { tech: crate::state::BasicTech::DirectedAttenuation }
-        )), "DirectedAttenuation should not be available without PathogenSuppression");
+        )), "DirectedAttenuation should not be available without CompetitiveDisplacement");
 
-        // With PathogenSuppression — available
-        state.unlocked_techs.push(crate::state::BasicTech::PathogenSuppression);
+        // With CompetitiveDisplacement — available
+        state.unlocked_techs.push(crate::state::BasicTech::CompetitiveDisplacement);
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
             ResearchKind::BasicResearch { tech: crate::state::BasicTech::DirectedAttenuation }
-        )), "DirectedAttenuation should be available with PathogenSuppression");
+        )), "DirectedAttenuation should be available with CompetitiveDisplacement");
     }
 
     #[test]
@@ -1311,18 +1311,18 @@ mod tests {
         let mut state = GameState::new_default(42);
 
         // Without DirectedAttenuation — not available
-        state.unlocked_techs.push(crate::state::BasicTech::PathogenSuppression);
+        state.unlocked_techs.push(crate::state::BasicTech::CompetitiveDisplacement);
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::GenomicInterdiction }
-        )), "GenomicInterdiction should not be available without DirectedAttenuation");
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::GeneDriveContainment }
+        )), "GeneDriveContainment should not be available without DirectedAttenuation");
 
         // With DirectedAttenuation — available
         state.unlocked_techs.push(crate::state::BasicTech::DirectedAttenuation);
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::GenomicInterdiction }
-        )), "GenomicInterdiction should be available with DirectedAttenuation");
+            ResearchKind::BasicResearch { tech: crate::state::BasicTech::GeneDriveContainment }
+        )), "GeneDriveContainment should be available with DirectedAttenuation");
     }
 
     #[test]

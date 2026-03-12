@@ -2951,7 +2951,7 @@ pub enum ResearchKind {
     /// Basic research — unlocks a technology in the tech tree.
     BasicResearch { tech: BasicTech },
     /// Pathogen suppression — permanently reduces a disease's infectivity by ~20%.
-    /// Requires the PathogenSuppression basic tech to be unlocked.
+    /// Requires the CompetitiveDisplacement basic tech to be unlocked.
     SuppressPathogen { disease_idx: usize },
     /// Directed attenuation — permanently reduces a disease's lethality by ~30%.
     /// In-situ modification of pathogen virulence factors.
@@ -2959,7 +2959,7 @@ pub enum ResearchKind {
     AttenuatePathogen { disease_idx: usize },
     /// Genomic interdiction — permanently eliminates a disease's cross-region spread.
     /// Disrupts pathogen transmission mechanisms at the genomic level.
-    /// Requires the GenomicInterdiction basic tech to be unlocked.
+    /// Requires the GeneDriveContainment basic tech to be unlocked.
     InterdictPathogen { disease_idx: usize },
     /// Field operations — send a team to stabilize degraded infrastructure in a region.
     /// Appears when any infrastructure system drops below INFRA_STRESSED (50%).
@@ -2986,8 +2986,8 @@ pub enum BasicTech {
     /// Prereq: completed at least one genomic sequencing project.
     RapidSequencing,
     /// All field research (IdentifyThreat, ClinicalTrial, FieldOperations) completes 25% faster.
-    /// Prereq: RapidSequencing (logical progression: fast sequencing → predictive field response).
-    PredictiveSurveillance,
+    /// Prereq: RapidSequencing (sequencing data guides field teams to high-value targets).
+    MetagenomicSurveillance,
     /// Triples preventive vaccination effectiveness.
     /// Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform).
     VaccinePlatform,
@@ -3000,26 +3000,26 @@ pub enum BasicTech {
     /// protocols make it harder for pathogens to evolve resistance.
     /// Prereq: deploy 2+ different medicines.
     CombinationTherapy,
-    /// Unlocks pathogen suppression field research: permanently reduce
-    /// a disease's infectivity by modifying its evolutionary trajectory.
+    /// Unlocks competitive displacement field research: release attenuated
+    /// strains that outcompete virulent wild-type, reducing infectivity.
     /// Prereq: VaccinePlatform + CombinationTherapy.
-    PathogenSuppression,
+    CompetitiveDisplacement,
     /// Unlocks directed attenuation field research: permanently reduce
     /// a disease's lethality by modifying its virulence factors in situ.
-    /// Prereq: PathogenSuppression.
+    /// Prereq: CompetitiveDisplacement.
     DirectedAttenuation,
-    /// Unlocks genomic interdiction field research: permanently eliminate
-    /// a disease's ability to spread between regions.
+    /// Unlocks gene drive containment field research: self-propagating
+    /// genetic modifications prevent pathogen establishment in new regions.
     /// Prereq: DirectedAttenuation.
-    GenomicInterdiction,
+    GeneDriveContainment,
     /// Reduces ManufactureDoses applied research duration by 35%.
     /// Prereq: at least one targeted medicine developed (mechanism.is_some() && unlocked).
     /// Note: when a Biotech corp is healthy, bonus could be increased to 50% (#1381).
     AutomatedSynthesis,
-    /// Each ManufactureDoses run produces 25% more doses. Stacks multiplicatively
-    /// with Europe's manufacturing yield bonus.
+    /// Each ManufactureDoses run produces 25% more doses (thermostable formulations
+    /// reduce cold-chain waste). Stacks multiplicatively with Europe's yield bonus.
     /// Prereq: AutomatedSynthesis.
-    DistributedStorage,
+    StabilizedFormulation,
 }
 
 impl BasicTech {
@@ -3030,15 +3030,15 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Monoclonal Antibodies",
             BasicTech::PhageTherapy => "Phage Therapy",
             BasicTech::RapidSequencing => "Rapid Sequencing",
-            BasicTech::PredictiveSurveillance => "Predictive Surveillance",
+            BasicTech::MetagenomicSurveillance => "Metagenomic Surveillance",
             BasicTech::VaccinePlatform => "Vaccine Platform",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
-            BasicTech::PathogenSuppression => "Pathogen Suppression",
+            BasicTech::CompetitiveDisplacement => "Competitive Displacement",
             BasicTech::DirectedAttenuation => "Directed Attenuation",
-            BasicTech::GenomicInterdiction => "Genomic Interdiction",
+            BasicTech::GeneDriveContainment => "Gene Drive Containment",
             BasicTech::AutomatedSynthesis => "Automated Synthesis",
-            BasicTech::DistributedStorage => "Distributed Storage",
+            BasicTech::StabilizedFormulation => "Stabilized Formulation",
         }
     }
 
@@ -3049,15 +3049,15 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Engineered antibody therapies with high efficacy against identified viral strains.",
             BasicTech::PhageTherapy => "Bacteriophage-based treatment for bacterial pathogens. Low resistance development.",
             BasicTech::RapidSequencing => "Cuts sequencing time in half. Reveals mutation drift rate and history.",
-            BasicTech::PredictiveSurveillance => "Integrated genomic surveillance network. Field identification and clinical trials 25% faster.",
+            BasicTech::MetagenomicSurveillance => "Environmental sample sequencing identifies pathogens without culture. Field research and clinical trials 25% faster.",
             BasicTech::VaccinePlatform => "Triples effectiveness of preventive vaccination programs.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
-            BasicTech::PathogenSuppression => "Field research to suppress pathogen spread. Each project reduces infectivity ~20%.",
+            BasicTech::CompetitiveDisplacement => "Release attenuated strains that outcompete virulent wild-type. Each project reduces infectivity ~20%.",
             BasicTech::DirectedAttenuation => "In-situ modification of pathogen virulence factors. Each project permanently reduces target lethality.",
-            BasicTech::GenomicInterdiction => "Disrupt pathogen transmission mechanisms at the genomic level. Eliminates cross-region spread.",
+            BasicTech::GeneDriveContainment => "Self-propagating genetic modifications prevent pathogen establishment in new regions. Eliminates cross-region spread.",
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
-            BasicTech::DistributedStorage => "Distributed cold storage increases yield per manufacturing run by 25%.",
+            BasicTech::StabilizedFormulation => "Thermostable formulations reduce cold-chain waste. Each manufacturing run yields 25% more usable doses.",
         }
     }
 
@@ -3092,7 +3092,7 @@ impl BasicTech {
                 state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
                     || state.unlocked_techs.contains(&BasicTech::PhageTherapy)
             }
-            BasicTech::PredictiveSurveillance => {
+            BasicTech::MetagenomicSurveillance => {
                 state.unlocked_techs.contains(&BasicTech::RapidSequencing)
             }
             BasicTech::ResistanceSurveillance => {
@@ -3106,21 +3106,21 @@ impl BasicTech {
                     .count();
                 distinct_deployed >= 2
             }
-            BasicTech::PathogenSuppression => {
+            BasicTech::CompetitiveDisplacement => {
                 state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
                     && state.unlocked_techs.contains(&BasicTech::CombinationTherapy)
             }
             BasicTech::DirectedAttenuation => {
-                state.unlocked_techs.contains(&BasicTech::PathogenSuppression)
+                state.unlocked_techs.contains(&BasicTech::CompetitiveDisplacement)
             }
-            BasicTech::GenomicInterdiction => {
+            BasicTech::GeneDriveContainment => {
                 state.unlocked_techs.contains(&BasicTech::DirectedAttenuation)
             }
             BasicTech::AutomatedSynthesis => {
                 // Prereq: at least one targeted medicine developed (not broad-spectrum)
                 state.medicines.iter().any(|m| m.mechanism.is_some() && m.unlocked)
             }
-            BasicTech::DistributedStorage => {
+            BasicTech::StabilizedFormulation => {
                 state.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
             }
         }
@@ -3133,15 +3133,15 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
             BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
-            BasicTech::PredictiveSurveillance => "Rapid Sequencing",
+            BasicTech::MetagenomicSurveillance => "Rapid Sequencing",
             BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::CombinationTherapy => "Deploy 2+ different medicines",
-            BasicTech::PathogenSuppression => "Vaccine Platform + Combination Therapy",
-            BasicTech::DirectedAttenuation => "Pathogen Suppression",
-            BasicTech::GenomicInterdiction => "Directed Attenuation",
+            BasicTech::CompetitiveDisplacement => "Vaccine Platform + Combination Therapy",
+            BasicTech::DirectedAttenuation => "Competitive Displacement",
+            BasicTech::GeneDriveContainment => "Directed Attenuation",
             BasicTech::AutomatedSynthesis => "Develop any targeted medicine",
-            BasicTech::DistributedStorage => "Automated Synthesis",
+            BasicTech::StabilizedFormulation => "Automated Synthesis",
         }
     }
 
@@ -3152,15 +3152,15 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
             BasicTech::RapidSequencing,
-            BasicTech::PredictiveSurveillance,
+            BasicTech::MetagenomicSurveillance,
             BasicTech::VaccinePlatform,
             BasicTech::ResistanceSurveillance,
             BasicTech::CombinationTherapy,
-            BasicTech::PathogenSuppression,
+            BasicTech::CompetitiveDisplacement,
             BasicTech::DirectedAttenuation,
-            BasicTech::GenomicInterdiction,
+            BasicTech::GeneDriveContainment,
             BasicTech::AutomatedSynthesis,
-            BasicTech::DistributedStorage,
+            BasicTech::StabilizedFormulation,
         ]
     }
 }
@@ -3171,7 +3171,7 @@ impl ResearchKind {
     /// DevelopMedicine costs depend on mechanism of action: each mechanism has
     /// a dev_cost_multiplier that scales base costs (3 personnel, 200 ticks, $500).
     /// Broad-spectrum (multi-target, no mechanism) uses fixed high costs.
-    /// These are BASE costs. Tech modifiers (RapidSequencing, PredictiveSurveillance) are
+    /// These are BASE costs. Tech modifiers (RapidSequencing, MetagenomicSurveillance) are
     /// applied in GameState::effective_costs(), not here.
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
@@ -3200,15 +3200,15 @@ impl ResearchKind {
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
                 BasicTech::RapidSequencing => (4, 300.0, 750.0),
-                BasicTech::PredictiveSurveillance => (4, 280.0, 650.0),
+                BasicTech::MetagenomicSurveillance => (4, 280.0, 650.0),
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
-                BasicTech::PathogenSuppression => (8, 480.0, 1200.0),
+                BasicTech::CompetitiveDisplacement => (8, 480.0, 1200.0),
                 BasicTech::DirectedAttenuation => (10, 600.0, 1500.0),
-                BasicTech::GenomicInterdiction => (12, 720.0, 2000.0),
+                BasicTech::GeneDriveContainment => (12, 720.0, 2000.0),
                 BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
-                BasicTech::DistributedStorage => (5, 280.0, 700.0),
+                BasicTech::StabilizedFormulation => (5, 280.0, 700.0),
             },
             ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
@@ -5285,7 +5285,7 @@ impl GameState {
     pub fn policy_research_prerequisite(policy_idx: usize) -> Option<BasicTech> {
         match policy_idx {
             6 => Some(BasicTech::RapidSequencing),      // Antigen Screening
-            7 => Some(BasicTech::PredictiveSurveillance), // Mass Rapid Screening
+            7 => Some(BasicTech::MetagenomicSurveillance), // Mass Rapid Screening
             _ => None,
         }
     }
@@ -5614,8 +5614,8 @@ impl GameState {
                 }
             }
         }
-        // Pathogen Suppression: fully known diseases, when tech is unlocked
-        if self.unlocked_techs.contains(&BasicTech::PathogenSuppression) {
+        // Competitive Displacement: fully known diseases, when tech is unlocked
+        if self.unlocked_techs.contains(&BasicTech::CompetitiveDisplacement) {
             for (i, disease) in self.diseases.iter().enumerate() {
                 if disease.knowledge >= KNOWLEDGE_FULL && self.disease_has_infected(i) {
                     let kind = ResearchKind::SuppressPathogen { disease_idx: i };
@@ -5636,8 +5636,8 @@ impl GameState {
                 }
             }
         }
-        // Genomic Interdiction: fully known diseases with cross-region spread, when tech is unlocked
-        if self.unlocked_techs.contains(&BasicTech::GenomicInterdiction) {
+        // Gene Drive Containment: fully known diseases with cross-region spread, when tech is unlocked
+        if self.unlocked_techs.contains(&BasicTech::GeneDriveContainment) {
             for (i, disease) in self.diseases.iter().enumerate() {
                 if disease.knowledge >= KNOWLEDGE_FULL
                     && self.disease_has_infected(i)
@@ -5741,7 +5741,7 @@ impl GameState {
 
     /// Project costs adjusted for unlocked technologies.
     /// - RapidSequencing halves GenomicSequencing duration.
-    /// - PredictiveSurveillance cuts IdentifyThreat, ClinicalTrial, and FieldOperations by 25%.
+    /// - MetagenomicSurveillance cuts IdentifyThreat, ClinicalTrial, and FieldOperations by 25%.
     ///   (Does not affect GenomicSequencing — already covered by RapidSequencing.)
     ///   Corp health modifier (25% → 35%) tracked in #1381.
     /// - AutomatedSynthesis cuts ManufactureDoses duration by 35%.
@@ -5757,7 +5757,7 @@ impl GameState {
             ResearchKind::IdentifyThreat { .. }
                 | ResearchKind::ClinicalTrial { .. }
                 | ResearchKind::FieldOperations { .. }
-        ) && self.unlocked_techs.contains(&BasicTech::PredictiveSurveillance)
+        ) && self.unlocked_techs.contains(&BasicTech::MetagenomicSurveillance)
         {
             duration *= 0.75;
         }
@@ -5825,10 +5825,10 @@ impl GameState {
     }
 
     /// Europe: Manufacturing capacity. +20% bonus doses from manufacturing.
-    /// DistributedStorage tech adds an additional 25% multiplier (stacks multiplicatively).
+    /// StabilizedFormulation tech adds an additional 25% multiplier (stacks multiplicatively).
     pub fn manufacturing_yield_bonus(&self) -> f64 {
         let base = if !self.regions[2].collapsed { 1.2 } else { 1.0 };
-        let tech_bonus = if self.unlocked_techs.contains(&BasicTech::DistributedStorage) {
+        let tech_bonus = if self.unlocked_techs.contains(&BasicTech::StabilizedFormulation) {
             1.25
         } else {
             1.0
@@ -6302,22 +6302,22 @@ mod tests {
     }
 
     #[test]
-    fn predictive_surveillance_prereq_requires_rapid_sequencing() {
+    fn metagenomic_surveillance_prereq_requires_rapid_sequencing() {
         let mut state = GameState::new_default(42);
         // Without RapidSequencing, prereq is not met
         assert!(!state.unlocked_techs.contains(&BasicTech::RapidSequencing));
-        assert!(!BasicTech::PredictiveSurveillance.prerequisites_met(&state));
+        assert!(!BasicTech::MetagenomicSurveillance.prerequisites_met(&state));
         // After unlocking RapidSequencing, prereq is met
         state.unlocked_techs.push(BasicTech::RapidSequencing);
-        assert!(BasicTech::PredictiveSurveillance.prerequisites_met(&state));
+        assert!(BasicTech::MetagenomicSurveillance.prerequisites_met(&state));
     }
 
     #[test]
-    fn predictive_surveillance_reduces_identify_threat_duration() {
+    fn metagenomic_surveillance_reduces_identify_threat_duration() {
         let mut state = GameState::new_default(42);
         let kind = ResearchKind::IdentifyThreat { disease_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
         let (_, fast_duration, _) = state.effective_costs(&kind);
         assert!(
             (fast_duration - base_duration * 0.75).abs() < 0.01,
@@ -6328,11 +6328,11 @@ mod tests {
     }
 
     #[test]
-    fn predictive_surveillance_reduces_clinical_trial_duration() {
+    fn metagenomic_surveillance_reduces_clinical_trial_duration() {
         let mut state = GameState::new_default(42);
         let kind = ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
         let (_, fast_duration, _) = state.effective_costs(&kind);
         assert!(
             (fast_duration - base_duration * 0.75).abs() < 0.01,
@@ -6343,11 +6343,11 @@ mod tests {
     }
 
     #[test]
-    fn predictive_surveillance_reduces_field_operations_duration() {
+    fn metagenomic_surveillance_reduces_field_operations_duration() {
         let mut state = GameState::new_default(42);
         let kind = ResearchKind::FieldOperations { region_idx: 0, system: InfraSystem::Healthcare };
         let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
         let (_, fast_duration, _) = state.effective_costs(&kind);
         assert!(
             (fast_duration - base_duration * 0.75).abs() < 0.01,
@@ -6358,26 +6358,26 @@ mod tests {
     }
 
     #[test]
-    fn predictive_surveillance_does_not_affect_genomic_sequencing() {
+    fn metagenomic_surveillance_does_not_affect_genomic_sequencing() {
         let mut state = GameState::new_default(42);
         let kind = ResearchKind::GenomicSequencing { disease_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::PredictiveSurveillance);
+        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
         let (_, after_duration, _) = state.effective_costs(&kind);
         assert!(
             (base_duration - after_duration).abs() < 0.01,
-            "GenomicSequencing should not be affected by PredictiveSurveillance"
+            "GenomicSequencing should not be affected by MetagenomicSurveillance"
         );
     }
 
     #[test]
-    fn predictive_surveillance_appears_in_all_after_rapid_sequencing() {
+    fn metagenomic_surveillance_appears_in_all_after_rapid_sequencing() {
         let all = BasicTech::all();
         let rs_pos = all.iter().position(|t| *t == BasicTech::RapidSequencing).unwrap();
-        let ps_pos = all.iter().position(|t| *t == BasicTech::PredictiveSurveillance).unwrap();
+        let ps_pos = all.iter().position(|t| *t == BasicTech::MetagenomicSurveillance).unwrap();
         assert!(
             ps_pos == rs_pos + 1,
-            "PredictiveSurveillance should appear immediately after RapidSequencing in all()"
+            "MetagenomicSurveillance should appear immediately after RapidSequencing in all()"
         );
     }
 
@@ -6397,9 +6397,9 @@ mod tests {
     #[test]
     fn distributed_storage_prereq_requires_automated_synthesis() {
         let mut state = GameState::new_default(42);
-        assert!(!BasicTech::DistributedStorage.prerequisites_met(&state));
+        assert!(!BasicTech::StabilizedFormulation.prerequisites_met(&state));
         state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
-        assert!(BasicTech::DistributedStorage.prerequisites_met(&state));
+        assert!(BasicTech::StabilizedFormulation.prerequisites_met(&state));
     }
 
     #[test]
@@ -6436,11 +6436,11 @@ mod tests {
         // Base: Europe alive = 1.2
         let base = state.manufacturing_yield_bonus();
         assert!((base - 1.2).abs() < 0.001, "base yield should be 1.2 with Europe alive");
-        state.unlocked_techs.push(BasicTech::DistributedStorage);
+        state.unlocked_techs.push(BasicTech::StabilizedFormulation);
         let with_tech = state.manufacturing_yield_bonus();
         assert!(
             (with_tech - 1.2 * 1.25).abs() < 0.001,
-            "DistributedStorage should stack multiplicatively with Europe: expected {}, got {}",
+            "StabilizedFormulation should stack multiplicatively with Europe: expected {}, got {}",
             1.2 * 1.25,
             with_tech
         );
@@ -6450,11 +6450,11 @@ mod tests {
     fn distributed_storage_boost_applies_without_europe() {
         let mut state = GameState::new_default(42);
         state.regions[2].collapsed = true; // collapse Europe
-        state.unlocked_techs.push(BasicTech::DistributedStorage);
+        state.unlocked_techs.push(BasicTech::StabilizedFormulation);
         let bonus = state.manufacturing_yield_bonus();
         assert!(
             (bonus - 1.25).abs() < 0.001,
-            "DistributedStorage alone should give 1.25x yield: got {}",
+            "StabilizedFormulation alone should give 1.25x yield: got {}",
             bonus
         );
     }
@@ -6463,10 +6463,10 @@ mod tests {
     fn automated_synthesis_and_distributed_storage_appear_in_all() {
         let all = BasicTech::all();
         assert!(all.contains(&BasicTech::AutomatedSynthesis), "AutomatedSynthesis must be in all()");
-        assert!(all.contains(&BasicTech::DistributedStorage), "DistributedStorage must be in all()");
+        assert!(all.contains(&BasicTech::StabilizedFormulation), "StabilizedFormulation must be in all()");
         let as_pos = all.iter().position(|t| *t == BasicTech::AutomatedSynthesis).unwrap();
-        let ds_pos = all.iter().position(|t| *t == BasicTech::DistributedStorage).unwrap();
-        assert!(ds_pos > as_pos, "DistributedStorage should appear after AutomatedSynthesis");
+        let ds_pos = all.iter().position(|t| *t == BasicTech::StabilizedFormulation).unwrap();
+        assert!(ds_pos > as_pos, "StabilizedFormulation should appear after AutomatedSynthesis");
     }
 
     #[test]
