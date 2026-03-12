@@ -5343,6 +5343,67 @@ mod tests {
     }
 
     #[test]
+    fn targeting_waste_scales_with_screening() {
+        use crate::state::ScreeningLevel;
+
+        let mut state = GameState::new_default(42);
+        unlock_all_medicines(&mut state);
+        for _ in 0..20 {
+            state = tick(&state);
+        }
+        let ri = primary_outbreak_region(&state);
+
+        // No screening: targeting_efficiency = 0.50
+        assert_eq!(state.policies[ri].screening, ScreeningLevel::None);
+        let target = crate::state::DeployTarget::Treat { disease_idx: 0 };
+        medicine::deploy_medicine(&mut state, 0, ri, target.clone());
+        state.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut state);
+
+        let delivered = state.events.iter().rev()
+            .find(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
+        assert!(delivered.is_some(), "should have a ShipmentDelivered event");
+        match delivered.unwrap() {
+            GameEvent::ShipmentDelivered { doses_wasted, doses, .. } => {
+                // With no screening and full infra, ~50% of doses should be wasted
+                let waste_fraction = doses_wasted / doses;
+                assert!(
+                    waste_fraction > 0.40 && waste_fraction < 0.60,
+                    "no-screening waste should be ~50%, got {:.1}% ({} wasted of {} doses)",
+                    waste_fraction * 100.0, doses_wasted, doses
+                );
+            }
+            _ => unreachable!(),
+        }
+
+        // Now enable Mass Rapid screening with full progress
+        state.policies[ri].screening = ScreeningLevel::MassRapid;
+        state.policies[ri].screening_progress = 1.0;
+        // Clear cooldown so we can deploy again
+        state.regions[ri].last_deploy_tick.clear();
+        state.medicines[0].doses = state.medicines[0].max_doses;
+        state.events.clear();
+
+        medicine::deploy_medicine(&mut state, 0, ri, target);
+        state.tick += crate::state::SHIPPING_TICKS + 1;
+        medicine::tick_shipments(&mut state);
+
+        let delivered2 = state.events.iter().rev()
+            .find(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
+        assert!(delivered2.is_some(), "should have a second ShipmentDelivered event");
+        match delivered2.unwrap() {
+            GameEvent::ShipmentDelivered { doses_wasted, .. } => {
+                assert!(
+                    *doses_wasted < 1.0,
+                    "mass-rapid screening should have near-zero waste, got {}",
+                    doses_wasted
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
     fn containment_adaptation_builds_under_quarantine() {
         let mut state = GameState::new_default(42);
         // Set up: disease 0 in region 0 with quarantine active
