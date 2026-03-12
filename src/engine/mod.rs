@@ -363,9 +363,28 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // These take priority over random crisis generation.
     if new.active_crisis.is_none() && crisis_gap_ok {
         if let Some(idx) = new.pending_crises.iter().position(|&(tick, _)| tick <= new.tick) {
-            let (_, kind) = new.pending_crises.remove(idx);
-            let crisis = crisis::build_crisis_event(&new, kind);
-            crisis::activate_crisis(&mut new, crisis);
+            let (_, mut kind) = new.pending_crises.remove(idx);
+            // Validate refugee destination: if to_region collapsed since queuing,
+            // re-route to another non-collapsed neighbor or drop the crisis entirely.
+            if let CrisisKind::RefugeeWave { from_region, ref mut to_region, .. } = kind {
+                if new.regions[*to_region].collapsed {
+                    let alt: Vec<usize> = new.regions[from_region].connections.iter()
+                        .filter(|&&c| !new.regions[c].collapsed)
+                        .copied()
+                        .collect();
+                    if let Some(&dest) = alt.first() {
+                        *to_region = dest;
+                    }
+                }
+                // Only fire if destination is still valid (uncollapsed).
+                if !new.regions[*to_region].collapsed {
+                    let crisis = crisis::build_crisis_event(&new, kind);
+                    crisis::activate_crisis(&mut new, crisis);
+                }
+            } else {
+                let crisis = crisis::build_crisis_event(&new, kind);
+                crisis::activate_crisis(&mut new, crisis);
+            }
         }
     }
 
@@ -3816,6 +3835,51 @@ mod tests {
         let after2 = tick(&after);
         assert!(after2.active_crisis.is_some(), "refugee crisis should fire on next tick");
         assert_eq!(after2.active_crisis.as_ref().unwrap().title, "Refugee Crisis");
+    }
+
+    #[test]
+    fn refugee_wave_dropped_if_destination_collapsed() {
+        let mut state = GameState::new_default(42);
+        state.tick = 100;
+        state.last_contract_offer_tick = state.tick;
+        // Region 0 collapsed, region 1 is the queued destination but also collapsed.
+        state.regions[0].collapsed = true;
+        state.regions[1].collapsed = true;
+        // Region 0 connects to [1, 2] — region 2 is still alive.
+        // Queue a refugee wave targeting the now-collapsed region 1.
+        state.pending_crises.push((100, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }));
+        let after = tick(&state);
+        // Should re-route to region 2 (the only non-collapsed neighbor of region 0).
+        assert!(after.active_crisis.is_some(), "refugee crisis should fire re-routed to region 2");
+        if let Some(ref crisis) = after.active_crisis {
+            if let CrisisKind::RefugeeWave { to_region, .. } = crisis.kind {
+                assert_eq!(to_region, 2, "should re-route to non-collapsed neighbor");
+            } else {
+                panic!("expected RefugeeWave crisis");
+            }
+        }
+    }
+
+    #[test]
+    fn refugee_wave_dropped_if_all_neighbors_collapsed() {
+        let mut state = GameState::new_default(42);
+        state.tick = 100;
+        state.last_contract_offer_tick = state.tick;
+        // Region 0 connects to [1, 2]. Collapse all of them.
+        state.regions[0].collapsed = true;
+        state.regions[1].collapsed = true;
+        state.regions[2].collapsed = true;
+        state.pending_crises.push((100, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }));
+        let after = tick(&state);
+        // The RefugeeWave should have been consumed and NOT fired.
+        let refugee_active = after.active_crisis.as_ref()
+            .is_some_and(|c| matches!(c.kind, CrisisKind::RefugeeWave { .. }));
+        assert!(!refugee_active,
+            "refugee crisis should be dropped when all neighbors collapsed");
+        let refugee_pending = after.pending_crises.iter()
+            .any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. }));
+        assert!(!refugee_pending,
+            "refugee crisis should be consumed from pending even when dropped");
     }
 
     #[test]
