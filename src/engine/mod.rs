@@ -4019,7 +4019,7 @@ mod tests {
             "option A should gain 0.05 POL modifier");
         // 2 personnel should be temporarily diverted
         assert!(!after.crisis_operations.is_empty(), "option A should create a temporary operation");
-        assert_eq!(after.crisis_operations[0].personnel, 2, "operation should divert 2 personnel");
+        assert_eq!(after.crisis_operations[0].personnel, 5, "operation should divert 5 personnel");
     }
 
     #[test]

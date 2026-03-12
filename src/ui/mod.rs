@@ -171,7 +171,12 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let efficacy = state.medicines.get(*medicine_idx)
                     .map(|m| m.effective_efficacy(*disease_idx, &state.diseases) * 100.0)
                     .unwrap_or(0.0);
-                let msg = format!("TRIAL SUCCESS: {} effective against {} ({:.0}%), auto-deploying", med_name, disease_name, efficacy);
+                let deploy_status = if state.medicines.get(*medicine_idx).map_or(false, |m| m.doses > 0.0) {
+                    "auto-deploy on"
+                } else {
+                    "auto-deploy on, pending doses"
+                };
+                let msg = format!("TRIAL SUCCESS: {} effective against {} ({:.0}%), {}", med_name, disease_name, efficacy, deploy_status);
                 (2, msg.clone(), msg)
             }
             GameEvent::TechUnlocked { tech } => {

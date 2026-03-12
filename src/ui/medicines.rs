@@ -564,15 +564,7 @@ fn render_select_target(
         ),
     ]));
     if strain_outdated {
-        // Compute how many mutations behind to give the player context
-        let behind = med.target_diseases.iter().position(|&d| d == disease_idx)
-            .and_then(|i| med.strain_generations.get(i).copied())
-            .map(|mg| {
-                let disease_gen = state.diseases.get(disease_idx)
-                    .map_or(0, |d| d.strain_generation) as i32;
-                (disease_gen - mg).max(0) as u32
-            })
-            .unwrap_or(0);
+        let behind = med.mutations_behind(disease_idx, &state.diseases);
         let behind_str = if behind > 0 {
             format!(", {} mutation{} behind", behind, if behind == 1 { "" } else { "s" })
         } else {
