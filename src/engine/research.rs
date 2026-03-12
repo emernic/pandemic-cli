@@ -261,6 +261,21 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                         .collect();
                 }
                 state.events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
+
+                // Manufacturing contract: boost the manufacturer's reserves if they have a board seat.
+                // This is a one-time reward representing the lucrative manufacturing contract,
+                // which directly improves board_satisfaction() (average reserve health of board corps).
+                if let Some(corp_idx) = state.medicines.get(m_idx).and_then(|m| m.manufacturer_corp_idx) {
+                    if let Some(corp) = state.corporations.get_mut(corp_idx) {
+                        if corp.board_seat && !corp.bankrupt {
+                            // Restore 25% of max reserves — meaningful but not game-breaking.
+                            // A corp at 50% reserves goes to 75%; at full reserves, excess is clamped.
+                            let boost = corp.max_reserves * 0.25;
+                            corp.reserves = (corp.reserves + boost).min(corp.max_reserves);
+                        }
+                    }
+                }
+
                 // Notify about clinical trial availability on Field track
                 let has_trial_available = state.available_field_projects().iter()
                     .any(|p| matches!(p, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == m_idx));

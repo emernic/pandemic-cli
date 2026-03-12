@@ -108,6 +108,60 @@ pub fn generate_corporations(state: &mut GameState) {
     }
 
     state.corporations = corps;
+
+    // Assign manufacturing contracts to medicines.
+    // Each non-broad-spectrum medicine gets a corporation as its manufacturer.
+    // Biotech corps are prioritized but any corp can manufacture.
+    // This creates a strategic dimension: choosing a medicine manufactured by a
+    // board-connected corp boosts that board member's satisfaction on development.
+    assign_manufacturers(state);
+}
+
+/// Assign manufacturing corporations to medicines that don't have one yet.
+/// Called after corporations are generated, and again when new diseases emerge
+/// (which create new medicines). Only touches medicines with `manufacturer_corp_idx: None`
+/// that aren't already unlocked.
+pub fn assign_manufacturers(state: &mut GameState) {
+    if state.corporations.is_empty() {
+        return;
+    }
+
+    // Build a pool of corporation indices, prioritizing Biotech corps
+    // (natural pharma manufacturers) but including others for variety.
+    let mut biotech_corps: Vec<usize> = state.corporations.iter()
+        .enumerate()
+        .filter(|(_, c)| c.sector == CorporationSector::Biotech && !c.bankrupt)
+        .map(|(i, _)| i)
+        .collect();
+    let mut other_corps: Vec<usize> = state.corporations.iter()
+        .enumerate()
+        .filter(|(_, c)| c.sector != CorporationSector::Biotech && !c.bankrupt)
+        .map(|(i, _)| i)
+        .collect();
+
+    // Shuffle both pools for per-run variety
+    use rand::seq::SliceRandom;
+    biotech_corps.shuffle(&mut state.rng_misc);
+    other_corps.shuffle(&mut state.rng_misc);
+
+    // Interleave: biotech first, then others, cycling through
+    let mut pool: Vec<usize> = Vec::with_capacity(biotech_corps.len() + other_corps.len());
+    pool.extend(&biotech_corps);
+    pool.extend(&other_corps);
+
+    if pool.is_empty() {
+        return;
+    }
+
+    let mut pool_idx = 0;
+    for med in &mut state.medicines {
+        // Skip already-assigned, already-unlocked, or broad-spectrum medicines
+        if med.manufacturer_corp_idx.is_some() || med.unlocked {
+            continue;
+        }
+        med.manufacturer_corp_idx = Some(pool[pool_idx % pool.len()]);
+        pool_idx += 1;
+    }
 }
 
 /// Update corporate finances each tick. Called from tick().
@@ -529,5 +583,147 @@ mod tests {
 
         check_board_demands(&mut state);
         assert_eq!(state.pending_crises.len(), 0, "no crisis when board is satisfied");
+    }
+
+    #[test]
+    fn manufacturers_assigned_to_locked_medicines() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+
+        // Every locked (not-yet-developed) medicine should have a manufacturer
+        for (i, med) in state.medicines.iter().enumerate() {
+            if !med.unlocked {
+                assert!(
+                    med.manufacturer_corp_idx.is_some(),
+                    "locked medicine {} ({}) should have a manufacturer",
+                    i, med.name
+                );
+                let corp_idx = med.manufacturer_corp_idx.unwrap();
+                assert!(
+                    corp_idx < state.corporations.len(),
+                    "manufacturer index {} out of bounds for medicine {}",
+                    corp_idx, med.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn broad_spectrum_has_no_manufacturer() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+
+        // The starting broad-spectrum medicine is unlocked and should have no manufacturer
+        let broad = state.medicines.iter().find(|m| m.unlocked).unwrap();
+        assert!(
+            broad.manufacturer_corp_idx.is_none(),
+            "starting broad-spectrum should not have a manufacturer"
+        );
+    }
+
+    #[test]
+    fn some_manufacturers_have_board_seats() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+
+        let locked_with_mfg: Vec<_> = state.medicines.iter()
+            .filter(|m| !m.unlocked && m.manufacturer_corp_idx.is_some())
+            .collect();
+        assert!(!locked_with_mfg.is_empty(), "should have locked medicines with manufacturers");
+
+        let board_connected = locked_with_mfg.iter()
+            .filter(|m| {
+                let corp = &state.corporations[m.manufacturer_corp_idx.unwrap()];
+                corp.board_seat
+            })
+            .count();
+        let non_board = locked_with_mfg.len() - board_connected;
+
+        // Both board-connected and non-board manufacturers should exist
+        // to create strategic tension
+        assert!(board_connected > 0,
+            "at least one medicine should have a board-connected manufacturer");
+        assert!(non_board > 0,
+            "at least one medicine should have a non-board manufacturer");
+    }
+
+    #[test]
+    fn develop_medicine_boosts_board_corp_reserves() {
+        use crate::state::{ResearchKind, ResearchProject};
+
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+        state.diseases[0].knowledge = 1.0;
+
+        // Find a locked medicine with a board-seat manufacturer
+        let med_idx = state.medicines.iter()
+            .enumerate()
+            .find(|(_, m)| {
+                !m.unlocked && m.manufacturer_corp_idx.map_or(false, |ci| {
+                    state.corporations.get(ci).map_or(false, |c| c.board_seat)
+                })
+            })
+            .map(|(i, _)| i)
+            .expect("should have a medicine with a board-seat manufacturer");
+
+        let corp_idx = state.medicines[med_idx].manufacturer_corp_idx.unwrap();
+
+        // Drain reserves to 50% to make the boost visible
+        state.corporations[corp_idx].reserves = state.corporations[corp_idx].max_reserves * 0.50;
+        let reserves_before = state.corporations[corp_idx].reserves;
+
+        // Complete a DevelopMedicine project
+        state.applied_research = Some(ResearchProject {
+            kind: ResearchKind::DevelopMedicine { medicine_idx: med_idx },
+            progress: 199.0,
+            required_ticks: 200.0,
+            personnel_assigned: 5,
+        });
+
+        state = tick(&state);
+
+        assert!(state.medicines[med_idx].unlocked, "medicine should be unlocked");
+        assert!(
+            state.corporations[corp_idx].reserves > reserves_before,
+            "board-seat manufacturer reserves should increase: before={}, after={}",
+            reserves_before, state.corporations[corp_idx].reserves
+        );
+    }
+
+    #[test]
+    fn new_disease_medicines_get_manufacturers() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+
+        let initial_med_count = state.medicines.len();
+
+        // Simulate disease emergence by adding new medicines
+        let new_meds = crate::state::Medicine::targeted_medicines(
+            state.diseases.len(), crate::state::PathogenType::Bacterium
+        );
+        state.medicines.extend(new_meds);
+
+        // Assign manufacturers to the new medicines
+        assign_manufacturers(&mut state);
+
+        // New medicines should have manufacturers
+        for med in &state.medicines[initial_med_count..] {
+            assert!(
+                med.manufacturer_corp_idx.is_some(),
+                "new medicine {} should have a manufacturer after assign_manufacturers",
+                med.name
+            );
+        }
+
+        // Original medicines should still have their manufacturers unchanged
+        for med in &state.medicines[..initial_med_count] {
+            if !med.unlocked {
+                assert!(
+                    med.manufacturer_corp_idx.is_some(),
+                    "original medicine {} should retain its manufacturer",
+                    med.name
+                );
+            }
+        }
     }
 }

@@ -112,6 +112,7 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
         });
         // Add new medicines for the replacement disease.
         state.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
+        super::corporations::assign_manufacturers(state);
 
         idx
     } else {
@@ -122,6 +123,7 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
         disease.spawned_at_tick = state.tick;
         state.diseases.push(disease);
         state.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
+        super::corporations::assign_manufacturers(state);
 
         // Update broad-spectrum medicine to also target new disease
         for med in &mut state.medicines {

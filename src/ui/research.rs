@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, RESEARCH_TRACK_COUNT, ResearchTrack, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -532,6 +532,24 @@ fn render_confirm(state: &GameState, track: ResearchTrack, project_idx: usize, d
     (" Confirm Research ".to_string(), lines)
 }
 
+/// Label showing the manufacturing corporation for a medicine.
+/// Returns " | Mfg: CorpName (Board)" or " | Mfg: CorpName" or "".
+fn manufacturer_label(med: &Medicine, state: &GameState) -> String {
+    let corp_idx = match med.manufacturer_corp_idx {
+        Some(idx) => idx,
+        None => return String::new(),
+    };
+    let corp = match state.corporations.get(corp_idx) {
+        Some(c) => c,
+        None => return String::new(),
+    };
+    if corp.board_seat {
+        format!(" | Mfg: {} (Board)", corp.name)
+    } else {
+        format!(" | Mfg: {}", corp.name)
+    }
+}
+
 /// Supplementary detail line for a research project (targets, knowledge, etc).
 fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
     match kind {
@@ -543,6 +561,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                         .map(|d| d.display_name(d_idx))
                 })
                 .collect();
+            let mfg = manufacturer_label(med, state);
             if let Some(mech) = med.mechanism {
                 let resist_label = if mech.resistance_rate_multiplier() > 1.2 {
                     "High"
@@ -551,13 +570,16 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
                 } else {
                     "Low"
                 };
-                Some(format!("{}: {} | Eff {:.0}%, Resist: {}",
+                Some(format!("{}: {} | Eff {:.0}%, Resist: {}{}",
                     mech.tradeoff_label(),
                     names.join(", "),
                     mech.efficacy_modifier() * 100.0,
-                    resist_label))
+                    resist_label,
+                    mfg))
             } else {
-                Some(format!("Targets: {}", names.join(", ")))
+                Some(format!("Targets: {}{}",
+                    names.join(", "),
+                    mfg))
             }
         }
         ResearchKind::ManufactureDoses { medicine_idx } => {
