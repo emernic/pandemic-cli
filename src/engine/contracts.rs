@@ -161,6 +161,8 @@ fn build_contract(template_id: u8, board_member_idx: usize, state: &GameState, r
         satisfaction: 1.0,
         warned: false,
         last_demand_tick: 0,
+        accepted_tick: 0,
+        loyalty_raise_offered: false,
     }
 }
 
@@ -170,6 +172,38 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
     TEMPLATES.get(template_id)
         .map(|t| t.relevance.is_relevant(state))
         .unwrap_or(true)
+}
+
+/// Minimum days a contract must be held before a loyalty raise can be offered.
+const LOYALTY_RAISE_MIN_DAYS: f64 = 10.0;
+/// Per-tick probability of a loyalty raise firing once eligible (~1.5%/tick ≈ ~84% within a day).
+const LOYALTY_RAISE_CHANCE: f64 = 0.015;
+/// Loyalty raise multiplier — income increases by this fraction (e.g. 0.15 = 15% raise).
+pub(super) const LOYALTY_RAISE_FRACTION: f64 = 0.15;
+
+/// Check contracts held long enough to trigger a loyalty raise offer.
+pub(super) fn tick_loyalty_raises(state: &mut GameState, rng: &mut ChaCha8Rng) {
+    let min_ticks = (LOYALTY_RAISE_MIN_DAYS * TICKS_PER_DAY) as u64;
+
+    for contract in &mut state.contracts {
+        if contract.loyalty_raise_offered {
+            continue;
+        }
+        if contract.accepted_tick == 0 {
+            continue; // Legacy contracts without accepted_tick set
+        }
+        let held_ticks = state.tick.saturating_sub(contract.accepted_tick);
+        if held_ticks < min_ticks {
+            continue;
+        }
+        if rng.r#gen::<f64>() < LOYALTY_RAISE_CHANCE {
+            contract.loyalty_raise_offered = true;
+            state.pending_crises.push((
+                state.tick,
+                CrisisKind::LoyaltyRaise { template_id: contract.template_id },
+            ));
+        }
+    }
 }
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
@@ -340,6 +374,8 @@ pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
             "Accepted {}'s {}: +¥{:.0}/day. Other board members are displeased.",
             offerer_name, contract.name, income_per_day,
         );
+        let mut contract = contract;
+        contract.accepted_tick = state.tick;
         state.contracts.push(contract);
         (true, Some(msg))
     } else {
@@ -416,6 +452,8 @@ mod tests {
             satisfaction: 1.0,
             warned: false,
             last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
         }
     }
 
@@ -469,11 +507,12 @@ mod tests {
                 board_member_idx: 0,
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
-
                 template_id: i as u8,
                 satisfaction: 1.0,
                 warned: false,
                 last_demand_tick: 0,
+                accepted_tick: 0,
+                loyalty_raise_offered: false,
             });
         }
         make_offer(&mut state);
@@ -562,6 +601,8 @@ mod tests {
             satisfaction: 1.0,
             warned: false,
             last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
         });
         tick_check_contracts(&mut state);
         assert_eq!(state.contracts.len(), 1);
@@ -608,11 +649,12 @@ mod tests {
                 board_member_idx: 0,
                 income: 1.0,
                 condition: FundingCondition::NoCollapse,
-
                 template_id: i as u8,
                 satisfaction: 1.0,
                 warned: false,
                 last_demand_tick: 0,
+                accepted_tick: 0,
+                loyalty_raise_offered: false,
             });
         }
 
@@ -869,6 +911,8 @@ mod tests {
             satisfaction: 1.0,
             warned: false,
             last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
         });
 
         // Set deaths so MaxDeaths templates are relevant
@@ -904,6 +948,8 @@ mod tests {
             satisfaction: 1.0,
             warned: false,
             last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
         });
         assert_eq!(state.contracts.len(), 1);
 
@@ -923,5 +969,154 @@ mod tests {
         let (ok, msg) = cancel_contract(&mut state, 0);
         assert!(!ok);
         assert!(msg.unwrap().contains("No active contract"));
+    }
+
+    #[test]
+    fn loyalty_raise_not_offered_before_min_days() {
+        let mut state = GameState::new_default(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let accepted = 100;
+        state.contracts.push(FundingContract {
+            name: "Test".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: accepted,
+            loyalty_raise_offered: false,
+        });
+
+        // Set tick to just before eligibility (10 days = 10 * TICKS_PER_DAY)
+        state.tick = accepted + (LOYALTY_RAISE_MIN_DAYS * TICKS_PER_DAY) as u64 - 1;
+        for _ in 0..100 {
+            tick_loyalty_raises(&mut state, &mut rng);
+        }
+        assert!(!state.contracts[0].loyalty_raise_offered);
+        assert!(state.pending_crises.is_empty());
+    }
+
+    #[test]
+    fn loyalty_raise_offered_after_min_days() {
+        let mut state = GameState::new_default(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let accepted = 100;
+        state.contracts.push(FundingContract {
+            name: "Test".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: accepted,
+            loyalty_raise_offered: false,
+        });
+
+        // Set tick well past eligibility
+        state.tick = accepted + (LOYALTY_RAISE_MIN_DAYS * TICKS_PER_DAY) as u64 + 1000;
+        // Run enough ticks that the probability check should fire at least once
+        for _ in 0..200 {
+            tick_loyalty_raises(&mut state, &mut rng);
+        }
+        assert!(state.contracts[0].loyalty_raise_offered,
+            "Loyalty raise should have been offered after enough ticks past eligibility");
+        assert!(state.pending_crises.iter().any(|(_, k)|
+            matches!(k, CrisisKind::LoyaltyRaise { template_id: 0 })
+        ));
+    }
+
+    #[test]
+    fn loyalty_raise_only_fires_once_per_contract() {
+        let mut state = GameState::new_default(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        state.contracts.push(FundingContract {
+            name: "Test".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 100,
+            loyalty_raise_offered: true, // Already offered
+        });
+        state.tick = 100 + (LOYALTY_RAISE_MIN_DAYS * TICKS_PER_DAY) as u64 + 5000;
+
+        for _ in 0..200 {
+            tick_loyalty_raises(&mut state, &mut rng);
+        }
+        assert!(state.pending_crises.is_empty(),
+            "Should not offer a second loyalty raise");
+    }
+
+    #[test]
+    fn loyalty_raise_crisis_accept_increases_income() {
+        use crate::engine::crisis;
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+        state.contracts.push(FundingContract {
+            name: "Test".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 100,
+            loyalty_raise_offered: true,
+        });
+
+        let income_before = state.contracts[0].income;
+
+        let crisis_event = crisis::build_crisis_event(
+            &state,
+            CrisisKind::LoyaltyRaise { template_id: 0 },
+        );
+        state.active_crisis = Some(crisis_event);
+
+        let msg = crisis::resolve_crisis(&mut state, 0);
+        assert!(msg.contains("raises") || msg.contains("increased"), "msg: {msg}");
+        let expected = income_before * (1.0 + LOYALTY_RAISE_FRACTION);
+        assert!((state.contracts[0].income - expected).abs() < 0.01,
+            "Income should increase by {}%: {income_before} -> expected {expected}, got {}",
+            LOYALTY_RAISE_FRACTION * 100.0, state.contracts[0].income);
+    }
+
+    #[test]
+    fn loyalty_raise_crisis_decline_no_change() {
+        use crate::engine::crisis;
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+        state.contracts.push(FundingContract {
+            name: "Test".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 100,
+            loyalty_raise_offered: true,
+        });
+
+        let income_before = state.contracts[0].income;
+
+        let crisis_event = crisis::build_crisis_event(
+            &state,
+            CrisisKind::LoyaltyRaise { template_id: 0 },
+        );
+        state.active_crisis = Some(crisis_event);
+
+        let msg = crisis::resolve_crisis(&mut state, 1);
+        assert!(msg.contains("unchanged") || msg.contains("nods"), "msg: {msg}");
+        assert!((state.contracts[0].income - income_before).abs() < 0.001,
+            "Income should be unchanged after declining");
     }
 }

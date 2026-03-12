@@ -1588,6 +1588,45 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::LoyaltyRaise { template_id } => {
+            let contract = state.contracts.iter()
+                .find(|c| c.template_id == *template_id);
+            let member_idx = contract.map(|c| c.board_member_idx).unwrap_or(0);
+            let member_name = state.board_members.get(member_idx)
+                .map(|m| m.name.as_str()).unwrap_or("Board member");
+            let current_income = contract.map(|c| c.income).unwrap_or(0.0);
+            let raise_amount = current_income * super::contracts::LOYALTY_RAISE_FRACTION;
+            let raise_per_day = raise_amount * TICKS_PER_DAY;
+            let contract_name = contract.map(|c| c.name.as_str()).unwrap_or("Contract");
+
+            CrisisEvent {
+                title: format!("{}: Price Adjustment", member_name),
+                description: format!(
+                    "{} wants to revisit the {} terms. Citing the worsening situation and \
+                     competing offers from other organizations, {} is willing to raise the \
+                     payout by ¥{:.0}/day. You could likely get more by shopping around, \
+                     but this is guaranteed.",
+                    member_name, contract_name, member_name, raise_per_day,
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: "Accept the raise".into(),
+                        description: format!(
+                            "+¥{:.0}/day. {} appreciates the continued partnership.",
+                            raise_per_day, member_name,
+                        ),
+                        cost: None,
+                    },
+                    CrisisOption {
+                        label: "Decline, the current terms are fine".into(),
+                        description: "No change to the contract.".into(),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
         CrisisKind::GovernorHardliner { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -3337,6 +3376,39 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 c.satisfaction = (c.satisfaction - 0.15).max(0.0);
             }
             format!("{} rebuffed. Contract satisfaction dropped.", member_name)
+        }
+
+        // --- Loyalty raise resolutions ---
+
+        (CrisisKind::LoyaltyRaise { template_id }, 0) => {
+            // Accept: increase contract income by the raise fraction, boost offerer satisfaction
+            let member_idx = state.contracts.iter()
+                .find(|c| c.template_id == *template_id)
+                .map(|c| c.board_member_idx);
+            let member_name = member_idx
+                .and_then(|idx| state.board_members.get(idx))
+                .map(|m| m.name.clone())
+                .unwrap_or_else(|| "Board member".to_string());
+            if let Some(c) = state.contracts.iter_mut()
+                .find(|c| c.template_id == *template_id)
+            {
+                c.income *= 1.0 + super::contracts::LOYALTY_RAISE_FRACTION;
+            }
+            if let Some(idx) = member_idx {
+                if let Some(member) = state.board_members.get_mut(idx) {
+                    member.satisfaction_modifier += 0.05;
+                }
+            }
+            format!("{} raises the payout. Contract income increased.", member_name)
+        }
+        (CrisisKind::LoyaltyRaise { template_id }, _) => {
+            // Decline: no change, no penalty
+            let member_name = state.contracts.iter()
+                .find(|c| c.template_id == *template_id)
+                .and_then(|c| state.board_members.get(c.board_member_idx))
+                .map(|m| m.name.clone())
+                .unwrap_or_else(|| "Board member".to_string());
+            format!("{} nods. Terms unchanged.", member_name)
         }
 
         (CrisisKind::GovernorHardliner { region_idx }, 0) => {
