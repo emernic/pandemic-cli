@@ -281,10 +281,9 @@ pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
 pub const DISCOURAGE_HOSP_COST: f64 = 0.4;
 pub const DISCOURAGE_HOSP_PERSONNEL: u32 = 2;
-/// Discourage Hospitalization reduces infectivity by this factor (0.80 = -20% spread).
-/// Baseline assumes hospitals are active (+25% spread from hospital exposure).
-/// Discouraging hospitalization removes that exposure penalty.
-pub const DISCOURAGE_HOSP_SPREAD_FACTOR: f64 = 0.80;
+/// Baseline hospital exposure increases infectivity by 25%.
+/// Discourage Hospitalization removes this penalty entirely.
+pub const HOSPITAL_EXPOSURE_FACTOR: f64 = 1.25;
 /// Co-infection lethality multiplier per additional active disease in the same
 /// region. With 2 diseases: +25% lethality; 3 diseases: +50%.
 /// Threshold: a disease counts as "co-infecting" when it has >= 1000 infected.
