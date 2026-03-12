@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{DeployTarget, GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
+use crate::state::{DeployTarget, GameOutcome, GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -371,7 +371,12 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select", "Back"));
+    let hint = if state.outcome == GameOutcome::Playing {
+        "  [↑/↓ ←/→] Navigate  [Enter] Select  [Esc] Back"
+    } else {
+        "  [Esc] Back"
+    };
+    lines.push(Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))));
 
     (format!(" Deploy: {} ", med.name), lines, selected_line)
 }
@@ -446,7 +451,12 @@ fn render_select_disease(
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Select", "Back"));
+    let hint = if state.outcome == GameOutcome::Playing {
+        "  [←/→] Change region  [Enter] Select  [Esc] Back"
+    } else {
+        "  [Esc] Back"
+    };
+    lines.push(Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))));
 
     (format!(" {} → {} ", med.name, region.name), lines)
 }
@@ -672,7 +682,12 @@ fn render_select_target(
     }
 
     lines.push(Line::from(""));
-    lines.push(hint_line(state, "Deploy", "Back"));
+    let hint = if state.outcome == GameOutcome::Playing {
+        "  [←/→] Change region  [Enter] Deploy  [Esc] Back"
+    } else {
+        "  [Esc] Back"
+    };
+    lines.push(Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))));
 
     (format!(" {} → {} → {} ", med.name, region.name, disease_name), lines)
 }
