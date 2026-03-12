@@ -415,17 +415,34 @@ mod tests {
     use crate::apply_action;
     use crate::engine::tick;
     use crate::state::{
-        GameOutcome, GameState, ResearchKind, ResearchProject, ResearchTrack,
+        GameOutcome, GameState, ResearchFlatItem, ResearchKind, ResearchProject, ResearchTrack,
     };
+
+    /// Helper: open research panel, navigate to first flat-list item matching `pred`, and confirm through.
+    fn start_research_matching(state: &GameState, pred: impl Fn(&ResearchFlatItem) -> bool) -> GameState {
+        // Ensure panel is closed first, then open fresh
+        let mut s = if state.ui.open_panel == crate::state::Panel::Research {
+            apply_action(state, &Action::ClosePanel)
+        } else {
+            state.clone()
+        };
+        s = apply_action(&s, &Action::OpenResearch);
+        let items = s.research_flat_items();
+        let idx = items.iter().position(|item| pred(item))
+            .expect("expected matching research item in flat list");
+        s.ui.panel_selection = idx;
+        s = apply_action(&s, &Action::Confirm); // ConfirmProject
+        s = apply_action(&s, &Action::Confirm); // Start
+        s
+    }
 
     #[test]
     fn research_identify_increases_knowledge() {
         let mut state = GameState::new_default(42);
-        // Start identify project on disease 0
+        // Start identify project on disease 0 (first item in flat list)
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select Identify #1
-        state = apply_action(&state, &Action::Confirm); // Confirm start
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.field_research.is_empty());
         assert_eq!(state.diseases[0].knowledge, 0.0);
 
@@ -446,11 +463,7 @@ mod tests {
         assert!(!state.medicines[0].unlocked);
 
         // Start applied research: Develop Antiviral-A
-        state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Applied Research
-        state = apply_action(&state, &Action::Confirm);     // Enter Applied
-        state = apply_action(&state, &Action::Confirm);     // Select Develop Antiviral-A
-        state = apply_action(&state, &Action::Confirm);     // Confirm
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::AppliedAvailable(_)));
 
         assert!(state.applied_research.is_some());
 
@@ -469,18 +482,18 @@ mod tests {
 
         assert!(state.medicines[0].tested_against.is_empty());
 
-        // Start field research: Clinical Trial
+        // Start field research: Clinical Trial — find index of clinical trial in flat list
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        let field_projects = state.available_field_projects();
-        let trial_idx = field_projects.iter().position(|k| matches!(k,
-            ResearchKind::ClinicalTrial { .. }
-        )).expect("should have a clinical trial available");
-        for _ in 0..trial_idx {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        state = apply_action(&state, &Action::Confirm);    // Select
-        state = apply_action(&state, &Action::Confirm);    // Confirm
+        let items = state.research_flat_items();
+        let field_projects = state.available_projects(ResearchTrack::Field);
+        let trial_flat_idx = items.iter().position(|item| {
+            if let ResearchFlatItem::FieldAvailable(idx) = item {
+                matches!(field_projects.get(*idx), Some(ResearchKind::ClinicalTrial { .. }))
+            } else { false }
+        }).expect("should have a clinical trial available");
+        state.ui.panel_selection = trial_flat_idx;
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Start
 
         assert!(!state.field_research.is_empty());
 
@@ -497,9 +510,8 @@ mod tests {
         state.resources.personnel = 0; // No personnel
 
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select Identify
-        state = apply_action(&state, &Action::Confirm); // Try to confirm
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Try to start
 
         // Should not have started
         assert!(state.field_research.is_empty());
@@ -556,19 +568,12 @@ mod tests {
         state.resources.funding = 1000.0; // enough for both projects
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
-        // Start field research
-        state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select Identify #2
-        state = apply_action(&state, &Action::Confirm); // Confirm
+        // Start field research (first item in flat list)
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::FieldAvailable(_)));
         assert!(!state.field_research.is_empty());
 
         // Start applied research
-        state = apply_action(&state, &Action::ClosePanel); // Back to categories
-        state = apply_action(&state, &Action::SelectNext);  // Applied Research
-        state = apply_action(&state, &Action::Confirm);     // Enter Applied
-        state = apply_action(&state, &Action::Confirm);     // Select Develop
-        state = apply_action(&state, &Action::Confirm);     // Confirm
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::AppliedAvailable(_)));
         assert!(state.applied_research.is_some());
 
         // Both running simultaneously
@@ -583,13 +588,12 @@ mod tests {
         state.resources.funding = 100.0;
 
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select Identify
-        state = apply_action(&state, &Action::Confirm); // Try to confirm
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Try to start
         assert!(state.field_research.is_empty(), "should not start without funding");
         assert!(state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"));
 
-        // Give enough funding, should succeed
+        // Give enough funding, should succeed (still on ConfirmProject screen)
         state.resources.funding = 500.0;
         state = apply_action(&state, &Action::Confirm); // Try again
         assert!(!state.field_research.is_empty(), "should start with sufficient funding");
@@ -737,16 +741,16 @@ mod tests {
         let original_rate = state.diseases[0].pathogen_type.mutation_rate();
 
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        let field_projects = state.available_field_projects();
-        let seq_idx = field_projects.iter().position(|k| matches!(k,
-            ResearchKind::GenomicSequencing { .. }
-        )).expect("should have genomic sequencing available");
-        for _ in 0..seq_idx {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        state = apply_action(&state, &Action::Confirm); // Select
-        state = apply_action(&state, &Action::Confirm); // Confirm
+        let items = state.research_flat_items();
+        let field_projects = state.available_projects(ResearchTrack::Field);
+        let seq_flat_idx = items.iter().position(|item| {
+            if let ResearchFlatItem::FieldAvailable(idx) = item {
+                matches!(field_projects.get(*idx), Some(ResearchKind::GenomicSequencing { .. }))
+            } else { false }
+        }).expect("should have genomic sequencing available");
+        state.ui.panel_selection = seq_flat_idx;
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.field_research.is_empty());
 
         for _ in 0..200 {
@@ -765,17 +769,16 @@ mod tests {
         let initial_personnel = state.resources.personnel;
 
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Applied Research
-        state = apply_action(&state, &Action::Confirm);     // Enter Applied
-        let applied_projects = state.available_applied_projects();
-        let train_idx = applied_projects.iter().position(|k| matches!(k,
-            ResearchKind::TrainPersonnel
-        )).expect("should have train personnel available");
-        for _ in 0..train_idx {
-            state = apply_action(&state, &Action::SelectNext);
-        }
-        state = apply_action(&state, &Action::Confirm); // Select
-        state = apply_action(&state, &Action::Confirm); // Confirm
+        let items = state.research_flat_items();
+        let applied_projects = state.available_projects(ResearchTrack::Applied);
+        let train_flat_idx = items.iter().position(|item| {
+            if let ResearchFlatItem::AppliedAvailable(idx) = item {
+                matches!(applied_projects.get(*idx), Some(ResearchKind::TrainPersonnel))
+            } else { false }
+        }).expect("should have train personnel available");
+        state.ui.panel_selection = train_flat_idx;
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Start
         assert!(state.applied_research.is_some());
 
         for _ in 0..160 {
@@ -793,12 +796,13 @@ mod tests {
         state.resources.funding = 1000.0;
         assert!(state.unlocked_techs.is_empty());
 
-        // Navigate: Research → Basic → first project → Confirm
+        // Navigate: Research → find BasicAvailable → Confirm → Confirm
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Applied
-        state = apply_action(&state, &Action::SelectNext); // Basic
-        state = apply_action(&state, &Action::Confirm);     // Enter Basic
-        state = apply_action(&state, &Action::Confirm);     // Select TargetedDrugDesign
+        let items = state.research_flat_items();
+        let basic_idx = items.iter().position(|item| matches!(item, crate::state::ResearchFlatItem::BasicAvailable(_)))
+            .expect("expected BasicAvailable item");
+        state.ui.panel_selection = basic_idx;
+        state = apply_action(&state, &Action::Confirm);     // Go to ConfirmProject
         state = apply_action(&state, &Action::Confirm);     // Confirm start
         assert!(state.basic_research.is_some(), "basic research should have started");
 
@@ -815,34 +819,27 @@ mod tests {
 
     #[test]
     fn three_concurrent_research_tracks() {
+        use crate::state::ResearchFlatItem;
+
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 2000.0;
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
         state.resources.personnel = 30;
 
-        // Start field research directly
-        state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field
-        state = apply_action(&state, &Action::Confirm); // Select first
-        state = apply_action(&state, &Action::Confirm); // Confirm
+        // Use the shared helper that handles panel toggle correctly
+        // (it closes the panel first if already open)
+
+        // Start field research
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::FieldAvailable(_)));
         assert!(!state.field_research.is_empty());
 
         // Start applied research
-        state = apply_action(&state, &Action::ClosePanel);
-        state = apply_action(&state, &Action::SelectNext); // Applied
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::Confirm);
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::AppliedAvailable(_)));
         assert!(state.applied_research.is_some());
 
         // Start basic research
-        // After Esc from Applied's BrowseProjects, cursor lands on Applied (index 1) — one SelectNext reaches Basic
-        state = apply_action(&state, &Action::ClosePanel);
-        state = apply_action(&state, &Action::SelectNext); // Basic
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::Confirm);
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::BasicAvailable(_)));
         assert!(state.basic_research.is_some());
 
         // All three running simultaneously
@@ -857,9 +854,8 @@ mod tests {
         state.outcome = GameOutcome::Lost;
         // Try to start research
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select project
-        state = apply_action(&state, &Action::Confirm); // Try to confirm
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Try to start
         assert!(state.field_research.is_empty(), "should not start research after game over");
     }
 
@@ -1431,11 +1427,10 @@ mod tests {
                 med.doses = 0.0;
             }
         }
-        // Start identify on disease 0
+        // Start identify on disease 0 (first item in flat list)
         state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::Confirm); // Field Research
-        state = apply_action(&state, &Action::Confirm); // Select Identify
-        state = apply_action(&state, &Action::Confirm); // Confirm start
+        state = apply_action(&state, &Action::Confirm); // ConfirmProject
+        state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.field_research.is_empty());
 
         // Advance to completion, checking events each tick (clone-and-mutate means
@@ -1461,11 +1456,7 @@ mod tests {
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         // Start develop medicine on applied track
-        state = apply_action(&state, &Action::OpenResearch);
-        state = apply_action(&state, &Action::SelectNext); // Applied
-        state = apply_action(&state, &Action::Confirm);
-        state = apply_action(&state, &Action::Confirm); // Select first project
-        state = apply_action(&state, &Action::Confirm); // Confirm
+        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::AppliedAvailable(_)));
         assert!(state.applied_research.is_some(),
             "Applied research should start. UI state: {:?}", state.ui.research_ui);
 
