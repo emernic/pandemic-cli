@@ -7,7 +7,9 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, RegionPriority, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
+    GameState, PolicyUiState, RegionPriority, RegionSpecialization, RegionTrait,
+    ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
+    REGULATORY_APPARATUS_COST_MULT,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, HOSPITAL_EXPOSURE_FACTOR,
@@ -126,8 +128,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let low_infra = region.has_trait(RegionTrait::LowInfrastructure);
     let trade_dep = region.has_trait(RegionTrait::TradeDependent);
     let infra_extra: u32 = if low_infra { 1 } else { 0 };
-    let spec_mult = if region.has_specialization(crate::state::RegionSpecialization::RegulatoryApparatus) {
-        crate::state::REGULATORY_APPARATUS_COST_MULT
+    let spec_mult = if region.has_specialization(RegionSpecialization::RegulatoryApparatus) {
+        REGULATORY_APPARATUS_COST_MULT
     } else {
         1.0
     };

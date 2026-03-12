@@ -4,7 +4,7 @@ use crate::state::{
     policy_display_name, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     QUARANTINE_COST, TRAVEL_BAN_COST,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
-    SURVEILLANCE_NETWORK_SCREENING_MULT,
+    REGULATORY_APPARATUS_COST_MULT, SURVEILLANCE_NETWORK_SCREENING_MULT,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_LOYALTY_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST,
@@ -41,8 +41,8 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
             let traits = state.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
             // Apply RegulatoryApparatus specialization discount to get true cost
             let spec_mult = state.regions.get(i).map(|r| {
-                if r.has_specialization(crate::state::RegionSpecialization::RegulatoryApparatus) {
-                    crate::state::REGULATORY_APPARATUS_COST_MULT
+                if r.has_specialization(RegionSpecialization::RegulatoryApparatus) {
+                    REGULATORY_APPARATUS_COST_MULT
                 } else {
                     1.0
                 }
