@@ -42,13 +42,15 @@ These were all suggested as closes during a triage session and overruled by the 
 
 5. **"Close — just misleading comments."** The user said delete the comments entirely. Misleading comments actively confuse future readers — they're not harmless.
 
-## Closing Comments
+## Comments
 
-Your comments will be read by future agents. Two rules:
+Your comments will be read by future agents. Three rules:
 
 1. **Match confidence to effort.** Say "seems outdated" or "I think this was fixed," not "I confirmed X." You glanced at it — say so.
 
 2. **Don't inject opinions that could mislead future readers.** If you write "this is not a game code issue," future agents will ignore similar issues. If you write "the current design is intentional," future agents will defend a bad design. Stick to facts: "the code referenced no longer exists" or "this was addressed in PR #1234."
+
+3. **Include what you found, hedged to effort.** Say what you looked at and what you think, but make clear how long you spent. Example: "Took a quick look (~30 seconds). It seems like X based on Y, but I haven't dug deeply into this." Future agents need your observations to pick up where you left off — but they also need to know how much weight to give them.
 
 ## Workflow
 
