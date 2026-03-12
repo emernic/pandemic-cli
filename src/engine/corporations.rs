@@ -57,7 +57,7 @@ const REGION_CORPS: [[(CorporationSector, &str, &str); 3]; 6] = [
 /// Old formula: BASE_FUNDING_INCOME × (region_pop / total_pop) × income_modifier = region income/tick.
 /// New: sum(corp.base_revenue) × TAX_RATE / TICKS_PER_DAY = region income/tick.
 /// So corp base_revenue (per day) = old_region_income_per_tick × TICKS_PER_DAY / TAX_RATE / 3.
-pub fn generate_corporations(state: &mut GameState) {
+pub(super) fn generate_corporations(state: &mut GameState) {
     let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
     if total_pop <= 0.0 {
         return;
@@ -141,7 +141,7 @@ pub fn generate_corporations(state: &mut GameState) {
 /// Called after corporations are generated, and again when new diseases emerge
 /// (which create new medicines). Only touches medicines with `manufacturer_corp_idx: None`
 /// that aren't already unlocked.
-pub fn assign_manufacturers(state: &mut GameState) {
+pub(super) fn assign_manufacturers(state: &mut GameState) {
     if state.corporations.is_empty() {
         return;
     }

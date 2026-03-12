@@ -6691,8 +6691,7 @@ mod tests {
     fn board_budget_is_fixed_between_meetings() {
         // Board budget doesn't change when regions get infected — it's set at board meetings.
         let mut state = GameState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        crate::engine::initialize_game(&mut state);
 
         let baseline = state.funding_income_rate();
         assert!(baseline > 0.0, "should have positive income from board budget");

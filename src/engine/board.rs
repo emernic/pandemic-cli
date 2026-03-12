@@ -10,7 +10,7 @@ use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState, MAX_FIEL
 /// - 6 corporate leaders (randomly chosen — may stack in the same region)
 /// - 2-3 governors who also sit on the board (dual-role creates strategic tension)
 /// - Total: 8-9 members
-pub fn generate_board_members(state: &mut GameState) {
+pub(super) fn generate_board_members(state: &mut GameState) {
     let mut members = Vec::new();
     let mut chairman_assigned = false;
 
