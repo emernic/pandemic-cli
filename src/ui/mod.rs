@@ -65,6 +65,24 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
     Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray)))
 }
 
+/// Render a sparkline from price history using Unicode block characters.
+/// `width` controls how many data points (from the tail) are shown.
+pub fn sparkline(history: &[f64], width: usize) -> String {
+    if history.is_empty() {
+        return String::new();
+    }
+    let bars = [' ', '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+    let min = history.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max = history.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let range = (max - min).max(0.01);
+    let start = history.len().saturating_sub(width);
+    let slice = &history[start..];
+    slice.iter().map(|v| {
+        let normalized = ((v - min) / range * 7.0).round() as usize;
+        bars[normalized.min(8)]
+    }).collect()
+}
+
 /// Convert game events from the most recent tick into status/log messages.
 /// Called after each tick by the game loop / snapshot runner.
 ///

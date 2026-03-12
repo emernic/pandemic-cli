@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::state::{GameState, LedgerUiState};
 use crate::format_number;
+use super::sparkline;
 
 /// Maximum selection index for the ledger panel in its current sub-state.
 pub fn selection_max(ui_state: &LedgerUiState, state: &GameState) -> usize {
@@ -15,25 +16,6 @@ pub fn selection_max(ui_state: &LedgerUiState, state: &GameState) -> usize {
         LedgerUiState::BrowseStocks => state.corporations.len().saturating_sub(1),
         LedgerUiState::ConfirmBuy { .. } | LedgerUiState::ConfirmSell { .. } => 0,
     }
-}
-
-/// Render a tiny sparkline from price history using Unicode block chars.
-fn sparkline(history: &[f64], width: usize) -> String {
-    if history.is_empty() {
-        return String::new();
-    }
-    let bars = [' ', '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
-    let min = history.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max = history.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let range = (max - min).max(0.01);
-
-    // Sample last `width` points, or all if fewer
-    let start = history.len().saturating_sub(width);
-    let slice = &history[start..];
-    slice.iter().map(|v| {
-        let normalized = ((v - min) / range * 7.0).round() as usize;
-        bars[normalized.min(8)]
-    }).collect()
 }
 
 /// Price change as percentage since previous close.
