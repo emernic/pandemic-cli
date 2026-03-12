@@ -417,7 +417,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         lines.push(Line::from(vec![
             Span::raw("      "),
             Span::styled(
-                "Controls auto-deploy targeting order",
+                priority.hint(),
                 Style::default().fg(Color::DarkGray),
             ),
         ]));

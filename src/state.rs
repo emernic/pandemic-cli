@@ -1523,6 +1523,16 @@ impl RegionPriority {
         }
     }
 
+    /// Description of what this priority level does, for the policy panel.
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::High => "Auto-deploy serves this region first",
+            Self::Normal => "Default auto-deploy order",
+            Self::Low => "Auto-deploy serves this region last",
+            Self::CutOff => "Auto-deploy skips; manual deploy only",
+        }
+    }
+
     /// Cycle to next priority level.
     pub fn next(self) -> Self {
         match self {
