@@ -56,7 +56,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     medicine::try_auto_deploy(&mut new);
 
     // Process arriving medicine shipments
-    medicine::tick_shipments(&mut new);
+    medicine::tick_shipments(&mut new, &mut rng_misc);
 
     // Infrastructure degradation — hospitals overwhelm, supply lines break, civil order erodes.
     infrastructure::tick_infrastructure(&mut new);
@@ -94,7 +94,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     contracts::tick_offer_contracts(&mut new, &mut rng_misc);
 
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
-    corporations::tick_corporations(&mut new);
+    corporations::tick_corporations(&mut new, &mut rng_misc);
     // Update regional GDP — smoothly tracks toward target based on disease + policies.
     // Must run before board satisfaction so governors see current GDP.
     tick_gdp(&mut new);
@@ -1173,7 +1173,7 @@ mod tests {
         let immune_before = state.regions[0].infections.iter()
             .find(|i| i.disease_idx == 0).map(|i| i.immune).unwrap_or(0.0);
         state.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut state);
+        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
         let immune_after = state.regions[0].infections.iter()
             .find(|i| i.disease_idx == 0).map(|i| i.immune).unwrap_or(0.0);
         assert!(immune_after > immune_before, "immune should increase after delivery: {immune_before} -> {immune_after}");
@@ -1213,7 +1213,7 @@ mod tests {
 
         // Deliver the shipment
         state.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut state);
+        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
 
         let infected_after = state.regions[ri].disease_state(0).unwrap().infected;
         assert!(
@@ -2209,7 +2209,7 @@ mod tests {
         // Advance past arrival tick
         let arrive = state.pending_shipments[0].arrive_tick;
         state.tick = arrive + 1;
-        medicine::tick_shipments(&mut state);
+        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
 
         // Shipment should have been delivered, not blocked
         assert_eq!(state.pending_shipments.len(), 0, "shipment should deliver despite travel ban");
@@ -2615,7 +2615,7 @@ mod tests {
             let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget::Treat { disease_idx });
             // Advance time to deliver this shipment
             state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
-            medicine::tick_shipments(&mut state);
+            { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
         }
 
         let after_res = state.medicines[med_idx].resistance_factor(disease_idx, &state.diseases);
@@ -2640,7 +2640,7 @@ mod tests {
             state.regions[0].last_deploy_tick.clear();
             let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget::Treat { disease_idx });
             state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
-            medicine::tick_shipments(&mut state);
+            { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
         }
 
         let bs_res = state.medicines[bs_idx].resistance_factor(disease_idx, &state.diseases);
@@ -5190,7 +5190,7 @@ mod tests {
         medicine::deploy_medicine(&mut baseline, 0, ri, target.clone());
         assert_eq!(baseline.pending_shipments.len(), 1);
         baseline.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut baseline);
+        { let mut rng = baseline.rng_misc.clone(); medicine::tick_shipments(&mut baseline, &mut rng); }
         let infected_full_infra = baseline.regions[ri].disease_state(0).unwrap().infected;
 
         // Degraded: 50% supply lines, 50% healthcare = 25% efficiency
@@ -5201,7 +5201,7 @@ mod tests {
         medicine::deploy_medicine(&mut degraded, 0, ri, target);
         assert_eq!(degraded.pending_shipments.len(), 1);
         degraded.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut degraded);
+        { let mut rng = degraded.rng_misc.clone(); medicine::tick_shipments(&mut degraded, &mut rng); }
         let infected_degraded = degraded.regions[ri].disease_state(0).unwrap().infected;
 
         // With degraded infrastructure, more infected should remain (fewer doses effective)
@@ -5228,7 +5228,7 @@ mod tests {
         let target = crate::state::DeployTarget::Treat { disease_idx: 0 };
         medicine::deploy_medicine(&mut state, 0, ri, target);
         state.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut state);
+        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
 
         // Check that the delivered event contains the efficiency
         let delivered = state.events.iter().find(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
@@ -5261,7 +5261,7 @@ mod tests {
         let target = crate::state::DeployTarget::Treat { disease_idx: 0 };
         medicine::deploy_medicine(&mut state, 0, ri, target.clone());
         state.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut state);
+        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
 
         let delivered = state.events.iter().rev()
             .find(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
@@ -5289,7 +5289,7 @@ mod tests {
 
         medicine::deploy_medicine(&mut state, 0, ri, target);
         state.tick += crate::state::SHIPPING_TICKS + 1;
-        medicine::tick_shipments(&mut state);
+        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
 
         let delivered2 = state.events.iter().rev()
             .find(|e| matches!(e, GameEvent::ShipmentDelivered { .. }));
