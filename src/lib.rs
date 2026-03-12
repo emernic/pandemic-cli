@@ -264,15 +264,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 pub fn tick_and_process(state: &GameState) -> GameState {
     let mut new = engine::tick(state);
     ui::process_events(&mut new);
-    // Auto-dismiss the home splash once the typewriter animation has played out.
-    // The splash reveals one line per tick and has ~27 lines; after 30 ticks the
-    // animation is complete and subsequent home-view renders should show the
-    // dashboard, not the splash.  Without this, a no-intervention run (where no
-    // panel is ever opened) would show the splash again whenever open_panel
-    // resets to None (e.g. after crisis resolution).
-    if !new.ui.home_splash_done && new.tick >= 30 {
-        new.ui.home_splash_done = true;
-    }
     new
 }
 
