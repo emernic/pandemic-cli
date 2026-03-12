@@ -129,9 +129,9 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PersonnelCrisis { amount });
     }
 
-    // International aid: scales with current funding (15%) and headcount (15%)
-    let funding = scaled_cost(state, 0.15, 100.0, 500.0);
-    let personnel = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(2, 8);
+    // International aid: meaningful funding vs modest personnel boost
+    let funding = scaled_cost(state, 0.30, 800.0, 1500.0);
+    let personnel = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(3, 5);
     candidates.push(CrisisKind::InternationalAid { funding, personnel });
 
     // Mutation surge: requires a disease with strain_generation > 0 AND active infections
