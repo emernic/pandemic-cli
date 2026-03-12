@@ -506,7 +506,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
         }
         CrisisKind::PersonnelCrisis { amount } => {
-            let retention_cost = scaled_cost(state, 0.20, 100.0, 600.0);
+            let retention_cost = 500.0;
             CrisisEvent {
                 title: "Personnel Attrition".into(),
                 description: format!(
