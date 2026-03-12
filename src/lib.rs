@@ -570,12 +570,14 @@ fn handle_ledger_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
         }
         Some(LedgerUiState::ConfirmBuy { corp_idx }) => {
             ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
+            ui.panel_selection = corp_idx;
             Some(GameCommand::BuyShares { corp_idx, quantity: LEDGER_TRADE_QUANTITY })
         }
         Some(LedgerUiState::ConfirmSell { corp_idx }) => {
             let held = state.portfolio.get(corp_idx).copied().unwrap_or(0);
             let quantity = held.min(LEDGER_TRADE_QUANTITY);
             ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
+            ui.panel_selection = corp_idx;
             if quantity > 0 {
                 Some(GameCommand::SellShares { corp_idx, quantity })
             } else {
