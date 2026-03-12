@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 """PostToolUse hook: reminds agent to carefully review any .md file writes."""
 import json
+import subprocess
 import sys
+
+
+def is_git_tracked(file_path):
+    """Check if a file is tracked by git (or staged for addition)."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", file_path],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 
 def main():
@@ -17,8 +30,7 @@ def main():
     if not file_path.endswith(".md"):
         return
 
-    # Don't trigger for gitignored playtest logs
-    if "/playtests/" in file_path:
+    if not is_git_tracked(file_path):
         return
 
     print(json.dumps({
