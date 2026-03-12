@@ -93,7 +93,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             {
                 let avail = state.personnel_available();
                 let total = state.resources.personnel;
-                if avail < total {
+                let sick: u32 = state.crisis_operations.iter()
+                    .filter(|op| op.label == "Sick Leave")
+                    .map(|op| op.personnel)
+                    .sum();
+                if sick > 0 {
+                    format!("Personnel: {}/{} ({} sick)", avail, total, sick)
+                } else if avail < total {
                     format!("Personnel: {}/{}", avail, total)
                 } else {
                     format!("Personnel: {}", total)

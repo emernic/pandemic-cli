@@ -3920,6 +3920,8 @@ pub enum CrisisKind {
     PoliticalPressure { region_idx: usize },
     /// Staff burnout — lose personnel or pay retention bonus.
     PersonnelCrisis { amount: u32 },
+    /// Staff falling ill from the pandemic — temporarily unavailable, then recover.
+    PersonnelSick { amount: u32, recovery_days: f64 },
     /// International aid offer — choose funding or personnel.
     InternationalAid { funding: f64, personnel: u32 },
     /// Mutation surge — pay to gain knowledge or let it drift.
@@ -4089,6 +4091,7 @@ impl CrisisKind {
             CrisisKind::LabAccident { .. } => "lab",
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
+            CrisisKind::PersonnelSick { .. } => "personnel_sick",
             CrisisKind::InternationalAid { .. } => "aid",
             CrisisKind::MutationSurge { .. } => "mutation",
             CrisisKind::RefugeeWave { .. } => "refugee",
