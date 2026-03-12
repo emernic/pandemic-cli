@@ -279,6 +279,9 @@ pub const EMERGENCE_MIN_TICK: u64 = (5.0 * TICKS_PER_DAY) as u64;
 pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0012;
 /// Maximum number of simultaneous diseases.
 pub const MAX_DISEASES: usize = 5;
+/// Wave clustering window: a recent spawn within this many ticks boosts emergence.
+/// ~3.3 days — long enough for 2–3 disease clusters, short enough to feel like waves.
+pub const WAVE_CLUSTER_WINDOW_TICKS: u64 = (3.3 * TICKS_PER_DAY) as u64;
 
 // Economy constants — single source of truth.
 pub const BASE_FUNDING_INCOME: f64 = 5.4;
