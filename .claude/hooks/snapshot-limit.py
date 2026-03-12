@@ -37,7 +37,8 @@ def main():
     if data.get("tool_name") != "Bash":
         return
 
-    if "--snapshot" not in data.get("tool_input", {}).get("command", ""):
+    command = data.get("tool_input", {}).get("command", "")
+    if "cargo run" not in command or "--snapshot" not in command:
         return
 
     count = read_count()
