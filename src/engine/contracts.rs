@@ -119,20 +119,20 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
                 r.population > 0 && infected / r.population as f64 >= 0.005
             }
         }),
-        // Helion Research Partnership (ForbidDecree: Conscript Researchers) — only relevant when
+        // Research Independence Pact (ForbidDecree: Conscript Researchers) — only relevant when
         // that decree is unlocked (500K+ infected or 100K+ dead). Before then the constraint is meaningless.
         2 => state.decree_unlocked(0),
-        // Holt Stability Fund (NoCollapse) — only relevant when collapse is a real risk
+        // Stability Assurance Fund (NoCollapse) — only relevant when collapse is a real risk
         3 => state.regions.iter().any(|r| {
             !r.collapsed && r.infections.iter().any(|i| i.infected >= SEVERITY_HIGH_THRESHOLD)
         }),
-        // Pinnacle Confidence Fund (MaxDeaths < 50M) — only when deaths are significant
+        // Confidence Fund (MaxDeaths < 50M) — only when deaths are significant
         4 => state.total_dead() >= 250_000.0,
-        // Pacific Mutual Actuarial Pact (MaxDeaths < 500M) — only when deaths substantial
+        // Actuarial Pact (MaxDeaths < 500M) — only when deaths substantial
         5 => state.total_dead() >= 2_500_000.0,
         // ForbidPolicy (Discourage Hosp.) / RequirePolicy (Border Controls) — always relevant
         6 | 7 => true,
-        // Caldwell Protocols Grant (ForbidDecree: Authorize Human Trials) — only relevant when
+        // Ethics Protocols Grant (ForbidDecree: Authorize Human Trials) — only relevant when
         // that decree is unlocked (50M+ dead or 2+ CRITICAL regions).
         8 => state.decree_unlocked(1),
         _ => true,
@@ -579,7 +579,7 @@ mod tests {
         assert!(state.pending_crises.is_empty());
         tick_check_contracts(&mut state);
 
-        // Warning should fire AND a patron demand crisis should be queued
+        // Warning should fire AND a contract demand crisis should be queued
         assert!(state.contracts[0].warned);
         assert_eq!(state.pending_crises.len(), 1);
         assert!(matches!(
@@ -605,7 +605,7 @@ mod tests {
         // Warning fires, but no demand crisis due to cooldown
         assert!(state.contracts[0].warned);
         assert!(state.pending_crises.is_empty(),
-            "Patron demand should not fire within cooldown period");
+            "Contract demand should not fire within cooldown period");
     }
 
     #[test]

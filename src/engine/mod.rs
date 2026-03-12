@@ -123,7 +123,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     // Authority: drifts toward a board/contract-driven target.
-    // Target = f(board_satisfaction, patron_confidence, severity). See GameState::approval_target().
+    // Target = f(board_satisfaction, contract_confidence, severity). See GameState::approval_target().
     // AUTH moves toward target at ~50%/day, so crisis hits take 2-3 days to recover.
     {
         let target = new.approval_target();
@@ -3431,7 +3431,7 @@ mod tests {
             last_demand_tick: 0,
         });
 
-        // Set up the patron demand crisis as active
+        // Set up the contract demand crisis as active
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::ContractDemand { template_id: 4 },
             title: "Kowalski: Demands".into(),
@@ -4586,8 +4586,8 @@ mod tests {
 
     #[test]
     fn board_health_drives_approval_target() {
-        // approval_target = crisis_severity + board_satisfaction*0.20 + patron*0.20.
-        // At game start: crisis is tiny, board is healthy (0.20), no patrons.
+        // approval_target = crisis_severity + board_satisfaction*0.20 + contract*0.20.
+        // At game start: crisis is tiny, board is healthy (0.20), no contracts.
         // Target ≈ 0.20–0.25 (board + small crisis from starting infections).
         let mut state = GameState::new_default(42);
         corporations::generate_corporations(&mut state);
@@ -4596,7 +4596,7 @@ mod tests {
         let healthy_target = state.approval_target();
         assert!(
             healthy_target >= 0.15 && healthy_target <= 0.30,
-            "approval_target with healthy board and no patrons should be 0.15–0.30, got {healthy_target:.3}"
+            "approval_target with healthy board and no contracts should be 0.15–0.30, got {healthy_target:.3}"
         );
 
         // Bankrupt all board-seat corporations and collapse governor-member regions:
@@ -4624,7 +4624,7 @@ mod tests {
 
     #[test]
     fn pol_drifts_down_when_above_target() {
-        // With no corporations (board_satisfaction=0, patron=0),
+        // With no corporations (board_satisfaction=0, contract=0),
         // approval_target = crisis_component only. POL above target must drift down.
         let mut state = GameState::new_default(42);
         // Some deaths to give a small severity floor
