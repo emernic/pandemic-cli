@@ -207,6 +207,11 @@ pub struct GameState {
     /// 1.0 = neutral (initial value), >1.0 = board is generous, <1.0 = budget slashed.
     #[serde(default = "default_one")]
     pub board_funding_multiplier: f64,
+    /// Tick when the Chairman's satisfaction first dropped below the hostile threshold (0.20).
+    /// Reset to None when satisfaction recovers. Used to trigger Vote of No Confidence
+    /// after ~3 consecutive days of hostility.
+    #[serde(default)]
+    pub chairman_hostile_since: Option<u64>,
     /// Monotonically increasing counter for assigning sequence group IDs to
     /// wave-coordinated diseases. Incremented each time a new group is created.
     #[serde(default)]
@@ -3896,6 +3901,9 @@ pub enum CrisisKind {
     /// Board sends a formal warning letter when non-board stock positions exceed
     /// cumulative policy spending + ¥1000 buffer. If the player continues, funding is cut.
     BoardEmbezzlementWarning,
+    /// Chairman calls a Vote of No Confidence after sustained hostility (<0.20 satisfaction
+    /// for ~3 consecutive days). Player must make concessions or stand firm.
+    VoteOfNoConfidence,
 
     // --- Corporate detention crises ---
 
@@ -3988,6 +3996,7 @@ impl CrisisKind {
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardMeeting => "board_meeting",
             CrisisKind::BoardEmbezzlementWarning => "board_embezzlement_warning",
+            CrisisKind::VoteOfNoConfidence => "vote_no_confidence",
             CrisisKind::FieldTeamDetained { .. } => "field_team_detained",
             CrisisKind::FieldTeamDetainedAgain { .. } => "field_team_detained_again",
             CrisisKind::LoanOffer { .. } => "loan_offer",
@@ -5032,6 +5041,7 @@ impl GameState {
             board_members: Vec::new(),
             next_board_meeting_tick: 0, // initialized properly after RNG setup
             board_funding_multiplier: 1.0,
+            chairman_hostile_since: None,
             next_sequence_group: 0,
             loans: vec![],
             cumulative_policy_spending: 0.0,

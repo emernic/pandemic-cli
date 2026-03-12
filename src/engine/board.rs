@@ -91,6 +91,9 @@ const MODIFIER_DECAY_RATE: f64 = 0.02 / crate::state::TICKS_PER_DAY;
 /// Update each board member's satisfaction based on their connected entities
 /// plus any relationship modifier from contract decisions.
 /// Called once per tick from the main tick loop.
+/// Chairman satisfaction threshold below which the hostility timer starts.
+const CHAIRMAN_HOSTILE_THRESHOLD: f64 = 0.20;
+
 pub(super) fn update_board_satisfaction(state: &mut GameState) {
     for i in 0..state.board_members.len() {
         let base_sat = compute_member_satisfaction(&state, i);
@@ -104,6 +107,21 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
         }
         state.board_members[i].satisfaction =
             (base_sat + state.board_members[i].satisfaction_modifier).clamp(0.0, 1.0);
+    }
+
+    // Track chairman hostility duration for Vote of No Confidence
+    let chairman_sat = state.board_members.iter()
+        .find(|m| m.is_chairman)
+        .map(|m| m.satisfaction);
+    match chairman_sat {
+        Some(sat) if sat < CHAIRMAN_HOSTILE_THRESHOLD => {
+            if state.chairman_hostile_since.is_none() {
+                state.chairman_hostile_since = Some(state.tick);
+            }
+        }
+        _ => {
+            state.chairman_hostile_since = None;
+        }
     }
 }
 
