@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::state::{
     Disease, GameEvent, GameState, MutationMode, PathogenType, RegionTrait,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
-    DISCOURAGE_HOSP_SPREAD_FACTOR, TICKS_PER_DAY,
+    HOSPITAL_EXPOSURE_FACTOR, TICKS_PER_DAY,
 };
 
 /// Scale a policy reduction factor by governor effectiveness.
@@ -76,11 +76,13 @@ pub(super) fn tick_spread_within(
                     disease.infectivity
                 };
                 // Baseline: hospitals increase spread (+25% from hospital exposure).
-                // Discourage Hospitalization removes this penalty (-20% net).
-                if discourage_hosp {
-                    infectivity *= scale_policy_factor(DISCOURAGE_HOSP_SPREAD_FACTOR, gov_eff);
+                // Discourage Hospitalization removes this penalty.
+                if !discourage_hosp {
+                    infectivity *= HOSPITAL_EXPOSURE_FACTOR;
                 } else {
-                    infectivity *= 1.25; // hospital exposure baseline
+                    // Gov effectiveness: partial exposure remains with weak governors
+                    let effective = 1.0 + (HOSPITAL_EXPOSURE_FACTOR - 1.0) * (1.0 - gov_eff);
+                    infectivity *= effective;
                 }
                 if sanitation_active {
                     let f = disease.transmission.water_sanitation_factor();

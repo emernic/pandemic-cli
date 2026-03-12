@@ -10,7 +10,7 @@ use crate::state::{
     GameState, PolicyUiState, RegionPriority, RegionTrait, ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
-    DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, DISCOURAGE_HOSP_SPREAD_FACTOR,
+    DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, HOSPITAL_EXPOSURE_FACTOR,
     BORDER_CONTROLS_COST, BORDER_CONTROLS_PERSONNEL,
     WATER_SANITATION_COST, WATER_SANITATION_PERSONNEL,
     MARTIAL_LAW_COST, MARTIAL_LAW_PERSONNEL,
@@ -144,7 +144,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          "Reduces infection rate (varies by transmission)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST),
         (2, "Discourage Hospitalization", policy.discourage_hosp,
          format!("¥{:.0}/day + {} pers.", DISCOURAGE_HOSP_COST * TICKS_PER_DAY, DISCOURAGE_HOSP_PERSONNEL + infra_extra),
-         "Reduces spread 20% but +50% lethality (no hospital care)",
+         "Removes hospital spread penalty, +50% lethality (no hospital care)",
          Some(DISCOURAGE_HOSP_PERSONNEL + infra_extra), DISCOURAGE_HOSP_COST),
         (3, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
@@ -661,8 +661,8 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
                     else { Color::Red };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
-            2 => { // Discourage Hospitalization — reduces spread
-                let reduction = (1.0 - DISCOURAGE_HOSP_SPREAD_FACTOR) * gov_eff * 100.0;
+            2 => { // Discourage Hospitalization — removes hospital exposure
+                let reduction = (1.0 - 1.0 / HOSPITAL_EXPOSURE_FACTOR) * gov_eff * 100.0;
                 (format!("{name} ({}, -{reduction:.0}% spread)", vector.label()), Color::Green)
             }
             4 => { // Water Sanitation
@@ -729,10 +729,10 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 impact_type = "infections";
             }
             2 => {
-                // Discourage Hospitalization: infections prevented from reduced spread
+                // Discourage Hospitalization: infections prevented by removing hospital exposure
                 if susceptible > 0.0 {
-                    // Baseline has 1.25x hospital exposure. This removes it (0.80x).
-                    let prevented = inf.infected * disease.infectivity * 1.25 * (1.0 - DISCOURAGE_HOSP_SPREAD_FACTOR) * gov_eff * (susceptible / pop);
+                    // Baseline has HOSPITAL_EXPOSURE_FACTOR; removing it prevents this fraction
+                    let prevented = inf.infected * disease.infectivity * (HOSPITAL_EXPOSURE_FACTOR - 1.0) * gov_eff * (susceptible / pop);
                     total_impact += prevented;
                 }
                 impact_type = "infections";
