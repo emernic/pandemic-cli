@@ -319,6 +319,14 @@ fn push_disease_indicators(
     state: &GameState,
     disease_idx: usize,
 ) {
+    let disease = &state.diseases[disease_idx];
+    if !disease.pathogen_type.is_treatable() {
+        spans.push(Span::styled(
+            "  UNTREATABLE".to_string(),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ));
+        return; // No medicine indicators relevant for untreatable diseases
+    }
     if state.has_outdated_medicine(disease_idx) {
         spans.push(Span::styled(
             "  Medicines outdated!".to_string(),

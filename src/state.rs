@@ -2116,7 +2116,7 @@ pub enum PathogenType {
     Bacterium,
     /// Slow-growing, hard to treat, limited drug options
     Fungus,
-    /// Extremely slow-spreading but nearly untreatable
+    /// Extremely slow-spreading and completely untreatable — containment only
     Prion,
 }
 
@@ -2336,6 +2336,12 @@ impl PathogenType {
                 else { TransmissionVector::Waterborne }
             }
         }
+    }
+
+    /// Whether this pathogen type can be treated with medicine at all.
+    /// Prions are completely untreatable — containment is the only option.
+    pub fn is_treatable(&self) -> bool {
+        !matches!(self, PathogenType::Prion)
     }
 
     /// The therapy type that's most effective against this pathogen.
@@ -2665,7 +2671,7 @@ impl TherapyType {
             (TherapyType::Antifungal, PathogenType::Fungus) => 1.0,
             // Broad-spectrum: weak efficacy against everything except prions.
             // A blunt bandaid — slows disease but can't stop it. Forces research investment.
-            (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.05,
+            (TherapyType::BroadSpectrum, PathogenType::Prion) => 0.0,
             (TherapyType::BroadSpectrum, _) => 0.15,
             // Prions resist everything
             (_, PathogenType::Prion) => 0.0,
@@ -2953,7 +2959,7 @@ impl Medicine {
     /// one medicine per mechanism of action (3-4 options depending on pathogen type).
     /// Each mechanism has distinct tradeoffs: fast/cheap mechanisms are potent but
     /// resistance-prone; expensive/slow ones are less potent but nearly resistance-proof.
-    /// Prions produce a single medicine (no known molecular targets for mechanism branching).
+    /// Prions are completely untreatable — returns empty vec.
     pub fn targeted_medicines(disease_idx: usize, pathogen_type: PathogenType) -> Vec<Medicine> {
         let therapy = pathogen_type.matched_therapy();
         let letter = (b'A' + disease_idx as u8) as char;
@@ -2963,23 +2969,8 @@ impl Medicine {
             PathogenType::Fungus => MechanismOfAction::fungal_mechanisms(),
             PathogenType::RnaVirus | PathogenType::DnaVirus => MechanismOfAction::viral_mechanisms(),
             PathogenType::Prion => {
-                // Prions: single medicine, no mechanism
-                return vec![Medicine {
-                    name: format!("{}-{}", therapy.label(), letter),
-                    therapy_type: therapy,
-                    mechanism: None,
-                    target_diseases: vec![disease_idx],
-                    cost: 50.0,
-                    doses: 0.0,
-                    max_doses: 1_000_000_000.0,
-                    unlocked: false,
-                    tested_against: vec![],
-                    strain_generations: vec![],
-                    deployed_count: 0,
-                    total_treated: 0.0,
-                    total_protected: 0.0,
-                    manufacturer_corp_idx: None,
-                }];
+                // Prions are completely untreatable — no medicines generated
+                return vec![];
             }
         };
 
@@ -3089,6 +3080,10 @@ impl Medicine {
                 }
             }
         }
+        // Filter out untreatable pathogens (prions) — no medicine works on them
+        result.retain(|&d_idx| {
+            diseases.get(d_idx).map_or(true, |d| d.pathogen_type.is_treatable())
+        });
         result
     }
 
@@ -5012,8 +5007,8 @@ impl GameState {
         regions[region_idx].estimated_infected = infected * ScreeningLevel::None.visibility_rate();
 
         // --- Generate medicines to match diseases ---
-        // Two targeted medicines per non-prion disease (different mechanisms),
-        // one for prion diseases.
+        // Two targeted medicines per non-prion disease (different mechanisms).
+        // Prion diseases get no medicines — they are completely untreatable.
         let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
             .flat_map(|(i, d)| Medicine::targeted_medicines(i, d.pathogen_type))
             .collect();
@@ -6181,8 +6176,7 @@ impl GameState {
         // Collect disease indices already covered by an available or active targeted medicine
         // development option. (The global BroadSpectrum medicine is always unlocked from game
         // start and therefore appears only in ManufactureDoses, never in DevelopMedicine — it
-        // cannot pollute this set. Prion medicines have therapy_type BroadSpectrum but target
-        // only one disease and are skipped in the main loop below, so they have no effect.)
+        // cannot pollute this set. Prion diseases have no medicines at all.)
         let mut covered: std::collections::HashSet<usize> = std::collections::HashSet::new();
         for kind in self.available_applied_projects() {
             if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
@@ -6199,6 +6193,17 @@ impl GameState {
 
         let mut result = Vec::new();
         let mut seen_diseases: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+        // Show identified prion diseases as untreatable (no medicines exist for them)
+        for (i, disease) in self.diseases.iter().enumerate() {
+            if disease.pathogen_type == PathogenType::Prion
+                && disease.detected
+                && disease.knowledge >= KNOWLEDGE_NAME
+            {
+                seen_diseases.insert(i);
+                result.push((i, "Prion — no known therapeutic intervention".to_string()));
+            }
+        }
 
         for med in &self.medicines {
             if med.unlocked || med.therapy_type == TherapyType::BroadSpectrum {
@@ -6374,7 +6379,7 @@ mod tests {
         // Prions resist everything
         assert_eq!(TherapyType::Antiviral.efficacy(&PathogenType::Prion), 0.0);
         assert_eq!(TherapyType::Antibiotic.efficacy(&PathogenType::Prion), 0.0);
-        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Prion), 0.05);
+        assert_eq!(TherapyType::BroadSpectrum.efficacy(&PathogenType::Prion), 0.0);
     }
 
     #[test]
