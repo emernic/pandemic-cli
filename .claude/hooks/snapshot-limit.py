@@ -1,34 +1,27 @@
 #!/usr/bin/env python3
 """PreToolUse hook: blocks snapshot commands after 35 uses per session.
 
-Uses a counter file (.snapshot_count) that tracks invocations. The file
-auto-resets if it's more than 2 hours old (i.e., from a previous session).
+Counts prior snapshot commands in the transcript to enforce the limit.
 """
 import json
-import os
 import sys
-import time
 
 LIMIT = 35
-COUNTER_FILE = os.path.join(os.environ.get("CLAUDE_PROJECT_DIR", "."), ".snapshot_count")
-MAX_AGE_SECONDS = 7200  # 2 hours
 
 
-def read_count():
-    """Read current count, resetting if the file is stale."""
-    try:
-        mtime = os.path.getmtime(COUNTER_FILE)
-        if time.time() - mtime > MAX_AGE_SECONDS:
-            return 0
-        with open(COUNTER_FILE) as f:
-            return int(f.read().strip())
-    except (FileNotFoundError, ValueError):
-        return 0
-
-
-def write_count(count):
-    with open(COUNTER_FILE, "w") as f:
-        f.write(str(count))
+def count_snapshot_commands(entries):
+    """Count how many Bash commands contain 'cargo run' and '--snapshot'."""
+    count = 0
+    for entry in entries:
+        if entry.get("type") != "assistant":
+            continue
+        for item in entry.get("message", {}).get("content", []):
+            if item.get("type") != "tool_use" or item.get("name") != "Bash":
+                continue
+            cmd = item.get("input", {}).get("command", "")
+            if "cargo run" in cmd and "--snapshot" in cmd:
+                count += 1
+    return count
 
 
 def main():
@@ -41,7 +34,13 @@ def main():
     if "cargo run" not in command or "--snapshot" not in command:
         return
 
-    count = read_count()
+    try:
+        with open(data["transcript_path"]) as f:
+            entries = [json.loads(line) for line in f if line.strip()]
+    except (KeyError, FileNotFoundError, json.JSONDecodeError):
+        return
+
+    count = count_snapshot_commands(entries)
 
     if count >= LIMIT:
         print(json.dumps({
@@ -54,8 +53,6 @@ def main():
                 "directory immediately."
             ),
         }))
-    else:
-        write_count(count + 1)
 
 
 if __name__ == "__main__":
