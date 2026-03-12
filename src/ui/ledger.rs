@@ -83,7 +83,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled(
-            format!("  {:<22} {:<8} {:>8} {:>7} {:>5} {:>5}  {}",
+            format!("  {:<22} {:<10} {:>8} {:>7} {:>5} {:>5}  {}",
                 "CORP", "SECTOR", "PRICE", "CHG", "HELD", "P/L", "30D"),
             Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
         ),
@@ -165,8 +165,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
         // Truncate sector label to 8 chars so columns stay aligned
         let sector_label = corp.sector.label();
-        let sector_display = if sector_label.len() > 8 {
-            &sector_label[..8]
+        let sector_display = if sector_label.len() > 10 {
+            &sector_label[..10]
         } else {
             sector_label
         };
@@ -174,7 +174,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         lines.push(Line::from(vec![
             Span::styled(marker, name_style),
             Span::styled(format!("{:<20}{}", display_name, board_marker), name_style),
-            Span::styled(format!(" {:<8}", sector_display), hdr),
+            Span::styled(format!(" {:<10}", sector_display), hdr),
             Span::styled(format!(" {:>8}", price_str), Style::default().fg(price_color)),
             Span::styled(format!(" {:>7}", change_str), Style::default().fg(change_color)),
             Span::styled(format!(" {:>5}", held_str), Style::default().fg(if held > 0 { Color::Cyan } else { Color::DarkGray })),
