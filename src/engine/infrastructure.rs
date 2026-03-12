@@ -113,6 +113,10 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             0.0
         };
         let restriction_drain = -restrictive_count * 0.00008; // ~0.01/day per policy
+        // Quarantine fatigue: sustained quarantine erodes civil order much faster than
+        // generic restriction drain. Creates a ~22-day window before anarchy kicks in,
+        // forcing players to cycle quarantine on/off rather than set-and-forget.
+        let quarantine_drain = if policy.quarantine { -0.0003 } else { 0.0 }; // ~0.036/day
         // Healthcare collapse accelerates civil breakdown
         let healthcare_cascade = if new_healthcare < INFRA_CRITICAL {
             -0.0003 // ~0.036/day — people see hospitals failing
@@ -129,7 +133,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         };
 
         let old_civil = state.regions[i].civil_order;
-        let civil_drain = civil_death_drain + restriction_drain + healthcare_cascade;
+        let civil_drain = civil_death_drain + restriction_drain + quarantine_drain + healthcare_cascade;
         let new_civil = (old_civil + civil_drain + natural_civil_recovery)
             .clamp(0.0, 1.0);
         state.regions[i].civil_order = new_civil;
@@ -264,6 +268,41 @@ mod tests {
             GameEvent::InfrastructureBreakpoint { system: InfraSystem::Healthcare, threshold, .. }
             if (*threshold - 0.50).abs() < 0.01
         )), "should fire STRESSED breakpoint event");
+    }
+
+    #[test]
+    fn quarantine_drains_civil_order_faster_than_other_policies() {
+        let mut state = GameState::new_default(42);
+        // No deaths — isolate quarantine drain effect
+        state.regions[0].dead = 0.0;
+        for r in &mut state.regions {
+            r.infections.clear();
+        }
+
+        // Run with quarantine only
+        state.policies[0].quarantine = true;
+        let initial = state.regions[0].civil_order;
+        for _ in 0..(120 * 15) {
+            tick_infrastructure(&mut state);
+        }
+        let co_with_quarantine = state.regions[0].civil_order;
+
+        // Reset and run with travel_ban only (same generic restriction weight)
+        state.regions[0].civil_order = initial;
+        state.policies[0].quarantine = false;
+        state.policies[0].travel_ban = true;
+        for _ in 0..(120 * 15) {
+            tick_infrastructure(&mut state);
+        }
+        let co_with_travel_ban = state.regions[0].civil_order;
+
+        assert!(co_with_quarantine < co_with_travel_ban,
+            "Quarantine should drain civil order faster than travel ban: {} vs {}",
+            co_with_quarantine, co_with_travel_ban);
+        // 15 days of quarantine should cause meaningful drain (at least 0.3 drop)
+        assert!(initial - co_with_quarantine > 0.3,
+            "15 days of quarantine should drain civil order significantly: {} -> {}",
+            initial, co_with_quarantine);
     }
 
     #[test]
