@@ -76,39 +76,50 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     // COUPLING CHECK: loop count must equal DECREE_COUNT
     for decree_idx in 0..DECREE_COUNT {
         let is_selected = row == selected;
-        let marker = if is_selected { "▸ " } else { "  " };
+        let marker = if is_selected { "▶ " } else { "  " };
         let name = decree_display_name(decree_idx);
         let enacted = state.enacted_decrees.is_enacted(decree_idx);
         let unlocked = state.decree_unlocked(decree_idx);
 
-        let (name_color, desc_color) = if enacted {
-            (Color::DarkGray, Color::DarkGray)
-        } else if is_selected {
-            (Color::Yellow, Color::DarkGray)
-        } else if unlocked {
-            (Color::Red, Color::DarkGray)
+        if !enacted && !unlocked {
+            // Locked — show 🔒 icon with unlock hint, matching Policies panel style
+            let name_style = if is_selected {
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let hint = GameState::decree_unlock_hint(decree_idx);
+            lines.push(Line::from(vec![
+                Span::styled(marker, name_style),
+                Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
+                Span::styled(name, name_style),
+                Span::styled(
+                    format!("  ({})", hint),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+            lines.push(Line::from(""));
         } else {
-            (Color::DarkGray, Color::DarkGray)
-        };
+            // Enacted or unlocked — show with description
+            let cost_pct = (DECREE_APPROVAL_COSTS[decree_idx] * 100.0) as u32;
+            let (name_color, desc_color, suffix) = if enacted {
+                (Color::DarkGray, Color::DarkGray, " [ENACTED]".to_string())
+            } else if is_selected {
+                (Color::Yellow, Color::DarkGray, format!(" [-{}% approval]", cost_pct))
+            } else {
+                (Color::Red, Color::DarkGray, format!(" [-{}% approval]", cost_pct))
+            };
 
-        let cost_pct = (DECREE_APPROVAL_COSTS[decree_idx] * 100.0) as u32;
-        let suffix = if enacted {
-            " [ENACTED]".to_string()
-        } else if !unlocked {
-            format!(" [{}]", GameState::decree_unlock_hint(decree_idx))
-        } else {
-            format!(" [-{}% approval]", cost_pct)
-        };
-
-        lines.push(Line::from(vec![
-            Span::styled(marker, Style::default().fg(Color::Yellow)),
-            Span::styled(name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
-            Span::styled(suffix, Style::default().fg(Color::DarkGray)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::raw("    "),
-            Span::styled(decree_description(decree_idx), Style::default().fg(desc_color)),
-        ]));
+            lines.push(Line::from(vec![
+                Span::styled(marker, Style::default().fg(Color::Yellow)),
+                Span::styled(name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+                Span::styled(suffix, Style::default().fg(Color::DarkGray)),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("    "),
+                Span::styled(decree_description(decree_idx), Style::default().fg(desc_color)),
+            ]));
+        }
         row += 1;
     }
 
@@ -135,7 +146,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
 
     for (name, desc, enabled) in &standing_orders {
         let is_selected = row == selected;
-        let marker = if is_selected { "▸ " } else { "  " };
+        let marker = if is_selected { "▶ " } else { "  " };
         let name_color = if is_selected { Color::Yellow } else { Color::White };
         let status = if *enabled { "[ON] " } else { "[OFF]" };
         let status_color = if *enabled { Color::Green } else { Color::DarkGray };
@@ -163,7 +174,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
 
         for loan in &state.loans {
             let is_selected = row == selected;
-            let marker = if is_selected { "▸ " } else { "  " };
+            let marker = if is_selected { "▶ " } else { "  " };
             let highlight = if is_selected { Color::Yellow } else { Color::White };
             let interest_per_day = loan.interest_per_tick() * TICKS_PER_DAY;
             let days_left = (loan.due_day - state.tick as f64 / TICKS_PER_DAY).max(0.0);
