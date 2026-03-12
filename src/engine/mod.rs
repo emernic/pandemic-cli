@@ -16,6 +16,7 @@ use crate::state::{
     CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, SimState,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
+    EMBEZZLEMENT_BUFFER,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
 };
@@ -66,6 +67,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
 
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
+    new.cumulative_policy_spending += policy_cost;
 
     // Emergency loans — offer when policies are suspended, accrue interest, trigger hostile crises.
     // Runs after policy enforcement so we know if a suspension just happened.
@@ -381,6 +383,16 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         let range = (3.0 * TICKS_PER_DAY) as u64;
         let jitter = rng_crisis.r#gen::<u64>() % (range + 1);
         new.next_board_meeting_tick = new.tick + base + jitter;
+    }
+
+    // Embezzlement detection: fire a warning letter when non-board stock positions
+    // exceed cumulative policy spending + buffer. Only fires once.
+    if new.active_crisis.is_none()
+        && !new.embezzlement_warned
+        && new.non_board_portfolio_value() > new.cumulative_policy_spending + EMBEZZLEMENT_BUFFER
+    {
+        let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardEmbezzlementWarning);
+        crisis::activate_crisis(&mut new, crisis);
     }
 
     // Crisis event generation (only when no crisis is active).
@@ -6159,6 +6171,95 @@ mod tests {
 
         let alive_after = s.regions[0].alive();
         assert!(alive_after >= floor - 1.0, "Alive {alive_after:.0} fell below floor {floor:.0}");
+    }
+
+    #[test]
+    fn embezzlement_warning_fires_when_non_board_positions_exceed_threshold() {
+        use crate::state::EMBEZZLEMENT_BUFFER;
+        let mut state = GameState::new_default(42);
+        corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
+        state.tick = 1000;
+        state.resources.funding = 5000.0;
+        // Prevent other crises from firing first
+        state.pending_crises.clear();
+        state.next_board_meeting_tick = u64::MAX;
+        state.last_contract_offer_tick = state.tick;
+
+        // Find a non-board corporation
+        let non_board_idx = state.corporations.iter().position(|c| !c.board_seat)
+            .expect("need at least one non-board corp");
+
+        // Buy enough shares to exceed the buffer
+        let price = state.corporations[non_board_idx].share_price;
+        let shares_needed = ((EMBEZZLEMENT_BUFFER + 100.0) / price).ceil() as u32 + 1;
+        while state.portfolio.len() <= non_board_idx {
+            state.portfolio.push(0);
+        }
+        state.portfolio[non_board_idx] = shares_needed;
+
+        // cumulative_policy_spending stays at 0, so non_board_value > 0 + buffer
+        assert!(state.non_board_portfolio_value() > state.cumulative_policy_spending + EMBEZZLEMENT_BUFFER);
+
+        // Tick should fire the embezzlement warning
+        let after = tick(&state);
+        assert!(after.active_crisis.is_some(), "should have an active crisis");
+        let crisis = after.active_crisis.as_ref().unwrap();
+        assert!(matches!(crisis.kind, CrisisKind::BoardEmbezzlementWarning),
+            "crisis should be BoardEmbezzlementWarning, got {:?}", crisis.kind);
+    }
+
+    #[test]
+    fn embezzlement_warning_only_fires_once() {
+        use crate::state::EMBEZZLEMENT_BUFFER;
+        let mut state = GameState::new_default(42);
+        corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
+        state.tick = 1000;
+        state.resources.funding = 5000.0;
+        state.embezzlement_warned = true; // Already warned
+
+        let non_board_idx = state.corporations.iter().position(|c| !c.board_seat)
+            .expect("need at least one non-board corp");
+        let price = state.corporations[non_board_idx].share_price;
+        let shares_needed = ((EMBEZZLEMENT_BUFFER + 100.0) / price).ceil() as u32 + 1;
+        while state.portfolio.len() <= non_board_idx {
+            state.portfolio.push(0);
+        }
+        state.portfolio[non_board_idx] = shares_needed;
+
+        let after = tick(&state);
+        // Should NOT fire again since already warned
+        let has_embezzlement_crisis = after.active_crisis.as_ref()
+            .map(|c| matches!(c.kind, CrisisKind::BoardEmbezzlementWarning))
+            .unwrap_or(false);
+        assert!(!has_embezzlement_crisis, "should not fire warning twice");
+    }
+
+    #[test]
+    fn embezzlement_penalty_reduces_funding_after_warning() {
+        use crate::state::EMBEZZLEMENT_BUFFER;
+        let mut state = GameState::new_default(42);
+        corporations::generate_corporations(&mut state);
+        board::generate_board_members(&mut state);
+        for r in &mut state.regions { r.infections.clear(); }
+
+        let baseline_income = state.funding_income_rate();
+
+        // Set up: warned + still over threshold
+        state.embezzlement_warned = true;
+        let non_board_idx = state.corporations.iter().position(|c| !c.board_seat)
+            .expect("need at least one non-board corp");
+        let price = state.corporations[non_board_idx].share_price;
+        let shares_needed = ((EMBEZZLEMENT_BUFFER + 500.0) / price).ceil() as u32 + 1;
+        while state.portfolio.len() <= non_board_idx {
+            state.portfolio.push(0);
+        }
+        state.portfolio[non_board_idx] = shares_needed;
+
+        let penalized_income = state.funding_income_rate();
+        assert!(penalized_income < baseline_income,
+            "income should be reduced: baseline={baseline_income:.2}, penalized={penalized_income:.2}");
     }
 
 }
