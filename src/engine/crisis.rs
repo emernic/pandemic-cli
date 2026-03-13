@@ -661,16 +661,16 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
         }
         CrisisKind::InternationalAid { funding, personnel } => {
             CrisisEvent {
-                title: "Emergency Aid Package".into(),
-                description: "A discretionary emergency fund has been released.".into(),
+                title: "Member State Aid Package".into(),
+                description: "Several member states have pledged additional resources to your operation.".into(),
                 options: vec![ CrisisOption {
-                    label: format!("Emergency funding (+¥{:.0})", funding),
-                    description: "Direct financial support".into(),
+                    label: format!("Accept funding (+¥{:.0})", funding),
+                    description: "Direct financial contribution from member states.".into(),
                     cost: None,
                 },
                  CrisisOption {
-                    label: format!("Personnel support (+{} staff)", personnel),
-                    description: "Trained researchers and field staff".into(),
+                    label: format!("Accept personnel (+{} staff)", personnel),
+                    description: "Seconded researchers and field staff from national agencies.".into(),
                     cost: None,
                 },
                 ],
@@ -2757,11 +2757,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::InternationalAid { funding, .. }, 0) => {
             state.resources.funding += funding;
-            format!("Received ¥{:.0} in emergency funding", funding)
+            format!("Received ¥{:.0} in member state funding", funding)
         }
         (CrisisKind::InternationalAid { personnel, .. }, _) => {
             state.resources.personnel += personnel;
-            format!("Received {} emergency personnel", personnel)
+            format!("{} personnel seconded from member states", personnel)
         }
         (CrisisKind::MutationSurge { .. }, 0) => {
             "Mutation surge ignored".into()
