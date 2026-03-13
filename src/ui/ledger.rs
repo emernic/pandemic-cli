@@ -14,7 +14,7 @@ use super::sparkline;
 pub fn selection_max(ui_state: &LedgerUiState, state: &GameState) -> usize {
     match ui_state {
         LedgerUiState::BrowseStocks => state.corporations.len().saturating_sub(1),
-        LedgerUiState::ConfirmBuy { .. } | LedgerUiState::ConfirmSell { .. } => 0,
+        LedgerUiState::ConfirmBuy { .. } | LedgerUiState::ConfirmSell { .. } | LedgerUiState::ConfirmBailout { .. } => 0,
     }
 }
 
@@ -189,7 +189,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                 ]));
                 lines.push(Line::from(vec![
-                    Span::styled("  [Enter] Confirm  [X] Switch to Sell  [Esc] Cancel", hdr),
+                    Span::styled("  [Enter] Confirm  [X] Sell/Bailout  [Esc] Cancel", hdr),
                 ]));
             }
         }
@@ -203,6 +203,24 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Span::styled(
                         format!(" {} shares of {} at \u{00a5}{:.1}/share = \u{00a5}{:.0}  (hold: {})",
                             qty, corp.name, corp.share_price, corp.share_price * qty as f64, held),
+                        Style::default().fg(Color::White),
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled("  [Enter] Confirm  [X] Switch to Bailout  [Esc] Cancel", hdr),
+                ]));
+            }
+        }
+        Some(LedgerUiState::ConfirmBailout { corp_idx }) => {
+            if let Some(corp) = state.corporations.get(*corp_idx) {
+                let cost = corp.bailout_cost();
+                let reserves_pct = (corp.reserves_fraction() * 100.0) as u32;
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![
+                    Span::styled("  BAILOUT ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!(" {} — inject \u{00a5}{:.0} to restore reserves (currently {}%)",
+                            corp.name, cost, reserves_pct),
                         Style::default().fg(Color::White),
                     ),
                 ]));

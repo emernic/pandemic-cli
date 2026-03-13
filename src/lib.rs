@@ -175,9 +175,15 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         let held = new.portfolio.get(*corp_idx).copied().unwrap_or(0);
                         if held > 0 {
                             new.ui.ledger_ui = Some(LedgerUiState::ConfirmSell { corp_idx: *corp_idx });
+                        } else {
+                            // No shares to sell — skip to bailout
+                            new.ui.ledger_ui = Some(LedgerUiState::ConfirmBailout { corp_idx: *corp_idx });
                         }
                     }
                     Some(LedgerUiState::ConfirmSell { corp_idx }) => {
+                        new.ui.ledger_ui = Some(LedgerUiState::ConfirmBailout { corp_idx: *corp_idx });
+                    }
+                    Some(LedgerUiState::ConfirmBailout { corp_idx }) => {
                         new.ui.ledger_ui = Some(LedgerUiState::ConfirmBuy { corp_idx: *corp_idx });
                     }
                     _ => {}
@@ -615,6 +621,11 @@ fn handle_ledger_confirm(ui: &mut UiState, state: &GameState) -> Option<GameComm
                 None
             }
         }
+        Some(LedgerUiState::ConfirmBailout { corp_idx }) => {
+            ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
+            ui.panel_selection = corp_idx;
+            Some(GameCommand::BailoutCorporation { corp_idx })
+        }
         None => None,
     }
 }
@@ -880,6 +891,41 @@ mod tests {
             "ledger panel should stay open after crisis dismissal");
         assert_eq!(state.ui.ledger_ui, Some(LedgerUiState::BrowseStocks),
             "ledger_ui should reset to BrowseStocks after crisis dismissal");
+    }
+
+    #[test]
+    fn ledger_bailout_ui_flow() {
+        let mut state = GameState::new_default(42);
+        crate::engine::initialize_game(&mut state);
+        // Drain corp 0's reserves so the bailout is meaningful
+        state.corporations[0].reserves = state.corporations[0].max_reserves * 0.1;
+        let cost = state.corporations[0].bailout_cost();
+        state.resources.funding = cost + 500.0;
+
+        // Open ledger, confirm on first corp → ConfirmBuy
+        let state = apply_action(&state, &Action::OpenLedger);
+        assert_eq!(state.ui.open_panel, Panel::Ledger);
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(matches!(state.ui.ledger_ui, Some(LedgerUiState::ConfirmBuy { corp_idx: 0 })));
+
+        // X cycles: Buy → Bailout (skips Sell since we hold 0 shares)
+        let state = apply_action(&state, &Action::ToggleExtra);
+        assert!(matches!(state.ui.ledger_ui, Some(LedgerUiState::ConfirmBailout { corp_idx: 0 })));
+
+        // Confirm the bailout
+        let funding_before = state.resources.funding;
+        let state = apply_action(&state, &Action::Confirm);
+        assert_eq!(state.ui.ledger_ui, Some(LedgerUiState::BrowseStocks),
+            "should return to BrowseStocks after bailout");
+        assert!(
+            (state.resources.funding - (funding_before - cost)).abs() < 0.01,
+            "funding should be deducted: expected {}, got {}",
+            funding_before - cost, state.resources.funding
+        );
+        assert!(
+            (state.corporations[0].reserves - state.corporations[0].max_reserves).abs() < 0.01,
+            "reserves should be restored to max"
+        );
     }
 
     #[test]

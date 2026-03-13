@@ -418,6 +418,7 @@ fn tick_share_prices(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8R
 mod tests {
     use super::*;
     use crate::engine::tick;
+    use crate::state::GameCommand;
 
     #[test]
     fn generate_creates_18_corporations_across_6_regions() {
@@ -688,5 +689,70 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn bailout_restores_reserves_and_deducts_funding() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+
+        // Drain a corp's reserves to 10%
+        state.corporations[0].reserves = state.corporations[0].max_reserves * 0.1;
+        let max_reserves = state.corporations[0].max_reserves;
+        let cost = state.corporations[0].bailout_cost();
+        state.resources.funding = cost + 100.0;
+
+        let result = crate::engine::execute_command(
+            &mut state,
+            &GameCommand::BailoutCorporation { corp_idx: 0 },
+        );
+
+        assert!(result.success, "bailout should succeed");
+        assert!(
+            (state.corporations[0].reserves - max_reserves).abs() < 0.01,
+            "reserves should be restored to max: got {}, expected {}",
+            state.corporations[0].reserves, max_reserves
+        );
+        assert!(
+            (state.resources.funding - 100.0).abs() < 0.01,
+            "funding should be deducted: got {}, expected 100",
+            state.resources.funding
+        );
+    }
+
+    #[test]
+    fn bailout_rejected_for_bankrupt_corp() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+        state.corporations[0].bankrupt = true;
+        state.resources.funding = 10_000.0;
+
+        let result = crate::engine::execute_command(
+            &mut state,
+            &GameCommand::BailoutCorporation { corp_idx: 0 },
+        );
+
+        assert!(!result.success, "bailout should fail for bankrupt corp");
+        assert_eq!(state.resources.funding, 10_000.0, "funding should be unchanged");
+    }
+
+    #[test]
+    fn bailout_rejected_with_insufficient_funds() {
+        let mut state = GameState::new_default(42);
+        generate_corporations(&mut state);
+        state.corporations[0].reserves = 0.1;
+        let cost = state.corporations[0].bailout_cost();
+        state.resources.funding = cost - 1.0;
+
+        let result = crate::engine::execute_command(
+            &mut state,
+            &GameCommand::BailoutCorporation { corp_idx: 0 },
+        );
+
+        assert!(!result.success, "bailout should fail with insufficient funds");
+        assert!(
+            (state.resources.funding - (cost - 1.0)).abs() < 0.01,
+            "funding should be unchanged"
+        );
     }
 }
