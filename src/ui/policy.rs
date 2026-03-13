@@ -144,7 +144,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * spec_mult * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
          "20-65% infection rate reduction (varies by pathogen)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST * spec_mult),
         (2, "Discourage Hospitalization", policy.discourage_hosp,
-         format!("¥{:.0}/day + {} pers.", DISCOURAGE_HOSP_COST * spec_mult * TICKS_PER_DAY, DISCOURAGE_HOSP_PERSONNEL + infra_extra),
+         "Free".to_string(),
          "Removes hospital spread penalty, +50% lethality (no hospital care)",
          Some(DISCOURAGE_HOSP_PERSONNEL + infra_extra), DISCOURAGE_HOSP_COST * spec_mult),
         (3, "Border Controls", policy.border_controls,

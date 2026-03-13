@@ -274,8 +274,8 @@ pub const TRAVEL_BAN_COST: f64 = 0.7;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
-pub const DISCOURAGE_HOSP_COST: f64 = 0.4;
-pub const DISCOURAGE_HOSP_PERSONNEL: u32 = 2;
+pub const DISCOURAGE_HOSP_COST: f64 = 0.0;
+pub const DISCOURAGE_HOSP_PERSONNEL: u32 = 0;
 /// Baseline hospital exposure increases infectivity by 25%.
 /// Discourage Hospitalization removes this penalty entirely.
 pub const HOSPITAL_EXPOSURE_FACTOR: f64 = 1.25;
@@ -699,14 +699,14 @@ pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 /// expensive/latest within each group:
 ///
 ///   Detection:      Basic Screening (5), Antigen (6), Mass Rapid (7)
-///   Containment:    Border Controls (3), Water Sanitation (4), Travel Ban (0), Quarantine (1), Discourage Hosp. (2)
+///   Containment:    Border Controls (3), Water Sanitation (4), Discourage Hosp. (2), Travel Ban (0), Quarantine (1)
 ///   Infrastructure: Intel Station (11), Field Hospital (10)
 ///   Other:          Nuclear Option (9), Martial Law (8)
 ///
 /// This is the canonical display ordering — both the policy renderer and the confirm
 /// handler use this to map display position → policy_idx.
 pub fn policy_display_order() -> [usize; POLICY_COUNT] {
-    [5, 6, 7, 3, 4, 0, 1, 2, 11, 10, 9, 8]
+    [5, 6, 7, 3, 4, 2, 0, 1, 11, 10, 9, 8]
 }
 
 /// Short display name for each policy by index. Canonical source — used by
