@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchCategory, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchCategory, ResearchKind, SimState, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: 4 rows (stats + income + research + border).
@@ -236,70 +236,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 }
 
 /// Compact research description for the header status line.
+/// Delegates to `ResearchKind::label()` for most variants, with abbreviations
+/// where the header needs shorter text.
 fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
     match kind {
-        ResearchKind::IdentifyThreat { disease_idx } => {
-            let disease = state.diseases.get(*disease_idx);
-            let name = disease
-                .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
-                .map(|d| d.name.as_str())
-                .unwrap_or("Unknown");
-            let verb = if disease.is_some_and(|d| d.knowledge >= KNOWLEDGE_NAME) {
-                "Studying"
-            } else {
-                "Identifying"
-            };
-            format!("{} {}", verb, name)
-        }
-        ResearchKind::DevelopMedicine { medicine_idx } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-            name.to_string()
-        }
-        ResearchKind::ClinicalTrial { medicine_idx, .. } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-            format!("Trial: {}", name)
-        }
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let name = state.medicines.get(*medicine_idx)
                 .map(|m| m.name.as_str())
                 .unwrap_or("Unknown");
             format!("Mfg: {}", name)
         }
-        ResearchKind::GenomicSequencing { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .filter(|d| d.knowledge >= KNOWLEDGE_NAME)
-                .map(|d| d.name.as_str())
-                .unwrap_or("Unknown");
-            format!("Sequencing {}", name)
-        }
         ResearchKind::TrainPersonnel => "Training".to_string(),
-        ResearchKind::BasicResearch { tech } => tech.name().to_string(),
-        ResearchKind::SuppressPathogen { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Suppress {}", name)
-        }
-        ResearchKind::AttenuatePathogen { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Attenuate {}", name)
-        }
-        ResearchKind::InterdictPathogen { disease_idx } => {
-            let name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "Unknown".to_string());
-            format!("Interdict {}", name)
-        }
-        ResearchKind::FieldOperations { region_idx, system } => {
-            let region = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("?");
-            format!("Stabilize {} {}", system.label(), region)
-        }
+        _ => kind.label(state),
     }
 }
