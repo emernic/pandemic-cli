@@ -419,7 +419,7 @@ mod tests {
         state.pending_shipments.push(Shipment {
             medicine_idx: 0,
             region_idx: 0,
-            target: DeployTarget::Treat { disease_idx: 0 },
+            target: DeployTarget { disease_idx: 0 },
             doses: 1000.0,
             cost: 250.0,
             arrive_tick: state.tick + TICKS_PER_DAY as u64,
