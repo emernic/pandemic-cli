@@ -320,6 +320,10 @@ pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 pub const COLLAPSE_DISRUPTION_TICKS: u64 = (10.0 * TICKS_PER_DAY) as u64;
 /// Medicine deployment cost multiplier for regions disrupted by a neighboring collapse.
 pub const DISRUPTION_MEDICINE_COST_MULT: f64 = 1.5;
+/// Delivery throughput reduction per collapsed neighbor (multiplicative).
+/// Each collapsed neighbor reduces throughput by this fraction.
+/// E.g., 0.15 means one collapsed neighbor → 85% throughput, two → 72%.
+pub const COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR: f64 = 0.15;
 /// Post-collapse secondary death rate: fraction of alive population lost per day
 /// to starvation, violence, and infrastructure breakdown.
 pub const COLLAPSE_DEATH_RATE: f64 = 0.05;
@@ -1979,6 +1983,12 @@ pub struct Region {
     /// Multiple collapses extend the duration (last-collapse-wins on end tick).
     #[serde(default)]
     pub disrupted_until: Option<u64>,
+    /// Supply chain throughput penalty from collapsed neighbors (0.0–1.0 multiplier).
+    /// 1.0 = no penalty, lower = fewer doses delivered. Each collapsed neighbor
+    /// reduces throughput by a fraction proportional to its share of the region's
+    /// connections. Updated each tick in tick_infrastructure.
+    #[serde(default = "default_one")]
+    pub collapse_supply_penalty: f64,
     /// Estimated total infected (from detected diseases) visible to the player.
     /// This is a lagged estimate — not a simple multiplier of real values.
     /// Updated each tick by convergence toward reality; convergence rate depends
@@ -2115,9 +2125,11 @@ impl Region {
     /// Fraction of shipped doses that are effectively delivered and administered.
     /// Supply lines determine how many doses physically arrive (logistics).
     /// Healthcare capacity determines how many arriving doses can be administered (staff/facilities).
+    /// Collapse supply penalty reduces throughput when neighboring regions have collapsed
+    /// (the global supply chain narrows as logistics hubs go offline).
     /// These are independent sequential bottlenecks, so they multiply.
     pub fn delivery_efficiency(&self) -> f64 {
-        self.supply_lines * self.healthcare_capacity
+        self.supply_lines * self.healthcare_capacity * self.collapse_supply_penalty
     }
 
     /// True if ANY disease in this region has an active deploy cooldown.
@@ -3912,7 +3924,7 @@ pub enum GameEvent {
         doses: f64,
     },
     /// A shipment delivered and doses took effect.
-    /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare).
+    /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare × collapse penalty).
     ShipmentDelivered {
         medicine_idx: usize,
         region_idx: usize,
@@ -5005,6 +5017,7 @@ impl GameState {
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
+                collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
                 base_gdp: 280.0,  // Large, wealthy economy
@@ -5048,6 +5061,7 @@ impl GameState {
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
+                collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
                 base_gdp: 45.0,   // Moderate economy
@@ -5091,6 +5105,7 @@ impl GameState {
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
+                collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
                 base_gdp: 210.0,  // Strong, hub economy
@@ -5134,6 +5149,7 @@ impl GameState {
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
+                collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
                 base_gdp: 30.0,   // Lower per-capita economy
@@ -5177,6 +5193,7 @@ impl GameState {
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
+                collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
                 base_gdp: 380.0,  // Largest total economy
@@ -5220,6 +5237,7 @@ impl GameState {
                 civil_order: 1.0,
                 deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
+                collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
                 base_gdp: 18.0,   // Small but developed economy

@@ -800,6 +800,11 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
             // Show delivery efficiency when impaired
             let eff = region.delivery_efficiency();
             if eff < 0.95 {
+                let hint = if region.collapse_supply_penalty < 1.0 {
+                    " (HC × SL × collapse)"
+                } else {
+                    " (HC × SL)"
+                };
                 lines.push(Line::from(vec![
                     Span::styled("Delivery efficiency: ", label),
                     Span::styled(
@@ -807,7 +812,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(if eff < 0.5 { Color::Red } else { Color::Yellow }),
                     ),
                     Span::styled(
-                        " (HC × SL)",
+                        hint,
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]));
