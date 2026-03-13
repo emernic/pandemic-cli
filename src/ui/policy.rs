@@ -319,8 +319,38 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             continue;
         }
 
+        // Tiered policies: show level instead of misleading [OFF] for surpassed tiers
+        let status = if *active {
+            "[ON] "
+        } else if *policy_idx >= POLICY_IDX_SCREENING_BASE
+            && *policy_idx <= POLICY_IDX_SCREENING_BASE + 2
+        {
+            // Screening is tiered: check if current level is above this tier
+            let tier_level = match *policy_idx - POLICY_IDX_SCREENING_BASE {
+                0 => ScreeningLevel::Basic,
+                1 => ScreeningLevel::Antigen,
+                _ => ScreeningLevel::MassRapid,
+            };
+            if policy.screening > tier_level {
+                "[PAST]"
+            } else {
+                "[OFF]"
+            }
+        } else if *policy_idx == 10 && region.hospital_level == 1 {
+            // Hospital level 1 built — show [Lv1] not [OFF]
+            "[Lv1]"
+        } else if *policy_idx == 11 && region.intel_level == 1 {
+            // Intel level 1 built — show [Lv1] not [OFF]
+            "[Lv1]"
+        } else {
+            "[OFF]"
+        };
+
+        let is_surpassed = status == "[PAST]" || status == "[Lv1]";
         let status_style = if *active {
             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        } else if is_surpassed {
+            Style::default().fg(Color::Cyan)
         } else if can_afford {
             Style::default().fg(Color::DarkGray)
         } else {
@@ -330,13 +360,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         let name_style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else if !*active && !can_afford {
-            // Unaffordable: mute name — player can see but enabling achieves nothing
             Style::default().fg(Color::DarkGray)
         } else {
             Style::default().fg(Color::White)
         };
-
-        let status = if *active { "[ON] " } else { "[OFF]" };
 
         let mut row = vec![
             Span::styled(format!("{}", marker), name_style),
