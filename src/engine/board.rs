@@ -36,7 +36,7 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             title: if is_chairman {
                 format!("Chairman of the Board, {}", corp.name)
             } else {
-                format!("CEO, {}", corp.name)
+                format!("Dir., {}", corp.name)
             },
             role: BoardRole::CorporateLeader { corp_idx },
             corp_idx: Some(corp_idx),
