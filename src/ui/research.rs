@@ -146,7 +146,9 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
     };
     let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
     let remaining = (project.required_ticks - project.progress).max(0.0);
-    let speed = project.speed(&state.medicines);
+    let personnel_speed = project.speed(&state.medicines);
+    let infra_mult = state.research_infra_multiplier();
+    let speed = personnel_speed * infra_mult;
     let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
     let auto_tag = if state.auto_repeat_research.contains(&project.kind) { " AUTO" } else { "" };
     lines.push(Line::from(Span::styled(
@@ -162,6 +164,15 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
     lines.push(Line::from(Span::styled(
         format!("    Progress: {:.0}%, {} remaining", pct, format_days(effective_remaining)),
         Style::default().fg(Color::Green),
+    )));
+    let speed_tag = if (speed - 1.0).abs() < 0.01 {
+        String::new()
+    } else {
+        format!("  {:.1}x speed", speed)
+    };
+    lines.push(Line::from(Span::styled(
+        format!("    {} personnel{}", project.personnel_assigned, speed_tag),
+        Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
 }

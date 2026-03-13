@@ -6681,6 +6681,17 @@ impl GameState {
         }
     }
 
+    /// Combined research speed multiplier from lab upgrades and biotech sector bonus.
+    /// Multiply by `ResearchProject::speed()` to get the effective per-tick rate.
+    pub fn research_infra_multiplier(&self) -> f64 {
+        let lab_mult = self.lab_speed_multiplier();
+        let biotech_bonus = (0..self.regions.len())
+            .map(|r| self.sector_bonus(r, CorporationSector::Biotech))
+            .fold(0.0_f64, f64::max);
+        let biotech_mult = 1.0 + CorporationSector::Biotech.max_bonus_pct() / 100.0 * biotech_bonus;
+        lab_mult * biotech_mult
+    }
+
     /// Human-readable name for the current lab level.
     pub fn lab_level_name(&self) -> &'static str {
         match self.lab_level {
