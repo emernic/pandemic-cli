@@ -827,31 +827,36 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         else { Color::LightRed };
                     (format!("¥{:.0}", corp.share_price), color)
                 };
-                let change_str = if corp.bankrupt {
-                    String::new()
-                } else if change > 0.5 {
-                    format!(" ▲{:+.1}%", change)
-                } else if change < -0.5 {
-                    format!(" ▼{:+.1}%", change)
-                } else {
-                    " ──".to_string()
-                };
                 let change_color = if change > 0.5 { Color::Green }
                     else if change < -0.5 { Color::Red }
                     else { Color::DarkGray };
                 let board_marker = if corp.board_seat { " ★" } else { "" };
                 let spark = sparkline(&corp.price_history, 8);
+                // Truncate long names to fit the column, then pad to fixed width.
+                let max_name_len = 22;
+                let display_name: String = corp.name.chars().take(max_name_len).collect();
+                // Build change string with fixed-width arrow column.
+                // Arrows (▲/▼) are 1 display column each, so format! padding works.
+                let padded_change = if corp.bankrupt {
+                    format!("{:<10}", "")
+                } else if change > 0.5 {
+                    format!(" ▲{:>+5.1}%", change)
+                } else if change < -0.5 {
+                    format!(" ▼{:>+5.1}%", change)
+                } else {
+                    format!(" {:<9}", "──")
+                };
                 lines.push(Line::from(vec![
                     Span::styled(
-                        format!(" {:<18}", corp.name),
+                        format!(" {:<width$}", display_name, width = max_name_len),
                         Style::default().fg(if corp.bankrupt { Color::DarkGray } else { Color::White }),
                     ),
                     Span::styled(
-                        format!("{:<6}", ticker_str),
+                        format!("{:>7} ", ticker_str),
                         Style::default().fg(price_color),
                     ),
                     Span::styled(
-                        format!("{:<8}", change_str),
+                        padded_change,
                         Style::default().fg(change_color),
                     ),
                     Span::styled(
