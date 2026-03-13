@@ -123,8 +123,10 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 ""
             };
             let status_color = if auto_on { Color::Green } else { Color::Cyan };
+            let type_label = med.therapy_type.label();
             lines.push(Line::from(vec![
                 Span::styled(format!("{}{}", marker, med.name), style),
+                Span::styled(format!("  {}", type_label), Style::default().fg(Color::Cyan)),
                 Span::styled(status_tag, Style::default().fg(status_color)),
             ]));
 
