@@ -67,20 +67,35 @@ pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<
 
 /// Render a sparkline from price history using Unicode block characters.
 /// `width` controls how many data points (from the tail) are shown.
-pub fn sparkline(history: &[f64], width: usize) -> String {
+/// Returns (sparkline_string, trend_color) where trend_color is Green if the
+/// price is up over the visible window, Red if down, DarkGray if flat.
+pub fn sparkline(history: &[f64], width: usize) -> (String, Color) {
     if history.is_empty() {
-        return String::new();
+        return (String::new(), Color::DarkGray);
     }
-    let bars = [' ', '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
+    // All 8 levels are visible — no space character, so the minimum value
+    // still renders as ▁ rather than disappearing.
+    let bars = ['\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}'];
     let min = history.iter().cloned().fold(f64::INFINITY, f64::min);
     let max = history.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let range = (max - min).max(0.01);
     let start = history.len().saturating_sub(width);
     let slice = &history[start..];
-    slice.iter().map(|v| {
+    let chart: String = slice.iter().map(|v| {
         let normalized = ((v - min) / range * 7.0).round() as usize;
-        bars[normalized.min(8)]
-    }).collect()
+        bars[normalized.min(7)]
+    }).collect();
+    // Color based on overall trend across the visible window.
+    let first = slice.first().copied().unwrap_or(0.0);
+    let last = slice.last().copied().unwrap_or(0.0);
+    let color = if last > first + 0.01 {
+        Color::Green
+    } else if last < first - 0.01 {
+        Color::Red
+    } else {
+        Color::DarkGray
+    };
+    (chart, color)
 }
 
 /// Convert game events from the most recent tick into status/log messages.

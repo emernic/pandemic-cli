@@ -126,7 +126,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             "-".to_string()
         };
 
-        let spark = sparkline(&corp.price_history, 12);
+        let (spark, spark_color) = sparkline(&corp.price_history, 12);
+        let spark_color = if corp.bankrupt { Color::DarkGray } else { spark_color };
 
         let name_style = if corp.bankrupt {
             Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
@@ -170,7 +171,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Span::styled(format!(" {:>5}", held_str), Style::default().fg(if held > 0 { Color::Cyan } else { Color::DarkGray })),
             Span::styled(format!(" {:>5}", pl_str), Style::default().fg(if held > 0 { change_color } else { Color::DarkGray })),
             Span::raw("  "),
-            Span::styled(spark, Style::default().fg(if corp.bankrupt { Color::DarkGray } else { Color::Green })),
+            Span::styled(spark, Style::default().fg(spark_color)),
         ]));
     }
 
