@@ -78,7 +78,10 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     spread::tick_horizontal_gene_transfer(&mut new);
 
     // Research progress
-    research::tick_research(&mut new, &mut rng_research);
+    let research_completions = research::tick_research(&mut new, &mut rng_research);
+    for _ in 0..research_completions {
+        board::on_research_completed(&mut new);
+    }
 
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new);
@@ -110,7 +113,10 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     policy::tick_governor_actions(&mut new);
 
     // Standing orders — auto-enable policies when severity thresholds are crossed.
-    policy::tick_standing_orders(&mut new);
+    let gdp_regions = policy::tick_standing_orders(&mut new);
+    for r_idx in gdp_regions {
+        board::on_gdp_policy_enacted(&mut new, r_idx);
+    }
 
     // Screening infrastructure — update progress ramp-up and estimated infection counts.
     // Must run after spread (so real values are current) and after policy costs
@@ -798,7 +804,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             region_idx,
             policy,
         } => {
-            let (msg, success) = policy::toggle_policy(state, *region_idx, *policy);
+            let (msg, success, gdp_region) = policy::toggle_policy(state, *region_idx, *policy);
+            if let Some(r_idx) = gdp_region {
+                board::on_gdp_policy_enacted(state, r_idx);
+            }
             CommandResult { message: msg, success }
         }
         GameCommand::ResolveCrisis { choice } => {
@@ -5518,7 +5527,7 @@ mod tests {
         state.ark_protocol = Some(0); // North America is the Ark
 
         // Try toggling policy in region 1 (abandoned)
-        let (msg, success) = policy::toggle_policy(&mut state, 1, PolicyId::TravelBan);
+        let (msg, success, _) = policy::toggle_policy(&mut state, 1, PolicyId::TravelBan);
         assert!(!success, "should block policy toggle in abandoned region");
         assert!(msg.unwrap().contains("abandoned"));
 
@@ -5530,7 +5539,7 @@ mod tests {
         assert!(msg.unwrap().contains("abandoned"));
 
         // Same actions should work on the Ark region (region 0)
-        let (msg, success) = policy::toggle_policy(&mut state, 0, PolicyId::TravelBan);
+        let (msg, success, _) = policy::toggle_policy(&mut state, 0, PolicyId::TravelBan);
         // May fail for other reasons (cost, etc.) but NOT because of abandonment
         if !success {
             assert!(!msg.unwrap().contains("abandoned"),

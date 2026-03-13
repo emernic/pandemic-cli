@@ -96,10 +96,27 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     policy_cost
 }
 
-/// Toggle a policy for a region. Returns (message, success) where success
-/// indicates the toggle actually happened (vs being rejected).
+/// Toggle a policy for a region. Returns (message, success, gdp_policy_region) where success
+/// indicates the toggle actually happened (vs being rejected), and gdp_policy_region is
+/// Some(region_idx) when a GDP-hurting policy was enacted (for board notification).
 /// Does not touch UI state.
-pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool) {
+pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool, Option<usize>) {
+    let (msg, success) = toggle_policy_inner(state, region_idx, policy);
+    // Signal GDP-hurting policy enactment for board notification by the orchestrator.
+    // A GDP-hurting policy was enacted if the toggle succeeded and the policy is now active.
+    let gdp_region = if success && matches!(policy, PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::MartialLaw) {
+        let is_now_active = match policy {
+            PolicyId::MartialLaw => state.policies.get(region_idx).is_some_and(|p| p.martial_law),
+            _ => state.policies.get(region_idx).is_some_and(|p| p.get_bool(policy)),
+        };
+        if is_now_active { Some(region_idx) } else { None }
+    } else {
+        None
+    };
+    (msg, success, gdp_region)
+}
+
+fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool) {
     if region_idx >= state.policies.len() {
         return (None, false);
     }
@@ -180,10 +197,6 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy: Po
                 (Some(format!("{region_name}: {off_msg}")), true)
             } else if available_personnel >= personnel {
                 state.policies[region_idx].set_bool(policy, true);
-                // Profiteer board members penalized when GDP-hurting policies enacted
-                if matches!(policy, PolicyId::TravelBan | PolicyId::Quarantine) {
-                    super::board::on_gdp_policy_enacted(state, region_idx);
-                }
                 let conflicts = conflicting_contract_names(state, policy);
                 let msg = if conflicts.is_empty() {
                     format!("{region_name}: {on_msg}")
@@ -242,7 +255,6 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy: Po
                 (Some(format!("{region_name}: Martial Law lifted")), true)
             } else if available_personnel >= ml_personnel {
                 state.policies[region_idx].martial_law = true;
-                super::board::on_gdp_policy_enacted(state, region_idx);
                 (Some(format!("{region_name}: Martial Law declared (collapse threshold −15%)")), true)
             } else {
                 (Some(format!(
@@ -1059,10 +1071,12 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
 /// Auto-enables policies for regions that cross severity thresholds,
 /// provided the policy isn't already active and the player has the
 /// required board approval and personnel.
-pub(super) fn tick_standing_orders(state: &mut GameState) {
+/// Returns region indices where GDP-hurting policies were enacted (for board notification).
+pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
     // Affordability guard: don't try to auto-enable policies when the player can't
     // sustain the current cost load. Prevents oscillation where cost enforcement
     // suspends a policy and this function immediately re-enables it.
+    let mut gdp_regions = Vec::new();
     let current_cost = state.total_policy_funding_cost();
     let num_regions = state.regions.len();
     for region_idx in 0..num_regions {
@@ -1077,8 +1091,9 @@ pub(super) fn tick_standing_orders(state: &mut GameState) {
             && !state.policies[region_idx].quarantine
             && state.resources.funding > current_cost + QUARANTINE_COST
         {
-            let (_, ok) = toggle_policy(state, region_idx, PolicyId::Quarantine);
+            let (_, ok, gdp_region) = toggle_policy(state, region_idx, PolicyId::Quarantine);
             if ok {
+                if let Some(r) = gdp_region { gdp_regions.push(r); }
                 let region_name = state.regions[region_idx].name.clone();
                 let conflicts = conflicting_contract_names(state, PolicyId::Quarantine);
                 let suffix = if conflicts.is_empty() {
@@ -1099,8 +1114,9 @@ pub(super) fn tick_standing_orders(state: &mut GameState) {
             && !state.policies[region_idx].travel_ban
             && state.resources.funding > current_cost + TRAVEL_BAN_COST
         {
-            let (_, ok) = toggle_policy(state, region_idx, PolicyId::TravelBan);
+            let (_, ok, gdp_region) = toggle_policy(state, region_idx, PolicyId::TravelBan);
             if ok {
+                if let Some(r) = gdp_region { gdp_regions.push(r); }
                 let region_name = state.regions[region_idx].name.clone();
                 let conflicts = conflicting_contract_names(state, PolicyId::TravelBan);
                 let suffix = if conflicts.is_empty() {
@@ -1115,6 +1131,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) {
             }
         }
     }
+    gdp_regions
 }
 
 /// Update screening infrastructure progress and estimated infection counts.
@@ -1214,22 +1231,22 @@ mod tests {
     fn screening_mutual_exclusivity() {
         let mut state = screening_test_state();
         // Enable Low screening on region 0
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::BasicScreening);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::BasicScreening);
         assert!(ok);
         assert_eq!(state.policies[0].screening, ScreeningLevel::Basic);
 
         // Switch to Medium — should replace Low, not stack
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
         assert!(ok);
         assert_eq!(state.policies[0].screening, ScreeningLevel::Antigen);
 
         // Switch to High — replaces Medium
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::MassRapidScreen);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::MassRapidScreen);
         assert!(ok);
         assert_eq!(state.policies[0].screening, ScreeningLevel::MassRapid);
 
         // Toggle High again — disables screening
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::MassRapidScreen);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::MassRapidScreen);
         assert!(ok);
         assert_eq!(state.policies[0].screening, ScreeningLevel::None);
     }
@@ -1240,25 +1257,25 @@ mod tests {
         state.resources.funding = 10_000.0;
         // Basic screening has no authority requirement — always available
         state.resources.authority = Authority::Minimal;
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::BasicScreening);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::BasicScreening);
         assert!(ok, "Basic screening should work at any authority level");
 
         // Antigen requires RapidSequencing research — blocked without it
         state.resources.authority = Authority::Medium;
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
         assert!(!ok, "Antigen screening should be blocked without RapidSequencing");
         assert!(msg.unwrap().contains("research"), "should mention research prerequisite");
 
         // Unlock research but drop authority — blocked by authority
         state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
         state.resources.authority = Authority::Minimal;
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
         assert!(!ok, "Antigen screening should be blocked at Minimal authority");
         assert!(msg.unwrap().contains("Authority"));
 
         // With research AND enough authority, Antigen should work
         state.resources.authority = Authority::Low;
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
         assert!(ok, "Antigen screening should work with research + Low authority");
     }
 
@@ -1277,12 +1294,12 @@ mod tests {
 
         // Upgrade to Medium: needs 2, frees 1 from Low, so needs 1 more available
         // With available=0 and freed=1, effective_available=1 < needed=2 → should fail
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
         assert!(!ok, "should fail: 0 available + 1 freed = 1 < 2 needed");
 
         // Give 1 more personnel: available=1, freed=1 from Low → effective=2 >= 2
         state.resources.personnel = busy + 1;
-        let (_, ok) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::AntigenScreening);
         assert!(ok, "should succeed: 1 available + 1 freed = 2 >= 2 needed");
         assert_eq!(state.policies[0].screening, ScreeningLevel::Antigen);
     }
@@ -1455,7 +1472,7 @@ mod tests {
         let mut state = screening_test_state();
 
         // Build Level 1: Field Hospital
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
         assert!(ok, "should succeed with sufficient funds");
         assert_eq!(state.regions[0].hospital_level, 1);
         assert!(msg.unwrap().contains("Field Hospital"));
@@ -1464,14 +1481,14 @@ mod tests {
         assert!(funds_after_l1 < 10_000.0, "funding should be deducted");
 
         // Upgrade to Level 2: Medical Center
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
         assert!(ok, "upgrade should succeed");
         assert_eq!(state.regions[0].hospital_level, 2);
         assert!(msg.unwrap().contains("Medical Center"));
         assert!(state.resources.funding < funds_after_l1, "upgrade should cost funds");
 
         // Try again — already maxed
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
         assert!(!ok, "should not build past level 2");
         assert!(msg.unwrap().contains("already"));
     }
@@ -1481,7 +1498,7 @@ mod tests {
         let mut state = screening_test_state();
         state.regions[0].collapsed = true;
 
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::FieldHospital);
         assert!(!ok, "should not build in collapsed region");
         assert!(msg.unwrap().contains("collapsed"));
     }
@@ -2040,7 +2057,7 @@ mod tests {
         });
 
         // Enable quarantine — should succeed but warn about the contract
-        let (msg, ok) = toggle_policy(&mut state, 0, PolicyId::Quarantine);
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::Quarantine);
         assert!(ok);
         let msg = msg.unwrap();
         assert!(msg.contains("Quarantine"), "should mention the policy: {msg}");
