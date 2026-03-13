@@ -157,6 +157,7 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
         format!("    Progress: {:.0}%, {} remaining", pct, format_days(effective_remaining)),
         Style::default().fg(Color::Green),
     )));
+    lines.push(Line::from(""));
 }
 
 /// Render an available (startable) research project with cost details.
