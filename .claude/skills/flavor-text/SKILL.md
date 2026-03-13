@@ -10,7 +10,7 @@ You are writing user-facing text for a sci-fi pandemic defense game. This includ
 
 **Read this skill BEFORE writing the text.** Internalize the principles, THEN write. Do not write first and check against this later.
 
-Before writing any Pandemic CLI text involving the N.W.H.O., the board, governors, corporations, contracts, decrees, aid, or regional authority, read `docs/setting.md`. It defines what power relationships literally exist in this world. Do not guess.
+Before writing any Pandemic CLI text involving the N.W.H.O., the board, governors, corporations, contracts, decrees, aid, or regional authority, read `docs/setting.md` and `docs/framing-guide.md`. `setting.md` defines the literal power relationships. `framing-guide.md` is the short operational check for describing them correctly. Do not guess.
 
 ## The Core Problem: AI-Generated Text Sounds Like AI
 
