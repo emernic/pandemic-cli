@@ -4429,8 +4429,7 @@ mod tests {
     #[test]
     fn crisis_urgency_increases_budget_with_visible_infections() {
         let mut state = GameState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        crate::engine::initialize_game(&mut state);
 
         assert!(state.reference_base_budget_per_tick > 0.0,
             "reference base should be set after board init");
@@ -4568,8 +4567,7 @@ mod tests {
     #[test]
     fn vote_no_confidence_stand_firm_cuts_budget() {
         let mut state = GameState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        crate::engine::initialize_game(&mut state);
         state.resources.funding = 5000.0;
         state.resources.authority = Authority::Medium;
         let budget_before = state.board_budget_per_tick;
