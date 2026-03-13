@@ -4595,6 +4595,23 @@ impl CrisisKind {
             CrisisKind::CorporateDemand { .. } => "corp_demand",
         }
     }
+
+    /// Whether this crisis kind should fire immediately, bypassing CRISIS_MIN_GAP.
+    /// Pathogen detections and governor crises are time-sensitive: the player needs
+    /// to respond before the situation evolves further.
+    pub fn bypasses_crisis_gap(&self) -> bool {
+        matches!(self,
+            CrisisKind::NewPathogenDetected { .. }
+            | CrisisKind::GovernorHardliner { .. }
+            | CrisisKind::GovernorBlowhard { .. }
+            | CrisisKind::GovernorRecluse { .. }
+            | CrisisKind::GovernorOperative { .. }
+            | CrisisKind::GovernorBuffoon { .. }
+            | CrisisKind::GovernorMobster { .. }
+            | CrisisKind::GovernorSick { .. }
+            | CrisisKind::GovernorDeath { .. }
+        )
+    }
 }
 
 /// Crisis events start appearing after this many ticks (~3 days).

@@ -360,11 +360,12 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     let crisis_gap_ok = new.last_crisis_resolved_tick == 0
         || new.tick.saturating_sub(new.last_crisis_resolved_tick) >= CRISIS_MIN_GAP;
 
-    // Fire pending pathogen detection alerts immediately — these bypass the normal
-    // crisis gap because the player needs to know about new threats ASAP.
+    // Fire urgent crises immediately — these bypass the normal crisis gap.
+    // Pathogen detections: player needs to know about new threats ASAP.
+    // Governor crises: governor already acted unilaterally, player needs to respond.
     if new.active_crisis.is_none() {
         if let Some(idx) = new.pending_crises.iter().position(|(tick, kind)|
-            *tick <= new.tick && matches!(kind, CrisisKind::NewPathogenDetected { .. }))
+            *tick <= new.tick && kind.bypasses_crisis_gap())
         {
             let (_, kind) = new.pending_crises.remove(idx);
             let crisis = crisis::build_crisis_event(&new, kind);
@@ -5078,6 +5079,20 @@ mod tests {
         let after2 = tick(&state2);
         assert!(after2.active_crisis.is_some(),
             "pending crisis should fire after gap is met");
+    }
+
+    #[test]
+    fn governor_crises_bypass_crisis_min_gap() {
+        let mut state = GameState::new_default(42);
+        state.tick = 500;
+        state.last_contract_offer_tick = state.tick;
+        // Recently resolved crisis — gap NOT met
+        state.last_crisis_resolved_tick = state.tick - 10;
+        state.pending_crises.push((state.tick, CrisisKind::GovernorHardliner { region_idx: 0 }));
+        let after = tick(&state);
+        // Governor crisis should fire despite gap not being met
+        assert!(after.active_crisis.is_some(),
+            "governor crisis should bypass CRISIS_MIN_GAP");
     }
 
     #[test]
