@@ -176,25 +176,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     Span::styled("Lethality: ?", Style::default().fg(Color::DarkGray))
                 };
 
-                // Observed Rt from daily screened infection estimates.
-                // Rt = (today / yesterday) when generation time ≈ 1 day, otherwise
-                // Rt = (today / yesterday) ^ generation_time_days.
                 let rt_span = if disease.knowledge >= KNOWLEDGE_PARTIAL_STATS {
-                    let prev = disease.prev_day_observed_infected;
-                    let curr = disease.current_day_observed_infected;
-                    // Need meaningful data: prev > 10 to avoid noise-dominated ratios
-                    if prev > 10.0 && curr > 0.0 {
-                        let generation_time_days = (disease.incubation_ticks / TICKS_PER_DAY)
-                            + 0.5 / (disease.lethality + disease.recovery_rate) / TICKS_PER_DAY;
-                        // Clamp generation time to reasonable range
-                        let gen_t = generation_time_days.clamp(0.5, 30.0);
-                        let growth = curr / prev;
-                        let rt = growth.powf(gen_t);
+                    if let Some(rt) = disease.observed_rt() {
                         let (symbol, color) = if rt > 1.5 { ("▲", Color::Red) }
                             else if rt > 1.05 { ("▲", Color::Yellow) }
                             else if rt > 0.95 { ("─", Color::White) }
                             else { ("▼", Color::Green) };
-                        // Compute average screening visibility for confidence
                         let avg_vis: f64 = state.regions.iter().enumerate()
                             .map(|(idx, _)| state.screening_visibility(idx))
                             .sum::<f64>() / state.regions.len() as f64;
