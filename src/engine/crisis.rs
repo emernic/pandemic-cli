@@ -2949,9 +2949,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Quarantine lifted in {} after unrest", region_name)
         }
         (CrisisKind::QuarantineRiot { .. }, 1) => {
-            // Deploy military — chairman satisfaction hit (personnel already deducted)
+            // Hire private security — chairman satisfaction hit (personnel already deducted)
             chairman_satisfaction_hit(state, -0.15);
-            "Military deployed. Quarantine maintained by force.".into()
+            "Private security deployed. Quarantine maintained by force.".into()
         }
         (CrisisKind::QuarantineRiot { region_idx }, _) => {
             // Wait it out — quarantine temporarily breached, small POL loss
