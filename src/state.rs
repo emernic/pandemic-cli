@@ -164,6 +164,10 @@ pub struct GameState {
     /// Player's stock portfolio — shares owned per corporation index.
     #[serde(default)]
     pub portfolio: Vec<u32>,
+    /// Total cost basis per corporation index (what the player actually paid).
+    /// Used for accurate P/L display in the ledger.
+    #[serde(default)]
+    pub cost_basis: Vec<f64>,
     /// Named board members with individual satisfaction. Generated at game start
     /// from board-seat corporations and selected governors.
     #[serde(default)]
@@ -5622,6 +5626,7 @@ impl GameState {
             contract_decline_counts: Vec::new(),
             corporations: Vec::new(),
             portfolio: Vec::new(),
+            cost_basis: Vec::new(),
             board_members: Vec::new(),
             next_board_meeting_tick: 0, // initialized properly after RNG setup
             board_budget_per_tick: 0.0, // set properly after corporations are generated
