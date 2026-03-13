@@ -831,7 +831,8 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     else if change < -0.5 { Color::Red }
                     else { Color::DarkGray };
                 let board_marker = if corp.board_seat { " ★" } else { "" };
-                let spark = sparkline(&corp.price_history, 8);
+                let (spark, spark_color) = sparkline(&corp.price_history, 8);
+                let spark_color = if corp.bankrupt { Color::DarkGray } else { spark_color };
                 // Truncate long names to fit the column, then pad to fixed width.
                 let max_name_len = 22;
                 let display_name: String = corp.name.chars().take(max_name_len).collect();
@@ -861,7 +862,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                     Span::styled(
                         format!(" {}", spark),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(spark_color),
                     ),
                     Span::styled(
                         board_marker,
