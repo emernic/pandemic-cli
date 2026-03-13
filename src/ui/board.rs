@@ -328,12 +328,7 @@ fn modifier_context(
         ModifierSource::RegionalGdp => {
             if let Some(idx) = member.region_idx {
                 if let Some(region) = state.regions.get(idx) {
-                    let status = if region.collapsed { "COLLAPSED" }
-                        else if region.gdp_fraction() < 0.40 { "Depression" }
-                        else if region.gdp_fraction() < 0.60 { "Recession" }
-                        else if region.gdp_fraction() < 0.80 { "Strained" }
-                        else { "Stable" };
-                    return format!("{:.0}k ({})", region.gdp, status);
+                    return format!("{:.0}k ({})", region.gdp, region.gdp_status());
                 }
             }
             String::new()
