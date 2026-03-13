@@ -166,8 +166,9 @@ pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::
 ///
 /// Delivery efficiency is based on regional infrastructure: supply lines
 /// determine how many doses physically arrive, healthcare capacity determines
-/// how many can be administered. These multiply, so degraded regions receive
-/// far fewer effective doses. Wasted doses are lost permanently.
+/// how many can be administered, and collapsed neighbors reduce throughput
+/// further. These multiply, so degraded regions receive far fewer effective
+/// doses. Wasted doses are lost permanently.
 fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     let med_idx = shipment.medicine_idx;
     let reg_idx = shipment.region_idx;

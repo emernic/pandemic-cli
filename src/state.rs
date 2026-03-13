@@ -3917,7 +3917,7 @@ pub enum GameEvent {
         doses: f64,
     },
     /// A shipment delivered and doses took effect.
-    /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare).
+    /// `efficiency` is the fraction of shipped doses that were usable (supply_lines × healthcare × collapse penalty).
     ShipmentDelivered {
         medicine_idx: usize,
         region_idx: usize,
