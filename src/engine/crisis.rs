@@ -1888,19 +1888,24 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
         }
         CrisisKind::PublicInquiry => {
+            let cost = scaled_cost(state, 0.12, 80.0, 400.0);
             CrisisEvent {
                 title: "Data Suppression Exposed".into(),
                 description:
-                    "The data leak you suppressed has resurfaced. Your concealment is now \
-                     a matter of public record. An independent inquiry has been demanded.".into(),
+                    "The data leak you suppressed has resurfaced. A board member is calling \
+                     for a formal audit of your operational conduct.".into(),
                 options: vec![ CrisisOption {
-                    label: "Full transparency now".into(),
-                    description: "Lose 3 days research progress, gain +10% board approval for honesty".into(),
-                    cost: None,
+                    label: format!("Cooperate with audit (¥{cost:.0}, 3 personnel for 2d)"),
+                    description: "+10% board approval. Compliance team diverted for 2 days.".into(),
+                    cost: Some(CrisisCost {
+                        funding: cost,
+                        personnel: 3,
+                        operation: Some(OperationSpec { days: 2.0, label: "Audit Compliance".into() }),
+                    }),
                 },
                  CrisisOption {
                     label: "Stonewall".into(),
-                    description: "−20% board approval. Research intact.".into(),
+                    description: "No cost. Board approval drops 20%.".into(),
                     cost: None,
                 },
                 ],
@@ -3627,20 +3632,14 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::PublicInquiry, 0) => {
-            // Full transparency — lose research progress, gain POL
-            let loss = (3.0 * TICKS_PER_DAY) as f64;
-            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
-                proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
+            // Cooperate with audit — funding + personnel cost already deducted, gain approval
             state.resources.board_approval += 0.10;
-            "Full transparency. Lost research time, rebuilt public trust.".into()
+            "Audit cooperation underway. Board confidence restored.".into()
         }
         (CrisisKind::PublicInquiry, _) => {
-            // Stonewall — massive POL loss
+            // Stonewall — board approval loss
             state.resources.board_approval -= 0.20;
-            "Stonewalled the inquiry. Public outrage intensifies.".into()
+            "Stonewalled the audit. Board members are furious.".into()
         }
 
         (CrisisKind::Infodemic { region_idx }, 0) => {
