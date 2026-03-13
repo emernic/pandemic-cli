@@ -6193,4 +6193,44 @@ mod tests {
         }
     }
 
+    #[test]
+    fn gdp_target_includes_trade_coupling() {
+        let mut state = GameState::new_default(42);
+        // Clear crises so they don't interfere
+        state.active_crisis = None;
+
+        // All regions start with gdp == base_gdp, so trade_factor ≈ 1.0.
+        // Pick a region with connections.
+        let region_idx = 0;
+        assert!(!state.regions[region_idx].connections.is_empty(),
+            "test region must have connections");
+
+        let healthy_target = state.gdp_target(region_idx);
+        assert!(healthy_target > 0.0);
+
+        // Now tank all connected neighbors' GDP to 0 (simulating collapse-like economy).
+        let neighbors: Vec<usize> = state.regions[region_idx].connections.clone();
+        for &n in &neighbors {
+            state.regions[n].gdp = 0.0;
+        }
+
+        let damaged_target = state.gdp_target(region_idx);
+        // Trade coupling should reduce the target (by up to 30% for non-trade-dependent,
+        // up to 50% for trade-dependent).
+        assert!(damaged_target < healthy_target,
+            "neighbor GDP collapse should reduce trade-coupled target: {} should be < {}",
+            damaged_target, healthy_target);
+
+        // The reduction should be roughly 30% (or 50% if TradeDependent).
+        let ratio = damaged_target / healthy_target;
+        let is_trade_dep = state.regions[region_idx].traits.contains(&crate::state::RegionTrait::TradeDependent);
+        if is_trade_dep {
+            assert!((ratio - 0.5).abs() < 0.05,
+                "trade-dependent region should lose ~50% from zeroed neighbors, got ratio {}", ratio);
+        } else {
+            assert!((ratio - 0.7).abs() < 0.05,
+                "normal region should lose ~30% from zeroed neighbors, got ratio {}", ratio);
+        }
+    }
+
 }
