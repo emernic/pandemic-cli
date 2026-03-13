@@ -33,6 +33,14 @@ Check specifically:
 
 **If you wrote or edited more than 3 words of any document OR any user-facing text, you MUST run `/humanizer` on it before finishing.** For user-facing text (crisis events, policy descriptions, UI labels, game-over messages, anything the player sees), also run `/flavor-text` first. This is not optional. Do it now if you haven't.
 
+**World-framing check:** If you wrote or edited text about the N.W.H.O., the board, governors, corporations, contracts, decrees, aid, or regional authority, read `docs/setting.md` and check for 20th-century framing errors. Common slop patterns:
+
+- treating the N.W.H.O. like a sovereign state
+- implying governors are subordinate appointees instead of independent power holders
+- writing board pressure as corruption of an otherwise pure humanitarian mission
+- using NGO/media vocabulary where the game should name specific actors, directives, leverage, or operational consequences
+- implying military or federal powers the player does not actually have
+
 **If you wrote or edited anything — documents, comments, descriptions, names — go back and re-read every word.** Two checks:
 
 1. **Accuracy:** Is every word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.

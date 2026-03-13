@@ -29,6 +29,7 @@ You are writing a GitHub issue based on something you encountered during this co
 7. **Be self-contained.** The person reading this issue will NOT have access to your conversation. They need to understand the problem fully from the issue alone. Include relevant code paths, reproduction steps, and context.
 8. **Keep scope narrow.** One issue = one problem or one feature. If you noticed multiple things, file multiple issues.
 9. **Separate what you observed from what you suspect.** Be concise, but don't cut useful context for brevity's sake. The real problem is when speculation about root causes gets mixed in with observations and read as fact. Keep the main description grounded in what you literally saw and did. If you have theories about why something is happening, put them in a clearly marked section: `## Possible Causes (unverified)`. The next person must be able to distinguish "this definitely happened" from "I think this might be why."
+10. **Frame Pandemic CLI issues from inside the actual world model.** Before filing issues about crisis text, governors, board behavior, decrees, contracts, aid, or regional authority, read `docs/setting.md`. Do not write issues that assume the player has sovereign government powers the setting does not grant.
 
 ## Process
 
@@ -104,6 +105,16 @@ Think carefully about the title and body before writing. The title should be spe
 ## Possible Solution (do not use directly)
 [OPTIONAL — only if you have a concrete idea. The implementer should feel free to ignore this.]
 ```
+
+For Pandemic CLI writing/design issues, prefer concrete framing like:
+- "This text implies the N.W.H.O. can override a governor by fiat, which conflicts with `docs/setting.md`."
+- "This crisis is framed as generic public backlash instead of named pressure from governors, board members, or contract stakeholders."
+
+Avoid thematic-summary issue language like:
+- "This undermines the game's commentary on power."
+- "This weakens the satire."
+
+Those may be true internally, but they are not precise enough for workers to act on.
 
 **For investigate issues**, use this structure:
 ```markdown

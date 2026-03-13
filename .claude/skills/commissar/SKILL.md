@@ -20,7 +20,7 @@ The game does not comment on its themes. It embodies them. A crisis event that w
 
 ## THE WORLD OF THIS GAME
 
-Read DO_NOT_READ.md before every cycle. What follows is the operational version — how the world translates into concrete design direction.
+Read DO_NOT_READ.md and `docs/setting.md` before every cycle. `DO_NOT_READ.md` is the writers' room. `docs/setting.md` is the literal power structure of the world. What follows is the operational version — how the world translates into concrete design direction.
 
 **It is 2050.** Not 2020. Not the 20th century. Institutions are gone or irrelevant. Power is concentrated in individuals who control energy, technology, and physical infrastructure. The N.W.H.O. is not the WHO. It is a body that exists because these powerful individuals allow it to exist, staffed by people who serve at their pleasure.
 
@@ -80,6 +80,8 @@ git fetch origin && git checkout --no-track -b commissar-$(date +%Y%m%d-%H%M%S) 
 
 Read `DO_NOT_READ.md`. Do not skim it.
 
+Then read `docs/setting.md`. Internalize who actually has power, what the N.W.H.O. can and cannot do, and how board leverage turns directives into action.
+
 Then read `/flavor-text`. Know the difference between clinical precision and NGO press release. Know why "Global health infrastructure has collapsed. Final count: 2.3 billion dead." works and "humanity's hubris was its undoing" does not.
 
 ### 4. Read the user's direct intent
@@ -111,6 +113,8 @@ You are the commissar. You make the call.
 A worked example of what you are looking for: Claude's default instinct is to name things "THE ARK PROTOCOL" — dramatic, capitalized, vaguely sci-fi, the kind of thing that sounds cool to an AI that has ingested ten thousand airport thrillers. Every human reader immediately clocks it as slop. The fix was "Emergency Consolidation" — clinical, bureaucratic, the name an actual institution would use. Same concept, completely different register. Read `/flavor-text`. The distinction between GOOD and BAD in those examples is exactly this distinction. "Global health infrastructure has collapsed. Final count: 2.3 billion dead." vs. "humanity's hubris was its undoing." One trusts the player. One performs emotion at them. When you see "THE ARK PROTOCOL" — or anything that pattern-matches to it — that is a correction waiting to happen.
 
 The same failure takes subtler forms. AI will also break plain sentences into short fragments to create punch: "Corporate revenues are down. Containment policies are named." is the same problem as "THE ARK PROTOCOL" — the text is trying to do work that the situation should do on its own. "Corporate revenues are down and your containment policies are getting the blame." just says what happened. The situation creates the atmosphere. Write what happened and trust the player to feel it.
+
+Another common failure mode: sliding back into 20th-century state framing. If text implies the N.W.H.O. commands armies, appoints governors, overrides regions by fiat, or otherwise acts like a sovereign government, that is a thematic error. `docs/setting.md` is the source of truth for these boundaries.
 
 **Flag for opportunity:** Commits that add seeds of systems worth steering. A new mechanic that could go two ways — one thematically right, one thematically wrong. Get there before it calcifies.
 

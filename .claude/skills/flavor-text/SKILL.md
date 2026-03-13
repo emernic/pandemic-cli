@@ -10,6 +10,8 @@ You are writing user-facing text for a sci-fi pandemic defense game. This includ
 
 **Read this skill BEFORE writing the text.** Internalize the principles, THEN write. Do not write first and check against this later.
 
+Before writing any Pandemic CLI text involving the N.W.H.O., the board, governors, corporations, contracts, decrees, aid, or regional authority, read `docs/setting.md`. It defines what power relationships literally exist in this world. Do not guess.
+
 ## The Core Problem: AI-Generated Text Sounds Like AI
 
 The examples below are from a cyberpunk hacking game, but the failure modes are universal. Study the BAD vs GOOD examples carefully — the BAD versions represent exactly what you will produce by default if you don't actively fight against it.
@@ -258,6 +260,25 @@ The nightmare scenario has arrived. Deep within the overflowing hospitals of Sã
 
 **GOOD crisis text:**
 Field teams in São Paulo report treatment-resistant cases. Genomic sequencing confirms a new strain — your current antivirals may no longer be effective.
+
+### Power Framing
+
+Pandemic CLI text fails immediately if it assumes the wrong kind of world.
+
+- The N.W.H.O. is not a sovereign government. It issues directives, allocates budget, negotiates, pressures, and coordinates.
+- Governors are not subordinate administrators. They are independent power holders who may comply, stall, bargain, or defy.
+- The board is not advisory. It is the real source of the N.W.H.O.'s leverage and budget.
+- Corporations are not flavor. They are the infrastructure and economic power that make regional compliance possible.
+
+This affects wording directly:
+
+- Do not write as if the player can simply order regions around by fiat.
+- Do not write as if policy enforcement comes from abstract state capacity.
+- Do not write as if humanitarian duty is the institution's true purpose and corporate pressure is a distortion of it.
+- Do not write the player as a rebel trapped inside the wrong system. The player works for the system.
+
+Bad framing: "The N.W.H.O. has ordered Governor Sato to comply immediately."
+Good framing: "The N.W.H.O. directive has been issued. Governor Sato is stalling and wants compensation before local enforcement begins."
 
 ### Disease Names
 Diseases already have a naming system (pathogen type + generated name like "Yersinia-Omega"). If you need to name a new disease or variant, follow real-world conventions (genus-species patterns, Greek letter variants, location-based informal names). Don't make up dramatic names like "The Crimson Plague" or "Death's Whisper."
