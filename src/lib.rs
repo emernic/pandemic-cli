@@ -203,8 +203,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     if let Some(item) = items.get(new.ui.panel_selection) {
                         // For available items, get the kind from the available list
                         let kind = match item {
-                            ResearchFlatItem::Available { category, project_idx } => {
-                                new.available_projects(*category).get(*project_idx).cloned()
+                            ResearchFlatItem::Available(idx) => {
+                                new.all_available_projects().get(*idx).cloned()
                             }
                             ResearchFlatItem::Active(idx) => {
                                 new.active_research.get(*idx).map(|p| p.kind.clone())
@@ -449,9 +449,8 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                 // Active projects: Enter is a no-op (info already visible)
                 ResearchFlatItem::Active(_) => {}
                 // Available projects: go to confirm screen
-                ResearchFlatItem::Available { category, project_idx } => {
+                ResearchFlatItem::Available(project_idx) => {
                     ui.research_ui = Some(ResearchUiState::ConfirmProject {
-                        category: *category,
                         project_idx: *project_idx,
                         double_personnel: false,
                     });
@@ -460,8 +459,8 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
             }
             None
         }
-        Some(ResearchUiState::ConfirmProject { category, project_idx, double_personnel }) => {
-            Some(GameCommand::StartResearch { category, project_idx, double_personnel })
+        Some(ResearchUiState::ConfirmProject { project_idx, double_personnel }) => {
+            Some(GameCommand::StartResearch { project_idx, double_personnel })
         }
         Some(ResearchUiState::ConfirmLabUpgrade) => {
             Some(GameCommand::UpgradeLab)

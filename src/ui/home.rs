@@ -548,11 +548,13 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
             lines.push(Line::from(spans));
         }
 
-        // Applied and Basic: single-slot
-        for (label, proj_opt) in [
-            ("Applied", state.research_slot(crate::state::ResearchCategory::Applied)),
-            ("Basic", state.research_slot(crate::state::ResearchCategory::Basic)),
+        // Applied and Basic: show first active project in each category
+        for (label, cat) in [
+            ("Applied", crate::state::ResearchCategory::Applied),
+            ("Basic", crate::state::ResearchCategory::Basic),
         ] {
+            let proj_opt = state.active_research.iter()
+                .find(|p| p.kind.category() == cat);
             if let Some(proj) = proj_opt {
                 let pct = if proj.required_ticks > 0.0 {
                     proj.progress / proj.required_ticks

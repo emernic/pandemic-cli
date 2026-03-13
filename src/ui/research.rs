@@ -22,8 +22,8 @@ pub fn selection_max(ui_state: &ResearchUiState, state: &GameState) -> usize {
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines, selected_line) = match &state.ui.research_ui {
         Some(ResearchUiState::BrowseAll) => render_flat(state),
-        Some(ResearchUiState::ConfirmProject { category, project_idx, double_personnel }) => {
-            let (t, l) = render_confirm(state, *category, *project_idx, *double_personnel);
+        Some(ResearchUiState::ConfirmProject { project_idx, double_personnel }) => {
+            let (t, l) = render_confirm(state, *project_idx, *double_personnel);
             (t, l, None)
         }
         Some(ResearchUiState::ConfirmLabUpgrade) => {
@@ -53,178 +53,58 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn category_name(category: ResearchCategory) -> &'static str {
-    match category {
-        ResearchCategory::Field => "Field",
-        ResearchCategory::Applied => "Applied",
-        ResearchCategory::Basic => "Basic",
-    }
-}
-
-/// Render the flat research panel with section headers for each category.
+/// Render the flat research panel: active projects, then available, then lab upgrade.
 fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let items = state.research_flat_items();
-    let mut item_idx = 0usize; // tracks position in `items` as we render
+    let available = state.all_available_projects();
+    let mut item_idx = 0usize;
 
-    // ─── Field Research ───
-    render_section_header(&mut lines, "Field Research", ResearchCategory::Field, state);
-    let field_active = state.active_in_category(ResearchCategory::Field);
-    let n_field_active = field_active.len();
-    let has_field_capacity = state.field_research_has_capacity();
-
-    if n_field_active == 0 && (!has_field_capacity || state.available_projects(ResearchCategory::Field).is_empty()) {
+    // ─── Active Research ───
+    let active_projects: Vec<(usize, &crate::state::ResearchProject)> = state.active_research.iter()
+        .enumerate().collect();
+    if !active_projects.is_empty() {
         lines.push(Line::from(Span::styled(
-            "  No projects available.",
+            "  ─── Active Research ───",
             Style::default().fg(Color::DarkGray),
         )));
-    }
-
-    // Active field projects
-    for project in &field_active {
-        let selected = state.ui.panel_selection == item_idx;
-        if selected { selected_line = Some(lines.len()); }
-        render_active_project(&mut lines, project, selected, state);
-        item_idx += 1;
-    }
-
-    // Available field projects
-    if has_field_capacity {
-        let field_available = state.available_projects(ResearchCategory::Field);
-        if !field_available.is_empty() && n_field_active > 0 {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                format!("  ── Start New ({}/{} slots) ──", n_field_active, crate::state::MAX_FIELD_RESEARCH),
-                Style::default().fg(Color::DarkGray),
-            )));
+        for (_idx, project) in &active_projects {
+            let selected = state.ui.panel_selection == item_idx;
+            if selected { selected_line = Some(lines.len()); }
+            render_active_project(&mut lines, project, selected, state);
+            item_idx += 1;
         }
-        for kind in &field_available {
+    }
+
+    // ─── Available Research ───
+    if !available.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ─── Available ───",
+            Style::default().fg(Color::DarkGray),
+        )));
+        // Group by category for visual organization
+        let mut current_cat: Option<ResearchCategory> = None;
+        for kind in &available {
+            let cat = kind.category();
+            if current_cat != Some(cat) {
+                current_cat = Some(cat);
+                lines.push(Line::from(Span::styled(
+                    format!("  ── {} ──", cat.name()),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
             let selected = state.ui.panel_selection == item_idx;
             if selected { selected_line = Some(lines.len()); }
             render_available_project(&mut lines, kind, selected, state);
             item_idx += 1;
         }
-    }
-
-    // ─── Applied Research ───
-    lines.push(Line::from(""));
-    render_section_header(&mut lines, "Applied Research", ResearchCategory::Applied, state);
-
-    let applied_is_train = state.research_slot(ResearchCategory::Applied)
-        .is_some_and(|p| matches!(p.kind, ResearchKind::TrainPersonnel));
-    if let Some(project) = state.research_slot(ResearchCategory::Applied) {
-        if !applied_is_train {
-            let selected = state.ui.panel_selection == item_idx;
-            if selected { selected_line = Some(lines.len()); }
-            render_active_project(&mut lines, project, selected, state);
-            item_idx += 1;
-        } else {
-            // TrainPersonnel is active but shown in Lab; show slot-busy hint here
-            lines.push(Line::from(Span::styled(
-                "  (slot used by Train Personnel)",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-    } else {
-        let applied_available = state.available_projects(ResearchCategory::Applied);
-        // Filter out TrainPersonnel — it's shown in the Lab section instead
-        let applied_non_train: Vec<_> = applied_available.iter()
-            .filter(|k| !matches!(k, ResearchKind::TrainPersonnel))
-            .collect();
-        if applied_non_train.is_empty() {
-            // Show hints about why nothing is available
-            let blocked = state.blocked_medicine_developments();
-            if !blocked.is_empty() {
-                for (disease_idx, reason) in &blocked {
-                    let disease_name = state.diseases.get(*disease_idx)
-                        .map(|d| d.display_name(*disease_idx))
-                        .unwrap_or_else(|| "Unknown".to_string());
-                    lines.push(Line::from(Span::styled(
-                        format!("  [PENDING] Develop: {}", disease_name),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                    lines.push(Line::from(Span::styled(
-                        format!("    {}", reason),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                }
-            } else {
-                let has_any_develop = state.research_slot(ResearchCategory::Applied)
-                    .is_some_and(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. }))
-                    || state.available_applied_projects()
-                        .iter()
-                        .any(|k| matches!(k, ResearchKind::DevelopMedicine { .. }));
-                let any_identified = state.diseases.iter().any(|d| d.knowledge > 0.0);
-                if !has_any_develop && !any_identified {
-                    lines.push(Line::from(Span::styled(
-                        "  No diseases identified yet.",
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                    lines.push(Line::from(Span::styled(
-                        "  (Start an Identify Threat project in Field Research.)",
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                } else {
-                    lines.push(Line::from(Span::styled(
-                        "  No projects available.",
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                }
-            }
-        } else {
-            for kind in &applied_available {
-                if matches!(kind, ResearchKind::TrainPersonnel) {
-                    continue;
-                }
-                let selected = state.ui.panel_selection == item_idx;
-                if selected { selected_line = Some(lines.len()); }
-                render_available_project(&mut lines, kind, selected, state);
-                item_idx += 1;
-            }
-        }
-    }
-
-    // ─── Basic Research ───
-    lines.push(Line::from(""));
-    render_section_header(&mut lines, "Basic Research", ResearchCategory::Basic, state);
-
-    if let Some(project) = state.research_slot(ResearchCategory::Basic) {
-        let selected = state.ui.panel_selection == item_idx;
-        if selected { selected_line = Some(lines.len()); }
-        render_active_project(&mut lines, project, selected, state);
-        item_idx += 1;
-    } else {
-        let basic_available = state.available_projects(ResearchCategory::Basic);
-        if basic_available.is_empty() {
-            // Show lock/complete status
-            let all_unlocked = crate::state::BasicTech::all()
-                .iter()
-                .all(|t| state.unlocked_techs.contains(t));
-            if all_unlocked {
-                lines.push(Line::from(Span::styled(
-                    "  All technologies unlocked.",
-                    Style::default().fg(Color::Green),
-                )));
-            } else {
-                let hint = crate::state::BasicTech::all()
-                    .iter()
-                    .find(|t| !state.unlocked_techs.contains(t))
-                    .map(|t| format!("  [LOCKED] {} to unlock {}", t.prereq_description(), t.name()))
-                    .unwrap_or_else(|| "  [LOCKED]".to_string());
-                lines.push(Line::from(Span::styled(
-                    hint,
-                    Style::default().fg(Color::DarkGray),
-                )));
-            }
-        } else {
-            for kind in &basic_available {
-                let selected = state.ui.panel_selection == item_idx;
-                if selected { selected_line = Some(lines.len()); }
-                render_available_project(&mut lines, kind, selected, state);
-                item_idx += 1;
-            }
-        }
+    } else if active_projects.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  No projects available.",
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     // ─── Lab ───
@@ -243,25 +123,6 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
             "  ─── Lab ───",
             Style::default().fg(Color::DarkGray),
         )));
-    }
-
-    // Train Personnel — always shown in Lab section, whether active or available
-    if applied_is_train {
-        let project = state.research_slot(ResearchCategory::Applied).unwrap();
-        let selected = state.ui.panel_selection == item_idx;
-        if selected { selected_line = Some(lines.len()); }
-        render_active_project(&mut lines, project, selected, state);
-        item_idx += 1;
-    } else if state.research_slot(ResearchCategory::Applied).is_none() {
-        let applied_projects = state.available_projects(ResearchCategory::Applied);
-        for kind in &applied_projects {
-            if matches!(kind, ResearchKind::TrainPersonnel) {
-                let selected = state.ui.panel_selection == item_idx;
-                if selected { selected_line = Some(lines.len()); }
-                render_available_project(&mut lines, kind, selected, state);
-                item_idx += 1;
-            }
-        }
     }
 
     // Lab upgrade button
@@ -308,14 +169,6 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
     }
 
     (" Research ".to_string(), lines, selected_line)
-}
-
-/// Render a section header like "─── Field Research ───"
-fn render_section_header(lines: &mut Vec<Line<'static>>, name: &str, _track: ResearchCategory, _state: &GameState) {
-    lines.push(Line::from(Span::styled(
-        format!("  ─── {} ───", name),
-        Style::default().fg(Color::DarkGray),
-    )));
 }
 
 /// Render an active research project (shows progress).
@@ -372,9 +225,9 @@ fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind,
     lines.push(Line::from(""));
 }
 
-fn render_confirm(state: &GameState, category: ResearchCategory, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
+fn render_confirm(state: &GameState, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let projects = state.available_projects(category);
+    let projects = state.all_available_projects();
 
     if let Some(kind) = projects.get(project_idx) {
         let (base_personnel, ticks, funding) = state.effective_costs(kind);
@@ -384,7 +237,7 @@ fn render_confirm(state: &GameState, category: ResearchCategory, project_idx: us
 
         // Breadcrumb
         lines.push(Line::from(Span::styled(
-            format!("  Research > {} > Confirm", category_name(category)),
+            "  Research > Confirm",
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::from(""));

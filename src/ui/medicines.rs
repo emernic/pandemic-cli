@@ -223,8 +223,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
 
             // Show manufacture hint when doses are depleted
             if med.doses <= 0.0 {
-                let is_manufacturing = state.research_slot(crate::state::ResearchCategory::Applied)
-                    .is_some_and(|p| matches!(&p.kind, ResearchKind::ManufactureDoses { medicine_idx: mi } if *mi == med_idx));
+                let is_manufacturing = state.active_research.iter()
+                    .any(|p| matches!(&p.kind, ResearchKind::ManufactureDoses { medicine_idx: mi } if *mi == med_idx));
                 if is_manufacturing {
                     lines.push(Line::from(Span::styled(
                         "    ↻ Restocking in progress (Applied Research)",

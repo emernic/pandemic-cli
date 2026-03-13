@@ -161,7 +161,6 @@ This is intentional. Command handlers have the context needed to compose feedbac
 3. Renderers and confirm handlers both read `panel_selection` in their own context and MUST agree on the index mapping
 
 **Named constants that tie the pieces together:**
-- `RESEARCH_TRACK_COUNT` — Field(0), Applied(1), Basic(2); UpgradeLab is always at index `RESEARCH_TRACK_COUNT`. Used by `panel_selection_max()`, `handle_research_confirm()`, and `render_categories()`.
 - `STANDING_ORDER_COUNT` — number of standing orders in Policy/BrowseRegions. Used by `panel_selection_max()` and asserted at render time in `ui/policy.rs`.
 - `FIELD_OP_TYPE_COUNT` — number of deployable op types in Operations/BrowseOps. Used by `panel_selection_max()` and the ops array in `ui/operations.rs`.
 - `MANAGE_*` constants — positions within Policy/ManagePolicies (policy toggles, infra repair, priority, appease, bargain). Shared between renderer and handler.

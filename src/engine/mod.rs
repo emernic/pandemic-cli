@@ -796,8 +796,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone());
             CommandResult { message: msg, success }
         }
-        GameCommand::StartResearch { category, project_idx, double_personnel } => {
-            let (ok, msg) = research::start_research(state, *category, *project_idx, *double_personnel);
+        GameCommand::StartResearch { project_idx, double_personnel } => {
+            let (ok, msg) = research::start_research(state, *project_idx, *double_personnel);
             CommandResult { message: msg, success: ok }
         }
         GameCommand::TogglePolicy {
@@ -1880,11 +1880,9 @@ mod tests {
                 }
                 if state.outcome != GameOutcome::Playing { break; }
 
-                // --- RESEARCH: all three categories ---
-                for cat in [ResearchCategory::Field, ResearchCategory::Applied, ResearchCategory::Basic] {
-                    if !state.has_research_capacity(cat) { continue; }
-                    let projects = state.available_projects(cat);
-                    if projects.is_empty() { continue; }
+                // --- RESEARCH: pick the best available project ---
+                let projects = state.all_available_projects();
+                if !projects.is_empty() {
                     let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
                         ResearchKind::DevelopMedicine { .. } => 0,
                         ResearchKind::ManufactureDoses { .. } => 0,
@@ -1895,9 +1893,11 @@ mod tests {
                     });
                     if let Some((idx, kind)) = best {
                         let (_, _, cost_funding) = kind.costs(&state.medicines);
-                        if state.resources.funding >= cost_funding + 200.0 {
+                        if state.resources.funding >= cost_funding + 200.0
+                            && state.personnel_available() >= kind.costs(&state.medicines).0
+                        {
                             execute_command(&mut state, &GameCommand::StartResearch {
-                                category: cat, project_idx: idx, double_personnel: false,
+                                project_idx: idx, double_personnel: false,
                             });
                         }
                     }
@@ -3681,7 +3681,7 @@ mod tests {
 
         // Choose option A (evacuate) — should destroy applied research
         let after = apply_action(&state, &Action::Confirm);
-        assert!(after.research_slot(crate::state::ResearchCategory::Applied).is_none(),
+        assert!(after.active_in_category(crate::state::ResearchCategory::Applied).is_empty(),
             "applied research should be destroyed on evacuation");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
@@ -3722,7 +3722,7 @@ mod tests {
 
         // Choose option A (evacuate) — should destroy basic research
         let after = apply_action(&state, &Action::Confirm);
-        assert!(after.research_slot(crate::state::ResearchCategory::Basic).is_none(),
+        assert!(after.active_in_category(crate::state::ResearchCategory::Basic).is_empty(),
             "basic research should be destroyed on evacuation");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
@@ -3763,7 +3763,7 @@ mod tests {
 
         // Choose option B (contain) — should preserve research
         let after = apply_action(&state, &Action::Confirm);
-        assert!(after.research_slot(crate::state::ResearchCategory::Applied).is_some(),
+        assert!(!after.active_in_category(crate::state::ResearchCategory::Applied).is_empty(),
             "applied research should be preserved on containment");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
