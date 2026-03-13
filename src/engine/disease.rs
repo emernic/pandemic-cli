@@ -122,12 +122,17 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
         state.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
         super::corporations::assign_manufacturers(state);
 
-        // Update broad-spectrum medicine to also target new disease
+        // Update broad-spectrum medicine to also target new disease.
+        // BS medicines work against any pathogen type without per-disease
+        // clinical trials, so we register both target and tested status.
         for med in &mut state.medicines {
-            if med.therapy_type == TherapyType::BroadSpectrum
-                && !med.target_diseases.contains(&idx)
-            {
-                med.target_diseases.push(idx);
+            if med.therapy_type == TherapyType::BroadSpectrum {
+                if !med.target_diseases.contains(&idx) {
+                    med.target_diseases.push(idx);
+                }
+                if !med.tested_against.contains(&idx) {
+                    med.tested_against.push(idx);
+                }
             }
         }
 
@@ -319,20 +324,6 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
             if rng.r#gen::<f64>() < multi_seed {
                 let seed_count = base_seed + rng.r#gen::<f64>() * base_seed;
                 state.regions[region_idx].get_or_create_infection(disease_idx).infected += seed_count;
-            }
-        }
-    }
-
-    // Auto-register new diseases with broad-spectrum medicines. These are
-    // known drug classes that work against any pathogen type, so they don't
-    // need per-disease clinical trials.
-    for med in &mut state.medicines {
-        if med.therapy_type == TherapyType::BroadSpectrum {
-            if !med.target_diseases.contains(&disease_idx) {
-                med.target_diseases.push(disease_idx);
-            }
-            if !med.tested_against.contains(&disease_idx) {
-                med.tested_against.push(disease_idx);
             }
         }
     }
