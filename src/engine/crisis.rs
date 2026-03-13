@@ -1599,27 +1599,33 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let raise_per_day = raise_amount * TICKS_PER_DAY;
             let contract_name = contract.map(|c| c.name.as_str()).unwrap_or("Contract");
 
+            let current_per_day = current_income * TICKS_PER_DAY;
+            let new_per_day = current_per_day + raise_per_day;
+
             CrisisEvent {
                 title: format!("{}: Price Adjustment", member_name),
                 description: format!(
-                    "{} wants to revisit the {} terms. Citing the worsening situation and \
-                     competing offers from other organizations, {} is willing to raise the \
-                     payout by ¥{:.0}/day. You could likely get more by shopping around, \
-                     but this is guaranteed.",
-                    member_name, contract_name, member_name, raise_per_day,
+                    "{} wants to revisit the {} terms.\n\n\
+                     Citing the worsening situation and competing offers, {} is offering to \
+                     raise the payout from ¥{:.0}/day to ¥{:.0}/day.\n\n\
+                     You could likely get more by shopping around, but this is guaranteed.",
+                    member_name, contract_name, member_name, current_per_day, new_per_day,
                 ),
                 options: vec![
                     CrisisOption {
                         label: "Accept the raise".into(),
                         description: format!(
-                            "+¥{:.0}/day. {} appreciates the continued partnership.",
-                            raise_per_day, member_name,
+                            "¥{:.0}/day → ¥{:.0}/day. {} appreciates the continued partnership.",
+                            current_per_day, new_per_day, member_name,
                         ),
                         cost: None,
                     },
                     CrisisOption {
-                        label: "Decline, the current terms are fine".into(),
-                        description: "No change to the contract.".into(),
+                        label: "Cancel contract, seek other offers".into(),
+                        description: format!(
+                            "\"Actually... I was exploring other offers.\" {} will not be pleased.",
+                            member_name,
+                        ),
                         cost: None,
                     },
                 ],
@@ -3402,13 +3408,18 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("{} raises the payout. Contract income increased.", member_name)
         }
         (CrisisKind::LoyaltyRaise { template_id }, _) => {
-            // Decline: no change, no penalty
-            let member_name = state.contracts.iter()
+            // Cancel contract to seek other offers
+            let member_idx = state.contracts.iter()
                 .find(|c| c.template_id == *template_id)
-                .and_then(|c| state.board_members.get(c.board_member_idx))
+                .map(|c| c.board_member_idx);
+            let member_name = member_idx
+                .and_then(|idx| state.board_members.get(idx))
                 .map(|m| m.name.clone())
                 .unwrap_or_else(|| "Board member".to_string());
-            format!("{} nods. Terms unchanged.", member_name)
+            if let Some(idx) = member_idx {
+                super::contracts::cancel_contract(state, idx);
+            }
+            format!("{} contract cancelled. The board takes note.", member_name)
         }
 
         (CrisisKind::GovernorHardliner { region_idx }, 0) => {
