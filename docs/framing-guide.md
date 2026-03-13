@@ -106,7 +106,7 @@ Right:
 - prevent governors from breaking ranks
 - secure access, transport, data, or treatment capacity
 
-Words that usually signal the wrong world: `constitutional`, `federal`, `national`, `international community`, `public trust`, `global consensus`.
+Words that usually signal the wrong world: `constitutional`, `federal`, `central authority`, `central command`, `national`, `international community`, `public trust`, `global consensus`. Never use `federal` or `central` to describe N.W.H.O. power — the N.W.H.O. issues guidelines and directives, not mandates backed by sovereign authority. Whether any world government exists is deliberately ambiguous.
 
 These are not banned in every context. They are warning lights. Stop and ask whether the line has drifted into 20th-century state or NGO framing.
 
