@@ -1066,7 +1066,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None, // Personnel cost applied in resolve
                 },
                 CrisisOption {
-                    label: "Ignore the warnings".into(),
+                    label: format!("Ignore the warnings (−{} personnel)", (personnel_loss + 1) / 2),
                     description: "Some staff leave on their own. Hospitals stay open.".into(),
                     cost: None,
                 },
