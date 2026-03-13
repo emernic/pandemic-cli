@@ -112,56 +112,32 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 Style::default().fg(Color::White)
             };
 
+            // Line 1: Name + deploying status
             let auto_on = state.auto_deploy.get(med_idx).copied().unwrap_or(false);
-            let auto_tag = if auto_on { " AUTO" } else { "" };
-            let type_info = if let Some(mech) = med.mechanism {
-                format!("  ({}, {})", med.therapy_type.label(), mech.label())
+            let has_shipments = state.pending_shipments.iter().any(|s| s.medicine_idx == med_idx);
+            let status_tag = if auto_on {
+                " [DEPLOYING]"
+            } else if has_shipments {
+                " [IN TRANSIT]"
             } else {
-                format!("  ({})", med.therapy_type.label())
+                ""
             };
+            let status_color = if auto_on { Color::Green } else { Color::Cyan };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}{}", marker, med.name), style),
-                Span::styled(type_info, Style::default().fg(Color::Cyan)),
-                Span::styled(auto_tag, Style::default().fg(Color::Green)),
+                Span::styled(status_tag, Style::default().fg(status_color)),
             ]));
 
-            let dc = dose_color(med);
-            let dose_text = if med.doses <= 0.0 {
-                "EMPTY".to_string()
-            } else if med.doses < med.max_doses {
-                format!("{}/{} doses", format_number(med.doses), format_number(med.max_doses))
-            } else {
-                format!("{} doses", format_number(med.doses))
-            };
-
-            let mut detail_spans = vec![
-                Span::raw("    "),
-                Span::styled(
-                    format!("¥{:.0}+", med.cost),
-                    Style::default().fg(Color::Yellow),
-                ),
-                Span::raw("  "),
-                Span::styled(
-                    dose_text,
-                    Style::default().fg(dc),
-                ),
-                Span::raw("  "),
-            ];
-
-            // Per-disease name with strain efficacy
-            for (j, &d_idx) in med.target_diseases.iter().enumerate() {
-                if j > 0 {
-                    detail_spans.push(Span::raw(", "));
-                }
+            // Line 2: What it fights and how well — THE most important info
+            for &d_idx in med.target_diseases.iter() {
                 let name = state.diseases.get(d_idx)
                     .map(|d| d.display_name(d_idx))
                     .unwrap_or_else(|| format!("#{}", d_idx + 1));
-                detail_spans.push(Span::styled(name, Style::default().fg(Color::Red)));
 
                 if med.tested_against.contains(&d_idx) {
                     let efficacy = med.effective_efficacy(d_idx, &state.diseases);
                     let pct = (efficacy * 100.0).round() as u32;
-                    let color = if pct >= 85 {
+                    let eff_color = if pct >= 85 {
                         Color::Green
                     } else if pct >= 50 {
                         Color::Yellow
@@ -170,75 +146,99 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                     } else {
                         Color::DarkGray
                     };
-                    // Show ▼ when strain drift has reduced calibration
                     let strain_eff = med.strain_efficacy(d_idx, &state.diseases);
-                    let trend = if strain_eff < 1.0 { "\u{25bc}" } else { "" };
-                    detail_spans.push(Span::styled(
-                        format!(" ({}%{})", pct, trend),
-                        Style::default().fg(color),
-                    ));
-                    // Show resistance level if surveillance unlocked
+                    let drift_note = if strain_eff < 1.0 { " (outdated)" } else { "" };
+
+                    let mut spans = vec![
+                        Span::raw("    "),
+                        Span::styled(
+                            format!("{}% effective", pct),
+                            Style::default().fg(eff_color),
+                        ),
+                        Span::styled(
+                            format!(" vs {}", name),
+                            Style::default().fg(Color::White),
+                        ),
+                    ];
+                    if !drift_note.is_empty() {
+                        spans.push(Span::styled(
+                            drift_note,
+                            Style::default().fg(Color::Yellow),
+                        ));
+                    }
                     if state.has_resistance_surveillance() {
                         let res_factor = med.resistance_factor(d_idx, &state.diseases);
                         let res_pct = ((1.0 - res_factor) * 100.0).round() as u32;
                         if res_pct > 0 {
                             let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
-                            detail_spans.push(Span::styled(
-                                format!(" Res:{}%", res_pct),
+                            spans.push(Span::styled(
+                                format!("  {}% resistant", res_pct),
                                 Style::default().fg(res_color),
                             ));
                         }
                     }
+                    lines.push(Line::from(spans));
                 } else {
-                    detail_spans.push(Span::styled(
-                        " [UNTESTED]",
-                        Style::default().fg(Color::Red),
-                    ));
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled("UNTESTED", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                        Span::styled(format!(" vs {}", name), Style::default().fg(Color::White)),
+                    ]));
                 }
             }
 
-            lines.push(Line::from(detail_spans));
-
-            // Show cumulative impact if any deployments have happened
-            let total_impact = med.total_treated + med.total_protected;
-            if total_impact > 0.0 {
-                let mut impact_spans = vec![Span::raw("    ")];
-                if med.total_treated > 0.0 {
-                    impact_spans.push(Span::styled(
-                        format!("{} treated", format_number(med.total_treated)),
-                        Style::default().fg(Color::Green),
-                    ));
-                }
-                if med.total_treated > 0.0 && med.total_protected > 0.0 {
-                    impact_spans.push(Span::raw("  "));
-                }
-                if med.total_protected > 0.0 {
-                    impact_spans.push(Span::styled(
-                        format!("{} protected", format_number(med.total_protected)),
-                        Style::default().fg(Color::Green),
-                    ));
-                }
-                lines.push(Line::from(impact_spans));
-            }
-
-            // Show manufacture hint when doses are depleted
+            // Line 3: Doses remaining + cost per deploy
+            let dc = dose_color(med);
             if med.doses <= 0.0 {
                 let is_manufacturing = state.active_research.iter()
                     .any(|p| matches!(&p.kind, ResearchKind::ManufactureDoses { medicine_idx: mi } if *mi == med_idx));
                 if is_manufacturing {
-                    lines.push(Line::from(Span::styled(
-                        "    ↻ Restocking in progress (Applied Research)",
-                        Style::default().fg(Color::Yellow),
-                    )));
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled("NO DOSES", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                        Span::styled(" — restocking in progress", Style::default().fg(Color::Yellow)),
+                    ]));
                 } else {
-                    lines.push(Line::from(Span::styled(
-                        "    → Restock via Research [R] > Applied Research",
-                        Style::default().fg(Color::Red),
-                    )));
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled("NO DOSES", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                        Span::styled(" — restock via Research [R] > Applied", Style::default().fg(Color::Red)),
+                    ]));
                 }
+            } else {
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!("{} doses remaining", format_number(med.doses)),
+                        Style::default().fg(dc),
+                    ),
+                    Span::styled(
+                        format!("  ¥{:.0} per deploy", med.cost),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
             }
 
-            // Show re-trial hint when any disease has drifted past the medicine's calibration
+            // Impact so far (only if medicine has been used)
+            let total_impact = med.total_treated + med.total_protected;
+            if total_impact > 0.0 {
+                let mut impact_parts: Vec<String> = Vec::new();
+                if med.total_treated > 0.0 {
+                    impact_parts.push(format!("{} treated", format_number(med.total_treated)));
+                }
+                if med.total_protected > 0.0 {
+                    impact_parts.push(format!("{} vaccinated", format_number(med.total_protected)));
+                }
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        impact_parts.join(", "),
+                        Style::default().fg(Color::Green),
+                    ),
+                ]));
+            }
+
+            // Warnings: strain drift needing action
             let any_strain_outdated = med.target_diseases.iter().any(|&d_idx| {
                 med.strain_efficacy(d_idx, &state.diseases) < 1.0
             });
@@ -248,31 +248,30 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 });
                 if retrial_in_progress {
                     lines.push(Line::from(Span::styled(
-                        "    ↻ Re-trial in progress, efficacy will be restored",
+                        "    Re-trial in progress",
                         Style::default().fg(Color::Yellow),
                     )));
                 } else {
                     lines.push(Line::from(Span::styled(
-                        "    → Strain drifted. Re-trial via Research [R] > Field Research",
+                        "    Strain drifted — re-trial needed (Research [R] > Field)",
                         Style::default().fg(Color::Red),
                     )));
                 }
             }
 
-            // Show pending shipments for this medicine
+            // Pending shipments
             let shipments: Vec<_> = state.pending_shipments.iter()
                 .filter(|s| s.medicine_idx == med_idx)
                 .collect();
             for s in &shipments {
                 let region_name = state.regions.get(s.region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                let doses_str = format_number(s.doses);
                 let ticks_left = s.arrive_tick.saturating_sub(state.tick);
                 let days_left = ticks_left as f64 / TICKS_PER_DAY;
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
-                        format!("→ {doses_str} en route to {region_name} ({days_left:.1}d)"),
+                        format!("Shipping to {} ({:.1}d)", region_name, days_left),
                         Style::default().fg(Color::Cyan),
                     ),
                 ]));
@@ -289,13 +288,12 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        // Show auto-deploy status for selected medicine
         let auto_status = unlocked.get(state.ui.panel_selection)
             .and_then(|&(med_idx, _)| state.auto_deploy.get(med_idx).copied())
             .unwrap_or(false);
-        let auto_label = if auto_status { " ON" } else { " OFF" };
+        let auto_label = if auto_status { "ON" } else { "OFF" };
         lines.push(Line::from(Span::styled(
-            format!("  [↑/↓] Select  [Enter] Deploy  [X] Auto-deploy{}  [Esc] Close", auto_label),
+            format!("  [Enter] Manual deploy  [X] Auto-deploy {}  [Esc] Close", auto_label),
             Style::default().fg(Color::DarkGray),
         )));
     }
@@ -471,21 +469,26 @@ fn render_select_target(
         .unwrap_or_else(|| "Unknown".to_string());
 
     let inf = region.infections.iter().find(|i| i.disease_idx == disease_idx);
-
-    // Compute efficacy (shared formula in Medicine::effective_efficacy)
     let efficacy = med.effective_efficacy(disease_idx, &state.diseases);
-    // Individual factors for display hints
-    let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
-    let resistance = med.resistance_factor(disease_idx, &state.diseases);
-    let eff_color = if efficacy >= 0.8 {
-        Color::Green
-    } else if efficacy >= 0.5 {
-        Color::Yellow
-    } else {
-        Color::Red
-    };
-    let strain_outdated = strain_eff < 1.0;
-    let res_pct = ((1.0 - resistance) * 100.0).round() as u32;
+    let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
+
+    // Targeting efficiency — shown up top if doses are being wasted
+    let targeting_eff = state.targeting_efficiency(region_idx);
+    if targeting_eff < 0.99 {
+        let waste_pct = ((1.0 - targeting_eff) * 100.0) as u32;
+        let color = if targeting_eff < 0.60 { Color::Red } else { Color::Yellow };
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {}% of doses wasted", waste_pct),
+                Style::default().fg(color),
+            ),
+            Span::styled(
+                " — improve screening to reduce",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        lines.push(Line::from(""));
+    }
 
     // Option 0: Vaccinate
     {
@@ -510,39 +513,26 @@ fn render_select_target(
         };
 
         lines.push(Line::from(Span::styled(
-            format!("{}Protect susceptible (preventive)", marker),
+            format!("{}Vaccinate", marker),
             style,
         )));
-        lines.push(Line::from(vec![
-            Span::raw("    "),
-            Span::styled(
-                format!("{} susceptible", format_number(susceptible)),
-                Style::default().fg(if empty { Color::DarkGray } else { Color::Cyan }),
-            ),
-            Span::raw(" → will protect "),
-            Span::styled(
-                format_number(will_vaccinate),
-                Style::default().fg(eff_color),
-            ),
-        ]));
-        if !empty {
-            let pct = if susceptible > 0.0 { will_vaccinate / susceptible * 100.0 } else { 0.0 };
+        if empty {
             lines.push(Line::from(Span::styled(
-                format!("    {:.1}% of susceptible", pct),
+                "    No susceptible population",
                 Style::default().fg(Color::DarkGray),
             )));
-            let stockpile_pct = if med.doses > 0.0 { will_vaccinate / med.doses * 100.0 } else { 0.0 };
-            let stockpile_color = if stockpile_pct > 75.0 { Color::Red } else if stockpile_pct > 40.0 { Color::Yellow } else { Color::DarkGray };
-            lines.push(Line::from(Span::styled(
-                format!("    Uses {} doses ({:.0}% of stockpile)", format_number(will_vaccinate), stockpile_pct),
-                Style::default().fg(stockpile_color),
-            )));
-        }
-        if state.has_resistance_surveillance() {
-            lines.push(Line::from(Span::styled(
-                "    Resistance pressure: Low",
-                Style::default().fg(Color::Green),
-            )));
+        } else {
+            lines.push(Line::from(vec![
+                Span::raw("    Will protect "),
+                Span::styled(
+                    format_number(will_vaccinate),
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" of {} susceptible", format_number(susceptible)),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
         }
     }
 
@@ -563,123 +553,75 @@ fn render_select_target(
         };
 
         lines.push(Line::from(Span::styled(
-            format!("{}Treat infected (therapeutic)", marker),
+            format!("{}Treat", marker),
             style,
         )));
-        lines.push(Line::from(vec![
-            Span::raw("    "),
-            Span::styled(
-                format!("{} infected", format_number(infected)),
-                Style::default().fg(if empty { Color::DarkGray } else { Color::Red }),
-            ),
-            Span::raw(" → will treat "),
-            Span::styled(
-                format_number(will_treat),
-                Style::default().fg(eff_color),
-            ),
-        ]));
-        if !empty {
-            let pct = if infected > 0.0 { will_treat / infected * 100.0 } else { 0.0 };
+        if empty {
             lines.push(Line::from(Span::styled(
-                format!("    {:.0}% of infected", pct),
+                "    No infected population",
                 Style::default().fg(Color::DarkGray),
             )));
-            let stockpile_pct = if med.doses > 0.0 { will_treat / med.doses * 100.0 } else { 0.0 };
-            let stockpile_color = if stockpile_pct > 75.0 { Color::Red } else if stockpile_pct > 40.0 { Color::Yellow } else { Color::DarkGray };
-            lines.push(Line::from(Span::styled(
-                format!("    Uses {} doses ({:.0}% of stockpile)", format_number(will_treat), stockpile_pct),
-                Style::default().fg(stockpile_color),
-            )));
-        }
-        if state.has_resistance_surveillance() {
-            lines.push(Line::from(Span::styled(
-                "    Resistance pressure: High (6x vs. preventive)",
-                Style::default().fg(Color::Yellow),
-            )));
+        } else {
+            lines.push(Line::from(vec![
+                Span::raw("    Will treat "),
+                Span::styled(
+                    format_number(will_treat),
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" of {} infected", format_number(infected)),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
         }
     }
 
-    // Efficacy info
+    // Cost — simple and clear
     lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled("  Efficacy: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("{:.0}%", efficacy * 100.0),
-            Style::default().fg(eff_color),
-        ),
-    ]));
-    if strain_outdated {
-        let behind = med.mutations_behind(disease_idx, &state.diseases);
-        let behind_str = if behind > 0 {
-            format!(", {} mutation{} behind", behind, if behind == 1 { "" } else { "s" })
-        } else {
-            String::new()
-        };
-        let retrial_in_progress = state.active_research.iter().filter(|p| p.kind.category() == crate::state::ResearchCategory::Field).any(|p| {
-            matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, disease_idx: di }
-                if *mi == medicine_idx && *di == disease_idx)
-        });
-        let action = if retrial_in_progress {
-            ": re-trial in progress"
-        } else {
-            ": re-trial in Research [R] to restore"
-        };
-        lines.push(Line::from(Span::styled(
-            format!("  Strain drift{}{}", behind_str, action),
-            Style::default().fg(Color::Yellow),
-        )));
-    }
-    if state.has_resistance_surveillance() && res_pct > 0 {
-        let res_color = if res_pct >= 30 { Color::Red } else { Color::Yellow };
-        let warning = if res_pct >= 50 { ", consider switching drugs" } else { "" };
-        lines.push(Line::from(Span::styled(
-            format!("  Resistance: {}%{}", res_pct, warning),
-            Style::default().fg(res_color),
-        )));
-    }
-
-    let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
+    let can_afford = state.resources.funding >= deploy_cost;
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             format!("¥{:.0}", deploy_cost),
             Style::default().fg(Color::Yellow),
         ),
-        Span::raw("    "),
-        Span::styled("Funding: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("¥{:.0}", state.resources.funding),
-            Style::default().fg(if state.resources.funding >= deploy_cost {
-                Color::Green
-            } else {
-                Color::Red
-            }),
+            format!("  (have ¥{:.0})", state.resources.funding),
+            Style::default().fg(if can_afford { Color::DarkGray } else { Color::Red }),
         ),
     ]));
     lines.push(Line::from(vec![
         Span::styled("  Doses: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("{}/{}", format_number(med.doses), format_number(med.max_doses)),
+            format!("{}", format_number(med.doses)),
             Style::default().fg(dose_color(med)),
         ),
     ]));
 
-    // Show targeting efficiency (screening-dependent dose waste)
-    let targeting_eff = state.targeting_efficiency(region_idx);
-    if targeting_eff < 0.99 {
-        let waste_pct = ((1.0 - targeting_eff) * 100.0) as u32;
-        let color = if targeting_eff < 0.60 { Color::Red } else if targeting_eff < 0.80 { Color::Yellow } else { Color::DarkGray };
-        lines.push(Line::from(vec![
-            Span::styled("  Targeting: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{:.0}%", targeting_eff * 100.0),
-                Style::default().fg(color),
-            ),
-            Span::styled(
-                format!(" ({waste_pct}% dose waste — improve screening to reduce)"),
-                Style::default().fg(color),
-            ),
-        ]));
+    // Warnings — only if something is actually wrong
+    let strain_eff = med.strain_efficacy(disease_idx, &state.diseases);
+    if strain_eff < 1.0 {
+        let behind = med.mutations_behind(disease_idx, &state.diseases);
+        lines.push(Line::from(Span::styled(
+            format!("  Strain drifted {} mutation{} — efficacy reduced",
+                behind, if behind == 1 { "" } else { "s" }),
+            Style::default().fg(Color::Yellow),
+        )));
+    }
+    if state.has_resistance_surveillance() {
+        let resistance = med.resistance_factor(disease_idx, &state.diseases);
+        let res_pct = ((1.0 - resistance) * 100.0).round() as u32;
+        if res_pct >= 30 {
+            lines.push(Line::from(Span::styled(
+                format!("  {}% drug resistance — consider switching", res_pct),
+                Style::default().fg(Color::Red),
+            )));
+        } else if res_pct > 0 {
+            lines.push(Line::from(Span::styled(
+                format!("  {}% drug resistance", res_pct),
+                Style::default().fg(Color::Yellow),
+            )));
+        }
     }
 
     lines.push(Line::from(""));
