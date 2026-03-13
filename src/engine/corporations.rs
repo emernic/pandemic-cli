@@ -130,6 +130,10 @@ pub(super) fn generate_corporations(state: &mut GameState) {
         state.corporations[idx].board_seat = true;
     }
 
+    // Warm up stock price histories so sparklines look natural from day 1.
+    // Simulates 10 days of pre-game trading at stable revenue (no crises yet).
+    warm_up_price_history(state);
+
     // Assign manufacturing contracts to medicines.
     // Each non-broad-spectrum medicine gets a corporation as its manufacturer.
     // Biotech corps are prioritized but any corp can manufacture.
@@ -190,6 +194,37 @@ pub(super) fn assign_manufacturers(state: &mut GameState) {
 /// Revenue flows from GDP: sector_pool × (company_capacity / total_capacity).
 /// Each corp's capacity = base_revenue × region.gdp_fraction ^ sector.crisis_exposure.
 /// When a competitor's region tanks, surviving peers capture more of the pool.
+/// Pre-populate price histories with 10 days of simulated trading at stable
+/// revenue. Uses the same three-term model as `tick_share_prices` but with no
+/// revenue signal (revenue == prev_revenue pre-game). This gives sparklines a
+/// natural look from the first frame instead of starting as a single flat dot.
+fn warm_up_price_history(state: &mut GameState) {
+    use rand::SeedableRng;
+    const WARMUP_DAYS: usize = 10;
+
+    // Derive a warmup RNG from IPO prices so we don't perturb the main RNG stream.
+    // This keeps all downstream randomness (board members, manufacturers) identical.
+    let seed_bits: u64 = state.corporations.iter()
+        .map(|c| c.ipo_price.to_bits())
+        .fold(0u64, |acc, b| acc.wrapping_add(b));
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed_bits);
+
+    for corp in &mut state.corporations {
+        let mut price = corp.ipo_price;
+        let fair_value = corp.ipo_price;
+
+        for _ in 0..WARMUP_DAYS {
+            let gravity = 0.05 * (fair_value - price) / price.max(0.01);
+            let noise = (rng.r#gen::<f64>() - 0.5) * 0.04;
+            price = (price * (1.0 + gravity + noise)).max(0.01);
+            corp.price_history.push(price);
+        }
+        // End on the IPO price so share_price == ipo_price at game start.
+        corp.price_history.push(corp.ipo_price);
+        corp.share_price = corp.ipo_price;
+    }
+}
+
 pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     // Handle collapsed regions first — bankrupt all corps in collapsed regions.
     for c_idx in 0..state.corporations.len() {
