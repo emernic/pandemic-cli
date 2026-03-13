@@ -116,6 +116,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     contracts::tick_check_contracts(&mut new);
     contracts::tick_offer_contracts(&mut new, &mut rng_misc);
     contracts::tick_loyalty_raises(&mut new, &mut rng_misc);
+    contracts::tick_patron_bonuses(&mut new, &mut rng_misc);
 
     // Corporate finances — update revenue, drain reserves, bankrupt failing corps.
     corporations::tick_corporations(&mut new, &mut rng_misc);
@@ -3474,6 +3475,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
 
         // Set up the contract demand crisis as active
@@ -3525,6 +3527,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
 
         state.active_crisis = Some(CrisisEvent {
