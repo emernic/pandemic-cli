@@ -4490,6 +4490,10 @@ pub struct UiState {
     /// Game speed multiplier (1, 2, 4, 6). Affects real-time tick rate only.
     #[serde(default = "default_speed")]
     pub speed_multiplier: u8,
+    /// Whether the player dismissed the "terminal too small" warning overlay.
+    /// Transient — resets each session so the warning re-appears if still too small.
+    #[serde(skip)]
+    pub size_warning_dismissed: bool,
 }
 
 fn default_speed() -> u8 {
@@ -5334,6 +5338,7 @@ impl GameState {
                 home_splash_done: false,
                 home_splash_revealed: false,
                 speed_multiplier: 1,
+                size_warning_dismissed: false,
             },
         }
     }
