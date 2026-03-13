@@ -21,6 +21,15 @@ use ratatui::{
 use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, UiState, ticks_to_days};
 use crate::format_number;
 
+/// Minimum terminal dimensions for playable layout.
+pub const MIN_COLS: u16 = 80;
+pub const MIN_ROWS: u16 = 24;
+
+/// Returns true when the size warning overlay is being displayed.
+pub fn is_size_warning_active(state: &GameState, cols: u16, rows: u16) -> bool {
+    !state.ui.size_warning_dismissed && (cols < MIN_COLS || rows < MIN_ROWS)
+}
+
 /// Maximum selection index for the current panel and UI sub-state.
 /// Dispatches to each panel module's `selection_max` so item-count logic
 /// lives alongside the renderers instead of being centralised in state.rs.
@@ -534,6 +543,14 @@ pub(crate) fn process_events(state: &mut GameState) {
 }
 
 pub fn render(f: &mut Frame, state: &GameState) {
+    let area = f.area();
+    if !state.ui.size_warning_dismissed
+        && (area.width < MIN_COLS || area.height < MIN_ROWS)
+    {
+        render_size_warning(f, area);
+        return;
+    }
+
     let header_height = resources::height(state);
     let has_extra_line = state.ui.status_message.is_some() || state.outcome != GameOutcome::Playing;
     let hotkey_height = if has_extra_line { 3 } else { 2 };
@@ -576,6 +593,32 @@ pub fn render(f: &mut Frame, state: &GameState) {
             panel => render_placeholder_panel(f, split[1], panel),
         }
     }
+}
+
+fn render_size_warning(f: &mut Frame, area: Rect) {
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "TERMINAL TOO SMALL",
+            Style::default().fg(Color::Yellow),
+        )),
+        Line::from(""),
+        Line::from("Resize your terminal or press F11 for full screen."),
+        Line::from(""),
+        Line::from(format!(
+            "Current: {}x{}  Minimum: {}x{}",
+            area.width, area.height, MIN_COLS, MIN_ROWS,
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "[X] Dismiss",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+    let paragraph = Paragraph::new(lines)
+        .alignment(ratatui::layout::Alignment::Center)
+        .block(Block::default().borders(Borders::ALL).title("PANDEMIC DEFENSE"));
+    f.render_widget(paragraph, area);
 }
 
 fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize, state: &GameState) {

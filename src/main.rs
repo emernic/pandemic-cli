@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 use crossterm::{
-    event::{self, Event, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -221,6 +221,20 @@ fn game_loop(
             if let Event::Key(key_event) = event::read()? {
                 // Only handle key press events (not release/repeat)
                 if key_event.kind == KeyEventKind::Press {
+                    // When the size warning overlay is showing, only X/Esc/Q work
+                    let term_size = terminal.size().unwrap_or_default();
+                    if ui::is_size_warning_active(&state, term_size.width, term_size.height) {
+                        match key_event.code {
+                            KeyCode::Char('x') | KeyCode::Char('X') | KeyCode::Esc => {
+                                state.ui.size_warning_dismissed = true;
+                            }
+                            KeyCode::Char('q') | KeyCode::Char('Q') => {
+                                return Ok(state);
+                            }
+                            _ => {} // swallow all other keys
+                        }
+                        continue;
+                    }
                     if let Some(action) = key_to_action(key_event.code) {
                         if action == Action::Quit {
                             return Ok(state);
