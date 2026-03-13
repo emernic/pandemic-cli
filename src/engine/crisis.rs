@@ -3796,6 +3796,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 state.active_research.push(project);
                 format!("Field identification of {} initiated.", name)
             } else {
+                // Refund the funding that CrisisCost already deducted — the research
+                // can't start without enough personnel.
+                if let Some(cost) = &crisis.options[choice].cost {
+                    state.resources.funding += cost.funding;
+                }
                 format!("Not enough personnel to identify {}.", name)
             }
         }
@@ -4194,6 +4199,28 @@ mod tests {
         assert!(state.active_research.iter().any(|p|
             matches!(p.kind, ResearchKind::IdentifyThreat { .. })),
             "should have an IdentifyThreat project active");
+    }
+
+    #[test]
+    fn new_pathogen_detected_refunds_funding_if_insufficient_personnel() {
+        let mut state = GameState::new_default(42);
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = 0.0;
+        state.resources.funding = 2000.0;
+        state.resources.personnel = 2; // IdentifyThreat needs 5
+
+        let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = crate::state::SimState::Event { was_running: false };
+
+        let funding_before = state.resources.funding;
+        let msg = resolve_crisis(&mut state, 0); // Begin identification
+        assert!(state.active_in_category(ResearchCategory::Field).is_empty(),
+            "no research should start without enough personnel");
+        assert_eq!(state.resources.funding, funding_before,
+            "funding should be refunded when personnel are insufficient");
+        assert!(msg.contains("personnel"), "message should mention personnel: {}", msg);
     }
 
     #[test]
