@@ -645,7 +645,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 format!(" ({})", gdp_status.0),
                 Style::default().fg(Color::DarkGray),
             ),
-            Span::styled("  Healthcare: ", label),
+            Span::styled("  Med Quality: ", label),
             Span::styled(
                 healthcare_label.0,
                 Style::default().fg(healthcare_label.1),
