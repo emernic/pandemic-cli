@@ -123,7 +123,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
             => ramp_up(10.0, 24.0) * fade_out(50.0, 70.0),
 
         // --- Late-game: survival and power struggles (ramp up day 24-40) ---
-        "military" | "cult" | "who_evac" | "warlord" | "vaccine_dispute"
+        "corporate_seizure" | "cult" | "who_evac" | "warlord" | "vaccine_dispute"
             => ramp_up(24.0, 40.0),
 
         // Corporate detention: requires a collapsed region, so can't appear before ~day 10,
@@ -3950,8 +3950,8 @@ mod tests {
             "corrupt official should be more likely early than late");
 
         // Late-game survival crises should be absent early, present late
-        assert!(phase_weight("military", 5.0) < phase_weight("military", 50.0),
-            "military takeover should be more likely late than early");
+        assert!(phase_weight("corporate_seizure", 5.0) < phase_weight("corporate_seizure", 50.0),
+            "corporate seizure should be more likely late than early");
         assert!(phase_weight("warlord", 3.0) < phase_weight("warlord", 50.0),
             "warlord demands should be more likely late than early");
         assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
@@ -3988,10 +3988,10 @@ mod tests {
             }
         }
 
-        // At day 5, late-game crises (military, cult, warlord, etc.) should
+        // At day 5, late-game crises (corporate_seizure, cult, warlord, etc.) should
         // be absent or extremely rare since they have near-zero weight
         let late_count = tags.iter()
-            .filter(|&&t| matches!(t, "military" | "cult" | "warlord" | "vaccine_dispute" | "who_evac"))
+            .filter(|&&t| matches!(t, "corporate_seizure" | "cult" | "warlord" | "vaccine_dispute" | "who_evac"))
             .count();
         assert!(late_count <= 2,
             "at day 5, late-game crises should be rare, got {}/{}",
