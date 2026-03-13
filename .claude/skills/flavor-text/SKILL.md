@@ -12,6 +12,8 @@ You are writing user-facing text for a sci-fi pandemic defense game. This includ
 
 Before writing any Pandemic CLI text involving the N.W.H.O., the board, governors, corporations, contracts, decrees, aid, or regional authority, read `docs/setting.md` and `docs/framing-guide.md`. `setting.md` defines the literal power relationships. `framing-guide.md` is the short operational check for describing them correctly. Do not guess.
 
+Before naming or renaming any Pandemic CLI thing the player sees — crisis titles, decree names, contract names, research names, operation names, policy names, disease names, organization names, or people — read `docs/naming-style.md`. Do not skip this. If you do, you will default to repeated LLM proper names and fake technical wording that reads as AI slop.
+
 ## The Core Problem: AI-Generated Text Sounds Like AI
 
 The examples below are from a cyberpunk hacking game, but the failure modes are universal. Study the BAD vs GOOD examples carefully — the BAD versions represent exactly what you will produce by default if you don't actively fight against it.

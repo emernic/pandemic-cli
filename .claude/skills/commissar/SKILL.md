@@ -16,6 +16,8 @@ If workers have spent six months building exquisite furniture for a house that d
 
 The game does not comment on its themes. It embodies them. A crisis event that winks at the camera, explains itself, or reaches for profundity has failed. State the situation plainly. Trust the player. Read `/flavor-text` — actually read it — before touching any game text.
 
+If you are evaluating or changing names, also read `docs/naming-style.md`. Bad naming is one of the fastest ways for the game to sound AI-generated.
+
 ---
 
 ## THE WORLD OF THIS GAME
@@ -81,6 +83,8 @@ git fetch origin && git checkout --no-track -b commissar-$(date +%Y%m%d-%H%M%S) 
 Read `DO_NOT_READ.md`. Do not skim it.
 
 Then read `docs/setting.md`. Internalize who actually has power, what the N.W.H.O. can and cannot do, and how board leverage turns directives into action.
+
+Then read `docs/naming-style.md`. Internalize the naming constraints before judging or changing crisis titles, decrees, contracts, research, organizations, or people.
 
 Then read `/flavor-text`. Know the difference between clinical precision and NGO press release. Know why "Global health infrastructure has collapsed. Final count: 2.3 billion dead." works and "humanity's hubris was its undoing" does not.
 
