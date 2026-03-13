@@ -4033,6 +4033,12 @@ pub enum GameEvent {
     IntelBriefing {
         message: String,
     },
+    /// Advanced Intel completed analysis on a detected disease — reveals
+    /// name and pathogen type immediately (knowledge boost to KNOWLEDGE_NAME).
+    IntelAnalysis {
+        disease_idx: usize,
+        message: String,
+    },
     /// A disease spread to a new region via cross-region transmission.
     DiseaseSpreadToRegion {
         disease_idx: usize,
@@ -6646,6 +6652,18 @@ impl GameState {
     /// True if the player has unlocked Epidemiological Forecasting (death projections).
     pub fn has_forecasting(&self) -> bool {
         self.unlocked_techs.contains(&BasicTech::EpidemiologicalForecasting)
+    }
+
+    /// True if any non-collapsed region with Advanced Intel (level 2) has active
+    /// infections of the given disease. Used to show intel assessment data in the
+    /// threats panel before full research knowledge is available.
+    pub fn has_advanced_intel_on_disease(&self, disease_idx: usize) -> bool {
+        self.regions.iter().any(|r| {
+            !r.collapsed
+                && r.intel_level >= 2
+                && r.disease_state(disease_idx)
+                    .is_some_and(|inf| inf.infected > 0.0)
+        })
     }
 
     /// Projected deaths over the next `days` for a specific disease across all regions.

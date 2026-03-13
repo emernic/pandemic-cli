@@ -196,6 +196,9 @@ pub(crate) fn process_events(state: &mut GameState) {
             GameEvent::IntelBriefing { message } => {
                 (3, message.clone(), message.clone())
             }
+            GameEvent::IntelAnalysis { message, .. } => {
+                (2, message.clone(), message.clone())
+            }
             GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine } => {
                 let name = state.diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
