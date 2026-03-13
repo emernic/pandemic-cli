@@ -3912,12 +3912,11 @@ mod tests {
     }
 
     #[test]
-    fn supply_disruption_option_b_preserves_doses() {
+    fn supply_disruption_option_b_loses_fifteen_percent() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].doses = 1000.0;
-        let initial_doses = state.medicines[0].doses;
         // Option B costs $300 — set up with cost
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
@@ -3933,8 +3932,8 @@ mod tests {
         });
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none());
-        assert_eq!(after.medicines[0].doses, initial_doses,
-            "option B should preserve doses");
+        assert_eq!(after.medicines[0].doses, 850.0,
+            "option B should lose 15% of doses to transit delays");
     }
 
     #[test]

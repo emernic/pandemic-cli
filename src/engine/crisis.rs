@@ -559,14 +559,15 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Accept losses".into(),
-                    description: format!("Lose {} doses", crate::format_number(loss)),
+                    description: format!("Lose {} doses. No cost.", crate::format_number(loss)),
                     cost: None,
                 },
                  {
+                    let reroute_loss = (doses * 0.15).round();
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency reroute (¥{:.0})", cost),
-                        description: "Rerouted. Full shipment preserved.".into(),
+                        description: format!("Save most of the shipment. {} doses still lost to transit delays.", crate::format_number(reroute_loss)),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
@@ -1360,12 +1361,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Accept the casualties".into(),
-                    description: format!("More deaths in {}, but save resources for the real fight", region_name),
+                    description: format!("10% of infected in {} die, but preserves governor relations and resources.", region_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Crackdown (¥{:.0}, 2 personnel for 2d)", crackdown_cost),
-                    description: "Raid supply chains and shut down counterfeiters. Agents return in 2 days.".into(),
+                    description: format!("Stop the deaths, but enforcement raids damage cooperation in {} (−10).", region_name),
                     cost: Some(CrisisCost {
                         funding: crackdown_cost,
                         personnel: 2,
@@ -1474,12 +1475,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      The charges are unsubstantiated."),
                 options: vec![ CrisisOption {
                     label: "Ignore it".into(),
-                    description: "−5% board approval. The noise will die down.".into(),
+                    description: format!("−3% board approval, but {} appreciates the restraint (+5 cooperation).", gov_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Counter-broadcast (¥{cost:.0})"),
-                    description: "Respond publicly. Costs money but shuts them up.".into(),
+                    description: format!("+3% board approval, but public confrontation damages cooperation with {} (−5).", gov_name),
                     cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 ],
@@ -1499,12 +1500,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Field teams are operating without local authorization."),
                 options: vec![ CrisisOption {
                     label: "Work around them".into(),
-                    description: format!("Governor cooperation in {} will deteriorate.", region_name),
+                    description: format!("−5 cooperation in {}, but +3% board approval for operational efficiency.", region_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: "Send a delegation (2 personnel for 4d)".into(),
-                    description: "Send staff to manage directly. Delegation returns in 4 days.".into(),
+                    description: format!("+10 cooperation in {}. Delegation returns in 4 days.", region_name),
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 2,
@@ -2678,8 +2679,16 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 "Supply disruption resolved".into()
             }
         }
-        (CrisisKind::SupplyDisruption { .. }, _) => {
-            "Emergency reroute successful. Supply chain restored.".into()
+        (CrisisKind::SupplyDisruption { medicine_idx }, _) => {
+            // Emergency reroute — still lose 15% from transit delays
+            if let Some(med) = state.medicines.get_mut(*medicine_idx) {
+                let lost = (med.doses * 0.15).round();
+                med.doses = (med.doses - lost).max(0.0);
+                format!("Supply chain rerouted. {} doses of {} lost to transit delays.",
+                    crate::format_number(lost), med.name)
+            } else {
+                "Emergency reroute successful.".into()
+            }
         }
         (CrisisKind::LabAccident { targets_basic }, 0) => {
             if *targets_basic {
@@ -2957,21 +2966,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::MediaPanic, 0) => {
-            // Ignore media — chairman satisfaction hit + schedule infodemic follow-up
+            // Deprioritize — take the approval hit but save resources
             chairman_satisfaction_hit(state, -0.08);
-            // Pick the most-infected non-collapsed region for the infodemic
-            let target = state.regions.iter().enumerate()
-                .filter(|(_, r)| !r.collapsed)
-                .max_by(|(_, a), (_, b)| {
-                    let a_inf: f64 = a.infections.iter().map(|i| i.infected).sum();
-                    let b_inf: f64 = b.infections.iter().map(|i| i.infected).sum();
-                    a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .map(|(i, _)| i)
-                .unwrap_or(0);
-            let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
-            "Communications degradation spreading. Reporting systems unreliable.".into()
+            "Comms deprioritized. Reporting gaps persist but resources preserved.".into()
         }
         (CrisisKind::MediaPanic, _) => {
             // Press conference — gain chairman satisfaction (costs already deducted)
@@ -3321,10 +3318,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Counterfeit medicines killing patients in {}", region_name)
         }
         (CrisisKind::CounterfeitEpidemic { region_idx }, _) => {
-            // Crackdown — costs already deducted
+            // Crackdown — costs already deducted, cooperation hit from enforcement
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Counterfeit drug ring in {} dismantled", region_name)
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
+            }
+            format!("Counterfeit ring in {} dismantled. Governor unhappy about enforcement raids.", region_name)
         }
 
         (CrisisKind::EmbezzlementRing { .. }, 0) => {
@@ -3381,23 +3381,30 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Public correction issued. Damage contained.".into()
         }
 
-        (CrisisKind::GovernorBlowhard { .. }, 0) => {
-            // Ignore it — small chairman satisfaction hit, noise dies down
-            chairman_satisfaction_hit(state, -0.05);
-            "Ignored the broadcast. The accusations faded.".into()
+        (CrisisKind::GovernorBlowhard { region_idx }, 0) => {
+            // Ignore it — small approval hit but governor appreciates restraint
+            chairman_satisfaction_hit(state, -0.03);
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
+            }
+            "Ignored the broadcast. The accusations faded. Governor relations stable.".into()
         }
-        (CrisisKind::GovernorBlowhard { .. }, _) => {
-            // Counter-broadcast — costs already deducted, gain chairman satisfaction
+        (CrisisKind::GovernorBlowhard { region_idx }, _) => {
+            // Counter-broadcast — gain approval but antagonize governor
             chairman_satisfaction_hit(state, 0.03);
-            "Counter-broadcast aired. Public sees through the bluster.".into()
-        }
-
-        (CrisisKind::GovernorRecluse { region_idx }, 0) => {
-            // Work around them — cooperation deteriorates from neglect
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.cooperation = (region.governor.cooperation - 5.0).max(0.0);
             }
-            "Operating without local support. Governor cooperation declining.".into()
+            "Counter-broadcast aired. Board satisfied but governor relations strained.".into()
+        }
+
+        (CrisisKind::GovernorRecluse { region_idx }, 0) => {
+            // Work around them — cooperation drops but board approves resourcefulness
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation - 5.0).max(0.0);
+            }
+            chairman_satisfaction_hit(state, 0.03);
+            "Operating without local support. Board noted your resourcefulness.".into()
         }
         (CrisisKind::GovernorRecluse { region_idx }, _) => {
             // Send delegation — personnel cost already deducted, +10 cooperation
