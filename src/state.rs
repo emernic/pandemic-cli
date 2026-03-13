@@ -1165,6 +1165,39 @@ impl CorporationSector {
     pub fn bonus_text(&self, strength: f64) -> String {
         format!("{} {}{:.0}%", self.bonus_label(), self.bonus_sign(), self.max_bonus_pct() * strength)
     }
+
+    /// Returns the policy this sector objects to most, if active in the given region.
+    /// Returns (policy_name, gdp_penalty_fraction) for the most offensive active policy,
+    /// or None if no relevant policy is active.
+    pub fn policy_grievance(&self, policy: &RegionPolicy) -> Option<(&'static str, f64)> {
+        match self {
+            Self::Logistics => {
+                if policy.travel_ban { Some(("travel ban", 0.20)) }
+                else if policy.border_controls { Some(("border controls", 0.10)) }
+                else { None }
+            }
+            Self::Mining => {
+                if policy.quarantine { Some(("quarantine", 0.20)) }
+                else if policy.martial_law { Some(("martial law", 0.15)) }
+                else { None }
+            }
+            Self::Energy => {
+                if policy.martial_law { Some(("martial law", 0.15)) }
+                else if policy.quarantine { Some(("quarantine", 0.20)) }
+                else { None }
+            }
+            Self::DataInfra => {
+                if policy.martial_law { Some(("martial law", 0.15)) }
+                else { None }
+            }
+            Self::Automation => {
+                if policy.quarantine { Some(("quarantine", 0.20)) }
+                else { None }
+            }
+            // Biotech benefits from pandemic response, rarely complains
+            Self::Biotech => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1202,6 +1235,9 @@ pub struct Corporation {
     /// Price history for sparkline display (last 30 data points, sampled daily).
     #[serde(default)]
     pub price_history: Vec<f64>,
+    /// Tick when this corp last fired a CorporateDemand crisis. Per-corp cooldown.
+    #[serde(default)]
+    pub last_demand_tick: Option<u64>,
 }
 
 fn default_share_price() -> f64 {
@@ -4261,6 +4297,15 @@ pub enum CrisisKind {
     LoyaltyRaise {
         template_id: u8,
     },
+
+    // --- Corporate demand crises ---
+
+    /// A corporation demands the player lift a policy that's crushing their revenue.
+    /// Fires when a corp's sector is specifically hurt by an active policy and their
+    /// revenue has dropped significantly. Per-corp cooldown prevents spam.
+    CorporateDemand {
+        corp_idx: usize,
+    },
 }
 
 impl CrisisKind {
@@ -4324,6 +4369,7 @@ impl CrisisKind {
             CrisisKind::LoanOffer { .. } => "loan_offer",
             CrisisKind::LoanCallIn { .. } => "loan_call_in",
             CrisisKind::LoyaltyRaise { .. } => "loyalty_raise",
+            CrisisKind::CorporateDemand { .. } => "corp_demand",
         }
     }
 }
