@@ -2149,17 +2149,22 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let mut memo_lines: Vec<String> = Vec::new();
 
             // Funding decision
-            let rate_word = if new_funding_rate > current_rate * 1.05 {
-                "increased"
+            if new_funding_rate > current_rate * 1.05 {
+                memo_lines.push(format!(
+                    "Your operating budget has been increased from \u{00a5}{:.0} to \u{00a5}{:.0} per day, effective immediately.",
+                    current_rate, new_funding_rate
+                ));
             } else if new_funding_rate < current_rate * 0.95 {
-                "reduced"
+                memo_lines.push(format!(
+                    "Your operating budget has been reduced from \u{00a5}{:.0} to \u{00a5}{:.0} per day, effective immediately.",
+                    current_rate, new_funding_rate
+                ));
             } else {
-                "maintained"
-            };
-            memo_lines.push(format!(
-                "Your operating budget has been {} to \u{00a5}{:.0} per day, effective immediately.",
-                rate_word, new_funding_rate
-            ));
+                memo_lines.push(format!(
+                    "Your operating budget has been maintained at \u{00a5}{:.0} per day.",
+                    new_funding_rate
+                ));
+            }
 
             // Chairman influence on funding outcome
             let chair_shift = chairman_funding_shift(state);
@@ -2239,9 +2244,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
 
             let description = format!(
-                "Day {:.0} review. {}",
+                "Day {:.0} review.\n\n{}",
                 day,
-                memo_lines.join(" ")
+                memo_lines.join("\n\n")
             );
 
             CrisisEvent {
