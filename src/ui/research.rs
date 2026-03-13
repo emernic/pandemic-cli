@@ -153,6 +153,12 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
         format!("{}[ACTIVE]{} {}", marker, auto_tag, project.kind.display_label(&state.diseases, &state.medicines, &state.regions)),
         style,
     )));
+    if let Some(detail) = format_detail(&project.kind, state) {
+        lines.push(Line::from(Span::styled(
+            format!("    {}", detail),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
     lines.push(Line::from(Span::styled(
         format!("    Progress: {:.0}%, {} remaining", pct, format_days(effective_remaining)),
         Style::default().fg(Color::Green),
