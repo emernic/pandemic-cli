@@ -99,8 +99,12 @@ fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
     let segments = build_splash_content(state);
 
     // One full line per tick for a snappy typewriter effect.
-    // usize::MAX means "show everything" (typewriter done).
-    let lines_to_show = state.tick as usize;
+    // If the player pressed Enter, show everything instantly.
+    let lines_to_show = if state.ui.home_splash_revealed {
+        usize::MAX
+    } else {
+        state.tick as usize
+    };
     let lines = render_truncated(&segments, lines_to_show);
 
     let block = Block::default()

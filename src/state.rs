@@ -4466,6 +4466,10 @@ pub struct UiState {
     /// Once true, the home panel renders fully without animation.
     #[serde(default)]
     pub home_splash_done: bool,
+    /// Whether the typewriter animation has been fast-forwarded (all lines shown).
+    /// First Enter press sets this; second Enter press sets `home_splash_done`.
+    #[serde(default)]
+    pub home_splash_revealed: bool,
     /// Game speed multiplier (1, 2, 4, 6). Affects real-time tick rate only.
     #[serde(default = "default_speed")]
     pub speed_multiplier: u8,
@@ -5311,6 +5315,7 @@ impl GameState {
                 board_ui: None,
                 ledger_ui: None,
                 home_splash_done: false,
+                home_splash_revealed: false,
                 speed_multiplier: 1,
             },
         }
