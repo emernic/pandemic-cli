@@ -252,12 +252,18 @@ fn stock_performance(state: &GameState, corp_idx: usize) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Research pipeline utilization: fraction of research capacity actively in use.
-/// Measured as active projects vs a reference maximum of 5 concurrent projects.
+/// Research pipeline utilization: fraction of available research being pursued.
+/// Computed as active / (active + available). If the player is researching
+/// everything they can, this returns 1.0. If nothing is researchable yet, 1.0.
 fn research_utilization(state: &GameState) -> f64 {
     let active = state.active_research.len() as f64;
-    let reference_max = 5.0; // historical: 3 field + 1 applied + 1 basic
-    (active / reference_max).clamp(0.0, 1.0)
+    let available = state.all_available_projects().len() as f64;
+    let total = active + available;
+    if total == 0.0 {
+        1.0 // nothing researchable — no reason for the board to complain
+    } else {
+        active / total
+    }
 }
 
 /// Global survival rate: fraction of initial population still alive.
