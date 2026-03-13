@@ -1224,6 +1224,9 @@ pub struct FundingContract {
     /// Whether a loyalty raise has already been offered for this contract.
     #[serde(default)]
     pub loyalty_raise_offered: bool,
+    /// Tick when the last patron bonus was granted for this contract.
+    #[serde(default)]
+    pub last_bonus_tick: u64,
 }
 
 /// Contract condition satisfaction thresholds and rates.
@@ -4079,6 +4082,8 @@ pub enum GameEvent {
     ContractWarning { member_name: String, reason: String },
     /// A contract was revoked because condition satisfaction bottomed out.
     ContractRevoked { name: String, reason: String },
+    /// A satisfied patron granted a bonus (funding, personnel, research boost, or doses).
+    PatronBonus { member_name: String, description: String },
     /// A corporation went bankrupt (permanent).
     CorporationBankrupt { corp_idx: usize, region_idx: usize },
     GameOver,

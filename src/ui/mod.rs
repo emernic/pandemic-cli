@@ -481,6 +481,10 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("FUNDING CUT: {}: {}", name, reason);
                 (2, msg.clone(), msg)
             }
+            GameEvent::PatronBonus { member_name, description } => {
+                let msg = format!("BONUS: {} — {}", member_name, description);
+                (3, msg.clone(), msg)
+            }
             GameEvent::CorporationBankrupt { corp_idx, region_idx } => {
                 let corp_name = state.corporations.get(*corp_idx)
                     .map(|c| c.name.as_str()).unwrap_or("Unknown");

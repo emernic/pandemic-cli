@@ -2037,6 +2037,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
 
         // Enable quarantine — should succeed but warn about the contract
@@ -2063,6 +2064,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
 

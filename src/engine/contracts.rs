@@ -2,7 +2,8 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    CrisisKind, DecreeId, FundingCondition, FundingContract, GameEvent, GameState, ModifierSource, PolicyId,
+    BoardPersonality, CrisisKind, DecreeId, FundingCondition, FundingContract, GameEvent,
+    GameState, ModifierSource, PolicyId,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
     CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
@@ -163,6 +164,7 @@ fn build_contract(template_id: u8, board_member_idx: usize, state: &GameState, r
         last_demand_tick: 0,
         accepted_tick: 0,
         loyalty_raise_offered: false,
+        last_bonus_tick: 0,
     }
 }
 
@@ -204,6 +206,127 @@ pub(super) fn tick_loyalty_raises(state: &mut GameState, rng: &mut ChaCha8Rng) {
             ));
         }
     }
+}
+
+/// Minimum contract satisfaction to be eligible for a patron bonus.
+const PATRON_BONUS_MIN_SATISFACTION: f64 = 0.8;
+/// Minimum days a contract must be held before bonuses can trigger.
+const PATRON_BONUS_MIN_HELD_DAYS: f64 = 7.0;
+/// Minimum days between bonuses on the same contract.
+const PATRON_BONUS_COOLDOWN_DAYS: f64 = 10.0;
+/// Per-tick probability of a bonus firing once eligible (~1%/tick).
+const PATRON_BONUS_CHANCE: f64 = 0.01;
+/// Funding bonus: multiplier on daily board budget (e.g. 1.5 = 1.5 days of base income).
+const PATRON_BONUS_FUNDING_DAYS: f64 = 1.5;
+/// Research bonus: fraction of remaining ticks removed from a random active project.
+const PATRON_BONUS_RESEARCH_FRACTION: f64 = 0.12;
+/// Dose bonus: fraction of max_doses added to a random deployed medicine.
+const PATRON_BONUS_DOSE_FRACTION: f64 = 0.20;
+
+/// Check satisfied contracts for patron bonus eligibility and grant bonuses.
+/// Bonuses are modest one-time perks: funding, personnel, research speed, or dose refill.
+/// The bonus type is determined by the offering board member's personality.
+pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng) {
+    let min_held_ticks = (PATRON_BONUS_MIN_HELD_DAYS * TICKS_PER_DAY) as u64;
+    let cooldown_ticks = (PATRON_BONUS_COOLDOWN_DAYS * TICKS_PER_DAY) as u64;
+
+    // Collect eligible contract indices and their board member info.
+    let eligible: Vec<(usize, usize)> = state.contracts.iter().enumerate()
+        .filter(|(_, c)| {
+            c.satisfaction >= PATRON_BONUS_MIN_SATISFACTION
+                && c.accepted_tick > 0
+                && state.tick.saturating_sub(c.accepted_tick) >= min_held_ticks
+                && (c.last_bonus_tick == 0
+                    || state.tick.saturating_sub(c.last_bonus_tick) >= cooldown_ticks)
+        })
+        .map(|(i, c)| (i, c.board_member_idx))
+        .collect();
+
+    for (contract_idx, member_idx) in eligible {
+        if rng.r#gen::<f64>() >= PATRON_BONUS_CHANCE {
+            continue;
+        }
+
+        let member_name = state.board_members.get(member_idx)
+            .map(|m| m.name.clone())
+            .unwrap_or_else(|| "Patron".to_string());
+        let personality = state.board_members.get(member_idx)
+            .and_then(|m| m.personality);
+
+        let description = match personality {
+            Some(BoardPersonality::Profiteer) | None => {
+                // Emergency funding: lump sum scaled to board budget.
+                let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
+                state.resources.funding += bonus;
+                format!("Emergency funds: +¥{:.0}", bonus)
+            }
+            Some(BoardPersonality::Technocrat) => {
+                // Research boost: accelerate a random active research project.
+                if let Some(proj_idx) = pick_random_research(state, rng) {
+                    let remaining = state.active_research[proj_idx].required_ticks
+                        - state.active_research[proj_idx].progress;
+                    let boost = remaining * PATRON_BONUS_RESEARCH_FRACTION;
+                    state.active_research[proj_idx].progress += boost;
+                    let kind_label = format!("{:?}", state.active_research[proj_idx].kind);
+                    format!("Research assist: {} advanced {:.0}%", kind_label, PATRON_BONUS_RESEARCH_FRACTION * 100.0)
+                } else {
+                    // Fallback to funding if no active research.
+                    let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
+                    state.resources.funding += bonus;
+                    format!("Emergency funds: +¥{:.0}", bonus)
+                }
+            }
+            Some(BoardPersonality::Humanitarian) => {
+                // Personnel boost: +1 permanent personnel.
+                state.resources.personnel += 1;
+                "Personnel seconded: +1 staff".to_string()
+            }
+            Some(BoardPersonality::Dealmaker) => {
+                // Supply priority: dose boost on a random medicine with doses.
+                if let Some(med_idx) = pick_random_medicine(state, rng) {
+                    let max_doses = state.medicines[med_idx].max_doses;
+                    let boost = max_doses * PATRON_BONUS_DOSE_FRACTION;
+                    let med = &mut state.medicines[med_idx];
+                    med.doses = (med.doses + boost).min(med.max_doses);
+                    let name = med.name.clone();
+                    format!("Supply priority: +{:.0} doses of {}", boost, name)
+                } else {
+                    // Fallback to funding if no medicines.
+                    let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
+                    state.resources.funding += bonus;
+                    format!("Emergency funds: +¥{:.0}", bonus)
+                }
+            }
+        };
+
+        state.contracts[contract_idx].last_bonus_tick = state.tick;
+        state.events.push(GameEvent::PatronBonus {
+            member_name,
+            description,
+        });
+    }
+}
+
+/// Pick a random active research project index, if any exist.
+fn pick_random_research(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize> {
+    if state.active_research.is_empty() {
+        return None;
+    }
+    let idx = rng.r#gen::<usize>() % state.active_research.len();
+    Some(idx)
+}
+
+/// Pick a random medicine index that has been deployed (has max_doses > 0), if any.
+fn pick_random_medicine(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize> {
+    let deployed: Vec<usize> = state.medicines.iter().enumerate()
+        .filter(|(_, m)| m.max_doses > 0.0 && m.doses < m.max_doses)
+        .map(|(i, _)| i)
+        .collect();
+    if deployed.is_empty() {
+        return None;
+    }
+    let idx = rng.r#gen::<usize>() % deployed.len();
+    Some(deployed[idx])
 }
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
@@ -453,6 +576,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         }
     }
 
@@ -512,6 +636,7 @@ mod tests {
                 last_demand_tick: 0,
                 accepted_tick: 0,
                 loyalty_raise_offered: false,
+                last_bonus_tick: 0,
             });
         }
         make_offer(&mut state);
@@ -602,6 +727,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
         tick_check_contracts(&mut state);
         assert_eq!(state.contracts.len(), 1);
@@ -654,6 +780,7 @@ mod tests {
                 last_demand_tick: 0,
                 accepted_tick: 0,
                 loyalty_raise_offered: false,
+                last_bonus_tick: 0,
             });
         }
 
@@ -915,6 +1042,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
 
         // Set deaths so MaxDeaths templates are relevant
@@ -952,6 +1080,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 0,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
         assert_eq!(state.contracts.len(), 1);
 
@@ -990,6 +1119,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: accepted,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
 
         // Set tick to just before eligibility (10 days = 10 * TICKS_PER_DAY)
@@ -1017,6 +1147,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: accepted,
             loyalty_raise_offered: false,
+            last_bonus_tick: 0,
         });
 
         // Set tick well past eligibility
@@ -1047,6 +1178,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 100,
             loyalty_raise_offered: true, // Already offered
+            last_bonus_tick: 0,
         });
         state.tick = 100 + (LOYALTY_RAISE_MIN_DAYS * TICKS_PER_DAY) as u64 + 5000;
 
@@ -1073,6 +1205,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 100,
             loyalty_raise_offered: true,
+            last_bonus_tick: 0,
         });
 
         let income_before = state.contracts[0].income;
@@ -1107,6 +1240,7 @@ mod tests {
             last_demand_tick: 0,
             accepted_tick: 100,
             loyalty_raise_offered: true,
+            last_bonus_tick: 0,
         });
 
         let crisis_event = crisis::build_crisis_event(
@@ -1119,5 +1253,105 @@ mod tests {
         assert!(msg.contains("cancelled"), "msg: {msg}");
         assert!(state.contracts.is_empty(),
             "Contract should be cancelled when declining loyalty raise");
+    }
+
+    #[test]
+    fn patron_bonus_requires_high_satisfaction() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+        let mut rng = ChaCha8Rng::seed_from_u64(99);
+
+        // Set board budget so funding bonus is meaningful.
+        state.board_budget_per_tick = 5.0;
+
+        // Contract with low satisfaction — should not get bonus.
+        state.contracts.push(FundingContract {
+            name: "Low Sat".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 0.5,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 1,
+            loyalty_raise_offered: false,
+            last_bonus_tick: 0,
+        });
+        state.tick = 10000; // Well past min held time.
+
+        for _ in 0..1000 {
+            tick_patron_bonuses(&mut state, &mut rng);
+        }
+        assert!(state.events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
+            "Low satisfaction contract should not receive patron bonus");
+    }
+
+    #[test]
+    fn patron_bonus_fires_with_high_satisfaction() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+
+        state.board_budget_per_tick = 5.0;
+
+        state.contracts.push(FundingContract {
+            name: "Happy Patron".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 1,
+            loyalty_raise_offered: false,
+            last_bonus_tick: 0,
+        });
+        state.tick = 10000; // Well past min held time.
+
+        // Run enough ticks that a bonus should fire (1% chance per tick).
+        for _ in 0..500 {
+            tick_patron_bonuses(&mut state, &mut rng);
+        }
+        let bonus_events: Vec<_> = state.events.iter()
+            .filter(|e| matches!(e, GameEvent::PatronBonus { .. }))
+            .collect();
+        assert!(!bonus_events.is_empty(),
+            "High satisfaction contract should eventually receive a patron bonus");
+        assert!(state.contracts[0].last_bonus_tick > 0,
+            "last_bonus_tick should be updated after bonus");
+    }
+
+    #[test]
+    fn patron_bonus_respects_cooldown() {
+        let mut state = GameState::new_default(42);
+        setup_board(&mut state);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+
+        state.board_budget_per_tick = 5.0;
+
+        state.contracts.push(FundingContract {
+            name: "Cooldown Test".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::NoCollapse,
+            template_id: 0,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 1,
+            loyalty_raise_offered: false,
+            last_bonus_tick: 9500, // Recent bonus.
+        });
+        state.tick = 9600; // Only 100 ticks since last bonus — within cooldown.
+
+        for _ in 0..200 {
+            tick_patron_bonuses(&mut state, &mut rng);
+            state.tick += 1;
+        }
+        // Tick only advanced to ~9800, cooldown is 600 ticks, so no bonus should fire.
+        assert!(state.events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
+            "Should not get bonus during cooldown period");
     }
 }
