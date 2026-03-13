@@ -5795,10 +5795,10 @@ impl GameState {
         self.contracts.iter().map(|c| c.income).sum()
     }
 
-    /// Compute the baseline board budget per tick from total corporate tax revenue.
-    /// This is the "neutral" budget at satisfaction 0.5 — what the board allocates
-    /// when they're neither happy nor angry. Used for initial calibration and as
-    /// the reference point for board meeting adjustments.
+    /// Compute the current GDP-derived board budget base from corporate tax revenue.
+    /// This tracks the real economy — it shrinks as GDP declines. Used as the
+    /// "current" input to compute_board_budget_per_tick (which dampens GDP decline
+    /// via the stored reference_base_budget_per_tick) and for UI comparisons.
     pub fn base_board_budget_per_tick(&self) -> f64 {
         let total_corp_tax: f64 = self.corporations.iter()
             .filter(|c| !self.regions.get(c.region_idx).is_some_and(|r| r.collapsed))
