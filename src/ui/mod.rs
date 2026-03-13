@@ -266,8 +266,8 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("TECH UNLOCKED: {} [{}]", tech.name(), tech.description());
                 (3, msg.clone(), msg)
             }
-            GameEvent::DecreeUnlocked { decree_idx } => {
-                let name = crate::state::decree_display_name(*decree_idx);
+            GameEvent::DecreeUnlocked { decree } => {
+                let name = decree.display_name();
                 let msg = format!("DECREE AVAILABLE: {}", name);
                 let notification = format!("{}. Open Orders [O] to enact.", msg);
                 (2, msg, notification)
@@ -506,8 +506,8 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let priority = if *adverse { 1 } else { 2 };
                 (priority, msg.clone(), msg)
             }
-            GameEvent::PolicyAuthorized { policy_idx } => {
-                let name = crate::state::policy_display_name(*policy_idx);
+            GameEvent::PolicyAuthorized { policy } => {
+                let name = policy.display_name();
                 let msg = format!("Board authorized policy: {}", name);
                 let notification = format!("{}. Open [P] Policy to deploy.", msg);
                 (3, msg, notification)

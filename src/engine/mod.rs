@@ -13,8 +13,9 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind, SimState,
-    COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR, DECREE_COUNT,
+    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind, SimState,
+    StandingOrderKind,
+    COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY,
@@ -49,7 +50,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     // Snapshot decree unlock state so we can detect newly unlocked decrees at end of tick.
-    let decrees_were_unlocked: Vec<bool> = (0..DECREE_COUNT).map(|i| state.decree_unlocked(i)).collect();
+    let decrees_were_unlocked: Vec<bool> = DecreeId::ALL.iter().map(|&d| state.decree_unlocked(d)).collect();
 
     // Clone per-subsystem RNG streams out so we can mutably borrow them and
     // `new.regions` simultaneously. Written back at the end of the function.
@@ -688,9 +689,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     // Detect newly unlocked emergency decrees (severity crossed threshold this tick).
-    for i in 0..DECREE_COUNT {
-        if !decrees_were_unlocked[i] && new.decree_unlocked(i) && !new.enacted_decrees.is_enacted(i) {
-            new.events.push(GameEvent::DecreeUnlocked { decree_idx: i });
+    for (i, &decree) in DecreeId::ALL.iter().enumerate() {
+        if !decrees_were_unlocked[i] && new.decree_unlocked(decree) && !new.enacted_decrees.is_enacted(decree) {
+            new.events.push(GameEvent::DecreeUnlocked { decree });
         }
     }
 
@@ -778,17 +779,17 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         }
         GameCommand::TogglePolicy {
             region_idx,
-            policy_idx,
+            policy,
         } => {
-            let (msg, success) = policy::toggle_policy(state, *region_idx, *policy_idx);
+            let (msg, success) = policy::toggle_policy(state, *region_idx, *policy);
             CommandResult { message: msg, success }
         }
         GameCommand::ResolveCrisis { choice } => {
             let msg = crisis::resolve_crisis(state, *choice);
             CommandResult { message: Some(msg), success: true }
         }
-        GameCommand::EnactDecree { decree_idx, region_idx } => {
-            let (msg, success) = policy::enact_decree(state, *decree_idx, *region_idx);
+        GameCommand::EnactDecree { decree, region_idx } => {
+            let (msg, success) = policy::enact_decree(state, *decree, *region_idx);
             CommandResult { message: msg, success }
         }
         GameCommand::AppeaseGovernor { region_idx } => {
@@ -801,9 +802,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         }
         GameCommand::ToggleStandingOrder { kind } => {
             match kind {
-                0 => state.standing_orders.auto_quarantine_at_high = !state.standing_orders.auto_quarantine_at_high,
-                1 => state.standing_orders.auto_travel_ban_at_crit = !state.standing_orders.auto_travel_ban_at_crit,
-                _ => {}
+                StandingOrderKind::AutoQuarantineAtHigh => state.standing_orders.auto_quarantine_at_high = !state.standing_orders.auto_quarantine_at_high,
+                StandingOrderKind::AutoTravelBanAtCrit => state.standing_orders.auto_travel_ban_at_crit = !state.standing_orders.auto_travel_ban_at_crit,
             }
             CommandResult { message: None, success: true }
         }
@@ -983,7 +983,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{Authority, CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchUiState};
+    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -1936,17 +1936,17 @@ mod tests {
                     let has_quarantine = state.policies[r_idx].quarantine;
                     if !has_border {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
-                            region_idx: r_idx, policy_idx: 3,
+                            region_idx: r_idx, policy: PolicyId::BorderControls,
                         });
                     }
                     if !has_water && any_waterborne {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
-                            region_idx: r_idx, policy_idx: 4,
+                            region_idx: r_idx, policy: PolicyId::WaterSanitation,
                         });
                     }
                     if !has_quarantine && total_infected > 10_000.0 {
                         execute_command(&mut state, &GameCommand::TogglePolicy {
-                            region_idx: r_idx, policy_idx: 1,
+                            region_idx: r_idx, policy: PolicyId::Quarantine,
                         });
                     }
                     // Hospitals are baseline — no need to activate hospital surge.
@@ -2587,7 +2587,7 @@ mod tests {
         // stays correct even if policy_display_order() changes.
         let travel_ban_display_pos = crate::state::policy_display_order()
             .iter()
-            .position(|&idx| idx == 0) // policy_idx 0 = Travel Ban
+            .position(|&p| p == PolicyId::TravelBan)
             .expect("Travel Ban must be in display order");
         for _ in 0..travel_ban_display_pos {
             state = apply_action(&state, &Action::SelectNext);
@@ -4934,7 +4934,7 @@ mod tests {
         let personnel_before = state.resources.personnel;
         // First Confirm goes to the confirmation screen
         state = apply_action(&state, &Action::Confirm);
-        assert_eq!(state.ui.operations_ui, Some(OpsUiState::ConfirmDecree { decree_idx: 0 }),
+        assert_eq!(state.ui.operations_ui, Some(OpsUiState::ConfirmDecree { decree: DecreeId::ConscriptResearchers }),
             "should show confirmation before enacting");
         assert!(!state.enacted_decrees.conscript_researchers, "should not yet be enacted");
         // Second Confirm enacts the decree
@@ -5484,7 +5484,7 @@ mod tests {
         state.ark_protocol = Some(0); // North America is the Ark
 
         // Try toggling policy in region 1 (abandoned)
-        let (msg, success) = policy::toggle_policy(&mut state, 1, 0); // travel ban
+        let (msg, success) = policy::toggle_policy(&mut state, 1, PolicyId::TravelBan);
         assert!(!success, "should block policy toggle in abandoned region");
         assert!(msg.unwrap().contains("abandoned"));
 
@@ -5496,7 +5496,7 @@ mod tests {
         assert!(msg.unwrap().contains("abandoned"));
 
         // Same actions should work on the Ark region (region 0)
-        let (msg, success) = policy::toggle_policy(&mut state, 0, 0);
+        let (msg, success) = policy::toggle_policy(&mut state, 0, PolicyId::TravelBan);
         // May fail for other reasons (cost, etc.) but NOT because of abandonment
         if !success {
             assert!(!msg.unwrap().contains("abandoned"),
@@ -5513,7 +5513,7 @@ mod tests {
         state.resources.authority = Authority::Maximum;
 
         // Fresh game: all decrees locked despite high POL
-        let (msg, ok) = policy::enact_decree(&mut state, 0, None);
+        let (msg, ok) = policy::enact_decree(&mut state, DecreeId::ConscriptResearchers, None);
         assert!(!ok, "decree should be blocked when severity is low");
         assert!(msg.unwrap().contains("more severe crisis"));
 
@@ -5521,8 +5521,8 @@ mod tests {
         state.regions[0].infections = vec![RegionDiseaseState {
             disease_idx: 0, exposed: 0.0, infected: 600_000.0, dead: 0.0, immune: 0.0,
         }];
-        assert!(state.decree_unlocked(0), "decree 0 should unlock at 500K+ infected");
-        let (_, ok) = policy::enact_decree(&mut state, 0, None);
+        assert!(state.decree_unlocked(DecreeId::ConscriptResearchers), "decree 0 should unlock at 500K+ infected");
+        let (_, ok) = policy::enact_decree(&mut state, DecreeId::ConscriptResearchers, None);
         assert!(ok, "decree should be available with sufficient severity");
         assert!(state.enacted_decrees.conscript_researchers);
     }
@@ -5536,7 +5536,7 @@ mod tests {
         for region in &mut state.regions {
             region.infections.clear();
         }
-        assert!(!state.decree_unlocked(0), "decree 0 should be locked with no infections/deaths");
+        assert!(!state.decree_unlocked(DecreeId::ConscriptResearchers), "decree 0 should be locked with no infections/deaths");
 
         // Set total (exposed+infected) just below 500K threshold for decree 0.
         // total_infected() counts exposed+infected.
@@ -5545,11 +5545,11 @@ mod tests {
         state.regions[0].infections = vec![RegionDiseaseState {
             disease_idx: 0, exposed: 9_000.0, infected: 490_000.0, dead: 0.0, immune: 0.0,
         }];
-        assert!(!state.decree_unlocked(0), "499K total should be below 500K threshold");
+        assert!(!state.decree_unlocked(DecreeId::ConscriptResearchers), "499K total should be below 500K threshold");
 
         // Tick: high infected count will expose new susceptibles, pushing total past 500K.
         let new = tick(&state);
-        assert!(new.decree_unlocked(0), "decree 0 should be unlocked after tick (spread grew past 500K)");
+        assert!(new.decree_unlocked(DecreeId::ConscriptResearchers), "decree 0 should be unlocked after tick (spread grew past 500K)");
         let unlocked_events: Vec<_> = new.events.iter()
             .filter(|e| matches!(e, GameEvent::DecreeUnlocked { .. }))
             .collect();

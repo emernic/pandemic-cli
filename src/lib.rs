@@ -7,10 +7,10 @@ pub mod ui;
 use action::Action;
 use engine::execute_command;
 use state::{
-    DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
+    DecreeId, DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
     LedgerUiState, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem, ResearchUiState, SimState,
-    STANDING_ORDER_COUNT, UiState, grid_reading_order, policy_display_order,
+    STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
 /// Route a player action to the appropriate handler.
@@ -488,11 +488,11 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
                 // Cycle deployment priority
                 Some(GameCommand::CycleDeployPriority { region_idx })
             } else {
-                // Map display position to policy_idx via sorted display order
-                let policy_idx = policy_display_order()[ui.panel_selection];
+                // Map display position to PolicyId via sorted display order
+                let policy = policy_display_order()[ui.panel_selection];
                 Some(GameCommand::TogglePolicy {
                     region_idx,
-                    policy_idx,
+                    policy,
                 })
             }
         }
@@ -523,33 +523,33 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                 }
             } else if ui.panel_selection >= so_base {
                 // Standing order selected — toggle
-                let kind = ui.panel_selection - so_base;
+                let kind = StandingOrderKind::ALL[ui.panel_selection - so_base];
                 Some(GameCommand::ToggleStandingOrder { kind })
             } else {
                 // Decree selected
-                let decree_idx = ui.panel_selection;
-                if state.enacted_decrees.is_enacted(decree_idx) || !state.decree_unlocked(decree_idx) {
+                let decree = DecreeId::from_index(ui.panel_selection);
+                if state.enacted_decrees.is_enacted(decree) || !state.decree_unlocked(decree) {
                     None
-                } else if decree_idx == 2 {
+                } else if decree == DecreeId::SacrificeRegion {
                     // Sacrifice Region — needs region selection
                     ui.operations_ui = Some(OpsUiState::SelectSacrificeRegion);
                     ui.panel_selection = 0;
                     None
-                } else if decree_idx == 4 {
+                } else if decree == DecreeId::FortifyRegion {
                     // Fortify Region — needs region selection
                     ui.operations_ui = Some(OpsUiState::SelectFortifyRegion);
                     ui.panel_selection = 0;
                     None
                 } else {
                     // All other decrees go through confirmation
-                    ui.operations_ui = Some(OpsUiState::ConfirmDecree { decree_idx });
+                    ui.operations_ui = Some(OpsUiState::ConfirmDecree { decree });
                     ui.panel_selection = 0;
                     None
                 }
             }
         }
-        Some(OpsUiState::ConfirmDecree { decree_idx }) => {
-            Some(GameCommand::EnactDecree { decree_idx, region_idx: None })
+        Some(OpsUiState::ConfirmDecree { decree }) => {
+            Some(GameCommand::EnactDecree { decree, region_idx: None })
         }
         Some(OpsUiState::SelectSacrificeRegion) => {
             let non_collapsed: Vec<usize> = state.regions.iter()
@@ -558,7 +558,7 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                 .map(|(i, _)| i)
                 .collect();
             if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::EnactDecree { decree_idx: 2, region_idx: Some(region_idx) })
+                Some(GameCommand::EnactDecree { decree: DecreeId::SacrificeRegion, region_idx: Some(region_idx) })
             } else {
                 None
             }
@@ -570,7 +570,7 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
                 .map(|(i, _)| i)
                 .collect();
             if let Some(&region_idx) = non_collapsed.get(ui.panel_selection) {
-                Some(GameCommand::EnactDecree { decree_idx: 4, region_idx: Some(region_idx) })
+                Some(GameCommand::EnactDecree { decree: DecreeId::FortifyRegion, region_idx: Some(region_idx) })
             } else {
                 None
             }

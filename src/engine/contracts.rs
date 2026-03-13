@@ -2,7 +2,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    CrisisKind, FundingCondition, FundingContract, GameEvent, GameState, ModifierSource,
+    CrisisKind, DecreeId, FundingCondition, FundingContract, GameEvent, GameState, ModifierSource, PolicyId,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
     CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
@@ -19,7 +19,7 @@ enum RelevanceCheck {
     /// At least one non-collapsed region has significant infection prevalence (≥0.5%).
     SignificantInfectionRate,
     /// The specified emergency decree is unlocked.
-    DecreeUnlocked(usize),
+    DecreeUnlocked(DecreeId),
     /// At least one region has a high-severity infection.
     HighSeverityRisk,
     /// Total deaths have reached a threshold.
@@ -71,20 +71,20 @@ const TEMPLATES: &[Template] = &[
     Template {
         name: "Shipping Lane Guarantee",
         income: 2.5,
-        condition: FundingCondition::ForbidPolicy { policy_idx: 0 }, // No travel bans
+        condition: FundingCondition::ForbidPolicy { policy: PolicyId::TravelBan },
         relevance: RelevanceCheck::MultiRegionalSpread,
     },
     Template {
         name: "Hospitality Protection Fund",
         income: 2.0,
-        condition: FundingCondition::ForbidPolicy { policy_idx: 1 }, // No quarantine
+        condition: FundingCondition::ForbidPolicy { policy: PolicyId::Quarantine },
         relevance: RelevanceCheck::SignificantInfectionRate,
     },
     Template {
         name: "Research Independence Pact",
         income: 2.0,
-        condition: FundingCondition::ForbidDecree { decree_idx: 0 }, // No Conscript Researchers
-        relevance: RelevanceCheck::DecreeUnlocked(0),
+        condition: FundingCondition::ForbidDecree { decree: DecreeId::ConscriptResearchers },
+        relevance: RelevanceCheck::DecreeUnlocked(DecreeId::ConscriptResearchers),
     },
     Template {
         name: "Stability Assurance Fund",
@@ -107,20 +107,20 @@ const TEMPLATES: &[Template] = &[
     Template {
         name: "Equipment Lease",
         income: 1.5,
-        condition: FundingCondition::ForbidPolicy { policy_idx: 2 }, // Discourage Hospitalization
+        condition: FundingCondition::ForbidPolicy { policy: PolicyId::DiscourageHosp },
         relevance: RelevanceCheck::Always,
     },
     Template {
         name: "Border Security Contract",
         income: 1.5,
-        condition: FundingCondition::RequirePolicy { policy_idx: 3 }, // Border Controls
+        condition: FundingCondition::RequirePolicy { policy: PolicyId::BorderControls },
         relevance: RelevanceCheck::Always,
     },
     Template {
         name: "Ethics Protocols Grant",
         income: 2.0,
-        condition: FundingCondition::ForbidDecree { decree_idx: 1 }, // No Authorize Human Trials
-        relevance: RelevanceCheck::DecreeUnlocked(1),
+        condition: FundingCondition::ForbidDecree { decree: DecreeId::AuthorizeHumanTrials },
+        relevance: RelevanceCheck::DecreeUnlocked(DecreeId::AuthorizeHumanTrials),
     },
 ];
 
@@ -304,12 +304,12 @@ pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) 
     // Pick a template that isn't already active, whose condition type isn't already held
     // (type exclusivity), whose condition is met, and that is contextually relevant.
     let active_ids: Vec<u8> = state.contracts.iter().map(|c| c.template_id).collect();
-    let active_types: Vec<&str> = state.contracts.iter()
-        .map(|c| c.condition.condition_type())
+    let active_categories: Vec<crate::state::ConditionCategory> = state.contracts.iter()
+        .map(|c| c.condition.category())
         .collect();
     let eligible: Vec<u8> = (0..TEMPLATES.len() as u8)
         .filter(|id| !active_ids.contains(id))
-        .filter(|id| !active_types.contains(&TEMPLATES[*id as usize].condition.condition_type()))
+        .filter(|id| !active_categories.contains(&TEMPLATES[*id as usize].condition.category()))
         .filter(|id| TEMPLATES[*id as usize].condition.is_met(state))
         .filter(|id| is_contextually_relevant(*id as usize, state))
         .collect();
@@ -908,7 +908,7 @@ mod tests {
             name: "Shipping Lane Guarantee".to_string(),
             board_member_idx: 0,
             income: 2.5,
-            condition: FundingCondition::ForbidPolicy { policy_idx: 0 },
+            condition: FundingCondition::ForbidPolicy { policy: crate::state::PolicyId::TravelBan },
             template_id: 0,
             satisfaction: 1.0,
             warned: false,
@@ -927,8 +927,8 @@ mod tests {
             state.last_contract_offer_tick = 0;
             tick_offer_contracts(&mut state, &mut rng);
             if let Some(ref offer) = state.contract_offer {
-                let offer_type = TEMPLATES[offer.template_id as usize].condition.condition_type();
-                assert_ne!(offer_type, "forbid_policy",
+                let offer_category = TEMPLATES[offer.template_id as usize].condition.category();
+                assert_ne!(offer_category, crate::state::ConditionCategory::ForbidPolicy,
                     "Should not offer ForbidPolicy when one is already active (got template {})",
                     offer.template_id);
             }
