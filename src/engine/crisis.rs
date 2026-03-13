@@ -3573,7 +3573,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::GovernorDeath { region_idx }, 0) => {
-            // Emergency appointment: faster succession (7 days)
+            // Stabilize operations: faster succession (7 days)
             use crate::state::TICKS_PER_DAY;
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 let old_name = region.governor.name.clone();
@@ -3584,7 +3584,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     name: old_name,
                 });
             }
-            "Emergency appointment ordered. Successor expected in 7 days.".into()
+            "Operations stabilized. Successor expected in 7 days.".into()
         }
         (CrisisKind::GovernorDeath { region_idx }, _) => {
             // Let the process run: standard succession (12 days)
