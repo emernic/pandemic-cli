@@ -116,14 +116,14 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             let auto_on = state.auto_deploy.get(med_idx).copied().unwrap_or(false);
             let has_shipments = state.pending_shipments.iter().any(|s| s.medicine_idx == med_idx);
             // Check if auto-deploy is ON but blocked because all tested diseases
-            // have efficacy below the deployment threshold (0.04).
+            // have efficacy below the auto-deploy threshold.
             let auto_blocked = auto_on && {
                 let tested: Vec<usize> = med.deployable_diseases(&state.diseases)
                     .into_iter()
                     .filter(|d_idx| med.tested_against.contains(d_idx))
                     .collect();
                 !tested.is_empty() && tested.iter().all(|&d_idx| {
-                    med.effective_efficacy(d_idx, &state.diseases) < 0.04
+                    med.effective_efficacy(d_idx, &state.diseases) < crate::state::AUTO_DEPLOY_MIN_EFFICACY
                 })
             };
             let (status_tag, status_color) = if auto_on && auto_blocked {
