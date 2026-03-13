@@ -105,6 +105,11 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // (so suspended screening is reflected).
     policy::tick_screening(&mut new);
 
+    // Snapshot per-disease observed infection estimates for Rt computation.
+    // Every tick: update current_day_observed_infected with latest screened estimates.
+    // At day boundaries: rotate current into prev.
+    snapshot_disease_observations(&mut new);
+
     // Funding contracts — check conditions (revoke violators), offer new contracts,
     // and check for loyalty raise eligibility on long-held contracts.
     contracts::tick_check_contracts(&mut new);
@@ -714,6 +719,39 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     new
+}
+
+/// Update per-disease observed infection estimates from screened data.
+/// Every tick: compute per-disease screened infected total and store as current estimate.
+/// At day boundaries: rotate current into prev, giving a 1-day comparison window for Rt.
+fn snapshot_disease_observations(state: &mut GameState) {
+    let is_day_boundary = state.tick > 0 && state.tick % (TICKS_PER_DAY as u64) == 0;
+
+    for disease_idx in 0..state.diseases.len() {
+        // Compute this disease's screened infected total across all regions
+        let observed: f64 = state.regions.iter().enumerate()
+            .filter_map(|(region_idx, region)| {
+                let inf = region.disease_state(disease_idx)?;
+                if inf.infected + inf.exposed <= 0.0 { return None; }
+                let shows_exposed = state.screening_shows_exposed(region_idx);
+                let total_real = if shows_exposed {
+                    region.detected_infected(&state.diseases)
+                } else {
+                    region.detected_symptomatic(&state.diseases)
+                };
+                let this_disease = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
+                let proportion = if total_real > 0.0 { this_disease / total_real } else { 0.0 };
+                Some(region.estimated_infected * proportion)
+            })
+            .sum();
+
+        if is_day_boundary {
+            // Rotate: current becomes prev, start fresh accumulation
+            state.diseases[disease_idx].prev_day_observed_infected =
+                state.diseases[disease_idx].current_day_observed_infected;
+        }
+        state.diseases[disease_idx].current_day_observed_infected = observed;
+    }
 }
 
 /// GDP smoothing rate: ~10% convergence per day toward target.
@@ -2622,6 +2660,8 @@ mod tests {
             mechanism_resistance: vec![],
             sequence_group: None,
             incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
+            prev_day_observed_infected: 0.0,
+            current_day_observed_infected: 0.0,
         }];
 
         let med = Medicine {
