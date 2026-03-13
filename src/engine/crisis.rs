@@ -2230,12 +2230,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             member.name, region_name
                         ));
                     }
-                    BoardRole::IndependentAdvisor => {
-                        concerns.push(format!(
-                            "{} has questioned the adequacy of current containment measures.",
-                            member.name
-                        ));
-                    }
                 }
             }
 
