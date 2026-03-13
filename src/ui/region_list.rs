@@ -860,7 +860,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(change_color),
                     ),
                     Span::styled(
-                        spark,
+                        format!(" {}", spark),
                         Style::default().fg(Color::DarkGray),
                     ),
                     Span::styled(
