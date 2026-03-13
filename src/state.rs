@@ -83,6 +83,10 @@ pub struct GameState {
     /// messages. Cleared at the start of each tick.
     #[serde(skip)]
     pub events: Vec<GameEvent>,
+    /// Tracks which medicines have already fired an AutoDeployBlocked event
+    /// this session, to avoid spamming the log every tick.
+    #[serde(skip)]
+    pub auto_deploy_blocked_notified: std::collections::HashSet<usize>,
     /// Persistent log of notable events with timestamps (day number, message).
     /// Populated by the UI layer from transient `events`. Capped at 50 entries.
     #[serde(default)]
@@ -4087,6 +4091,9 @@ pub enum GameEvent {
     ResearchHandoff { message: String },
     /// Personnel left due to unpaid wages (funding at $0).
     PersonnelAttrition { count: u32 },
+    /// Auto-deploy was blocked for a medicine because its effective efficacy
+    /// against all tested diseases is below the deployment threshold.
+    AutoDeployBlocked { medicine_idx: usize },
     /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
     /// from one bacterium to another.
     ResistanceTransferred {
@@ -5599,6 +5606,7 @@ impl GameState {
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
             events: vec![],
+            auto_deploy_blocked_notified: std::collections::HashSet::new(),
             event_log: VecDeque::new(),
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
