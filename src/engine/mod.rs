@@ -1857,9 +1857,8 @@ mod tests {
         //
         // Note: BS efficacy is intentionally low (0.15) — BS is a bandaid that
         // buys time while targeted medicines are researched, not a win condition.
-        // The threshold here reflects that improvement: policies + weak BS + research
-        // extends survival by a modest but real margin. A player who completes the
-        // research pipeline gets much higher benefit not captured by this test.
+        // The 1.10x threshold ensures player actions produce a meaningful (>=10%)
+        // survival improvement. Actual median is typically ~1.15-1.20x across seeds.
         //
         // Strategy: treatment first (removes ~efficacy fraction of infected per deploy),
         // vaccination second (only with targeted meds — BS vaccination is a dose trap).
@@ -2054,8 +2053,8 @@ mod tests {
         }
         eprintln!("Median improvement ratio: {median_improvement:.2}");
 
-        assert!(median_improvement >= 1.03,
-            "Median paired improvement is {median_improvement:.2}x (expected >=1.03x). \
+        assert!(median_improvement >= 1.10,
+            "Median paired improvement is {median_improvement:.2}x (expected >=1.10x). \
              Player actions (policies + research + BS treatment) aren't meaningful enough. \
              {better_count}/{} seeds show improvement.",
             seeds.len());
