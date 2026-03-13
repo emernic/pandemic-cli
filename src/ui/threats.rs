@@ -227,15 +227,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                 ]));
 
-                // 5-day death projection (requires EpidemiologicalForecasting tech)
+                // 20-day death projection (requires EpidemiologicalForecasting tech)
                 if state.has_forecasting() {
-                    let projected = state.projected_deaths(i, 5.0);
+                    let projected = state.projected_deaths(i, 20.0);
                     if projected >= 1.0 {
                         let proj_color = if projected >= 10_000.0 { Color::Red }
                             else if projected >= 1_000.0 { Color::Yellow }
                             else { Color::White };
                         lines.push(Line::from(Span::styled(
-                            format!("    Projected +{} deaths / 5 days", format_number(projected)),
+                            format!("    Projected +{} deaths / 20 days", format_number(projected)),
                             Style::default().fg(proj_color),
                         )));
                     }
@@ -428,7 +428,7 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
     ];
     if has_forecast {
         header_spans.push(Span::raw("  "));
-        header_spans.push(Span::styled(format!("{:>8}", "Proj 5d"), hdr));
+        header_spans.push(Span::styled(format!("{:>8}", "Proj20d"), hdr));
     }
     lines.push(Line::from(header_spans));
 
@@ -485,7 +485,7 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: 
                 ),
             ];
             if has_forecast {
-                let proj = inf.infected * disease.lethality * TICKS_PER_DAY * 5.0;
+                let proj = inf.infected * disease.lethality * TICKS_PER_DAY * 20.0;
                 total_projected += proj;
                 let proj_color = if proj >= 10_000.0 { Color::Red }
                     else if proj >= 1_000.0 { Color::Yellow }

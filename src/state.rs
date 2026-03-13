@@ -3522,7 +3522,7 @@ pub enum BasicTech {
     /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
     /// Prereq: TargetedDrugDesign.
     ResilientGrids,
-    /// Unlocks 5-day death projections in the Threats panel for each detected disease.
+    /// Unlocks 20-day death projections in the Threats panel for each detected disease.
     /// Shows where the outbreak is heading, not just where it is.
     /// Prereq: RapidSequencing + ResistanceSurveillance.
     EpidemiologicalForecasting,
@@ -3567,7 +3567,7 @@ impl BasicTech {
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
             BasicTech::StabilizedFormulation => "Thermostable formulations reduce cold-chain waste. Each manufacturing run yields 25% more usable doses.",
             BasicTech::ResilientGrids => "Hardened regional infrastructure protocols. Disease-caused infrastructure degradation 20% slower.",
-            BasicTech::EpidemiologicalForecasting => "Predictive outbreak modeling. Threats panel shows projected deaths over 5 days for each active disease.",
+            BasicTech::EpidemiologicalForecasting => "Predictive outbreak modeling. Threats panel shows projected deaths over 20 days for each active disease.",
         }
     }
 
@@ -3731,7 +3731,7 @@ impl ResearchKind {
                 BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
                 BasicTech::StabilizedFormulation => (5, 280.0, 700.0),
                 BasicTech::ResilientGrids => (3, 240.0, 550.0),
-                BasicTech::EpidemiologicalForecasting => (4, 280.0, 700.0),
+                BasicTech::EpidemiologicalForecasting => (2, 160.0, 300.0),
             },
             ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
