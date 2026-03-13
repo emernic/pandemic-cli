@@ -5988,12 +5988,7 @@ impl GameState {
     /// "current" input to compute_board_budget_per_tick (which dampens GDP decline
     /// via the stored reference_base_budget_per_tick) and for UI comparisons.
     pub fn base_board_budget_per_tick(&self) -> f64 {
-        let total_corp_tax: f64 = self.corporations.iter()
-            .filter(|c| !self.regions.get(c.region_idx).is_some_and(|r| r.collapsed))
-            .map(|c| c.tax_contribution())
-            .sum();
-        // Apply governor skim per region (same as old system)
-        let mut skimmed_total = 0.0;
+        let mut total = 0.0;
         for region_idx in 0..self.regions.len() {
             let region = &self.regions[region_idx];
             if region.collapsed { continue; }
@@ -6001,10 +5996,10 @@ impl GameState {
                 .filter(|c| c.region_idx == region_idx)
                 .map(|c| c.tax_contribution())
                 .sum();
-            let skim_factor = 1.0 - region.governor.income_skim;
-            skimmed_total += region_tax * skim_factor;
+            let skim_factor = (1.0 - region.governor.income_skim).max(0.0);
+            total += region_tax * skim_factor;
         }
-        if skimmed_total > 0.0 { skimmed_total } else { total_corp_tax }
+        total
     }
 
     /// Whether the player's non-board stock positions exceed the embezzlement threshold.
