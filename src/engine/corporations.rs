@@ -115,6 +115,7 @@ pub(super) fn generate_corporations(state: &mut GameState) {
                 share_price: ipo_price,
                 ipo_price,
                 price_history: vec![ipo_price],
+                last_demand_tick: None,
             });
         }
     }

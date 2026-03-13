@@ -140,6 +140,9 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         // Billionaire can show up mid-to-late
         "billionaire" => ramp_up(16.0, 30.0),
 
+        // Corporate demands: mid-game when policies are in full effect
+        "corp_demand" => ramp_up(8.0, 20.0),
+
         // Default: no phase bias (follow-ups, governor crises, etc.)
         _ => 1.0,
     }
@@ -450,6 +453,34 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // Ark Protocol: scheduled deterministically in tick() when 2+ regions collapse,
     // not generated randomly.
+
+    // Corporate demand: a corp's sector is hurt by an active policy and revenue is down.
+    // Per-corp cooldown of 20 days prevents the same corp spamming demands.
+    const CORP_DEMAND_COOLDOWN: u64 = (20.0 * TICKS_PER_DAY) as u64;
+    const CORP_DEMAND_REVENUE_THRESHOLD: f64 = 0.70; // revenue/base < 70%
+    if day > 8.0 {
+        for (c_idx, corp) in state.corporations.iter().enumerate() {
+            if corp.bankrupt {
+                continue;
+            }
+            // Per-corp cooldown
+            if let Some(last) = corp.last_demand_tick {
+                if state.tick.saturating_sub(last) < CORP_DEMAND_COOLDOWN {
+                    continue;
+                }
+            }
+            // Revenue must be significantly depressed
+            if corp.base_revenue <= 0.0 || corp.revenue / corp.base_revenue > CORP_DEMAND_REVENUE_THRESHOLD {
+                continue;
+            }
+            // The corp's sector must have a grievance with an active policy in their region
+            if let Some(policy) = state.policies.get(corp.region_idx) {
+                if corp.sector.policy_grievance(policy).is_some() {
+                    candidates.push(CrisisKind::CorporateDemand { corp_idx: c_idx });
+                }
+            }
+        }
+    }
 
     // Filter out crisis types that are still on cooldown
     candidates.retain(|k| {
@@ -2477,6 +2508,70 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+        CrisisKind::CorporateDemand { corp_idx } => {
+            let corp = &state.corporations[*corp_idx];
+            let corp_name = corp.name.clone();
+            let director = corp.director_surname.clone();
+            let region_idx = corp.region_idx;
+            let region_name = state.regions.get(region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let policy = state.policies.get(region_idx).cloned().unwrap_or_default();
+            let (grievance_policy, _) = corp.sector.policy_grievance(&policy)
+                .unwrap_or(("restrictions", 0.0));
+            let compensation = scaled_cost(state, 0.25, 200.0, 1500.0);
+            let sector_label = corp.sector.label();
+
+            // Sector-specific demand language
+            let demand_text = match corp.sector {
+                CorporationSector::Logistics => format!(
+                    "{corp_name} cannot move freight with the {grievance_policy} in {region_name}. \
+                     Dir. {director} is demanding compensation or immediate repeal."
+                ),
+                CorporationSector::Mining => format!(
+                    "{corp_name} has lost access to its workforce under the {grievance_policy} in {region_name}. \
+                     Dir. {director} wants the restriction lifted or full compensation."
+                ),
+                CorporationSector::Energy => format!(
+                    "{corp_name} reports grid operations in {region_name} are compromised by the {grievance_policy}. \
+                     Dir. {director} is threatening to pull maintenance crews."
+                ),
+                CorporationSector::DataInfra => format!(
+                    "{corp_name} data centers in {region_name} are running on skeleton staff due to {grievance_policy}. \
+                     Dir. {director} wants relief or compensation for losses."
+                ),
+                CorporationSector::Automation => format!(
+                    "{corp_name} factory output in {region_name} has stalled under the {grievance_policy}. \
+                     Dir. {director} is demanding either exemptions or payment."
+                ),
+                _ => format!(
+                    "{corp_name} ({sector_label}) is losing revenue from the {grievance_policy} in {region_name}. \
+                     Dir. {director} is demanding action."
+                ),
+            };
+
+            CrisisEvent {
+                title: format!("Dir. {director}: {} Complaint", sector_label),
+                description: demand_text,
+                options: vec![
+                    CrisisOption {
+                        label: format!("Pay compensation (¥{compensation:.0})"),
+                        description: format!(
+                            "{corp_name} accepts the payment. Policy remains in effect."
+                        ),
+                        cost: Some(CrisisCost { funding: compensation, personnel: 0, ..Default::default() }),
+                    },
+                    CrisisOption {
+                        label: "Refuse".into(),
+                        description: format!(
+                            "{corp_name} retaliates. Infrastructure and civil order take a hit in {region_name}."
+                        ),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
     };
     // INVARIANT: at least one option must be free so the player is never softlocked.
     debug_assert!(event.options.iter().any(|o| o.cost.is_none()),
@@ -3920,6 +4015,39 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.personnel = state.resources.personnel.saturating_sub(*team_size);
             format!("Team written off. {team_size} personnel lost. {corp_name} gets nothing this time.")
         }
+
+        // --- Corporate demand resolutions ---
+
+        (CrisisKind::CorporateDemand { corp_idx }, 0) => {
+            // Pay compensation (cost already deducted generically).
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.clone()).unwrap_or_else(|| "the corporation".into());
+            // Record demand tick for per-corp cooldown
+            if let Some(corp) = state.corporations.get_mut(*corp_idx) {
+                corp.last_demand_tick = Some(state.tick);
+            }
+            format!("Compensation paid to {corp_name}. Policy remains in effect.")
+        }
+        (CrisisKind::CorporateDemand { corp_idx }, _) => {
+            // Refuse: corp retaliates by pulling investment.
+            // Infrastructure and civil order take a hit in the corp's region.
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.clone()).unwrap_or_else(|| "the corporation".into());
+            let region_idx = state.corporations.get(*corp_idx)
+                .map(|c| c.region_idx).unwrap_or(0);
+            let region_name = state.regions.get(region_idx)
+                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
+            // Infrastructure hit: supply lines and civil order drop
+            if let Some(region) = state.regions.get_mut(region_idx) {
+                region.supply_lines = (region.supply_lines - 0.05).max(0.0);
+                region.civil_order = (region.civil_order - 0.05).max(0.0);
+            }
+            // Record demand tick for per-corp cooldown
+            if let Some(corp) = state.corporations.get_mut(*corp_idx) {
+                corp.last_demand_tick = Some(state.tick);
+            }
+            format!("{corp_name} retaliates. Supply lines and civil order reduced in {region_name}.")
+        }
     };
     // Clamp POL after crisis modifications
     state.resources.board_approval = state.resources.board_approval.clamp(0.0, 1.0);
@@ -4458,5 +4586,147 @@ mod tests {
             .filter(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0))
             .count();
         assert_eq!(death_count, 1, "should not duplicate GovernorDeath");
+    }
+
+    #[test]
+    fn corporate_demand_generates_when_policy_hurts_sector() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+
+        // Find a Logistics corp and enable travel ban in its region
+        let logistics_idx = state.corporations.iter()
+            .position(|c| c.sector == CorporationSector::Logistics && !c.bankrupt)
+            .expect("should have a logistics corp");
+        let region_idx = state.corporations[logistics_idx].region_idx;
+        state.policies[region_idx].travel_ban = true;
+
+        // Depress the corp's revenue below threshold
+        state.corporations[logistics_idx].revenue =
+            state.corporations[logistics_idx].base_revenue * 0.50;
+
+        let mut found = false;
+        for seed in 0..200u64 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            if let Some(crisis) = generate_crisis(&state, &mut rng) {
+                if matches!(crisis.kind, CrisisKind::CorporateDemand { corp_idx }
+                    if corp_idx == logistics_idx)
+                {
+                    // Verify crisis text mentions the corp and policy
+                    assert!(crisis.description.contains("travel ban"),
+                        "crisis should mention the offending policy");
+                    assert!(crisis.options.len() == 2, "should have 2 options");
+                    assert!(crisis.options.iter().any(|o| o.cost.is_none()),
+                        "must have a free option");
+                    found = true;
+                    break;
+                }
+            }
+        }
+        assert!(found, "CorporateDemand should generate for logistics corp under travel ban");
+    }
+
+    #[test]
+    fn corporate_demand_per_corp_cooldown() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+
+        let logistics_idx = state.corporations.iter()
+            .position(|c| c.sector == CorporationSector::Logistics && !c.bankrupt)
+            .expect("should have a logistics corp");
+        let region_idx = state.corporations[logistics_idx].region_idx;
+        state.policies[region_idx].travel_ban = true;
+        state.corporations[logistics_idx].revenue =
+            state.corporations[logistics_idx].base_revenue * 0.50;
+
+        // Set a recent demand tick — should prevent generation
+        state.corporations[logistics_idx].last_demand_tick = Some(state.tick - 10);
+
+        let mut found_demand = false;
+        for seed in 0..200u64 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            if let Some(crisis) = generate_crisis(&state, &mut rng) {
+                if matches!(crisis.kind, CrisisKind::CorporateDemand { corp_idx }
+                    if corp_idx == logistics_idx)
+                {
+                    found_demand = true;
+                    break;
+                }
+            }
+        }
+        assert!(!found_demand, "corp on cooldown should not generate a demand");
+    }
+
+    #[test]
+    fn corporate_demand_refuse_damages_infrastructure() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = 1000;
+
+        // Find a logistics corp
+        let corp_idx = state.corporations.iter()
+            .position(|c| c.sector == CorporationSector::Logistics && !c.bankrupt)
+            .unwrap();
+        let region_idx = state.corporations[corp_idx].region_idx;
+
+        let supply_before = state.regions[region_idx].supply_lines;
+        let civil_before = state.regions[region_idx].civil_order;
+
+        // Build and activate the crisis
+        let crisis = build_crisis_event(&state, CrisisKind::CorporateDemand { corp_idx });
+        state.active_crisis = Some(crisis);
+        state.sim_state = SimState::Event { was_running: false };
+
+        let msg = resolve_crisis(&mut state, 1); // Refuse
+
+        assert!(state.regions[region_idx].supply_lines < supply_before,
+            "supply lines should decrease on refusal");
+        assert!(state.regions[region_idx].civil_order < civil_before,
+            "civil order should decrease on refusal");
+        assert!(state.corporations[corp_idx].last_demand_tick.is_some(),
+            "demand tick should be recorded");
+        assert!(msg.contains("retaliates"), "message should mention retaliation");
+    }
+
+    #[test]
+    fn biotech_never_generates_demand() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+
+        // Enable all policies everywhere and depress all biotech corps
+        for (i, policy) in state.policies.iter_mut().enumerate() {
+            policy.quarantine = true;
+            policy.travel_ban = true;
+            policy.martial_law = true;
+            // Also depress all biotech corps in this region
+            for corp in state.corporations.iter_mut().filter(|c| c.region_idx == i) {
+                corp.revenue = corp.base_revenue * 0.30;
+            }
+        }
+
+        let mut found_biotech_demand = false;
+        for seed in 0..500u64 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            if let Some(crisis) = generate_crisis(&state, &mut rng) {
+                if let CrisisKind::CorporateDemand { corp_idx } = crisis.kind {
+                    if state.corporations[corp_idx].sector == CorporationSector::Biotech {
+                        found_biotech_demand = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(!found_biotech_demand, "Biotech corps should never generate demands");
     }
 }
