@@ -700,14 +700,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Ignore".into(),
-                    description: "Pathogen knowledge degrades as the strain drifts.".into(),
+                    description: "Pathogen knowledge drops 5% as the strain drifts.".into(),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency analysis (¥{:.0})", cost),
-                        description: "Current strain sequenced. Pathogen knowledge updated.".into(),
+                        description: "Current strain sequenced. +15% pathogen knowledge, improving treatment calibration.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
@@ -826,12 +826,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Suppress the leak".into(),
-                    description: "Deny and contain. −10% board approval. Risk of formal inquiry if exposed.".into(),
+                    description: "Deny and contain. −10% board approval. Triggers a formal inquiry in ~5 days.".into(),
                     cost: None,
                 },
                 CrisisOption {
                     label: "No comment".into(),
-                    description: "Leak circulates. −7% board approval. 50% chance of media fallout.".into(),
+                    description: "Leak circulates. −7% board approval. 50% chance of regional infodemic within a week.".into(),
                     cost: None,
                 },
                 ],
@@ -947,7 +947,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Fast-track (+10% board approval)".into(),
-                    description: "Clear for use at reduced efficacy".into(),
+                    description: "Clear for use 2 strain generations behind current variant. ~30% efficacy penalty from drift.".into(),
                     cost: None,
                 },
                 ],
@@ -1162,7 +1162,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "Wait them out".into(),
-                    description: "Supply lines and healthcare degrade while you wait.".into(),
+                    description: "Healthcare −10%, supply lines −15%. −5% board approval.".into(),
                     cost: None,
                 },
                 ],
@@ -1212,12 +1212,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: format!("Back {corp_a}"),
-                    description: format!("+¥{:.0} from {corp_a}. −15% board approval. {corp_b} retaliates.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_a}. −15% board approval. Expect sanctions from {corp_b} within days.", credit_gain),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Back {corp_b}"),
-                    description: format!("+¥{:.0} from {corp_b}. −15% board approval. {corp_a} retaliates.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_b}. −15% board approval. Expect sanctions from {corp_a} within days.", credit_gain),
                     cost: None,
                 },
                 ],
@@ -1654,7 +1654,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Local authorities are blocking your field teams."),
                 options: vec![ CrisisOption {
                     label: "Withdraw teams".into(),
-                    description: format!("All restrictive policies disabled in {region_name}"),
+                    description: format!("Quarantine, travel ban, martial law, and border controls all disabled in {region_name}."),
                     cost: None,
                 },
                  CrisisOption {
@@ -1664,7 +1664,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "Ignore the dispute".into(),
-                    description: "Patchy policy enforcement. No cost.".into(),
+                    description: format!("Quarantine and martial law dropped in {region_name}. Other policies remain. −5% board approval."),
                     cost: None,
                 },
                 ],
@@ -2430,8 +2430,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: "Escalate through official channels".into(),
                         description: format!(
-                            "No funding required. Ties up {team_size} staff for up to 7 days. \
-                             The process has no enforcement authority and the outcome is uncertain.",
+                            "No funding required. Ties up {team_size} staff for 4-7 days. \
+                             Roughly 1 in 3 chance of early release. Otherwise the process \
+                             stalls with no resolution.",
                         ),
                         cost: None,
                     },
@@ -2584,7 +2585,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisOption {
                         label: "Refuse".into(),
                         description: format!(
-                            "{corp_name} retaliates. Infrastructure and civil order take a hit in {region_name}."
+                            "{corp_name} retaliates. Supply lines −5%, civil order −5% in {region_name}."
                         ),
                         cost: None,
                     },
