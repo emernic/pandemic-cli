@@ -412,6 +412,11 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                     let crisis = crisis::build_crisis_event(&new, kind);
                     crisis::activate_crisis(&mut new, crisis);
                 }
+            } else if matches!(kind,
+                CrisisKind::LoyaltyRaise { template_id } | CrisisKind::ContractDemand { template_id }
+                    if !new.contracts.iter().any(|c| c.template_id == template_id))
+            {
+                // Contract was revoked/cancelled since this crisis was queued — drop it.
             } else {
                 let crisis = crisis::build_crisis_event(&new, kind);
                 crisis::activate_crisis(&mut new, crisis);
