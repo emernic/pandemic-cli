@@ -142,27 +142,29 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 // ── Impact ──
                 let total_dead = disease_deaths[i];
 
-                // Observed CFR: deaths are always observable; immune only from
-                // regions with screening that reveals immune counts.
-                let observed_immune: f64 = state.regions.iter().enumerate()
+                // Observed CFR: only count deaths AND immune from regions with
+                // screening that reveals immune counts, so both halves of the
+                // ratio come from the same population. Without this, CFR is
+                // biased high (global deaths / partial immune = ~100%).
+                let (screened_dead, screened_immune) = state.regions.iter().enumerate()
                     .filter_map(|(region_idx, region)| {
                         if !state.screening_shows_immune(region_idx) { return None; }
                         let inf = region.disease_state(i)?;
-                        Some(inf.immune)
+                        Some((inf.dead, inf.immune))
                     })
-                    .sum();
+                    .fold((0.0, 0.0), |(d, im), (dd, ii)| (d + dd, im + ii));
                 let has_any_immune_screening = state.regions.iter().enumerate()
                     .any(|(idx, _)| state.screening_shows_immune(idx));
-                let resolved = total_dead + observed_immune;
+                let resolved = screened_dead + screened_immune;
 
                 let lethal_span = if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
                     Span::styled("Lethality: ?", Style::default().fg(Color::DarkGray))
-                } else if !has_any_immune_screening || observed_immune <= 0.0 {
+                } else if !has_any_immune_screening || screened_immune <= 0.0 {
                     // Without immune data, CFR = deaths/deaths = 100% always — useless.
                     // Show "?" and hint that screening is needed.
                     Span::styled("Lethality: ? (need screening)", Style::default().fg(Color::DarkGray))
                 } else if resolved > 0.0 {
-                    let cfr = (total_dead / resolved) * 100.0;
+                    let cfr = (screened_dead / resolved) * 100.0;
                     let color = if cfr > 30.0 { Color::Red }
                         else if cfr > 10.0 { Color::Yellow }
                         else { Color::Green };
