@@ -137,8 +137,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let policies: Vec<(usize, &str, bool, String, &str, Option<u32>, f64)> = vec![
         (0, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
-         if trade_dep { "Blocks 50-95% cross-region spread (varies by pathogen), 30% GDP penalty" }
-         else { "Blocks 50-95% cross-region spread (varies by pathogen), 20% GDP penalty" },
+         if trade_dep { "Blocks 50-95% spread to and from this region (varies by pathogen), 30% GDP penalty" }
+         else { "Blocks 50-95% spread to and from this region (varies by pathogen), 20% GDP penalty" },
          Some(TRAVEL_BAN_PERSONNEL + infra_extra), tb_cost),
         (1, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * spec_mult * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
@@ -149,7 +149,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          Some(DISCOURAGE_HOSP_PERSONNEL + infra_extra), DISCOURAGE_HOSP_COST * spec_mult),
         (3, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * spec_mult * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
-         "Blocks 30% spread into/out of region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST * spec_mult),
+         "Blocks 30% spread to and from this region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST * spec_mult),
         (4, "Water Sanitation", policy.water_sanitation,
          format!("¥{:.0}/day + {} pers.", WATER_SANITATION_COST * spec_mult * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
          "50% waterborne spread reduction within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra), WATER_SANITATION_COST * spec_mult),
