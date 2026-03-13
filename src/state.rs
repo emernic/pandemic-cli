@@ -1577,7 +1577,7 @@ impl BoardMember {
     }
 }
 
-fn format_large_number(n: f64) -> String {
+pub fn format_large_number(n: f64) -> String {
     if n >= 1_000_000_000.0 {
         format!("{:.1}B", n / 1_000_000_000.0)
     } else if n >= 1_000_000.0 {
