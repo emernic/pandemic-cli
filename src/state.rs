@@ -2621,6 +2621,26 @@ impl Disease {
         }
     }
 
+    /// Estimated generation time in days: incubation period + half the mean infectious period.
+    /// Used for Rt computation. Clamped to [0.5, 30.0] days.
+    pub fn generation_time_days(&self) -> f64 {
+        let mean_infectious_days = 0.5 / (self.lethality + self.recovery_rate) / TICKS_PER_DAY;
+        ((self.incubation_ticks / TICKS_PER_DAY) + mean_infectious_days).clamp(0.5, 30.0)
+    }
+
+    /// Observed Rt from daily screened infection snapshots.
+    /// Returns None if insufficient data (prev < 10 or curr = 0).
+    pub fn observed_rt(&self) -> Option<f64> {
+        let prev = self.prev_day_observed_infected;
+        let curr = self.current_day_observed_infected;
+        if prev > 10.0 && curr > 0.0 {
+            let growth = curr / prev;
+            Some(growth.powf(self.generation_time_days()))
+        } else {
+            None
+        }
+    }
+
     /// Effective mutation rate after genomic sequencing reductions.
     /// Each sequencing halves the rate: base_rate * 0.5^sequencing_count.
     pub fn effective_mutation_rate(&self) -> f64 {
