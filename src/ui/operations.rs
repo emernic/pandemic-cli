@@ -7,9 +7,8 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, OpsUiState, TICKS_PER_DAY,
-    DECREE_COUNT, DECREE_CHAIRMAN_COSTS, STANDING_ORDER_COUNT,
-    decree_display_name,
+    DecreeId, GameState, OpsUiState, TICKS_PER_DAY,
+    DECREE_COUNT, STANDING_ORDER_COUNT,
 };
 use super::hint_line;
 use super::policy::{decree_description, render_confirm_decree, render_region_select};
@@ -47,8 +46,8 @@ pub fn selection_max(ui_state: &OpsUiState, state: &GameState) -> usize {
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     match &state.ui.operations_ui {
         Some(OpsUiState::BrowseOps) | None => render_browse(f, area, state),
-        Some(OpsUiState::ConfirmDecree { decree_idx }) => {
-            let (title, lines, _) = render_confirm_decree(state, *decree_idx);
+        Some(OpsUiState::ConfirmDecree { decree }) => {
+            let (title, lines, _) = render_confirm_decree(state, *decree);
             render_panel(f, area, &title, lines);
         }
         Some(OpsUiState::SelectSacrificeRegion) => {
@@ -110,12 +109,12 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     )));
 
     // COUPLING CHECK: loop count must equal DECREE_COUNT
-    for decree_idx in 0..DECREE_COUNT {
+    for &decree in &DecreeId::ALL {
         let is_selected = row == selected;
         let marker = if is_selected { "▶ " } else { "  " };
-        let name = decree_display_name(decree_idx);
-        let enacted = state.enacted_decrees.is_enacted(decree_idx);
-        let unlocked = state.decree_unlocked(decree_idx);
+        let name = decree.display_name();
+        let enacted = state.enacted_decrees.is_enacted(decree);
+        let unlocked = state.decree_unlocked(decree);
 
         if !enacted && !unlocked {
             // Locked — show 🔒 icon with unlock hint, matching Policies panel style
@@ -124,7 +123,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             } else {
                 Style::default().fg(Color::DarkGray)
             };
-            let hint = GameState::decree_unlock_hint(decree_idx);
+            let hint = GameState::decree_unlock_hint(decree);
             lines.push(Line::from(vec![
                 Span::styled(marker, name_style),
                 Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),
@@ -137,7 +136,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             lines.push(Line::from(""));
         } else {
             // Enacted or unlocked — show with description
-            let cost_pct = (DECREE_CHAIRMAN_COSTS[decree_idx].abs() * 100.0) as u32;
+            let cost_pct = (decree.chairman_cost().abs() * 100.0) as u32;
             let (name_color, desc_color, suffix) = if enacted {
                 (Color::DarkGray, Color::DarkGray, " [ENACTED]".to_string())
             } else if is_selected {
@@ -153,7 +152,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             ]));
             lines.push(Line::from(vec![
                 Span::raw("    "),
-                Span::styled(decree_description(decree_idx), Style::default().fg(desc_color)),
+                Span::styled(decree_description(decree), Style::default().fg(desc_color)),
             ]));
         }
         row += 1;

@@ -2071,7 +2071,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             let traits = state.regions.get(*region_idx).map(|r| r.traits.as_slice()).unwrap_or(&[]);
                             p.active_policy_costs(traits).into_iter()
                                 .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-                                .map(|(idx, _)| crate::state::policy_display_name(idx).to_string())
+                                .map(|(policy, _)| policy.display_name().to_string())
                         })
                         .unwrap_or_else(|| "your most expensive policy".into());
                     CrisisEvent {
@@ -3818,11 +3818,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     if let Some(region) = state.regions.get(*region_idx) {
                         let traits = region.traits.as_slice();
                         if let Some(policy) = state.policies.get_mut(*region_idx) {
-                            if let Some((idx, _)) = policy.active_policy_costs(traits).into_iter()
+                            if let Some((pid, _)) = policy.active_policy_costs(traits).into_iter()
                                 .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
                             {
-                                use crate::state::POLICY_IDX_SCREENING_BASE;
-                                if idx == POLICY_IDX_SCREENING_BASE {
+                                if pid == crate::state::PolicyId::BasicScreening {
                                     cancelled_name = Some(match policy.screening {
                                         crate::state::ScreeningLevel::Basic => "Basic Screening",
                                         crate::state::ScreeningLevel::Antigen => "Med Screening",
@@ -3831,8 +3830,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                                     }.to_string());
                                     policy.screening = crate::state::ScreeningLevel::None;
                                 } else {
-                                    cancelled_name = Some(crate::state::policy_display_name(idx).to_string());
-                                    policy.set_bool(idx, false);
+                                    cancelled_name = Some(pid.display_name().to_string());
+                                    policy.set_bool(pid, false);
                                 }
                             }
                         }
@@ -3918,11 +3917,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 
             // Emit PolicyAuthorized events for newly unlocked policies
             if new_authority > old_authority {
-                use crate::state::{POLICY_AUTHORITY_REQUIREMENTS, POLICY_COUNT};
-                for idx in 0..POLICY_COUNT {
-                    if let Some(req) = POLICY_AUTHORITY_REQUIREMENTS[idx] {
+                use crate::state::PolicyId;
+                for &policy in &PolicyId::ALL {
+                    if let Some(req) = policy.authority_requirement() {
                         if old_authority < req && new_authority >= req {
-                            state.events.push(GameEvent::PolicyAuthorized { policy_idx: idx });
+                            state.events.push(GameEvent::PolicyAuthorized { policy });
                         }
                     }
                 }

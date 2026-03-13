@@ -467,17 +467,207 @@ impl Default for Authority {
     }
 }
 
-/// Chairman satisfaction cost for each decree. Applied as a negative modifier
-/// to the chairman's satisfaction when the decree is enacted. Larger costs
-/// mean the chairman is more reluctant — the political fallout lands on them.
-pub const DECREE_CHAIRMAN_COSTS: [f64; DECREE_COUNT] = [
-    -0.05, // Conscript Researchers — early/mild, small political cost
-    -0.10, // Authorize Human Trials — ethically controversial
-    -0.10, // Sacrifice Region — dramatic but situational
-    -0.15, // Suspend Regional Authority — major power grab
-    -0.10, // Fortify Region — picking favorites, moderate cost
-    -0.20, // Emergency Countermeasure — kills civilians, massive political cost
-];
+// ── Typed domain identifiers ────────────────────────────────────────────────
+// These enums replace the raw `usize` indices previously used to identify
+// policies, decrees, and standing orders throughout the codebase. Each enum
+// is the single source of truth for its domain: display names, costs,
+// authority requirements, and unlock conditions all live as methods here.
+
+/// Typed identifier for each policy available per region.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PolicyId {
+    TravelBan,
+    Quarantine,
+    DiscourageHosp,
+    BorderControls,
+    WaterSanitation,
+    BasicScreening,
+    AntigenScreening,
+    MassRapidScreen,
+    MartialLaw,
+    NuclearOption,
+    FieldHospital,
+    IntelStation,
+}
+
+impl PolicyId {
+    /// All policies in index order (matching the historical 0–11 mapping).
+    pub const ALL: [PolicyId; POLICY_COUNT] = [
+        PolicyId::TravelBan,
+        PolicyId::Quarantine,
+        PolicyId::DiscourageHosp,
+        PolicyId::BorderControls,
+        PolicyId::WaterSanitation,
+        PolicyId::BasicScreening,
+        PolicyId::AntigenScreening,
+        PolicyId::MassRapidScreen,
+        PolicyId::MartialLaw,
+        PolicyId::NuclearOption,
+        PolicyId::FieldHospital,
+        PolicyId::IntelStation,
+    ];
+
+    /// Display order — grouped by function for the policy panel UI.
+    pub const DISPLAY_ORDER: [PolicyId; POLICY_COUNT] = [
+        PolicyId::BasicScreening,
+        PolicyId::AntigenScreening,
+        PolicyId::MassRapidScreen,
+        PolicyId::BorderControls,
+        PolicyId::WaterSanitation,
+        PolicyId::DiscourageHosp,
+        PolicyId::TravelBan,
+        PolicyId::Quarantine,
+        PolicyId::IntelStation,
+        PolicyId::FieldHospital,
+        PolicyId::NuclearOption,
+        PolicyId::MartialLaw,
+    ];
+
+    /// Short display name for UI and status messages.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::TravelBan => "Travel Ban",
+            Self::Quarantine => "Quarantine",
+            Self::DiscourageHosp => "Discourage Hospitalization",
+            Self::BorderControls => "Border Controls",
+            Self::WaterSanitation => "Water Sanitation",
+            Self::BasicScreening => "Basic Screening",
+            Self::AntigenScreening => "Antigen Screening",
+            Self::MassRapidScreen => "Mass Rapid Screen",
+            Self::MartialLaw => "Martial Law",
+            Self::NuclearOption => "Nuclear Option",
+            Self::FieldHospital => "Field Hospital",
+            Self::IntelStation => "Intel Station",
+        }
+    }
+
+    /// Minimum Authority level required to activate this policy.
+    /// `None` means always available (no authority gate).
+    pub fn authority_requirement(self) -> Option<Authority> {
+        match self {
+            Self::TravelBan => Some(Authority::Medium),
+            Self::Quarantine => Some(Authority::Medium),
+            Self::DiscourageHosp => Some(Authority::Low),
+            Self::BorderControls => None,
+            Self::WaterSanitation => None,
+            Self::BasicScreening => None,
+            Self::AntigenScreening => Some(Authority::Low),
+            Self::MassRapidScreen => Some(Authority::Medium),
+            Self::MartialLaw => Some(Authority::High),
+            Self::NuclearOption => Some(Authority::High),
+            Self::FieldHospital => Some(Authority::Medium),
+            Self::IntelStation => None,
+        }
+    }
+
+    /// BasicTech prerequisite for this policy, if any.
+    pub fn research_prerequisite(self) -> Option<BasicTech> {
+        match self {
+            Self::AntigenScreening => Some(BasicTech::RapidSequencing),
+            Self::MassRapidScreen => Some(BasicTech::MetagenomicSurveillance),
+            _ => None,
+        }
+    }
+
+    /// Whether this is a screening-tier policy (backed by the ScreeningLevel enum
+    /// rather than an individual boolean field).
+    pub fn is_screening(self) -> bool {
+        matches!(self, Self::BasicScreening | Self::AntigenScreening | Self::MassRapidScreen)
+    }
+
+    /// The base screening tier index. Only valid for screening policies.
+    pub const SCREENING_BASE: PolicyId = PolicyId::BasicScreening;
+}
+
+/// Typed identifier for each emergency decree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DecreeId {
+    ConscriptResearchers,
+    AuthorizeHumanTrials,
+    SacrificeRegion,
+    SuspendRegionalAuthority,
+    FortifyRegion,
+    EmergencyCountermeasure,
+}
+
+impl DecreeId {
+    /// All decrees in index order.
+    pub const ALL: [DecreeId; DECREE_COUNT] = [
+        DecreeId::ConscriptResearchers,
+        DecreeId::AuthorizeHumanTrials,
+        DecreeId::SacrificeRegion,
+        DecreeId::SuspendRegionalAuthority,
+        DecreeId::FortifyRegion,
+        DecreeId::EmergencyCountermeasure,
+    ];
+
+    /// Short display name for UI and status messages.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::ConscriptResearchers => "Conscript Researchers",
+            Self::AuthorizeHumanTrials => "Authorize Human Trials",
+            Self::SacrificeRegion => "Sacrifice Region",
+            Self::SuspendRegionalAuthority => "Suspend Regional Authority",
+            Self::FortifyRegion => "Fortify Region",
+            Self::EmergencyCountermeasure => "Emergency Countermeasure",
+        }
+    }
+
+    /// Chairman satisfaction cost when this decree is enacted.
+    pub fn chairman_cost(self) -> f64 {
+        match self {
+            Self::ConscriptResearchers => -0.05,
+            Self::AuthorizeHumanTrials => -0.10,
+            Self::SacrificeRegion => -0.10,
+            Self::SuspendRegionalAuthority => -0.15,
+            Self::FortifyRegion => -0.10,
+            Self::EmergencyCountermeasure => -0.20,
+        }
+    }
+
+    /// Convert to array index (for backward compat during migration).
+    pub fn as_index(self) -> usize {
+        match self {
+            Self::ConscriptResearchers => 0,
+            Self::AuthorizeHumanTrials => 1,
+            Self::SacrificeRegion => 2,
+            Self::SuspendRegionalAuthority => 3,
+            Self::FortifyRegion => 4,
+            Self::EmergencyCountermeasure => 5,
+        }
+    }
+
+    /// Convert from array index. Panics on out-of-range.
+    pub fn from_index(idx: usize) -> Self {
+        Self::ALL[idx]
+    }
+}
+
+/// Typed identifier for standing orders (automation rules).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StandingOrderKind {
+    AutoQuarantineAtHigh,
+    AutoTravelBanAtCrit,
+}
+
+impl StandingOrderKind {
+    pub const ALL: [StandingOrderKind; STANDING_ORDER_COUNT] = [
+        StandingOrderKind::AutoQuarantineAtHigh,
+        StandingOrderKind::AutoTravelBanAtCrit,
+    ];
+}
+
+/// Typed discriminant for FundingCondition type-exclusivity grouping.
+/// Contracts with the same category are mutually exclusive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ConditionCategory {
+    ForbidPolicy,
+    RequirePolicy,
+    MaxDeaths,
+    NoCollapse,
+    ForbidDecree,
+}
+
 
 /// Single source of truth for decree unlock conditions.
 /// All fields are OR'd — meeting ANY threshold unlocks the decree.
@@ -723,45 +913,13 @@ pub struct RegionPolicy {
 ///   3 = Border Controls   11 = Intel Station
 ///   4 = Water Sanitation
 ///
-/// Display position is determined by `policy_display_order()` (grouped by function).
+/// Display position is determined by `PolicyId::DISPLAY_ORDER` (grouped by function).
 /// If you add a new policy, you must update:
-///   - POLICY_COUNT and POLICY_AUTHORITY_REQUIREMENTS (this file)
+///   - POLICY_COUNT and PolicyId enum (this file)
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
 pub const POLICY_COUNT: usize = 12;
-
-/// Policy index for Martial Law. Included in active_policy_costs alongside 0-4
-/// because it has a recurring funding cost, unlike Nuclear (9) which is one-shot.
-pub const POLICY_IDX_MARTIAL_LAW: usize = 8;
-
-/// Policy index for Nuclear Annihilation. Special-cased in UI (☢ icon) and engine
-/// (allowed in collapsed regions when all other policies are unavailable).
-pub const POLICY_IDX_NUCLEAR: usize = 9;
-
-/// Policy index for the first (Basic) screening tier. The three screening tiers occupy
-/// indices POLICY_IDX_SCREENING_BASE through POLICY_IDX_SCREENING_BASE + 2
-/// (Basic / Med / Mass Screening), all backed by the single `screening` enum field.
-pub const POLICY_IDX_SCREENING_BASE: usize = 5;
-
-/// Minimum Authority level required to activate each policy.
-/// `None` means always available (no authority gate). Authority starts at
-/// Minimal and ramps over ~40 days as the board grants more power at meetings.
-/// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
-pub const POLICY_AUTHORITY_REQUIREMENTS: [Option<Authority>; POLICY_COUNT] = [
-    Some(Authority::Medium),   // 0: Travel Ban — containment, moderate authority
-    Some(Authority::Medium),   // 1: Quarantine — restricts movement, moderate authority
-    Some(Authority::Low),      // 2: Discourage Hospitalization — containment, low authority
-    None,                      // 3: Border Controls — always available
-    None,                      // 4: Water Sanitation — always available
-    None,                      // 5: Basic Screening — always available
-    Some(Authority::Low),      // 6: Antigen Screening — mandatory testing, low authority
-    Some(Authority::Medium),   // 7: Mass Rapid Screening — mandatory mass testing
-    Some(Authority::High),     // 8: Martial Law — drastic, needs strong backing
-    Some(Authority::High),     // 9: Nuclear Annihilation — extreme measures
-    Some(Authority::Medium),   // 10: Field Hospital — institutional build
-    None,                      // 11: Intel Station — always available
-];
 
 /// Panel selection positions for the ManagePolicies subpanel.
 ///
@@ -776,68 +934,42 @@ pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT;
 pub const MANAGE_APPEASE_POS: usize = MANAGE_PRIORITY_POS + 1;
 pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
 
-/// Policy display order — grouped by function, cheapest/earliest to most
-/// expensive/latest within each group:
-///
-///   Detection:      Basic Screening (5), Antigen (6), Mass Rapid (7)
-///   Containment:    Border Controls (3), Water Sanitation (4), Discourage Hosp. (2), Travel Ban (0), Quarantine (1)
-///   Infrastructure: Intel Station (11), Field Hospital (10)
-///   Other:          Nuclear Option (9), Martial Law (8)
-///
-/// This is the canonical display ordering — both the policy renderer and the confirm
-/// handler use this to map display position → policy_idx.
-pub fn policy_display_order() -> [usize; POLICY_COUNT] {
-    [5, 6, 7, 3, 4, 2, 0, 1, 11, 10, 9, 8]
-}
 
-/// Short display name for each policy by index. Canonical source — used by
-/// both engine (status messages) and UI (panel rendering).
-pub fn policy_display_name(policy_idx: usize) -> &'static str {
-    match policy_idx {
-        0 => "Travel Ban",
-        1 => "Quarantine",
-        2 => "Discourage Hospitalization",
-        3 => "Border Controls",
-        4 => "Water Sanitation",
-        5 => "Basic Screening",
-        6 => "Antigen Screening",
-        7 => "Mass Rapid Screen",
-        8 => "Martial Law",
-        9 => "Nuclear Option",
-        10 => "Field Hospital",
-        11 => "Intel Station",
-        _ => "Unknown Policy",
-    }
+/// Policy display order — grouped by function for the policy panel UI.
+/// Delegates to `PolicyId::DISPLAY_ORDER`.
+pub fn policy_display_order() -> [PolicyId; POLICY_COUNT] {
+    PolicyId::DISPLAY_ORDER
 }
 
 impl RegionPolicy {
-    /// Per-policy funding costs for each active policy. Returns (policy_idx, cost)
+    /// Per-policy funding costs for each active policy. Returns (PolicyId, cost)
     /// pairs, trait-adjusted. Used by both `funding_cost()` and `tick_enforce_costs()`
     /// to ensure a single source of truth for policy pricing.
     /// Delegates to `bool_policy_cost()` for boolean policies to avoid duplication.
-    pub fn active_policy_costs(&self, traits: &[RegionTrait]) -> Vec<(usize, f64)> {
+    pub fn active_policy_costs(&self, traits: &[RegionTrait]) -> Vec<(PolicyId, f64)> {
         let mut costs = Vec::new();
-        for idx in [0, 1, 2, 3, 4, POLICY_IDX_MARTIAL_LAW] {
-            if self.get_bool(idx) {
-                costs.push((idx, Self::bool_policy_cost(idx, traits)));
+        for id in [PolicyId::TravelBan, PolicyId::Quarantine, PolicyId::DiscourageHosp,
+                   PolicyId::BorderControls, PolicyId::WaterSanitation, PolicyId::MartialLaw] {
+            if self.get_bool(id) {
+                costs.push((id, Self::bool_policy_cost(id, traits)));
             }
         }
         let scr_cost = self.screening.funding_cost();
-        if scr_cost > 0.0 { costs.push((POLICY_IDX_SCREENING_BASE, scr_cost)); }
+        if scr_cost > 0.0 { costs.push((PolicyId::BasicScreening, scr_cost)); }
         costs
     }
 
-    /// Per-tick funding cost of a single boolean policy by index, trait-adjusted.
+    /// Per-tick funding cost of a single boolean policy, trait-adjusted.
     /// Used by toggle_policy to display the cost when enabling a policy.
-    pub fn bool_policy_cost(policy_idx: usize, traits: &[RegionTrait]) -> f64 {
+    pub fn bool_policy_cost(policy: PolicyId, traits: &[RegionTrait]) -> f64 {
         let trade_dependent = traits.contains(&RegionTrait::TradeDependent);
-        match policy_idx {
-            0 => if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST },
-            1 => QUARANTINE_COST,
-            2 => DISCOURAGE_HOSP_COST,
-            3 => BORDER_CONTROLS_COST,
-            4 => WATER_SANITATION_COST,
-            8 => MARTIAL_LAW_COST,
+        match policy {
+            PolicyId::TravelBan => if trade_dependent { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST },
+            PolicyId::Quarantine => QUARANTINE_COST,
+            PolicyId::DiscourageHosp => DISCOURAGE_HOSP_COST,
+            PolicyId::BorderControls => BORDER_CONTROLS_COST,
+            PolicyId::WaterSanitation => WATER_SANITATION_COST,
+            PolicyId::MartialLaw => MARTIAL_LAW_COST,
             _ => 0.0,
         }
     }
@@ -890,15 +1022,17 @@ impl RegionPolicy {
         n
     }
 
-    /// Whether a policy (by index) is currently active. Handles both boolean
+    /// Whether a policy is currently active. Handles both boolean
     /// policies and screening tiers.
-    pub fn is_active(&self, policy_idx: usize) -> bool {
-        match policy_idx {
-            0..=4 | 8 | 9 => self.get_bool(policy_idx),
-            5 => self.screening >= ScreeningLevel::Basic,
-            6 => self.screening >= ScreeningLevel::Antigen,
-            7 => self.screening >= ScreeningLevel::MassRapid,
-            _ => false,
+    pub fn is_active(&self, policy: PolicyId) -> bool {
+        match policy {
+            PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp
+            | PolicyId::BorderControls | PolicyId::WaterSanitation
+            | PolicyId::MartialLaw | PolicyId::NuclearOption => self.get_bool(policy),
+            PolicyId::BasicScreening => self.screening >= ScreeningLevel::Basic,
+            PolicyId::AntigenScreening => self.screening >= ScreeningLevel::Antigen,
+            PolicyId::MassRapidScreen => self.screening >= ScreeningLevel::MassRapid,
+            PolicyId::FieldHospital | PolicyId::IntelStation => false,
         }
     }
 
@@ -913,30 +1047,30 @@ impl RegionPolicy {
         // nuclear_annihilation is NOT cleared — it's permanent and post-collapse
     }
 
-    /// Access a boolean policy field by index (0-4, 8-9).
-    pub fn get_bool(&self, idx: usize) -> bool {
-        match idx {
-            0 => self.travel_ban,
-            1 => self.quarantine,
-            2 => self.discourage_hosp,
-            3 => self.border_controls,
-            4 => self.water_sanitation,
-            8 => self.martial_law,
-            9 => self.nuclear_annihilation,
+    /// Access a boolean policy field by typed ID.
+    pub fn get_bool(&self, policy: PolicyId) -> bool {
+        match policy {
+            PolicyId::TravelBan => self.travel_ban,
+            PolicyId::Quarantine => self.quarantine,
+            PolicyId::DiscourageHosp => self.discourage_hosp,
+            PolicyId::BorderControls => self.border_controls,
+            PolicyId::WaterSanitation => self.water_sanitation,
+            PolicyId::MartialLaw => self.martial_law,
+            PolicyId::NuclearOption => self.nuclear_annihilation,
             _ => false,
         }
     }
 
-    /// Set a boolean policy field by index (0-4, 8-9).
-    pub fn set_bool(&mut self, idx: usize, val: bool) {
-        match idx {
-            0 => self.travel_ban = val,
-            1 => self.quarantine = val,
-            2 => self.discourage_hosp = val,
-            3 => self.border_controls = val,
-            4 => self.water_sanitation = val,
-            8 => self.martial_law = val,
-            9 => self.nuclear_annihilation = val,
+    /// Set a boolean policy field by typed ID.
+    pub fn set_bool(&mut self, policy: PolicyId, val: bool) {
+        match policy {
+            PolicyId::TravelBan => self.travel_ban = val,
+            PolicyId::Quarantine => self.quarantine = val,
+            PolicyId::DiscourageHosp => self.discourage_hosp = val,
+            PolicyId::BorderControls => self.border_controls = val,
+            PolicyId::WaterSanitation => self.water_sanitation = val,
+            PolicyId::MartialLaw => self.martial_law = val,
+            PolicyId::NuclearOption => self.nuclear_annihilation = val,
             _ => {}
         }
     }
@@ -972,87 +1106,74 @@ pub struct EnactedDecrees {
 }
 
 impl EnactedDecrees {
-    pub fn is_enacted(&self, decree_idx: usize) -> bool {
-        match decree_idx {
-            0 => self.conscript_researchers,
-            1 => self.authorize_human_trials,
-            2 => self.sacrificed_region.is_some(),
-            3 => self.suspend_regional_authority,
-            4 => self.fortified_region.is_some(),
-            5 => self.emergency_countermeasure,
-            _ => false,
+    pub fn is_enacted(&self, decree: DecreeId) -> bool {
+        match decree {
+            DecreeId::ConscriptResearchers => self.conscript_researchers,
+            DecreeId::AuthorizeHumanTrials => self.authorize_human_trials,
+            DecreeId::SacrificeRegion => self.sacrificed_region.is_some(),
+            DecreeId::SuspendRegionalAuthority => self.suspend_regional_authority,
+            DecreeId::FortifyRegion => self.fortified_region.is_some(),
+            DecreeId::EmergencyCountermeasure => self.emergency_countermeasure,
         }
     }
 }
 
-/// Display name for a decree by index.
-pub fn decree_display_name(decree_idx: usize) -> &'static str {
-    match decree_idx {
-        0 => "Conscript Researchers",
-        1 => "Authorize Human Trials",
-        2 => "Sacrifice Region",
-        3 => "Suspend Regional Authority",
-        4 => "Fortify Region",
-        5 => "Emergency Countermeasure",
-        _ => "Unknown Decree",
-    }
-}
 
 /// A condition attached to a funding contract. Checked each tick.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum FundingCondition {
     /// A specific policy must NOT be active in any region.
-    ForbidPolicy { policy_idx: usize },
+    ForbidPolicy { policy: PolicyId },
     /// A specific policy must be active in at least one region.
-    RequirePolicy { policy_idx: usize },
+    RequirePolicy { policy: PolicyId },
     /// Total global deaths must stay below this threshold.
     MaxDeaths { threshold: f64 },
     /// All regions must remain standing (revoked on first collapse).
     NoCollapse,
     /// A specific emergency decree must not be enacted while this contract is active.
     /// Once enacted, decrees are permanent. Violating this condition will gradually revoke the contract.
-    ForbidDecree { decree_idx: usize },
+    ForbidDecree { decree: DecreeId },
 }
 
 impl FundingCondition {
     pub fn description(&self) -> String {
         match self {
-            Self::ForbidPolicy { policy_idx } => {
-                format!("Do not use {}", policy_display_name(*policy_idx))
+            Self::ForbidPolicy { policy } => {
+                format!("Do not use {}", policy.display_name())
             }
-            Self::RequirePolicy { policy_idx } => {
-                format!("Maintain {} in at least one region", policy_display_name(*policy_idx))
+            Self::RequirePolicy { policy } => {
+                format!("Maintain {} in at least one region", policy.display_name())
             }
             Self::MaxDeaths { threshold } => {
                 format!("Global deaths below {}", format_large_number(*threshold))
             }
             Self::NoCollapse => "No region may collapse".to_string(),
-            Self::ForbidDecree { decree_idx } => {
-                format!("Do not enact {}", decree_display_name(*decree_idx))
+            Self::ForbidDecree { decree } => {
+                format!("Do not enact {}", decree.display_name())
             }
         }
     }
 
-    /// Return a discriminant tag for type-exclusivity grouping.
-    /// Contracts with the same condition_type() are mutually exclusive.
-    pub fn condition_type(&self) -> &'static str {
+    /// Return a typed discriminant for type-exclusivity grouping.
+    /// Contracts with the same category are mutually exclusive.
+    pub fn category(&self) -> ConditionCategory {
         match self {
-            Self::ForbidPolicy { .. } => "forbid_policy",
-            Self::RequirePolicy { .. } => "require_policy",
-            Self::MaxDeaths { .. } => "max_deaths",
-            Self::NoCollapse => "no_collapse",
-            Self::ForbidDecree { .. } => "forbid_decree",
+            Self::ForbidPolicy { .. } => ConditionCategory::ForbidPolicy,
+            Self::RequirePolicy { .. } => ConditionCategory::RequirePolicy,
+            Self::MaxDeaths { .. } => ConditionCategory::MaxDeaths,
+            Self::NoCollapse => ConditionCategory::NoCollapse,
+            Self::ForbidDecree { .. } => ConditionCategory::ForbidDecree,
         }
     }
 
     /// Check whether this condition is currently satisfied.
     pub fn is_met(&self, state: &GameState) -> bool {
         match self {
-            Self::ForbidPolicy { policy_idx } => {
-                !state.policies.iter().any(|p| p.is_active(*policy_idx))
+            Self::ForbidPolicy { policy } => {
+                !state.policies.iter().any(|p| p.is_active(*policy))
             }
-            Self::RequirePolicy { policy_idx } => {
-                state.policies.iter().any(|p| p.is_active(*policy_idx))
+            Self::RequirePolicy { policy } => {
+                state.policies.iter().any(|p| p.is_active(*policy))
             }
             Self::MaxDeaths { threshold } => {
                 state.total_dead() < *threshold
@@ -1060,8 +1181,8 @@ impl FundingCondition {
             Self::NoCollapse => {
                 !state.regions.iter().any(|r| r.collapsed)
             }
-            Self::ForbidDecree { decree_idx } => {
-                !state.enacted_decrees.is_enacted(*decree_idx)
+            Self::ForbidDecree { decree } => {
+                !state.enacted_decrees.is_enacted(*decree)
             }
         }
     }
@@ -4004,7 +4125,7 @@ pub enum GameEvent {
     },
     /// An emergency decree became available due to escalating crisis severity.
     DecreeUnlocked {
-        decree_idx: usize,
+        decree: DecreeId,
     },
     /// Suppression research complete — pathogen infectivity permanently reduced.
     PathogenSuppressed {
@@ -4089,7 +4210,7 @@ pub enum GameEvent {
     },
     /// Board approval crossed a policy's threshold — that policy is now globally available.
     PolicyAuthorized {
-        policy_idx: usize,
+        policy: PolicyId,
     },
 }
 
@@ -4126,15 +4247,15 @@ pub enum GameCommand {
     },
     TogglePolicy {
         region_idx: usize,
-        policy_idx: usize,
+        policy: PolicyId,
     },
     /// Resolve the active crisis by choosing option A (0) or B (1).
     ResolveCrisis {
         choice: usize,
     },
-    /// Enact an emergency decree. `region_idx` is only used for SacrificeRegion.
+    /// Enact an emergency decree. `region_idx` is only used for SacrificeRegion/FortifyRegion.
     EnactDecree {
-        decree_idx: usize,
+        decree: DecreeId,
         region_idx: Option<usize>,
     },
     /// Spend funds to boost POL directly.
@@ -4142,8 +4263,8 @@ pub enum GameCommand {
     AppeaseGovernor { region_idx: usize },
     /// Personality-specific bargain with a defiant governor (non-monetary cost).
     BargainWithGovernor { region_idx: usize },
-    /// Toggle a standing order. Kind: 0=auto_quarantine_at_high, 1=auto_travel_ban_at_crit.
-    ToggleStandingOrder { kind: usize },
+    /// Toggle a standing order on/off.
+    ToggleStandingOrder { kind: StandingOrderKind },
     /// Toggle auto-deploy for a specific medicine.
     ToggleAutoDeploy { med_idx: usize },
     /// Toggle auto-repeat for a specific repeatable research project.
@@ -4567,7 +4688,7 @@ pub enum OpsUiState {
     /// Top level: browse decrees, standing orders, loans.
     BrowseOps,
     /// Confirm an emergency decree before enacting it.
-    ConfirmDecree { decree_idx: usize },
+    ConfirmDecree { decree: DecreeId },
     /// Select which region to sacrifice (for Sacrifice Region decree).
     SelectSacrificeRegion,
     /// Select which region to fortify (for Fortify Region decree).
@@ -5905,9 +6026,8 @@ impl GameState {
     /// Effective Authority requirement for a policy in a specific region.
     /// Regional severity (infection rate) can lower the requirement by one level —
     /// a crisis in a region justifies action even with low global authority.
-    pub fn effective_authority_requirement(&self, region_idx: usize, policy_idx: usize) -> Option<Authority> {
-        let base = POLICY_AUTHORITY_REQUIREMENTS.get(policy_idx).copied().flatten();
-        let base = match base {
+    pub fn effective_authority_requirement(&self, region_idx: usize, policy: PolicyId) -> Option<Authority> {
+        let base = match policy.authority_requirement() {
             Some(a) => a,
             None => return None, // Always available
         };
@@ -5927,19 +6047,9 @@ impl GameState {
         }
     }
 
-    /// The BasicTech prerequisite for a policy, if any. Policies without a research
-    /// prerequisite return None. Both approval AND research must be satisfied.
-    pub fn policy_research_prerequisite(policy_idx: usize) -> Option<BasicTech> {
-        match policy_idx {
-            6 => Some(BasicTech::RapidSequencing),      // Antigen Screening
-            7 => Some(BasicTech::MetagenomicSurveillance), // Mass Rapid Screening
-            _ => None,
-        }
-    }
-
     /// Whether a policy's research prerequisite is satisfied (or has none).
-    pub fn policy_research_met(&self, policy_idx: usize) -> bool {
-        match Self::policy_research_prerequisite(policy_idx) {
+    pub fn policy_research_met(&self, policy: PolicyId) -> bool {
+        match policy.research_prerequisite() {
             Some(tech) => self.unlocked_techs.contains(&tech),
             None => true,
         }
@@ -5947,48 +6057,34 @@ impl GameState {
 
     /// Whether a policy can be activated given current authority level, regional severity,
     /// and research prerequisites.
-    pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
-        self.policy_research_met(policy_idx)
-            && match self.effective_authority_requirement(region_idx, policy_idx) {
+    pub fn policy_unlocked(&self, region_idx: usize, policy: PolicyId) -> bool {
+        self.policy_research_met(policy)
+            && match self.effective_authority_requirement(region_idx, policy) {
                 Some(req) => self.resources.authority >= req,
                 None => true,
             }
     }
 
     /// Single source of truth for decree unlock conditions.
-    /// Returns None for invalid decree indices.
-    pub fn decree_unlock_condition(decree_idx: usize) -> Option<DecreeUnlockCondition> {
-        match decree_idx {
-            // Conscript Researchers
-            0 => Some(DecreeUnlockCondition { min_infected: Some(500_000.0), min_dead: Some(100_000.0), ..Default::default() }),
-            // Authorize Human Trials
-            1 => Some(DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() }),
-            // Sacrifice Region
-            2 => Some(DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() }),
-            // Suspend Regional Authority — major power grab, harder to unlock than Human Trials
-            3 => Some(DecreeUnlockCondition { min_dead: Some(100_000_000.0), min_crit_regions: Some(3), ..Default::default() }),
-            // Fortify Region — less drastic than Sacrifice, unlocks at intermediate threshold
-            4 => Some(DecreeUnlockCondition { min_dead: Some(200_000_000.0), min_collapsed_regions: Some(1), ..Default::default() }),
-            // Emergency Countermeasure
-            5 => Some(DecreeUnlockCondition { min_dead: Some(2_000_000_000.0), min_collapsed_regions: Some(3), ..Default::default() }),
-            _ => None,
+    pub fn decree_unlock_condition(decree: DecreeId) -> DecreeUnlockCondition {
+        match decree {
+            DecreeId::ConscriptResearchers => DecreeUnlockCondition { min_infected: Some(500_000.0), min_dead: Some(100_000.0), ..Default::default() },
+            DecreeId::AuthorizeHumanTrials => DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() },
+            DecreeId::SacrificeRegion => DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() },
+            DecreeId::SuspendRegionalAuthority => DecreeUnlockCondition { min_dead: Some(100_000_000.0), min_crit_regions: Some(3), ..Default::default() },
+            DecreeId::FortifyRegion => DecreeUnlockCondition { min_dead: Some(200_000_000.0), min_collapsed_regions: Some(1), ..Default::default() },
+            DecreeId::EmergencyCountermeasure => DecreeUnlockCondition { min_dead: Some(2_000_000_000.0), min_collapsed_regions: Some(3), ..Default::default() },
         }
     }
 
     /// Human-readable unlock condition for a decree, shown in the policy panel when locked.
-    pub fn decree_unlock_hint(decree_idx: usize) -> String {
-        match Self::decree_unlock_condition(decree_idx) {
-            Some(cond) => format!("Unlocks: {}", cond.describe()),
-            None => String::new(),
-        }
+    pub fn decree_unlock_hint(decree: DecreeId) -> String {
+        format!("Unlocks: {}", Self::decree_unlock_condition(decree).describe())
     }
 
     /// Whether a decree is unlocked based on current crisis severity.
-    pub fn decree_unlocked(&self, decree_idx: usize) -> bool {
-        match Self::decree_unlock_condition(decree_idx) {
-            Some(cond) => cond.is_met(self),
-            None => false,
-        }
+    pub fn decree_unlocked(&self, decree: DecreeId) -> bool {
+        Self::decree_unlock_condition(decree).is_met(self)
     }
 
     /// Whether a personality-specific bargain is available for the given region.
@@ -6116,8 +6212,8 @@ impl GameState {
     pub fn next_authority_unlock(&self) -> Option<(&'static str, Authority)> {
         let current = self.resources.authority;
         let mut best: Option<(&'static str, Authority)> = None;
-        for idx in 0..POLICY_COUNT {
-            let required = match POLICY_AUTHORITY_REQUIREMENTS[idx] {
+        for &policy in &PolicyId::ALL {
+            let required = match policy.authority_requirement() {
                 Some(req) => req,
                 None => continue, // Always available
             };
@@ -6125,7 +6221,7 @@ impl GameState {
                 continue; // Already unlocked
             }
             if best.is_none() || required < best.unwrap().1 {
-                best = Some((policy_display_name(idx), required));
+                best = Some((policy.display_name(), required));
             }
         }
         best

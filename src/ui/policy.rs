@@ -22,12 +22,10 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    POLICY_AUTHORITY_REQUIREMENTS, POLICY_COUNT, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
-    decree_display_name,
+    DecreeId, PolicyId, POLICY_COUNT,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
-    DECREE_CHAIRMAN_COSTS,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_COOPERATION_GAIN,
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
@@ -128,47 +126,46 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let tb_cost = if trade_dep { TRAVEL_BAN_COST * TRADE_DEPENDENT_TRAVEL_BAN_MULT } else { TRAVEL_BAN_COST };
     let tb_cost = tb_cost * spec_mult;
 
-    // Policy toggles — each entry explicitly carries its policy_idx (see POLICY_COUNT
-    // doc in state.rs for the index mapping). Display position != policy_idx (grouped
-    // by function via policy_display_order()).
+    // Policy toggles — each entry carries its PolicyId. Display position != index
+    // (grouped by function via policy_display_order()).
     // tick_cost: per-tick ongoing funding cost (0.0 for one-time purchases like hospitals/intel).
     // Used to mute policies when funding ≤ 0 — the engine suspends ongoing-cost policies at that point.
-    //                   (policy_idx, name, active, cost_str, desc, personnel_needed, tick_cost)
-    let policies: Vec<(usize, &str, bool, String, &str, Option<u32>, f64)> = vec![
-        (0, "Travel Ban", policy.travel_ban,
+    //                   (PolicyId, name, active, cost_str, desc, personnel_needed, tick_cost)
+    let policies: Vec<(PolicyId, &str, bool, String, &str, Option<u32>, f64)> = vec![
+        (PolicyId::TravelBan, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
          if trade_dep { "Blocks 50-95% spread to and from this region (varies by pathogen), 30% GDP penalty" }
          else { "Blocks 50-95% spread to and from this region (varies by pathogen), 20% GDP penalty" },
          Some(TRAVEL_BAN_PERSONNEL + infra_extra), tb_cost),
-        (1, "Quarantine", policy.quarantine,
+        (PolicyId::Quarantine, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * spec_mult * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
          "20-65% infection rate reduction (varies by pathogen)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST * spec_mult),
-        (2, "Discourage Hospitalization", policy.discourage_hosp,
+        (PolicyId::DiscourageHosp, "Discourage Hospitalization", policy.discourage_hosp,
          "Free".to_string(),
          "Removes hospital spread penalty, +50% lethality (no hospital care)",
          Some(DISCOURAGE_HOSP_PERSONNEL + infra_extra), DISCOURAGE_HOSP_COST * spec_mult),
-        (3, "Border Controls", policy.border_controls,
+        (PolicyId::BorderControls, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * spec_mult * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
          "Blocks 30% spread to and from this region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST * spec_mult),
-        (4, "Water Sanitation", policy.water_sanitation,
+        (PolicyId::WaterSanitation, "Water Sanitation", policy.water_sanitation,
          format!("¥{:.0}/day + {} pers.", WATER_SANITATION_COST * spec_mult * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
          "50% waterborne spread reduction within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra), WATER_SANITATION_COST * spec_mult),
-        (5, "Basic Screening", policy.screening == ScreeningLevel::Basic,
+        (PolicyId::BasicScreening, "Basic Screening", policy.screening == ScreeningLevel::Basic,
          format!("¥{:.0}/day + {} pers.", SCREENING_BASIC_COST * spec_mult * TICKS_PER_DAY, 1 + infra_extra),
          "40% visible, 10% spread reduction, 75% dose targeting, 30% faster detection (~4 day ramp-up)", Some(1 + infra_extra), SCREENING_BASIC_COST * spec_mult),
-        (6, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
+        (PolicyId::AntigenScreening, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
          format!("¥{:.0}/day + {} pers.", SCREENING_ANTIGEN_COST * spec_mult * TICKS_PER_DAY, 2 + infra_extra),
          "75% visible, 20% spread reduction, 90% dose targeting, detects incubating and immune (~4 day ramp-up)", Some(2 + infra_extra), SCREENING_ANTIGEN_COST * spec_mult),
-        (7, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
+        (PolicyId::MassRapidScreen, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
          format!("¥{:.0}/day + {} pers.", SCREENING_MASS_RAPID_COST * spec_mult * TICKS_PER_DAY, 4 + infra_extra),
          "95% visible, 30% spread reduction, 100% dose targeting, detects incubating and immune (~4 day ramp-up)", Some(4 + infra_extra), SCREENING_MASS_RAPID_COST * spec_mult),
-        (8, "Martial Law", policy.martial_law,
+        (PolicyId::MartialLaw, "Martial Law", policy.martial_law,
          format!("¥{:.0}/day + {} pers.", MARTIAL_LAW_COST * spec_mult * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
          "Collapse threshold −15% (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra), MARTIAL_LAW_COST * spec_mult),
-        (9, "Nuclear Option", policy.nuclear_annihilation,
+        (PolicyId::NuclearOption, "Nuclear Option", policy.nuclear_annihilation,
          format!("One-time: ¥{:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population. Stops all disease spread.", None, 0.0),
-        (10,
+        (PolicyId::FieldHospital,
          match region.hospital_level {
              0 => "Build Field Hospital",
              1 => "Upgrade → Medical Center",
@@ -186,7 +183,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
              _ => "40% lethality reduction, +25% medicine efficacy",
          },
          None, 0.0),
-        (11,
+        (PolicyId::IntelStation,
          match region.intel_level {
              0 => "Build Intel Station",
              1 => "Upgrade → Advanced Intel",
@@ -206,11 +203,14 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
          None, 0.0),
     ];
 
-    // Reorder by canonical display order (grouped by function — see policy_display_order() doc).
+    // Reorder by canonical display order (grouped by function — see PolicyId::DISPLAY_ORDER).
     // display_pos == panel_selection; confirm handler maps back via policy_display_order().
-    let policies: Vec<_> = policy_display_order().iter().map(|&idx| policies[idx].clone()).collect();
+    let display_order = policy_display_order();
+    let policies: Vec<_> = display_order.iter().map(|pid| {
+        policies.iter().find(|(id, ..)| id == pid).unwrap().clone()
+    }).collect();
 
-    for (display_pos, (policy_idx, name, active, cost_str, desc, personnel_needed, tick_cost)) in policies.iter().enumerate() {
+    for (display_pos, (policy_id, name, active, cost_str, desc, personnel_needed, tick_cost)) in policies.iter().enumerate() {
         // Insert section headers between policy groups
         if let Some(header) = policy_section_header(display_pos) {
             if display_pos > 0 {
@@ -228,11 +228,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         // Collapsed regions: only nuclear annihilation is available
         // Non-collapsed regions: nuclear annihilation is not available
-        // Healthcare investment (idx 10): only available pre-collapse
         let structurally_locked = if region.collapsed {
-            *policy_idx != POLICY_IDX_NUCLEAR && !*active
+            *policy_id != PolicyId::NuclearOption && !*active
         } else {
-            *policy_idx == POLICY_IDX_NUCLEAR
+            *policy_id == PolicyId::NuclearOption
         };
 
         if structurally_locked {
@@ -242,7 +241,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Style::default().fg(Color::DarkGray)
             };
             let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
-            let icon = if *policy_idx == POLICY_IDX_NUCLEAR { "🔒 " } else { "  " };
+            let icon = if *policy_id == PolicyId::NuclearOption { "🔒 " } else { "  " };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
                 Span::styled(icon, Style::default().fg(Color::DarkGray)),
@@ -256,7 +255,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             continue;
         }
 
-        let pol_unlocked = state.policy_unlocked(region_idx, *policy_idx);
+        let pol_unlocked = state.policy_unlocked(region_idx, *policy_id);
 
         let can_afford_personnel = personnel_needed
             .map(|need| {
@@ -264,7 +263,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 if *active {
                     // If already active, its personnel would be freed on disable
                     avail += need;
-                } else if *policy_idx >= POLICY_IDX_SCREENING_BASE && *policy_idx <= POLICY_IDX_SCREENING_BASE + 2 {
+                } else if policy_id.is_screening() {
                     // Screening upgrade: personnel from current tier would be freed
                     avail += policy.screening.personnel_cost();
                 }
@@ -279,23 +278,23 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 
         if !*active && !pol_unlocked {
             // Locked — show as unavailable with the reason
-            let research_met = state.policy_research_met(*policy_idx);
-            let authority_met = match state.effective_authority_requirement(region_idx, *policy_idx) {
+            let research_met = state.policy_research_met(*policy_id);
+            let authority_met = match state.effective_authority_requirement(region_idx, *policy_id) {
                 Some(req) => state.resources.authority >= req,
                 None => true,
             };
 
             let lock_reason = if !research_met && !authority_met {
-                let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
-                let req = POLICY_AUTHORITY_REQUIREMENTS[*policy_idx]
+                let tech = policy_id.research_prerequisite().unwrap();
+                let req = policy_id.authority_requirement()
                     .map(|a| a.label())
                     .unwrap_or("???");
                 format!("  (Requires {} + {} authority)", tech.name(), req)
             } else if !research_met {
-                let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
+                let tech = policy_id.research_prerequisite().unwrap();
                 format!("  (Requires {})", tech.name())
             } else {
-                let req = POLICY_AUTHORITY_REQUIREMENTS[*policy_idx]
+                let req = policy_id.authority_requirement()
                     .map(|a| a.label())
                     .unwrap_or("???");
                 format!("  (Requires {} authority)", req)
@@ -322,13 +321,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         // Tiered policies: show level instead of misleading [OFF] for surpassed tiers
         let status = if *active {
             "[ON] "
-        } else if *policy_idx >= POLICY_IDX_SCREENING_BASE
-            && *policy_idx <= POLICY_IDX_SCREENING_BASE + 2
-        {
+        } else if policy_id.is_screening() {
             // Screening is tiered: check if current level is above this tier
-            let tier_level = match *policy_idx - POLICY_IDX_SCREENING_BASE {
-                0 => ScreeningLevel::Basic,
-                1 => ScreeningLevel::Antigen,
+            let tier_level = match policy_id {
+                PolicyId::BasicScreening => ScreeningLevel::Basic,
+                PolicyId::AntigenScreening => ScreeningLevel::Antigen,
                 _ => ScreeningLevel::MassRapid,
             };
             if policy.screening > tier_level {
@@ -336,10 +333,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             } else {
                 "[OFF]"
             }
-        } else if *policy_idx == 10 && region.hospital_level == 1 {
+        } else if *policy_id == PolicyId::FieldHospital && region.hospital_level == 1 {
             // Hospital level 1 built — show [Lv1] not [OFF]
             "[Lv1]"
-        } else if *policy_idx == 11 && region.intel_level == 1 {
+        } else if *policy_id == PolicyId::IntelStation && region.intel_level == 1 {
             // Intel level 1 built — show [Lv1] not [OFF]
             "[Lv1]"
         } else {
@@ -376,12 +373,12 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             Span::styled(*desc, Style::default().fg(Color::DarkGray)),
         ]));
         // Effectiveness hints for transmission-sensitive policies
-        if let Some(hint) = effectiveness_hint(state, region_idx, *policy_idx) {
+        if let Some(hint) = effectiveness_hint(state, region_idx, *policy_id) {
             lines.push(hint);
         }
         // Estimated daily impact for active policies
         if *active {
-            if let Some(impact) = impact_estimate(state, region_idx, *policy_idx) {
+            if let Some(impact) = impact_estimate(state, region_idx, *policy_id) {
                 lines.push(impact);
             }
         }
@@ -601,28 +598,27 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
 }
 
 /// Returns the short description for a decree, used in both the browse list and confirmation dialog.
-pub(crate) fn decree_description(decree_idx: usize) -> String {
-    match decree_idx {
-        0 => format!("+{} personnel, -¥{:.0}/day income (permanent)",
+pub(crate) fn decree_description(decree: DecreeId) -> String {
+    match decree {
+        DecreeId::ConscriptResearchers => format!("+{} personnel, -¥{:.0}/day income (permanent)",
             CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY * TICKS_PER_DAY),
-        1 => "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
-        2 => format!("Abandon a region, +{:.0}% income from the rest (permanent)",
+        DecreeId::AuthorizeHumanTrials => "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
+        DecreeId::SacrificeRegion => format!("Abandon a region, +{:.0}% income from the rest (permanent)",
             (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
-        3 => "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
-        4 => format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
+        DecreeId::SuspendRegionalAuthority => "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
+        DecreeId::FortifyRegion => format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
             FORTIFY_INFRA_PENALTY * 100.0),
-        5 => format!("Infectivity -{:.0}%, spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
+        DecreeId::EmergencyCountermeasure => format!("Infectivity -{:.0}%, spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
             (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
             (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
             COUNTERMEASURE_KILL_FRACTION * 100.0),
-        _ => unreachable!("decree_idx {} out of range", decree_idx),
     }
 }
 
-pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
-    let name = decree_display_name(decree_idx);
-    let desc = decree_description(decree_idx);
-    let cost = DECREE_CHAIRMAN_COSTS[decree_idx]; // negative value
+pub(crate) fn render_confirm_decree(state: &GameState, decree: DecreeId) -> (String, Vec<Line<'static>>, Option<usize>) {
+    let name = decree.display_name();
+    let desc = decree_description(decree);
+    let cost = decree.chairman_cost();
     let cost_pct = (cost.abs() * 100.0) as u32;
 
     let mut lines: Vec<Line> = Vec::new();
@@ -700,10 +696,9 @@ pub(crate) fn render_region_select(state: &GameState, title: &str, action: &str,
 
 /// Generate an effectiveness hint line for transmission-sensitive policies.
 /// Shows per-disease reduction percentages based on transmission vector.
-fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -> Option<Line<'static>> {
+fn effectiveness_hint(state: &GameState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
     // Only transmission-sensitive policies get hints
-    // 0=Travel Ban, 1=Quarantine, 2=Discourage Hospitalization, 4=Water Sanitation
-    if !matches!(policy_idx, 0 | 1 | 2 | 4) {
+    if !matches!(policy, PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp | PolicyId::WaterSanitation) {
         return None;
     }
 
@@ -738,24 +733,24 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
             spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
         }
 
-        let (label, color) = match policy_idx {
-            0 => { // Travel Ban
+        let (label, color) = match policy {
+            PolicyId::TravelBan => {
                 let reduction = (1.0 - vector.travel_ban_factor()) * gov_eff * 100.0;
                 let color = if reduction >= 80.0 { Color::Green } else { Color::Yellow };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
-            1 => { // Quarantine
+            PolicyId::Quarantine => {
                 let reduction = (1.0 - vector.quarantine_factor()) * gov_eff * 100.0;
                 let color = if reduction >= 50.0 { Color::Green }
                     else if reduction >= 30.0 { Color::Yellow }
                     else { Color::Red };
                 (format!("{name} ({}, -{reduction:.0}%)", vector.label()), color)
             }
-            2 => { // Discourage Hospitalization — removes hospital exposure
+            PolicyId::DiscourageHosp => { // removes hospital exposure
                 let reduction = (1.0 - 1.0 / HOSPITAL_EXPOSURE_FACTOR) * gov_eff * 100.0;
                 (format!("{name} ({}, -{reduction:.0}% spread)", vector.label()), Color::Green)
             }
-            4 => { // Water Sanitation
+            PolicyId::WaterSanitation => {
                 match vector {
                     TransmissionVector::Waterborne => {
                         let reduction = 0.5 * gov_eff * 100.0;
@@ -777,7 +772,7 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy_idx: usize) -
 
 /// Estimated daily impact for an active policy. Shows approximate infections
 /// or deaths prevented per day based on current disease parameters and counts.
-fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> Option<Line<'static>> {
+fn impact_estimate(state: &GameState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
     let region = &state.regions[region_idx];
     let pop = region.population as f64;
     if pop <= 0.0 {
@@ -803,14 +798,13 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
         let alive = (pop - region.dead).max(0.0);
         let susceptible = alive - inf.infected - inf.immune;
 
-        match policy_idx {
-            0 => {
+        match policy {
+            PolicyId::TravelBan => {
                 // Travel Ban: can't easily estimate cross-region prevention
-                // Show income penalty instead (already shown elsewhere)
                 return None;
             }
-            1 => {
-                // Quarantine: infections prevented = infected × infectivity × (1 - factor) × susceptible/pop
+            PolicyId::Quarantine => {
+                // infections prevented = infected × infectivity × (1 - factor) × susceptible/pop
                 if susceptible > 0.0 {
                     let factor = disease.transmission.quarantine_factor();
                     let prevented = inf.infected * disease.infectivity * (1.0 - factor) * gov_eff * (susceptible / pop);
@@ -818,8 +812,8 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 }
                 impact_type = "infections";
             }
-            2 => {
-                // Discourage Hospitalization: infections prevented by removing hospital exposure
+            PolicyId::DiscourageHosp => {
+                // infections prevented by removing hospital exposure
                 if susceptible > 0.0 {
                     // Baseline has HOSPITAL_EXPOSURE_FACTOR; removing it prevents this fraction
                     let prevented = inf.infected * disease.infectivity * (HOSPITAL_EXPOSURE_FACTOR - 1.0) * gov_eff * (susceptible / pop);
@@ -827,12 +821,12 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 }
                 impact_type = "infections";
             }
-            3 => {
-                // Border Controls: cross-region spread prevention — hard to estimate
+            PolicyId::BorderControls => {
+                // cross-region spread prevention — hard to estimate
                 return None;
             }
-            4 => {
-                // Water Sanitation: infections prevented for waterborne diseases
+            PolicyId::WaterSanitation => {
+                // infections prevented for waterborne diseases
                 if susceptible > 0.0 {
                     let factor = disease.transmission.water_sanitation_factor();
                     if factor < 1.0 {
@@ -842,8 +836,8 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy_idx: usize) -> O
                 }
                 impact_type = "infections";
             }
-            10 => {
-                // Field Hospital / Medical Center: deaths prevented by lethality reduction
+            PolicyId::FieldHospital => {
+                // deaths prevented by lethality reduction
                 let reduction = match region.hospital_level {
                     0 => 0.25, // Building Level 1
                     1 => 0.40 - 0.25, // Upgrading from Level 1 to Level 2 (incremental)
