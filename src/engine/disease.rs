@@ -99,11 +99,8 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
             region.infections.retain(|inf| inf.disease_idx != idx);
         }
 
-        // Cancel any active field research targeting the recycled disease.
-        state.field_research.retain(|r| !r.references_disease(idx));
-        if state.applied_research.as_ref().is_some_and(|r| r.references_disease(idx)) {
-            state.applied_research = None;
-        }
+        // Cancel any active research targeting the recycled disease.
+        state.active_research.retain(|r| !r.references_disease(idx));
 
         // Remove old medicines targeting the recycled disease (excluding broad-spectrum).
         state.medicines.retain(|m| {

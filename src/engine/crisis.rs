@@ -4,7 +4,7 @@ use crate::state::{
     ActiveLoan, BoardPersonality, BoardRole, CorporationSector, CrisisCost, CrisisEvent,
     CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, GovernorPersonality,
     LoanLender, ModifierSource, OperationSpec, ResearchKind,
-    ResearchTrack, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
+    ResearchCategory, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -164,8 +164,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Lab accident: requires active applied or basic research
-    let has_applied = state.applied_research.is_some();
-    let has_basic = state.basic_research.is_some();
+    let has_applied = state.research_slot(ResearchCategory::Applied).is_some();
+    let has_basic = state.research_slot(ResearchCategory::Basic).is_some();
     if has_applied || has_basic {
         // If both tracks are running, randomly target one
         let targets_basic = if has_applied && has_basic {
@@ -231,7 +231,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     // not generated randomly.
 
     // Data leak: requires any active research (field or applied)
-    if !state.field_research.is_empty() || state.applied_research.is_some() {
+    if !state.active_in_category(ResearchCategory::Field).is_empty() || state.research_slot(ResearchCategory::Applied).is_some() {
         candidates.push(CrisisKind::DataLeak);
     }
 
@@ -2398,7 +2398,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .unwrap_or("an unknown location");
 
             // Check if identification is already in progress
-            let already_identifying = state.field_research.iter()
+            let already_identifying = state.active_research.iter()
                 .any(|p| matches!(p.kind, ResearchKind::IdentifyThreat { disease_idx: d } if d == *disease_idx));
 
             // Check if there's capacity for field research
@@ -2566,10 +2566,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::LabAccident { targets_basic }, 0) => {
             if *targets_basic {
-                state.basic_research = None;
+                state.active_research.retain(|p| p.kind.category() != ResearchCategory::Basic);
                 "Lab evacuated. Basic research project lost.".into()
             } else {
-                state.applied_research = None;
+                state.active_research.retain(|p| p.kind.category() != ResearchCategory::Applied);
                 "Lab evacuated. Applied research project lost.".into()
             }
         }
@@ -2581,10 +2581,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if state.rng_crisis.r#gen::<f64>() < 0.70 {
                 // Breach worsens — lose the research anyway
                 if *targets_basic {
-                    state.basic_research = None;
+                    state.active_research.retain(|p| p.kind.category() != ResearchCategory::Basic);
                     "Breach worsened. Basic research lost.".into()
                 } else {
-                    state.applied_research = None;
+                    state.active_research.retain(|p| p.kind.category() != ResearchCategory::Applied);
                     "Breach worsened. Applied research lost.".into()
                 }
             } else {
@@ -2607,11 +2607,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // If personnel drops below what active research requires, cancel the
             // most recent field research — not enough staff to sustain it.
             let research_demand: u32 =
-                state.field_research.iter().map(|p| p.personnel_assigned).sum::<u32>()
-                + state.applied_research.as_ref().map_or(0, |p| p.personnel_assigned)
-                + state.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
+                state.active_research.iter().filter(|p| p.kind.category() == ResearchCategory::Field).map(|p| p.personnel_assigned).sum::<u32>()
+                + state.active_research.iter().filter(|p| p.kind.category() == ResearchCategory::Applied).map(|p| p.personnel_assigned).sum::<u32>()
+                + state.active_research.iter().filter(|p| p.kind.category() == ResearchCategory::Basic).map(|p| p.personnel_assigned).sum::<u32>();
+            let removed_field = {
+                let idx = state.active_research.iter().rposition(|p| p.kind.category() == ResearchCategory::Field);
+                if let Some(i) = idx { state.active_research.remove(i); true } else { false }
+            };
             if research_demand > state.resources.personnel
-                && state.field_research.pop().is_some()
+                && removed_field
             {
                 format!("Lost {} personnel. Field research cancelled, insufficient staff.",
                     amount)
@@ -3054,7 +3058,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.resources.funding += reward;
             state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
             // Billionaire's team redirected basic research priorities — 2 days of progress lost
-            if let Some(proj) = &mut state.basic_research {
+            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Basic) {
                 let loss = 2.0 * TICKS_PER_DAY as f64;
                 proj.progress = (proj.progress - loss).max(0.0);
             }
@@ -3119,11 +3123,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::PerformanceReview, 0) => {
             // Attend — lose 1 day research progress, gain POL
             let loss = TICKS_PER_DAY as f64;
-            if let Some(proj) = state.field_research.first_mut() {
+            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                 proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = &mut state.applied_research {
+            } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                 proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = &mut state.basic_research {
+            } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Basic) {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             state.resources.board_approval += 0.05;
@@ -3166,11 +3170,11 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let lucky = state.rng_crisis.r#gen::<bool>();
             if lucky {
                 let boost = 2.0 * TICKS_PER_DAY as f64;
-                if let Some(proj) = &mut state.applied_research {
+                if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                     proj.progress += boost;
-                } else if let Some(proj) = state.field_research.first_mut() {
+                } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                     proj.progress += boost;
-                } else if let Some(proj) = &mut state.basic_research {
+                } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Basic) {
                     proj.progress += boost;
                 }
                 "The intern was right. Research accelerated by 2 days.".into()
@@ -3182,13 +3186,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::CongressionalHearing, 0) => {
             // Testify honestly — lose 2 days research, gain POL
             let loss = 2.0 * TICKS_PER_DAY as f64;
-            if let Some(proj) = state.field_research.first_mut() {
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
-            if let Some(proj) = &mut state.applied_research {
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
-            if let Some(proj) = &mut state.basic_research {
+            for proj in state.active_research.iter_mut() {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             state.resources.board_approval += 0.10;
@@ -3283,9 +3281,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::MilitaryOverreach, _) => {
             // Accept classification — lose research progress
             let loss = TICKS_PER_DAY as f64;
-            if let Some(proj) = state.field_research.first_mut() {
+            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                 proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = &mut state.applied_research {
+            } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             "Classification accepted. Research data access restricted.".into()
@@ -3296,9 +3294,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::GovernorBuffoon { .. }, 0) => {
             // Damage control — lose 1 day research progress cleaning up
             let loss = TICKS_PER_DAY as f64;
-            if let Some(proj) = state.field_research.first_mut() {
+            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                 proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = &mut state.applied_research {
+            } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             "Spent a day undoing the damage. Could have been worse.".into()
@@ -3505,9 +3503,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 (GovernorPersonality::Buffoon, 0) => {
                     // Damage control: lose 1.5 days research progress
                     let loss = (TICKS_PER_DAY * 1.5) as f64;
-                    if let Some(proj) = state.field_research.first_mut() {
+                    if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                         proj.progress = (proj.progress - loss).max(0.0);
-                    } else if let Some(proj) = &mut state.applied_research {
+                    } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                         proj.progress = (proj.progress - loss).max(0.0);
                     }
                     queue_governor_death_followup(state, *region_idx);
@@ -3520,9 +3518,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 (GovernorPersonality::Blowhard, 0) => {
                     // Send samples: lose 2 days applied research progress
                     let loss = (TICKS_PER_DAY * 2.0) as f64;
-                    if let Some(proj) = &mut state.applied_research {
+                    if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                         proj.progress = (proj.progress - loss).max(0.0);
-                    } else if let Some(proj) = state.field_research.first_mut() {
+                    } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                         proj.progress = (proj.progress - loss).max(0.0);
                     }
                     if let Some(region) = state.regions.get_mut(*region_idx) {
@@ -3644,9 +3642,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::PublicInquiry, 0) => {
             // Full transparency — lose research progress, gain POL
             let loss = (3.0 * TICKS_PER_DAY) as f64;
-            if let Some(proj) = state.field_research.first_mut() {
+            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                 proj.progress = (proj.progress - loss).max(0.0);
-            } else if let Some(proj) = &mut state.applied_research {
+            } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
             state.resources.board_approval += 0.10;
@@ -3795,9 +3793,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // "Begin identification" — the first option (only present when identification
             // is available). Funding cost was already deducted by CrisisCost.
             // Start the identification research project.
-            let projects = state.available_projects(ResearchTrack::Field);
+            let projects = state.available_projects(ResearchCategory::Field);
             if let Some(idx) = projects.iter().position(|k| matches!(k, ResearchKind::IdentifyThreat { disease_idx: d } if *d == *disease_idx)) {
-                let (ok, msg) = super::research::start_research(state, ResearchTrack::Field, idx, false);
+                let (ok, msg) = super::research::start_research(state, ResearchCategory::Field, idx, false);
                 if ok {
                     let name = state.diseases.get(*disease_idx)
                         .map(|d| d.display_name(*disease_idx))
@@ -4104,12 +4102,12 @@ mod tests {
         state.active_crisis = Some(crisis);
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
-        assert!(state.field_research.is_empty(), "no research before resolution");
+        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "no research before resolution");
         let msg = resolve_crisis(&mut state, 0); // Begin identification
-        assert!(!state.field_research.is_empty(),
+        assert!(!state.active_in_category(ResearchCategory::Field).is_empty(),
             "identification research should start after choosing option A");
         assert!(matches!(
-            &state.field_research[0].kind,
+            &state.active_research.iter().find(|p| p.kind.category() == ResearchCategory::Field).unwrap().kind,
             ResearchKind::IdentifyThreat { disease_idx: 0 }
         ), "should be identifying disease 0");
         assert!(msg.contains("initiated"), "message should confirm initiation: {}", msg);
@@ -4130,7 +4128,7 @@ mod tests {
 
         let funding_before = state.resources.funding;
         resolve_crisis(&mut state, 1); // Acknowledge
-        assert!(state.field_research.is_empty(), "no research should start on dismiss");
+        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "no research should start on dismiss");
         assert_eq!(state.resources.funding, funding_before, "no funding should be deducted on dismiss");
     }
 
@@ -4140,7 +4138,7 @@ mod tests {
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
         // Already identifying disease 0
-        state.field_research.push(crate::state::ResearchProject {
+        state.active_research.push(crate::state::ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
             progress: 0.0,
             required_ticks: 160.0,
