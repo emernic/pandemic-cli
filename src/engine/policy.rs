@@ -1,7 +1,8 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, GameEvent, GameState, GovernorPersonality, RegionSpecialization, RegionTrait,
+    CrisisKind, FundingCondition, GameEvent, GameState, GovernorPersonality,
+    RegionSpecialization, RegionTrait,
     ScreeningLevel,
     policy_display_name, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     QUARANTINE_COST, TRAVEL_BAN_COST,
@@ -30,6 +31,14 @@ use crate::state::{
     TRAVEL_BAN_PERSONNEL,
     WATER_SANITATION_PERSONNEL,
 };
+
+/// Return names of active contracts whose ForbidPolicy condition matches the given policy_idx.
+fn conflicting_contract_names(state: &GameState, policy_idx: usize) -> Vec<String> {
+    state.contracts.iter()
+        .filter(|c| matches!(c.condition, FundingCondition::ForbidPolicy { policy_idx: idx } if idx == policy_idx))
+        .map(|c| c.name.clone())
+        .collect()
+}
 
 /// Enforce policy costs: suspend most expensive policies one at a time
 /// until affordable, then deduct the total cost. Returns the total
@@ -170,7 +179,13 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 if matches!(policy_idx, 0 | 1) {
                     super::board::on_gdp_policy_enacted(state, region_idx);
                 }
-                (Some(format!("{region_name}: {on_msg}")), true)
+                let conflicts = conflicting_contract_names(state, policy_idx);
+                let msg = if conflicts.is_empty() {
+                    format!("{region_name}: {on_msg}")
+                } else {
+                    format!("{region_name}: {on_msg} (violates {})", conflicts.join(", "))
+                };
+                (Some(msg), true)
             } else {
                 (Some(format!(
                     "Not enough personnel for {} (need {personnel})", name.to_lowercase()
@@ -783,13 +798,19 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                     .map(|(_, name)| *name)
                     .collect();
                 if let Some(&target) = inactive.first() {
-                    let label = match target {
-                        "quarantine" => { state.policies[i].quarantine = true; "Quarantine" }
-                        "border_controls" => { state.policies[i].border_controls = true; "Border Controls" }
-                        "martial_law" => { state.policies[i].martial_law = true; "Martial Law" }
+                    let (label, pidx) = match target {
+                        "quarantine" => { state.policies[i].quarantine = true; ("Quarantine", Some(1usize)) }
+                        "border_controls" => { state.policies[i].border_controls = true; ("Border Controls", Some(3usize)) }
+                        "martial_law" => { state.policies[i].martial_law = true; ("Martial Law", None) }
                         _ => unreachable!(),
                     };
-                    Some(format!("{gov_name} imposed {label} in {region_name} without authorization"))
+                    let conflicts = pidx.map(|p| conflicting_contract_names(state, p)).unwrap_or_default();
+                    let suffix = if conflicts.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" (violates {})", conflicts.join(", "))
+                    };
+                    Some(format!("{gov_name} imposed {label} in {region_name} without authorization{suffix}"))
                 } else {
                     None // All restrictive policies already active
                 }
@@ -1055,9 +1076,15 @@ pub(super) fn tick_standing_orders(state: &mut GameState) {
             let (_, ok) = toggle_policy(state, region_idx, 1);
             if ok {
                 let region_name = state.regions[region_idx].name.clone();
+                let conflicts = conflicting_contract_names(state, 1);
+                let suffix = if conflicts.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (violates {})", conflicts.join(", "))
+                };
                 state.events.push(GameEvent::PolicyAutoActivated {
                     region_idx,
-                    policy_name: format!("Quarantine in {region_name}"),
+                    policy_name: format!("Quarantine in {region_name}{suffix}"),
                 });
             }
         }
@@ -1071,9 +1098,15 @@ pub(super) fn tick_standing_orders(state: &mut GameState) {
             let (_, ok) = toggle_policy(state, region_idx, 0);
             if ok {
                 let region_name = state.regions[region_idx].name.clone();
+                let conflicts = conflicting_contract_names(state, 0);
+                let suffix = if conflicts.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (violates {})", conflicts.join(", "))
+                };
                 state.events.push(GameEvent::PolicyAutoActivated {
                     region_idx,
-                    policy_name: format!("Travel Ban in {region_name}"),
+                    policy_name: format!("Travel Ban in {region_name}{suffix}"),
                 });
             }
         }
@@ -1981,6 +2014,61 @@ mod tests {
         assert!(!state.policies[0].quarantine);
         assert!(!state.policies[0].travel_ban);
         assert!(!state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })));
+    }
+
+    #[test]
+    fn toggle_policy_warns_about_contract_conflict() {
+        let mut state = GameState::new_default(42);
+        state.resources.board_approval = 1.0;
+        state.contracts.push(crate::state::FundingContract {
+            name: "Hospitality Protection Fund".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::ForbidPolicy { policy_idx: 1 },
+            template_id: 1,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
+        });
+
+        // Enable quarantine — should succeed but warn about the contract
+        let (msg, ok) = toggle_policy(&mut state, 0, 1);
+        assert!(ok);
+        let msg = msg.unwrap();
+        assert!(msg.contains("Quarantine"), "should mention the policy: {msg}");
+        assert!(msg.contains("Hospitality Protection Fund"), "should mention the conflicting contract: {msg}");
+    }
+
+    #[test]
+    fn standing_order_auto_activation_warns_about_contract_conflict() {
+        let mut state = GameState::new_default(42);
+        state.resources.board_approval = 1.0;
+        state.standing_orders.auto_quarantine_at_high = true;
+        state.contracts.push(crate::state::FundingContract {
+            name: "Hospitality Protection Fund".to_string(),
+            board_member_idx: 0,
+            income: 2.0,
+            condition: FundingCondition::ForbidPolicy { policy_idx: 1 },
+            template_id: 1,
+            satisfaction: 1.0,
+            warned: false,
+            last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
+        });
+        state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
+
+        tick_standing_orders(&mut state);
+
+        assert!(state.policies[0].quarantine);
+        let event = state.events.iter().find(|e| matches!(e, GameEvent::PolicyAutoActivated { .. }));
+        assert!(event.is_some(), "PolicyAutoActivated event should have fired");
+        if let GameEvent::PolicyAutoActivated { policy_name, .. } = event.unwrap() {
+            assert!(policy_name.contains("Hospitality Protection Fund"),
+                "auto-activation event should mention conflicting contract: {policy_name}");
+        }
     }
 
     #[test]
