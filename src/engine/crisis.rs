@@ -1032,8 +1032,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None, // Personnel operation applied in resolve
                 },
                  CrisisOption {
-                    label: "Refuse (+3% approval)".into(),
-                    description: format!("Keep your data, lose ¥{:.0} in foreign aid. Board respects your independence.", refuse_cost),
+                    label: format!("Refuse (−¥{:.0}, +3% approval)", refuse_cost),
+                    description: "Keep your data. Foreign aid reduced, but the board respects your independence.".into(),
                     cost: Some(CrisisCost { funding: *refuse_cost, personnel: 0, ..Default::default() }),
                 },
                 ],
@@ -1052,8 +1052,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     region_name,
                 ),
                 options: vec![ CrisisOption {
-                    label: "Discourage hospitalization".into(),
-                    description: format!("Tell patients in {} to stay home. Staff recover.", region_name),
+                    label: "Discourage hospitalization (policy)".into(),
+                    description: format!(
+                        "Enable Discourage Hospitalization policy in {}. \
+                         Reduces hospital spread but increases lethality. Can be toggled off later.",
+                        region_name
+                    ),
                     cost: None,
                 },
                  CrisisOption {
@@ -1101,8 +1105,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 description: "A board member's corporation has deployed private security to your \
                     facilities. They are demanding operational authority, citing asset protection.".into(),
                 options: vec![ CrisisOption {
-                    label: "Cooperate".into(),
-                    description: format!("Transfer {} personnel to their oversight, gain +15% board approval", cooperate_loss),
+                    label: format!("Cooperate (−{} personnel, +15% approval)", cooperate_loss),
+                    description: format!(
+                        "Permanently lose {} personnel. The board approves, but corporate control over your operations deepens.",
+                        cooperate_loss
+                    ),
                     cost: None,
                 },
                  {
@@ -1418,7 +1425,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      proprietary IP. Your researchers can no longer access their own findings.".into(),
                 options: vec![ CrisisOption {
                     label: "Release the data (−10% board approval)".into(),
-                    description: "Override the restriction. Data restored to research teams.".into(),
+                    description: "Override the IP claim. Board members with corporate ties won't appreciate it.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -2041,7 +2048,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 options: vec![
                     CrisisOption {
                         label: "Decline".into(),
-                        description: "No debt. Policies remain suspended.".into(),
+                        description: "No debt. Funding gap persists until resolved by other means.".into(),
                         cost: None,
                     },
                     CrisisOption {
