@@ -3623,6 +3623,68 @@ impl ResearchKind {
     pub fn is_repeatable(&self) -> bool {
         matches!(self, Self::TrainPersonnel | Self::ManufactureDoses { .. })
     }
+
+    /// Human-readable label for this research kind, respecting disease knowledge level.
+    /// Used by both UI (header status) and engine (event log messages).
+    pub fn label(&self, state: &GameState) -> String {
+        match self {
+            Self::IdentifyThreat { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Identify {}", name)
+            }
+            Self::DevelopMedicine { medicine_idx } => {
+                let name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("Develop {}", name)
+            }
+            Self::ClinicalTrial { medicine_idx, .. } => {
+                let name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("Trial {}", name)
+            }
+            Self::ManufactureDoses { medicine_idx } => {
+                let name = state.medicines.get(*medicine_idx)
+                    .map(|m| m.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("Manufacture {}", name)
+            }
+            Self::GenomicSequencing { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Sequence {}", name)
+            }
+            Self::TrainPersonnel => "Train Personnel".to_string(),
+            Self::BasicResearch { tech } => format!("Research {}", tech.name()),
+            Self::SuppressPathogen { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Suppress {}", name)
+            }
+            Self::AttenuatePathogen { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Attenuate {}", name)
+            }
+            Self::InterdictPathogen { disease_idx } => {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("Interdict {}", name)
+            }
+            Self::FieldOperations { region_idx, system } => {
+                let region = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                format!("Field Ops {} {}", system.label(), region)
+            }
+        }
+    }
 }
 
 /// Technology nodes in the Basic Research tech tree.
