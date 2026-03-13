@@ -2585,6 +2585,13 @@ pub struct Disease {
     /// Newly infected individuals enter the "exposed" compartment and transition
     /// to infectious at rate 1/incubation_ticks per tick.
     pub incubation_ticks: f64,
+    /// Previous day's observed (screened) infected estimate for this disease.
+    /// Updated once per day in tick(). Used to compute observed Rt.
+    #[serde(default)]
+    pub prev_day_observed_infected: f64,
+    /// Current accumulating observed infected estimate (snapshotted to prev at day boundary).
+    #[serde(default)]
+    pub current_day_observed_infected: f64,
 }
 
 /// Resistance level for a specific mechanism of action against a disease.
@@ -2698,6 +2705,8 @@ impl Disease {
             mechanism_resistance: vec![],
             sequence_group: None,
             incubation_ticks,
+            prev_day_observed_infected: 0.0,
+            current_day_observed_infected: 0.0,
         }
     }
 }

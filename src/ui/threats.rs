@@ -140,38 +140,72 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 lines.push(Line::from(""));
 
                 // ── Impact ──
-                // Lethality (observed case fatality rate)
                 let total_dead = disease_deaths[i];
-                let total_immune: f64 = state.regions.iter()
-                    .filter_map(|r| r.disease_state(i))
-                    .map(|inf| inf.immune)
-                    .sum();
-                // Use screened estimates for infected count (respects fog of war)
-                let total_infected: f64 = state.regions.iter().enumerate()
+
+                // Observed CFR: deaths are always observable; immune only from
+                // regions with screening that reveals immune counts.
+                let observed_immune: f64 = state.regions.iter().enumerate()
                     .filter_map(|(region_idx, region)| {
+                        if !state.screening_shows_immune(region_idx) { return None; }
                         let inf = region.disease_state(i)?;
-                        if inf.infected + inf.exposed <= 0.0 { return None; }
-                        let shows_exposed = state.screening_shows_exposed(region_idx);
-                        let total_real = if shows_exposed {
-                            region.detected_infected(&state.diseases)
-                        } else {
-                            region.detected_symptomatic(&state.diseases)
-                        };
-                        let this_disease = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
-                        let proportion = if total_real > 0.0 { this_disease / total_real } else { 0.0 };
-                        Some(region.estimated_infected * proportion)
+                        Some(inf.immune)
                     })
                     .sum();
-                let resolved = total_dead + total_immune;
+                let has_any_immune_screening = state.regions.iter().enumerate()
+                    .any(|(idx, _)| state.screening_shows_immune(idx));
+                let resolved = total_dead + observed_immune;
 
-                let lethal_span = if disease.knowledge >= KNOWLEDGE_PARTIAL_STATS && resolved > 0.0 {
+                let lethal_span = if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
+                    Span::styled("Lethality: ?", Style::default().fg(Color::DarkGray))
+                } else if !has_any_immune_screening || observed_immune <= 0.0 {
+                    // Without immune data, CFR = deaths/deaths = 100% always — useless.
+                    // Show "?" and hint that screening is needed.
+                    Span::styled("Lethality: ? (need screening)", Style::default().fg(Color::DarkGray))
+                } else if resolved > 0.0 {
                     let cfr = (total_dead / resolved) * 100.0;
                     let color = if cfr > 30.0 { Color::Red }
                         else if cfr > 10.0 { Color::Yellow }
                         else { Color::Green };
-                    Span::styled(format!("Lethality: {cfr:.0}%"), Style::default().fg(color))
+                    Span::styled(
+                        format!("Lethality: {cfr:.0}%"),
+                        Style::default().fg(color),
+                    )
                 } else {
                     Span::styled("Lethality: ?", Style::default().fg(Color::DarkGray))
+                };
+
+                // Observed Rt from daily screened infection estimates.
+                // Rt = (today / yesterday) when generation time ≈ 1 day, otherwise
+                // Rt = (today / yesterday) ^ generation_time_days.
+                let rt_span = if disease.knowledge >= KNOWLEDGE_PARTIAL_STATS {
+                    let prev = disease.prev_day_observed_infected;
+                    let curr = disease.current_day_observed_infected;
+                    // Need meaningful data: prev > 10 to avoid noise-dominated ratios
+                    if prev > 10.0 && curr > 0.0 {
+                        let generation_time_days = (disease.incubation_ticks / TICKS_PER_DAY)
+                            + 0.5 / (disease.lethality + disease.recovery_rate) / TICKS_PER_DAY;
+                        // Clamp generation time to reasonable range
+                        let gen_t = generation_time_days.clamp(0.5, 30.0);
+                        let growth = curr / prev;
+                        let rt = growth.powf(gen_t);
+                        let (symbol, color) = if rt > 1.5 { ("▲", Color::Red) }
+                            else if rt > 1.05 { ("▲", Color::Yellow) }
+                            else if rt > 0.95 { ("─", Color::White) }
+                            else { ("▼", Color::Green) };
+                        // Compute average screening visibility for confidence
+                        let avg_vis: f64 = state.regions.iter().enumerate()
+                            .map(|(idx, _)| state.screening_visibility(idx))
+                            .sum::<f64>() / state.regions.len() as f64;
+                        let confidence = if avg_vis < 0.3 { "~" } else { "" };
+                        Span::styled(
+                            format!("Rt: {confidence}{rt:.1} {symbol}"),
+                            Style::default().fg(color),
+                        )
+                    } else {
+                        Span::styled("Rt: ?", Style::default().fg(Color::DarkGray))
+                    }
+                } else {
+                    Span::styled("Rt: ?", Style::default().fg(Color::DarkGray))
                 };
 
                 // Deaths + share of total
@@ -182,21 +216,27 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     else { Color::White }
                 } else { Color::DarkGray };
 
-                let impact_spans: Vec<Span> = vec![
+                // Current observed infected from the snapshot system
+                let total_infected = disease.current_day_observed_infected;
+
+                lines.push(Line::from(vec![
                     Span::raw("    "),
                     lethal_span,
+                    Span::raw("    "),
+                    rt_span,
                     Span::raw("    "),
                     Span::styled(
                         format!("Infected~{}", format_number(total_infected)),
                         Style::default().fg(Color::LightRed),
                     ),
+                ]));
+                lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
                         format_deaths_line(total_dead, grand_total_deaths),
                         Style::default().fg(death_color),
                     ),
-                ];
-                lines.push(Line::from(impact_spans));
+                ]));
 
                 // 5-day death projection (requires EpidemiologicalForecasting tech)
                 if state.has_forecasting() {
