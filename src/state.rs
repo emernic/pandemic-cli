@@ -2989,6 +2989,9 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 pub const TICKS_PER_DAY: f64 = 60.0;
 /// Personnel added per completed TrainPersonnel project.
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
+/// Minimum effective efficacy for auto-deploy to fire. Below this threshold,
+/// deploying wastes doses on a near-useless medicine.
+pub const AUTO_DEPLOY_MIN_EFFICACY: f64 = 0.04;
 /// Deploy cooldown per disease per region in ticks (half a day).
 /// Per-disease cooldown means treating disease A doesn't block treating disease B.
 pub const DEPLOY_COOLDOWN_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
