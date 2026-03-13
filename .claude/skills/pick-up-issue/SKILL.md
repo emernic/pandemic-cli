@@ -93,6 +93,21 @@ When picking up an investigate issue:
 
 5. Investigate issues are often small and self-contained. Many can be resolved quickly — but don't use that as an excuse to skip the "step back and think" part.
 
+### Evaluating by Source
+
+Investigate issues are important for codebase hygiene and surfacing architectural problems, but they create noise and entropy when handled poorly. Always check who filed the issue:
+
+- **Filed by the user** (the issue body will say "user"): Take this seriously. Thoroughly research what they're describing and think hard about whether it's a real problem. The user has context you don't.
+
+- **Filed by a playtester** (has `playtest-feedback` label): Playtesters may not understand the code and may not realize what they're suggesting would be disproportionately complex. If the suggested change isn't worth the implementation cost, close it.
+
+- **Filed by a worker agent** (no label other than `investigate`): These are the main way broken architecture and code smell get surfaced — take code and architecture issues seriously. Check whether other issues have been filed about the same area, or whether similar patterns have caused problems elsewhere in the codebase. However, be skeptical of **gameplay balance suggestions and UX suggestions** from worker agents. For those, ask three questions in order:
+  1. **Does this make the game simpler?** Fewer mechanics, fewer special cases, less to learn.
+  2. **Does this make things more obvious to the player?** Clearer feedback, less confusion.
+  3. **Does this make the code simpler and easier to maintain?**
+
+  If the answer to all three is no, close the issue as not planned with a short comment explaining why. Avoid adding bells and whistles or hedgy little mechanics that muddy existing systems.
+
 ## Design Issues
 
 Issues labeled `design` are thinking tasks, not coding tasks. **The deliverable is a set of concrete implementation issues, not a PR with code changes.** You are being asked to be a game designer.
