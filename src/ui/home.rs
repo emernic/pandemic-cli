@@ -410,6 +410,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── AUTHORITY ──", cyan)));
+        lines.push(Line::from(Span::styled(
+            "  Board backing that gates your policies.",
+            dim,
+        )));
+        lines.push(Line::from(Span::styled(
+            "  Set at board meetings. Higher = more options.",
+            dim,
+        )));
         lines.push(Line::from(""));
 
         lines.push(Line::from(vec![
