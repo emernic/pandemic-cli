@@ -99,6 +99,8 @@ pub(super) fn generate_board_members(state: &mut GameState) {
 
     // Initialize board budget from corporate tax revenue at current satisfaction.
     if state.board_budget_per_tick == 0.0 {
+        let base = state.base_board_budget_per_tick();
+        state.reference_base_budget_per_tick = base;
         let board_sat = state.board_satisfaction();
         state.board_budget_per_tick =
             crate::engine::crisis::compute_board_budget_per_tick(state, board_sat);

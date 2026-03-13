@@ -75,14 +75,25 @@ fn chairman_funding_shift(state: &GameState) -> f64 {
 }
 
 /// Compute the per-tick board budget at a given satisfaction level.
-/// Uses the base corporate tax revenue (at full health) as the reference point,
-/// then scales by satisfaction + chairman influence.
+/// Uses the reference base (captured at game start) scaled by a dampened GDP factor,
+/// so that satisfaction is the primary lever and GDP decline doesn't dominate.
+/// GDP factor uses sqrt(current/reference) — moderate decline is cushioned,
+/// total collapse still zeroes the budget.
 pub(super) fn compute_board_budget_per_tick(state: &GameState, board_sat: f64) -> f64 {
-    let base = state.base_board_budget_per_tick();
+    let current_base = state.base_board_budget_per_tick();
+    let reference = state.reference_base_budget_per_tick;
+    let effective_base = if reference > 0.0 {
+        // Dampen GDP decline: sqrt(current/reference) * reference
+        let gdp_ratio = (current_base / reference).clamp(0.0, 1.0);
+        reference * gdp_ratio.sqrt()
+    } else {
+        // Fallback for legacy saves where reference wasn't set
+        current_base
+    };
     let mult = board_budget_satisfaction_mult(board_sat);
     let shift = chairman_funding_shift(state);
     let full_mult = (mult + shift).clamp(0.3, 1.4);
-    base * full_mult
+    effective_base * full_mult
 }
 
 /// POL cost for closing borders on a refugee wave (escalates with each collapse).
@@ -4349,6 +4360,43 @@ mod tests {
         let hostile_budget = compute_board_budget_per_tick(&state, 0.5);
         assert!(hostile_budget < base_budget,
             "hostile chairman should decrease budget: base={base_budget}, hostile={hostile_budget}");
+    }
+
+    #[test]
+    fn satisfaction_dampens_gdp_decline_on_budget() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        // Capture the initial budget at neutral satisfaction
+        let initial_budget = compute_board_budget_per_tick(&state, 0.5);
+        assert!(state.reference_base_budget_per_tick > 0.0,
+            "reference base should be set after board init");
+
+        // Simulate GDP decline by reducing corporate revenue directly
+        for corp in &mut state.corporations {
+            corp.revenue *= 0.5;
+        }
+
+        // With GDP decline, budget at neutral satisfaction should still be above
+        // what the raw GDP fraction would give (sqrt dampening)
+        let declined_budget = compute_board_budget_per_tick(&state, 0.5);
+        let raw_base = state.base_board_budget_per_tick();
+
+        // declined_budget should be higher than raw_base * 1.0 (undampened neutral)
+        // because sqrt dampening cushions the GDP decline
+        assert!(declined_budget > raw_base,
+            "dampened budget ({:.2}) should exceed raw GDP-derived base ({:.2})",
+            declined_budget, raw_base);
+
+        // At max satisfaction (1.0), budget should be meaningfully higher than
+        // at min satisfaction (0.0), proving satisfaction is the primary lever
+        let max_sat_budget = compute_board_budget_per_tick(&state, 1.0);
+        let min_sat_budget = compute_board_budget_per_tick(&state, 0.0);
+        let sat_ratio = max_sat_budget / min_sat_budget;
+        assert!(sat_ratio > 2.0,
+            "satisfaction swing should be >2x, got {:.2}x (max={:.2}, min={:.2})",
+            sat_ratio, max_sat_budget, min_sat_budget);
     }
 
     #[test]

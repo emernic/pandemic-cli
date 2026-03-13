@@ -190,6 +190,11 @@ pub struct GameState {
     /// fluctuate with regional health. Contracts add on top of this.
     #[serde(default)]
     pub board_budget_per_tick: f64,
+    /// The base board budget at game start (before GDP decline). Used as
+    /// the reference point for satisfaction scaling so that the satisfaction
+    /// multiplier operates on a stable base rather than a shrinking GDP-derived one.
+    #[serde(default)]
+    pub reference_base_budget_per_tick: f64,
     /// Tick when the Chairman's satisfaction first dropped below the hostile threshold (0.20).
     /// Reset to None when satisfaction recovers. Used to trigger Vote of No Confidence
     /// after ~3 consecutive days of hostility.
@@ -5455,6 +5460,7 @@ impl GameState {
             board_members: Vec::new(),
             next_board_meeting_tick: 0, // initialized properly after RNG setup
             board_budget_per_tick: 0.0, // set properly after corporations are generated
+            reference_base_budget_per_tick: 0.0,
             chairman_hostile_since: None,
             next_sequence_group: 0,
             loans: vec![],
