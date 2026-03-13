@@ -1157,16 +1157,18 @@ mod tests {
         state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
         state.unlocked_techs.push(crate::state::BasicTech::MetagenomicSurveillance);
         // Unlock all decrees by satisfying every severity threshold:
-        // - 3 collapses → unlocks decrees 4,5
-        // - 600K infected across 2 regions → unlocks decree 0 (500K+ infected)
-        //   and provides 2 CRIT regions → unlocks decrees 1,2,3
-        // We collapse regions 3-5 and infect regions 0,1 to avoid breaking tests
+        // - 3 collapses → unlocks decrees 4,5 (Fortify needs 1+, Emergency needs 3+)
+        // - 900K infected across 3 regions → unlocks decree 0 (500K+ infected)
+        //   and provides 3 CRIT regions → unlocks decrees 1,3
+        //   (Suspend Regional Authority needs 3+ CRIT)
+        // We collapse regions 3-5 and infect regions 0,1,2 to avoid breaking tests
         // that operate on early regions.
         state.regions[3].collapsed = true;
         state.regions[4].collapsed = true;
         state.regions[5].collapsed = true;
         state.regions[0].get_or_create_infection(0).infected = 300_000.0;
         state.regions[1].get_or_create_infection(0).infected = 300_000.0;
+        state.regions[2].get_or_create_infection(0).infected = 300_000.0;
         state
     }
 
