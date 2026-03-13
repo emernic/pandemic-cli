@@ -308,9 +308,12 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     // in additional non-collapsed regions. Pushed from day 20 to day 30 to
     // give containment policies a window to matter before seeding makes them moot.
     // By day 60, every viable region gets seeded.
+    // Non-adjacent regions are seeded with higher probability — creating
+    // impossible emergence patterns that hint at engineered origins.
     let multi_seed = ((day - 30.0) / 30.0).clamp(0.0, 1.0); // 0 at day 30, 1 at day 60
     if multi_seed > 0.0 {
         let (_, primary_region) = result;
+        let primary_connections = state.regions[primary_region].connections.clone();
         let viable: Vec<usize> = state.regions.iter().enumerate()
             .filter(|(i, r)| !r.collapsed && *i != primary_region)
             .map(|(i, _)| i)
@@ -319,7 +322,11 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         // Day 40: ~8.5k, Day 60: ~18.5k, Day 80: ~32.5k
         let base_seed = 500.0 + day * day * 5.0;
         for &region_idx in &viable {
-            if rng.r#gen::<f64>() < multi_seed {
+            // Non-adjacent regions get 2x seeding probability — creates
+            // anomalous simultaneous emergence in disconnected regions.
+            let is_adjacent = primary_connections.contains(&region_idx);
+            let prob = if is_adjacent { multi_seed * 0.5 } else { multi_seed };
+            if rng.r#gen::<f64>() < prob {
                 let seed_count = base_seed + rng.r#gen::<f64>() * base_seed;
                 state.regions[region_idx].get_or_create_infection(disease_idx).infected += seed_count;
             }

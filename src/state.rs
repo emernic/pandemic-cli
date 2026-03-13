@@ -2800,6 +2800,15 @@ pub struct Disease {
     /// Newly infected individuals enter the "exposed" compartment and transition
     /// to infectious at rate 1/incubation_ticks per tick.
     pub incubation_ticks: f64,
+    /// Regions where this disease was first detected (indices into state.regions).
+    /// Set once at detection time — records which regions had infections > 0
+    /// at the moment detection triggered. Natural diseases show one region;
+    /// engineered multi-seeded diseases show multiple (often non-adjacent).
+    #[serde(default)]
+    pub first_detected_regions: Vec<usize>,
+    /// Day on which this disease was detected (tick / TICKS_PER_DAY).
+    #[serde(default)]
+    pub detected_day: f64,
     /// Previous day's observed (screened) infected estimate for this disease.
     /// Updated once per day in tick(). Used to compute observed Rt.
     #[serde(default)]
@@ -2940,6 +2949,8 @@ impl Disease {
             mechanism_resistance: vec![],
             sequence_group: None,
             incubation_ticks,
+            first_detected_regions: vec![],
+            detected_day: 0.0,
             prev_day_observed_infected: 0.0,
             current_day_observed_infected: 0.0,
         }
@@ -5518,6 +5529,9 @@ impl GameState {
             immune: 0.0,
         });
         regions[region_idx].dead = dead;
+        // Record first-detection region for the initial disease (Day 0, single region)
+        diseases[0].first_detected_regions = vec![region_idx];
+        diseases[0].detected_day = 0.0;
         // Seed the initial estimate — organic reporting catches roughly 15% of cases
         // at the time the player takes over. Without this, the first frame shows
         // "Infected: ~0" despite the briefing saying there's an active outbreak.
