@@ -4,7 +4,7 @@ Use this document when writing player-facing text or issue descriptions about au
 
 This is not a prose-quality guide. It is a guide to what is literally happening when the player acts.
 
-Read [setting.md](/home/emernic/pandemic_cli_8/docs/setting.md) first. This document is the short operational layer on top of it.
+Read [setting.md](setting.md) first. This document is the short operational layer on top of it.
 
 ## Core Rule
 
