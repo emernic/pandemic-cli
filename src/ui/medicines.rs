@@ -531,6 +531,12 @@ fn render_select_target(
                 format!("    {:.1}% of susceptible", pct),
                 Style::default().fg(Color::DarkGray),
             )));
+            let stockpile_pct = if med.doses > 0.0 { will_vaccinate / med.doses * 100.0 } else { 0.0 };
+            let stockpile_color = if stockpile_pct > 75.0 { Color::Red } else if stockpile_pct > 40.0 { Color::Yellow } else { Color::DarkGray };
+            lines.push(Line::from(Span::styled(
+                format!("    Uses {} doses ({:.0}% of stockpile)", format_number(will_vaccinate), stockpile_pct),
+                Style::default().fg(stockpile_color),
+            )));
         }
         if state.has_resistance_surveillance() {
             lines.push(Line::from(Span::styled(
@@ -577,6 +583,12 @@ fn render_select_target(
             lines.push(Line::from(Span::styled(
                 format!("    {:.0}% of infected", pct),
                 Style::default().fg(Color::DarkGray),
+            )));
+            let stockpile_pct = if med.doses > 0.0 { will_treat / med.doses * 100.0 } else { 0.0 };
+            let stockpile_color = if stockpile_pct > 75.0 { Color::Red } else if stockpile_pct > 40.0 { Color::Yellow } else { Color::DarkGray };
+            lines.push(Line::from(Span::styled(
+                format!("    Uses {} doses ({:.0}% of stockpile)", format_number(will_treat), stockpile_pct),
+                Style::default().fg(stockpile_color),
             )));
         }
         if state.has_resistance_surveillance() {
