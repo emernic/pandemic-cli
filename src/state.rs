@@ -5572,10 +5572,25 @@ impl GameState {
         // Infrastructure health: average of the three infrastructure metrics
         let infra_health = (region.healthcare_capacity + region.supply_lines + region.civil_order) / 3.0;
 
+        // Trade coupling: neighbor economic health drags GDP via trade links.
+        // Uses current smoothed gdp_fraction (not gdp_target) to avoid circularity.
+        // When all neighbors healthy: trade_factor ≈ 1.0. When neighbors collapse: → 0.7.
+        // TradeDependent regions feel a stronger hit (→ 0.5 instead of → 0.7).
+        let trade_factor = if region.connections.is_empty() {
+            1.0
+        } else {
+            let avg_neighbor_gdp: f64 = region.connections.iter()
+                .map(|&c| self.regions[c].gdp_fraction())
+                .sum::<f64>() / region.connections.len() as f64;
+            let trade_dep = region.traits.contains(&RegionTrait::TradeDependent);
+            let trade_weight = if trade_dep { 0.5 } else { 0.3 };
+            (1.0 - trade_weight) + trade_weight * avg_neighbor_gdp
+        };
+
         // Active containment policies reduce GDP — the core tension.
         let policy = match self.policies.get(region_idx) {
             Some(p) => p,
-            None => return (region.base_gdp * alive_frac * infra_health).max(0.0),
+            None => return (region.base_gdp * alive_frac * infra_health * trade_factor).max(0.0),
         };
         let mut policy_factor = 1.0;
         if policy.quarantine {
@@ -5596,21 +5611,6 @@ impl GameState {
         if policy.martial_law {
             policy_factor *= 0.85; // 15% GDP hit — curfews, restricted movement
         }
-
-        // Trade coupling: neighbor economic health drags GDP via trade links.
-        // Uses current smoothed gdp_fraction (not gdp_target) to avoid circularity.
-        // When all neighbors healthy: trade_factor ≈ 1.0. When neighbors collapse: → 0.7.
-        // TradeDependent regions feel a stronger hit (→ 0.5 instead of → 0.7).
-        let trade_factor = if region.connections.is_empty() {
-            1.0
-        } else {
-            let avg_neighbor_gdp: f64 = region.connections.iter()
-                .map(|&c| self.regions[c].gdp_fraction())
-                .sum::<f64>() / region.connections.len() as f64;
-            let trade_dep = region.traits.contains(&RegionTrait::TradeDependent);
-            let trade_weight = if trade_dep { 0.5 } else { 0.3 };
-            (1.0 - trade_weight) + trade_weight * avg_neighbor_gdp
-        };
 
         (region.base_gdp * alive_frac * infra_health * policy_factor * trade_factor).max(0.0)
     }
