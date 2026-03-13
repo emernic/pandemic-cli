@@ -1,12 +1,14 @@
 use rand::Rng;
 
 use crate::state::{
+    CorporationSector,
     CrisisKind, FundingCondition, GameEvent, GameState, GovernorPersonality,
     ModifierSource, RegionSpecialization, RegionTrait,
     ScreeningLevel,
     DecreeId, PolicyId,
     QUARANTINE_COST, TRAVEL_BAN_COST,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
+    INFRA_STRESSED, SUPPLY_STRESSED_COST_MULT,
     REGULATORY_APPARATUS_COST_MULT, SURVEILLANCE_NETWORK_SCREENING_MULT,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_COOPERATION_GAIN,
@@ -47,20 +49,27 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     let mut policy_cost = state.total_policy_funding_cost();
     while policy_cost > 0.0 && state.resources.funding < policy_cost {
         // Find the most expensive active individual policy across all regions.
-        // Uses active_policy_costs() — single source of truth for trait-adjusted pricing.
+        // Applies the same multipliers as total_policy_funding_cost() for consistent ranking.
         let mut best: Option<(usize, PolicyId, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
-            let traits = state.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-            // Apply RegulatoryApparatus specialization discount to get true cost
-            let spec_mult = state.regions.get(i).map(|r| {
+            let region = state.regions.get(i);
+            let traits = region.map(|r| r.traits.as_slice()).unwrap_or(&[]);
+            // Apply all multipliers matching total_policy_funding_cost()
+            let gov_mult = region.map(|r| r.governor.cost_multiplier()).unwrap_or(1.0);
+            let supply_mult = region.map(|r| {
+                if r.supply_lines < INFRA_STRESSED { SUPPLY_STRESSED_COST_MULT } else { 1.0 }
+            }).unwrap_or(1.0);
+            let spec_mult = region.map(|r| {
                 if r.has_specialization(RegionSpecialization::RegulatoryApparatus) {
                     REGULATORY_APPARATUS_COST_MULT
                 } else {
                     1.0
                 }
             }).unwrap_or(1.0);
+            let auto_bonus = state.sector_bonus(i, CorporationSector::Automation);
+            let auto_mult = 1.0 - CorporationSector::Automation.max_bonus_pct() / 100.0 * auto_bonus;
             for (policy, cost) in p.active_policy_costs(traits) {
-                let effective = cost * spec_mult;
+                let effective = cost * gov_mult * supply_mult * spec_mult * auto_mult;
                 if best.is_none() || effective > best.unwrap().2 {
                     best = Some((i, policy, effective));
                 }
