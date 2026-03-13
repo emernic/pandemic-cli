@@ -1,5 +1,6 @@
 use crate::state::{
     BasicTech, CorporationSector, GameEvent, GameState, InfraSystem, PathogenType, RegionSpecialization,
+    COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR,
     INFRA_CRITICAL, INFRA_STRESSED,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
     TROPICAL_MEDICINE_HC_DRAIN_MULT, COMMUNITY_NETWORKS_CO_DRAIN_MULT, LOGISTICS_HUB_SL_DRAIN_MULT,
@@ -202,6 +203,21 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         state.regions[i].civil_order = new_civil;
         emit_breakpoint_events(state, i, InfraSystem::CivilOrder, old_civil, new_civil);
     }
+
+    // --- Collapse supply chain penalty ---
+    // When neighboring regions collapse, the global supply network narrows.
+    // Each collapsed neighbor reduces delivery throughput multiplicatively.
+    for i in 0..num_regions {
+        if state.regions[i].collapsed {
+            state.regions[i].collapse_supply_penalty = 0.0;
+            continue;
+        }
+        let collapsed_neighbors = state.regions[i].connections.iter()
+            .filter(|&&c| state.regions[c].collapsed)
+            .count();
+        state.regions[i].collapse_supply_penalty =
+            (1.0 - COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR).powi(collapsed_neighbors as i32);
+    }
 }
 
 /// Emit GameEvent when infrastructure crosses a breakpoint threshold.
@@ -378,6 +394,37 @@ mod tests {
         assert_eq!(state.regions[0].healthcare_capacity, 0.0);
         assert_eq!(state.regions[0].supply_lines, 0.0);
         assert_eq!(state.regions[0].civil_order, 0.0);
+        assert_eq!(state.regions[0].collapse_supply_penalty, 0.0);
+    }
+
+    #[test]
+    fn collapse_reduces_neighbor_delivery_throughput() {
+        use crate::state::COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR;
+        let mut state = GameState::new_default(42);
+        // NA (idx 0) is connected to SA (idx 1) and Europe (idx 2).
+        // Verify baseline: no collapsed neighbors → penalty = 1.0
+        tick_infrastructure(&mut state);
+        assert!((state.regions[0].collapse_supply_penalty - 1.0).abs() < 0.001,
+            "No collapsed neighbors should give penalty 1.0, got {}", state.regions[0].collapse_supply_penalty);
+
+        // Collapse SA (idx 1) — NA should get a throughput penalty
+        state.regions[1].collapsed = true;
+        tick_infrastructure(&mut state);
+        let expected_one = 1.0 - COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR;
+        assert!((state.regions[0].collapse_supply_penalty - expected_one).abs() < 0.001,
+            "One collapsed neighbor: expected {}, got {}", expected_one, state.regions[0].collapse_supply_penalty);
+
+        // Also collapse Europe (idx 2) — NA now has 2 collapsed neighbors
+        state.regions[2].collapsed = true;
+        tick_infrastructure(&mut state);
+        let expected_two = (1.0 - COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR).powi(2);
+        assert!((state.regions[0].collapse_supply_penalty - expected_two).abs() < 0.001,
+            "Two collapsed neighbors: expected {}, got {}", expected_two, state.regions[0].collapse_supply_penalty);
+
+        // Delivery efficiency should reflect the penalty
+        let eff = state.regions[0].delivery_efficiency();
+        assert!(eff < state.regions[0].supply_lines * state.regions[0].healthcare_capacity,
+            "Delivery efficiency should be reduced by collapse penalty");
     }
 
     #[test]
