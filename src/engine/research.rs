@@ -57,9 +57,13 @@ pub(super) fn start_research(state: &mut GameState, project_idx: usize, double_p
 /// Advance research projects by one tick and handle completions.
 /// Progress scales with diminishing returns: 2x personnel = 1.5x speed (peak),
 /// beyond 2x personnel = negative returns (too many cooks).
-pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
+/// Returns the number of research completions that should trigger board notifications
+/// (DevelopMedicine and BasicResearch completions boost Technocrat satisfaction).
+pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> u32 {
     // Proactively auto-repeat on idle categories
     try_auto_repeat(state);
+
+    let mut board_notify_count: u32 = 0;
 
     let lab_mult = state.lab_speed_multiplier();
     // Biotech sector bonus: best regional bonus boosts research speed
@@ -211,7 +215,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                         .collect();
                 }
                 state.events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
-                super::board::on_research_completed(state);
+                board_notify_count += 1;
 
                 if let Some(corp_idx) = state.medicines.get(m_idx).and_then(|m| m.manufacturer_corp_idx) {
                     if let Some(corp) = state.corporations.get_mut(corp_idx) {
@@ -247,7 +251,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                 if !state.unlocked_techs.contains(&tech) {
                     state.unlocked_techs.push(tech);
                     state.events.push(GameEvent::TechUnlocked { tech });
-                    super::board::on_research_completed(state);
+                    board_notify_count += 1;
                 }
             }
         }
@@ -280,6 +284,8 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
             }
         }
     }
+
+    board_notify_count
 }
 
 /// Try to auto-repeat any repeatable research that has auto-repeat enabled.
