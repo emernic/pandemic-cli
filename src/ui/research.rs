@@ -53,15 +53,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn category_name(track: ResearchCategory) -> &'static str {
-    match track {
+fn category_name(category: ResearchCategory) -> &'static str {
+    match category {
         ResearchCategory::Field => "Field",
         ResearchCategory::Applied => "Applied",
         ResearchCategory::Basic => "Basic",
     }
 }
 
-/// Render the flat research panel with section headers for each track.
+/// Render the flat research panel with section headers for each category.
 fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
@@ -372,9 +372,9 @@ fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind,
     lines.push(Line::from(""));
 }
 
-fn render_confirm(state: &GameState, track: ResearchCategory, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
+fn render_confirm(state: &GameState, category: ResearchCategory, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
-    let projects = state.available_projects(track);
+    let projects = state.available_projects(category);
 
     if let Some(kind) = projects.get(project_idx) {
         let (base_personnel, ticks, funding) = state.effective_costs(kind);
@@ -384,7 +384,7 @@ fn render_confirm(state: &GameState, track: ResearchCategory, project_idx: usize
 
         // Breadcrumb
         lines.push(Line::from(Span::styled(
-            format!("  Research > {} > Confirm", category_name(track)),
+            format!("  Research > {} > Confirm", category_name(category)),
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::from(""));

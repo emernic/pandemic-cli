@@ -109,7 +109,7 @@ pub struct GameState {
     pub auto_resolve_crises: HashMap<String, usize>,
     /// Per-project auto-repeat: when a repeatable project (TrainPersonnel,
     /// ManufactureDoses) completes, automatically restart it if its kind is in
-    /// this set. Replaces the old per-track auto_research toggle.
+    /// this set.
     #[serde(default)]
     pub auto_repeat_research: Vec<ResearchKind>,
     /// Auto-deploy: automatically deploy tested medicines to the worst-affected
@@ -3787,7 +3787,7 @@ pub enum GameEvent {
     CrisisAutoResolved { message: String },
     /// A research project was auto-restarted because auto-repeat is on.
     ResearchAutoRestarted { kind: ResearchKind },
-    /// A research completion on one track unlocked a project on another track.
+    /// A research completion in one category unlocked a project in another category.
     /// Notifies the player to start the next pipeline step manually.
     ResearchHandoff { message: String },
     /// Personnel left due to unpaid wages (funding at $0).
