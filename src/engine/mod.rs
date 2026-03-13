@@ -4421,11 +4421,11 @@ mod tests {
     }
 
     #[test]
-    fn military_takeover_option_a_loses_personnel_gains_pol() {
+    fn corporate_seizure_option_a_loses_personnel_gains_pol() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
         let before_pol = state.resources.board_approval;
-        setup_crisis(&mut state, CrisisKind::MilitaryTakeover { cooperate_loss: 4 }, 0);
+        setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 4 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.personnel, before_personnel - 4,
             "option A should lose scaled personnel");
@@ -5075,13 +5075,13 @@ mod tests {
     }
 
     #[test]
-    fn military_cooperate_schedules_overreach_followup() {
+    fn corporate_cooperate_schedules_overreach_followup() {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
-        setup_crisis(&mut state, CrisisKind::MilitaryTakeover { cooperate_loss: 3 }, 0);
+        setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 3 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.pending_crises.len(), 1);
-        assert!(matches!(after.pending_crises[0].1, CrisisKind::MilitaryOverreach));
+        assert!(matches!(after.pending_crises[0].1, CrisisKind::CorporateOverreach));
     }
 
     #[test]

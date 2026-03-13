@@ -325,10 +325,10 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::WhistleblowerReport { medicine_idx: idx });
     }
 
-    // Military takeover: requires POL < 40% and day > 16
+    // Corporate seizure: requires POL < 40% and day > 16
     if state.resources.board_approval < 0.40 && day > 16.0 {
         let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
-        candidates.push(CrisisKind::MilitaryTakeover { cooperate_loss });
+        candidates.push(CrisisKind::CorporateSeizure { cooperate_loss });
     }
 
     // --- Late-game crisis types (day-gated) ---
@@ -1048,14 +1048,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::MilitaryTakeover { cooperate_loss } => {
+        CrisisKind::CorporateSeizure { cooperate_loss } => {
             CrisisEvent {
-                title: "Military Threatens Takeover".into(),
-                description: "Joint command has issued an ultimatum. They want operational \
-                    authority over your agency, citing security concerns.".into(),
+                title: "Corporate Security Takeover".into(),
+                description: "A board member's corporation has deployed private security to your \
+                    facilities. They are demanding operational authority, citing asset protection.".into(),
                 options: vec![ CrisisOption {
                     label: "Cooperate".into(),
-                    description: format!("Cede {} personnel to military, gain +15% board approval", cooperate_loss),
+                    description: format!("Transfer {} personnel to their oversight, gain +15% board approval", cooperate_loss),
                     cost: None,
                 },
                  {
@@ -1362,13 +1362,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::MilitaryOverreach => {
+        CrisisKind::CorporateOverreach => {
             let resist_cost = scaled_cost(state, 0.25, 200.0, 800.0);
             CrisisEvent {
-                title: "Research Data Classified".into(),
+                title: "Research Data Seized".into(),
                 description:
-                    "The military you cooperated with has classified your pathogen data. \
-                     Civilian researchers are locked out of their own findings.".into(),
+                    "The corporation you cooperated with has reclassified your pathogen data as \
+                     proprietary IP. Your researchers can no longer access their own findings.".into(),
                 options: vec![ CrisisOption {
                     label: "Release the data (−10% board approval)".into(),
                     description: "Override the restriction. Data restored to research teams.".into(),
@@ -1376,11 +1376,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: format!("Legal challenge (¥{:.0})", resist_cost),
-                    description: "Expensive but preserves civilian control".into(),
+                    description: "Sue for access. Preserves research independence.".into(),
                     cost: Some(CrisisCost { funding: resist_cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
-                    label: "Accept the classification".into(),
+                    label: "Accept it".into(),
                     description: "Lose access to your research data. No cost.".into(),
                     cost: None,
                 },
@@ -3020,29 +3020,29 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Continuing deployment despite concerns. Public confidence shaken.".into()
         }
 
-        (CrisisKind::MilitaryTakeover { cooperate_loss }, 0) => {
+        (CrisisKind::CorporateSeizure { cooperate_loss }, 0) => {
             // Cooperate — lose personnel, gain POL
             state.resources.personnel = state.resources.personnel.saturating_sub(*cooperate_loss);
             state.resources.board_approval += 0.15;
-            // Schedule follow-up: military overreach in 4 days
+            // Schedule follow-up: corporate overreach in 4 days
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::MilitaryOverreach));
-            format!("Ceded {} staff to military. Agency retains civilian control.", cooperate_loss)
+            state.pending_crises.push((followup_tick, CrisisKind::CorporateOverreach));
+            format!("Transferred {} staff to corporate oversight. Agency retains nominal control.", cooperate_loss)
         }
-        (CrisisKind::MilitaryTakeover { .. }, 1) => {
+        (CrisisKind::CorporateSeizure { .. }, 1) => {
             // Resist — costs already deducted
-            "Military takeover averted. Independence maintained.".into()
+            "Corporate takeover averted. Independence maintained.".into()
         }
-        (CrisisKind::MilitaryTakeover { .. }, _) => {
+        (CrisisKind::CorporateSeizure { .. }, _) => {
             // Stall — buy time, they may return
             state.resources.board_approval -= 0.05;
             if state.rng_crisis.r#gen::<bool>() {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let cooperate_loss = ((state.resources.personnel as f64 * 0.25).round() as u32).clamp(2, 8);
-                state.pending_crises.push((followup_tick, CrisisKind::MilitaryTakeover { cooperate_loss }));
-                "Negotiations stalled. Military will return.".into()
+                state.pending_crises.push((followup_tick, CrisisKind::CorporateSeizure { cooperate_loss }));
+                "Negotiations stalled. They'll be back.".into()
             } else {
-                "Stalling worked. Military backed down.".into()
+                "Stalling worked. Corporate security withdrew.".into()
             }
         }
 
@@ -3251,24 +3251,24 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Embezzlement tolerated. ¥{:.0} lost. They're still at it.", loss)
         }
 
-        (CrisisKind::MilitaryOverreach, 0) => {
+        (CrisisKind::CorporateOverreach, 0) => {
             // Override restriction — lose POL, data restored to research teams
             state.resources.board_approval -= 0.10;
             "Restriction overridden. Data restored to research teams.".into()
         }
-        (CrisisKind::MilitaryOverreach, 1) => {
+        (CrisisKind::CorporateOverreach, 1) => {
             // Legal challenge — costs already deducted
-            "Legal challenge successful. Civilian control of research restored.".into()
+            "Legal challenge successful. Research independence restored.".into()
         }
-        (CrisisKind::MilitaryOverreach, _) => {
-            // Accept classification — lose research progress
+        (CrisisKind::CorporateOverreach, _) => {
+            // Accept IP claim — lose research progress
             let loss = TICKS_PER_DAY as f64;
             if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
                 proj.progress = (proj.progress - loss).max(0.0);
             } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
-            "Classification accepted. Research data access restricted.".into()
+            "IP claim accepted. Research data access restricted.".into()
         }
 
         // --- Governor archetype crisis resolutions ---
