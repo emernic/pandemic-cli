@@ -100,152 +100,103 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         Style::default().fg(Color::DarkGray),
                     )));
                 }
-            } else if disease.knowledge < KNOWLEDGE_PARTIAL_STATS {
-                // Name known, partial stats + pathogen type (vector not yet known)
-                let mut type_spans = vec![
-                    Span::styled(
-                        format!("    Type: {}", disease.pathogen_type.label()),
-                        Style::default().fg(Color::Cyan),
-                    ),
-                    Span::styled(
-                        format!("  Strain: Gen {}", disease.strain_generation),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ];
-                push_disease_indicators(&mut type_spans, state, i);
-                lines.push(Line::from(type_spans));
-                if disease.pathogen_type == PathogenType::Fungus {
-                    lines.push(Line::from(Span::styled(
-                        "    [!] Degrades medical infrastructure",
-                        Style::default().fg(Color::Yellow),
-                    )));
-                }
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("Infect: {:.0}%", disease.infectivity * 100.0),
-                        Style::default().fg(Color::Red),
-                    ),
-                    Span::raw("  "),
-                    Span::styled("Lethal: ?", Style::default().fg(Color::DarkGray)),
-                    Span::raw("  "),
-                    Span::styled("Recov: ?", Style::default().fg(Color::DarkGray)),
-                ]));
             } else {
-                // Full stats visible + pathogen type + transmission vector
-                let mut type_spans = vec![
+                // ── Identity & biology ──
+                let has_vector = disease.knowledge >= KNOWLEDGE_PARTIAL_STATS;
+                let mut id_spans: Vec<Span> = vec![
                     Span::styled(
-                        format!("    Type: {}", disease.pathogen_type.label()),
+                        format!("    {}", disease.pathogen_type.label()),
                         Style::default().fg(Color::Cyan),
                     ),
-                    Span::styled(
-                        format!("  Vector: {}", disease.transmission.label()),
-                        Style::default().fg(Color::Yellow),
-                    ),
-                    Span::styled(
-                        format!("  Strain: Gen {}", disease.strain_generation),
-                        Style::default().fg(Color::DarkGray),
-                    ),
                 ];
-                push_disease_indicators(&mut type_spans, state, i);
-                lines.push(Line::from(type_spans));
-                if disease.pathogen_type == PathogenType::Fungus {
-                    lines.push(Line::from(Span::styled(
-                        "    [!] Degrades medical infrastructure",
+                if has_vector {
+                    id_spans.push(Span::styled(
+                        format!(" · {}", disease.transmission.label()),
                         Style::default().fg(Color::Yellow),
+                    ));
+                }
+                if disease.strain_generation > 0 {
+                    id_spans.push(Span::styled(
+                        format!(" · Gen {}", disease.strain_generation),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+                lines.push(Line::from(id_spans));
+
+                // Special trait warnings on their own line
+                let warnings = disease_warnings(state, i);
+                for (text, color, bold) in &warnings {
+                    let style = if *bold {
+                        Style::default().fg(*color).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(*color)
+                    };
+                    lines.push(Line::from(Span::styled(
+                        format!("    {text}"),
+                        style,
                     )));
                 }
-                // Full stats visible
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(
-                        format!("Infect: {:.0}%", disease.infectivity * 100.0),
-                        Style::default().fg(Color::Red),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        format!("Lethal: {:.1}%", disease.lethality * 100.0),
-                        Style::default().fg(Color::Magenta),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        format!("Recov: {:.0}%", disease.recovery_rate * 100.0),
-                        Style::default().fg(Color::Green),
-                    ),
-                ]));
-            }
 
-            // Comparative triage data — deaths ranking, CFR, region spread, medicine status
-            if disease.knowledge >= KNOWLEDGE_NAME {
+                lines.push(Line::from(""));
+
+                // ── Impact ──
+                // Lethality (observed case fatality rate)
                 let total_dead = disease_deaths[i];
+                let total_immune: f64 = state.regions.iter()
+                    .filter_map(|r| r.disease_state(i))
+                    .map(|inf| inf.immune)
+                    .sum();
+                // Use screened estimates for infected count (respects fog of war)
+                let total_infected: f64 = state.regions.iter().enumerate()
+                    .filter_map(|(region_idx, region)| {
+                        let inf = region.disease_state(i)?;
+                        if inf.infected + inf.exposed <= 0.0 { return None; }
+                        let shows_exposed = state.screening_shows_exposed(region_idx);
+                        let total_real = if shows_exposed {
+                            region.detected_infected(&state.diseases)
+                        } else {
+                            region.detected_symptomatic(&state.diseases)
+                        };
+                        let this_disease = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
+                        let proportion = if total_real > 0.0 { this_disease / total_real } else { 0.0 };
+                        Some(region.estimated_infected * proportion)
+                    })
+                    .sum();
+                let resolved = total_dead + total_immune;
 
-                // Deaths + share of total deaths — primary triage signal
+                let lethal_span = if disease.knowledge >= KNOWLEDGE_PARTIAL_STATS && resolved > 0.0 {
+                    let cfr = (total_dead / resolved) * 100.0;
+                    let color = if cfr > 30.0 { Color::Red }
+                        else if cfr > 10.0 { Color::Yellow }
+                        else { Color::Green };
+                    Span::styled(format!("Lethality: {cfr:.0}%"), Style::default().fg(color))
+                } else {
+                    Span::styled("Lethality: ?", Style::default().fg(Color::DarkGray))
+                };
+
+                // Deaths + share of total
                 let death_color = if grand_total_deaths > 0.0 {
                     let share = total_dead / grand_total_deaths;
                     if share >= 0.5 { Color::Red }
                     else if share >= 0.25 { Color::Yellow }
                     else { Color::White }
                 } else { Color::DarkGray };
-                let death_text = format_deaths_line(total_dead, grand_total_deaths);
-                lines.push(Line::from(vec![
+
+                let impact_spans: Vec<Span> = vec![
                     Span::raw("    "),
-                    Span::styled(death_text, Style::default().fg(death_color)),
-                ]));
-
-                // Case fatality rate (resolved cases that died)
-                let total_immune: f64 = state.regions.iter()
-                    .filter_map(|r| r.disease_state(i))
-                    .map(|inf| inf.immune)
-                    .sum();
-                let resolved = total_dead + total_immune;
-                let cfr_span = if resolved > 0.0 {
-                    let cfr = (total_dead / resolved) * 100.0;
-                    let color = if cfr > 30.0 { Color::Red }
-                        else if cfr > 10.0 { Color::Yellow }
-                        else { Color::Green };
-                    Span::styled(format!("CFR: {cfr:.0}%"), Style::default().fg(color))
-                } else {
-                    Span::styled("CFR: ?", Style::default().fg(Color::DarkGray))
-                };
-
-                // Region spread count
-                let order = grid_reading_order(state.regions.len());
-                let affected: Vec<&str> = order.iter()
-                    .filter_map(|&idx| state.regions.get(idx))
-                    .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
-                    .map(|r| r.name.as_str())
-                    .collect();
-                let spread_color = if affected.len() >= 4 { Color::Red }
-                    else if affected.len() >= 2 { Color::Yellow }
-                    else { Color::White };
-
-                lines.push(Line::from(vec![
+                    lethal_span,
                     Span::raw("    "),
-                    cfr_span,
-                    Span::raw("  "),
                     Span::styled(
-                        format!("Spread: {}/{}", affected.len(), state.regions.len()),
-                        Style::default().fg(spread_color),
+                        format!("Infected~{}", format_number(total_infected)),
+                        Style::default().fg(Color::LightRed),
                     ),
+                    Span::raw("    "),
                     Span::styled(
-                        format!("  ({})", affected.join(", ")),
-                        Style::default().fg(Color::DarkGray),
+                        format_deaths_line(total_dead, grand_total_deaths),
+                        Style::default().fg(death_color),
                     ),
-                ]));
-
-                // Medicine status
-                let med_status = medicine_status_for_disease(state, i);
-                let (med_text, med_color) = match med_status {
-                    MedStatus::Deployed => ("Medicine: deployed", Color::Green),
-                    MedStatus::Available => ("Medicine: available (not deployed)", Color::Cyan),
-                    MedStatus::Tested => ("Medicine: tested, needs doses", Color::Blue),
-                    MedStatus::InDevelopment => ("Medicine: in development", Color::Yellow),
-                    MedStatus::None => ("Medicine: none", Color::Red),
-                };
-                lines.push(Line::from(Span::styled(
-                    format!("    {med_text}"),
-                    Style::default().fg(med_color),
-                )));
+                ];
+                lines.push(Line::from(impact_spans));
 
                 // 5-day death projection (requires EpidemiologicalForecasting tech)
                 if state.has_forecasting() {
@@ -260,41 +211,72 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         )));
                     }
                 }
-            }
 
-            // Sequence homology: Rapid Sequencing reveals shared genetic markers between
-            // wave-coordinated diseases. Shows when knowledge >= 0.66 on both diseases.
-            // Factual data only — no commentary. Player connects the dots.
-            if state.unlocked_techs.contains(&BasicTech::RapidSequencing)
-                && disease.knowledge >= KNOWLEDGE_PARTIAL_STATS
-            {
-                if let Some(group) = disease.sequence_group {
-                    for (other_idx, other) in state.diseases.iter().enumerate() {
-                        if other_idx != i
-                            && other.sequence_group == Some(group)
-                            && other.knowledge >= KNOWLEDGE_PARTIAL_STATS
-                        {
-                            lines.push(Line::from(Span::styled(
-                                format!("    Shares sequences with {}", other.display_name(other_idx)),
-                                Style::default().fg(Color::Magenta),
-                            )));
+                // Region spread
+                let order = grid_reading_order(state.regions.len());
+                let affected: Vec<&str> = order.iter()
+                    .filter_map(|&idx| state.regions.get(idx))
+                    .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
+                    .map(|r| r.name.as_str())
+                    .collect();
+                let spread_color = if affected.len() >= 4 { Color::Red }
+                    else if affected.len() >= 2 { Color::Yellow }
+                    else { Color::White };
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        format!("Spread: {}/{} regions", affected.len(), state.regions.len()),
+                        Style::default().fg(spread_color),
+                    ),
+                    Span::styled(
+                        format!("  ({})", affected.join(", ")),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+
+                lines.push(Line::from(""));
+
+                // ── Response status ──
+                let med_status = medicine_status_for_disease(state, i);
+                let (med_text, med_color) = match med_status {
+                    MedStatus::Deployed => ("Medicine: deployed", Color::Green),
+                    MedStatus::Available => ("Medicine: available (not deployed)", Color::Cyan),
+                    MedStatus::Tested => ("Medicine: tested, needs doses", Color::Blue),
+                    MedStatus::InDevelopment => ("Medicine: in development", Color::Yellow),
+                    MedStatus::None => ("Medicine: none", Color::Red),
+                };
+                lines.push(Line::from(Span::styled(
+                    format!("    {med_text}"),
+                    Style::default().fg(med_color),
+                )));
+
+                // Knowledge bar
+                if disease.knowledge > 0.0 && disease.knowledge < 1.0 {
+                    let pct = (disease.knowledge * 100.0).min(100.0);
+                    lines.push(Line::from(Span::styled(
+                        format!("    Knowledge: {:.0}%", pct),
+                        Style::default().fg(Color::Blue),
+                    )));
+                }
+
+                // Sequence homology
+                if state.unlocked_techs.contains(&BasicTech::RapidSequencing)
+                    && disease.knowledge >= KNOWLEDGE_PARTIAL_STATS
+                {
+                    if let Some(group) = disease.sequence_group {
+                        for (other_idx, other) in state.diseases.iter().enumerate() {
+                            if other_idx != i
+                                && other.sequence_group == Some(group)
+                                && other.knowledge >= KNOWLEDGE_PARTIAL_STATS
+                            {
+                                lines.push(Line::from(Span::styled(
+                                    format!("    Shares sequences with {}", other.display_name(other_idx)),
+                                    Style::default().fg(Color::Magenta),
+                                )));
+                            }
                         }
                     }
                 }
-            }
-
-            // Show knowledge bar
-            if disease.knowledge > 0.0 {
-                let pct = (disease.knowledge * 100.0).min(100.0);
-                let color = if disease.knowledge >= 1.0 {
-                    Color::Green
-                } else {
-                    Color::Blue
-                };
-                lines.push(Line::from(Span::styled(
-                    format!("    Knowledge: {:.0}%", pct),
-                    Style::default().fg(color),
-                )));
             }
 
             if selected && disease.knowledge >= KNOWLEDGE_NAME {
@@ -337,40 +319,31 @@ fn format_deaths_line(deaths: f64, grand_total: f64) -> String {
     }
 }
 
-/// Push disease warning indicators: outdated medicines, resistance, containment
-/// adaptation, and sequence homology. Only shows warnings that require player action
-/// or provide actionable intelligence.
-fn push_disease_indicators(
-    spans: &mut Vec<Span<'static>>,
+/// Collect disease warning indicators as (text, color, bold) tuples.
+/// Callers decide how to display them (inline, stacked, etc.).
+fn disease_warnings(
     state: &GameState,
     disease_idx: usize,
-) {
+) -> Vec<(String, Color, bool)> {
     let disease = &state.diseases[disease_idx];
+    let mut warnings = Vec::new();
     if disease.pathogen_type == PathogenType::RnaVirus {
-        spans.push(Span::styled(
-            "  Causes social disruption".to_string(),
-            Style::default().fg(Color::Yellow),
-        ));
+        warnings.push(("Causes social disruption".to_string(), Color::Yellow, false));
+    }
+    if disease.pathogen_type == PathogenType::Fungus {
+        warnings.push(("Degrades infrastructure".to_string(), Color::Yellow, false));
     }
     if !disease.pathogen_type.is_treatable() {
-        spans.push(Span::styled(
-            "  UNTREATABLE".to_string(),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        ));
-        return; // No medicine indicators relevant for untreatable diseases
+        warnings.push(("UNTREATABLE".to_string(), Color::Red, true));
+        return warnings; // No medicine indicators relevant for untreatable diseases
     }
     if state.has_outdated_medicine(disease_idx) {
-        spans.push(Span::styled(
-            "  Medicines outdated!".to_string(),
-            Style::default().fg(Color::Red),
-        ));
+        warnings.push(("Medicines outdated!".to_string(), Color::Red, false));
     }
     if state.has_resistance_surveillance() && state.has_resistant_medicine(disease_idx) {
-        spans.push(Span::styled(
-            "  Resistance building!".to_string(),
-            Style::default().fg(Color::Yellow),
-        ));
+        warnings.push(("Resistance building!".to_string(), Color::Yellow, false));
     }
+    warnings
 }
 
 enum MedStatus {
