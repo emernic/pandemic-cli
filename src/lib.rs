@@ -190,8 +190,17 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
             }
             // Toggle "Assign 2x personnel" on research confirm screen (pure UI state)
-            else if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
-                *double_personnel = !*double_personnel;
+            else if new.ui.open_panel == Panel::Research {
+                if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
+                    *double_personnel = !*double_personnel;
+                } else if matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+                    // Toggle auto-research based on which track the cursor is on
+                    let items = new.research_flat_items();
+                    let track = items.get(new.ui.panel_selection).and_then(|item| item.track());
+                    if let Some(track) = track {
+                        execute_command(&mut new, &GameCommand::ToggleAutoResearch { track });
+                    }
+                }
             }
             // Toggle auto-deploy when browsing medicines
             else if new.ui.open_panel == Panel::Medicines
@@ -200,14 +209,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let unlocked = new.unlocked_medicine_indices();
                 if let Some(&med_idx) = unlocked.get(new.ui.panel_selection) {
                     execute_command(&mut new, &GameCommand::ToggleAutoDeploy { med_idx });
-                }
-            }
-            // Toggle auto-research based on which track the cursor is on
-            else if matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
-                let items = new.research_flat_items();
-                let track = items.get(new.ui.panel_selection).and_then(|item| item.track());
-                if let Some(track) = track {
-                    execute_command(&mut new, &GameCommand::ToggleAutoResearch { track });
                 }
             }
         }
@@ -668,6 +669,22 @@ mod tests {
         let state = apply_action(&state, &Action::TogglePause); // pause
         let state = apply_action(&state, &Action::SpeedUp);
         assert_eq!(state.ui.speed_multiplier, 1); // unchanged
+    }
+
+    #[test]
+    fn x_key_does_not_toggle_auto_research_from_wrong_panel() {
+        let mut state = GameState::new_default(42);
+        // Open research panel, which sets research_ui = BrowseAll
+        state = apply_action(&state, &Action::OpenResearch);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        // Switch to policy panel — research_ui stays BrowseAll but open_panel changes
+        state = apply_action(&state, &Action::OpenPolicy);
+        assert_eq!(state.ui.open_panel, Panel::Policy);
+        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        // Press X — should NOT toggle auto-research
+        let before = state.auto_research;
+        state = apply_action(&state, &Action::ToggleExtra);
+        assert_eq!(state.auto_research, before, "X on policy panel must not toggle auto-research");
     }
 
     #[test]
