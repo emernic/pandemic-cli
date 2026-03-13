@@ -1872,7 +1872,7 @@ mod tests {
         // Strategy: treatment first (removes ~efficacy fraction of infected per deploy),
         // vaccination second (only with targeted meds — BS vaccination is a dose trap).
         // Prioritize worst-hit regions.
-        use crate::state::{ResearchCategory, ResearchKind, DeployTarget};
+        use crate::state::{ResearchKind, DeployTarget};
 
         fn simulate_competent(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
