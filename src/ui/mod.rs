@@ -544,9 +544,7 @@ pub(crate) fn process_events(state: &mut GameState) {
 
 pub fn render(f: &mut Frame, state: &GameState) {
     let area = f.area();
-    if !state.ui.size_warning_dismissed
-        && (area.width < MIN_COLS || area.height < MIN_ROWS)
-    {
+    if is_size_warning_active(state, area.width, area.height) {
         render_size_warning(f, area);
         return;
     }
