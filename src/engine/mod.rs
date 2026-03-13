@@ -444,6 +444,26 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                     let crisis = crisis::build_crisis_event(&new, kind);
                     crisis::activate_crisis(&mut new, crisis);
                 }
+            } else if let CrisisKind::ArkProtocol { ref mut region_idx } = kind {
+                // Validate Ark target: if region collapsed since queuing, re-pick
+                // the best surviving region by survival fraction.
+                if new.regions[*region_idx].collapsed {
+                    let best = new.regions.iter().enumerate()
+                        .filter(|(_, r)| !r.collapsed)
+                        .max_by(|(_, a), (_, b)| {
+                            let frac = |r: &crate::state::Region| r.alive() / (r.population as f64).max(1.0);
+                            frac(a).partial_cmp(&frac(b)).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .map(|(i, _)| i);
+                    if let Some(new_idx) = best {
+                        *region_idx = new_idx;
+                    }
+                }
+                // Only fire if target is valid (uncollapsed).
+                if !new.regions[*region_idx].collapsed {
+                    let crisis = crisis::build_crisis_event(&new, kind);
+                    crisis::activate_crisis(&mut new, crisis);
+                }
             } else if matches!(kind,
                 CrisisKind::LoyaltyRaise { template_id } | CrisisKind::ContractDemand { template_id }
                     if !new.contracts.iter().any(|c| c.template_id == template_id))
@@ -4254,6 +4274,51 @@ mod tests {
             .any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. }));
         assert!(!refugee_pending,
             "refugee crisis should be consumed from pending even when dropped");
+    }
+
+    #[test]
+    fn ark_protocol_reroutes_if_target_collapsed() {
+        let mut state = GameState::new_default(42);
+        state.tick = 100;
+        state.last_contract_offer_tick = state.tick;
+        // Collapse the originally-chosen Ark target (region 0) plus one more
+        // so the 2+ collapsed threshold is met.
+        state.regions[0].collapsed = true;
+        state.regions[1].collapsed = true;
+        // Queue ArkProtocol targeting the now-collapsed region 0.
+        state.pending_crises.push((100, CrisisKind::ArkProtocol { region_idx: 0 }));
+        let after = tick(&state);
+        // Should fire with a re-picked surviving region.
+        assert!(after.active_crisis.is_some(),
+            "ArkProtocol should fire after re-routing to surviving region");
+        if let Some(ref crisis) = after.active_crisis {
+            if let CrisisKind::ArkProtocol { region_idx } = crisis.kind {
+                assert!(!after.regions[region_idx].collapsed,
+                    "Ark target should be a surviving region, got collapsed region {}", region_idx);
+            } else {
+                panic!("expected ArkProtocol crisis");
+            }
+        }
+    }
+
+    #[test]
+    fn ark_protocol_dropped_if_all_regions_collapsed() {
+        let mut state = GameState::new_default(42);
+        state.tick = 100;
+        state.last_contract_offer_tick = state.tick;
+        // Collapse all regions.
+        for r in state.regions.iter_mut() {
+            r.collapsed = true;
+        }
+        state.pending_crises.push((100, CrisisKind::ArkProtocol { region_idx: 0 }));
+        let after = tick(&state);
+        // Should be consumed but not fired.
+        let ark_active = after.active_crisis.as_ref()
+            .is_some_and(|c| matches!(c.kind, CrisisKind::ArkProtocol { .. }));
+        assert!(!ark_active, "ArkProtocol should not fire when all regions collapsed");
+        let ark_pending = after.pending_crises.iter()
+            .any(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
+        assert!(!ark_pending, "ArkProtocol should be consumed from pending");
     }
 
     #[test]
