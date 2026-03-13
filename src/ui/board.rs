@@ -171,9 +171,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                                 format!("Demands: Protect {} economy", r.name)
                             })
                     }
-                    BoardRole::IndependentAdvisor => {
-                        Some("Demands: Reduce global death toll".to_string())
-                    }
                 };
                 if let Some(text) = demand_text {
                     lines.push(Line::from(Span::styled(

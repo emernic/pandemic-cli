@@ -1530,8 +1530,6 @@ pub enum BoardRole {
     CorporateLeader { corp_idx: usize },
     /// Also a regional governor. Satisfaction tracks regional GDP.
     RegionGovernor { region_idx: usize },
-    /// Independent figure with global concerns. Satisfaction tracks overall death rate.
-    IndependentAdvisor,
 }
 
 /// Personality archetype for corporate board members.
@@ -1589,7 +1587,7 @@ pub enum ModifierSource {
     RegionalGdp,
     /// Research slot utilization (Technocrat personality).
     ResearchUtilization,
-    /// Global population survival rate (Humanitarian personality / IndependentAdvisor).
+    /// Global population survival rate (Humanitarian personality).
     GlobalSurvival,
     /// Whether the player owns shares in the member's corp (Dealmaker personality).
     PlayerInvestment,

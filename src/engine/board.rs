@@ -210,12 +210,6 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                     value: gdp - 0.50,
                 });
             }
-            BoardRole::IndependentAdvisor => {
-                continuous.push(SatisfactionModifier {
-                    source: ModifierSource::GlobalSurvival,
-                    value: survival_rate - 0.50,
-                });
-            }
         }
 
         // Insert continuous modifiers at the front so they display first
