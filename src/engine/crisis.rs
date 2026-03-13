@@ -278,13 +278,14 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::TrialShortcut { disease_idx: d_idx, medicine_idx: m_idx });
     }
 
-    // Vaccine hesitancy: requires any unlocked medicine
-    let regions_non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-        .filter(|(_, r)| !r.collapsed)
+    // Vaccine hesitancy: requires any unlocked medicine AND region with active infections
+    // (noncompliance only makes sense where medical directives are being issued)
+    let regions_with_medical_activity: Vec<usize> = state.regions.iter().enumerate()
+        .filter(|(_, r)| !r.collapsed && r.infections.iter().any(|i| i.infected > 100.0))
         .map(|(i, _)| i)
         .collect();
-    if state.medicines.iter().any(|m| m.unlocked) && !regions_non_collapsed.is_empty() {
-        let idx = regions_non_collapsed[rng.r#gen::<usize>() % regions_non_collapsed.len()];
+    if state.medicines.iter().any(|m| m.unlocked) && !regions_with_medical_activity.is_empty() {
+        let idx = regions_with_medical_activity[rng.r#gen::<usize>() % regions_with_medical_activity.len()];
         candidates.push(CrisisKind::VaccineHesitancy { region_idx: idx });
     }
 
@@ -341,14 +342,15 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // --- Late-game crisis types (day-gated) ---
 
-    // Cult blockade: requires day > 24, deployed medicine exists
+    // Cult blockade: requires day > 24, deployed medicine exists, region has active infections
+    // (supply route blockade only makes sense where deliveries are actually happening)
     if day > 24.0 && state.medicines.iter().any(|m| m.unlocked && m.doses > 0.0) {
-        let non_collapsed: Vec<usize> = state.regions.iter().enumerate()
-            .filter(|(_, r)| !r.collapsed)
+        let infected_non_collapsed: Vec<usize> = state.regions.iter().enumerate()
+            .filter(|(_, r)| !r.collapsed && r.infections.iter().any(|i| i.infected > 100.0))
             .map(|(i, _)| i)
             .collect();
-        if !non_collapsed.is_empty() {
-            let idx = non_collapsed[rng.r#gen::<usize>() % non_collapsed.len()];
+        if !infected_non_collapsed.is_empty() {
+            let idx = infected_non_collapsed[rng.r#gen::<usize>() % infected_non_collapsed.len()];
             candidates.push(CrisisKind::CultBlockade { region_idx: idx });
         }
     }
