@@ -105,6 +105,7 @@ pub(super) fn generate_corporations(state: &mut GameState) {
                 region_idx: r_idx,
                 base_revenue,
                 revenue: base_revenue,
+                prev_revenue: base_revenue,
                 operating_costs,
                 reserves,
                 max_reserves: reserves,
@@ -184,105 +185,109 @@ pub(super) fn assign_manufacturers(state: &mut GameState) {
     }
 }
 
-/// Update corporate finances each tick. Called from tick().
+/// Update corporate finances each tick via sector competition pools.
 ///
-/// For each non-bankrupt corporation:
-/// 1. Compute revenue based on regional conditions and policy effects
-/// 2. Deduct operating costs from revenue to get profit
-/// 3. Add/subtract profit from reserves
-/// 4. If reserves hit 0, the corp goes bankrupt (permanent)
+/// Revenue flows from GDP: sector_pool × (company_capacity / total_capacity).
+/// Each corp's capacity = base_revenue × region.gdp_fraction ^ sector.crisis_exposure.
+/// When a competitor's region tanks, surviving peers capture more of the pool.
 pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
-    let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
-    if total_pop <= 0.0 {
-        return;
+    // Handle collapsed regions first — bankrupt all corps in collapsed regions.
+    for c_idx in 0..state.corporations.len() {
+        if state.corporations[c_idx].bankrupt {
+            continue;
+        }
+        let r_idx = state.corporations[c_idx].region_idx;
+        if state.regions[r_idx].collapsed {
+            state.corporations[c_idx].bankrupt = true;
+            state.corporations[c_idx].bankrupt_at_tick = Some(state.tick);
+            state.corporations[c_idx].revenue = 0.0;
+            state.corporations[c_idx].reserves = 0.0;
+            state.events.push(GameEvent::CorporationBankrupt {
+                corp_idx: c_idx,
+                region_idx: r_idx,
+            });
+        }
     }
 
+    // Global GDP fraction: sum of all regions' GDP / sum of all regions' base GDP.
+    let total_base_gdp: f64 = state.regions.iter().map(|r| r.base_gdp).sum();
+    let total_gdp: f64 = state.regions.iter().map(|r| r.gdp).sum();
+    let global_gdp_frac = if total_base_gdp > 0.0 {
+        (total_gdp / total_base_gdp).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    // Compute revenue via sector competition pools.
+    let sectors = [
+        CorporationSector::Energy,
+        CorporationSector::Logistics,
+        CorporationSector::Biotech,
+        CorporationSector::Mining,
+        CorporationSector::DataInfra,
+        CorporationSector::Automation,
+    ];
+
+    for &sector in &sectors {
+        // Collect indices of non-bankrupt corps in this sector.
+        let members: Vec<usize> = (0..state.corporations.len())
+            .filter(|&i| state.corporations[i].sector == sector && !state.corporations[i].bankrupt)
+            .collect();
+
+        if members.is_empty() {
+            continue;
+        }
+
+        // Sector pool: total base revenue × global GDP health.
+        let sector_base: f64 = members.iter()
+            .map(|&i| state.corporations[i].base_revenue)
+            .sum();
+        let sector_pool = sector_base * global_gdp_frac;
+
+        // Each corp's competitive capacity = base_revenue × gdp_fraction ^ crisis_exposure.
+        let capacities: Vec<f64> = members.iter()
+            .map(|&i| {
+                let gdp_frac = state.regions[state.corporations[i].region_idx].gdp_fraction();
+                state.corporations[i].base_revenue * gdp_frac.powf(sector.crisis_exposure())
+            })
+            .collect();
+
+        let total_capacity: f64 = capacities.iter().sum();
+        if total_capacity <= 0.0 {
+            for &i in &members {
+                state.corporations[i].revenue = 0.0;
+            }
+            continue;
+        }
+
+        // Distribute sector pool proportionally.
+        for (j, &i) in members.iter().enumerate() {
+            let share = capacities[j] / total_capacity;
+            state.corporations[i].revenue = (sector_pool * share).max(0.0);
+        }
+    }
+
+    // Update reserves for all non-bankrupt corps.
     for c_idx in 0..state.corporations.len() {
         if state.corporations[c_idx].bankrupt {
             continue;
         }
 
-        let r_idx = state.corporations[c_idx].region_idx;
-        let region = &state.regions[r_idx];
-
-        if region.collapsed {
-            // Collapsed region: all corps immediately bankrupt
-            state.corporations[c_idx].bankrupt = true;
-            state.corporations[c_idx].bankrupt_at_tick = Some(state.tick);
-            state.corporations[c_idx].revenue = 0.0;
-            state.corporations[c_idx].reserves = 0.0;
-            state.events.push(GameEvent::CorporationBankrupt {
-                corp_idx: c_idx,
-                region_idx: r_idx,
-            });
-            continue;
-        }
-
-        let sector = state.corporations[c_idx].sector;
-        let base_revenue = state.corporations[c_idx].base_revenue;
-
-        // Workforce factor: based on healthy fraction of population
-        let pop = region.population as f64;
-        let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
-        let incapacitated = region.dead + infected * crate::state::INFECTED_INCAPACITATION_RATE;
-        let healthy_frac = ((pop - incapacitated) / pop).clamp(0.0, 1.0);
-        let workforce_factor =
-            1.0 - (1.0 - healthy_frac) * sector.workforce_sensitivity();
-
-        // Infrastructure factors
-        let hc_factor =
-            1.0 - (1.0 - region.healthcare_capacity) * sector.healthcare_sensitivity();
-        let sl_factor =
-            1.0 - (1.0 - region.supply_lines) * sector.supply_line_sensitivity();
-        let co_factor =
-            1.0 - (1.0 - region.civil_order) * sector.civil_order_sensitivity();
-
-        // Policy factors
-        let policies = state.policies.get(r_idx);
-        let policy_factor = if let Some(p) = policies {
-            let mut factor = 1.0;
-            if p.travel_ban {
-                factor *= sector.travel_ban_factor();
-            }
-            if p.quarantine {
-                factor *= sector.quarantine_factor();
-            }
-            if p.border_controls {
-                factor *= sector.border_controls_factor();
-            }
-            if p.discourage_hosp {
-                factor *= sector.discourage_hosp_factor();
-            }
-            factor
-        } else {
-            1.0
-        };
-
-        let revenue = base_revenue
-            * workforce_factor
-            * hc_factor
-            * sl_factor
-            * co_factor
-            * policy_factor;
-
-        state.corporations[c_idx].revenue = revenue.max(0.0);
-
-        // Update reserves: profit per tick
+        let revenue = state.corporations[c_idx].revenue;
         let profit_per_tick =
             (revenue - state.corporations[c_idx].operating_costs) / TICKS_PER_DAY;
         state.corporations[c_idx].reserves += profit_per_tick;
 
-        // Cap reserves at max
         if state.corporations[c_idx].reserves > state.corporations[c_idx].max_reserves {
             state.corporations[c_idx].reserves = state.corporations[c_idx].max_reserves;
         }
 
-        // Bankruptcy check
         if state.corporations[c_idx].reserves <= 0.0 {
             state.corporations[c_idx].reserves = 0.0;
             state.corporations[c_idx].bankrupt = true;
             state.corporations[c_idx].bankrupt_at_tick = Some(state.tick);
             state.corporations[c_idx].revenue = 0.0;
+            let r_idx = state.corporations[c_idx].region_idx;
             state.events.push(GameEvent::CorporationBankrupt {
                 corp_idx: c_idx,
                 region_idx: r_idx,
@@ -290,21 +295,20 @@ pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chach
         }
     }
 
-    // Update share prices once per day based on revenue performance + noise.
+    // Update share prices once per day.
     if state.tick > 0 && state.tick % (TICKS_PER_DAY as u64) == 0 {
         tick_share_prices(state, rng_misc);
     }
 }
 
-/// Update share prices for all corporations.
-/// Price = f(revenue_ratio, reserves_fraction) + random walk noise.
-/// Called once per day from tick_corporations.
+/// Three-term stock price model: gravity + signal + variable volatility.
+/// Gravity weakly pulls toward fair value (5%/day). Signal creates trending
+/// from revenue changes. Volatility scales with the magnitude of change.
 fn tick_share_prices(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     for c_idx in 0..state.corporations.len() {
         let corp = &state.corporations[c_idx];
 
         if corp.bankrupt {
-            // Bankrupt corps crash to near-zero
             state.corporations[c_idx].share_price = 0.01;
             state.corporations[c_idx].price_history.push(0.01);
             if state.corporations[c_idx].price_history.len() > PRICE_HISTORY_MAX {
@@ -313,23 +317,38 @@ fn tick_share_prices(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8R
             continue;
         }
 
-        let revenue_ratio = if corp.base_revenue > 0.0 {
-            corp.revenue / corp.base_revenue
+        let base_revenue = corp.base_revenue;
+        let revenue = corp.revenue;
+        let prev_revenue = corp.prev_revenue;
+        let ipo_price = corp.ipo_price;
+        let old_price = corp.share_price;
+
+        let revenue_ratio = if base_revenue > 0.0 {
+            revenue / base_revenue
         } else {
             0.0
         };
-        let reserves_frac = corp.reserves_fraction();
 
-        // Fair value: IPO price × weighted performance
-        let fair_value = corp.ipo_price * (0.6 * revenue_ratio + 0.4 * reserves_frac);
+        let fair_value = ipo_price * revenue_ratio;
 
-        // Mean-revert toward fair value with random walk
-        let old_price = corp.share_price;
-        let reversion = 0.15 * (fair_value - old_price);
-        let noise = (rng_misc.r#gen::<f64>() - 0.5) * old_price * 0.08;
-        let new_price = (old_price + reversion + noise).max(0.01);
+        // Gravity: weak pull toward fair value (5%/day)
+        let gravity = 0.05 * (fair_value - old_price) / old_price.max(0.01);
+
+        // Signal: revenue change creates trending
+        let signal = if base_revenue > 0.0 {
+            (revenue - prev_revenue) / base_revenue
+        } else {
+            0.0
+        };
+
+        // Variable volatility: calm when stable, wild during crises
+        let volatility = 0.04 + signal.abs() * 3.0;
+        let noise = (rng_misc.r#gen::<f64>() - 0.5) * volatility;
+
+        let new_price = (old_price * (1.0 + gravity + signal + noise)).max(0.01);
 
         state.corporations[c_idx].share_price = new_price;
+        state.corporations[c_idx].prev_revenue = revenue;
         state.corporations[c_idx].price_history.push(new_price);
         if state.corporations[c_idx].price_history.len() > PRICE_HISTORY_MAX {
             state.corporations[c_idx].price_history.remove(0);
