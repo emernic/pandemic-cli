@@ -967,6 +967,36 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (success, msg) = contracts::cancel_contract(state, *board_member_idx);
             CommandResult { message: msg, success }
         }
+        GameCommand::BailoutCorporation { corp_idx } => {
+            if *corp_idx >= state.corporations.len() {
+                return CommandResult { message: Some("Invalid corporation".to_string()), success: false };
+            }
+            let corp = &state.corporations[*corp_idx];
+            if corp.bankrupt {
+                return CommandResult { message: Some("Corporation is bankrupt — bailout not possible".to_string()), success: false };
+            }
+            let cost = corp.bailout_cost();
+            if state.resources.funding < cost {
+                return CommandResult {
+                    message: Some(format!(
+                        "Insufficient funds: need ¥{:.0}, have ¥{:.0}",
+                        cost, state.resources.funding
+                    )),
+                    success: false,
+                };
+            }
+            state.resources.funding -= cost;
+            let max_reserves = state.corporations[*corp_idx].max_reserves;
+            state.corporations[*corp_idx].reserves = max_reserves;
+            let name = state.corporations[*corp_idx].name.clone();
+            CommandResult {
+                message: Some(format!(
+                    "Bailout: ¥{:.0} injected into {}. Reserves restored to full.",
+                    cost, name
+                )),
+                success: true,
+            }
+        }
     }
 }
 

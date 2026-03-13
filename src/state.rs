@@ -1258,6 +1258,13 @@ impl Corporation {
         self.revenue / TICKS_PER_DAY * CORPORATE_TAX_RATE
     }
 
+    /// Cost to bail out this corporation (refill reserves to max).
+    /// Roughly 10 days of operating costs — expensive enough to be a real decision,
+    /// cheap enough that saving a critical corporation is sometimes worth it.
+    pub fn bailout_cost(&self) -> f64 {
+        (self.operating_costs * 10.0).round()
+    }
+
     /// Days until bankruptcy at current burn rate. None if not burning reserves.
     pub fn days_of_runway(&self) -> Option<f64> {
         if self.bankrupt { return None; }
@@ -4040,6 +4047,8 @@ pub enum GameCommand {
     /// Cancel an active contract by board member index. Frees the contract slot
     /// but applies a satisfaction penalty to the offering member.
     CancelContract { board_member_idx: usize },
+    /// Inject funding into a corporation's reserves to prevent bankruptcy.
+    BailoutCorporation { corp_idx: usize },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -4467,6 +4476,8 @@ pub enum LedgerUiState {
     ConfirmBuy { corp_idx: usize },
     /// Confirm a sell order for the selected corporation.
     ConfirmSell { corp_idx: usize },
+    /// Confirm a bailout (reserve injection) for the selected corporation.
+    ConfirmBailout { corp_idx: usize },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -4710,7 +4721,7 @@ impl UiState {
             }
             Panel::Ledger => {
                 match &self.ledger_ui {
-                    Some(LedgerUiState::ConfirmBuy { .. }) | Some(LedgerUiState::ConfirmSell { .. }) => {
+                    Some(LedgerUiState::ConfirmBuy { .. }) | Some(LedgerUiState::ConfirmSell { .. }) | Some(LedgerUiState::ConfirmBailout { .. }) => {
                         self.ledger_ui = Some(LedgerUiState::BrowseStocks);
                         self.panel_selection = 0;
                     }
