@@ -559,7 +559,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Accept losses".into(),
-                    description: format!("Lose {} doses. No cost.", crate::format_number(loss)),
+                    description: format!("Lose {} doses", crate::format_number(loss)),
                     cost: None,
                 },
                  {
@@ -3387,7 +3387,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
             }
-            "Ignored the broadcast. The accusations faded. Governor relations stable.".into()
+            "Ignored the broadcast. The accusations faded. Governor cooperation improved.".into()
         }
         (CrisisKind::GovernorBlowhard { region_idx }, _) => {
             // Counter-broadcast — gain approval but antagonize governor
