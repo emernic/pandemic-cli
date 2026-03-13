@@ -294,9 +294,6 @@ pub const BASE_FUNDING_INCOME: f64 = 5.4;
 /// With 2 contracts (~¥360/day), gross ~¥1008/day → ~¥864/day net.
 /// History: 0.10 made training a trap (50% of income); 0.03 doubled income, trivializing economy.
 pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
-/// Fraction of infected people who are too sick to contribute economically.
-/// 70% are incapacitated (hospitalized, quarantined, bedridden); 30% are mild/asymptomatic.
-pub const INFECTED_INCAPACITATION_RATE: f64 = 0.7;
 pub const TRAVEL_BAN_COST: f64 = 0.7;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
@@ -1136,101 +1133,18 @@ impl CorporationSector {
         }
     }
 
-    /// How much workforce loss (from infection/death) reduces revenue.
-    /// 0.0 = immune to workforce loss, 1.0 = fully proportional.
-    pub fn workforce_sensitivity(&self) -> f64 {
+    /// Exponent applied to regional `gdp_fraction` when computing a corporation's
+    /// competitive capacity in its sector pool. When GDP = 1.0, the exponent has
+    /// no effect (1.0^anything = 1.0). When GDP drops, exposed sectors amplify
+    /// the damage nonlinearly. Replaces the old 60-value sensitivity matrix.
+    pub fn crisis_exposure(&self) -> f64 {
         match self {
-            Self::Energy => 0.4,      // Automated, fewer workers needed
-            Self::Logistics => 0.5,   // Partially automated freight
-            Self::Biotech => 0.7,     // Skilled workers hard to replace
-            Self::Mining => 0.8,      // Labor-intensive
-            Self::DataInfra => 0.3,   // Mostly automated
-            Self::Automation => 0.2,  // Robots don't get sick
-        }
-    }
-
-    /// Revenue multiplier when travel ban is active in the region.
-    pub fn travel_ban_factor(&self) -> f64 {
-        match self {
-            Self::Energy => 0.85,     // Local operations, mild impact
-            Self::Logistics => 0.30,  // Devastating — core business is movement
-            Self::Biotech => 0.70,    // Supply chain disruption
-            Self::Mining => 0.60,     // Can't ship product
-            Self::DataInfra => 0.90,  // Data travels on wires
-            Self::Automation => 0.75, // Parts supply affected
-        }
-    }
-
-    /// Revenue multiplier when quarantine is active in the region.
-    pub fn quarantine_factor(&self) -> f64 {
-        match self {
-            Self::Energy => 0.90,     // Essential service, keeps running
-            Self::Logistics => 0.60,  // Restricted movement hurts
-            Self::Biotech => 0.85,    // Labs still operate
-            Self::Mining => 0.70,     // Workers can't get to sites
-            Self::DataInfra => 0.95,  // Remote operations fine
-            Self::Automation => 0.85, // Factories still run
-        }
-    }
-
-    /// Revenue multiplier when border controls are active.
-    pub fn border_controls_factor(&self) -> f64 {
-        match self {
-            Self::Energy => 0.95,
-            Self::Logistics => 0.70,  // International shipping slowed
-            Self::Biotech => 0.90,
-            Self::Mining => 0.80,     // Export friction
-            Self::DataInfra => 0.95,
-            Self::Automation => 0.85,
-        }
-    }
-
-    /// Revenue multiplier when hospitalization is discouraged (some sectors hurt).
-    pub fn discourage_hosp_factor(&self) -> f64 {
-        match self {
-            Self::Energy => 1.0,
-            Self::Logistics => 0.95,  // Fewer medical supply contracts
-            Self::Biotech => 0.85,    // Reduced demand for their products
-            Self::Mining => 1.0,
-            Self::DataInfra => 0.95,  // Less health data infrastructure demand
-            Self::Automation => 1.0,
-        }
-    }
-
-    /// How much healthcare_capacity degradation affects this sector.
-    /// Applied as: 1.0 - (1.0 - hc) * sensitivity
-    pub fn healthcare_sensitivity(&self) -> f64 {
-        match self {
-            Self::Energy => 0.3,
-            Self::Logistics => 0.4,
-            Self::Biotech => 0.8,     // Depends on healthcare infrastructure
-            Self::Mining => 0.5,
-            Self::DataInfra => 0.2,
-            Self::Automation => 0.2,
-        }
-    }
-
-    /// How much supply_lines degradation affects this sector.
-    pub fn supply_line_sensitivity(&self) -> f64 {
-        match self {
-            Self::Energy => 0.6,      // Needs fuel/parts
-            Self::Logistics => 0.9,   // IS the supply line
-            Self::Biotech => 0.5,     // Lab supplies
-            Self::Mining => 0.7,      // Equipment, export routes
-            Self::DataInfra => 0.3,   // Needs some physical infra
-            Self::Automation => 0.5,  // Parts supply
-        }
-    }
-
-    /// How much civil_order degradation affects this sector.
-    pub fn civil_order_sensitivity(&self) -> f64 {
-        match self {
-            Self::Energy => 0.5,      // Infrastructure target
-            Self::Logistics => 0.4,   // Route safety
-            Self::Biotech => 0.3,     // Secure facilities
-            Self::Mining => 0.6,      // Remote sites vulnerable
-            Self::DataInfra => 0.7,   // Cables get cut, towers get looted
-            Self::Automation => 0.4,  // Factories targeted
+            Self::Energy => 0.8,      // Essential, somewhat insulated
+            Self::Logistics => 1.4,   // Trade-dependent, amplifies damage
+            Self::Biotech => 0.9,     // Essential during pandemic
+            Self::Mining => 1.3,      // Labor-dependent, exposed
+            Self::DataInfra => 0.6,   // Highly resilient
+            Self::Automation => 0.7,  // Robots don't get sick
         }
     }
 
@@ -1284,6 +1198,9 @@ pub struct Corporation {
     pub base_revenue: f64,
     /// Current revenue per day (after all modifiers). Updated each tick.
     pub revenue: f64,
+    /// Previous day's revenue. Used by stock price model to compute trending signal.
+    #[serde(default)]
+    pub prev_revenue: f64,
     /// Fixed operating costs per day.
     pub operating_costs: f64,
     /// Cash reserves. Depleted when revenue < costs.
@@ -5537,11 +5454,13 @@ impl GameState {
             .sum()
     }
 
-    /// Economic health factor for a region (0.0 = collapsed, up to 1.0 = fully healthy).
-    /// Used by neighbors to compute trade income. Accounts for both active infections
-    /// and cumulative deaths — a region that lost 30% of its population is economically
-    /// devastated even if current infections are low.
-    fn region_economic_health(region: &Region) -> f64 {
+    /// Compute the GDP target for a region (actual value, not a fraction).
+    /// GDP = base_gdp × alive_frac × infra_health × policy_factor.
+    /// Deaths cause permanent economic shrinkage; infrastructure degradation
+    /// (from infections) provides the dynamic damage path. No separate
+    /// infection-based damage formula needed.
+    pub fn gdp_target(&self, region_idx: usize) -> f64 {
+        let region = &self.regions[region_idx];
         if region.collapsed {
             return 0.0;
         }
@@ -5549,26 +5468,17 @@ impl GameState {
         if pop <= 0.0 {
             return 0.0;
         }
-        let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
-        let infected_frac = infected / pop;
-        let death_frac = region.dead / pop;
-        // Active infections are weighted more heavily (immediate economic disruption)
-        // Deaths reflect permanent economic damage
-        let damage = infected_frac * 3.0 + death_frac * 2.0;
-        (1.0 - damage).clamp(0.1, 1.0)
-    }
 
-    /// Compute the GDP target for a region (actual value, not a fraction).
-    /// Combines base_gdp × economic health × policy penalties.
-    /// The actual `region.gdp` smoothly tracks toward this target each tick.
-    pub fn gdp_target(&self, region_idx: usize) -> f64 {
-        let region = &self.regions[region_idx];
-        let health = Self::region_economic_health(region);
+        // Permanent shrinkage from deaths
+        let alive_frac = (pop - region.total_dead()) / pop;
+
+        // Infrastructure health: average of the three infrastructure metrics
+        let infra_health = (region.healthcare_capacity + region.supply_lines + region.civil_order) / 3.0;
 
         // Active containment policies reduce GDP — the core tension.
         let policy = match self.policies.get(region_idx) {
             Some(p) => p,
-            None => return region.base_gdp * health,
+            None => return (region.base_gdp * alive_frac * infra_health).max(0.0),
         };
         let mut policy_factor = 1.0;
         if policy.quarantine {
@@ -5590,7 +5500,7 @@ impl GameState {
             policy_factor *= 0.85; // 15% GDP hit — curfews, restricted movement
         }
 
-        (region.base_gdp * health * policy_factor).max(0.0)
+        (region.base_gdp * alive_frac * infra_health * policy_factor).max(0.0)
     }
 
     /// Per-tick funding income: fixed board budget + contracts + decree modifiers.
