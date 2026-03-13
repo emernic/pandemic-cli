@@ -90,6 +90,8 @@ In practice, the early runs often felt like waiting for approval to cross the ne
 
 ### Board Budget
 
+> **Note (2026-03-13):** Budget formula changed. Visible infections now boost the board allocation, so the monotonic cuts described below are stale for mid-to-late game.
+
 Board budget is separate from approval.
 
 - In the runs I checked, it started as a fixed daily allocation, around `¥390-406/day`.
