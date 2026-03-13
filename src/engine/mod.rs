@@ -3304,7 +3304,7 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 300.0, personnel: 3 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Test Crisis".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "A".into(), cost: None },
@@ -3329,39 +3329,38 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         let mut state = GameState::new_default(42);
-        let initial_funding = state.resources.funding;
+        let initial_personnel = state.resources.personnel;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
-            title: "Aid".into(),
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            title: "Attrition".into(),
             description: "Test".into(),
-            options: vec![ CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
-             CrisisOption { label: "RP".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "Accept losses".into(), description: "".into(), cost: None },
+             CrisisOption { label: "Pay retention".into(), description: "".into(), cost: None },
             ],
             tick_created: 0,
         });
 
-        // Choose option A (funding)
+        // Choose option A (accept losses — lose personnel)
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none(), "crisis should be resolved");
-        assert_eq!(after.resources.funding, initial_funding + 500.0,
-            "should have received funding");
+        assert_eq!(after.resources.personnel, initial_personnel - 3,
+            "should have lost personnel");
 
-        // Reset and choose option B (personnel)
-        let initial_personnel = state.resources.personnel;
+        // Reset and choose option B (pay retention — keep personnel)
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
-            title: "Aid".into(),
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            title: "Attrition".into(),
             description: "Test".into(),
-            options: vec![ CrisisOption { label: "Funding".into(), description: "".into(), cost: None },
-             CrisisOption { label: "Personnel".into(), description: "".into(), cost: None },
+            options: vec![ CrisisOption { label: "Accept losses".into(), description: "".into(), cost: None },
+             CrisisOption { label: "Pay retention".into(), description: "".into(), cost: None },
             ],
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::SelectNext); // select option B
         let after = apply_action(&after, &Action::Confirm);
         assert!(after.active_crisis.is_none(), "crisis should be resolved");
-        assert_eq!(after.resources.personnel, initial_personnel + 5,
-            "should have received personnel");
+        assert_eq!(after.resources.personnel, initial_personnel,
+            "retention should keep personnel unchanged");
     }
 
     #[test]
@@ -3401,7 +3400,7 @@ mod tests {
         // Game is running, crisis fires
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3424,7 +3423,7 @@ mod tests {
         // Game was paused when crisis fired
         state.sim_state = SimState::Event { was_running: false };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3549,7 +3548,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3586,7 +3585,7 @@ mod tests {
 
         // Inject an active crisis
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 100.0, personnel: 3 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -4443,68 +4442,6 @@ mod tests {
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.board_approval - (before - 0.08)).abs() < 0.001,
             "option A should decrease board_approval by 0.08");
-    }
-
-    #[test]
-    fn billionaire_option_b_gains_funding_loses_personnel() {
-        let mut state = GameState::new_default(42);
-        let before_funding = state.resources.funding;
-        let before_personnel = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::BillionaireOffer { reward: 200.0, personnel_loss: 2 }, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - (before_funding + 200.0)).abs() < 1.0,
-            "option B should gain scaled reward");
-        assert_eq!(after.resources.personnel, before_personnel - 2,
-            "option B should lose scaled personnel");
-    }
-
-    #[test]
-    fn billionaire_option_a_no_changes() {
-        let mut state = GameState::new_default(42);
-        let before_funding = state.resources.funding;
-        let before_personnel = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::BillionaireOffer { reward: 200.0, personnel_loss: 2 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.resources.funding, before_funding,
-            "option A should not change funding");
-        assert_eq!(after.resources.personnel, before_personnel,
-            "option A should not change personnel");
-    }
-
-    #[test]
-    fn who_evacuation_option_a_loses_funding_and_pol() {
-        let mut state = GameState::new_default(42);
-        state.resources.funding = 1000.0;
-        state.resources.board_approval = 0.50;
-        let before_pol = state.resources.board_approval;
-        setup_crisis(&mut state, CrisisKind::WHOEvacuation { aid_loss: 150.0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 850.0).abs() < 1.0,
-            "option A should lose scaled aid amount ($150)");
-        assert!((after.resources.board_approval - (before_pol - 0.05)).abs() < 0.001,
-            "option A should lose 0.05 POL modifier");
-    }
-
-    #[test]
-    fn who_evacuation_option_b_gains_pol() {
-        use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
-        state.resources.funding = 2000.0;
-        let before_pol = state.resources.board_approval;
-        state.sim_state = crate::state::SimState::Event { was_running: true };
-        state.ui.crisis_selection = 1;
-        state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::WHOEvacuation { aid_loss: 150.0 },
-            title: "T".into(), description: "T".into(),
-            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-             crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 800.0, personnel: 3, ..Default::default() }) },
-            ],
-            tick_created: 0,
-        });
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before_pol + 0.10)).abs() < 0.001,
-            "option B should gain 0.10 POL modifier");
     }
 
     #[test]

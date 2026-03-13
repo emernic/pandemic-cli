@@ -640,25 +640,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::InternationalAid { funding, personnel } => {
-            CrisisEvent {
-                title: "Member State Aid Package".into(),
-                description: "Several member states have pledged additional resources to your operation.".into(),
-                options: vec![ CrisisOption {
-                    label: format!("Accept funding (+¥{:.0})", funding),
-                    description: "Direct financial contribution from member states.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Accept personnel (+{} staff)", personnel),
-                    description: "Seconded researchers and field staff from national agencies.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::MutationSurge { disease_idx } => {
             let disease_name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
@@ -1128,59 +1109,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 CrisisOption {
                     label: "Wait them out".into(),
                     description: "Supply lines and healthcare degrade while you wait.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::BillionaireOffer { reward, personnel_loss } => {
-            CrisisEvent {
-                title: "Private Funding Offer".into(),
-                description: format!(
-                    "A private donor offers ¥{:.0} in exchange for institutional concessions. \
-                    Your research staff will not be happy about the terms.", reward),
-                options: vec![ CrisisOption {
-                    label: "Decline politely".into(),
-                    description: "Keep team morale, no funding".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Accept the deal".into(),
-                    description: format!("+¥{:.0} funding, −{} personnel quit in protest", reward, personnel_loss),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::WHOEvacuation { aid_loss } => {
-            CrisisEvent {
-                title: "N.W.H.O. Headquarters Evacuated".into(),
-                description: "A containment breach has forced N.W.H.O. headquarters to evacuate. \
-                    Global coordination is degrading.".into(),
-                options: vec![ CrisisOption {
-                    label: "Let regions go independent".into(),
-                    description: format!("Lose ¥{:.0} in aid income, −5% board approval", aid_loss),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.40, 250.0, 1500.0);
-                    CrisisOption {
-                        label: format!("Take over coordination (¥{:.0}, 3 personnel for 5d)", cost),
-                        description: "Expensive, but gain +10% board approval and maintain global response. Coordination team returns in 5 days.".into(),
-                        cost: Some(CrisisCost {
-                            funding: cost,
-                            personnel: 3,
-                            operation: Some(OperationSpec { days: 5.0, label: "Coordination Team".into() }),
-                        }),
-                    }
-                },
-                CrisisOption {
-                    label: "Do nothing".into(),
-                    description: "Wait for N.W.H.O. to regroup. Coordination degrades.".into(),
                     cost: None,
                 },
                 ],
@@ -2751,14 +2679,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 }
             }
         }
-        (CrisisKind::InternationalAid { funding, .. }, 0) => {
-            state.resources.funding += funding;
-            format!("Received ¥{:.0} in member state funding", funding)
-        }
-        (CrisisKind::InternationalAid { personnel, .. }, _) => {
-            state.resources.personnel += personnel;
-            format!("{} personnel seconded from member states", personnel)
-        }
         (CrisisKind::MutationSurge { .. }, 0) => {
             "Mutation surge ignored".into()
         }
@@ -3149,42 +3069,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 region.supply_lines = (region.supply_lines - 0.15).max(0.0);
             }
             "Blockade dissolved after days of delays. Supply lines degraded.".into()
-        }
-
-        (CrisisKind::BillionaireOffer { .. }, 0) => {
-            // Decline
-            "Offer declined. Team morale intact.".into()
-        }
-        (CrisisKind::BillionaireOffer { reward, personnel_loss }, _) => {
-            // Accept — gain funding, lose personnel, basic research disrupted
-            state.resources.funding += reward;
-            state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
-            // Billionaire's team redirected basic research priorities — 2 days of progress lost
-            if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Basic) {
-                let loss = 2.0 * TICKS_PER_DAY as f64;
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
-            format!("Deal accepted. ¥{:.0} received, {} researchers quit.",
-                reward, personnel_loss)
-        }
-
-        (CrisisKind::WHOEvacuation { aid_loss }, 0) => {
-            // Let regions go independent — lose funding and POL
-            state.resources.funding = (state.resources.funding - aid_loss).max(0.0);
-            state.resources.board_approval -= 0.05;
-            format!("N.W.H.O. coordination collapsed. Lost ¥{:.0} in aid.", aid_loss)
-        }
-        (CrisisKind::WHOEvacuation { .. }, 1) => {
-            // Take over — costs already deducted, gain POL
-            state.resources.board_approval += 0.10;
-            "Your agency is now coordinating the global response. Heavy responsibility.".into()
-        }
-        (CrisisKind::WHOEvacuation { aid_loss, .. }, _) => {
-            // Do nothing — coordination degrades, lose funding AND 1 personnel wanders off
-            state.resources.funding = (state.resources.funding - aid_loss * 0.75).max(0.0);
-            state.resources.personnel = state.resources.personnel.saturating_sub(1);
-            state.resources.board_approval -= 0.03;
-            format!("Coordination collapsed during inaction. Lost ¥{:.0}.", aid_loss * 0.75)
         }
 
         (CrisisKind::WarlordDemand { region_idx }, 0) => {
