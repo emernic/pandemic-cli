@@ -47,20 +47,30 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     let mut policy_cost = state.total_policy_funding_cost();
     while policy_cost > 0.0 && state.resources.funding < policy_cost {
         // Find the most expensive active individual policy across all regions.
-        // Uses active_policy_costs() — single source of truth for trait-adjusted pricing.
+        // Uses the same full multiplier chain as total_policy_funding_cost():
+        // gov_mult × supply_mult × spec_mult × auto_mult.
         let mut best: Option<(usize, PolicyId, f64)> = None;
         for (i, p) in state.policies.iter().enumerate() {
-            let traits = state.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-            // Apply RegulatoryApparatus specialization discount to get true cost
-            let spec_mult = state.regions.get(i).map(|r| {
+            let region = state.regions.get(i);
+            let traits = region.map(|r| r.traits.as_slice()).unwrap_or(&[]);
+            let gov_mult = region.map(|r| r.governor.cost_multiplier()).unwrap_or(1.0);
+            let supply_mult = region.map(|r| {
+                if r.supply_lines < crate::state::INFRA_STRESSED {
+                    crate::state::SUPPLY_STRESSED_COST_MULT
+                } else { 1.0 }
+            }).unwrap_or(1.0);
+            let spec_mult = region.map(|r| {
                 if r.has_specialization(RegionSpecialization::RegulatoryApparatus) {
                     REGULATORY_APPARATUS_COST_MULT
                 } else {
                     1.0
                 }
             }).unwrap_or(1.0);
+            let auto_bonus = state.sector_bonus(i, crate::state::CorporationSector::Automation);
+            let auto_mult = 1.0 - crate::state::CorporationSector::Automation.max_bonus_pct() / 100.0 * auto_bonus;
+            let region_mult = gov_mult * supply_mult * spec_mult * auto_mult;
             for (policy, cost) in p.active_policy_costs(traits) {
-                let effective = cost * spec_mult;
+                let effective = cost * region_mult;
                 if best.is_none() || effective > best.unwrap().2 {
                     best = Some((i, policy, effective));
                 }
