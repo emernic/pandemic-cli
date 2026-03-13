@@ -92,6 +92,10 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     new.ui.operations_ui = Some(OpsUiState::BrowseOps);
                     new.ui.panel_selection = 0;
                 }
+                if new.ui.ledger_ui.is_some() {
+                    new.ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
+                    new.ui.panel_selection = 0;
+                }
                 // sim_state restoration (Event → Running/Paused) happens inside
                 // crisis::resolve_crisis() — no post-processing needed here.
             }
@@ -871,6 +875,40 @@ mod tests {
         let state = apply_action(&state, &Action::Confirm);
         assert!(!state.policies[0].border_controls,
             "stray enter after crisis dismissal must not toggle border_controls");
+    }
+
+    #[test]
+    fn crisis_dismiss_resets_ledger_wizard() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
+
+        // Set up state with ledger panel open in ConfirmBuy.
+        let mut state = GameState::new_default(42);
+        state.ui.open_panel = Panel::Ledger;
+        state.ui.ledger_ui = Some(LedgerUiState::ConfirmBuy { corp_idx: 0 });
+        state.ui.panel_selection = 0;
+
+        // Fire a crisis while in this state.
+        state.sim_state = SimState::Event { was_running: true };
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            title: "Aid Offer".into(),
+            description: "Choose wisely".into(),
+            options: vec![
+                CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
+                CrisisOption { label: "Take personnel".into(), description: "Get 5 staff".into(), cost: None },
+            ],
+            tick_created: 0,
+        });
+
+        // Dismiss the crisis.
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(state.active_crisis.is_none(), "crisis should be dismissed");
+
+        // Ledger should reset to BrowseStocks, not stay in ConfirmBuy.
+        assert_eq!(state.ui.open_panel, Panel::Ledger,
+            "ledger panel should stay open after crisis dismissal");
+        assert_eq!(state.ui.ledger_ui, Some(LedgerUiState::BrowseStocks),
+            "ledger_ui should reset to BrowseStocks after crisis dismissal");
     }
 
     #[test]
