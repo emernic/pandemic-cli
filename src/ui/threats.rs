@@ -263,6 +263,18 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     ),
                 ]));
 
+                // First-detection info: show where the disease was first observed
+                if !disease.first_detected_regions.is_empty() {
+                    let det_names: Vec<&str> = disease.first_detected_regions.iter()
+                        .filter_map(|&idx| state.regions.get(idx).map(|r| r.name.as_str()))
+                        .collect();
+                    let day_str = format!("{:.0}", disease.detected_day);
+                    lines.push(Line::from(Span::styled(
+                        format!("    First detected: {} (Day {})", det_names.join(", "), day_str),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+
                 lines.push(Line::from(""));
 
                 // ── Response status ──

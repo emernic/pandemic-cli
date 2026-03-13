@@ -283,6 +283,14 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 let spawned_at = new.diseases[disease_idx].spawned_at_tick;
                 let silent_days = (new.tick.saturating_sub(spawned_at)) as f64
                     / crate::state::TICKS_PER_DAY;
+                // Record which regions had infections at detection time
+                let detection_regions: Vec<usize> = new.regions.iter().enumerate()
+                    .filter(|(_, r)| r.disease_state(disease_idx)
+                        .is_some_and(|inf| inf.infected > 0.0))
+                    .map(|(i, _)| i)
+                    .collect();
+                new.diseases[disease_idx].first_detected_regions = detection_regions;
+                new.diseases[disease_idx].detected_day = new.tick as f64 / crate::state::TICKS_PER_DAY;
                 new.diseases[disease_idx].detected = true;
                 new.events.push(GameEvent::DiseaseDetected { disease_idx, silent_days });
                 // Schedule pathogen detection alert crisis. Fires immediately if no
@@ -2694,6 +2702,8 @@ mod tests {
             mechanism_resistance: vec![],
             sequence_group: None,
             incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
+            first_detected_regions: vec![],
+            detected_day: 0.0,
             prev_day_observed_infected: 0.0,
             current_day_observed_infected: 0.0,
         }];
