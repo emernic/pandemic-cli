@@ -220,9 +220,10 @@ fn warm_up_price_history(state: &mut GameState) {
             price = (price * (1.0 + gravity + noise)).max(0.01);
             corp.price_history.push(price);
         }
-        // End on the IPO price so share_price == ipo_price at game start.
-        corp.price_history.push(corp.ipo_price);
-        corp.share_price = corp.ipo_price;
+        // Let the final warmup price stand as the opening price.
+        // This gives an immediate non-zero trend so sparklines show color (green/red)
+        // from the first frame instead of appearing gray.
+        corp.share_price = price;
     }
 }
 
