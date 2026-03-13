@@ -1728,17 +1728,17 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisEvent {
                         title: format!("{}: Evacuation Panic", gov_name),
                         description: format!(
-                            "{gov_name} tested positive and announced a personal evacuation from \
-                             {region_name} on live broadcast. A regional corporation is threatening \
-                             to follow suit."),
+                            "{gov_name} tested positive and is deteriorating fast. Before anyone could \
+                             contain it, they announced a personal evacuation from {region_name} on \
+                             live broadcast. A regional corporation is threatening to follow suit."),
                         options: vec![ CrisisOption {
                             label: "Damage control".into(),
-                            description: "Lose 1.5 days of research progress containing the fallout".into(),
+                            description: "Lose 1.5 days of research progress containing the fallout. Governor's condition goes unmonitored.".into(),
                             cost: None,
                         },
                         CrisisOption {
                             label: format!("PR containment (¥{cost:.0})"),
-                            description: "Hire a crisis team. Corporation stays put.".into(),
+                            description: "Hire a crisis team. Corporation stays put. Governor receives care.".into(),
                             cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                         },
                         ],
@@ -1750,8 +1750,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisEvent {
                         title: format!("{}: Demands Experimental Treatment", gov_name),
                         description: format!(
-                            "{gov_name} is sick and broadcasting from a hospital bed in {region_name}, \
-                             demanding your agency send \"whatever you have in the lab.\""),
+                            "{gov_name} is in critical condition, broadcasting from a hospital bed in \
+                             {region_name}, demanding your agency send \"whatever you have in the lab.\""),
                         options: vec![ CrisisOption {
                             label: "Send samples".into(),
                             description: "Lose 2 days of applied research progress".into(),
@@ -1759,7 +1759,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "Board approval drops. They're threatening to go public with accusations.".into(),
+                            description: "No treatment sent. Board approval drops. Governor's prognosis is poor.".into(),
                             cost: None,
                         },
                         ],
@@ -1772,10 +1772,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         title: format!("{}: Gone Dark", gov_name),
                         description: format!(
                             "{gov_name} has disappeared from all communications. Regional staff in \
-                             {region_name} say the governor is bedridden. Policy enforcement has stalled."),
+                             {region_name} say the governor is bedridden and getting worse. Policy \
+                             enforcement has stalled."),
                         options: vec![ CrisisOption {
-                            label: "Let them recover".into(),
-                            description: format!("Cooperation drops in {}. Policies less effective until recovery.", region_name),
+                            label: "Leave them be".into(),
+                            description: format!("No intervention. Cooperation drops in {}. Governor may not recover.", region_name),
                             cost: None,
                         },
                         CrisisOption {
@@ -1797,8 +1798,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisEvent {
                         title: format!("{}: Priority Demand", gov_name),
                         description: format!(
-                            "{gov_name} is ill and insisting your agency prioritize {region_name} \
-                             above all other regions. \"Send your people here or I will handle this myself.\""),
+                            "{gov_name} is critically ill and insisting your agency prioritize \
+                             {region_name} above all other regions. \"Send your people here or I will \
+                             handle this myself.\""),
                         options: vec![ CrisisOption {
                             label: "Divert personnel (2 for 5d)".into(),
                             description: "Comply with the demand. Team returns in 5 days.".into(),
@@ -1815,7 +1817,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "Cooperation drops hard. Governor threatens to cut all access.".into(),
+                            description: "No medical support. Cooperation drops hard. Governor's condition is critical.".into(),
                             cost: None,
                         },
                         ],
@@ -1837,7 +1839,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "Board approval drops. Income skim increases.".into(),
+                            description: "No medical expenses covered. Board approval drops. Income skim increases.".into(),
                             cost: None,
                         },
                         ],
@@ -1850,8 +1852,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     CrisisEvent {
                         title: format!("{}: Protection Required", gov_name),
                         description: format!(
-                            "{gov_name} is sick and wants protection. \"I need a security detail. \
-                             Or ¥{cost:.0}. Either works.\""),
+                            "{gov_name} is seriously ill and wants protection. \"I need a security \
+                             detail. Or ¥{cost:.0}. Either works.\""),
                         options: vec![ CrisisOption {
                             label: "Send security detail (3 personnel for 5d)".into(),
                             description: "Three staff babysit the governor. They return in 5 days.".into(),
@@ -1868,7 +1870,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "Cooperation drops sharply. They won't forget this.".into(),
+                            description: "No support provided. Cooperation drops sharply. Governor's condition is worsening.".into(),
                             cost: None,
                         },
                         ],
@@ -3633,7 +3635,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                         region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
                     }
                     queue_governor_death_followup(state, *region_idx);
-                    "Governor isolating. Region running on autopilot.".into()
+                    "No intervention. Region running on autopilot.".into()
                 }
                 (GovernorPersonality::Recluse, _) => {
                     // Send management team: personnel cost already deducted
