@@ -707,7 +707,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Emergency analysis (¥{:.0})", cost),
-                        description: "Current strain sequenced. +15% pathogen knowledge, improving treatment calibration.".into(),
+                        description: "Current strain sequenced. +15% pathogen knowledge.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
