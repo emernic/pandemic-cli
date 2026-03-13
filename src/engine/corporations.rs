@@ -444,8 +444,7 @@ mod tests {
     #[test]
     fn board_budget_set_after_initialization() {
         let mut state = GameState::new_default(42);
-        generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        crate::engine::initialize_game(&mut state);
         let income = state.funding_income_rate();
         assert!(
             income > 0.0,

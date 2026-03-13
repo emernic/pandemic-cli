@@ -34,6 +34,17 @@ pub fn initialize_game(state: &mut GameState) {
     if state.board_members.is_empty() {
         board::generate_board_members(state);
     }
+
+    // Initialize board budget from corporate tax revenue at current satisfaction.
+    // Done here (not in board.rs) because it depends on crisis::compute_board_budget_per_tick,
+    // and subsystems must not call into each other — mod.rs orchestrates cross-subsystem work.
+    if state.board_budget_per_tick == 0.0 {
+        let base = state.base_board_budget_per_tick();
+        state.reference_base_budget_per_tick = base;
+        let board_sat = state.board_satisfaction();
+        state.board_budget_per_tick =
+            crisis::compute_board_budget_per_tick(state, board_sat);
+    }
 }
 
 /// External callers should use `lib::tick_and_process()` instead, which also
@@ -214,6 +225,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             && rng_emergence.r#gen::<f64>() < emergence_chance
         {
             if let Some((new_disease_idx, _)) = disease::spawn_disease_scaled(&mut new, &mut rng_emergence) {
+                // New medicines need manufacturers — orchestrated here since
+                // disease and corporations are peer subsystems.
+                corporations::assign_manufacturers(&mut new);
                 // Assign sequence group when this spawn was triggered by wave clustering.
                 // Diseases from the same wave share a group ID, visible via Rapid Sequencing.
                 if let Some(trigger_idx) = wave_trigger_idx {
@@ -660,6 +674,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     {
         let mut rng_e = new.rng_emergence.clone();
         disease::spawn_disease_scaled(&mut new, &mut rng_e);
+        corporations::assign_manufacturers(&mut new);
         new.rng_emergence = rng_e;
     }
 
@@ -6053,8 +6068,7 @@ mod tests {
     fn embezzlement_penalty_reduces_funding_after_warning() {
         use crate::state::EMBEZZLEMENT_BUFFER;
         let mut state = GameState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
+        initialize_game(&mut state);
         for r in &mut state.regions { r.infections.clear(); }
 
         let baseline_income = state.funding_income_rate();
