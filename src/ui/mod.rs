@@ -487,6 +487,12 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let priority = if *adverse { 1 } else { 2 };
                 (priority, msg.clone(), msg)
             }
+            GameEvent::PolicyAuthorized { policy_idx } => {
+                let name = crate::state::policy_display_name(*policy_idx);
+                let msg = format!("Board authorized policy: {}", name);
+                let notification = format!("{}. Open [P] Policy to deploy.", msg);
+                (3, msg, notification)
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

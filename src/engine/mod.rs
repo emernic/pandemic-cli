@@ -17,7 +17,8 @@ use crate::state::{
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
-    MAX_DISEASES, TICKS_PER_DAY, WAVE_CLUSTER_WINDOW_TICKS,
+    MAX_DISEASES, POLICY_APPROVAL_THRESHOLDS, POLICY_COUNT, TICKS_PER_DAY,
+    WAVE_CLUSTER_WINDOW_TICKS,
 };
 
 /// Advance the simulation by one tick.
@@ -147,10 +148,23 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // Target = f(board_satisfaction, contract_confidence, severity). See GameState::approval_target().
     // AUTH moves toward target at ~50%/day, so crisis hits take 2-3 days to recover.
     {
+        let old_approval = new.resources.board_approval;
         let target = new.approval_target();
         let drift_rate = 0.50 / TICKS_PER_DAY;
-        let delta = (target - new.resources.board_approval) * drift_rate;
-        new.resources.board_approval = (new.resources.board_approval + delta).clamp(0.0, 1.0);
+        let delta = (target - old_approval) * drift_rate;
+        new.resources.board_approval = (old_approval + delta).clamp(0.0, 1.0);
+        let new_approval = new.resources.board_approval;
+
+        // Emit events when approval crosses a policy's base threshold (rising only).
+        if new_approval > old_approval {
+            for idx in 0..POLICY_COUNT {
+                let threshold = POLICY_APPROVAL_THRESHOLDS[idx];
+                if threshold <= 0.0 { continue; } // always available
+                if old_approval < threshold && new_approval >= threshold {
+                    new.events.push(GameEvent::PolicyAuthorized { policy_idx: idx });
+                }
+            }
+        }
     }
 
     // POL-based personnel: ~1 person per 3 days at max POL (0.90).

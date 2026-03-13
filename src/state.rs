@@ -3909,6 +3909,10 @@ pub enum GameEvent {
         label: String,
         personnel: u32,
     },
+    /// Board approval crossed a policy's threshold — that policy is now globally available.
+    PolicyAuthorized {
+        policy_idx: usize,
+    },
 }
 
 /// Automation rules that fire during tick when conditions are met.
