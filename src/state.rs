@@ -2329,9 +2329,10 @@ impl Region {
         })
     }
 
-    /// Total infected across all diseases, capped at population.
-    /// May double-count people infected with multiple diseases simultaneously,
-    /// but the cap prevents displaying more infected than the population.
+    /// Total sick (exposed + infectious) across all diseases, capped at population.
+    /// Includes the exposed/incubating compartment since those people have the disease
+    /// even though they're not yet infectious. May double-count people with multiple
+    /// diseases simultaneously, but the cap prevents exceeding population.
     pub fn total_infected(&self) -> f64 {
         let raw: f64 = self.infections.iter().map(|i| i.exposed + i.infected).sum();
         raw.min(self.population as f64)
