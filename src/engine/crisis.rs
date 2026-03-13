@@ -1596,7 +1596,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: format!("{}: Sovereignty Dispute", gov_name),
                 description: format!(
-                    "{gov_name} has declared your health mandate unconstitutional in {region_name}. \
+                    "{gov_name} has rejected your health directive in {region_name}. \
                      Local authorities are blocking your field teams."),
                 options: vec![ CrisisOption {
                     label: "Withdraw teams".into(),
@@ -1768,7 +1768,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "Cooperation drops hard. Governor threatens federal oversight.".into(),
+                            description: "Cooperation drops hard. Governor threatens to cut all access.".into(),
                             cost: None,
                         },
                         ],
@@ -2921,7 +2921,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let mut governor_rebels = false;
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
-                // If cooperation drops below 30, governor may rebel against federal overreach
+                // If cooperation drops below 30, governor may rebel against directive overreach
                 if region.governor.cooperation < 30.0 {
                     governor_rebels = true;
                 }
@@ -3414,8 +3414,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Restrictive policies withdrawn in {}", region_name)
         }
         (CrisisKind::GovernorHardliner { .. }, 1) => {
-            // Federal override — costs already deducted
-            "Federal authority imposed. Governor forced to comply.".into()
+            // Board pressure override — costs already deducted
+            "Board leverage applied. Governor forced to comply.".into()
         }
         (CrisisKind::GovernorHardliner { region_idx }, _) => {
             // Ignore the dispute — patchy enforcement, small POL loss

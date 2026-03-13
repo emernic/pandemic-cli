@@ -62,6 +62,8 @@ The player toggles a policy (quarantine, border controls, etc.) in a region. Wha
 
 ## Using This Document
 
-This is primarily a guide for writing text and framing events. When a crisis event or UI label implies the player has sovereign government powers (deploying military, appointing officials, issuing federal mandates), that's the wrong framing. The player's tools are money, personnel, board leverage, and negotiation.
+This is primarily a guide for writing text and framing events. When a crisis event or UI label implies the player has sovereign government powers (deploying military, appointing officials, issuing mandates by fiat), that's the wrong framing. The player's tools are money, personnel, board leverage, and negotiation.
+
+Never use "federal," "central authority," or "central command" to describe N.W.H.O. power. The N.W.H.O. issues guidelines and directives that governors may or may not follow. Whether any world government exists in this setting is deliberately ambiguous.
 
 This does not mean every feature needs layers of intermediaries or hidden modifiers. The game should be clear and playable. The player toggles policies and they take effect. This document is about how we *describe* that process in text, not about adding complexity to the mechanics.

@@ -881,7 +881,7 @@ pub struct EnactedDecrees {
     #[serde(default)]
     pub sacrificed_region: Option<usize>,
     /// Suspend Regional Authority: freeze all governor cooperation. No drift, no
-    /// defiance, no cooperation bonuses. Central command overrides local governance.
+    /// defiance, no cooperation bonuses. Board leverage overrides local governance.
     #[serde(default)]
     pub suspend_regional_authority: bool,
     /// Fortify Region: restore one region's infrastructure to 100%, all others
@@ -4188,7 +4188,7 @@ pub enum CrisisKind {
 
     // --- Governor defiance crises (fired when cooperation drops below threshold) ---
 
-    /// Hardliner governor declares your mandate unconstitutional.
+    /// Hardliner governor declares your directive illegitimate.
     #[serde(alias = "GovernorNationalist")]
     GovernorHardliner { region_idx: usize },
     /// Blowhard governor makes noise — mostly hollow threats.
