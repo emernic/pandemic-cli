@@ -41,6 +41,8 @@ Check specifically:
 - using NGO/media vocabulary where the game should name specific actors, directives, leverage, or operational consequences
 - implying military or federal powers the player does not actually have
 
+**Naming check:** If you wrote or edited names of people, corporations, crises, decrees, contracts, research, operations, policies, or organizations, read `docs/naming-style.md`. Do not wave this off as cosmetic. Repeated default LLM names and fake technical naming are one of the clearest tells that the text is AI-generated.
+
 **If you wrote or edited anything — documents, comments, descriptions, names — go back and re-read every word.** Two checks:
 
 1. **Accuracy:** Is every word as correct and clear as it can be? If not, fix it. Documents have no compiler. Wrong claims silently poison every future session.

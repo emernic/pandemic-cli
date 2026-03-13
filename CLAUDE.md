@@ -164,6 +164,7 @@ Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architectu
 
 **World and power structure:** `docs/setting.md` — read this before writing crisis events, designing board/governor/corporation features, or framing any interaction involving authority and power relationships.
 **Authority framing:** `docs/framing-guide.md` — before writing user-facing text or designing features that touch authority, governance, board dynamics, contracts, decrees, crises, or regional power relationships, read this and `docs/setting.md`. Skip this for purely mechanical bug fixes, refactors, balance-only changes, or small predefined edits that add no new framing.
+**Naming:** `docs/naming-style.md` — before naming or renaming crises, decrees, contracts, research, operations, policies, or other player-facing systems, read this. Do not skip it. If you do, you will default to repeated LLM proper names and fake smart-sounding biotech terms that immediately read as AI-generated.
 
 ### Architectural Direction — THIS IS YOUR JOB
 
