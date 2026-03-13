@@ -788,7 +788,7 @@ mod tests {
         state.resources.personnel = 50;
         state.resources.funding = 5000.0;
 
-        // Start multiple field projects — no capacity limit
+        // Fill 3 field projects (the old MAX_FIELD_RESEARCH limit)
         state.active_research.push(ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
             progress: 0.0,
@@ -809,16 +809,12 @@ mod tests {
         });
         assert_eq!(state.active_in_category(ResearchCategory::Field).len(), 3);
 
-        // Can still start more if there are available projects and personnel
+        // With no capacity limits, a 4th project should start if we have resources
         let available = state.all_available_projects();
-        if !available.is_empty() {
-            let (ok, _msg) = super::start_research(&mut state, 0, false);
-            // Should succeed as long as we have personnel and funding
-            if state.personnel_available() >= available[0].costs(&state.medicines).0 {
-                assert!(ok, "should start research when personnel and funding are available");
-                assert!(state.active_research.len() >= 4, "should have 4+ active projects");
-            }
-        }
+        assert!(!available.is_empty(), "should still have available projects with 3 active");
+        let (ok, _msg) = super::start_research(&mut state, 0, false);
+        assert!(ok, "should start a 4th project — no capacity limit, only personnel/funding");
+        assert!(state.active_research.len() >= 4, "should have 4+ active projects");
     }
 
     #[test]

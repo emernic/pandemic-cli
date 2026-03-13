@@ -1880,9 +1880,9 @@ mod tests {
                 }
                 if state.outcome != GameOutcome::Playing { break; }
 
-                // --- RESEARCH: pick the best available project ---
-                let projects = state.all_available_projects();
-                if !projects.is_empty() {
+                // --- RESEARCH: start projects by priority until out of resources ---
+                loop {
+                    let projects = state.all_available_projects();
                     let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
                         ResearchKind::DevelopMedicine { .. } => 0,
                         ResearchKind::ManufactureDoses { .. } => 0,
@@ -1892,14 +1892,18 @@ mod tests {
                         _ => 4,
                     });
                     if let Some((idx, kind)) = best {
-                        let (_, _, cost_funding) = kind.costs(&state.medicines);
+                        let (personnel, _, cost_funding) = kind.costs(&state.medicines);
                         if state.resources.funding >= cost_funding + 200.0
-                            && state.personnel_available() >= kind.costs(&state.medicines).0
+                            && state.personnel_available() >= personnel
                         {
                             execute_command(&mut state, &GameCommand::StartResearch {
                                 project_idx: idx, double_personnel: false,
                             });
+                        } else {
+                            break;
                         }
+                    } else {
+                        break;
                     }
                 }
 
