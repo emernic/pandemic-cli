@@ -1658,7 +1658,7 @@ mod tests {
         use crate::state::GOVERNOR_COOPERATION_THRESHOLD;
 
         let mut state = screening_test_state();
-        state.policies[0].discourage_hosp = true;
+        state.policies[0].quarantine = true;
 
         // Normal cooperation — full cost
         state.regions[0].governor.cooperation = 50.0;
