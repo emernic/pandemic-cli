@@ -1,7 +1,8 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState, MAX_FIELD_RESEARCH};
+use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState, MAX_FIELD_RESEARCH,
+    ModifierSource, SatisfactionModifier};
 
 /// Generate board members from existing game entities at game start.
 /// Called after corporations and regions are initialized.
@@ -41,10 +42,12 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             corp_idx: Some(corp_idx),
             region_idx: Some(corp.region_idx),
             satisfaction: 1.0,
-            satisfaction_modifier: 0.0,
+            modifiers: vec![SatisfactionModifier {
+                source: ModifierSource::InitialSkepticism,
+                value: -INITIAL_SKEPTICISM,
+            }],
             is_chairman,
             personality: Some(personality),
-            initial_skepticism: INITIAL_SKEPTICISM,
         });
     }
 
@@ -71,15 +74,20 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             corp_idx: None,
             region_idx: Some(region_idx),
             satisfaction: 1.0,
-            satisfaction_modifier: 0.0,
+            modifiers: vec![SatisfactionModifier {
+                source: ModifierSource::InitialSkepticism,
+                value: -INITIAL_SKEPTICISM,
+            }],
             is_chairman: false,
             personality: None,
-            initial_skepticism: INITIAL_SKEPTICISM,
         });
         governor_count += 1;
     }
 
     state.board_members = members;
+
+    // Compute initial satisfaction so modifiers are populated from tick 0
+    update_board_satisfaction(state);
 
     // Schedule the first board meeting around day 7 ± 1 day of jitter.
     if state.next_board_meeting_tick == 0 {
@@ -111,30 +119,112 @@ const SKEPTICISM_DECAY_RATE: f64 = 0.01 / crate::state::TICKS_PER_DAY;
 /// Chairman satisfaction threshold below which the hostility timer starts.
 const CHAIRMAN_HOSTILE_THRESHOLD: f64 = 0.20;
 
-/// Update each board member's satisfaction based on their connected entities
-/// plus any relationship modifier from contract decisions.
+/// Update each board member's satisfaction based on named modifiers.
+/// Continuous modifiers (Base, Stock, GDP, etc.) are cleared and recomputed.
+/// Event-driven modifiers (trades, contracts, crises) decay toward 0.
 /// Called once per tick from the main tick loop.
 pub(super) fn update_board_satisfaction(state: &mut GameState) {
+    // Pre-compute shared values outside the member loop
+    let research_util = research_utilization(state);
+    let survival_rate = global_survival_rate(state);
+
     for i in 0..state.board_members.len() {
-        let base_sat = compute_member_satisfaction(&state, i);
-        // Decay modifier toward 0
-        let modifier = state.board_members[i].satisfaction_modifier;
-        if modifier.abs() > 0.001 {
-            let decay = modifier.signum() * MODIFIER_DECAY_RATE;
-            state.board_members[i].satisfaction_modifier =
-                if modifier.abs() <= MODIFIER_DECAY_RATE { 0.0 }
-                else { modifier - decay };
+        // 1. Remove continuous modifiers (they'll be recomputed fresh)
+        state.board_members[i].modifiers.retain(|m| !m.source.is_continuous());
+
+        // 2. Decay event-driven modifiers toward 0
+        for m in state.board_members[i].modifiers.iter_mut() {
+            let rate = if m.source == ModifierSource::InitialSkepticism {
+                SKEPTICISM_DECAY_RATE
+            } else {
+                MODIFIER_DECAY_RATE
+            };
+            if m.value.abs() > rate {
+                m.value -= m.value.signum() * rate;
+            } else {
+                m.value = 0.0;
+            }
         }
-        // Decay initial skepticism toward 0
-        let skepticism = state.board_members[i].initial_skepticism;
-        if skepticism > 0.001 {
-            state.board_members[i].initial_skepticism =
-                (skepticism - SKEPTICISM_DECAY_RATE).max(0.0);
-        } else if skepticism != 0.0 {
-            state.board_members[i].initial_skepticism = 0.0;
+        // Remove near-zero modifiers
+        state.board_members[i].modifiers.retain(|m| m.value.abs() > 0.001);
+
+        // 3. Add continuous modifiers based on role and personality
+        let member = &state.board_members[i];
+        let mut continuous = vec![SatisfactionModifier {
+            source: ModifierSource::Base,
+            value: 0.50,
+        }];
+
+        match &member.role {
+            BoardRole::CorporateLeader { corp_idx } => {
+                let stock = stock_performance(state, *corp_idx);
+                match member.personality {
+                    Some(BoardPersonality::Profiteer) | None => {
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::StockPerformance,
+                            value: stock - 0.50,
+                        });
+                    }
+                    Some(BoardPersonality::Technocrat) => {
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::StockPerformance,
+                            value: 0.6 * stock - 0.30,
+                        });
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::ResearchUtilization,
+                            value: 0.4 * research_util - 0.20,
+                        });
+                    }
+                    Some(BoardPersonality::Humanitarian) => {
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::StockPerformance,
+                            value: 0.5 * stock - 0.25,
+                        });
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::GlobalSurvival,
+                            value: 0.5 * survival_rate - 0.25,
+                        });
+                    }
+                    Some(BoardPersonality::Dealmaker) => {
+                        let owns_shares = state.portfolio.get(*corp_idx)
+                            .map_or(0.0, |&shares| if shares > 0 { 1.0 } else { 0.0 });
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::StockPerformance,
+                            value: 0.7 * stock - 0.35,
+                        });
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::PlayerInvestment,
+                            value: 0.3 * owns_shares - 0.15,
+                        });
+                    }
+                }
+            }
+            BoardRole::RegionGovernor { region_idx } => {
+                let gdp = state.regions.get(*region_idx)
+                    .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
+                    .unwrap_or(0.0);
+                continuous.push(SatisfactionModifier {
+                    source: ModifierSource::RegionalGdp,
+                    value: gdp - 0.50,
+                });
+            }
+            BoardRole::IndependentAdvisor => {
+                continuous.push(SatisfactionModifier {
+                    source: ModifierSource::GlobalSurvival,
+                    value: survival_rate - 0.50,
+                });
+            }
         }
-        state.board_members[i].satisfaction =
-            (base_sat + state.board_members[i].satisfaction_modifier - state.board_members[i].initial_skepticism).clamp(0.0, 1.0);
+
+        // Insert continuous modifiers at the front so they display first
+        let event_modifiers: Vec<SatisfactionModifier> =
+            state.board_members[i].modifiers.drain(..).collect();
+        state.board_members[i].modifiers = continuous;
+        state.board_members[i].modifiers.extend(event_modifiers);
+
+        // 4. Compute satisfaction as sum of all modifiers
+        let total: f64 = state.board_members[i].modifiers.iter().map(|m| m.value).sum();
+        state.board_members[i].satisfaction = total.clamp(0.0, 1.0);
     }
 
     // Track chairman hostility duration for Vote of No Confidence
@@ -185,40 +275,6 @@ fn global_survival_rate(state: &GameState) -> f64 {
     }
 }
 
-/// Compute satisfaction for a single board member from game state.
-/// Corporate leaders blend stock performance with personality-specific factors.
-fn compute_member_satisfaction(state: &GameState, member_idx: usize) -> f64 {
-    let member = &state.board_members[member_idx];
-    match &member.role {
-        BoardRole::CorporateLeader { corp_idx } => {
-            let stock = stock_performance(state, *corp_idx);
-            match member.personality {
-                Some(BoardPersonality::Profiteer) | None => {
-                    stock
-                }
-                Some(BoardPersonality::Technocrat) => {
-                    0.6 * stock + 0.4 * research_utilization(state)
-                }
-                Some(BoardPersonality::Humanitarian) => {
-                    0.5 * stock + 0.5 * global_survival_rate(state)
-                }
-                Some(BoardPersonality::Dealmaker) => {
-                    let owns_shares = state.portfolio.get(*corp_idx)
-                        .map_or(0.0, |&shares| if shares > 0 { 1.0 } else { 0.0 });
-                    0.7 * stock + 0.3 * owns_shares
-                }
-            }
-        }
-        BoardRole::RegionGovernor { region_idx } => {
-            state.regions.get(*region_idx)
-                .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
-                .unwrap_or(0.0)
-        }
-        BoardRole::IndependentAdvisor => {
-            global_survival_rate(state)
-        }
-    }
-}
 
 /// Satisfaction boost when player buys shares in a board member's own corporation.
 /// Scaled per 10-share block — a single buy gives +0.05, comparable to a minor contract favor.
@@ -276,11 +332,11 @@ pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<St
             } else {
                 INVEST_OWN_CORP_BOOST
             };
-            member.satisfaction_modifier += boost * dealmaker_mult;
+            member.add_modifier(ModifierSource::BoughtShares, boost * dealmaker_mult);
             pleased = Some(member.name.clone());
         } else if let Some(member_corp) = state.corporations.get(member_corp_idx) {
             if member_corp.sector == bought_sector {
-                member.satisfaction_modifier -= INVEST_RIVAL_PENALTY * dealmaker_mult;
+                member.add_modifier(ModifierSource::RivalInvestment, -INVEST_RIVAL_PENALTY * dealmaker_mult);
                 displeased_count += 1;
             }
         }
@@ -311,7 +367,7 @@ pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<S
             _ => continue,
         };
         if member_corp_idx == corp_idx {
-            member.satisfaction_modifier -= SELL_OWN_CORP_PENALTY * dealmaker_mult;
+            member.add_modifier(ModifierSource::SoldShares, -SELL_OWN_CORP_PENALTY * dealmaker_mult);
             displeased = Some(member.name.clone());
         }
     }
@@ -327,7 +383,7 @@ pub(super) fn on_gdp_policy_enacted(state: &mut GameState, region_idx: usize) {
             continue;
         }
         if member.region_idx == Some(region_idx) {
-            member.satisfaction_modifier -= PROFITEER_POLICY_PENALTY;
+            member.add_modifier(ModifierSource::PolicyEnacted, -PROFITEER_POLICY_PENALTY);
         }
     }
 }
@@ -336,7 +392,7 @@ pub(super) fn on_gdp_policy_enacted(state: &mut GameState, region_idx: usize) {
 pub(super) fn on_research_completed(state: &mut GameState) {
     for member in state.board_members.iter_mut() {
         if member.personality == Some(BoardPersonality::Technocrat) {
-            member.satisfaction_modifier += TECHNOCRAT_RESEARCH_BOOST;
+            member.add_modifier(ModifierSource::ResearchCompleted, TECHNOCRAT_RESEARCH_BOOST);
         }
     }
 }
@@ -516,13 +572,12 @@ mod tests {
                 _ => None,
             }).expect("should have a corporate leader");
 
-        let before = state.board_members[member_idx].satisfaction_modifier;
         on_buy_shares(&mut state, corp_idx);
-        let after = state.board_members[member_idx].satisfaction_modifier;
+        let total = state.board_members[member_idx].modifier_total(&ModifierSource::BoughtShares);
 
-        assert!((after - before - INVEST_OWN_CORP_BOOST).abs() < 0.001,
-            "buying own corp should boost modifier by {INVEST_OWN_CORP_BOOST}, got delta {}",
-            after - before);
+        assert!((total - INVEST_OWN_CORP_BOOST).abs() < 0.001,
+            "buying own corp should add BoughtShares modifier of {INVEST_OWN_CORP_BOOST}, got {}",
+            total);
     }
 
     #[test]
@@ -546,13 +601,12 @@ mod tests {
             .map(|(idx, _)| idx);
 
         if let Some(rival_idx) = rival_idx {
-            let before = state.board_members[member_idx].satisfaction_modifier;
             on_buy_shares(&mut state, rival_idx);
-            let after = state.board_members[member_idx].satisfaction_modifier;
+            let total = state.board_members[member_idx].modifier_total(&ModifierSource::RivalInvestment);
 
-            assert!((after - before + INVEST_RIVAL_PENALTY).abs() < 0.001,
-                "buying rival sector corp should penalize by {INVEST_RIVAL_PENALTY}, got delta {}",
-                after - before);
+            assert!((total + INVEST_RIVAL_PENALTY).abs() < 0.001,
+                "buying rival sector corp should add RivalInvestment modifier of -{INVEST_RIVAL_PENALTY}, got {}",
+                total);
         }
         // If no same-sector rival exists for this seed, the test passes vacuously
     }
@@ -569,13 +623,12 @@ mod tests {
                 _ => None,
             }).expect("should have a corporate leader");
 
-        let before = state.board_members[member_idx].satisfaction_modifier;
         on_sell_shares(&mut state, corp_idx);
-        let after = state.board_members[member_idx].satisfaction_modifier;
+        let total = state.board_members[member_idx].modifier_total(&ModifierSource::SoldShares);
 
-        assert!((after - before + SELL_OWN_CORP_PENALTY).abs() < 0.001,
-            "selling own corp should penalize by {SELL_OWN_CORP_PENALTY}, got delta {}",
-            after - before);
+        assert!((total + SELL_OWN_CORP_PENALTY).abs() < 0.001,
+            "selling own corp should add SoldShares modifier of -{SELL_OWN_CORP_PENALTY}, got {}",
+            total);
     }
 
     #[test]
@@ -599,13 +652,12 @@ mod tests {
             .map(|(idx, _)| idx);
 
         if let Some(unrelated_idx) = unrelated_idx {
-            let before = state.board_members[member_idx].satisfaction_modifier;
+            let before_count = state.board_members[member_idx].modifiers.len();
             on_buy_shares(&mut state, unrelated_idx);
-            let after = state.board_members[member_idx].satisfaction_modifier;
+            let after_count = state.board_members[member_idx].modifiers.len();
 
-            assert!((after - before).abs() < 0.001,
-                "buying unrelated sector should not affect this member, got delta {}",
-                after - before);
+            assert_eq!(before_count, after_count,
+                "buying unrelated sector should not add any modifier");
         }
     }
 }
