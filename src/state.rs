@@ -5778,10 +5778,10 @@ impl GameState {
             1 => Some(DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() }),
             // Sacrifice Region
             2 => Some(DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() }),
-            // Suspend Regional Authority
-            3 => Some(DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() }),
-            // Fortify Region
-            4 => Some(DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() }),
+            // Suspend Regional Authority — major power grab, harder to unlock than Human Trials
+            3 => Some(DecreeUnlockCondition { min_dead: Some(100_000_000.0), min_crit_regions: Some(3), ..Default::default() }),
+            // Fortify Region — less drastic than Sacrifice, unlocks at intermediate threshold
+            4 => Some(DecreeUnlockCondition { min_dead: Some(200_000_000.0), min_collapsed_regions: Some(1), ..Default::default() }),
             // Emergency Countermeasure
             5 => Some(DecreeUnlockCondition { min_dead: Some(2_000_000_000.0), min_collapsed_regions: Some(3), ..Default::default() }),
             _ => None,
