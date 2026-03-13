@@ -1,8 +1,8 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState, MAX_FIELD_RESEARCH,
-    ModifierSource, ResearchCategory, SatisfactionModifier};
+use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState,
+    ModifierSource, SatisfactionModifier};
 
 /// Generate board members from existing game entities at game start.
 /// Called after corporations and regions are initialized.
@@ -252,16 +252,12 @@ fn stock_performance(state: &GameState, corp_idx: usize) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Research pipeline utilization: fraction of research slots actively in use
-/// across field, applied, and basic tracks.
+/// Research pipeline utilization: fraction of research capacity actively in use.
+/// Measured as active projects vs a reference maximum of 5 concurrent projects.
 fn research_utilization(state: &GameState) -> f64 {
-    let field_active = state.active_in_category(ResearchCategory::Field).len() as f64;
-    let field_max = MAX_FIELD_RESEARCH as f64;
-    let applied_active = if state.research_slot(ResearchCategory::Applied).is_some() { 1.0 } else { 0.0 };
-    let basic_active = if state.research_slot(ResearchCategory::Basic).is_some() { 1.0 } else { 0.0 };
-    let total_active = field_active + applied_active + basic_active;
-    let total_max = field_max + 1.0 + 1.0;
-    (total_active / total_max).clamp(0.0, 1.0)
+    let active = state.active_research.len() as f64;
+    let reference_max = 5.0; // historical: 3 field + 1 applied + 1 basic
+    (active / reference_max).clamp(0.0, 1.0)
 }
 
 /// Global survival rate: fraction of initial population still alive.

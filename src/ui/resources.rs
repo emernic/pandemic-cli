@@ -168,7 +168,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
         let field_projects = state.active_in_category(ResearchCategory::Field);
         if field_projects.is_empty() {
-            let has_field_projects = !state.available_field_projects().is_empty();
+            let has_field_projects = state.all_available_projects().iter()
+                .any(|p| p.category() == ResearchCategory::Field);
             if has_field_projects {
                 spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
             } else {
@@ -187,14 +188,16 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             }
         }
 
-        // Applied and Basic tracks
-        for (label, category, color) in [
+        // Applied and Basic categories
+        for (label, cat, color) in [
             ("Applied", ResearchCategory::Applied, Color::Magenta),
             ("Basic", ResearchCategory::Basic, Color::Green),
         ] {
             spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
             spans.push(Span::styled(format!("{}: ", label), Style::default().fg(Color::DarkGray)));
-            if let Some(project) = state.research_slot(category) {
+            let project = state.active_research.iter()
+                .find(|p| p.kind.category() == cat);
+            if let Some(project) = project {
                 let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
                 spans.push(Span::styled(
                     format!("{} {}%", compact_research_label(&project.kind, state), pct),
@@ -202,8 +205,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ));
             } else {
                 // Check if there are available projects the player could start
-                let has_actionable = state.available_projects(category).iter()
-                    .any(|p| !matches!(p, ResearchKind::TrainPersonnel));
+                let has_actionable = state.all_available_projects().iter()
+                    .any(|p| p.category() == cat && !matches!(p, ResearchKind::TrainPersonnel));
                 if has_actionable {
                     spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
                 } else {

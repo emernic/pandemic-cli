@@ -167,10 +167,10 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Lab accident: requires active applied or basic research
-    let has_applied = state.research_slot(ResearchCategory::Applied).is_some();
-    let has_basic = state.research_slot(ResearchCategory::Basic).is_some();
+    let has_applied = !state.active_in_category(ResearchCategory::Applied).is_empty();
+    let has_basic = !state.active_in_category(ResearchCategory::Basic).is_empty();
     if has_applied || has_basic {
-        // If both tracks are running, randomly target one
+        // If both categories are running, randomly target one
         let targets_basic = if has_applied && has_basic {
             rng.r#gen::<bool>()
         } else {
@@ -233,8 +233,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     // RefugeeWave is triggered deterministically on collapse (see engine/mod.rs),
     // not generated randomly.
 
-    // Data leak: requires any active research (field or applied)
-    if !state.active_in_category(ResearchCategory::Field).is_empty() || state.research_slot(ResearchCategory::Applied).is_some() {
+    // Data leak: requires any active research
+    if !state.active_research.is_empty() {
         candidates.push(CrisisKind::DataLeak);
     }
 
@@ -2444,7 +2444,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .any(|p| matches!(p.kind, ResearchKind::IdentifyThreat { disease_idx: d } if d == *disease_idx));
 
             // Check if there's capacity for field research
-            let has_capacity = state.field_research_has_capacity();
+            let has_capacity = true; // no capacity limits — personnel/funding are the only gate
 
             let mut options = Vec::new();
 
@@ -3904,9 +3904,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // "Begin identification" — the first option (only present when identification
             // is available). Funding cost was already deducted by CrisisCost.
             // Start the identification research project.
-            let projects = state.available_projects(ResearchCategory::Field);
+            let projects = state.all_available_projects();
             if let Some(idx) = projects.iter().position(|k| matches!(k, ResearchKind::IdentifyThreat { disease_idx: d } if *d == *disease_idx)) {
-                let (ok, msg) = super::research::start_research(state, ResearchCategory::Field, idx, false);
+                let (ok, msg) = super::research::start_research(state, idx, false);
                 if ok {
                     let name = state.diseases.get(*disease_idx)
                         .map(|d| d.display_name(*disease_idx))

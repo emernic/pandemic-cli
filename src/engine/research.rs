@@ -6,17 +6,15 @@ use crate::state::{
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
+/// `project_idx` indexes into `state.all_available_projects()`.
 ///
 /// Returns (success, message).
-pub(super) fn start_research(state: &mut GameState, category: ResearchCategory, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
+pub(super) fn start_research(state: &mut GameState, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
-    if !state.has_research_capacity(category) {
-        return (false, None);
-    }
 
-    let projects = state.available_projects(category);
+    let projects = state.all_available_projects();
 
     if let Some(kind) = projects.get(project_idx) {
         let (base_personnel, duration, funding_cost) = state.effective_costs(kind);
@@ -224,9 +222,9 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
                     }
                 }
 
-                let has_trial_available = state.available_field_projects().iter()
+                let has_trial_available = state.all_available_projects().iter()
                     .any(|p| matches!(p, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == m_idx));
-                if has_trial_available && state.field_research_has_capacity() {
+                if has_trial_available {
                     let name = state.medicines.get(m_idx)
                         .map(|m| m.name.as_str()).unwrap_or("medicine");
                     state.events.push(GameEvent::ResearchHandoff {
@@ -256,8 +254,8 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     }
 
     // Notify player if field completions unlocked Applied research options
-    if had_field_completion && state.research_slot(ResearchCategory::Applied).is_none() {
-        if let Some(kind) = state.available_applied_projects().iter()
+    if had_field_completion {
+        if let Some(kind) = state.all_available_projects().iter()
             .find(|p| matches!(p, ResearchKind::DevelopMedicine { .. }))
         {
             if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
@@ -273,37 +271,29 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) {
     // Auto-repeat completed repeatable projects
     for project in &completed {
         if state.auto_repeat_research.contains(&project.kind) {
-            let cat = project.kind.category();
-            if state.has_research_capacity(cat) {
-                // Find the project in available list and start it
-                let projects = state.available_projects(cat);
-                if let Some(idx) = projects.iter().position(|k| k == &project.kind) {
-                    let (ok, _) = start_research(state, cat, idx, false);
-                    if ok {
-                        state.events.push(GameEvent::ResearchAutoRestarted { kind: project.kind.clone() });
-                    }
+            let projects = state.all_available_projects();
+            if let Some(idx) = projects.iter().position(|k| k == &project.kind) {
+                let (ok, _) = start_research(state, idx, false);
+                if ok {
+                    state.events.push(GameEvent::ResearchAutoRestarted { kind: project.kind.clone() });
                 }
             }
         }
     }
 }
 
-/// Try to auto-repeat any repeatable research that has auto-repeat enabled
-/// and whose category has capacity. Called at the start of each tick.
+/// Try to auto-repeat any repeatable research that has auto-repeat enabled.
+/// Called at the start of each tick.
 fn try_auto_repeat(state: &mut GameState) {
     let kinds_to_repeat: Vec<ResearchKind> = state.auto_repeat_research.clone();
     for kind in &kinds_to_repeat {
-        let cat = kind.category();
-        if !state.has_research_capacity(cat) {
-            continue;
-        }
-        let projects = state.available_projects(cat);
+        let projects = state.all_available_projects();
         if let Some(idx) = projects.iter().position(|k| k == kind) {
             let (_, _, cost) = state.effective_costs(&projects[idx]);
             if state.resources.funding < cost {
                 continue;
             }
-            let (ok, _) = start_research(state, cat, idx, false);
+            let (ok, _) = start_research(state, idx, false);
             if ok {
                 state.events.push(GameEvent::ResearchAutoRestarted { kind: kind.clone() });
             }
@@ -340,8 +330,8 @@ mod tests {
         GameOutcome, GameState, ResearchCategory, ResearchFlatItem, ResearchKind, ResearchProject,
     };
 
-    /// Helper: open research panel, navigate to first flat-list item matching `pred`, and confirm through.
-    fn start_research_matching(state: &GameState, pred: impl Fn(&ResearchFlatItem) -> bool) -> GameState {
+    /// Helper: open research panel, navigate to first available item matching `kind_pred`, and confirm through.
+    fn start_research_matching(state: &GameState, kind_pred: impl Fn(&ResearchKind) -> bool) -> GameState {
         // Ensure panel is closed first, then open fresh
         let mut s = if state.ui.open_panel == crate::state::Panel::Research {
             apply_action(state, &Action::ClosePanel)
@@ -350,8 +340,14 @@ mod tests {
         };
         s = apply_action(&s, &Action::OpenResearch);
         let items = s.research_flat_items();
-        let idx = items.iter().position(|item| pred(item))
-            .expect("expected matching research item in flat list");
+        let available = s.all_available_projects();
+        let idx = items.iter().position(|item| {
+            if let ResearchFlatItem::Available(proj_idx) = item {
+                available.get(*proj_idx).map_or(false, &kind_pred)
+            } else {
+                false
+            }
+        }).expect("expected matching research item in flat list");
         s.ui.panel_selection = idx;
         s = apply_action(&s, &Action::Confirm); // ConfirmProject
         s = apply_action(&s, &Action::Confirm); // Start
@@ -385,14 +381,14 @@ mod tests {
         assert!(!state.medicines[0].unlocked);
 
         // Start applied research: Develop Antiviral-A
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Applied, .. }));
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
 
-        assert!(state.research_slot(ResearchCategory::Applied).is_some());
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
 
         for _ in 0..200 {
             state = tick(&state);
         }
-        assert!(state.research_slot(ResearchCategory::Applied).is_none());
+        assert!(state.active_in_category(ResearchCategory::Applied).is_empty());
         assert!(state.medicines[0].unlocked);
     }
 
@@ -404,18 +400,8 @@ mod tests {
 
         assert!(state.medicines[0].tested_against.is_empty());
 
-        // Start field research: Clinical Trial — find index of clinical trial in flat list
-        state = apply_action(&state, &Action::OpenResearch);
-        let items = state.research_flat_items();
-        let field_projects = state.available_projects(ResearchCategory::Field);
-        let trial_flat_idx = items.iter().position(|item| {
-            if let ResearchFlatItem::Available { category: ResearchCategory::Field, project_idx: idx } = item {
-                matches!(field_projects.get(*idx), Some(ResearchKind::ClinicalTrial { .. }))
-            } else { false }
-        }).expect("should have a clinical trial available");
-        state.ui.panel_selection = trial_flat_idx;
-        state = apply_action(&state, &Action::Confirm); // ConfirmProject
-        state = apply_action(&state, &Action::Confirm); // Start
+        // Start field research: Clinical Trial
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::ClinicalTrial { .. }));
 
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
 
@@ -491,16 +477,16 @@ mod tests {
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         // Start field research (first item in flat list)
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Field, .. }));
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Field);
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
 
         // Start applied research
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Applied, .. }));
-        assert!(state.research_slot(ResearchCategory::Applied).is_some());
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
 
         // Both running simultaneously
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
-        assert!(state.research_slot(ResearchCategory::Applied).is_some());
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
     }
 
     #[test]
@@ -648,7 +634,7 @@ mod tests {
         });
         state = tick(&state);
 
-        assert!(state.research_slot(ResearchCategory::Applied).is_none(), "project should be complete");
+        assert!(state.active_in_category(ResearchCategory::Applied).is_empty(), "project should be complete");
         let expected_doses = state.medicines[0].max_doses * state.manufacturing_yield_bonus();
         assert_eq!(
             state.medicines[0].doses, expected_doses,
@@ -662,17 +648,7 @@ mod tests {
         state.diseases[0].knowledge = 1.0;
         let original_rate = state.diseases[0].pathogen_type.mutation_rate();
 
-        state = apply_action(&state, &Action::OpenResearch);
-        let items = state.research_flat_items();
-        let field_projects = state.available_projects(ResearchCategory::Field);
-        let seq_flat_idx = items.iter().position(|item| {
-            if let ResearchFlatItem::Available { category: ResearchCategory::Field, project_idx: idx } = item {
-                matches!(field_projects.get(*idx), Some(ResearchKind::GenomicSequencing { .. }))
-            } else { false }
-        }).expect("should have genomic sequencing available");
-        state.ui.panel_selection = seq_flat_idx;
-        state = apply_action(&state, &Action::Confirm); // ConfirmProject
-        state = apply_action(&state, &Action::Confirm); // Start
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::GenomicSequencing { .. }));
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
 
         for _ in 0..200 {
@@ -690,22 +666,13 @@ mod tests {
         let mut state = GameState::new_default(42);
         let initial_personnel = state.resources.personnel;
 
-        state = apply_action(&state, &Action::OpenResearch);
-        let items = state.research_flat_items();
-        let train_flat_idx = items.iter().position(|item| {
-            if let ResearchFlatItem::Available { category: ResearchCategory::Applied, project_idx } = item {
-                matches!(state.available_projects(ResearchCategory::Applied).get(*project_idx), Some(ResearchKind::TrainPersonnel))
-            } else { false }
-        }).expect("should have train personnel available");
-        state.ui.panel_selection = train_flat_idx;
-        state = apply_action(&state, &Action::Confirm); // ConfirmProject
-        state = apply_action(&state, &Action::Confirm); // Start
-        assert!(state.research_slot(ResearchCategory::Applied).is_some());
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
 
         for _ in 0..160 {
             state = tick(&state);
         }
-        assert!(state.research_slot(ResearchCategory::Applied).is_none());
+        assert!(state.active_in_category(ResearchCategory::Applied).is_empty());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
     }
 
@@ -717,21 +684,15 @@ mod tests {
         state.resources.funding = 1000.0;
         assert!(state.unlocked_techs.is_empty());
 
-        // Navigate: Research → find BasicAvailable → Confirm → Confirm
-        state = apply_action(&state, &Action::OpenResearch);
-        let items = state.research_flat_items();
-        let basic_idx = items.iter().position(|item| matches!(item, crate::state::ResearchFlatItem::Available { category: ResearchCategory::Basic, .. }))
-            .expect("expected Basic available item");
-        state.ui.panel_selection = basic_idx;
-        state = apply_action(&state, &Action::Confirm);     // Go to ConfirmProject
-        state = apply_action(&state, &Action::Confirm);     // Confirm start
-        assert!(state.research_slot(ResearchCategory::Basic).is_some(), "basic research should have started");
+        // Navigate: Research → find Basic → Confirm → Confirm
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Basic);
+        assert!(state.active_in_category(ResearchCategory::Basic).first().is_some(), "basic research should have started");
 
         // Advance to completion (240 ticks at 1x speed)
         for _ in 0..240 {
             state = tick(&state);
         }
-        assert!(state.research_slot(ResearchCategory::Basic).is_none(), "project should be complete");
+        assert!(state.active_in_category(ResearchCategory::Basic).is_empty(), "project should be complete");
         assert!(
             state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign),
             "TargetedDrugDesign should be unlocked"
@@ -739,8 +700,7 @@ mod tests {
     }
 
     #[test]
-    fn three_concurrent_research_tracks() {
-        use crate::state::ResearchFlatItem;
+    fn three_concurrent_research_projects() {
 
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
@@ -752,21 +712,21 @@ mod tests {
         // (it closes the panel first if already open)
 
         // Start field research
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Field, .. }));
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Field);
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
 
         // Start applied research
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Applied, .. }));
-        assert!(state.research_slot(ResearchCategory::Applied).is_some());
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
 
         // Start basic research
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Basic, .. }));
-        assert!(state.research_slot(ResearchCategory::Basic).is_some());
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Basic);
+        assert!(state.active_in_category(ResearchCategory::Basic).first().is_some());
 
         // All three running simultaneously
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
-        assert!(state.research_slot(ResearchCategory::Applied).is_some());
-        assert!(state.research_slot(ResearchCategory::Basic).is_some());
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
+        assert!(state.active_in_category(ResearchCategory::Basic).first().is_some());
     }
 
     #[test]
@@ -823,29 +783,42 @@ mod tests {
     }
 
     #[test]
-    fn field_research_capped_at_max() {
-        use crate::state::MAX_FIELD_RESEARCH;
+    fn research_only_gated_by_personnel_and_funding() {
         let mut state = GameState::new_default(42);
         state.resources.personnel = 50;
+        state.resources.funding = 5000.0;
 
-        // Fill all field slots
-        for i in 0..MAX_FIELD_RESEARCH {
-            state.active_research.push(ResearchProject {
-                kind: ResearchKind::IdentifyThreat { disease_idx: i },
-                progress: 0.0,
-                required_ticks: 160.0,
-                personnel_assigned: 5,
-            });
+        // Start multiple field projects — no capacity limit
+        state.active_research.push(ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 5,
+        });
+        state.active_research.push(ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 1 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 5,
+        });
+        state.active_research.push(ResearchProject {
+            kind: ResearchKind::IdentifyThreat { disease_idx: 2 },
+            progress: 0.0,
+            required_ticks: 160.0,
+            personnel_assigned: 5,
+        });
+        assert_eq!(state.active_in_category(ResearchCategory::Field).len(), 3);
+
+        // Can still start more if there are available projects and personnel
+        let available = state.all_available_projects();
+        if !available.is_empty() {
+            let (ok, _msg) = super::start_research(&mut state, 0, false);
+            // Should succeed as long as we have personnel and funding
+            if state.personnel_available() >= available[0].costs(&state.medicines).0 {
+                assert!(ok, "should start research when personnel and funding are available");
+                assert!(state.active_research.len() >= 4, "should have 4+ active projects");
+            }
         }
-        assert!(!state.field_research_has_capacity(), "should be at capacity");
-        assert_eq!(state.active_in_category(ResearchCategory::Field).len(), MAX_FIELD_RESEARCH);
-
-        // Try to start another — should fail
-        let (ok, _msg) = super::start_research(
-            &mut state, ResearchCategory::Field, 0, false,
-        );
-        assert!(!ok, "should not start field research when at capacity");
-        assert_eq!(state.active_in_category(ResearchCategory::Field).len(), MAX_FIELD_RESEARCH);
     }
 
     #[test]
@@ -993,19 +966,19 @@ mod tests {
         state.medicines[0].tested_against = vec![];
 
         // Start a clinical trial WITHOUT human trials decree
-        let projects = state.available_projects(ResearchCategory::Field);
+        let projects = state.all_available_projects();
         let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
         assert!(trial_idx.is_some(), "clinical trial should be available");
-        let (ok, _) = super::start_research(&mut state, ResearchCategory::Field, trial_idx.unwrap(), false);
+        let (ok, _) = super::start_research(&mut state, trial_idx.unwrap(), false);
         assert!(ok);
         let normal_duration = state.active_in_category(ResearchCategory::Field).last().unwrap().required_ticks;
         state.active_research.retain(|p| p.kind.category() != ResearchCategory::Field);
 
         // Now enact human trials and start the same trial
         state.enacted_decrees.authorize_human_trials = true;
-        let projects = state.available_projects(ResearchCategory::Field);
+        let projects = state.all_available_projects();
         let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
-        let (ok, _) = super::start_research(&mut state, ResearchCategory::Field, trial_idx.unwrap(), false);
+        let (ok, _) = super::start_research(&mut state, trial_idx.unwrap(), false);
         assert!(ok);
         let fast_duration = state.active_in_category(ResearchCategory::Field).last().unwrap().required_ticks;
 
@@ -1253,9 +1226,9 @@ mod tests {
         state.diseases[0].knowledge = 1.0;
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
-        // Start develop medicine on applied track
-        state = start_research_matching(&state, |item| matches!(item, ResearchFlatItem::Available { category: ResearchCategory::Applied, .. }));
-        assert!(state.research_slot(ResearchCategory::Applied).is_some(),
+        // Start develop medicine (applied research)
+        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
+        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some(),
             "Applied research should start. UI state: {:?}", state.ui.research_ui);
 
         // Advance to completion, checking events each tick
