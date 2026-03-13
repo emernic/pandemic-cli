@@ -6219,9 +6219,11 @@ impl GameState {
         // Applied Research: active project OR available projects
         // TrainPersonnel is skipped here — it appears in the Lab section instead.
         let applied_projects = self.available_projects(ResearchTrack::Applied);
-        if self.research_slot(ResearchTrack::Applied).is_some() {
+        let applied_is_train = self.applied_research.as_ref()
+            .is_some_and(|p| matches!(p.kind, ResearchKind::TrainPersonnel));
+        if self.research_slot(ResearchTrack::Applied).is_some() && !applied_is_train {
             items.push(ResearchFlatItem::AppliedActive);
-        } else {
+        } else if self.research_slot(ResearchTrack::Applied).is_none() {
             for i in 0..applied_projects.len() {
                 if matches!(applied_projects[i], ResearchKind::TrainPersonnel) {
                     continue;
@@ -6239,8 +6241,10 @@ impl GameState {
             }
         }
 
-        // Lab section: Train Personnel (if applied slot is free) and lab upgrade
-        if self.research_slot(ResearchTrack::Applied).is_none() {
+        // Lab section: Train Personnel (active or available) and lab upgrade
+        if applied_is_train {
+            items.push(ResearchFlatItem::AppliedActive);
+        } else if self.research_slot(ResearchTrack::Applied).is_none() {
             let applied_projects = self.available_projects(ResearchTrack::Applied);
             for (i, kind) in applied_projects.iter().enumerate() {
                 if matches!(kind, ResearchKind::TrainPersonnel) {
