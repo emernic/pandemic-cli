@@ -163,6 +163,7 @@ Key files: `src/state.rs` (data structures + derived computations), `src/engine/
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
 **World and power structure:** `docs/setting.md` — read this before writing crisis events, designing board/governor/corporation features, or framing any interaction involving authority and power relationships.
+**Authority framing:** `docs/framing-guide.md` — before writing user-facing text or designing features that touch authority, governance, board dynamics, contracts, decrees, crises, or regional power relationships, read this and `docs/setting.md`. Skip this for purely mechanical bug fixes, refactors, balance-only changes, or small predefined edits that add no new framing.
 
 ### Architectural Direction — THIS IS YOUR JOB
 
