@@ -669,7 +669,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
             options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
@@ -694,7 +694,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
             options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
@@ -709,7 +709,7 @@ mod tests {
         let state = apply_action(&state, &Action::Confirm);
 
         // Preference should be saved
-        assert_eq!(state.auto_resolve_crises.get("aid"), Some(&1));
+        assert_eq!(state.auto_resolve_crises.get("personnel"), Some(&1));
         assert!(state.active_crisis.is_none());
         assert!(!state.ui.crisis_auto_resolve); // reset after confirm
     }
@@ -721,7 +721,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
             options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
@@ -741,11 +741,11 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         // Pre-existing preference for aid crises
-        state.auto_resolve_crises.insert("aid".to_string(), 0);
+        state.auto_resolve_crises.insert("personnel".to_string(), 0);
 
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
             options: vec![ CrisisOption { label: "Take funding".into(), description: "Get ¥500".into(), cost: None },
@@ -756,7 +756,7 @@ mod tests {
 
         // Confirm WITHOUT [X] — should clear the existing preference
         let state = apply_action(&state, &Action::Confirm);
-        assert!(!state.auto_resolve_crises.contains_key("aid"),
+        assert!(!state.auto_resolve_crises.contains_key("personnel"),
             "manually handling a crisis should clear saved preference");
     }
 
@@ -819,7 +819,7 @@ mod tests {
         // Fire a crisis while in this state.
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
             options: vec![
@@ -861,7 +861,7 @@ mod tests {
         // Fire a crisis while in this state.
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::InternationalAid { funding: 500.0, personnel: 5 },
+            kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
             description: "Choose wisely".into(),
             options: vec![

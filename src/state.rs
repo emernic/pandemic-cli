@@ -4112,8 +4112,6 @@ pub enum CrisisKind {
     PersonnelCrisis { amount: u32 },
     /// Staff falling ill from the pandemic — temporarily unavailable, then recover.
     PersonnelSick { amount: u32, recovery_days: f64 },
-    /// International aid offer — choose funding or personnel.
-    InternationalAid { funding: f64, personnel: u32 },
     /// Mutation surge — pay to gain knowledge or let it drift.
     MutationSurge { disease_idx: usize },
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
@@ -4143,10 +4141,6 @@ pub enum CrisisKind {
     MilitaryTakeover { cooperate_loss: u32 },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
-    /// Billionaire offers to fund everything — for a price.
-    BillionaireOffer { reward: f64, personnel_loss: u32 },
-    /// WHO headquarters loses power — relocate or improvise.
-    WHOEvacuation { aid_loss: f64 },
     /// Warlord declares himself ruler of collapsed region, demands recognition.
     WarlordDemand { region_idx: usize },
     /// Two corporations claim credit for your treatment breakthrough, threatening to cut contracts.
@@ -4302,7 +4296,6 @@ impl CrisisKind {
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::PersonnelSick { .. } => "personnel_sick",
-            CrisisKind::InternationalAid { .. } => "aid",
             CrisisKind::MutationSurge { .. } => "mutation",
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::DataLeak => "dataleak",
@@ -4317,8 +4310,6 @@ impl CrisisKind {
             CrisisKind::WhistleblowerReport { .. } => "whistleblower",
             CrisisKind::MilitaryTakeover { .. } => "military",
             CrisisKind::CultBlockade { .. } => "cult",
-            CrisisKind::BillionaireOffer { .. } => "billionaire",
-            CrisisKind::WHOEvacuation { .. } => "who_evac",
             CrisisKind::WarlordDemand { .. } => "warlord",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
             CrisisKind::PerformanceReview => "performance_review",
