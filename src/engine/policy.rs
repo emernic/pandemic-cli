@@ -1152,7 +1152,9 @@ pub(super) fn tick_screening(state: &mut GameState) {
         // Get real detected infected for this region.
         // Without antigen-level screening, exposed (incubating) people are invisible —
         // they show no symptoms, so only symptomatic cases contribute to the estimate.
-        let real = if screening.shows_exposed() {
+        // Gate on progress > 0.5 to match the UI's screening_shows_exposed() — the
+        // infrastructure needs meaningful ramp-up before it can detect incubating cases.
+        let real = if screening.shows_exposed() && progress > 0.5 {
             state.regions[i].detected_infected(&state.diseases)
         } else {
             state.regions[i].detected_symptomatic(&state.diseases)
