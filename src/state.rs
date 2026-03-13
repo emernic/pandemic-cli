@@ -1190,7 +1190,7 @@ impl CorporationSector {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Corporation {
     pub name: String,
-    /// Surname of the corporation's director/CEO (for board member display).
+    /// Surname of the corporation's director (for board member display).
     pub director_surname: String,
     pub sector: CorporationSector,
     pub region_idx: usize,
