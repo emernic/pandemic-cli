@@ -757,13 +757,13 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 )
             } else if to_collapsed {
                 format!(
-                    "Seal the borders. {:.0}M die in the open. {} has already fallen.",
+                    "Seal the borders. {:.0}M die in the open. {} is already gone.",
                     survivors_m * 0.20, to_name,
                 )
             } else if to_infected {
                 format!(
                     "Seal the borders. Millions die at the gates. \
-                     Prevent further destabilization in {}.",
+                     {} is already struggling — keep it from getting worse.",
                     to_name,
                 )
             } else {
