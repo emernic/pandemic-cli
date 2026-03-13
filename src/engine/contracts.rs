@@ -1092,7 +1092,7 @@ mod tests {
     }
 
     #[test]
-    fn loyalty_raise_crisis_decline_no_change() {
+    fn loyalty_raise_crisis_decline_cancels_contract() {
         use crate::engine::crisis;
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
@@ -1109,8 +1109,6 @@ mod tests {
             loyalty_raise_offered: true,
         });
 
-        let income_before = state.contracts[0].income;
-
         let crisis_event = crisis::build_crisis_event(
             &state,
             CrisisKind::LoyaltyRaise { template_id: 0 },
@@ -1118,8 +1116,8 @@ mod tests {
         state.active_crisis = Some(crisis_event);
 
         let msg = crisis::resolve_crisis(&mut state, 1);
-        assert!(msg.contains("unchanged") || msg.contains("nods"), "msg: {msg}");
-        assert!((state.contracts[0].income - income_before).abs() < 0.001,
-            "Income should be unchanged after declining");
+        assert!(msg.contains("cancelled"), "msg: {msg}");
+        assert!(state.contracts.is_empty(),
+            "Contract should be cancelled when declining loyalty raise");
     }
 }
