@@ -930,7 +930,11 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             while state.portfolio.len() <= *corp_idx {
                 state.portfolio.push(0);
             }
+            while state.cost_basis.len() <= *corp_idx {
+                state.cost_basis.push(0.0);
+            }
             state.portfolio[*corp_idx] += quantity;
+            state.cost_basis[*corp_idx] += cost;
             let reaction = board::on_buy_shares(state, *corp_idx);
             let name = state.corporations[*corp_idx].name.clone();
             let mut msg = format!(
@@ -955,6 +959,15 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             }
             let proceeds = state.corporations[*corp_idx].share_price * (*quantity as f64);
             state.resources.funding += proceeds;
+            // Reduce cost basis proportionally: selling N of M shares removes N/M of basis.
+            if held > 0 {
+                let basis = state.cost_basis.get(*corp_idx).copied().unwrap_or(0.0);
+                let fraction_sold = *quantity as f64 / held as f64;
+                if let Some(b) = state.cost_basis.get_mut(*corp_idx) {
+                    *b -= basis * fraction_sold;
+                    if *b < 0.0 { *b = 0.0; }
+                }
+            }
             state.portfolio[*corp_idx] -= quantity;
             let reaction = board::on_sell_shares(state, *corp_idx);
             let name = state.corporations[*corp_idx].name.clone();

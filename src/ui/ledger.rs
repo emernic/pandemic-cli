@@ -118,9 +118,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let held = state.portfolio.get(c_idx).copied().unwrap_or(0);
         let held_str = if held > 0 { format!("{:>5}", held) } else { "    -".to_string() };
 
-        // P/L for held shares (vs IPO price)
+        // P/L for held shares (vs actual cost basis)
         let pl_str = if held > 0 {
-            let pl = (corp.share_price - corp.ipo_price) * held as f64;
+            let basis = state.cost_basis.get(c_idx).copied().unwrap_or(0.0);
+            let market_value = corp.share_price * held as f64;
+            let pl = market_value - basis;
             if pl >= 0.0 { format!("+{}", format_number(pl)) } else { format_number(pl) }
         } else {
             "-".to_string()
