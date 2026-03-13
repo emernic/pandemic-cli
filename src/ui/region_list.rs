@@ -978,43 +978,6 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         )));
     }
 
-    // Active policies
-    if let Some(policy) = state.policies.get(idx) {
-        if policy.any_active() && lines.len() < inner.height as usize {
-            let mut policy_parts: Vec<Span> = vec![
-                Span::styled("  Policies: ", label),
-            ];
-            let policy_style = Style::default().fg(Color::Yellow);
-            if policy.travel_ban {
-                policy_parts.push(Span::styled("Travel Ban ", policy_style));
-            }
-            if policy.quarantine {
-                policy_parts.push(Span::styled("Quarantine ", policy_style));
-            }
-            if policy.discourage_hosp {
-                policy_parts.push(Span::styled("Disc. Hosp. ", policy_style));
-            }
-            if policy.border_controls {
-                policy_parts.push(Span::styled("Border Ctrl ", policy_style));
-            }
-            if policy.water_sanitation {
-                policy_parts.push(Span::styled("Water Sanit. ", policy_style));
-            }
-            match policy.screening {
-                crate::state::ScreeningLevel::None => {}
-                crate::state::ScreeningLevel::Basic => {
-                    policy_parts.push(Span::styled("Screen:Basic ", policy_style));
-                }
-                crate::state::ScreeningLevel::Antigen => {
-                    policy_parts.push(Span::styled("Screen:Antigen ", policy_style));
-                }
-                crate::state::ScreeningLevel::MassRapid => {
-                    policy_parts.push(Span::styled("Screen:Rapid ", policy_style));
-                }
-            }
-            lines.push(Line::from(policy_parts));
-        }
-    }
 
     // Non-drawable connection hint
     let hidden = non_drawable_connections(state, idx);
