@@ -307,7 +307,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             .unwrap_or(false);
         let auto_label = if auto_status { "ON" } else { "OFF" };
         lines.push(Line::from(Span::styled(
-            format!("  [Enter] Manual deploy  [X] Auto-deploy {}  [Esc] Close", auto_label),
+            format!("  [X] Auto-deploy {}  [Enter] Target manually  [Esc] Close", auto_label),
             Style::default().fg(Color::DarkGray),
         )));
     }
