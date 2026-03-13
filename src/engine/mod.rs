@@ -813,6 +813,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 state.auto_deploy.push(false);
             }
             state.auto_deploy[*med_idx] = !state.auto_deploy[*med_idx];
+            // Reset blocked notification so the player gets re-notified if still blocked
+            state.auto_deploy_blocked_notified.remove(med_idx);
             CommandResult { message: None, success: true }
         }
         GameCommand::ToggleAutoRepeat { kind } => {

@@ -115,14 +115,26 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             // Line 1: Name + deploying status
             let auto_on = state.auto_deploy.get(med_idx).copied().unwrap_or(false);
             let has_shipments = state.pending_shipments.iter().any(|s| s.medicine_idx == med_idx);
-            let status_tag = if auto_on {
-                " [DEPLOYING]"
-            } else if has_shipments {
-                " [IN TRANSIT]"
-            } else {
-                ""
+            // Check if auto-deploy is ON but blocked because all tested diseases
+            // have efficacy below the deployment threshold (0.04).
+            let auto_blocked = auto_on && {
+                let tested: Vec<usize> = med.deployable_diseases(&state.diseases)
+                    .into_iter()
+                    .filter(|d_idx| med.tested_against.contains(d_idx))
+                    .collect();
+                !tested.is_empty() && tested.iter().all(|&d_idx| {
+                    med.effective_efficacy(d_idx, &state.diseases) < 0.04
+                })
             };
-            let status_color = if auto_on { Color::Green } else { Color::Cyan };
+            let (status_tag, status_color) = if auto_on && auto_blocked {
+                (" [INEFFECTIVE]", Color::Red)
+            } else if auto_on {
+                (" [DEPLOYING]", Color::Green)
+            } else if has_shipments {
+                (" [IN TRANSIT]", Color::Cyan)
+            } else {
+                ("", Color::Cyan)
+            };
             let type_label = med.therapy_type.label();
             lines.push(Line::from(vec![
                 Span::styled(format!("{}{}", marker, med.name), style),
