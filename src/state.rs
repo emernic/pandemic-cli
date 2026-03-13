@@ -6155,7 +6155,7 @@ impl GameState {
     /// Returns (crisis_component, board_component, contract_component) that sum to pressure.
     /// Used by the dashboard to show a breakdown and by board meetings to decide authority.
     pub fn authority_pressure_components(&self) -> (f64, f64, f64) {
-        let total_infected = self.total_infected();
+        let total_infected = self.total_infected_detected();
         let total_dead = self.total_dead_detected();
         let collapsed = self.regions.iter().filter(|r| r.collapsed).count() as f64;
         let total_regions = self.regions.len().max(1) as f64;
