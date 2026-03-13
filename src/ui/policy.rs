@@ -104,24 +104,6 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let region = &state.regions[region_idx];
     let policy = state.policies.get(region_idx).cloned().unwrap_or_default();
 
-    let infected = region.screened_infected();
-    let dead = region.detected_dead(&state.diseases);
-    lines.push(Line::from(vec![
-        Span::raw("  "),
-        Span::styled(
-            format!("Pop: {}  ", format_number(region.population as f64)),
-            Style::default().fg(Color::White),
-        ),
-        Span::styled(
-            format!("Inf: {}  ", format_number(infected)),
-            Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
-        ),
-        Span::styled(
-            format!("Dead: {}", format_number(dead)),
-            Style::default().fg(if dead > 0.0 { Color::Red } else { Color::DarkGray }),
-        ),
-    ]));
-    lines.push(Line::from(""));
 
     // Show regional traits with effects
     for t in &region.traits {
