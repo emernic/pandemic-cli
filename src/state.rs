@@ -1985,8 +1985,8 @@ pub struct Region {
     pub disrupted_until: Option<u64>,
     /// Supply chain throughput penalty from collapsed neighbors (0.0–1.0 multiplier).
     /// 1.0 = no penalty, lower = fewer doses delivered. Each collapsed neighbor
-    /// reduces throughput by a fraction proportional to its share of the region's
-    /// connections. Updated each tick in tick_infrastructure.
+    /// reduces throughput by COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR (multiplicative).
+    /// Updated each tick in tick_infrastructure.
     #[serde(default = "default_one")]
     pub collapse_supply_penalty: f64,
     /// Estimated total infected (from detected diseases) visible to the player.
