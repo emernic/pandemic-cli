@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BoardPersonality, BoardRole, GameState, TICKS_PER_DAY};
+use crate::state::{BoardPersonality, BoardRole, GameState, ModifierSource, TICKS_PER_DAY};
 
 
 /// Maximum selection index for the board panel.
@@ -218,200 +218,50 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
     let member = &state.board_members[member_idx];
     let hdr = Style::default().fg(Color::DarkGray);
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "    \u{2500}\u{2500} Interests \u{2500}\u{2500}",
-        Style::default().fg(Color::Cyan),
-    )));
-
-    // Role-specific detail
-    match &member.role {
-        BoardRole::CorporateLeader { corp_idx } => {
-            if let Some(corp) = state.corporations.get(*corp_idx) {
-                lines.push(Line::from(vec![
-                    Span::styled("    Company: ", hdr),
-                    Span::styled(
-                        corp.name.clone(),
-                        Style::default().fg(Color::White),
-                    ),
-                ]));
-
-                // Stock price with trend arrow
-                let change_pct = corp.price_change_pct();
-                let trend_arrow = if corp.bankrupt {
-                    ""
-                } else if change_pct > 0.5 {
-                    " \u{25b2}"
-                } else if change_pct < -0.5 {
-                    " \u{25bc}"
-                } else {
-                    ""
-                };
-                let price_color = if corp.bankrupt {
-                    Color::Red
-                } else if corp.share_price >= corp.ipo_price * 0.8 {
-                    Color::Green
-                } else if corp.share_price >= corp.ipo_price * 0.5 {
-                    Color::Yellow
-                } else {
-                    Color::LightRed
-                };
-
-                let price_str = if corp.bankrupt {
-                    "BANKRUPT".to_string()
-                } else {
-                    format!("\u{00a5}{:.0}{} ({:+.1}%)", corp.share_price, trend_arrow, change_pct)
-                };
-                lines.push(Line::from(vec![
-                    Span::styled("    Stock: ", hdr),
-                    Span::styled(price_str, Style::default().fg(price_color)),
-                ]));
-
-                // Chairman effect (personality-specific power)
-                if member.is_chairman {
-                    if let Some(personality) = &member.personality {
-                        lines.push(Line::from(Span::styled(
-                            format!("    {}", personality.chairman_effect_description()),
-                            Style::default().fg(Color::Magenta),
-                        )));
-                    }
-                }
-            }
-        }
-        BoardRole::RegionGovernor { region_idx } => {
-            if let Some(region) = state.regions.get(*region_idx) {
-                let gdp_frac = region.gdp_fraction();
-
-                lines.push(Line::from(vec![
-                    Span::styled("    Region: ", hdr),
-                    Span::styled(
-                        region.name.clone(),
-                        Style::default().fg(Color::White),
-                    ),
-                ]));
-
-                let status = if region.collapsed {
-                    ("COLLAPSED", Color::Red)
-                } else if gdp_frac < 0.40 {
-                    ("Depression", Color::Red)
-                } else if gdp_frac < 0.60 {
-                    ("Recession", Color::LightRed)
-                } else if gdp_frac < 0.80 {
-                    ("Strained", Color::Yellow)
-                } else {
-                    ("Stable", Color::Green)
-                };
-                lines.push(Line::from(vec![
-                    Span::styled("    GDP: ", hdr),
-                    Span::styled(
-                        format!("{:.0}k", region.gdp),
-                        Style::default().fg(status.1),
-                    ),
-                    Span::styled(
-                        format!("  ({})", status.0),
-                        hdr,
-                    ),
-                ]));
-            }
-        }
-        BoardRole::IndependentAdvisor => {
-            let total_alive: f64 = state.regions.iter().map(|r| r.alive()).sum();
-            let initial = state.initial_population();
-            let survival_pct = if initial > 0.0 { (total_alive / initial) * 100.0 } else { 0.0 };
-
-            lines.push(Line::from(vec![
-                Span::styled("    Role: ", hdr),
-                Span::styled(
-                    "Independent advisor",
-                    Style::default().fg(Color::White),
-                ),
-            ]));
-            lines.push(Line::from(vec![
-                Span::styled("    Global survival: ", hdr),
-                Span::styled(
-                    format!("{:.1}%", survival_pct),
-                    Style::default().fg(if survival_pct > 90.0 { Color::Green }
-                        else if survival_pct > 75.0 { Color::Yellow }
-                        else { Color::Red }),
-                ),
-            ]));
+    // Chairman effect (personality-specific power)
+    if member.is_chairman {
+        if let Some(personality) = &member.personality {
+            lines.push(Line::from(Span::styled(
+                format!("    {}", personality.chairman_effect_description()),
+                Style::default().fg(Color::Magenta),
+            )));
         }
     }
 
-    // Connected corporation (for governor-members who also have a corp)
-    if matches!(member.role, BoardRole::RegionGovernor { .. }) {
-        if let Some(corp_idx) = member.corp_idx {
-            if let Some(corp) = state.corporations.get(corp_idx) {
-                let change = corp.price_change_pct();
-                let arrow = if corp.bankrupt { "" }
-                    else if change > 0.5 { " \u{25b2}" }
-                    else if change < -0.5 { " \u{25bc}" }
-                    else { "" };
-                let stock_str = if corp.bankrupt {
-                    "BANKRUPT".to_string()
-                } else {
-                    format!("\u{00a5}{:.0}{}", corp.share_price, arrow)
-                };
-                let stock_color = if corp.bankrupt { Color::Red }
-                    else if corp.share_price >= corp.ipo_price * 0.8 { Color::Green }
-                    else if corp.share_price >= corp.ipo_price * 0.5 { Color::Yellow }
-                    else { Color::LightRed };
-                lines.push(Line::from(vec![
-                    Span::styled("    Corp: ", hdr),
-                    Span::styled(
-                        corp.name.clone(),
-                        Style::default().fg(Color::White),
-                    ),
-                    Span::styled("  Stock: ", hdr),
-                    Span::styled(stock_str, Style::default().fg(stock_color)),
-                ]));
-            }
-        }
-    }
-
-    // Approval breakdown
+    // Unified Approval section — shows all named modifiers
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "    \u{2500}\u{2500} Approval \u{2500}\u{2500}",
         Style::default().fg(Color::Cyan),
     )));
 
-    let factors = state.member_satisfaction_factors(member_idx);
-    for &(label, value, weight) in &factors {
-        if label == "Relationship modifier" {
-            // Show modifier as +/- value, not a percentage
-            let mod_color = if value > 0.0 { Color::Green } else { Color::Red };
-            lines.push(Line::from(vec![
-                Span::styled(format!("    {}: ", label), hdr),
-                Span::styled(
-                    format!("{:+.0}%", value * 100.0),
-                    Style::default().fg(mod_color),
-                ),
-            ]));
-        } else {
-            let pct = value * 100.0;
-            let val_color = if pct > 70.0 { Color::Green }
-                else if pct > 40.0 { Color::Yellow }
-                else { Color::Red };
-            let weight_str = if weight < 1.0 {
-                format!(" ({:.0}%)", weight * 100.0)
-            } else {
-                String::new()
-            };
-            lines.push(Line::from(vec![
-                Span::styled(format!("    {}{}: ", label, weight_str), hdr),
-                Span::styled(
-                    format!("{:.0}%", pct),
-                    Style::default().fg(val_color),
-                ),
-            ]));
+    let modifiers = state.member_satisfaction_modifiers(member_idx);
+    for m in modifiers {
+        // Build context string for certain modifiers
+        let context = modifier_context(state, member, &m.source);
+        let label = m.source.label();
+        let pct = m.value * 100.0;
+        let val_color = if pct > 1.0 { Color::Green }
+            else if pct > -1.0 { Color::DarkGray }
+            else { Color::Red };
+
+        let mut spans = vec![
+            Span::styled(format!("    {}: ", label), hdr),
+            Span::styled(
+                format!("{:+.0}%", pct),
+                Style::default().fg(val_color),
+            ),
+        ];
+        if !context.is_empty() {
+            spans.push(Span::styled(format!("  {}", context), hdr));
         }
+        lines.push(Line::from(spans));
     }
 
     // Show final satisfaction
     let (sat_word, sat_color) = satisfaction_display(member.satisfaction);
     lines.push(Line::from(vec![
-        Span::styled("    Result: ", hdr),
+        Span::styled("    Total: ", hdr),
         Span::styled(
             format!("{:.0}%", member.satisfaction * 100.0),
             Style::default().fg(sat_color),
@@ -448,5 +298,57 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
             "    [X] Cancel contract",
             Style::default().fg(Color::Yellow),
         )));
+    }
+}
+
+/// Build a short context string for a modifier line (e.g., stock price, GDP status).
+fn modifier_context(
+    state: &GameState,
+    member: &crate::state::BoardMember,
+    source: &ModifierSource,
+) -> String {
+    match source {
+        ModifierSource::StockPerformance => {
+            let corp_idx = match &member.role {
+                BoardRole::CorporateLeader { corp_idx } => Some(*corp_idx),
+                _ => member.corp_idx,
+            };
+            if let Some(idx) = corp_idx {
+                if let Some(corp) = state.corporations.get(idx) {
+                    if corp.bankrupt {
+                        return "BANKRUPT".to_string();
+                    }
+                    let change = corp.price_change_pct();
+                    let arrow = if change > 0.5 { "\u{25b2}" }
+                        else if change < -0.5 { "\u{25bc}" }
+                        else { "" };
+                    return format!("\u{00a5}{:.0}{}", corp.share_price, arrow);
+                }
+            }
+            String::new()
+        }
+        ModifierSource::RegionalGdp => {
+            if let Some(idx) = member.region_idx {
+                if let Some(region) = state.regions.get(idx) {
+                    let status = if region.collapsed { "COLLAPSED" }
+                        else if region.gdp_fraction() < 0.40 { "Depression" }
+                        else if region.gdp_fraction() < 0.60 { "Recession" }
+                        else if region.gdp_fraction() < 0.80 { "Strained" }
+                        else { "Stable" };
+                    return format!("{:.0}k ({})", region.gdp, status);
+                }
+            }
+            String::new()
+        }
+        ModifierSource::GlobalSurvival => {
+            let initial = state.initial_population();
+            if initial > 0.0 {
+                let alive: f64 = state.regions.iter().map(|r| r.alive()).sum();
+                let pct = (alive / initial) * 100.0;
+                return format!("{:.1}%", pct);
+            }
+            String::new()
+        }
+        _ => String::new(),
     }
 }

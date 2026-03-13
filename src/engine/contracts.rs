@@ -2,7 +2,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    CrisisKind, FundingCondition, FundingContract, GameEvent, GameState,
+    CrisisKind, FundingCondition, FundingContract, GameEvent, GameState, ModifierSource,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
     CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
@@ -361,12 +361,11 @@ pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
             .unwrap_or_else(|| "Board member".to_string());
 
         // Board politics: accepting one member's contract angers the rest.
-        // Uses satisfaction_modifier so the effect persists across entity-driven updates.
         for (i, member) in state.board_members.iter_mut().enumerate() {
             if i == offerer_idx {
-                member.satisfaction_modifier += ACCEPT_OFFERER_BOOST;
+                member.add_modifier(ModifierSource::ContractAccepted, ACCEPT_OFFERER_BOOST);
             } else {
-                member.satisfaction_modifier -= ACCEPT_OTHERS_PENALTY;
+                member.add_modifier(ModifierSource::ContractAccepted, -ACCEPT_OTHERS_PENALTY);
             }
         }
 
@@ -395,7 +394,7 @@ pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
 
         // Refusing angers the offering board member
         if let Some(member) = state.board_members.get_mut(offerer_idx) {
-            member.satisfaction_modifier -= REFUSE_OFFERER_PENALTY;
+            member.add_modifier(ModifierSource::ContractRefused, -REFUSE_OFFERER_PENALTY);
         }
 
         // Track the decline for price escalation on re-offers
@@ -424,7 +423,7 @@ pub(super) fn cancel_contract(state: &mut GameState, board_member_idx: usize) ->
 
         // Penalize the offering member for breaking the deal
         if let Some(member) = state.board_members.get_mut(board_member_idx) {
-            member.satisfaction_modifier -= CANCEL_PENALTY;
+            member.add_modifier(ModifierSource::ContractCanceled, -CANCEL_PENALTY);
         }
 
         let msg = format!(
@@ -810,14 +809,16 @@ mod tests {
         assert!(ok, "should accept");
         assert!(msg.unwrap().contains("displeased"), "should mention others are displeased");
 
-        // Offerer should have positive modifier
-        assert!((state.board_members[0].satisfaction_modifier - ACCEPT_OFFERER_BOOST).abs() < 0.01,
+        // Offerer should have positive ContractAccepted modifier
+        let offerer_total = state.board_members[0].modifier_total(&ModifierSource::ContractAccepted);
+        assert!((offerer_total - ACCEPT_OFFERER_BOOST).abs() < 0.01,
             "offerer modifier should be +{}", ACCEPT_OFFERER_BOOST);
-        // Others should have negative modifier
+        // Others should have negative ContractAccepted modifier
         for (i, m) in state.board_members.iter().enumerate() {
             if i != 0 {
-                assert!((m.satisfaction_modifier - (-ACCEPT_OTHERS_PENALTY)).abs() < 0.01,
-                    "member {} modifier should be -{}, got {}", i, ACCEPT_OTHERS_PENALTY, m.satisfaction_modifier);
+                let total = m.modifier_total(&ModifierSource::ContractAccepted);
+                assert!((total - (-ACCEPT_OTHERS_PENALTY)).abs() < 0.01,
+                    "member {} modifier should be -{}, got {}", i, ACCEPT_OTHERS_PENALTY, total);
             }
         }
     }
@@ -834,12 +835,13 @@ mod tests {
         let (ok, _) = reject_contract(&mut state);
         assert!(ok);
 
-        // Offerer (idx 1) should have negative modifier
-        assert!((state.board_members[1].satisfaction_modifier - (-REFUSE_OFFERER_PENALTY)).abs() < 0.01);
+        // Offerer (idx 1) should have negative ContractRefused modifier
+        let offerer_total = state.board_members[1].modifier_total(&ModifierSource::ContractRefused);
+        assert!((offerer_total - (-REFUSE_OFFERER_PENALTY)).abs() < 0.01);
 
-        // Others should have zero modifier
-        assert!((state.board_members[0].satisfaction_modifier).abs() < 0.01);
-        assert!((state.board_members[2].satisfaction_modifier).abs() < 0.01);
+        // Others should have no ContractRefused modifier
+        assert!(state.board_members[0].modifier_total(&ModifierSource::ContractRefused).abs() < 0.01);
+        assert!(state.board_members[2].modifier_total(&ModifierSource::ContractRefused).abs() < 0.01);
     }
 
     #[test]
@@ -957,7 +959,8 @@ mod tests {
         assert!(ok);
         assert!(msg.unwrap().contains("Canceled"));
         assert_eq!(state.contracts.len(), 0);
-        assert!((state.board_members[0].satisfaction_modifier - (-CANCEL_PENALTY)).abs() < 0.01,
+        let cancel_total = state.board_members[0].modifier_total(&ModifierSource::ContractCanceled);
+        assert!((cancel_total - (-CANCEL_PENALTY)).abs() < 0.01,
             "offerer should receive cancel penalty");
     }
 

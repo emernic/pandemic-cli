@@ -1434,9 +1434,89 @@ impl BoardPersonality {
     }
 }
 
+/// Source/kind of a satisfaction modifier. Used for display labels and deduplication.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ModifierSource {
+    /// Base disposition: +50% for everyone.
+    Base,
+    /// Stock price relative to IPO (corporate leaders).
+    StockPerformance,
+    /// Regional GDP health (governors).
+    RegionalGdp,
+    /// Research slot utilization (Technocrat personality).
+    ResearchUtilization,
+    /// Global population survival rate (Humanitarian personality / IndependentAdvisor).
+    GlobalSurvival,
+    /// Whether the player owns shares in the member's corp (Dealmaker personality).
+    PlayerInvestment,
+    /// Initial distrust of the player, decays over ~30 days.
+    InitialSkepticism,
+    /// Player bought shares in this member's corp.
+    BoughtShares,
+    /// Player sold shares of this member's corp.
+    SoldShares,
+    /// Player invested in a same-sector rival corp.
+    RivalInvestment,
+    /// GDP-hurting policy enacted in Profiteer's region.
+    PolicyEnacted,
+    /// Research completed (Technocrat bonus).
+    ResearchCompleted,
+    /// Contract accepted by player (offerer boost / others penalty).
+    ContractAccepted,
+    /// Contract refused by player.
+    ContractRefused,
+    /// Contract canceled by player.
+    ContractCanceled,
+    /// Crisis resolution effect.
+    CrisisEffect,
+    /// Contract loyalty bonus (held 10+ days).
+    ContractLoyalty,
+}
+
+impl ModifierSource {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Base => "Base disposition",
+            Self::StockPerformance => "Stock performance",
+            Self::RegionalGdp => "Regional GDP",
+            Self::ResearchUtilization => "Research utilization",
+            Self::GlobalSurvival => "Global survival",
+            Self::PlayerInvestment => "Player investment",
+            Self::InitialSkepticism => "Initial skepticism",
+            Self::BoughtShares => "Bought shares",
+            Self::SoldShares => "Sold shares",
+            Self::RivalInvestment => "Rival investment",
+            Self::PolicyEnacted => "Policy enacted",
+            Self::ResearchCompleted => "Research completed",
+            Self::ContractAccepted => "Contract accepted",
+            Self::ContractRefused => "Contract refused",
+            Self::ContractCanceled => "Contract canceled",
+            Self::CrisisEffect => "Crisis effect",
+            Self::ContractLoyalty => "Contract loyalty",
+        }
+    }
+
+    /// Whether this modifier is continuously recomputed each tick (not decaying).
+    pub fn is_continuous(&self) -> bool {
+        matches!(self,
+            Self::Base | Self::StockPerformance | Self::RegionalGdp |
+            Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment
+        )
+    }
+}
+
+/// A named, visible satisfaction modifier on a board member.
+/// Continuous modifiers are cleared and recomputed each tick.
+/// Decaying modifiers persist and decay toward 0 over time.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SatisfactionModifier {
+    pub source: ModifierSource,
+    pub value: f64,
+}
+
 /// A named individual on the NWHO board of directors.
-/// Satisfaction combines entity-driven base satisfaction with a relationship modifier
-/// from contract decisions. The modifier decays toward 0 over time.
+/// Satisfaction is the clamped sum of all active modifiers — both continuously
+/// recomputed ones (Base, Stock, GDP) and event-driven decaying ones (trades, contracts).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BoardMember {
     /// Display name (e.g., "Dir. Caldwell" or "Gov. Torres").
@@ -1451,22 +1531,34 @@ pub struct BoardMember {
     /// Region index this member governs (if any). Same as RegionGovernor.region_idx
     /// when role is RegionGovernor, but corp-leaders may be linked to their corp's region.
     pub region_idx: Option<usize>,
-    /// Individual satisfaction (0.0–1.0). Computed as base (from entity health) + modifier.
+    /// Individual satisfaction (0.0–1.0). Sum of all modifiers, clamped.
     pub satisfaction: f64,
-    /// Relationship modifier from contract accept/refuse decisions. Can be negative.
-    /// Decays toward 0 at ~0.02/day so contract politics have a lasting but not permanent effect.
+    /// Named satisfaction modifiers. Each has a source label and value.
+    /// Continuous modifiers are cleared and recomputed each tick.
+    /// Event-driven modifiers decay toward 0 over time.
     #[serde(default)]
-    pub satisfaction_modifier: f64,
+    pub modifiers: Vec<SatisfactionModifier>,
     /// Whether this member is the Chairman of the Board (2x satisfaction weight).
     #[serde(default)]
     pub is_chairman: bool,
     /// Personality archetype for corporate leaders. None for governor members.
     #[serde(default)]
     pub personality: Option<BoardPersonality>,
-    /// Initial skepticism penalty (0.0–1.0). Starts at ~0.30 and wanes at ~1%/day,
-    /// representing the board not yet trusting the player. Gone by ~day 30.
-    #[serde(default)]
-    pub initial_skepticism: f64,
+}
+
+impl BoardMember {
+    /// Add an event-driven modifier (will decay over time).
+    pub fn add_modifier(&mut self, source: ModifierSource, value: f64) {
+        self.modifiers.push(SatisfactionModifier { source, value });
+    }
+
+    /// Sum of all modifier values with the given source.
+    pub fn modifier_total(&self, source: &ModifierSource) -> f64 {
+        self.modifiers.iter()
+            .filter(|m| &m.source == source)
+            .map(|m| m.value)
+            .sum()
+    }
 }
 
 fn format_large_number(n: f64) -> String {
@@ -5881,81 +5973,11 @@ impl GameState {
         (crisis_component + board_component + contract_component).clamp(0.0, 0.90)
     }
 
-    /// Returns a list of (label, value, weight) tuples describing the factors that
-    /// drive a board member's satisfaction. Used by the UI to show an approval breakdown.
-    /// The `value` is 0.0–1.0, `weight` is the fraction of base satisfaction from this factor.
-    /// Also returns the satisfaction_modifier as a separate entry if nonzero.
-    pub fn member_satisfaction_factors(&self, member_idx: usize) -> Vec<(&'static str, f64, f64)> {
-        let member = &self.board_members[member_idx];
-        let mut factors = Vec::new();
-
-        match &member.role {
-            BoardRole::CorporateLeader { corp_idx } => {
-                let stock = self.corporations.get(*corp_idx)
-                    .map(|c| if c.bankrupt { 0.0 } else {
-                        (c.share_price / c.ipo_price).clamp(0.0, 1.0)
-                    })
-                    .unwrap_or(0.0);
-
-                match member.personality {
-                    Some(BoardPersonality::Profiteer) | None => {
-                        factors.push(("Stock performance", stock, 1.0));
-                    }
-                    Some(BoardPersonality::Technocrat) => {
-                        let field_active = self.field_research.len() as f64;
-                        let field_max = MAX_FIELD_RESEARCH as f64;
-                        let applied_active = if self.applied_research.is_some() { 1.0 } else { 0.0 };
-                        let basic_active = if self.basic_research.is_some() { 1.0 } else { 0.0 };
-                        let total_active = field_active + applied_active + basic_active;
-                        let total_max = field_max + 1.0 + 1.0;
-                        let research = (total_active / total_max).clamp(0.0, 1.0);
-                        factors.push(("Stock performance", stock, 0.6));
-                        factors.push(("Research utilization", research, 0.4));
-                    }
-                    Some(BoardPersonality::Humanitarian) => {
-                        let survival = {
-                            let initial_pop = self.initial_population();
-                            if initial_pop <= 0.0 { 0.0 }
-                            else { ((initial_pop - self.total_dead()) / initial_pop).clamp(0.0, 1.0) }
-                        };
-                        factors.push(("Stock performance", stock, 0.5));
-                        factors.push(("Global survival", survival, 0.5));
-                    }
-                    Some(BoardPersonality::Dealmaker) => {
-                        let owns_shares = self.portfolio.get(*corp_idx)
-                            .map_or(0.0, |&shares| if shares > 0 { 1.0 } else { 0.0 });
-                        factors.push(("Stock performance", stock, 0.7));
-                        factors.push(("Player investment", owns_shares, 0.3));
-                    }
-                }
-            }
-            BoardRole::RegionGovernor { region_idx } => {
-                let gdp = self.regions.get(*region_idx)
-                    .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
-                    .unwrap_or(0.0);
-                factors.push(("Regional GDP", gdp, 1.0));
-            }
-            BoardRole::IndependentAdvisor => {
-                let survival = {
-                    let initial_pop = self.initial_population();
-                    if initial_pop <= 0.0 { 0.0 }
-                    else { ((initial_pop - self.total_dead()) / initial_pop).clamp(0.0, 1.0) }
-                };
-                factors.push(("Global survival", survival, 1.0));
-            }
-        }
-
-        // Include initial skepticism if still active
-        if member.initial_skepticism > 0.001 {
-            factors.push(("Initial skepticism", -member.initial_skepticism, 1.0));
-        }
-
-        // Include relationship modifier if nonzero
-        if member.satisfaction_modifier.abs() > 0.001 {
-            factors.push(("Relationship modifier", member.satisfaction_modifier, 1.0));
-        }
-
-        factors
+    /// Returns a reference to the board member's active satisfaction modifiers.
+    /// Used by the UI to display the approval breakdown. Each modifier has a
+    /// source label and value. The sum of all values (clamped 0–1) equals satisfaction.
+    pub fn member_satisfaction_modifiers(&self, member_idx: usize) -> &[SatisfactionModifier] {
+        &self.board_members[member_idx].modifiers
     }
 
     /// The next policy that would unlock with more approval. Returns (name, threshold)

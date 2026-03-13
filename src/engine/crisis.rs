@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::state::{
     ActiveLoan, BoardPersonality, BoardRole, CorporationSector, CrisisCost, CrisisEvent,
     CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, GovernorPersonality,
-    LoanLender, OperationSpec, ResearchKind,
+    LoanLender, ModifierSource, OperationSpec, ResearchKind,
     ResearchTrack, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
@@ -3396,7 +3396,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
             if let Some(idx) = member_idx {
                 if let Some(member) = state.board_members.get_mut(idx) {
-                    member.satisfaction_modifier += 0.05;
+                    member.add_modifier(ModifierSource::ContractLoyalty, 0.05);
                 }
             }
             format!("{} raises the payout. Contract income increased.", member_name)
@@ -3835,7 +3835,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         (CrisisKind::VoteOfNoConfidence, 0) => {
             // Make concessions: cost already deducted. Boost chairman satisfaction.
             if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
-                chairman.satisfaction_modifier += 0.30;
+                chairman.add_modifier(ModifierSource::CrisisEffect, 0.30);
             }
             // Reset hostility timer since we placated them
             state.chairman_hostile_since = None;
@@ -4259,8 +4259,9 @@ mod tests {
         resolve_crisis(&mut state, 0);
 
         let chair = &state.board_members[chair_idx];
-        assert!(chair.satisfaction_modifier > 0.2,
-            "concessions should boost chairman modifier, got {}", chair.satisfaction_modifier);
+        let crisis_total = chair.modifier_total(&ModifierSource::CrisisEffect);
+        assert!(crisis_total > 0.2,
+            "concessions should boost chairman CrisisEffect modifier, got {}", crisis_total);
         assert!(state.chairman_hostile_since.is_none(),
             "hostility timer should reset after concessions");
     }
