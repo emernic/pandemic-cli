@@ -2685,12 +2685,13 @@ impl PathogenType {
     }
 
     /// The therapy type that's most effective against this pathogen.
-    pub fn matched_therapy(&self) -> TherapyType {
+    /// Returns `None` for prions, which are completely untreatable.
+    pub fn matched_therapy(&self) -> Option<TherapyType> {
         match self {
-            PathogenType::RnaVirus | PathogenType::DnaVirus => TherapyType::Antiviral,
-            PathogenType::Bacterium => TherapyType::Antibiotic,
-            PathogenType::Fungus => TherapyType::Antifungal,
-            PathogenType::Prion => TherapyType::BroadSpectrum,
+            PathogenType::RnaVirus | PathogenType::DnaVirus => Some(TherapyType::Antiviral),
+            PathogenType::Bacterium => Some(TherapyType::Antibiotic),
+            PathogenType::Fungus => Some(TherapyType::Antifungal),
+            PathogenType::Prion => None,
         }
     }
 }
@@ -3344,7 +3345,6 @@ impl Medicine {
     /// resistance-prone; expensive/slow ones are less potent but nearly resistance-proof.
     /// Prions are completely untreatable — returns empty vec.
     pub fn targeted_medicines(disease_idx: usize, pathogen_type: PathogenType) -> Vec<Medicine> {
-        let therapy = pathogen_type.matched_therapy();
         let letter = (b'A' + disease_idx as u8) as char;
 
         let mechs: &[MechanismOfAction] = match pathogen_type {
@@ -3356,6 +3356,8 @@ impl Medicine {
                 return vec![];
             }
         };
+        // Safe to unwrap: prions return early above, all other types have a matched therapy.
+        let therapy = pathogen_type.matched_therapy().unwrap();
 
         mechs.iter().map(|&mech| {
             let doses = mech.base_doses();

@@ -57,9 +57,10 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
             .collect();
 
         let weights: Vec<f64> = types.iter().map(|t| {
-            let matched_therapy = t.matched_therapy();
-            let player_has_counter = deployed_therapies.contains(&matched_therapy);
-            // Types the player CAN treat get lower weight; types they CAN'T get higher
+            let player_has_counter = t.matched_therapy()
+                .is_some_and(|therapy| deployed_therapies.contains(&therapy));
+            // Types the player CAN treat get lower weight; types they CAN'T get higher.
+            // Untreatable types (prions) always get the "no counter" weight.
             let counter_bonus = if player_has_counter { 0.3 } else { 2.0 };
             // Blend: uniform early, counter-weighted late
             (1.0 - counter_weight) + counter_bonus * counter_weight
