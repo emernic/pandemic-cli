@@ -6266,29 +6266,40 @@ impl GameState {
     /// Build the flat list of selectable items for the research panel.
     /// Used by both the renderer and the input handler.
     pub fn research_flat_items(&self) -> Vec<ResearchFlatItem> {
-        let mut items = Vec::new();
         let available = self.all_available_projects();
+        let mut items = Vec::new();
         let mut claimed_active = vec![false; self.active_research.len()];
 
-        // Walk available projects in canonical order, substituting active
-        // projects where a match exists so items stay in a stable position.
-        for (avail_idx, kind) in available.iter().enumerate() {
-            let mut found = None;
-            for (ai, proj) in self.active_research.iter().enumerate() {
-                if proj.kind == *kind && !claimed_active[ai] {
-                    found = Some(ai);
-                    break;
-                }
+        // Build a stable canonical ordering by interleaving active projects
+        // back into the available list at their natural position.
+        // all_available_projects() excludes active projects, so we need to
+        // merge them back in by category order (Field, Applied, Basic).
+        for cat in [ResearchCategory::Field, ResearchCategory::Applied, ResearchCategory::Basic] {
+            // Collect available items in this category with their index into
+            // the full available list
+            let avail_in_cat: Vec<(usize, &ResearchKind)> = available.iter()
+                .enumerate()
+                .filter(|(_, k)| k.category() == cat)
+                .collect();
+            // Collect active items in this category
+            let active_in_cat: Vec<(usize, &ResearchProject)> = self.active_research.iter()
+                .enumerate()
+                .filter(|(_, p)| p.kind.category() == cat)
+                .collect();
+
+            // Active items first (they were started earlier, so lead their category),
+            // then available items. This keeps active items in their category
+            // group rather than jumping to a separate section.
+            for (ai, _proj) in &active_in_cat {
+                claimed_active[*ai] = true;
+                items.push(ResearchFlatItem::Active(*ai));
             }
-            if let Some(ai) = found {
-                claimed_active[ai] = true;
-                items.push(ResearchFlatItem::Active(ai));
-            } else {
-                items.push(ResearchFlatItem::Available(avail_idx));
+            for (avail_idx, _kind) in &avail_in_cat {
+                items.push(ResearchFlatItem::Available(*avail_idx));
             }
         }
 
-        // Append unclaimed active projects (conditions changed while running)
+        // Append any unclaimed active projects (edge case: conditions changed)
         for (ai, _) in self.active_research.iter().enumerate() {
             if !claimed_active[ai] {
                 items.push(ResearchFlatItem::Active(ai));
