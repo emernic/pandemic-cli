@@ -14,7 +14,7 @@ use rand::Rng;
 
 use crate::state::{
     CrisisKind, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind, SimState,
-    COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
+    COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR, DECREE_COUNT,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, TICKS_PER_DAY, WAVE_CLUSTER_WINDOW_TICKS,
@@ -48,7 +48,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     // Snapshot decree unlock state so we can detect newly unlocked decrees at end of tick.
-    let decrees_were_unlocked: Vec<bool> = (0..6).map(|i| state.decree_unlocked(i)).collect();
+    let decrees_were_unlocked: Vec<bool> = (0..DECREE_COUNT).map(|i| state.decree_unlocked(i)).collect();
 
     // Clone per-subsystem RNG streams out so we can mutably borrow them and
     // `new.regions` simultaneously. Written back at the end of the function.
@@ -688,7 +688,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     }
 
     // Detect newly unlocked emergency decrees (severity crossed threshold this tick).
-    for i in 0..6 {
+    for i in 0..DECREE_COUNT {
         if !decrees_were_unlocked[i] && new.decree_unlocked(i) && !new.enacted_decrees.is_enacted(i) {
             new.events.push(GameEvent::DecreeUnlocked { decree_idx: i });
         }

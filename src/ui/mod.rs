@@ -241,7 +241,7 @@ pub(crate) fn process_events(state: &mut GameState) {
             GameEvent::DecreeUnlocked { decree_idx } => {
                 let name = crate::state::decree_display_name(*decree_idx);
                 let msg = format!("DECREE AVAILABLE: {}", name);
-                let notification = format!("{}. Open Operations [O] to enact.", msg);
+                let notification = format!("{}. Open Orders [O] to enact.", msg);
                 (2, msg, notification)
             }
             GameEvent::PathogenSuppressed { disease_idx } => {
