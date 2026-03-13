@@ -4137,8 +4137,8 @@ pub enum CrisisKind {
     ExhaustionEpidemic { region_idx: usize, personnel_loss: u32 },
     /// Whistleblower reports medicine side effects — halt or continue.
     WhistleblowerReport { medicine_idx: usize },
-    /// Military threatens takeover of health agency.
-    MilitaryTakeover { cooperate_loss: u32 },
+    /// Board member's corporation deploys private security, demands operational control.
+    CorporateSeizure { cooperate_loss: u32 },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
     /// Warlord declares himself ruler of collapsed region, demands recognition.
@@ -4208,8 +4208,8 @@ pub enum CrisisKind {
     CounterfeitEpidemic { region_idx: usize },
     /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
     EmbezzlementRing { stolen_per_day: f64 },
-    /// Follow-up to MilitaryTakeover (Cooperate): military wants your research.
-    MilitaryOverreach,
+    /// Follow-up to CorporateSeizure (Cooperate): corporation claims your research as proprietary IP.
+    CorporateOverreach,
     /// Follow-up to DataLeak (Suppress): cover-up exposed, inquiry demanded.
     PublicInquiry,
     /// Follow-up to MediaPanic (Ignore): misinformation degrades screening.
@@ -4308,7 +4308,7 @@ impl CrisisKind {
             CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::WhistleblowerReport { .. } => "whistleblower",
-            CrisisKind::MilitaryTakeover { .. } => "military",
+            CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
             CrisisKind::CultBlockade { .. } => "cult",
             CrisisKind::WarlordDemand { .. } => "warlord",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
@@ -4331,7 +4331,7 @@ impl CrisisKind {
             CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
-            CrisisKind::MilitaryOverreach => "military_overreach",
+            CrisisKind::CorporateOverreach => "corporate_overreach",
             CrisisKind::PublicInquiry => "public_inquiry",
             CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
