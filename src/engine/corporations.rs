@@ -190,11 +190,6 @@ pub(super) fn assign_manufacturers(state: &mut GameState) {
     }
 }
 
-/// Update corporate finances each tick via sector competition pools.
-///
-/// Revenue flows from GDP: sector_pool × (company_capacity / total_capacity).
-/// Each corp's capacity = base_revenue × region.gdp_fraction ^ sector.crisis_exposure.
-/// When a competitor's region tanks, surviving peers capture more of the pool.
 /// Pre-populate price histories with 10 days of simulated trading at stable
 /// revenue. Uses the same three-term model as `tick_share_prices` but with no
 /// revenue signal (revenue == prev_revenue pre-game). This gives sparklines a
@@ -227,6 +222,11 @@ fn warm_up_price_history(state: &mut GameState) {
     }
 }
 
+/// Update corporate finances each tick via sector competition pools.
+///
+/// Revenue flows from GDP: sector_pool × (company_capacity / total_capacity).
+/// Each corp's capacity = base_revenue × region.gdp_fraction ^ sector.crisis_exposure.
+/// When a competitor's region tanks, surviving peers capture more of the pool.
 pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     // Handle collapsed regions first — bankrupt all corps in collapsed regions.
     for c_idx in 0..state.corporations.len() {
