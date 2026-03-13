@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{map_grid_pos, GameState, Region, RegionTrait, MAP_GRID_LEN,
+use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
 
@@ -53,47 +53,10 @@ enum ConnStrength {
     Minimal,
 }
 
-/// Compute the effective spread factor for flow from `source` to `dest`.
-fn directional_spread_factor(state: &GameState, source: usize, dest: usize) -> f64 {
-    let mut factor = 1.0;
-
-    let src_pol = state.policies.get(source);
-    let dst_pol = state.policies.get(dest);
-
-    let src_ban = src_pol.is_some_and(|p| p.travel_ban);
-    let dst_ban = dst_pol.is_some_and(|p| p.travel_ban);
-    let src_border = src_pol.is_some_and(|p| p.border_controls);
-    let dst_border = dst_pol.is_some_and(|p| p.border_controls);
-
-    if src_ban || dst_ban {
-        // Travel ban: use representative factor (~0.2, averaging across transmission types)
-        factor *= 0.2;
-    } else if src_border || dst_border {
-        factor *= 0.7;
-    }
-
-    // Screening at both endpoints
-    let src_screening = src_pol.map(|p| p.screening.spread_factor()).unwrap_or(1.0);
-    let dst_screening = dst_pol.map(|p| p.screening.spread_factor()).unwrap_or(1.0);
-    factor *= src_screening.min(dst_screening);
-
-    // Island geography reduces inbound spread
-    if state.regions[dest].has_trait(RegionTrait::IslandGeography) {
-        factor *= 0.5;
-    }
-
-    // Collapsed source emits less spread
-    if state.regions[source].collapsed {
-        factor *= 0.3;
-    }
-
-    factor
-}
-
 /// Classify connection strength between two regions (takes max of both directions).
 fn connection_strength(state: &GameState, a: usize, b: usize) -> ConnStrength {
-    let factor = directional_spread_factor(state, a, b)
-        .max(directional_spread_factor(state, b, a));
+    let factor = state.cross_region_spread_factor(a, b)
+        .max(state.cross_region_spread_factor(b, a));
 
     if factor > 0.7 {
         ConnStrength::Strong
@@ -656,18 +619,13 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     // Region traits (income and healthcare modifiers)
     {
-        let gdp_frac = region.gdp_fraction();
-        let gdp_status = if region.collapsed {
-            ("COLLAPSED", Color::Red)
-        } else if gdp_frac < 0.40 {
-            ("Depression", Color::Red)
-        } else if gdp_frac < 0.60 {
-            ("Recession", Color::LightRed)
-        } else if gdp_frac < 0.80 {
-            ("Strained", Color::Yellow)
-        } else {
-            ("Stable", Color::Green)
-        };
+        let status_label = region.gdp_status();
+        let gdp_status = (status_label, match status_label {
+            "COLLAPSED" | "Depression" => Color::Red,
+            "Recession" => Color::LightRed,
+            "Strained" => Color::Yellow,
+            _ => Color::Green,
+        });
         let healthcare_label = if region.healthcare_modifier <= 0.80 {
             ("Excellent", Color::Green)
         } else if region.healthcare_modifier <= 0.95 {

@@ -2992,16 +2992,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 if !medicine.tested_against.contains(disease_idx) {
                     medicine.tested_against.push(*disease_idx);
                 }
-                // Set strain calibration 2 generations behind current, so the
-                // medicine works but at reduced efficacy (~0.70x).
-                if let Some(pos) = medicine.target_diseases.iter().position(|&d| d == *disease_idx) {
-                    let current_gen = state.diseases.get(*disease_idx)
-                        .map_or(0, |d| d.strain_generation) as i32;
-                    while medicine.strain_generations.len() <= pos {
-                        medicine.strain_generations.push(0);
-                    }
-                    medicine.strain_generations[pos] = current_gen - 2;
-                }
+                // Fast-track calibration: 2 generations behind → ~0.70x efficacy
+                medicine.set_strain_calibration_behind(*disease_idx, &state.diseases, 2);
             }
             let name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))

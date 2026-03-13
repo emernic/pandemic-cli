@@ -2151,6 +2151,17 @@ impl Region {
         if self.base_gdp > 0.0 { (self.gdp / self.base_gdp).clamp(0.0, 1.0) } else { 0.0 }
     }
 
+    /// Human-readable GDP status label based on GDP fraction and collapse state.
+    /// Canonical source of truth for GDP classification — do NOT hardcode these
+    /// thresholds elsewhere.
+    pub fn gdp_status(&self) -> &'static str {
+        if self.collapsed { "COLLAPSED" }
+        else if self.gdp_fraction() < 0.40 { "Depression" }
+        else if self.gdp_fraction() < 0.60 { "Recession" }
+        else if self.gdp_fraction() < 0.80 { "Strained" }
+        else { "Stable" }
+    }
+
     /// Policy effectiveness multiplier based on governor cooperation and personality.
     /// 1.0 when normal/cooperative, 0.7 when defiant, 0.4 when defiant Recluse.
     pub fn policy_effectiveness(&self) -> f64 {
@@ -3283,6 +3294,26 @@ impl Medicine {
                 }
             }
             None => 0,
+        }
+    }
+
+    /// Set strain calibration for a disease to N generations behind the current
+    /// strain. Used by TrialShortcut and EmergencySampleDelivery to fast-track
+    /// testing with a built-in efficacy penalty.
+    /// `generations_behind` is typically 2 (yielding ~0.70x efficacy from drift).
+    pub fn set_strain_calibration_behind(
+        &mut self,
+        disease_idx: usize,
+        diseases: &[Disease],
+        generations_behind: i32,
+    ) {
+        if let Some(pos) = self.target_diseases.iter().position(|&d| d == disease_idx) {
+            let current_gen = diseases.get(disease_idx)
+                .map_or(0, |d| d.strain_generation) as i32;
+            while self.strain_generations.len() <= pos {
+                self.strain_generations.push(0);
+            }
+            self.strain_generations[pos] = current_gen - generations_behind;
         }
     }
 
@@ -6552,6 +6583,58 @@ impl GameState {
             1.0
         };
         base * disruption_mult * spec_mult
+    }
+
+    /// Approximate cross-region spread factor from `source` to `dest` (0.0–1.0).
+    /// Accounts for travel bans, border controls, screening, island geography,
+    /// governor effectiveness, nuclear annihilation, and source collapse.
+    /// Uses a representative travel-ban factor (0.2) since this is disease-agnostic;
+    /// the engine's per-disease spread uses exact per-transmission factors instead.
+    pub fn cross_region_spread_factor(&self, source: usize, dest: usize) -> f64 {
+        // Annihilated regions neither send nor receive spread
+        if self.policies.get(source).is_some_and(|p| p.nuclear_annihilation)
+            || self.policies.get(dest).is_some_and(|p| p.nuclear_annihilation)
+        {
+            return 0.0;
+        }
+        let mut factor = 1.0;
+
+        let src_pol = self.policies.get(source);
+        let dst_pol = self.policies.get(dest);
+
+        let src_ban = src_pol.is_some_and(|p| p.travel_ban);
+        let dst_ban = dst_pol.is_some_and(|p| p.travel_ban);
+        let src_border = src_pol.is_some_and(|p| p.border_controls);
+        let dst_border = dst_pol.is_some_and(|p| p.border_controls);
+
+        // Governor effectiveness (min of both endpoints)
+        let src_eff = self.regions.get(source).map(|r| r.policy_effectiveness()).unwrap_or(1.0);
+        let dst_eff = self.regions.get(dest).map(|r| r.policy_effectiveness()).unwrap_or(1.0);
+        let eff = src_eff.min(dst_eff);
+
+        if src_ban || dst_ban {
+            // Representative travel-ban factor (~0.2, averaging across transmission types)
+            factor *= 1.0 - (1.0 - 0.2) * eff;
+        } else if src_border || dst_border {
+            factor *= 1.0 - (1.0 - 0.7) * eff;
+        }
+
+        // Screening at both endpoints
+        let src_screening = src_pol.map(|p| p.screening.spread_factor()).unwrap_or(1.0);
+        let dst_screening = dst_pol.map(|p| p.screening.spread_factor()).unwrap_or(1.0);
+        factor *= 1.0 - (1.0 - src_screening.min(dst_screening)) * eff;
+
+        // Island geography: 50% less inbound spread
+        if self.regions[dest].has_trait(RegionTrait::IslandGeography) {
+            factor *= 0.5;
+        }
+
+        // Collapsed source emits less spread
+        if self.regions[source].collapsed {
+            factor *= 0.3;
+        }
+
+        factor
     }
 
     /// Passive bonus strength for a sector in a region (0.0–1.0).

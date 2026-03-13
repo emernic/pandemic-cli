@@ -388,17 +388,10 @@ pub(super) fn emergency_sample_delivery(
             cooperation_change = 10.0;
         }
 
-        // Set strain calibration 2 generations behind for untested diseases (like TrialShortcut)
+        // Set strain calibration 2 generations behind for untested diseases
         for &d_idx in &active_diseases {
             if !state.medicines[medicine_idx].tested_against.contains(&d_idx) {
-                if let Some(pos) = state.medicines[medicine_idx].target_diseases.iter().position(|&d| d == d_idx) {
-                    let current_gen = state.diseases.get(d_idx)
-                        .map_or(0, |d| d.strain_generation) as i32;
-                    while state.medicines[medicine_idx].strain_generations.len() <= pos {
-                        state.medicines[medicine_idx].strain_generations.push(0);
-                    }
-                    state.medicines[medicine_idx].strain_generations[pos] = current_gen - 2;
-                }
+                state.medicines[medicine_idx].set_strain_calibration_behind(d_idx, &state.diseases, 2);
             }
         }
     } else if has_tested_match {
