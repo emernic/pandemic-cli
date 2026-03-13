@@ -2483,6 +2483,15 @@ impl PathogenType {
         }
     }
 
+    /// Qualitative mutation risk for intel assessment display.
+    /// Derived from mutation_rate() — kept colocated so changes stay in sync.
+    pub fn mutation_risk_label(&self) -> &'static str {
+        let rate = self.mutation_rate();
+        if rate >= 0.0008 { "High" }
+        else if rate >= 0.0002 { "Moderate" }
+        else { "Low" }
+    }
+
     /// Stat ranges tuned so total collapse occurs by day 90 without intervention.
     /// HARD REQUIREMENT: every seed must lose by day 90 with no player action.
     /// The enforcing test is `game_is_lost_within_90_days_without_intervention`.

@@ -135,12 +135,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 // Intel assessment: show mutation risk when Advanced Intel is
                 // monitoring but full research knowledge isn't available yet.
                 if has_intel && !has_research_vector {
-                    let mutation_rate = disease.pathogen_type.mutation_rate();
-                    let risk_label = if mutation_rate >= 0.0008 { "High" }
-                        else if mutation_rate >= 0.0002 { "Moderate" }
-                        else { "Low" };
                     lines.push(Line::from(Span::styled(
-                        format!("    Mutation risk: {} [intel]", risk_label),
+                        format!("    Mutation risk: {} [intel]", disease.pathogen_type.mutation_risk_label()),
                         Style::default().fg(Color::DarkGray),
                     )));
                 }
