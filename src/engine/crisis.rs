@@ -699,7 +699,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Ignore".into(),
-                    description: "No cost, but mutation continues unchecked".into(),
+                    description: "Pathogen knowledge degrades as the strain drifts.".into(),
                     cost: None,
                 },
                  {
@@ -856,7 +856,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     let cost = scaled_cost(state, 0.10, 80.0, 400.0);
                     CrisisOption {
                         label: format!("Confiscate (¥{:.0})", cost),
-                        description: "Seize the drugs. No treatment available for them.".into(),
+                        description: "Seize the drugs. Governor cooperation improves.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
@@ -1281,7 +1281,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "File it".into(),
-                    description: "No effect.".into(),
+                    description: "Board notes your fiscal discipline.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1499,7 +1499,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Field teams are operating without local authorization."),
                 options: vec![ CrisisOption {
                     label: "Work around them".into(),
-                    description: format!("Policy effectiveness reduced in {} until cooperation recovers", region_name),
+                    description: format!("Governor cooperation in {} will deteriorate.", region_name),
                     cost: None,
                 },
                  CrisisOption {
@@ -2379,8 +2379,16 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 options: vec![
                     CrisisOption {
                         label: "Acknowledged".into(),
-                        description: "Accept the board's concern and proceed.".into(),
+                        description: "Accept the reprimand. Board approval decreases.".into(),
                         cost: None,
+                    },
+                    {
+                        let cost = scaled_cost(state, 0.08, 60.0, 300.0);
+                        CrisisOption {
+                            label: format!("Present a research timeline (¥{:.0})", cost),
+                            description: "Prepare a formal response. Costs money but preserves board confidence.".into(),
+                            cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                        }
                     },
                 ],
                 kind,
@@ -2758,8 +2766,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 }
             }
         }
-        (CrisisKind::MutationSurge { .. }, 0) => {
-            "Mutation surge ignored".into()
+        (CrisisKind::MutationSurge { disease_idx }, 0) => {
+            // Ignoring a mutation surge means knowledge drifts as the pathogen changes
+            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
+                disease.knowledge = (disease.knowledge - 0.05).max(0.0);
+            }
+            "Mutation surge ignored. Pathogen knowledge degraded.".into()
         }
         (CrisisKind::MutationSurge { disease_idx }, _) => {
             if let Some(disease) = state.diseases.get_mut(*disease_idx) {
@@ -2905,9 +2917,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Black market drugs allowed in {}. Some treated, some suffered adverse reactions.", region_name)
         }
         (CrisisKind::BlackMarketMedicine { region_idx }, _) => {
+            // Confiscate — governor appreciates enforcement of order
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Black market drugs confiscated in {}. No alternative treatment available.", region_name)
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
+            }
+            format!("Black market drugs confiscated in {}. Governor cooperation improved.", region_name)
         }
 
         (CrisisKind::QuarantineRiot { region_idx }, 0) => {
@@ -3228,8 +3244,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::InternDiscovery { .. }, 0) => {
-            // Ignore — nothing happens
-            "Proposal filed.".into()
+            // File it — board appreciates fiscal prudence
+            chairman_satisfaction_hit(state, 0.02);
+            "Proposal filed. The board notes your fiscal discipline.".into()
         }
         (CrisisKind::InternDiscovery { .. }, _) => {
             // Pursue — 50/50 gamble (costs already deducted)
@@ -3383,9 +3400,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Counter-broadcast aired. Public sees through the bluster.".into()
         }
 
-        (CrisisKind::GovernorRecluse { .. }, 0) => {
-            // Work around them — accept reduced policy effectiveness
-            "Operating without local support. Policies less effective until cooperation recovers.".into()
+        (CrisisKind::GovernorRecluse { region_idx }, 0) => {
+            // Work around them — cooperation deteriorates from neglect
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation - 5.0).max(0.0);
+            }
+            "Operating without local support. Governor cooperation declining.".into()
         }
         (CrisisKind::GovernorRecluse { region_idx }, _) => {
             // Send delegation — personnel cost already deducted, +10 cooperation
@@ -3924,8 +3944,14 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Letter filed. The board will be monitoring fund allocations.".into()
         }
 
+        (CrisisKind::BoardResearchInquiry, 0) => {
+            // Acknowledge — chairman satisfaction hit for inaction
+            chairman_satisfaction_hit(state, -0.05);
+            "The board's displeasure has been noted.".into()
+        }
         (CrisisKind::BoardResearchInquiry, _) => {
-            "The board's concern has been noted.".into()
+            // Present a timeline — costs already deducted, no satisfaction hit
+            "Timeline presented. The board expects results.".into()
         }
 
         (CrisisKind::VoteOfNoConfidence, 0) => {

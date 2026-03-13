@@ -6145,7 +6145,7 @@ mod tests {
                 if crisis.kind.tag() == "board_research_inquiry" {
                     found = true;
                     assert_eq!(crisis.title, "Board Inquiry: Research Status");
-                    assert_eq!(crisis.options.len(), 1);
+                    assert_eq!(crisis.options.len(), 2);
                     break;
                 }
                 // Auto-resolve other crises
