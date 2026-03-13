@@ -162,6 +162,8 @@ Key files: `src/state.rs` (data structures + derived computations), `src/engine/
 
 Design docs: `docs/architecture.md`, `docs/gameplay.md`, `docs/target-architecture.md`
 
+**World and power structure:** `docs/setting.md` — read this before writing crisis events, designing board/governor/corporation features, or framing any interaction involving authority and power relationships.
+
 ### Architectural Direction — THIS IS YOUR JOB
 
 The UI/engine separation is done. The engine god file has been broken into subsystem modules. See `docs/target-architecture.md` for the full picture. The short version:
