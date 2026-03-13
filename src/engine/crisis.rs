@@ -52,6 +52,31 @@ fn board_budget_satisfaction_mult(board_sat: f64) -> f64 {
     }
 }
 
+/// Crisis urgency boost based on player-visible (screened) infections as a
+/// fraction of total population. The board sees people are sick and allocates
+/// more funding to deal with it. Better screening reveals more of the true
+/// caseload, so investing in testing infrastructure directly increases the
+/// urgency signal the board acts on.
+///
+/// Uses sqrt of the screened infection fraction so the boost grows quickly at
+/// first (a visible outbreak is alarming) but tapers at extreme levels.
+/// Total population is ~7.8 billion, so:
+///   100K screened (0.001%) → +0.01  (barely registers)
+///   10M  screened (0.13%)  → +0.11  (outbreak is undeniable)
+///   100M screened (1.3%)   → +0.34  (full crisis, near cap)
+///   500M screened (6.4%)   → +0.40  (cap)
+/// Capped at +0.40 to prevent runaway budgets.
+fn crisis_urgency_boost(state: &GameState) -> f64 {
+    let screened = state.total_infected_screened();
+    let population = state.initial_population();
+    if population <= 0.0 || screened < 1000.0 {
+        return 0.0;
+    }
+    let fraction = screened / population;
+    let raw = fraction.sqrt() * 3.0;
+    raw.clamp(0.0, 0.40)
+}
+
 /// Chairman mood shift applied on top of the budget multiplier.
 /// Content chairman (>0.7 satisfaction) steers meetings favorably; hostile pushes for cuts.
 /// Profiteer chairman amplifies swings: ±0.15 instead of the default ±0.10.
@@ -75,25 +100,25 @@ fn chairman_funding_shift(state: &GameState) -> f64 {
 }
 
 /// Compute the per-tick board budget at a given satisfaction level.
-/// Uses the reference base (captured at game start) scaled by a dampened GDP factor,
-/// so that satisfaction is the primary lever and GDP decline doesn't dominate.
-/// GDP factor uses sqrt(current/reference) — moderate decline is cushioned,
-/// total collapse still zeroes the budget.
+/// Uses the reference base (captured at game start) as a stable anchor, then
+/// applies three additive factors:
+///   1. Satisfaction multiplier (0.5–1.2x based on board mood)
+///   2. Chairman mood shift (±0.10 or ±0.15 for Profiteer)
+///   3. Crisis urgency boost (0–0.30 based on screened infections)
+///
+/// The urgency boost is the key counterforce to satisfaction decline: as the
+/// pandemic worsens, stocks/GDP drop (lowering satisfaction), but visible
+/// infections rise (increasing urgency). The net effect keeps the budget
+/// roughly stable instead of death-spiraling. Better screening amplifies the
+/// urgency signal, rewarding investment in testing infrastructure.
 pub(super) fn compute_board_budget_per_tick(state: &GameState, board_sat: f64) -> f64 {
-    let current_base = state.base_board_budget_per_tick();
     let reference = state.reference_base_budget_per_tick;
-    let effective_base = if reference > 0.0 {
-        // Dampen GDP decline: sqrt(current/reference) * reference
-        let gdp_ratio = (current_base / reference).clamp(0.0, 1.0);
-        reference * gdp_ratio.sqrt()
-    } else {
-        // Fallback for legacy saves where reference wasn't set
-        current_base
-    };
+    let base = if reference > 0.0 { reference } else { state.base_board_budget_per_tick() };
     let mult = board_budget_satisfaction_mult(board_sat);
     let shift = chairman_funding_shift(state);
-    let full_mult = (mult + shift).clamp(0.3, 1.4);
-    effective_base * full_mult
+    let urgency = crisis_urgency_boost(state);
+    let full_mult = (mult + shift + urgency).clamp(0.3, 1.8);
+    base * full_mult
 }
 
 /// POL cost for closing borders on a refugee wave (escalates with each collapse).
@@ -2143,6 +2168,16 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 memo_lines.push(format!(
                     "Your operating budget has been maintained at \u{00a5}{:.0} per day.",
                     new_funding_rate
+                ));
+            }
+
+            // Crisis urgency influence on funding
+            let urgency = crisis_urgency_boost(state);
+            if urgency >= 0.05 {
+                let screened = state.total_infected_screened();
+                memo_lines.push(format!(
+                    "Reported caseload ({}) has been factored into the allocation.",
+                    crate::state::format_large_number(screened)
                 ));
             }
 
@@ -4363,40 +4398,64 @@ mod tests {
     }
 
     #[test]
-    fn satisfaction_dampens_gdp_decline_on_budget() {
+    fn crisis_urgency_increases_budget_with_visible_infections() {
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
-        // Capture the initial budget at neutral satisfaction
-        let initial_budget = compute_board_budget_per_tick(&state, 0.5);
         assert!(state.reference_base_budget_per_tick > 0.0,
             "reference base should be set after board init");
 
-        // Simulate GDP decline by reducing corporate revenue directly
-        for corp in &mut state.corporations {
-            corp.revenue *= 0.5;
+        let pop = state.initial_population();
+        assert!(pop > 7e9, "total population should be ~7.8 billion, got {pop}");
+
+        // No infections: urgency boost should be zero
+        let budget_calm = compute_board_budget_per_tick(&state, 0.5);
+        assert_eq!(crisis_urgency_boost(&state), 0.0,
+            "no infections should mean no urgency boost");
+
+        // 100K screened: early outbreak, barely registers
+        let n_regions = state.regions.len() as f64;
+        for region in &mut state.regions {
+            region.estimated_infected = 100_000.0 / n_regions;
         }
+        let urgency_100k = crisis_urgency_boost(&state);
+        assert!(urgency_100k < 0.02,
+            "100K screened should barely register, got {:.3}", urgency_100k);
 
-        // With GDP decline, budget at neutral satisfaction should still be above
-        // what the raw GDP fraction would give (sqrt dampening)
-        let declined_budget = compute_board_budget_per_tick(&state, 0.5);
-        let raw_base = state.base_board_budget_per_tick();
+        // 50M screened (~0.6% of pop): mid-to-late game, meaningful boost
+        for region in &mut state.regions {
+            region.estimated_infected = 50_000_000.0 / n_regions;
+        }
+        let urgency_50m = crisis_urgency_boost(&state);
+        assert!(urgency_50m > 0.20 && urgency_50m < 0.30,
+            "50M screened should give ~0.24 urgency, got {:.3}", urgency_50m);
 
-        // declined_budget should be higher than raw_base * 1.0 (undampened neutral)
-        // because sqrt dampening cushions the GDP decline
-        assert!(declined_budget > raw_base,
-            "dampened budget ({:.2}) should exceed raw GDP-derived base ({:.2})",
-            declined_budget, raw_base);
+        let budget_crisis = compute_board_budget_per_tick(&state, 0.5);
+        assert!(budget_crisis > budget_calm * 1.20,
+            "budget with 50M infections ({:.2}) should be >20% above calm ({:.2})",
+            budget_crisis, budget_calm);
 
-        // At max satisfaction (1.0), budget should be meaningfully higher than
-        // at min satisfaction (0.0), proving satisfaction is the primary lever
-        let max_sat_budget = compute_board_budget_per_tick(&state, 1.0);
-        let min_sat_budget = compute_board_budget_per_tick(&state, 0.0);
-        let sat_ratio = max_sat_budget / min_sat_budget;
-        assert!(sat_ratio > 2.0,
-            "satisfaction swing should be >2x, got {:.2}x (max={:.2}, min={:.2})",
-            sat_ratio, max_sat_budget, min_sat_budget);
+        // 200M screened (~2.5% of pop): full crisis, urgency should nearly cap
+        for region in &mut state.regions {
+            region.estimated_infected = 200_000_000.0 / n_regions;
+        }
+        let urgency_200m = crisis_urgency_boost(&state);
+        assert!(urgency_200m > 0.35,
+            "200M screened should be near cap, got {:.3}", urgency_200m);
+
+        // Even with low satisfaction (0.2), urgency at 200M should significantly
+        // offset the budget cut
+        let budget_low_sat_urgent = compute_board_budget_per_tick(&state, 0.2);
+        let budget_low_sat_calm = {
+            for region in &mut state.regions {
+                region.estimated_infected = 0.0;
+            }
+            compute_board_budget_per_tick(&state, 0.2)
+        };
+        assert!(budget_low_sat_urgent > budget_low_sat_calm * 1.40,
+            "urgency at 200M should boost low-sat budget by >40%: urgent={:.2}, calm={:.2}",
+            budget_low_sat_urgent, budget_low_sat_calm);
     }
 
     #[test]
