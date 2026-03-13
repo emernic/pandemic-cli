@@ -218,6 +218,21 @@ pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chach
         0.0
     };
 
+    // Build set of corp indices boosted by active contracts.
+    // When the player has a contract with a board member who owns a corporation,
+    // that corporation gets a competitive capacity boost (~15%) — the narrative is
+    // that government resources are being funneled their way.
+    let mut contract_boosted_corps: Vec<bool> = vec![false; state.corporations.len()];
+    for contract in &state.contracts {
+        if let Some(bm) = state.board_members.get(contract.board_member_idx) {
+            if let Some(c_idx) = bm.corp_idx {
+                if c_idx < contract_boosted_corps.len() {
+                    contract_boosted_corps[c_idx] = true;
+                }
+            }
+        }
+    }
+
     // Compute revenue via sector competition pools.
     let sectors = [
         CorporationSector::Energy,
@@ -245,10 +260,15 @@ pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chach
         let sector_pool = sector_base * global_gdp_frac;
 
         // Each corp's competitive capacity = base_revenue × gdp_fraction ^ crisis_exposure.
+        // Corps with an active player contract get a 15% capacity boost.
         let capacities: Vec<f64> = members.iter()
             .map(|&i| {
                 let gdp_frac = state.regions[state.corporations[i].region_idx].gdp_fraction();
-                state.corporations[i].base_revenue * gdp_frac.powf(sector.crisis_exposure())
+                let mut cap = state.corporations[i].base_revenue * gdp_frac.powf(sector.crisis_exposure());
+                if contract_boosted_corps[i] {
+                    cap *= 1.15;
+                }
+                cap
             })
             .collect();
 
