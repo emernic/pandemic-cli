@@ -3793,6 +3793,103 @@ mod tests {
         });
     }
 
+    // --- Generic crisis cost deduction tests ---
+
+    #[test]
+    fn crisis_cost_deducts_funding() {
+        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, SimState};
+        let mut state = GameState::new_default(42);
+        let funding_before = state.resources.funding;
+        state.sim_state = SimState::Event { was_running: true };
+        state.ui.crisis_selection = 1;
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            title: "T".into(),
+            description: "T".into(),
+            options: vec![
+                CrisisOption { label: "A".into(), description: "".into(), cost: None },
+                CrisisOption { label: "B".into(), description: "".into(),
+                    cost: Some(CrisisCost { funding: 250.0, personnel: 0, ..Default::default() }) },
+            ],
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert!((after.resources.funding - (funding_before - 250.0)).abs() < 0.01,
+            "choosing a costed option should deduct funding; expected {} got {}",
+            funding_before - 250.0, after.resources.funding);
+    }
+
+    #[test]
+    fn crisis_cost_deducts_personnel_permanently() {
+        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, SimState};
+        let mut state = GameState::new_default(42);
+        let personnel_before = state.resources.personnel;
+        state.sim_state = SimState::Event { was_running: true };
+        state.ui.crisis_selection = 0;
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            title: "T".into(),
+            description: "T".into(),
+            options: vec![
+                CrisisOption { label: "A".into(), description: "".into(),
+                    cost: Some(CrisisCost { funding: 0.0, personnel: 2, ..Default::default() }) },
+                CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert_eq!(after.resources.personnel, personnel_before - 2,
+            "choosing a costed option should permanently deduct personnel");
+    }
+
+    #[test]
+    fn crisis_cost_creates_operation_for_temporary_personnel() {
+        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, OperationSpec, SimState};
+        let mut state = GameState::new_default(42);
+        let personnel_before = state.resources.personnel;
+        state.sim_state = SimState::Event { was_running: true };
+        state.ui.crisis_selection = 0;
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            title: "T".into(),
+            description: "T".into(),
+            options: vec![
+                CrisisOption { label: "A".into(), description: "".into(),
+                    cost: Some(CrisisCost {
+                        funding: 100.0,
+                        personnel: 3,
+                        operation: Some(OperationSpec { days: 2.0, label: "Test Op".into() }),
+                    }) },
+                CrisisOption { label: "B".into(), description: "".into(), cost: None },
+            ],
+            tick_created: 0,
+        });
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        // Personnel should NOT be permanently deducted — they're in an operation
+        assert_eq!(after.resources.personnel, personnel_before,
+            "personnel should not be permanently lost when operation is specified");
+        assert_eq!(after.crisis_operations.len(), 1);
+        assert_eq!(after.crisis_operations[0].label, "Test Op");
+        assert_eq!(after.crisis_operations[0].personnel, 3);
+    }
+
+    #[test]
+    fn crisis_cost_none_deducts_nothing() {
+        let mut state = GameState::new_default(42);
+        let funding_before = state.resources.funding;
+        let personnel_before = state.resources.personnel;
+        setup_crisis(&mut state, CrisisKind::SupplyDisruption { medicine_idx: 0 }, 0);
+        let after = apply_action(&state, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert!((after.resources.funding - funding_before).abs() < 0.01,
+            "free option should not deduct funding");
+        assert_eq!(after.resources.personnel, personnel_before,
+            "free option should not deduct personnel");
+    }
+
     #[test]
     fn supply_disruption_option_a_loses_half_doses() {
         let mut state = GameState::new_default(42);
