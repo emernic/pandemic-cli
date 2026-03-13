@@ -3824,6 +3824,10 @@ pub enum GameEvent {
     TechUnlocked {
         tech: BasicTech,
     },
+    /// An emergency decree became available due to escalating crisis severity.
+    DecreeUnlocked {
+        decree_idx: usize,
+    },
     /// Suppression research complete — pathogen infectivity permanently reduced.
     PathogenSuppressed {
         disease_idx: usize,

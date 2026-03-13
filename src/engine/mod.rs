@@ -47,6 +47,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         return new;
     }
 
+    // Snapshot decree unlock state so we can detect newly unlocked decrees at end of tick.
+    let decrees_were_unlocked: Vec<bool> = (0..6).map(|i| state.decree_unlocked(i)).collect();
+
     // Clone per-subsystem RNG streams out so we can mutably borrow them and
     // `new.regions` simultaneously. Written back at the end of the function.
     let mut rng_spread = new.rng_spread.clone();
@@ -681,6 +684,13 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             }
             region.prev_dead = region.total_dead();
             region.prev_dead_tick = new.tick;
+        }
+    }
+
+    // Detect newly unlocked emergency decrees (severity crossed threshold this tick).
+    for i in 0..6 {
+        if !decrees_were_unlocked[i] && new.decree_unlocked(i) && !new.enacted_decrees.is_enacted(i) {
+            new.events.push(GameEvent::DecreeUnlocked { decree_idx: i });
         }
     }
 
@@ -5571,6 +5581,42 @@ mod tests {
         let (_, ok) = policy::enact_decree(&mut state, 0, None);
         assert!(ok, "decree should be available with sufficient severity");
         assert!(state.enacted_decrees.conscript_researchers);
+    }
+
+    #[test]
+    fn decree_unlock_emits_event() {
+        use crate::state::RegionDiseaseState;
+
+        let mut state = GameState::new_default(42);
+        // Clear ALL infections and deaths so all decrees start locked
+        for region in &mut state.regions {
+            region.infections.clear();
+        }
+        assert!(!state.decree_unlocked(0), "decree 0 should be locked with no infections/deaths");
+
+        // Set total (exposed+infected) just below 500K threshold for decree 0.
+        // total_infected() counts exposed+infected.
+        // Use 499K total with large infected pool to generate new exposures from
+        // the susceptible population, pushing total past 500K in one tick.
+        state.regions[0].infections = vec![RegionDiseaseState {
+            disease_idx: 0, exposed: 9_000.0, infected: 490_000.0, dead: 0.0, immune: 0.0,
+        }];
+        assert!(!state.decree_unlocked(0), "499K total should be below 500K threshold");
+
+        // Tick: high infected count will expose new susceptibles, pushing total past 500K.
+        let new = tick(&state);
+        assert!(new.decree_unlocked(0), "decree 0 should be unlocked after tick (spread grew past 500K)");
+        let unlocked_events: Vec<_> = new.events.iter()
+            .filter(|e| matches!(e, GameEvent::DecreeUnlocked { .. }))
+            .collect();
+        assert!(!unlocked_events.is_empty(), "should emit DecreeUnlocked event when crossing threshold");
+
+        // Running tick again should NOT re-emit (already unlocked)
+        let new2 = tick(&new);
+        let unlocked_events2: Vec<_> = new2.events.iter()
+            .filter(|e| matches!(e, GameEvent::DecreeUnlocked { .. }))
+            .collect();
+        assert!(unlocked_events2.is_empty(), "should not re-emit DecreeUnlocked on subsequent ticks");
     }
 
     #[test]
