@@ -102,18 +102,27 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 }
             } else {
                 // ── Identity & biology ──
-                let has_vector = disease.knowledge >= KNOWLEDGE_PARTIAL_STATS;
+                let has_research_vector = disease.knowledge >= KNOWLEDGE_PARTIAL_STATS;
+                let has_intel = state.has_advanced_intel_on_disease(i);
+                let show_vector = has_research_vector || has_intel;
                 let mut id_spans: Vec<Span> = vec![
                     Span::styled(
                         format!("    {}", disease.pathogen_type.label()),
                         Style::default().fg(Color::Cyan),
                     ),
                 ];
-                if has_vector {
+                if show_vector {
+                    let vector_color = if has_research_vector { Color::Yellow } else { Color::DarkGray };
                     id_spans.push(Span::styled(
                         format!(" · {}", disease.transmission.label()),
-                        Style::default().fg(Color::Yellow),
+                        Style::default().fg(vector_color),
                     ));
+                    if !has_research_vector {
+                        id_spans.push(Span::styled(
+                            " [intel]",
+                            Style::default().fg(Color::DarkGray),
+                        ));
+                    }
                 }
                 if disease.strain_generation > 0 {
                     id_spans.push(Span::styled(
@@ -122,6 +131,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     ));
                 }
                 lines.push(Line::from(id_spans));
+
+                // Intel assessment: show mutation risk when Advanced Intel is
+                // monitoring but full research knowledge isn't available yet.
+                if has_intel && !has_research_vector {
+                    let mutation_rate = disease.pathogen_type.mutation_rate();
+                    let risk_label = if mutation_rate >= 0.0008 { "High" }
+                        else if mutation_rate >= 0.0002 { "Moderate" }
+                        else { "Low" };
+                    lines.push(Line::from(Span::styled(
+                        format!("    Mutation risk: {} [intel]", risk_label),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
 
                 // Special trait warnings on their own line
                 let warnings = disease_warnings(state, i);
