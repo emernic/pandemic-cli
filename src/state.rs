@@ -6458,11 +6458,30 @@ impl GameState {
         {
             duration *= 0.65; // 35% faster
         }
+        // ManufactureDoses: scale cost and time by how depleted the stockpile is.
+        // At 0 doses you pay full price; at 90% full you pay 10%.
+        if let ResearchKind::ManufactureDoses { medicine_idx } = kind {
+            let depletion = self.manufacture_depletion_fraction(*medicine_idx);
+            duration *= depletion;
+            funding *= depletion;
+        }
         // Technocrat chairman: 10% research funding discount
         if self.chairman_personality() == Some(BoardPersonality::Technocrat) {
             funding *= 0.9;
         }
         (personnel, duration, funding)
+    }
+
+    /// Fraction of stockpile that needs manufacturing (0.0 = full, 1.0 = empty).
+    /// Used to scale ManufactureDoses cost and time proportionally.
+    pub fn manufacture_depletion_fraction(&self, medicine_idx: usize) -> f64 {
+        let target = self.medicines.get(medicine_idx)
+            .map(|m| m.max_doses * self.manufacturing_yield_bonus())
+            .unwrap_or(1.0);
+        let current = self.medicines.get(medicine_idx)
+            .map(|m| m.doses)
+            .unwrap_or(0.0);
+        ((target - current) / target).clamp(0.05, 1.0) // minimum 5% so it's never free
     }
 
     /// Vaccination effectiveness multiplier. VaccinePlatform tech triples it.

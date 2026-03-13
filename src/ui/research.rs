@@ -390,14 +390,15 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
             let yield_bonus = state.manufacturing_yield_bonus();
-            let actual_doses = med.max_doses * yield_bonus;
-            if (yield_bonus - 1.0).abs() > 0.01 {
-                Some(format!("Produces {} doses (+{:.0}% mfg bonus)",
-                    crate::format_number(actual_doses),
-                    (yield_bonus - 1.0) * 100.0))
+            let target_doses = med.max_doses * yield_bonus;
+            let current = crate::format_number(med.doses);
+            let target = crate::format_number(target_doses);
+            let bonus_note = if (yield_bonus - 1.0).abs() > 0.01 {
+                format!(" (+{:.0}% mfg bonus)", (yield_bonus - 1.0) * 100.0)
             } else {
-                Some(format!("Restores to {} doses", crate::format_number(med.max_doses)))
-            }
+                String::new()
+            };
+            Some(format!("{} → {} doses{}", current, target, bonus_note))
         }
         ResearchKind::GenomicSequencing { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
