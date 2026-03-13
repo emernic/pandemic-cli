@@ -715,6 +715,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let to_name = state.regions.get(*to_region)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let to_collapsed = state.regions.get(*to_region)
+                .map(|r| r.collapsed).unwrap_or(false);
+            let to_infected = state.regions.get(*to_region)
+                .map(|r| r.infections.iter().any(|i| i.infected > 0.0))
+                .unwrap_or(false);
             let survivors = state.regions.get(*from_region)
                 .map(|r| r.alive()).unwrap_or(0.0);
             let survivors_m = survivors / 1_000_000.0;
@@ -745,6 +750,29 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let pol_cost = refugee_pol_cost(*wave);
             let pol_pct = (pol_cost * 100.0).round() as u32;
 
+            let close_desc = if *wave >= 3 {
+                format!(
+                    "Seal the borders. {:.0}M die in the open.",
+                    survivors_m * 0.20,
+                )
+            } else if to_collapsed {
+                format!(
+                    "Seal the borders. {:.0}M die in the open. {} has already fallen.",
+                    survivors_m * 0.20, to_name,
+                )
+            } else if to_infected {
+                format!(
+                    "Seal the borders. Millions die at the gates. \
+                     Prevent further destabilization in {}.",
+                    to_name,
+                )
+            } else {
+                format!(
+                    "Seal the borders. Millions die at the gates. {} stays clean.",
+                    to_name,
+                )
+            };
+
             CrisisEvent {
                 title: "Refugee Crisis".into(),
                 description,
@@ -758,17 +786,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: format!("Close borders (−{}% board approval)", pol_pct),
-                    description: if *wave >= 3 {
-                        format!(
-                            "Seal the borders. {:.0}M die in the open.",
-                            survivors_m * 0.20,
-                        )
-                    } else {
-                        format!(
-                            "Seal the borders. Millions die at the gates. {} stays clean.",
-                            to_name,
-                        )
-                    },
+                    description: close_desc,
                     cost: None, // POL cost applied in resolve
                 },
                 CrisisOption {
