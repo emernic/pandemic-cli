@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SimState {
@@ -26,23 +26,6 @@ impl SimState {
     }
 }
 
-
-/// Deserialize hospital_level: accepts old `healthcare_invested: bool` saves
-/// (true → 1, false → 0) and new `hospital_level: u8` saves.
-fn deserialize_hospital_level<'de, D>(deserializer: D) -> Result<u8, D::Error>
-where D: Deserializer<'de> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum HospitalLevel {
-        Level(u8),
-        OldBool(bool),
-    }
-    match HospitalLevel::deserialize(deserializer)? {
-        HospitalLevel::Level(n) => Ok(n),
-        HospitalLevel::OldBool(true) => Ok(1),
-        HospitalLevel::OldBool(false) => Ok(0),
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameState {
@@ -130,7 +113,7 @@ pub struct GameState {
     pub history: Vec<HistorySnapshot>,
     /// Per-disease highest death milestone tier already notified (0=none, 1=1M, 2=100M, 3=1B).
     /// Prevents repeat alerts for the same threshold.
-    #[serde(default, alias = "threat_alert_level")]
+    #[serde(default)]
     pub death_milestone_tier: Vec<u8>,
     /// Per-disease flag: whether the pre-detection intel briefing has fired for this disease.
     /// Advanced Intel stations generate a warning before full detection when local infections
@@ -227,10 +210,8 @@ pub struct GameState {
 pub struct HistorySnapshot {
     pub tick: u64,
     /// Screened infected count (visibility depends on screening policy level).
-    #[serde(alias = "total_infected")]
     pub screened_infected: f64,
     /// Dead from detected diseases only (unidentified diseases not counted).
-    #[serde(alias = "total_dead")]
     pub detected_dead: f64,
 }
 
@@ -361,13 +342,10 @@ pub enum ScreeningLevel {
     #[default]
     None,
     /// Rough infected estimates. Cheap but inaccurate.
-    #[serde(alias = "Low")]
     Basic,
     /// Reveals infected + immune counts with moderate accuracy.
-    #[serde(alias = "Medium")]
     Antigen,
     /// Near-complete data on infected/immune AND reduces disease spread.
-    #[serde(alias = "High")]
     MassRapid,
 }
 
@@ -884,7 +862,7 @@ pub struct RegionPolicy {
     pub discourage_hosp: bool,
     /// Reduces cross-region spread by 30%, no income penalty.
     /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
-    #[serde(default, alias = "border_screening")]
+    #[serde(default)]
     pub border_controls: bool,
     /// Halves waterborne disease infectivity. No effect on airborne/contact.
     #[serde(default)]
@@ -1895,20 +1873,16 @@ pub enum GovernorPersonality {
     /// All noise. Defiance: small funding drain + alarming event messages.
     /// The real danger is wasting resources appeasing someone who'd shut up on their own.
     /// Bargain: small cost, large cooperation gain.
-    #[serde(alias = "Populist")]
     Blowhard,
     /// Absent. Defiance: doesn't sabotage — just stops enforcing. Policy effects
     /// reduced in the region. Bargain: costs personnel (you send someone to manage).
-    #[serde(alias = "Technocrat")]
     Recluse,
     /// Does too much. Defiance: unilaterally activates policies the player didn't set,
     /// costing unbudgeted personnel and funding. Bargain: give them authority (high cost).
-    #[serde(alias = "Nationalist")]
     Hardliner,
     /// Competent and helpful, always skimming. When loyal, policies more effective.
     /// When defiant, continuous funding drain that grows over time.
     /// Bargain: permanent cut of regional income.
-    #[serde(alias = "Cooperative")]
     Operative,
     /// Everything escalates. Defiance: periodic lump-sum demands that increase each time.
     /// Bargain: pure money, most expensive, gets worse over time.
@@ -2139,7 +2113,7 @@ pub struct Region {
     /// Field hospital level: 0 = none, 1 = Field Hospital (25% lethality reduction),
     /// 2 = Medical Center (40% lethality reduction + 25% medicine efficacy bonus).
     /// Destroyed (reset to 0) when region collapses.
-    #[serde(default, alias = "healthcare_invested", deserialize_with = "deserialize_hospital_level")]
+    #[serde(default)]
     pub hospital_level: u8,
     /// Intelligence station level: 0 = none, 1 = Intel Station (detects at 3k local infections),
     /// 2 = Advanced Intel (detects at 1k infections, generates briefings).
@@ -3524,7 +3498,6 @@ impl Medicine {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ResearchCategory {
     Field,
-    #[serde(alias = "Bench")]
     Applied,
     Basic,
 }
@@ -4428,16 +4401,12 @@ pub enum CrisisKind {
     // --- Governor defiance crises (fired when cooperation drops below threshold) ---
 
     /// Hardliner governor declares your directive illegitimate.
-    #[serde(alias = "GovernorNationalist")]
     GovernorHardliner { region_idx: usize },
     /// Blowhard governor makes noise — mostly hollow threats.
-    #[serde(alias = "GovernorPopulist")]
     GovernorBlowhard { region_idx: usize },
     /// Recluse governor stops responding — region drifts.
-    #[serde(alias = "GovernorTechnocrat")]
     GovernorRecluse { region_idx: usize },
     /// Operative governor starts skimming openly.
-    #[serde(alias = "GovernorCooperative")]
     GovernorOperative { region_idx: usize },
     /// Buffoon governor causes accidental damage.
     GovernorBuffoon { region_idx: usize },
