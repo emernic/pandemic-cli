@@ -326,7 +326,14 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
         let infected = region.screened_infected();
         let dead = region.detected_dead(&state.diseases);
 
-        let on_cooldown = region.any_deploy_cooldown(state.tick);
+        // Show per-disease cooldown for diseases this medicine targets in this region
+        let deployable = med.deployable_diseases(&state.diseases);
+        let cooldowns: Vec<(usize, u64)> = deployable.iter()
+            .filter_map(|&d_idx| {
+                let remaining = region.deploy_cooldown_remaining(state.tick, d_idx);
+                if remaining > 0 { Some((d_idx, remaining)) } else { None }
+            })
+            .collect();
 
         let mut spans = vec![
             Span::styled(format!("{}{:<14}", marker, region.name), style),
@@ -347,12 +354,28 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
                 Style::default().fg(Color::DarkGray),
             ));
         }
-        if on_cooldown {
-            spans.push(Span::raw("  "));
-            spans.push(Span::styled(
-                "[partial cooldown]".to_string(),
-                Style::default().fg(Color::Yellow),
-            ));
+        if !cooldowns.is_empty() {
+            let all_on_cooldown = cooldowns.len() == deployable.len();
+            if all_on_cooldown {
+                // Every targetable disease is on cooldown — show simple message
+                let max_ticks = cooldowns.iter().map(|(_, t)| *t).max().unwrap_or(0);
+                let hours = ((max_ticks as f64 / TICKS_PER_DAY) * 24.0).ceil() as u64;
+                spans.push(Span::raw("  "));
+                spans.push(Span::styled(
+                    format!("[cooldown {}h]", hours),
+                    Style::default().fg(Color::Yellow),
+                ));
+            } else {
+                // Some diseases on cooldown, others ready — show which
+                let names: Vec<&str> = cooldowns.iter()
+                    .filter_map(|(d_idx, _)| state.diseases.get(*d_idx).map(|d| d.name.as_str()))
+                    .collect();
+                spans.push(Span::raw("  "));
+                spans.push(Span::styled(
+                    format!("[cooldown: {}]", names.join(", ")),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
         }
         let eff = region.delivery_efficiency();
         if eff < 0.90 {
