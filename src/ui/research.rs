@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchCategory, ResearchKind, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the research panel in its current sub-state.
@@ -53,113 +53,78 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-/// Render the flat research panel: active projects, then available, then lab upgrade.
+/// Render the flat research panel: one unified list, no section headers.
 fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let items = state.research_flat_items();
     let available = state.all_available_projects();
-    let mut item_idx = 0usize;
 
-    // ─── Active Research ───
-    let active_projects: Vec<(usize, &crate::state::ResearchProject)> = state.active_research.iter()
-        .enumerate().collect();
-    if !active_projects.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  ─── Active Research ───",
-            Style::default().fg(Color::DarkGray),
-        )));
-        for (_idx, project) in &active_projects {
-            let selected = state.ui.panel_selection == item_idx;
-            if selected { selected_line = Some(lines.len()); }
-            render_active_project(&mut lines, project, selected, state);
-            item_idx += 1;
-        }
-    }
-
-    // ─── Available Research ───
-    if !available.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "  ─── Available ───",
-            Style::default().fg(Color::DarkGray),
-        )));
-        // Group by category for visual organization
-        let mut current_cat: Option<ResearchCategory> = None;
-        for kind in &available {
-            let cat = kind.category();
-            if current_cat != Some(cat) {
-                current_cat = Some(cat);
-                lines.push(Line::from(Span::styled(
-                    format!("  ── {} ──", cat.name()),
-                    Style::default().fg(Color::DarkGray),
-                )));
-            }
-            let selected = state.ui.panel_selection == item_idx;
-            if selected { selected_line = Some(lines.len()); }
-            render_available_project(&mut lines, kind, selected, state);
-            item_idx += 1;
-        }
-    } else if active_projects.is_empty() {
+    if items.is_empty() {
         lines.push(Line::from(Span::styled(
             "  No projects available.",
             Style::default().fg(Color::DarkGray),
         )));
     }
 
-    // ─── Lab ───
-    lines.push(Line::from(""));
-    if state.lab_level >= 2 {
-        lines.push(Line::from(Span::styled(
-            format!("  ─── {} (max) ───", state.lab_level_name()),
-            Style::default().fg(Color::DarkGray),
-        )));
-        lines.push(Line::from(Span::styled(
-            "    All research runs 60% faster",
-            Style::default().fg(Color::DarkGray),
-        )));
-    } else {
-        lines.push(Line::from(Span::styled(
-            "  ─── Lab ───",
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
-
-    // Lab upgrade button
-    if state.lab_level < 2 {
+    for (item_idx, item) in items.iter().enumerate() {
         let selected = state.ui.panel_selection == item_idx;
-        if selected { selected_line = Some(lines.len()); }
-        let marker = if selected { "▶ " } else { "  " };
-        let upgrade_style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Magenta)
-        };
-        lines.push(Line::from(Span::styled(
-            format!("{}[PURCHASE] Upgrade Research Lab", marker),
-            upgrade_style,
-        )));
-        let (cost, next_name, pct) = if state.lab_level == 0 {
-            (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
-        } else {
-            (LAB_LEVEL_2_COST, "Advanced Genomics Center", 60)
-        };
-        let can_afford = state.resources.funding >= cost;
-        let cost_style = if can_afford { Color::Cyan } else { Color::Red };
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("    {} → {} (+{}% speed)", state.lab_level_name(), next_name, pct),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                format!(" [¥{:.0}]", cost),
-                Style::default().fg(cost_style),
-            ),
-        ]));
-        item_idx += 1;
+        match item {
+            crate::state::ResearchFlatItem::Active(ai) => {
+                if let Some(project) = state.active_research.get(*ai) {
+                    if selected { selected_line = Some(lines.len()); }
+                    render_active_project(&mut lines, project, selected, state);
+                }
+            }
+            crate::state::ResearchFlatItem::Available(avail_idx) => {
+                if let Some(kind) = available.get(*avail_idx) {
+                    if selected { selected_line = Some(lines.len()); }
+                    render_available_project(&mut lines, kind, selected, state);
+                }
+            }
+            crate::state::ResearchFlatItem::UpgradeLab => {
+                lines.push(Line::from(""));
+                if selected { selected_line = Some(lines.len()); }
+                let marker = if selected { "▶ " } else { "  " };
+                let upgrade_style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Magenta)
+                };
+                lines.push(Line::from(Span::styled(
+                    format!("{}[PURCHASE] Upgrade Research Lab", marker),
+                    upgrade_style,
+                )));
+                let (cost, next_name, pct) = if state.lab_level == 0 {
+                    (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
+                } else {
+                    (LAB_LEVEL_2_COST, "Advanced Genomics Center", 60)
+                };
+                let can_afford = state.resources.funding >= cost;
+                let cost_style = if can_afford { Color::Cyan } else { Color::Red };
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("    {} → {} (+{}% speed)", state.lab_level_name(), next_name, pct),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!(" [¥{:.0}]", cost),
+                        Style::default().fg(cost_style),
+                    ),
+                ]));
+            }
+        }
     }
 
-    let _ = item_idx;
+    // Max lab info when fully upgraded
+    if state.lab_level >= 2 {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  {} (max) — all research 60% faster", state.lab_level_name()),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
     lines.push(Line::from(""));
     if !items.is_empty() {
         lines.push(Line::from(Span::styled(

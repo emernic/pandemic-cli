@@ -6267,19 +6267,34 @@ impl GameState {
     /// Used by both the renderer and the input handler.
     pub fn research_flat_items(&self) -> Vec<ResearchFlatItem> {
         let mut items = Vec::new();
-
-        // All active research projects
-        for (idx, _) in self.active_research.iter().enumerate() {
-            items.push(ResearchFlatItem::Active(idx));
-        }
-
-        // All available research projects
         let available = self.all_available_projects();
-        for i in 0..available.len() {
-            items.push(ResearchFlatItem::Available(i));
+        let mut claimed_active = vec![false; self.active_research.len()];
+
+        // Walk available projects in canonical order, substituting active
+        // projects where a match exists so items stay in a stable position.
+        for (avail_idx, kind) in available.iter().enumerate() {
+            let mut found = None;
+            for (ai, proj) in self.active_research.iter().enumerate() {
+                if proj.kind == *kind && !claimed_active[ai] {
+                    found = Some(ai);
+                    break;
+                }
+            }
+            if let Some(ai) = found {
+                claimed_active[ai] = true;
+                items.push(ResearchFlatItem::Active(ai));
+            } else {
+                items.push(ResearchFlatItem::Available(avail_idx));
+            }
         }
 
-        // Lab upgrade
+        // Append unclaimed active projects (conditions changed while running)
+        for (ai, _) in self.active_research.iter().enumerate() {
+            if !claimed_active[ai] {
+                items.push(ResearchFlatItem::Active(ai));
+            }
+        }
+
         if self.lab_level < 2 {
             items.push(ResearchFlatItem::UpgradeLab);
         }

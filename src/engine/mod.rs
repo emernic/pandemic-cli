@@ -1737,9 +1737,12 @@ mod tests {
         state = apply_action(&state, &Action::OpenResearch);
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
         let items = state.research_flat_items();
-        assert!(matches!(items.first(), Some(ResearchFlatItem::Active(0))));
+        // Find the active item's position in the unified list
+        let active_pos = items.iter().position(|i| matches!(i, ResearchFlatItem::Active(_))).unwrap();
+        assert!(matches!(items[active_pos], ResearchFlatItem::Active(0)));
 
-        // Enter on active project should be a no-op (stays on BrowseAll)
+        // Navigate to the active project and press Enter — should be a no-op
+        state.ui.panel_selection = active_pos;
         state = apply_action(&state, &Action::Confirm);
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
     }
