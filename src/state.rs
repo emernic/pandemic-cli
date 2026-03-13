@@ -2166,8 +2166,7 @@ pub struct Region {
     #[serde(default = "default_one")]
     pub supply_lines: f64,
     /// Civil order (0.0–1.0). Degrades when deaths mount and unpopular policies are active.
-    /// Below 0.5: screening effectiveness halved. Below 0.25: policies randomly deactivate.
-    /// At 0: all policies disabled, spread rate +50%.
+    /// At 0: spread rate +50% (anarchy). Also factors into GDP via infrastructure health.
     #[serde(default = "default_one")]
     pub civil_order: f64,
     /// Deployment priority for auto-deploy targeting. High regions are served
