@@ -3,7 +3,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
     BoardPersonality, CrisisKind, DecreeId, FundingCondition, FundingContract, GameEvent,
-    GameState, ModifierSource, PolicyId,
+    GameState, ModifierSource, PolicyId, ResearchKind,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
     CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
@@ -267,7 +267,7 @@ pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng) {
                         - state.active_research[proj_idx].progress;
                     let boost = remaining * PATRON_BONUS_RESEARCH_FRACTION;
                     state.active_research[proj_idx].progress += boost;
-                    let kind_label = format!("{:?}", state.active_research[proj_idx].kind);
+                    let kind_label = research_kind_label(&state.active_research[proj_idx].kind, state);
                     format!("Research assist: {} advanced {:.0}%", kind_label, PATRON_BONUS_RESEARCH_FRACTION * 100.0)
                 } else {
                     // Fallback to funding if no active research.
@@ -304,6 +304,50 @@ pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng) {
             member_name,
             description,
         });
+    }
+}
+
+/// Human-readable label for a research project kind (for event log messages).
+fn research_kind_label(kind: &ResearchKind, state: &GameState) -> String {
+    match kind {
+        ResearchKind::IdentifyThreat { disease_idx } => {
+            let name = state.diseases.get(*disease_idx).map(|d| d.name.as_str()).unwrap_or("?");
+            format!("Identify {}", name)
+        }
+        ResearchKind::DevelopMedicine { medicine_idx } => {
+            let name = state.medicines.get(*medicine_idx).map(|m| m.name.as_str()).unwrap_or("?");
+            format!("Develop {}", name)
+        }
+        ResearchKind::ClinicalTrial { medicine_idx, .. } => {
+            let name = state.medicines.get(*medicine_idx).map(|m| m.name.as_str()).unwrap_or("?");
+            format!("Trial {}", name)
+        }
+        ResearchKind::ManufactureDoses { medicine_idx } => {
+            let name = state.medicines.get(*medicine_idx).map(|m| m.name.as_str()).unwrap_or("?");
+            format!("Manufacture {}", name)
+        }
+        ResearchKind::GenomicSequencing { disease_idx } => {
+            let name = state.diseases.get(*disease_idx).map(|d| d.name.as_str()).unwrap_or("?");
+            format!("Sequence {}", name)
+        }
+        ResearchKind::TrainPersonnel => "Train Personnel".to_string(),
+        ResearchKind::BasicResearch { tech } => format!("Research {}", tech.name()),
+        ResearchKind::SuppressPathogen { disease_idx } => {
+            let name = state.diseases.get(*disease_idx).map(|d| d.name.as_str()).unwrap_or("?");
+            format!("Suppress {}", name)
+        }
+        ResearchKind::AttenuatePathogen { disease_idx } => {
+            let name = state.diseases.get(*disease_idx).map(|d| d.name.as_str()).unwrap_or("?");
+            format!("Attenuate {}", name)
+        }
+        ResearchKind::InterdictPathogen { disease_idx } => {
+            let name = state.diseases.get(*disease_idx).map(|d| d.name.as_str()).unwrap_or("?");
+            format!("Interdict {}", name)
+        }
+        ResearchKind::FieldOperations { region_idx, system } => {
+            let region = state.regions.get(*region_idx).map(|r| r.name.as_str()).unwrap_or("?");
+            format!("Field Ops {} {}", system.label(), region)
+        }
     }
 }
 
