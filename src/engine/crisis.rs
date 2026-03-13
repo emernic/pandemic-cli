@@ -2443,12 +2443,9 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let already_identifying = state.active_research.iter()
                 .any(|p| matches!(p.kind, ResearchKind::IdentifyThreat { disease_idx: d } if d == *disease_idx));
 
-            // Check if there's capacity for field research
-            let has_capacity = true; // no capacity limits — personnel/funding are the only gate
-
             let mut options = Vec::new();
 
-            if !already_identifying && has_capacity {
+            if !already_identifying {
                 let identify_kind = ResearchKind::IdentifyThreat { disease_idx: *disease_idx };
                 let (_, _, funding_cost) = state.effective_costs(&identify_kind);
                 options.push(CrisisOption {
