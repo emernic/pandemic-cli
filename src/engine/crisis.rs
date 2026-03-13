@@ -208,11 +208,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PersonnelSick { amount, recovery_days });
     }
 
-    // International aid: meaningful funding vs modest personnel boost
-    let funding = scaled_cost(state, 0.30, 800.0, 1500.0);
-    let personnel = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(3, 5);
-    candidates.push(CrisisKind::InternationalAid { funding, personnel });
-
     // Mutation surge: requires a disease with strain_generation > 0 AND active infections
     let mutated: Vec<usize> = state.diseases.iter().enumerate()
         .filter(|(i, d)| {
@@ -348,20 +343,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
             let idx = non_collapsed[rng.r#gen::<usize>() % non_collapsed.len()];
             candidates.push(CrisisKind::CultBlockade { region_idx: idx });
         }
-    }
-
-    // Billionaire offer: requires day > 16
-    if day > 16.0 {
-        let reward = scaled_cost(state, 0.25, 150.0, 500.0);
-        let personnel_loss = ((state.resources.personnel as f64 * 0.10).round() as u32).clamp(1, 5);
-        candidates.push(CrisisKind::BillionaireOffer { reward, personnel_loss });
-    }
-
-    // WHO evacuation: requires day > 20, Europe not collapsed
-    let europe_ok = state.regions.iter().any(|r| r.name == "Europe" && !r.collapsed);
-    if day > 20.0 && europe_ok {
-        let aid_loss = scaled_cost(state, 0.15, 100.0, 500.0);
-        candidates.push(CrisisKind::WHOEvacuation { aid_loss });
     }
 
     // Warlord demand: requires collapsed region
@@ -872,8 +853,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Deploy military (−15% board approval, 2 personnel for 2d)".into(),
-                    description: "Maintain quarantine by force. Troops return in 2 days.".into(),
+                    label: "Hire private security (−15% board approval, 2 personnel for 2d)".into(),
+                    description: "Maintain quarantine by force. Security team returns in 2 days.".into(),
                     cost: Some(CrisisCost {
                         funding: 0.0,
                         personnel: 2,
@@ -1699,8 +1680,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: format!("Federal override (¥{cost:.0})"),
-                    description: "Maintain operations. Governor will resent it.".into(),
+                    label: format!("Negotiate access (¥{cost:.0})"),
+                    description: "Pay for continued access. Governor will resent it.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
@@ -1937,14 +1918,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 description: format!(
                     "{gov_name} of {region_name} has died from the pandemic. \
                      The region has no leadership. Policy enforcement will suffer \
-                     until a successor is appointed."),
+                     until a successor emerges."),
                 options: vec![ CrisisOption {
-                    label: "Emergency appointment".into(),
-                    description: format!("Spend ¥{cost:.0} to fast-track a replacement. Successor arrives in 7 days."),
+                    label: format!("Stabilize operations (¥{cost:.0})"),
+                    description: "Fund local continuity efforts. Successor arrives in 7 days.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                  CrisisOption {
-                    label: "Let the process run".into(),
+                    label: "Wait it out".into(),
                     description: "A successor will emerge on their own. 12 days leaderless.".into(),
                     cost: None,
                 },
