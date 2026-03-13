@@ -242,8 +242,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Style::default().fg(Color::DarkGray)
             };
             let reason = if region.collapsed { "collapsed" } else { "not collapsed" };
-            // Nuclear uses ☢ icon to match the 🔒 icon pattern for AUTH-locked items.
-            let icon = if *policy_idx == POLICY_IDX_NUCLEAR { "☢ " } else { "  " };
+            let icon = if *policy_idx == POLICY_IDX_NUCLEAR { "🔒 " } else { "  " };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}", marker), name_style),
                 Span::styled(icon, Style::default().fg(Color::DarkGray)),
@@ -336,9 +335,6 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             Span::styled(format!("{}", marker), name_style),
             Span::styled(format!("{} ", status), status_style),
         ];
-        if *policy_idx == POLICY_IDX_NUCLEAR {
-            row.push(Span::styled("☢ ", Style::default().fg(Color::Yellow)));
-        }
         row.push(Span::styled(format!("{}", name), name_style));
         lines.push(Line::from(row));
         lines.push(Line::from(vec![
