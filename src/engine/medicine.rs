@@ -508,12 +508,12 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             // Wasting doses on a near-useless medicine delays the player from
             // switching to targeted medicines with full efficacy.
             let effective_eff = state.medicines[med_idx].effective_efficacy(best_disease_idx, &state.diseases);
-            if effective_eff < 0.04 {
+            if effective_eff < crate::state::AUTO_DEPLOY_MIN_EFFICACY {
                 // Notify the player once when ALL tested diseases are below threshold
                 // (truly blocked, not just this tick's best target).
                 if !state.auto_deploy_blocked_notified.contains(&med_idx) {
                     let all_blocked = tested.iter().all(|&d_idx| {
-                        state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < 0.04
+                        state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::AUTO_DEPLOY_MIN_EFFICACY
                     });
                     if all_blocked {
                         state.auto_deploy_blocked_notified.insert(med_idx);
