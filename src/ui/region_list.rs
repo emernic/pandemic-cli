@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
+use crate::state::{map_grid_pos, GameState, Region, RegionTrait, MAP_GRID_LEN,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
 
@@ -39,6 +39,68 @@ fn classify_connection(a: usize, b: usize) -> Option<ConnKind> {
         Some(ConnKind::Diagonal)
     } else {
         None
+    }
+}
+
+/// Connection visual strength: how much spread flows through this link.
+#[derive(Clone, Copy)]
+enum ConnStrength {
+    /// No significant restrictions — double line
+    Strong,
+    /// Some restrictions (border controls, screening, partial collapse) — single line
+    Reduced,
+    /// Heavy restrictions (travel ban, combined policies) — dashed line
+    Minimal,
+}
+
+/// Compute the effective spread factor for flow from `source` to `dest`.
+fn directional_spread_factor(state: &GameState, source: usize, dest: usize) -> f64 {
+    let mut factor = 1.0;
+
+    let src_pol = state.policies.get(source);
+    let dst_pol = state.policies.get(dest);
+
+    let src_ban = src_pol.is_some_and(|p| p.travel_ban);
+    let dst_ban = dst_pol.is_some_and(|p| p.travel_ban);
+    let src_border = src_pol.is_some_and(|p| p.border_controls);
+    let dst_border = dst_pol.is_some_and(|p| p.border_controls);
+
+    if src_ban || dst_ban {
+        // Travel ban: use representative factor (~0.2, averaging across transmission types)
+        factor *= 0.2;
+    } else if src_border || dst_border {
+        factor *= 0.7;
+    }
+
+    // Screening at both endpoints
+    let src_screening = src_pol.map(|p| p.screening.spread_factor()).unwrap_or(1.0);
+    let dst_screening = dst_pol.map(|p| p.screening.spread_factor()).unwrap_or(1.0);
+    factor *= src_screening.min(dst_screening);
+
+    // Island geography reduces inbound spread
+    if state.regions[dest].has_trait(RegionTrait::IslandGeography) {
+        factor *= 0.5;
+    }
+
+    // Collapsed source emits less spread
+    if state.regions[source].collapsed {
+        factor *= 0.3;
+    }
+
+    factor
+}
+
+/// Classify connection strength between two regions (takes max of both directions).
+fn connection_strength(state: &GameState, a: usize, b: usize) -> ConnStrength {
+    let factor = directional_spread_factor(state, a, b)
+        .max(directional_spread_factor(state, b, a));
+
+    if factor > 0.7 {
+        ConnStrength::Strong
+    } else if factor > 0.25 {
+        ConnStrength::Reduced
+    } else {
+        ConnStrength::Minimal
     }
 }
 
@@ -99,7 +161,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     // Condensed boxes: 4 content lines + 2 border = 6 (name, stats, bar, collapse indicator)
     let region_height = ((inner.height.saturating_sub(gap_row)) / 2).min(6);
 
-    // Draw connections in gap areas
+    // Draw connections in gap areas — line style reflects spread strength
     let connections = drawable_connections(state);
     {
         let buf = f.buffer_mut();
@@ -110,12 +172,27 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 
             let has_spread = state.regions[conn.a].screened_infected() > 0.0
                 || state.regions[conn.b].screened_infected() > 0.0;
+            let strength = connection_strength(state, conn.a, conn.b);
             let color = if has_spread {
                 Color::Red
             } else {
-                Color::DarkGray
+                match strength {
+                    ConnStrength::Strong => Color::Gray,
+                    ConnStrength::Reduced => Color::DarkGray,
+                    ConnStrength::Minimal => Color::DarkGray,
+                }
             };
             let style = Style::default().fg(color);
+
+            // Pick line characters based on strength:
+            //   Strong  = double line (═ ║)
+            //   Reduced = single line (─ │)
+            //   Minimal = dashed line (┄ ┊)
+            let (h_char, v_char, d_char) = match strength {
+                ConnStrength::Strong  => ("═", "║", "╱"),
+                ConnStrength::Reduced => ("─", "│", "╱"),
+                ConnStrength::Minimal => ("┄", "┊", "·"),
+            };
 
             match conn.kind {
                 ConnKind::Horizontal => {
@@ -124,7 +201,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     for x in x_start..x_start + gap_col {
                         if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
                             let cell = &mut buf[(x, y)];
-                            cell.set_symbol("─");
+                            cell.set_symbol(h_char);
                             cell.set_style(style);
                         }
                     }
@@ -135,7 +212,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     for y in y_start..y_start + gap_row {
                         if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
                             let cell = &mut buf[(x, y)];
-                            cell.set_symbol("│");
+                            cell.set_symbol(v_char);
                             cell.set_style(style);
                         }
                     }
@@ -145,7 +222,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     let y = inner.y + rb * (region_height + gap_row) + region_height;
                     if x < buf_area.x + buf_area.width && y < buf_area.y + buf_area.height {
                         let cell = &mut buf[(x, y)];
-                        cell.set_symbol("╱");
+                        cell.set_symbol(d_char);
                         cell.set_style(style);
                     }
                 }
