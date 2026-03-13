@@ -212,9 +212,9 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
             }
         }
         Action::Confirm => {
-            // Skip typewriter animation on the splash screen
-            if !new.ui.home_splash_done {
-                new.ui.home_splash_done = true;
+            // If the typewriter animation is still playing, skip to fully revealed.
+            if !new.ui.home_splash_done && !new.ui.home_splash_revealed {
+                new.ui.home_splash_revealed = true;
                 return new;
             }
             if new.outcome == GameOutcome::Playing {

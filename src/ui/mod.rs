@@ -560,11 +560,21 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let warning = if (millis / 500) % 2 == 0 { "⚠" } else { "  " };
-    lines.push(Line::from(Span::styled(
-        format!("  {}  {}  {}", warning, crisis.title, warning),
-        Style::default().fg(Color::Yellow),
-    )));
+    let flash_on = (millis / 500) % 2 == 0;
+    let warning_style = if flash_on {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Black)
+    };
+    let title_style = Style::default().fg(Color::Yellow);
+    lines.push(Line::from(vec![
+        Span::raw("  "),
+        Span::styled("⚠", warning_style),
+        Span::raw("  "),
+        Span::styled(crisis.title.clone(), title_style),
+        Span::raw("  "),
+        Span::styled("⚠", warning_style),
+    ]));
     lines.push(Line::from(""));
 
     // Word-wrap description manually for the panel width
