@@ -147,10 +147,14 @@ pub(crate) fn process_events(state: &mut GameState) {
     for event in &state.events {
         let (priority, msg, notification) = match event {
             GameEvent::RegionCollapsed { region_idx, personnel_lost } => {
-                let region_name = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let region = state.regions.get(*region_idx);
+                let region_name = region.map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
-                let msg = format!("COLLAPSE: {} has fallen! {} regions remain", region_name, remaining);
+                let spec_suffix = match region.and_then(|r| r.specialization) {
+                    Some(spec) => format!(". {} lost", spec.label()),
+                    None => String::new(),
+                };
+                let msg = format!("COLLAPSE: {} has fallen! {} regions remain{}", region_name, remaining, spec_suffix);
                 let notification = if *personnel_lost > 0 {
                     format!("{}. {} personnel lost.", msg, personnel_lost)
                 } else {
