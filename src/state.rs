@@ -390,17 +390,88 @@ pub const COUNTERMEASURE_KILL_FRACTION: f64 = 0.10;
 pub const COUNTERMEASURE_INFECTIVITY_MULT: f64 = 0.50;
 /// Emergency Countermeasure: cross-region spread multiplier applied to all diseases.
 pub const COUNTERMEASURE_SPREAD_MULT: f64 = 0.25;
-/// Board approval cost for each decree (subtracted immediately on enactment).
-/// Indexed by decree_idx. Costs escalate: early decrees are cheap, late-game
-/// decrees are expensive. Taking 2+ decrees in quick succession drops the player
-/// below policy approval thresholds (Quarantine=45%, Travel Ban=40%).
-pub const DECREE_APPROVAL_COSTS: [f64; DECREE_COUNT] = [
-    0.05, // Conscript Researchers — early/mild, small political cost
-    0.10, // Authorize Human Trials — ethically controversial
-    0.10, // Sacrifice Region — dramatic but situational
-    0.15, // Suspend Regional Authority — major power grab
-    0.10, // Fortify Region — picking favorites, moderate cost
-    0.20, // Emergency Countermeasure — kills civilians, massive political cost
+/// The degree to which the board leverages its economic and political influence
+/// to enable the player to act in the world. Board members collectively represent
+/// a significant chunk of the global economic elite; Authority reflects their
+/// willingness to publicly and privately support the player's directives.
+/// Authority is decided at board meetings, not per-tick — it can only change
+/// by one level per meeting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Authority {
+    Minimal,
+    VeryLow,
+    Low,
+    Medium,
+    High,
+    Maximum,
+}
+
+impl Authority {
+    /// Raise by one level (capped at Maximum).
+    pub fn raise(self) -> Self {
+        match self {
+            Self::Minimal => Self::VeryLow,
+            Self::VeryLow => Self::Low,
+            Self::Low => Self::Medium,
+            Self::Medium => Self::High,
+            Self::High => Self::Maximum,
+            Self::Maximum => Self::Maximum,
+        }
+    }
+
+    /// Lower by one level (floored at Minimal).
+    pub fn lower(self) -> Self {
+        match self {
+            Self::Minimal => Self::Minimal,
+            Self::VeryLow => Self::Minimal,
+            Self::Low => Self::VeryLow,
+            Self::Medium => Self::Low,
+            Self::High => Self::Medium,
+            Self::Maximum => Self::High,
+        }
+    }
+
+    /// Human-readable label for display.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Minimal => "Minimal",
+            Self::VeryLow => "Very Low",
+            Self::Low => "Low",
+            Self::Medium => "Medium",
+            Self::High => "High",
+            Self::Maximum => "Maximum",
+        }
+    }
+
+    /// Personnel trickle rate (per day) at each authority level.
+    pub fn personnel_per_day(self) -> f64 {
+        match self {
+            Self::Minimal => 0.0,
+            Self::VeryLow => 0.5,
+            Self::Low => 1.0,
+            Self::Medium => 2.0,
+            Self::High => 3.0,
+            Self::Maximum => 5.0,
+        }
+    }
+}
+
+impl Default for Authority {
+    fn default() -> Self {
+        Self::Minimal
+    }
+}
+
+/// Chairman satisfaction cost for each decree. Applied as a negative modifier
+/// to the chairman's satisfaction when the decree is enacted. Larger costs
+/// mean the chairman is more reluctant — the political fallout lands on them.
+pub const DECREE_CHAIRMAN_COSTS: [f64; DECREE_COUNT] = [
+    -0.05, // Conscript Researchers — early/mild, small political cost
+    -0.10, // Authorize Human Trials — ethically controversial
+    -0.10, // Sacrifice Region — dramatic but situational
+    -0.15, // Suspend Regional Authority — major power grab
+    -0.10, // Fortify Region — picking favorites, moderate cost
+    -0.20, // Emergency Countermeasure — kills civilians, massive political cost
 ];
 
 /// Single source of truth for decree unlock conditions.
@@ -649,7 +720,7 @@ pub struct RegionPolicy {
 ///
 /// Display position is determined by `policy_display_order()` (grouped by function).
 /// If you add a new policy, you must update:
-///   - POLICY_COUNT and POLICY_APPROVAL_THRESHOLDS (this file)
+///   - POLICY_COUNT and POLICY_AUTHORITY_REQUIREMENTS (this file)
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
@@ -668,22 +739,23 @@ pub const POLICY_IDX_NUCLEAR: usize = 9;
 /// (Basic / Med / Mass Screening), all backed by the single `screening` enum field.
 pub const POLICY_IDX_SCREENING_BASE: usize = 5;
 
-/// Minimum Board Approval (0.0–1.0) required to activate each policy.
-/// Starting approval is 0.10 (skeptical board). Ramps up as crisis worsens.
+/// Minimum Authority level required to activate each policy.
+/// `None` means always available (no authority gate). Authority starts at
+/// Minimal and ramps over ~40 days as the board grants more power at meetings.
 /// Indexed by policy_idx (see POLICY_COUNT doc for the mapping).
-pub const POLICY_APPROVAL_THRESHOLDS: [f64; POLICY_COUNT] = [
-    0.40, // Travel Ban — basic containment, available near starting approval
-    0.45, // Quarantine — restricts movement, moderate board buy-in
-    0.30, // Discourage Hospitalization — containment, low threshold
-    0.00, // Border Controls — basic containment, always available (costs personnel + funding)
-    0.00, // Water Sanitation — basic public health, always available (costs personnel + funding)
-    0.00, // Basic Screening — disease reporting, always available (costs personnel + funding)
-    0.30, // Antigen Screening — mandatory testing, needs board buy-in
-    0.40, // Mass Rapid Screening — mandatory mass testing, needs board support
-    0.70, // Martial Law — drastic, needs strong board backing
-    0.60, // Nuclear Annihilation — extreme, but collapsed regions raise urgency
-    0.40, // Field Hospital — institutional build, needs board support
-    0.00, // Intel Station — always available, encourages early investment
+pub const POLICY_AUTHORITY_REQUIREMENTS: [Option<Authority>; POLICY_COUNT] = [
+    Some(Authority::Medium),   // 0: Travel Ban — containment, moderate authority
+    Some(Authority::Medium),   // 1: Quarantine — restricts movement, moderate authority
+    Some(Authority::Low),      // 2: Discourage Hospitalization — containment, low authority
+    None,                      // 3: Border Controls — always available
+    None,                      // 4: Water Sanitation — always available
+    None,                      // 5: Basic Screening — always available
+    Some(Authority::Low),      // 6: Antigen Screening — mandatory testing, low authority
+    Some(Authority::Medium),   // 7: Mass Rapid Screening — mandatory mass testing
+    Some(Authority::High),     // 8: Martial Law — drastic, needs strong backing
+    Some(Authority::High),     // 9: Nuclear Annihilation — extreme measures
+    Some(Authority::Medium),   // 10: Field Hospital — institutional build
+    None,                      // 11: Intel Station — always available
 ];
 
 /// Panel selection positions for the ManagePolicies subpanel.
@@ -1516,13 +1588,11 @@ fn format_large_number(n: f64) -> String {
 pub struct Resources {
     pub funding: f64,
     pub personnel: u32,
-    /// Board Approval (0.0–1.0). The board's collective assessment of your performance.
-    /// 0% = furious, 50% = neutral (starting value), 100% = enraptured.
-    /// Drifts toward a board/contract-driven target (~50%/day). Crisis choices modify
-    /// this directly, so approval hits take real time to recover from.
+    /// The board's current grant of authority. Decided at board meetings —
+    /// can only change by one level per meeting. Starts at Minimal.
     #[serde(default)]
-    pub board_approval: f64,
-    /// Fractional accumulator for approval-based personnel gains.
+    pub authority: Authority,
+    /// Fractional accumulator for authority-based personnel gains.
     #[serde(default)]
     pub personnel_accum: f64,
     /// Fractional accumulator for personnel attrition (when funding is $0).
@@ -5341,7 +5411,7 @@ impl GameState {
             resources: Resources {
                 funding: 500.0,
                 personnel: 20,
-                board_approval: 0.10,
+                authority: Authority::Minimal,
                 personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_funding_warning_tick: 0,
@@ -5795,22 +5865,29 @@ impl GameState {
         self.regions.iter().map(|r| r.population as f64).sum()
     }
 
-    /// Effective approval threshold for a policy in a specific region.
-    /// Regional severity (infection rate) reduces the threshold — a crisis
-    /// in a region justifies action even with low global board approval.
-    pub fn effective_approval_threshold(&self, region_idx: usize, policy_idx: usize) -> f64 {
-        let base = POLICY_APPROVAL_THRESHOLDS.get(policy_idx).copied().unwrap_or(1.0);
+    /// Effective Authority requirement for a policy in a specific region.
+    /// Regional severity (infection rate) can lower the requirement by one level —
+    /// a crisis in a region justifies action even with low global authority.
+    pub fn effective_authority_requirement(&self, region_idx: usize, policy_idx: usize) -> Option<Authority> {
+        let base = POLICY_AUTHORITY_REQUIREMENTS.get(policy_idx).copied().flatten();
+        let base = match base {
+            Some(a) => a,
+            None => return None, // Always available
+        };
         let region = match self.regions.get(region_idx) {
             Some(r) => r,
-            None => return base,
+            None => return Some(base),
         };
-        // severity = fraction of region population currently infected
         let pop = region.population as f64;
-        if pop <= 0.0 { return base; }
+        if pop <= 0.0 { return Some(base); }
         let infected: f64 = region.infections.iter().map(|i| i.infected).sum();
         let severity = (infected / pop).min(1.0);
-        // High severity reduces threshold by up to 50%
-        (base * (1.0 - severity * 0.5)).max(0.0)
+        // High severity (>50% infected) lowers requirement by one level
+        if severity > 0.5 {
+            Some(base.lower())
+        } else {
+            Some(base)
+        }
     }
 
     /// The BasicTech prerequisite for a policy, if any. Policies without a research
@@ -5831,11 +5908,14 @@ impl GameState {
         }
     }
 
-    /// Whether a policy can be activated given current board approval, regional severity,
+    /// Whether a policy can be activated given current authority level, regional severity,
     /// and research prerequisites.
     pub fn policy_unlocked(&self, region_idx: usize, policy_idx: usize) -> bool {
         self.policy_research_met(policy_idx)
-            && self.resources.board_approval >= self.effective_approval_threshold(region_idx, policy_idx)
+            && match self.effective_authority_requirement(region_idx, policy_idx) {
+                Some(req) => self.resources.authority >= req,
+                None => true,
+            }
     }
 
     /// Single source of truth for decree unlock conditions.
@@ -5938,32 +6018,23 @@ impl GameState {
         total / self.contracts.len() as f64
     }
 
-    /// Current approval drift target based on crisis severity, board confidence, and contract compliance.
-    /// Approval drifts toward this value at ~50%/day. Called by engine::tick().
-    /// Returns (crisis_component, board_component, contract_component) that sum to approval_target().
-    /// Used by the dashboard to show a breakdown without duplicating the formula.
-    ///
-    /// Crisis severity is the primary driver — the board starts skeptical and only grants
-    /// authority as infections, deaths, and collapses prove the crisis is real. Board
-    /// satisfaction and contract compliance act as secondary modifiers.
-    pub fn approval_target_components(&self) -> (f64, f64, f64) {
+    /// Authority pressure score: how urgently the board should be granting authority.
+    /// Computed from crisis severity, board satisfaction, and contract compliance.
+    /// Returns (crisis_component, board_component, contract_component) that sum to pressure.
+    /// Used by the dashboard to show a breakdown and by board meetings to decide authority.
+    pub fn authority_pressure_components(&self) -> (f64, f64, f64) {
         let total_infected = self.total_infected();
         let total_dead = self.total_dead_detected();
         let collapsed = self.regions.iter().filter(|r| r.collapsed).count() as f64;
         let total_regions = self.regions.len().max(1) as f64;
 
-        // Crisis severity: the primary driver of approval (0.0–0.55).
-        // Uses sqrt scaling for fast initial ramp that flattens as crisis deepens.
-        // Infections saturate at 100K (detectable outbreak in a 6B+ world).
-        // Deaths saturate at 20K (undeniable humanitarian crisis).
-        // Collapses directly signal existential threat.
+        // Crisis severity: the primary driver of authority (0.0–0.55).
         let infection_severity = (total_infected / 100_000.0).min(1.0).sqrt();
         let death_severity = (total_dead / 20_000.0).min(1.0).sqrt();
         let collapse_severity = (collapsed / total_regions).min(1.0);
         let crisis_component = (infection_severity * 0.25 + death_severity * 0.20 + collapse_severity * 0.10).min(0.55);
 
-        // Board satisfaction: happy board members are more generous (0.0–0.20)
-        // Humanitarian chairman adds +0.05 (slightly more forgiving approval trajectory)
+        // Board satisfaction: happy board members grant more authority (0.0–0.20)
         let humanitarian_bonus = if self.chairman_personality() == Some(BoardPersonality::Humanitarian) {
             0.05
         } else {
@@ -5971,16 +6042,28 @@ impl GameState {
         };
         let board_component = self.board_satisfaction() * 0.20 + humanitarian_bonus;
 
-        // Contract confidence: contract condition compliance amplifies authority (0.0–0.20).
-        // contract_confidence() returns 0.0 when no contracts exist.
+        // Contract confidence: contract compliance amplifies authority (0.0–0.20).
         let contract_component = self.contract_confidence() * 0.20;
 
         (crisis_component, board_component, contract_component)
     }
 
-    pub fn approval_target(&self) -> f64 {
-        let (crisis_component, board_component, contract_component) = self.approval_target_components();
-        (crisis_component + board_component + contract_component).clamp(0.0, 0.90)
+    /// Total authority pressure score (0.0–0.95).
+    pub fn authority_pressure(&self) -> f64 {
+        let (c, b, ct) = self.authority_pressure_components();
+        (c + b + ct).clamp(0.0, 0.95)
+    }
+
+    /// The authority level the board would grant given current pressure.
+    /// Board meetings use this to decide whether to raise or lower authority.
+    pub fn suggested_authority(&self) -> Authority {
+        let pressure = self.authority_pressure();
+        if pressure >= 0.75 { Authority::Maximum }
+        else if pressure >= 0.60 { Authority::High }
+        else if pressure >= 0.45 { Authority::Medium }
+        else if pressure >= 0.30 { Authority::Low }
+        else if pressure >= 0.15 { Authority::VeryLow }
+        else { Authority::Minimal }
     }
 
     /// Returns a reference to the board member's active satisfaction modifiers.
@@ -5990,22 +6073,22 @@ impl GameState {
         &self.board_members[member_idx].modifiers
     }
 
-    /// The next policy that would unlock with more approval. Returns (name, threshold)
-    /// for the lowest-threshold policy not yet globally available, or None if all
-    /// are already unlocked at current approval.
-    pub fn next_approval_unlock(&self) -> Option<(&'static str, f64)> {
-        let approval = self.resources.board_approval;
-        let mut best: Option<(&'static str, f64)> = None;
+    /// The next policy that would unlock at a higher authority level.
+    /// Returns (name, required_authority) for the lowest-authority policy not yet
+    /// globally available, or None if all are already unlocked.
+    pub fn next_authority_unlock(&self) -> Option<(&'static str, Authority)> {
+        let current = self.resources.authority;
+        let mut best: Option<(&'static str, Authority)> = None;
         for idx in 0..POLICY_COUNT {
-            let threshold = POLICY_APPROVAL_THRESHOLDS[idx];
-            if threshold <= 0.0 {
-                continue; // Always available, skip
-            }
-            if approval >= threshold {
+            let required = match POLICY_AUTHORITY_REQUIREMENTS[idx] {
+                Some(req) => req,
+                None => continue, // Always available
+            };
+            if current >= required {
                 continue; // Already unlocked
             }
-            if best.is_none() || threshold < best.unwrap().1 {
-                best = Some((policy_display_name(idx), threshold));
+            if best.is_none() || required < best.unwrap().1 {
+                best = Some((policy_display_name(idx), required));
             }
         }
         best

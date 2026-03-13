@@ -17,7 +17,7 @@ use crate::state::{
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR, DECREE_COUNT,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
-    MAX_DISEASES, POLICY_APPROVAL_THRESHOLDS, POLICY_COUNT, TICKS_PER_DAY,
+    MAX_DISEASES, TICKS_PER_DAY,
     WAVE_CLUSTER_WINDOW_TICKS,
 };
 
@@ -149,33 +149,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         new.resources.attrition_accum = 0.0;
     }
 
-    // Authority: drifts toward a board/contract-driven target.
-    // Target = f(board_satisfaction, contract_confidence, severity). See GameState::approval_target().
-    // AUTH moves toward target at ~50%/day, so crisis hits take 2-3 days to recover.
+    // Authority-based personnel trickle. Rate depends on current authority level.
     {
-        let old_approval = new.resources.board_approval;
-        let target = new.approval_target();
-        let drift_rate = 0.50 / TICKS_PER_DAY;
-        let delta = (target - old_approval) * drift_rate;
-        new.resources.board_approval = (old_approval + delta).clamp(0.0, 1.0);
-        let new_approval = new.resources.board_approval;
-
-        // Emit events when approval crosses a policy's base threshold (rising only).
-        if new_approval > old_approval {
-            for idx in 0..POLICY_COUNT {
-                let threshold = POLICY_APPROVAL_THRESHOLDS[idx];
-                if threshold <= 0.0 { continue; } // always available
-                if old_approval < threshold && new_approval >= threshold {
-                    new.events.push(GameEvent::PolicyAuthorized { policy_idx: idx });
-                }
-            }
-        }
-    }
-
-    // POL-based personnel: ~1 person per 3 days at max POL (0.90).
-    // With typical mid-game POL (~30-40%), this gives ~1 per 8-10 days.
-    {
-        let rate = new.resources.board_approval / (3.0 * TICKS_PER_DAY);
+        let rate = new.resources.authority.personnel_per_day() / TICKS_PER_DAY;
         new.resources.personnel_accum += rate;
         if new.resources.personnel_accum >= 1.0 {
             let gained = new.resources.personnel_accum as u32;
@@ -1007,7 +983,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchUiState};
+    use crate::state::{Authority, CrisisKind, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyUiState, RegionDiseaseState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut GameState) {
@@ -1902,6 +1878,9 @@ mod tests {
             let mut state = GameState::new_default(seed);
             corporations::generate_corporations(&mut state);
             board::generate_board_members(&mut state);
+            // Give the bot full authority so it can test policies & research,
+            // not the authority ramp mechanic.
+            state.resources.authority = Authority::Maximum;
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             let mut total_deploys = 0u32;
             for _ in 0..max_ticks {
@@ -2389,17 +2368,17 @@ mod tests {
     }
 
     #[test]
-    fn pol_based_personnel_accumulation() {
+    fn authority_based_personnel_accumulation() {
         let mut state = GameState::new_default(42);
-        // Pre-load the accumulator so even modest POL pushes it over 1.0.
-        // This tests the mechanism (POL → accum → personnel) without
-        // needing thousands of ticks for POL to build up naturally.
+        // Pre-load the accumulator so even a modest rate pushes it over 1.0.
+        // This tests the mechanism (authority → accum → personnel) without
+        // needing thousands of ticks.
         state.resources.personnel_accum = 0.99;
-        state.resources.board_approval = 0.50;
+        state.resources.authority = Authority::Maximum;
         let initial_personnel = state.resources.personnel;
 
-        // rate = 0.50 / (3.0 * 120) = 0.00139/tick. Starting at 0.99,
-        // we need ~8 ticks to cross 1.0. Run 20 to be safe.
+        // At Maximum authority, personnel_per_day() is high enough that
+        // starting at 0.99 accum should cross 1.0 within a few ticks.
         let mut s = state;
         for _ in 0..20 {
             s = tick(&s);
@@ -2415,15 +2394,15 @@ mod tests {
     }
 
     #[test]
-    fn pol_based_personnel_zero_pol_no_gain() {
+    fn authority_minimal_no_personnel_gain() {
         let mut state = GameState::new_default(42);
         corporations::generate_corporations(&mut state);
         board::generate_board_members(&mut state);
-        // Clear infections so POL target stays near 0
+        // Clear infections
         for r in &mut state.regions {
             r.infections.clear();
         }
-        state.resources.board_approval = 0.0;
+        state.resources.authority = Authority::Minimal;
         state.resources.personnel_accum = 0.0;
         let initial_personnel = state.resources.personnel;
 
@@ -2432,12 +2411,12 @@ mod tests {
             s = tick(&s);
         }
 
-        // With no infections, POL target is near 0 (only time_frac contributes).
-        // Personnel gain should be minimal.
+        // With Minimal authority, personnel_per_day() is 0.
+        // Personnel gain should be zero.
         let gained = s.resources.personnel.saturating_sub(initial_personnel);
         assert!(
-            gained <= 1,
-            "with zero POL and no infections, personnel should barely increase, gained {gained}"
+            gained == 0,
+            "with Minimal authority, personnel should not increase, gained {gained}"
         );
     }
 
@@ -2594,7 +2573,7 @@ mod tests {
     #[test]
     fn policy_toggle_via_confirm() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0; // Full POL for testing
+        state.resources.authority = Authority::Maximum; // Full authority for testing
 
         // P key now opens directly to ManagePolicies for the current map region (0)
         state = apply_action(&state, &Action::OpenPolicy);
@@ -4124,17 +4103,14 @@ mod tests {
     }
 
     #[test]
-    fn refugee_wave_option_b_loses_pol_and_kills_refugees() {
+    fn refugee_wave_option_b_kills_refugees() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
+        state.resources.authority = Authority::Maximum;
         state.regions[0].collapsed = true;
         let dead_before = state.regions[0].dead;
         let survivors_before = state.regions[0].alive();
         setup_crisis(&mut state, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        // 15% POL loss
-        assert!((after.resources.board_approval - 0.35).abs() < 0.001,
-            "option B should decrease board_approval by 0.15");
         // 20% of survivors die at the border
         let expected_deaths = survivors_before * 0.20;
         assert!((after.regions[0].dead - dead_before - expected_deaths).abs() < 1.0,
@@ -4233,7 +4209,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Player has previously chosen to always close borders (option 1)
         state.auto_resolve_crises.insert("refugee".to_string(), 1);
-        state.resources.board_approval = 0.80;
+        state.resources.authority = Authority::Maximum;
         // Push region 0 to collapse on the next tick
         let threshold = state.regions[0].collapse_threshold;
         let pop = state.regions[0].population as f64;
@@ -4250,13 +4226,10 @@ mod tests {
             "refugee crisis should be auto-resolved, not left active");
         assert!(after2.events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })),
             "CrisisAutoResolved event should be emitted");
-        // POL should be lower (option 1 = close borders = POL loss)
-        assert!(after2.resources.board_approval < 0.80,
-            "closing borders should drain board approval");
     }
 
     #[test]
-    fn data_leak_option_a_diverts_personnel_gains_pol() {
+    fn data_leak_option_a_diverts_personnel() {
         use crate::state::{ResearchProject, ResearchKind};
         let mut state = GameState::new_default(42);
         state.active_research = vec![ResearchProject {
@@ -4265,7 +4238,6 @@ mod tests {
             required_ticks: 1000.0,
             personnel_assigned: 3,
         }];
-        let before_pol = state.resources.board_approval;
         let before_progress = state.active_research[0].progress;
         // Use the real event (not setup_crisis stub) so option costs are present
         use crate::state::SimState;
@@ -4276,23 +4248,19 @@ mod tests {
         // Research progress should be unchanged (no rollback)
         assert!((after.active_research.first().unwrap().progress - before_progress).abs() < 0.01,
             "option A should not roll back research progress");
-        // POL should increase
-        assert!((after.resources.board_approval - (before_pol + 0.05)).abs() < 0.001,
-            "option A should gain 0.05 POL modifier");
-        // 2 personnel should be temporarily diverted
+        // Personnel should be temporarily diverted
         assert!(!after.crisis_operations.is_empty(), "option A should create a temporary operation");
         assert_eq!(after.crisis_operations[0].personnel, 5, "operation should divert 5 personnel");
     }
 
     #[test]
-    fn data_leak_option_b_loses_pol() {
+    fn data_leak_option_b_resolves() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::DataLeak, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.10)).abs() < 0.001,
-            "option B should decrease board_approval by 0.10");
+        // Crisis should be resolved
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
@@ -4324,12 +4292,12 @@ mod tests {
     }
 
     #[test]
-    fn quarantine_riot_option_b_loses_pol() {
+    fn quarantine_riot_option_b_costs_personnel() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.policies[0].quarantine = true;
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
+        let before_personnel = state.resources.personnel;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -4342,26 +4310,24 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.15)).abs() < 0.001,
-            "option B should decrease board_approval by 0.15");
+        assert_eq!(after.resources.personnel, before_personnel - 2,
+            "option B should cost 2 personnel");
     }
 
     #[test]
-    fn media_panic_option_a_loses_pol() {
+    fn media_panic_option_a_resolves() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::MediaPanic, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.08)).abs() < 0.001,
-            "option A should decrease board_approval by 0.08");
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
-    fn media_panic_option_b_gains_pol() {
+    fn media_panic_option_b_costs_funding() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
-        let before = state.resources.board_approval;
+        state.resources.funding = 1000.0;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -4374,49 +4340,42 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before + 0.05)).abs() < 0.001,
-            "option B should increase board_approval by 0.05");
+        assert!((after.resources.funding - 700.0).abs() < 1.0,
+            "option B should cost 300 funding");
     }
 
     #[test]
-    fn trial_shortcut_option_a_loses_pol() {
+    fn trial_shortcut_option_a_resolves() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.05)).abs() < 0.001,
-            "option A should decrease board_approval by 0.05");
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
-    fn trial_shortcut_option_b_gains_pol() {
+    fn trial_shortcut_option_b_resolves() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
-        let before = state.resources.board_approval;
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before + 0.10)).abs() < 0.001,
-            "option B should increase board_approval by 0.10");
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
-    fn vaccine_hesitancy_option_a_loses_pol() {
+    fn vaccine_hesitancy_option_a_resolves() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::VaccineHesitancy { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.10)).abs() < 0.001,
-            "option A should decrease board_approval by 0.10");
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
-    fn vaccine_hesitancy_option_b_gains_pol() {
+    fn vaccine_hesitancy_option_b_costs_funding() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        let before = state.resources.board_approval;
         state.sim_state = crate::state::SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
@@ -4429,8 +4388,8 @@ mod tests {
             tick_created: 0,
         });
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before + 0.05)).abs() < 0.001,
-            "option B should increase board_approval by 0.05");
+        assert!((after.resources.funding - 600.0).abs() < 1.0,
+            "option B should cost 400 funding");
     }
 
     #[test]
@@ -4492,15 +4451,14 @@ mod tests {
     }
 
     #[test]
-    fn resource_diversion_option_b_grants_approval_boost() {
+    fn resource_diversion_option_b_resolves() {
         let mut state = GameState::new_default(42);
         detect_all_diseases(&mut state);
         state.resources.funding = 1000.0;
-        state.resources.board_approval = 0.50;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::ResourceDiversion { disease_idx: 0, share_reward: 250.0, refuse_cost: 150.0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - 0.53).abs() < 0.01,
-            "option B should grant +3% board approval, got {}", after.resources.board_approval);
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
@@ -4526,52 +4484,42 @@ mod tests {
     }
 
     #[test]
-    fn whistleblower_option_a_destroys_doses_gains_pol() {
+    fn whistleblower_option_a_destroys_doses() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].doses = 1000.0;
-        let before_pol = state.resources.board_approval;
         setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.medicines[0].doses, 700.0,
             "option A should destroy 30% of doses");
-        assert!((after.resources.board_approval - (before_pol + 0.05)).abs() < 0.001,
-            "option A should gain 0.05 POL modifier");
     }
 
     #[test]
-    fn whistleblower_option_b_loses_pol() {
+    fn whistleblower_option_b_resolves() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.08)).abs() < 0.001,
-            "option B should decrease board_approval by 0.08");
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
-    fn corporate_seizure_option_a_loses_personnel_gains_pol() {
+    fn corporate_seizure_option_a_loses_personnel() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
-        let before_pol = state.resources.board_approval;
         setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 4 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.personnel, before_personnel - 4,
             "option A should lose scaled personnel");
-        assert!((after.resources.board_approval - (before_pol + 0.15)).abs() < 0.001,
-            "option A should gain 0.15 POL modifier");
     }
 
     #[test]
-    fn cult_blockade_option_a_loses_pol() {
+    fn cult_blockade_option_a_resolves() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 0.50;
-        let before = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::CultBlockade { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.board_approval - (before - 0.08)).abs() < 0.001,
-            "option A should decrease board_approval by 0.08");
+        assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
@@ -4632,15 +4580,12 @@ mod tests {
     }
 
     #[test]
-    fn warlord_demand_option_a_gains_pol_region_stays_collapsed() {
+    fn warlord_demand_option_a_region_stays_collapsed() {
         let mut state = GameState::new_default(42);
         state.regions[0].collapsed = true;
-        let before_pol = state.resources.board_approval;
         setup_crisis(&mut state, CrisisKind::WarlordDemand { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.regions[0].collapsed, "option A should keep region collapsed");
-        assert!((after.resources.board_approval - (before_pol + 0.05)).abs() < 0.001,
-            "option A should gain 0.05 POL modifier");
     }
 
     #[test]
@@ -4676,17 +4621,14 @@ mod tests {
     }
 
     #[test]
-    fn vaccine_dispute_option_b_gains_funding_loses_pol() {
+    fn vaccine_dispute_option_b_gains_funding() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        state.resources.board_approval = 0.50;
-        let before_pol = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0, corp_a: "Seraph Genomics".to_string(), corp_b: "Caliber Bioscience".to_string() }, 1);
         let after = apply_action(&state, &Action::Confirm);
         assert!((after.resources.funding - 1300.0).abs() < 1.0,
             "option B should gain scaled credit_gain ($300)");
-        assert!((after.resources.board_approval - (before_pol - 0.15)).abs() < 0.001,
-            "option B should lose 0.15 POL modifier");
     }
 
     #[test]
@@ -4764,127 +4706,6 @@ mod tests {
         }
         assert!(got_trial, "TrialShortcut should generate even at gen 0");
     }
-
-    #[test]
-    fn pol_drifts_toward_board_target() {
-        // POL is now driven by board satisfaction, not severity.
-        // With a healthy board (full reserves), approval_target ≈ 0.30.
-        // Starting from 0, POL should drift well above 0.10 within 5 days.
-        let mut state = GameState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
-        state.resources.board_approval = 0.0;
-
-        let mut s = state.clone();
-        for _ in 0..(TICKS_PER_DAY as u64 * 5) {
-            s = tick(&s);
-            if s.active_crisis.is_some() {
-                s.active_crisis = None;
-                s.sim_state = SimState::Running;
-            }
-        }
-        assert!(s.resources.board_approval > 0.10,
-            "POL should drift up after 5 days with healthy board, got {}",
-            s.resources.board_approval);
-    }
-
-    #[test]
-    fn pol_recovers_after_crisis_hit() {
-        let mut state = GameState::new_default(42);
-        // Healthy board creates a non-zero POL target (~0.30)
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
-        state.tick = 0; // prevent new disease spawns
-
-        // Let POL reach a steady state over 3 days
-        let mut s = state.clone();
-        for _ in 0..(TICKS_PER_DAY as u64 * 3) {
-            s = tick(&s);
-            if s.active_crisis.is_some() {
-                s.active_crisis = None;
-                s.sim_state = SimState::Running;
-            }
-        }
-        let steady = s.resources.board_approval;
-
-        // Simulate a crisis hit: drop POL by 0.15
-        s.resources.board_approval = (steady - 0.15).max(0.0);
-        let after_hit = s.resources.board_approval;
-
-        // Run 3 more days — POL should recover toward the target
-        for _ in 0..(TICKS_PER_DAY as u64 * 3) {
-            s = tick(&s);
-            if s.active_crisis.is_some() {
-                s.active_crisis = None;
-                s.sim_state = SimState::Running;
-            }
-        }
-        assert!(s.resources.board_approval > after_hit + 0.05,
-            "POL should recover after crisis hit: was {after_hit}, now {}. steady was {steady}",
-            s.resources.board_approval);
-    }
-
-    #[test]
-    fn board_health_drives_approval_target() {
-        // approval_target = crisis_severity + board_satisfaction*0.20 + contract*0.20.
-        // At game start: crisis is tiny, board is healthy (0.20), no contracts.
-        // Target ≈ 0.20–0.25 (board + small crisis from starting infections).
-        let mut state = GameState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
-
-        let healthy_target = state.approval_target();
-        assert!(
-            healthy_target >= 0.15 && healthy_target <= 0.30,
-            "approval_target with healthy board and no contracts should be 0.15–0.30, got {healthy_target:.3}"
-        );
-
-        // Bankrupt all board-seat corporations and collapse governor-member regions:
-        // approval_target should drop (board_component goes to 0).
-        let mut damaged = state.clone();
-        for c in damaged.corporations.iter_mut().filter(|c| c.board_seat) {
-            c.bankrupt = true;
-            c.reserves = 0.0;
-            c.revenue = 0.0;
-        }
-        // Collapse the regions whose governors sit on the board
-        for member in &damaged.board_members {
-            if let crate::state::BoardRole::RegionGovernor { region_idx } = &member.role {
-                damaged.regions[*region_idx].collapsed = true;
-            }
-        }
-        // Recompute member satisfaction from damaged state
-        board::update_board_satisfaction(&mut damaged);
-        let damaged_target = damaged.approval_target();
-        assert!(
-            damaged_target < healthy_target,
-            "damaged board should give lower approval_target: healthy={healthy_target:.3} damaged={damaged_target:.3}"
-        );
-    }
-
-    #[test]
-    fn pol_drifts_down_when_above_target() {
-        // With no corporations (board_satisfaction=0, contract=0),
-        // approval_target = crisis_component only. POL above target must drift down.
-        let mut state = GameState::new_default(42);
-        // Some deaths to give a small severity floor
-        for region in &mut state.regions {
-            let inf = region.get_or_create_infection(0);
-            inf.dead = 1_000_000.0;
-            region.dead = 1_000_000.0;
-        }
-        state.resources.board_approval = 0.80; // well above the tiny severity-only target
-        state.tick = TICKS_PER_DAY as u64 * 100;
-
-        // Run a few days — POL should drift DOWN toward the low target
-        let mut s = state;
-        for _ in 0..(TICKS_PER_DAY as u64 * 5) {
-            s = tick(&s);
-        }
-        assert!(s.resources.board_approval < 0.50,
-            "POL should drift down toward severity-only target, got {:.3}", s.resources.board_approval);
-    }
-
 
 
     #[test]
@@ -5099,7 +4920,7 @@ mod tests {
     #[test]
     fn decree_enact_via_orders_panel_ui_flow() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.resources.funding = 10_000.0;
         // Unlock all decrees: collapse regions 3-5 + set 600K infected on region 0
         for i in 3..6 { state.regions[i].collapsed = true; }
@@ -5126,7 +4947,7 @@ mod tests {
     #[test]
     fn decree_sacrifice_region_ui_flow() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.resources.funding = 10_000.0;
         // Unlock all decrees: collapse regions 3-5 + set 600K infected on region 0
         for i in 3..6 { state.regions[i].collapsed = true; }
@@ -5689,7 +5510,7 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
 
         // Fresh game: all decrees locked despite high POL
         let (msg, ok) = policy::enact_decree(&mut state, 0, None);
@@ -5743,18 +5564,16 @@ mod tests {
     }
 
     #[test]
-    fn bargain_buffoon_costs_pol() {
+    fn bargain_buffoon_gains_cooperation() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Buffoon;
         state.regions[0].governor.cooperation = 20.0;
-        state.resources.board_approval = 0.50;
-        let initial_pol = state.resources.board_approval;
+        state.resources.authority = Authority::Maximum;
         let initial_cooperation = state.regions[0].governor.cooperation;
 
         let (msg, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(ok, "bargain should succeed");
         assert!(msg.unwrap().contains("praised publicly"));
-        assert!(state.resources.board_approval < initial_pol);
         assert!(state.regions[0].governor.cooperation > initial_cooperation);
     }
 

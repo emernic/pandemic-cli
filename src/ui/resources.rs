@@ -40,27 +40,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         {
-            let approval = state.resources.board_approval;
-            let approval_color = if approval >= 0.5 { Color::Green } else if approval >= 0.2 { Color::Yellow } else { Color::Red };
+            let auth = state.resources.authority;
+            let auth_color = match auth {
+                crate::state::Authority::Maximum | crate::state::Authority::High => Color::Green,
+                crate::state::Authority::Medium | crate::state::Authority::Low => Color::Yellow,
+                _ => Color::Red,
+            };
             Span::styled(
-                format!("Board: {:.0}%", approval * 100.0),
-                Style::default().fg(approval_color),
+                format!("Authority: {}", auth.label()),
+                Style::default().fg(auth_color),
             )
         },
-        // Board approval trend arrow: compare current to drift target
-        {
-            let target = state.approval_target();
-            let approval = state.resources.board_approval;
-            let gap = target - approval;
-            if gap > 0.02 {
-                Span::styled(" \u{25b2}", Style::default().fg(Color::Green)) // ▲ rising
-            } else if gap < -0.02 {
-                Span::styled(" \u{25bc}", Style::default().fg(Color::Red)) // ▼ falling
-            } else {
-                Span::styled(" \u{2500}", Style::default().fg(Color::DarkGray)) // ─ stable
-            }
-        },
-        Span::raw(""),
         Span::raw("  "),
         Span::styled(
             format!("Funds: ¥{:.0}", state.resources.funding),

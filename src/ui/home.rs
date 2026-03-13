@@ -396,39 +396,28 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         ]));
     }
 
-    // ── Board Approval breakdown ──
+    // ── Authority ──
     {
-        let approval = state.resources.board_approval;
-        let target = state.approval_target();
-        // Net drift per day: (target - current) * 50%/day drift rate
-        let drift_per_day = (target - approval) * 0.50;
-
-        // Decompose target into its constituent parts (single source of truth in state.rs)
-        let (crisis_component, board_component, contract_component) = state.approval_target_components();
-
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("  ── BOARD APPROVAL ──", cyan)));
-        lines.push(Line::from(""));
-
-        let approval_color = if approval >= 0.5 { Color::Green } else if approval >= 0.2 { Color::Yellow } else { Color::Red };
-        let (drift_str, drift_color) = if drift_per_day > 0.005 {
-            (format!("+{:.1}%/day", drift_per_day * 100.0), Color::Green)
-        } else if drift_per_day < -0.005 {
-            (format!("{:.1}%/day", drift_per_day * 100.0), Color::Red)
-        } else {
-            ("stable".to_string(), Color::DarkGray)
+        let auth = state.resources.authority;
+        let auth_color = match auth {
+            crate::state::Authority::Maximum | crate::state::Authority::High => Color::Green,
+            crate::state::Authority::Medium | crate::state::Authority::Low => Color::Yellow,
+            _ => Color::Red,
         };
 
+        // Decompose pressure into its constituent parts (single source of truth in state.rs)
+        let (crisis_component, board_component, contract_component) = state.authority_pressure_components();
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("  ── AUTHORITY ──", cyan)));
+        lines.push(Line::from(""));
+
         lines.push(Line::from(vec![
-            Span::styled("  Current:  ", dim),
-            Span::styled(format!("{:.0}%", approval * 100.0), Style::default().fg(approval_color)),
-            Span::styled("   Target: ", dim),
-            Span::styled(format!("{:.0}%", target * 100.0), Style::default().fg(Color::White)),
-            Span::styled("   Drift: ", dim),
-            Span::styled(drift_str, Style::default().fg(drift_color)),
+            Span::styled("  Level:    ", dim),
+            Span::styled(auth.label(), Style::default().fg(auth_color)),
         ]));
 
-        // Target breakdown: what's driving the target
+        // Pressure breakdown: what's driving the board's authority decisions
         if crisis_component >= 0.005 {
             lines.push(Line::from(vec![
                 Span::styled("  Crisis:   ", dim),
@@ -450,10 +439,10 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         // Next unlock hint
-        if let Some((name, threshold)) = state.next_approval_unlock() {
+        if let Some((name, required)) = state.next_authority_unlock() {
             lines.push(Line::from(vec![
                 Span::styled("  Next:     ", dim),
-                Span::styled(format!("{} @ {:.0}%", name, threshold * 100.0), Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{} @ {}", name, required.label()), Style::default().fg(Color::DarkGray)),
             ]));
         }
     }
