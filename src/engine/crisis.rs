@@ -1,12 +1,20 @@
 use rand::Rng;
 
 use crate::state::{
-    ActiveLoan, BoardPersonality, BoardRole, CorporationSector, CrisisCost, CrisisEvent,
-    CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState, GovernorPersonality,
-    LoanLender, ModifierSource, OperationSpec, ResearchKind,
+    ActiveLoan, Authority, BoardPersonality, BoardRole, CorporationSector, CrisisCost,
+    CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState,
+    GovernorPersonality, LoanLender, ModifierSource, OperationSpec, ResearchKind,
     ResearchCategory, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
+
+/// Apply a satisfaction modifier to the chairman board member.
+/// Positive values boost satisfaction, negative values penalize it.
+fn chairman_satisfaction_hit(state: &mut GameState, amount: f64) {
+    if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+        chairman.add_modifier(ModifierSource::CrisisEffect, amount);
+    }
+}
 
 /// Queue a GovernorDeath crisis after a delay, unless the governor is already dead
 /// or a GovernorDeath is already pending/active for this region.
@@ -325,8 +333,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::WhistleblowerReport { medicine_idx: idx });
     }
 
-    // Corporate seizure: requires POL < 40% and day > 16
-    if state.resources.board_approval < 0.40 && day > 16.0 {
+    // Corporate seizure: requires low authority and day > 16
+    if state.resources.authority <= Authority::Low && day > 16.0 {
         let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
         candidates.push(CrisisKind::CorporateSeizure { cooperate_loss });
     }
@@ -2734,7 +2742,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             let border_deaths = survivors * 0.20;
             state.regions[*from_region].dead += border_deaths;
             let pol_cost = refugee_pol_cost(*wave);
-            state.resources.board_approval = (state.resources.board_approval - pol_cost).max(0.0);
+            chairman_satisfaction_hit(state, -pol_cost);
             let deaths_m = border_deaths / 1_000_000.0;
             format!("Borders closed. {:.0}M dead at the gates of {}. The world is horrified.",
                 deaths_m, from_name)
@@ -2766,27 +2774,27 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             state.regions[*from_region].dead += border_deaths;
             // Smaller POL cost than full closure
             let pol_cost = refugee_pol_cost(*wave) * 0.5;
-            state.resources.board_approval = (state.resources.board_approval - pol_cost).max(0.0);
+            chairman_satisfaction_hit(state, -pol_cost);
             let accepted_m = accepted / 1_000_000.0;
             format!("Partial intake: {:.0}M accepted into {}. Rest turned away.", accepted_m, to_name)
         }
 
         (CrisisKind::DataLeak, 0) => {
-            // Issue a statement — personnel diverted via CrisisCost, gain POL
-            state.resources.board_approval += 0.05;
+            // Issue a statement — personnel diverted via CrisisCost, gain chairman satisfaction
+            chairman_satisfaction_hit(state, 0.05);
             "Statement issued. Board confidence up. Response team deployed for 2 days.".into()
         }
         (CrisisKind::DataLeak, 1) => {
-            // Suppress — lose POL
-            state.resources.board_approval -= 0.10;
+            // Suppress — chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.10);
             // Schedule follow-up: public inquiry in 5 days
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::PublicInquiry));
             "Leak suppressed. Board confidence shaken. Inquiry risk elevated.".into()
         }
         (CrisisKind::DataLeak, _) => {
-            // No comment — moderate POL loss, 50% chance of follow-up
-            state.resources.board_approval -= 0.07;
+            // No comment — moderate chairman satisfaction loss, 50% chance of follow-up
+            chairman_satisfaction_hit(state, -0.07);
             if state.rng_crisis.r#gen::<bool>() {
                 let target = state.regions.iter().enumerate()
                     .filter(|(_, r)| !r.collapsed)
@@ -2844,15 +2852,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Quarantine lifted in {} after unrest", region_name)
         }
         (CrisisKind::QuarantineRiot { .. }, 1) => {
-            // Deploy military — lose POL (personnel already deducted)
-            state.resources.board_approval -= 0.15;
+            // Deploy military — chairman satisfaction hit (personnel already deducted)
+            chairman_satisfaction_hit(state, -0.15);
             "Military deployed. Quarantine maintained by force.".into()
         }
         (CrisisKind::QuarantineRiot { region_idx }, _) => {
             // Wait it out — quarantine temporarily breached, small POL loss
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.resources.board_approval -= 0.03;
+            chairman_satisfaction_hit(state, -0.03);
             // Temporary quarantine breach — some infection increase
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 for inf in &mut region.infections {
@@ -2865,8 +2873,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::MediaPanic, 0) => {
-            // Ignore media — lose POL + schedule infodemic follow-up
-            state.resources.board_approval -= 0.08;
+            // Ignore media — chairman satisfaction hit + schedule infodemic follow-up
+            chairman_satisfaction_hit(state, -0.08);
             // Pick the most-infected non-collapsed region for the infodemic
             let target = state.regions.iter().enumerate()
                 .filter(|(_, r)| !r.collapsed)
@@ -2882,20 +2890,20 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Communications degradation spreading. Reporting systems unreliable.".into()
         }
         (CrisisKind::MediaPanic, _) => {
-            // Press conference — gain POL (costs already deducted)
-            state.resources.board_approval += 0.05;
+            // Press conference — gain chairman satisfaction (costs already deducted)
+            chairman_satisfaction_hit(state, 0.05);
             "Communications infrastructure restored. Reporting stabilized.".into()
         }
 
         (CrisisKind::TrialShortcut { .. }, 0) => {
-            // Maintain standards — lose POL
-            state.resources.board_approval -= 0.05;
+            // Maintain standards — chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.05);
             "Maintained trial standards. Board noted the delay.".into()
         }
         (CrisisKind::TrialShortcut { disease_idx, medicine_idx }, _) => {
-            // Fast-track — gain POL, mark medicine as tested but 2 generations behind
+            // Fast-track — gain chairman satisfaction, mark medicine as tested but 2 generations behind
             // current strain (30% efficacy penalty from drift).
-            state.resources.board_approval += 0.10;
+            chairman_satisfaction_hit(state, 0.10);
             if let Some(medicine) = state.medicines.get_mut(*medicine_idx) {
                 if !medicine.tested_against.contains(disease_idx) {
                     medicine.tested_against.push(*disease_idx);
@@ -2918,8 +2926,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
-            // Mandate — lose POL + governor cooperation drops + possible nationalist rebellion
-            state.resources.board_approval -= 0.10;
+            // Mandate — chairman satisfaction hit + governor cooperation drops + possible nationalist rebellion
+            chairman_satisfaction_hit(state, -0.10);
             let mut governor_rebels = false;
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
@@ -2937,15 +2945,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
         }
         (CrisisKind::VaccineHesitancy { region_idx }, 1) => {
-            // Education campaign — costs already deducted, gain POL
+            // Education campaign — costs already deducted, gain chairman satisfaction
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.resources.board_approval += 0.05;
+            chairman_satisfaction_hit(state, 0.05);
             format!("Incentive program deployed in {}. Compliance rates improving.", region_name)
         }
         (CrisisKind::VaccineHesitancy { region_idx }, _) => {
             // Accept noncompliance — infections spike from untreated spread
-            state.resources.board_approval -= 0.05;
+            chairman_satisfaction_hit(state, -0.05);
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 for inf in &mut region.infections {
                     if inf.infected > 100.0 {
@@ -2983,8 +2991,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Research data shared. Received ¥{:.0}. 2 personnel diverted for 2 days.", share_reward)
         }
         (CrisisKind::ResourceDiversion { .. }, _) => {
-            // Refuse — funding cost already deducted, grant approval boost
-            state.resources.board_approval = (state.resources.board_approval + 0.03).min(1.0);
+            // Refuse — funding cost already deducted, grant chairman satisfaction boost
+            chairman_satisfaction_hit(state, 0.03);
             "Refused to share research. Foreign aid reduced. Board approves your independence.".into()
         }
 
@@ -3010,27 +3018,28 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::WhistleblowerReport { medicine_idx }, 0) => {
-            // Halt deployment — destroy doses, gain POL
-            if let Some(med) = state.medicines.get_mut(*medicine_idx) {
+            // Halt deployment — destroy doses, gain chairman satisfaction
+            let msg = if let Some(med) = state.medicines.get_mut(*medicine_idx) {
                 let destroyed = (med.doses * 0.3).round();
                 med.doses = (med.doses - destroyed).max(0.0);
-                state.resources.board_approval += 0.05;
                 format!("Halted deployment of {}. {} doses destroyed.",
                     med.name, crate::format_number(destroyed))
             } else {
                 "Deployment halted".into()
-            }
+            };
+            chairman_satisfaction_hit(state, 0.05);
+            msg
         }
         (CrisisKind::WhistleblowerReport { .. }, _) => {
-            // Continue deployment — lose POL
-            state.resources.board_approval -= 0.08;
+            // Continue deployment — chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.08);
             "Continuing deployment despite concerns. Public confidence shaken.".into()
         }
 
         (CrisisKind::CorporateSeizure { cooperate_loss }, 0) => {
-            // Cooperate — lose personnel, gain POL
+            // Cooperate — lose personnel, gain chairman satisfaction
             state.resources.personnel = state.resources.personnel.saturating_sub(*cooperate_loss);
-            state.resources.board_approval += 0.15;
+            chairman_satisfaction_hit(state, 0.15);
             // Schedule follow-up: corporate overreach in 4 days
             let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::CorporateOverreach));
@@ -3042,7 +3051,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::CorporateSeizure { .. }, _) => {
             // Stall — buy time, they may return
-            state.resources.board_approval -= 0.05;
+            chairman_satisfaction_hit(state, -0.05);
             if state.rng_crisis.r#gen::<bool>() {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let cooperate_loss = ((state.resources.personnel as f64 * 0.25).round() as u32).clamp(2, 8);
@@ -3056,8 +3065,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         // --- Late-game crisis resolutions ---
 
         (CrisisKind::CultBlockade { .. }, 0) => {
-            // Negotiate — give them airtime, lose POL
-            state.resources.board_approval -= 0.08;
+            // Negotiate — give them airtime, chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.08);
             "Concessions granted. Deliveries resume.".into()
         }
         (CrisisKind::CultBlockade { .. }, 1) => {
@@ -3066,7 +3075,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
         (CrisisKind::CultBlockade { region_idx }, _) => {
             // Wait them out — supply lines and healthcare degrade significantly
-            state.resources.board_approval -= 0.05;
+            chairman_satisfaction_hit(state, -0.05);
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.healthcare_capacity = (region.healthcare_capacity - 0.10).max(0.0);
                 region.supply_lines = (region.supply_lines - 0.15).max(0.0);
@@ -3075,10 +3084,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::WarlordDemand { region_idx }, 0) => {
-            // Refuse — gain POL, region stays collapsed
+            // Refuse — gain chairman satisfaction, region stays collapsed
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.resources.board_approval += 0.05;
+            chairman_satisfaction_hit(state, 0.05);
             format!("Refused the warlord. {} remains sealed.", region_name)
         }
         (CrisisKind::WarlordDemand { region_idx }, _) => {
@@ -3097,10 +3106,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("Stayed neutral. Both canceled ¥{:.0} in contracts.", neutral_loss)
         }
         (CrisisKind::VaccineDispute { credit_gain, corp_a, corp_b, .. }, option) => {
-            // Back one corp — gain funding, lose POL, schedule retaliation from the other
+            // Back one corp — gain funding, chairman satisfaction hit, schedule retaliation from the other
             let (backed, retaliator) = if option == 1 { (corp_a, corp_b) } else { (corp_b, corp_a) };
             state.resources.funding += credit_gain;
-            state.resources.board_approval -= 0.15;
+            chairman_satisfaction_hit(state, -0.15);
             let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
             let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
             state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator.clone() }));
@@ -3119,25 +3128,25 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Basic) {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
-            state.resources.board_approval += 0.05;
+            chairman_satisfaction_hit(state, 0.05);
             "Review complete. Rating: \"Meets Expectations.\"".into()
         }
         (CrisisKind::PerformanceReview, _) => {
-            // Skip — lose POL
-            state.resources.board_approval -= 0.05;
+            // Skip — chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.05);
             "Board notes your absence. A memo has been circulated.".into()
         }
 
         (CrisisKind::NamingRights { disease_idx, payout }, 0) => {
-            // Decline — gain POL
+            // Decline — gain chairman satisfaction
             let _ = (disease_idx, payout);
-            state.resources.board_approval += 0.03;
+            chairman_satisfaction_hit(state, 0.03);
             "Offer declined.".into()
         }
         (CrisisKind::NamingRights { disease_idx, payout }, _) => {
-            // Accept — gain money, lose POL, rename the disease
+            // Accept — gain money, chairman satisfaction hit, rename the disease
             state.resources.funding += payout;
-            state.resources.board_approval -= 0.05;
+            chairman_satisfaction_hit(state, -0.05);
             let old_name = state.diseases.get(*disease_idx)
                 .map(|d| d.name.clone())
                 .unwrap_or_else(|| "Unknown".into());
@@ -3173,17 +3182,17 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::CongressionalHearing, 0) => {
-            // Testify honestly — lose 2 days research, gain POL
+            // Testify honestly — lose 2 days research, gain chairman satisfaction
             let loss = 2.0 * TICKS_PER_DAY as f64;
             for proj in state.active_research.iter_mut() {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
-            state.resources.board_approval += 0.10;
+            chairman_satisfaction_hit(state, 0.10);
             "Review concluded. Commission notes your cooperation.".into()
         }
         (CrisisKind::CongressionalHearing, 1) => {
-            // Send deputy — small POL gain, 40% chance of contempt follow-up
-            state.resources.board_approval += 0.02;
+            // Send deputy — small chairman satisfaction gain, 40% chance of contempt follow-up
+            chairman_satisfaction_hit(state, 0.02);
             if state.rng_crisis.r#gen::<f64>() < 0.40 {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let fine = scaled_cost(state, 0.15, 200.0, 600.0);
@@ -3194,8 +3203,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             }
         }
         (CrisisKind::CongressionalHearing, _) => {
-            // Ignore the subpoena — guaranteed contempt, big POL loss, research continues
-            state.resources.board_approval -= 0.15;
+            // Ignore the subpoena — guaranteed contempt, big chairman satisfaction hit, research continues
+            chairman_satisfaction_hit(state, -0.15);
             let followup_tick = state.tick + (2.0 * TICKS_PER_DAY) as u64;
             let fine = scaled_cost(state, 0.20, 300.0, 800.0);
             state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
@@ -3203,14 +3212,14 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::ContemptOfCongress { fine }, 0) => {
-            // Pay fine — lose money and POL
+            // Pay fine — lose money and chairman satisfaction
             state.resources.funding = (state.resources.funding - fine).max(0.0);
-            state.resources.board_approval -= 0.08;
+            chairman_satisfaction_hit(state, -0.08);
             format!("Fine paid. ¥{:.0} deducted.", fine)
         }
         (CrisisKind::ContemptOfCongress { .. }, _) => {
-            // Fight charges — pay same fine but less POL loss
-            state.resources.board_approval -= 0.03;
+            // Fight charges — pay same fine but less chairman satisfaction loss
+            chairman_satisfaction_hit(state, -0.03);
             "Appeal filed. Legal fees applied.".into()
         }
 
@@ -3259,8 +3268,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::CorporateOverreach, 0) => {
-            // Override restriction — lose POL, data restored to research teams
-            state.resources.board_approval -= 0.10;
+            // Override restriction — chairman satisfaction hit, data restored to research teams
+            chairman_satisfaction_hit(state, -0.10);
             "Restriction overridden. Data restored to research teams.".into()
         }
         (CrisisKind::CorporateOverreach, 1) => {
@@ -3296,13 +3305,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::GovernorBlowhard { .. }, 0) => {
-            // Ignore it — small POL loss, noise dies down
-            state.resources.board_approval -= 0.05;
+            // Ignore it — small chairman satisfaction hit, noise dies down
+            chairman_satisfaction_hit(state, -0.05);
             "Ignored the broadcast. The accusations faded.".into()
         }
         (CrisisKind::GovernorBlowhard { .. }, _) => {
-            // Counter-broadcast — costs already deducted, gain POL
-            state.resources.board_approval += 0.03;
+            // Counter-broadcast — costs already deducted, gain chairman satisfaction
+            chairman_satisfaction_hit(state, 0.03);
             "Counter-broadcast aired. Public sees through the bluster.".into()
         }
 
@@ -3420,10 +3429,10 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Board leverage applied. Governor forced to comply.".into()
         }
         (CrisisKind::GovernorHardliner { region_idx }, _) => {
-            // Ignore the dispute — patchy enforcement, small POL loss
+            // Ignore the dispute — patchy enforcement, small chairman satisfaction hit
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.resources.board_approval -= 0.05;
+            chairman_satisfaction_hit(state, -0.05);
             // Disable only the most aggressive policies
             if let Some(policy) = state.policies.get_mut(*region_idx) {
                 policy.quarantine = false;
@@ -3433,8 +3442,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::GovernorOperative { .. }, 0) => {
-            // Look the other way, lose POL
-            state.resources.board_approval -= 0.15;
+            // Look the other way, chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.15);
             "Turned a blind eye. Your team noticed.".into()
         }
         (CrisisKind::GovernorOperative { region_idx }, _) => {
@@ -3446,8 +3455,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::GovernorMobster { .. }, 0) => {
-            // Refuse — lose POL
-            state.resources.board_approval -= 0.20;
+            // Refuse — chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.20);
             "Refused to pay. They're making your life difficult.".into()
         }
         (CrisisKind::GovernorMobster { region_idx }, _) => {
@@ -3523,8 +3532,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     "Samples sent. Research set back. Governor satisfied.".into()
                 }
                 (GovernorPersonality::Blowhard, _) => {
-                    // Refuse: POL loss
-                    state.resources.board_approval -= 0.08;
+                    // Refuse: chairman satisfaction hit
+                    chairman_satisfaction_hit(state, -0.08);
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                     }
@@ -3565,7 +3574,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
                     }
-                    state.resources.board_approval -= 0.05;
+                    chairman_satisfaction_hit(state, -0.05);
                     queue_governor_death_followup(state, *region_idx);
                     "Refused. Governor threatening to take matters into their own hands.".into()
                 }
@@ -3577,8 +3586,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     "Expenses paid. The governor is grateful. Relatively.".into()
                 }
                 (GovernorPersonality::Operative, _) => {
-                    // Refuse: POL loss + income skim increase
-                    state.resources.board_approval -= 0.06;
+                    // Refuse: chairman satisfaction hit + income skim increase
+                    chairman_satisfaction_hit(state, -0.06);
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                         region.governor.income_skim = (region.governor.income_skim + 0.03).min(0.30);
@@ -3634,13 +3643,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::PublicInquiry, 0) => {
-            // Cooperate with audit — funding + personnel cost already deducted, gain approval
-            state.resources.board_approval += 0.10;
+            // Cooperate with audit — funding + personnel cost already deducted, gain chairman satisfaction
+            chairman_satisfaction_hit(state, 0.10);
             "Audit cooperation underway. Board confidence restored.".into()
         }
         (CrisisKind::PublicInquiry, _) => {
-            // Stonewall — board approval loss
-            state.resources.board_approval -= 0.20;
+            // Stonewall — chairman satisfaction hit
+            chairman_satisfaction_hit(state, -0.20);
             "Stonewalled the audit. Board members are furious.".into()
         }
 
@@ -3665,9 +3674,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
 
         (CrisisKind::SanctionsThreat { funding_loss, .. }, 0) => {
-            // Accept cuts — lose funding + POL hit
+            // Accept cuts — lose funding + chairman satisfaction hit
             state.resources.funding = (state.resources.funding - funding_loss).max(0.0);
-            state.resources.board_approval -= 0.10;
+            chairman_satisfaction_hit(state, -0.10);
             format!("Contracts canceled. ¥{:.0} lost.", funding_loss)
         }
         (CrisisKind::SanctionsThreat { .. }, _) => {
@@ -3763,12 +3772,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                     }
                 }
                 LoanLender::Corporation { .. } => {
-                    // Personnel intimidation + POL smear campaign
+                    // Personnel intimidation + chairman satisfaction smear campaign
                     let lost = 2u32.min(state.resources.personnel);
                     state.resources.personnel = state.resources.personnel.saturating_sub(lost);
-                    state.resources.board_approval = (state.resources.board_approval - 0.10).max(0.0);
+                    chairman_satisfaction_hit(state, -0.10);
                     format!(
-                        "{lender_name} collected. {lost} researchers 'unavailable'. −10% board approval from smear campaign.",
+                        "{lender_name} collected. {lost} researchers 'unavailable'. Chairman satisfaction hit from smear campaign.",
                     )
                 }
             }
@@ -3814,6 +3823,31 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             // Single option: Acknowledged. Set the new fixed board budget.
             let board_sat = state.board_satisfaction();
             state.board_budget_per_tick = compute_board_budget_per_tick(state, board_sat);
+
+            // Authority decision: board raises/lowers by one level max per meeting
+            let old_authority = state.resources.authority;
+            let suggested = state.suggested_authority();
+            let new_authority = if suggested > old_authority {
+                old_authority.raise()
+            } else if suggested < old_authority {
+                old_authority.lower()
+            } else {
+                old_authority
+            };
+            state.resources.authority = new_authority;
+
+            // Emit PolicyAuthorized events for newly unlocked policies
+            if new_authority > old_authority {
+                use crate::state::{POLICY_AUTHORITY_REQUIREMENTS, POLICY_COUNT};
+                for idx in 0..POLICY_COUNT {
+                    if let Some(req) = POLICY_AUTHORITY_REQUIREMENTS[idx] {
+                        if old_authority < req && new_authority >= req {
+                            state.events.push(GameEvent::PolicyAuthorized { policy_idx: idx });
+                        }
+                    }
+                }
+            }
+
             "Board communiqué filed.".into()
         }
 
@@ -3836,8 +3870,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             "Concessions accepted. The Chairman withdraws the motion.".into()
         }
         (CrisisKind::VoteOfNoConfidence, _) => {
-            // Stand firm: board approval hit + immediate 20% budget cut
-            state.resources.board_approval = (state.resources.board_approval - 0.15).max(0.0);
+            // Stand firm: chairman satisfaction hit + immediate 20% budget cut
+            chairman_satisfaction_hit(state, -0.15);
             state.board_budget_per_tick *= 0.80;
             "Motion defeated, but the board has slashed your budget.".into()
         }
@@ -3934,8 +3968,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             format!("{corp_name} retaliates. Supply lines and civil order reduced in {region_name}.")
         }
     };
-    // Clamp POL after crisis modifications
-    state.resources.board_approval = state.resources.board_approval.clamp(0.0, 1.0);
+    // Authority is an enum — no clamping needed.
     // Restore sim state from Event mode. When the player manually resolves a crisis,
     // sim_state is Event { was_running }. We restore Running or Paused here so callers
     // don't need to know about this hidden rule. In the auto-resolve path (called from
@@ -4380,7 +4413,7 @@ mod tests {
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
         state.resources.funding = 5000.0;
-        state.resources.board_approval = 0.60;
+        state.resources.authority = Authority::Medium;
         let budget_before = state.board_budget_per_tick;
 
         let kind = CrisisKind::VoteOfNoConfidence;
@@ -4388,8 +4421,11 @@ mod tests {
         state.active_crisis = Some(crisis_event);
         resolve_crisis(&mut state, 1);
 
-        assert!(state.resources.board_approval < 0.50,
-            "board approval should drop, got {}", state.resources.board_approval);
+        // Standing firm applies a -0.15 chairman satisfaction hit
+        let chairman = state.board_members.iter().find(|m| m.is_chairman).unwrap();
+        let crisis_total = chairman.modifier_total(&ModifierSource::CrisisEffect);
+        assert!(crisis_total < 0.0,
+            "chairman satisfaction should drop from stand-firm, got {}", crisis_total);
         assert!(state.board_budget_per_tick < budget_before * 0.85,
             "board budget should drop, got {:.2} (was {:.2})", state.board_budget_per_tick, budget_before);
     }

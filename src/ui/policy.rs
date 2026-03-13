@@ -22,12 +22,12 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    POLICY_APPROVAL_THRESHOLDS, POLICY_COUNT, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
+    POLICY_AUTHORITY_REQUIREMENTS, POLICY_COUNT, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     decree_display_name,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
-    DECREE_APPROVAL_COSTS,
+    DECREE_CHAIRMAN_COSTS,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_COOPERATION_GAIN,
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
@@ -280,18 +280,25 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         if !*active && !pol_unlocked {
             // Locked — show as unavailable with the reason
             let research_met = state.policy_research_met(*policy_idx);
-            let threshold = POLICY_APPROVAL_THRESHOLDS[*policy_idx];
-            let approval_met = state.resources.board_approval
-                >= state.effective_approval_threshold(region_idx, *policy_idx);
+            let authority_met = match state.effective_authority_requirement(region_idx, *policy_idx) {
+                Some(req) => state.resources.authority >= req,
+                None => true,
+            };
 
-            let lock_reason = if !research_met && !approval_met {
+            let lock_reason = if !research_met && !authority_met {
                 let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
-                format!("  (Requires {} + Board Approval {:.0}%)", tech.name(), threshold * 100.0)
+                let req = POLICY_AUTHORITY_REQUIREMENTS[*policy_idx]
+                    .map(|a| a.label())
+                    .unwrap_or("???");
+                format!("  (Requires {} + {} authority)", tech.name(), req)
             } else if !research_met {
                 let tech = GameState::policy_research_prerequisite(*policy_idx).unwrap();
                 format!("  (Requires {})", tech.name())
             } else {
-                format!("  (Board Approval {:.0}%)", threshold * 100.0)
+                let req = POLICY_AUTHORITY_REQUIREMENTS[*policy_idx]
+                    .map(|a| a.label())
+                    .unwrap_or("???");
+                format!("  (Requires {} authority)", req)
             };
 
             let name_style = if selected {
@@ -588,8 +595,8 @@ pub(crate) fn decree_description(decree_idx: usize) -> String {
 pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let name = decree_display_name(decree_idx);
     let desc = decree_description(decree_idx);
-    let cost_pct = (DECREE_APPROVAL_COSTS[decree_idx] * 100.0) as u32;
-    let new_approval = (state.resources.board_approval - DECREE_APPROVAL_COSTS[decree_idx]).max(0.0);
+    let cost = DECREE_CHAIRMAN_COSTS[decree_idx]; // negative value
+    let cost_pct = (cost.abs() * 100.0) as u32;
 
     let mut lines: Vec<Line> = Vec::new();
 
@@ -605,14 +612,8 @@ pub(crate) fn render_confirm_decree(state: &GameState, decree_idx: usize) -> (St
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled(
-            format!("  Approval cost: -{}%", cost_pct),
+            format!("  Chairman satisfaction: -{}%", cost_pct),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!("  (current: {:.0}% → {:.0}%)",
-                state.resources.board_approval * 100.0,
-                new_approval * 100.0),
-            Style::default().fg(Color::DarkGray),
         ),
     ]));
     lines.push(Line::from(""));

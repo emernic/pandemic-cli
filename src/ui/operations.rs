@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::state::{
     GameState, OpsUiState, TICKS_PER_DAY,
-    DECREE_COUNT, DECREE_APPROVAL_COSTS, STANDING_ORDER_COUNT,
+    DECREE_COUNT, DECREE_CHAIRMAN_COSTS, STANDING_ORDER_COUNT,
     decree_display_name,
 };
 use super::hint_line;
@@ -137,13 +137,13 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             lines.push(Line::from(""));
         } else {
             // Enacted or unlocked — show with description
-            let cost_pct = (DECREE_APPROVAL_COSTS[decree_idx] * 100.0) as u32;
+            let cost_pct = (DECREE_CHAIRMAN_COSTS[decree_idx].abs() * 100.0) as u32;
             let (name_color, desc_color, suffix) = if enacted {
                 (Color::DarkGray, Color::DarkGray, " [ENACTED]".to_string())
             } else if is_selected {
-                (Color::Yellow, Color::DarkGray, format!(" [-{}% approval]", cost_pct))
+                (Color::Yellow, Color::DarkGray, format!(" [-{}% chairman]", cost_pct))
             } else {
-                (Color::Red, Color::DarkGray, format!(" [-{}% approval]", cost_pct))
+                (Color::Red, Color::DarkGray, format!(" [-{}% chairman]", cost_pct))
             };
 
             lines.push(Line::from(vec![

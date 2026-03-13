@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     CrisisKind, FundingCondition, GameEvent, GameState, GovernorPersonality,
-    RegionSpecialization, RegionTrait,
+    ModifierSource, RegionSpecialization, RegionTrait,
     ScreeningLevel,
     policy_display_name, POLICY_IDX_NUCLEAR, POLICY_IDX_SCREENING_BASE,
     QUARANTINE_COST, TRAVEL_BAN_COST,
@@ -135,11 +135,13 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy_idx
                 policy_display_name(policy_idx), tech.name()
             )), false);
         }
-        let threshold = state.effective_approval_threshold(region_idx, policy_idx);
-        return (Some(format!(
-            "{} requires {:.0}% Board Approval (current: {:.0}%)",
-            policy_display_name(policy_idx), threshold * 100.0, state.resources.board_approval * 100.0
-        )), false);
+        let required = state.effective_authority_requirement(region_idx, policy_idx);
+        if let Some(req) = required {
+            return (Some(format!(
+                "{} requires {} Authority (current: {})",
+                policy_display_name(policy_idx), req.label(), state.resources.authority.label()
+            )), false);
+        }
     }
     let available_personnel = state.personnel_available();
     let region_traits = state.regions.get(region_idx).map(|r| r.traits.as_slice()).unwrap_or(&[]);
@@ -399,8 +401,10 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 
     match personality {
         GovernorPersonality::Buffoon => {
-            // Public Praise — cheap POL cost, cooperation decays fast (tracked in tick)
-            state.resources.board_approval = (state.resources.board_approval - BARGAIN_BUFFOON_APPROVAL_COST).max(0.0);
+            // Public Praise — chairman satisfaction hit, cooperation decays fast (tracked in tick)
+            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+                chairman.add_modifier(ModifierSource::CrisisEffect, -BARGAIN_BUFFOON_APPROVAL_COST);
+            }
             let gov = &mut state.regions[region_idx].governor;
             gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
             let cooperation = gov.cooperation;
@@ -834,8 +838,10 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
                     state.resources.funding -= demand;
                     Some(format!("{gov_name} extorted ¥{demand:.0} from {region_name}"))
                 } else {
-                    // Can't pay — small POL hit instead
-                    state.resources.board_approval = (state.resources.board_approval - 0.05).max(0.0);
+                    // Can't pay — chairman satisfaction hit instead
+                    if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+                        chairman.add_modifier(ModifierSource::CrisisEffect, -0.05);
+                    }
                     Some(format!("{gov_name} made threats in {region_name}. International embarrassment."))
                 }
             }
@@ -855,7 +861,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 /// Returns (message, success).
 pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx: Option<usize>) -> (Option<String>, bool) {
     use crate::state::{
-        decree_display_name, DECREE_APPROVAL_COSTS,
+        decree_display_name, DECREE_CHAIRMAN_COSTS,
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
         SACRIFICE_INCOME_BONUS,
     };
@@ -877,7 +883,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
         )), false);
     }
 
-    let approval_cost = DECREE_APPROVAL_COSTS[decree_idx];
+    let chairman_cost = DECREE_CHAIRMAN_COSTS[decree_idx];
 
     let (msg, success) = match decree_idx {
         0 => {
@@ -1043,9 +1049,11 @@ pub(super) fn enact_decree(state: &mut GameState, decree_idx: usize, region_idx:
         _ => (None, false),
     };
 
-    // Deduct board approval cost only on successful enactment
+    // Apply chairman satisfaction cost only on successful enactment
     if success {
-        state.resources.board_approval = (state.resources.board_approval - approval_cost).max(0.0);
+        if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+            chairman.add_modifier(ModifierSource::CrisisEffect, chairman_cost);
+        }
     }
 
     (msg, success)
@@ -1176,7 +1184,7 @@ pub(super) fn tick_screening(state: &mut GameState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{GameState, ScreeningLevel};
+    use crate::state::{Authority, GameState, ScreeningLevel};
     use crate::engine::tick;
 
     /// Helper: set up a state with full POL and plenty of personnel for screening tests.
@@ -1184,7 +1192,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.resources.funding = 10_000.0;
         // Unlock research prerequisites for advanced screening tiers
         state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
@@ -1230,31 +1238,31 @@ mod tests {
     }
 
     #[test]
-    fn screening_pol_gating() {
+    fn screening_authority_gating() {
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
-        // Basic screening has 0.00 threshold — always available
-        state.resources.board_approval = 0.05;
+        // Basic screening has no authority requirement — always available
+        state.resources.authority = Authority::Minimal;
         let (_, ok) = toggle_policy(&mut state, 0, 5);
-        assert!(ok, "Basic screening should work at any approval level");
+        assert!(ok, "Basic screening should work at any authority level");
 
         // Antigen requires RapidSequencing research — blocked without it
-        state.resources.board_approval = 0.35;
+        state.resources.authority = Authority::Medium;
         let (msg, ok) = toggle_policy(&mut state, 0, 6);
         assert!(!ok, "Antigen screening should be blocked without RapidSequencing");
         assert!(msg.unwrap().contains("research"), "should mention research prerequisite");
 
-        // Unlock research but drop approval — blocked by approval
+        // Unlock research but drop authority — blocked by authority
         state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
-        state.resources.board_approval = 0.10;
+        state.resources.authority = Authority::Minimal;
         let (msg, ok) = toggle_policy(&mut state, 0, 6);
-        assert!(!ok, "Antigen screening should be blocked at 10% approval");
-        assert!(msg.unwrap().contains("Board Approval"));
+        assert!(!ok, "Antigen screening should be blocked at Minimal authority");
+        assert!(msg.unwrap().contains("Authority"));
 
-        // With research AND enough approval, Antigen should work
-        state.resources.board_approval = 0.35;
+        // With research AND enough authority, Antigen should work
+        state.resources.authority = Authority::Low;
         let (_, ok) = toggle_policy(&mut state, 0, 6);
-        assert!(ok, "Antigen screening should work with research + 35% approval");
+        assert!(ok, "Antigen screening should work with research + Low authority");
     }
 
     #[test]
@@ -1942,7 +1950,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_fires_at_high() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
 
         // Simulate a region at HIGH severity
@@ -1959,7 +1967,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_does_not_fire_below_threshold() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
 
         // Below HIGH severity
@@ -1973,7 +1981,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_skips_already_active() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.policies[0].quarantine = true; // already active
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
@@ -1989,7 +1997,7 @@ mod tests {
     #[test]
     fn standing_order_auto_travel_ban_fires_at_crit() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_travel_ban_at_crit = true;
 
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
@@ -2005,7 +2013,7 @@ mod tests {
     #[test]
     fn standing_order_disabled_does_not_fire() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         // Both standing orders OFF (default)
         state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
 
@@ -2019,7 +2027,7 @@ mod tests {
     #[test]
     fn toggle_policy_warns_about_contract_conflict() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.contracts.push(crate::state::FundingContract {
             name: "Hospitality Protection Fund".to_string(),
             board_member_idx: 0,
@@ -2044,7 +2052,7 @@ mod tests {
     #[test]
     fn standing_order_auto_activation_warns_about_contract_conflict() {
         let mut state = GameState::new_default(42);
-        state.resources.board_approval = 1.0;
+        state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.contracts.push(crate::state::FundingContract {
             name: "Hospitality Protection Fund".to_string(),
