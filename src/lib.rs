@@ -325,6 +325,42 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     }
 }
 
+/// After selecting a disease, check funding and trial status, then either deploy
+/// directly or show the untested-medicine confirmation screen.
+fn try_deploy_or_confirm(
+    ui: &mut UiState,
+    state: &GameState,
+    medicine_idx: usize,
+    region_idx: usize,
+    disease_idx: usize,
+) -> Option<GameCommand> {
+    let target = DeployTarget { disease_idx };
+    let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
+    if state.resources.funding < deploy_cost {
+        ui.status_message = Some(
+            format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
+                deploy_cost, state.resources.funding),
+        );
+        return None;
+    }
+    let med = &state.medicines[medicine_idx];
+    let is_tested = med.tested_against.contains(&disease_idx);
+    if !is_tested {
+        ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
+            medicine_idx,
+            region_idx,
+            target,
+        });
+        None
+    } else {
+        Some(GameCommand::DeployMedicine {
+            medicine_idx,
+            region_idx,
+            target,
+        })
+    }
+}
+
 fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.medicine_ui.clone() {
         Some(MedicineUiState::BrowseMedicines) => {
@@ -350,12 +386,9 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                     .any(|(i, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME && !deployable.contains(&i));
                 if deployable.len() == 1 && !has_known_incompatible {
                     // Only one deployable disease and no incompatible ones to explain:
-                    // skip disease selection to save the player a step.
-                    ui.medicine_ui = Some(MedicineUiState::SelectTarget {
-                        medicine_idx,
-                        region_idx,
-                        disease_idx: deployable[0],
-                    });
+                    // skip disease selection and go straight to deploy.
+                    let disease_idx = deployable[0];
+                    return try_deploy_or_confirm(ui, state, medicine_idx, region_idx, disease_idx);
                 } else {
                     ui.medicine_ui = Some(MedicineUiState::SelectDisease {
                         medicine_idx,
@@ -370,54 +403,9 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
             let med = &state.medicines[medicine_idx];
             let deployable = med.deployable_diseases(&state.diseases);
             if let Some(&disease_idx) = deployable.get(ui.panel_selection) {
-                ui.medicine_ui = Some(MedicineUiState::SelectTarget {
-                    medicine_idx,
-                    region_idx,
-                    disease_idx,
-                });
-                ui.panel_selection = 0;
+                return try_deploy_or_confirm(ui, state, medicine_idx, region_idx, disease_idx);
             }
             None
-        }
-        Some(MedicineUiState::SelectTarget {
-            medicine_idx,
-            region_idx,
-            disease_idx,
-        }) => {
-            let med = &state.medicines[medicine_idx];
-            // panel_selection: 0 = vaccinate, 1 = treat
-            let target = if ui.panel_selection == 0 {
-                DeployTarget::Vaccinate { disease_idx }
-            } else {
-                DeployTarget::Treat { disease_idx }
-            };
-            // UX pre-check: show error early so the wizard doesn't advance to ConfirmDeploy
-            // when the player can't afford it. Uses medicine_deploy_cost() — the same calculation
-            // as the engine — so this preview can never drift from the authoritative check.
-            let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
-            if state.resources.funding < deploy_cost {
-                ui.status_message = Some(
-                    format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
-                        deploy_cost, state.resources.funding),
-                );
-                None
-            } else {
-                let is_tested = med.tested_against.contains(&disease_idx);
-                if !is_tested {
-                    ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
-                        medicine_idx,
-                        region_idx,
-                        target: target.clone(),
-                    });
-                    None
-                } else {
-                    Some(GameCommand::DeployMedicine {
-                        medicine_idx,
-                        region_idx,
-                        target,
-                    })
-                }
-            }
         }
         Some(MedicineUiState::ConfirmDeploy {
             medicine_idx,

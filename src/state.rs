@@ -3271,6 +3271,10 @@ pub struct Medicine {
     pub name: String,
     #[serde(default)]
     pub therapy_type: TherapyType,
+    /// Whether this medicine is a vaccine or therapeutic. Determines deployment
+    /// behavior: vaccines protect susceptible, therapeutics treat infected.
+    #[serde(default)]
+    pub mode: MedicineMode,
     /// Molecular mechanism of action. `None` for broad-spectrum medicines.
     /// Targeted medicines get a specific mechanism assigned during development.
     #[serde(default)]
@@ -3325,11 +3329,43 @@ pub struct Shipment {
     pub arrive_tick: u64,
 }
 
-// What a medicine deployment targets: protect susceptible (preventive) or treat infected (therapeutic).
+/// Whether a medicine is a vaccine (protects susceptible) or therapeutic (treats infected).
+/// Set at creation time — determines deployment behavior automatically.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MedicineMode {
+    /// Protects susceptible population against infection.
+    Vaccine,
+    /// Treats actively infected population.
+    Therapeutic,
+}
+
+impl Default for MedicineMode {
+    fn default() -> Self {
+        MedicineMode::Therapeutic
+    }
+}
+
+impl MedicineMode {
+    pub fn label(&self) -> &'static str {
+        match self {
+            MedicineMode::Vaccine => "Vaccine",
+            MedicineMode::Therapeutic => "Therapeutic",
+        }
+    }
+
+    pub fn short_label(&self) -> &'static str {
+        match self {
+            MedicineMode::Vaccine => "Vax",
+            MedicineMode::Therapeutic => "Trt",
+        }
+    }
+}
+
+/// What a medicine deployment targets: which disease in which mode.
+/// The mode (vaccine vs therapeutic) is determined by the medicine itself.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DeployTarget {
-    Vaccinate { disease_idx: usize },
-    Treat { disease_idx: usize },
+pub struct DeployTarget {
+    pub disease_idx: usize,
 }
 
 impl Medicine {
@@ -3360,24 +3396,29 @@ impl Medicine {
         // Safe to unwrap: prions return early above, all other types have a matched therapy.
         let therapy = pathogen_type.matched_therapy().unwrap();
 
-        mechs.iter().map(|&mech| {
+        mechs.iter().flat_map(|&mech| {
             let doses = mech.base_doses();
-            Medicine {
-                name: format!("{}-{}", mech.short_label(), letter),
-                therapy_type: therapy,
-                mechanism: Some(mech),
-                target_diseases: vec![disease_idx],
-                cost: mech.deploy_cost(),
-                doses: 0.0,
-                max_doses: doses,
-                unlocked: false,
-                tested_against: vec![],
-                strain_generations: vec![],
-                deployed_count: 0,
-                total_treated: 0.0,
-                total_protected: 0.0,
-                manufacturer_corp_idx: None,
-            }
+            let base = |mode: MedicineMode| {
+                let prefix = mode.short_label();
+                Medicine {
+                    name: format!("{}-{}-{}", prefix, mech.short_label(), letter),
+                    therapy_type: therapy,
+                    mode,
+                    mechanism: Some(mech),
+                    target_diseases: vec![disease_idx],
+                    cost: mech.deploy_cost(),
+                    doses: 0.0,
+                    max_doses: doses,
+                    unlocked: false,
+                    tested_against: vec![],
+                    strain_generations: vec![],
+                    deployed_count: 0,
+                    total_treated: 0.0,
+                    total_protected: 0.0,
+                    manufacturer_corp_idx: None,
+                }
+            };
+            [base(MedicineMode::Therapeutic), base(MedicineMode::Vaccine)]
         }).collect()
     }
 
@@ -4723,8 +4764,6 @@ pub enum MedicineUiState {
     SelectRegion { medicine_idx: usize },
     /// Choose which disease to target (skipped for single-target medicines).
     SelectDisease { medicine_idx: usize, region_idx: usize },
-    /// Choose vaccinate (0) or treat (1) for the selected disease.
-    SelectTarget { medicine_idx: usize, region_idx: usize, disease_idx: usize },
     ConfirmDeploy { medicine_idx: usize, region_idx: usize, target: DeployTarget },
     /// Shown after a deployment completes, displaying the result prominently.
     DeployResult { medicine_idx: usize, message: String },
@@ -4822,7 +4861,6 @@ pub struct UiState {
     /// - `Panel::Medicines / BrowseMedicines` → index into unlocked medicines
     /// - `Panel::Medicines / SelectRegion`    → index into grid_reading_order(regions)
     /// - `Panel::Medicines / SelectDisease`   → index into deployable_diseases list
-    /// - `Panel::Medicines / SelectTarget`    → 0 = Vaccinate, 1 = Treat
     /// - `Panel::Research / BrowseAll`         → index into `research_flat_items()` flat list
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → decrees, standing orders, loans
@@ -4964,19 +5002,7 @@ impl UiState {
                         self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
                         self.panel_selection = 0;
                     }
-                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target }) => {
-                        let (disease_idx, action) = match target {
-                            DeployTarget::Vaccinate { disease_idx } => (disease_idx, 0),
-                            DeployTarget::Treat { disease_idx } => (disease_idx, 1),
-                        };
-                        self.medicine_ui = Some(MedicineUiState::SelectTarget {
-                            medicine_idx,
-                            region_idx,
-                            disease_idx,
-                        });
-                        self.panel_selection = action;
-                    }
-                    Some(MedicineUiState::SelectTarget { medicine_idx, region_idx, .. }) => {
+                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, .. }) => {
                         let med = &medicines[medicine_idx];
                         if med.deployable_diseases(diseases).len() == 1 {
                             self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
@@ -5158,17 +5184,6 @@ impl UiState {
                     self.medicine_ui = Some(MedicineUiState::SelectDisease {
                         medicine_idx: med,
                         region_idx: self.map_selection,
-                    });
-                    self.panel_selection = 0;
-                }
-            }
-            Some(MedicineUiState::SelectTarget { medicine_idx, disease_idx, region_idx }) => {
-                if *region_idx != self.map_selection {
-                    let (med, dis) = (*medicine_idx, *disease_idx);
-                    self.medicine_ui = Some(MedicineUiState::SelectTarget {
-                        medicine_idx: med,
-                        region_idx: self.map_selection,
-                        disease_idx: dis,
                     });
                     self.panel_selection = 0;
                 }
@@ -5630,19 +5645,20 @@ impl GameState {
 
         // One broad-spectrum medicine targeting all diseases
         let all_disease_indices: Vec<usize> = (0..diseases.len()).collect();
+        // Broad-spectrum therapeutic: starts unlocked at limited supply. A blunt bandaid
+        // that slows early disease spread while the player develops targeted medicines.
+        // 500K doses depletes within ~10 days as infections grow, forcing investment
+        // in the research pipeline. Targeted medicines are 6–7x more effective.
         medicines.push(Medicine {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
+            mode: MedicineMode::Therapeutic,
             mechanism: None,
             target_diseases: all_disease_indices.clone(),
             cost: 10.0,
             doses: 500_000.0,
             max_doses: 500_000.0,
             unlocked: true,
-            // Broad-spectrum starts unlocked at limited supply: a blunt bandaid
-            // that slows early disease spread while the player develops targeted medicines.
-            // 500K doses depletes within ~10 days as infections grow, forcing investment
-            // in the research pipeline. Targeted medicines are 6–7x more effective.
             tested_against: all_disease_indices.clone(),
             strain_generations: vec![],
             deployed_count: 0,
