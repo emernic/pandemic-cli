@@ -4083,6 +4083,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::RegionDiseaseState;
 
     #[test]
     fn phase_weights_shift_with_game_day() {
@@ -4892,5 +4893,145 @@ mod tests {
             }
         }
         assert!(!found_biotech_demand, "Biotech corps should never generate demands");
+    }
+
+    #[test]
+    fn board_meeting_raises_authority_when_pressure_high() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        // Start at Minimal authority
+        state.resources.authority = Authority::Minimal;
+
+        // Ensure disease 0 exists and is detected so deaths count toward pressure
+        if !state.diseases.is_empty() {
+            state.diseases[0].detected = true;
+        }
+
+        // Create massive crisis pressure: lots of infections and deaths
+        for region in &mut state.regions {
+            region.infections.push(RegionDiseaseState {
+                disease_idx: 0,
+                exposed: 0.0,
+                infected: 5_000_000.0,
+                dead: 500_000.0,
+                immune: 0.0,
+            });
+        }
+
+        // Max out board satisfaction to boost pressure further
+        for member in &mut state.board_members {
+            member.satisfaction = 1.0;
+        }
+
+        // Verify suggested authority is above Minimal
+        let suggested = state.suggested_authority();
+        assert!(suggested > Authority::Minimal,
+            "with massive infections, suggested authority should be above Minimal, got {:?}", suggested);
+
+        // Resolve a board meeting
+        let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
+        state.active_crisis = Some(crisis);
+        resolve_crisis(&mut state, 0);
+
+        assert_eq!(state.resources.authority, Authority::VeryLow,
+            "board meeting should raise authority by exactly one level from Minimal");
+    }
+
+    #[test]
+    fn board_meeting_lowers_authority_when_pressure_low() {
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        // Start at High authority with no crisis
+        state.resources.authority = Authority::High;
+
+        // Clear all infections so pressure is purely from board satisfaction
+        for region in &mut state.regions {
+            region.infections.clear();
+            region.dead = 0.0;
+        }
+
+        // Zero out board satisfaction to minimize pressure
+        for member in &mut state.board_members {
+            member.satisfaction = 0.0;
+        }
+
+        // Verify suggested authority is below High
+        let suggested = state.suggested_authority();
+        assert!(suggested < Authority::High,
+            "with no crisis and zero satisfaction, suggested should be below High, got {:?}", suggested);
+
+        // Resolve a board meeting
+        let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
+        state.active_crisis = Some(crisis);
+        resolve_crisis(&mut state, 0);
+
+        assert_eq!(state.resources.authority, Authority::Medium,
+            "board meeting should lower authority by exactly one level from High");
+    }
+
+    #[test]
+    fn board_meeting_emits_policy_authorized_on_raise() {
+        use crate::state::PolicyId;
+
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+        crate::engine::board::generate_board_members(&mut state);
+
+        // Start at VeryLow — raising to Low should unlock DiscourageHosp (requires Low)
+        state.resources.authority = Authority::VeryLow;
+
+        // Ensure disease 0 is detected so deaths count toward pressure
+        if !state.diseases.is_empty() {
+            state.diseases[0].detected = true;
+        }
+
+        // Create enough pressure that suggested > VeryLow
+        for region in &mut state.regions {
+            region.infections.push(RegionDiseaseState {
+                disease_idx: 0,
+                exposed: 0.0,
+                infected: 5_000_000.0,
+                dead: 500_000.0,
+                immune: 0.0,
+            });
+        }
+        for member in &mut state.board_members {
+            member.satisfaction = 1.0;
+        }
+
+        let suggested = state.suggested_authority();
+        assert!(suggested > Authority::VeryLow,
+            "setup should produce suggested > VeryLow, got {:?}", suggested);
+
+        // Clear events, then resolve board meeting
+        state.events.clear();
+        let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
+        state.active_crisis = Some(crisis);
+        resolve_crisis(&mut state, 0);
+
+        assert_eq!(state.resources.authority, Authority::Low,
+            "authority should have been raised to Low");
+
+        // DiscourageHosp requires Authority::Low — should be in the emitted events
+        let policy_events: Vec<_> = state.events.iter().filter_map(|e| {
+            if let GameEvent::PolicyAuthorized { policy } = e {
+                Some(*policy)
+            } else {
+                None
+            }
+        }).collect();
+
+        assert!(policy_events.contains(&PolicyId::DiscourageHosp),
+            "raising to Low should emit PolicyAuthorized for DiscourageHosp, got {:?}", policy_events);
+
+        // TravelBan and Quarantine require Medium — should NOT be emitted
+        assert!(!policy_events.contains(&PolicyId::TravelBan),
+            "TravelBan requires Medium, should not be emitted at Low");
+        assert!(!policy_events.contains(&PolicyId::Quarantine),
+            "Quarantine requires Medium, should not be emitted at Low");
     }
 }
