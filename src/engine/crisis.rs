@@ -967,7 +967,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Enforce compliance".into(),
-                    description: "Effective but −10% board approval".into(),
+                    description: "Maintains treatment coverage. −10% board approval, −15 governor cooperation.".into(),
                     cost: None,
                 },
                  {
@@ -1182,7 +1182,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Refuse".into(),
-                    description: format!("{} remains sealed, +5% board approval", region_name),
+                    description: format!("{} stays collapsed. No medical access, no future operations. +5% board approval.", region_name),
                     cost: None,
                 },
                  {
@@ -1261,7 +1261,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: "Naming Rights".into(),
                 description: format!(
-                    "A pharmaceutical consortium offers ¥{:.0} for the naming rights to {}.",
+                    "A pharmaceutical consortium offers ¥{:.0} for the naming rights to {}. \
+                     The rename is cosmetic only.",
                     payout, disease_name,
                 ),
                 options: vec![ CrisisOption {
@@ -1316,7 +1317,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Send a deputy".into(),
-                    description: "+2% board approval. 40% chance of formal censure.".into(),
+                    description: "+2% board approval. 40% chance of censure (follow-up fine).".into(),
                     cost: None,
                 },
                 CrisisOption {
@@ -1583,12 +1584,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 options: vec![
                     CrisisOption {
                         label: format!("Placate (¥{:.0})", placate_cost),
-                        description: "Pay to buy time. Contract satisfaction recovers.".to_string(),
+                        description: "Pay to buy time. Contract satisfaction +25%.".to_string(),
                         cost: Some(CrisisCost { funding: placate_cost, personnel: 0, ..Default::default() }),
                     },
                     CrisisOption {
                         label: "Refuse".into(),
-                        description: format!("{} moves closer to pulling out.", member_name),
+                        description: format!("{} loses patience. Contract satisfaction −15%.", member_name),
                         cost: None,
                     },
                 ],
@@ -1906,7 +1907,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Wait it out".into(),
-                    description: "A successor will emerge on their own. 12 days leaderless.".into(),
+                    description: "A successor will emerge on their own. 12 days with no policy enforcement or cooperation gains.".into(),
                     cost: None,
                 },
                 ],
@@ -1979,7 +1980,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Field teams report population is hiding symptoms and refusing screening."),
                 options: vec![ CrisisOption {
                     label: "Accept reduced visibility".into(),
-                    description: format!("Screening downgraded in {region_name}"),
+                    description: format!("Screening drops one level in {region_name}."),
                     cost: None,
                 },
                  CrisisOption {
