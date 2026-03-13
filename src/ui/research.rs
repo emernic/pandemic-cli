@@ -110,11 +110,21 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
     lines.push(Line::from(""));
     render_section_header(&mut lines, "Applied Research", ResearchTrack::Applied, state);
 
+    let applied_is_train = state.applied_research.as_ref()
+        .is_some_and(|p| matches!(p.kind, ResearchKind::TrainPersonnel));
     if let Some(project) = state.research_slot(ResearchTrack::Applied) {
-        let selected = state.ui.panel_selection == item_idx;
-        if selected { selected_line = Some(lines.len()); }
-        render_active_project(&mut lines, project, selected, state);
-        item_idx += 1;
+        if !applied_is_train {
+            let selected = state.ui.panel_selection == item_idx;
+            if selected { selected_line = Some(lines.len()); }
+            render_active_project(&mut lines, project, selected, state);
+            item_idx += 1;
+        } else {
+            // TrainPersonnel is active but shown in Lab; show slot-busy hint here
+            lines.push(Line::from(Span::styled(
+                "  (slot used by Train Personnel)",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
     } else {
         let applied_available = state.available_projects(ResearchTrack::Applied);
         // Filter out TrainPersonnel — it's shown in the Lab section instead
@@ -234,8 +244,14 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
         )));
     }
 
-    // Train Personnel (shown here if applied slot is free)
-    if state.research_slot(ResearchTrack::Applied).is_none() {
+    // Train Personnel — always shown in Lab section, whether active or available
+    if applied_is_train {
+        let project = state.research_slot(ResearchTrack::Applied).unwrap();
+        let selected = state.ui.panel_selection == item_idx;
+        if selected { selected_line = Some(lines.len()); }
+        render_active_project(&mut lines, project, selected, state);
+        item_idx += 1;
+    } else if state.research_slot(ResearchTrack::Applied).is_none() {
         let applied_projects = state.available_projects(ResearchTrack::Applied);
         for kind in &applied_projects {
             if matches!(kind, ResearchKind::TrainPersonnel) {
