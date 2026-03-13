@@ -26,22 +26,6 @@ impl SimState {
     }
 }
 
-/// Deserialize field_research: accepts both old `Option<ResearchProject>` (single)
-/// and new `Vec<ResearchProject>` (parallel) save formats.
-fn deserialize_field_research<'de, D>(deserializer: D) -> Result<Vec<ResearchProject>, D::Error>
-where D: Deserializer<'de> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum FieldResearch {
-        Vec(Vec<ResearchProject>),
-        Option(Option<ResearchProject>),
-    }
-    match FieldResearch::deserialize(deserializer)? {
-        FieldResearch::Vec(v) => Ok(v),
-        FieldResearch::Option(Some(p)) => Ok(vec![p]),
-        FieldResearch::Option(None) => Ok(vec![]),
-    }
-}
 
 /// Deserialize hospital_level: accepts old `healthcare_invested: bool` saves
 /// (true → 1, false → 0) and new `hospital_level: u8` saves.
@@ -80,16 +64,11 @@ pub struct GameState {
     pub diseases: Vec<Disease>,
     #[serde(default)]
     pub medicines: Vec<Medicine>,
-    /// Active field research projects (Identify Threat, Clinical Trial, Genomic Sequencing).
-    /// Multiple projects can run simultaneously, gated by personnel.
-    #[serde(default, deserialize_with = "deserialize_field_research")]
-    pub field_research: Vec<ResearchProject>,
-    /// Active applied research project (Develop Medicine).
-    #[serde(default, alias = "applied_research")]
-    pub applied_research: Option<ResearchProject>,
-    /// Active basic research project (tech tree unlocks).
+    /// All active research projects (flat list).
+    /// Field category allows up to MAX_FIELD_RESEARCH simultaneous;
+    /// Applied and Basic allow one each.
     #[serde(default)]
-    pub basic_research: Option<ResearchProject>,
+    pub active_research: Vec<ResearchProject>,
     /// Technologies unlocked via basic research.
     #[serde(default)]
     pub unlocked_techs: Vec<BasicTech>,
@@ -128,10 +107,11 @@ pub struct GameState {
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
     pub auto_resolve_crises: HashMap<String, usize>,
-    /// Auto-research: when a project completes, automatically start the next
-    /// highest-priority available project (if affordable). Per-track toggle.
+    /// Per-project auto-repeat: when a repeatable project (TrainPersonnel,
+    /// ManufactureDoses) completes, automatically restart it if its kind is in
+    /// this set. Replaces the old per-track auto_research toggle.
     #[serde(default)]
-    pub auto_research: [bool; 3],
+    pub auto_repeat_research: Vec<ResearchKind>,
     /// Auto-deploy: automatically deploy tested medicines to the worst-affected
     /// region each tick cycle. Per-medicine toggle, indexed by medicine index.
     #[serde(default)]
@@ -3225,37 +3205,32 @@ impl Medicine {
 
 }
 
-/// Which research track a project belongs to.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ResearchTrack {
+/// Research category — purely for capacity checks and UI grouping.
+/// Derived from `ResearchKind::category()`. Field allows multiple simultaneous
+/// projects (up to MAX_FIELD_RESEARCH); Applied and Basic allow one each.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ResearchCategory {
     Field,
     #[serde(alias = "Bench")]
     Applied,
     Basic,
 }
 
-/// Number of research track categories (Field, Applied, Basic).
-/// If you add a fourth track, update `ResearchTrack::from_index()`,
-/// `ResearchTrack::index()`, and `research_flat_items()`.
-pub const RESEARCH_TRACK_COUNT: usize = 3;
 
-impl ResearchTrack {
+impl ResearchCategory {
     pub fn index(self) -> usize {
         match self {
-            ResearchTrack::Field => 0,
-            ResearchTrack::Applied => 1,
-            ResearchTrack::Basic => 2,
+            ResearchCategory::Field => 0,
+            ResearchCategory::Applied => 1,
+            ResearchCategory::Basic => 2,
         }
     }
 
-    /// Canonical inverse of `index()` — maps a numeric index to the
-    /// corresponding research track.
-    pub fn from_index(idx: usize) -> Option<Self> {
-        match idx {
-            0 => Some(ResearchTrack::Field),
-            1 => Some(ResearchTrack::Applied),
-            2 => Some(ResearchTrack::Basic),
-            _ => None,
+    pub fn name(self) -> &'static str {
+        match self {
+            ResearchCategory::Field => "Field",
+            ResearchCategory::Applied => "Applied",
+            ResearchCategory::Basic => "Basic",
         }
     }
 }
@@ -3317,6 +3292,34 @@ pub enum ResearchKind {
     /// Creates a mid-game phase shift: field research slots compete between disease
     /// work and keeping regions operational.
     FieldOperations { region_idx: usize, system: InfraSystem },
+}
+
+impl ResearchKind {
+    /// Which capacity category this research kind belongs to.
+    /// Field: multiple simultaneous (up to MAX_FIELD_RESEARCH).
+    /// Applied/Basic: one at a time.
+    pub fn category(&self) -> ResearchCategory {
+        match self {
+            Self::IdentifyThreat { .. }
+            | Self::ClinicalTrial { .. }
+            | Self::GenomicSequencing { .. }
+            | Self::SuppressPathogen { .. }
+            | Self::AttenuatePathogen { .. }
+            | Self::InterdictPathogen { .. }
+            | Self::FieldOperations { .. } => ResearchCategory::Field,
+            Self::DevelopMedicine { .. }
+            | Self::ManufactureDoses { .. }
+            | Self::TrainPersonnel => ResearchCategory::Applied,
+            Self::BasicResearch { .. } => ResearchCategory::Basic,
+        }
+    }
+
+    /// Whether this research kind supports auto-repeat.
+    /// Repeatable: TrainPersonnel, ManufactureDoses.
+    /// Non-repeatable: everything else (one-shot projects).
+    pub fn is_repeatable(&self) -> bool {
+        matches!(self, Self::TrainPersonnel | Self::ManufactureDoses { .. })
+    }
 }
 
 /// Technology nodes in the Basic Research tech tree.
@@ -3782,8 +3785,8 @@ pub enum GameEvent {
     /// A crisis was auto-resolved based on player's saved preference.
     /// Carries the resolution outcome message for the event log.
     CrisisAutoResolved { message: String },
-    /// A research project was auto-started because auto-research is on.
-    ResearchAutoStarted { track: ResearchTrack },
+    /// A research project was auto-restarted because auto-repeat is on.
+    ResearchAutoRestarted { kind: ResearchKind },
     /// A research completion on one track unlocked a project on another track.
     /// Notifies the player to start the next pipeline step manually.
     ResearchHandoff { message: String },
@@ -3943,7 +3946,7 @@ pub enum GameCommand {
         target: DeployTarget,
     },
     StartResearch {
-        track: ResearchTrack,
+        category: ResearchCategory,
         project_idx: usize,
         double_personnel: bool,
     },
@@ -3969,8 +3972,8 @@ pub enum GameCommand {
     ToggleStandingOrder { kind: usize },
     /// Toggle auto-deploy for a specific medicine.
     ToggleAutoDeploy { med_idx: usize },
-    /// Toggle auto-research for a specific track.
-    ToggleAutoResearch { track: ResearchTrack },
+    /// Toggle auto-repeat for a specific repeatable research project.
+    ToggleAutoRepeat { kind: ResearchKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
     /// Cycle a region's deployment priority (High → Normal → Low → CutOff → High).
@@ -4351,7 +4354,7 @@ pub enum ResearchUiState {
     /// Flat list showing all research tracks with section headers.
     BrowseAll,
     /// Confirming a project before starting it.
-    ConfirmProject { track: ResearchTrack, project_idx: usize, double_personnel: bool },
+    ConfirmProject { category: ResearchCategory, project_idx: usize, double_personnel: bool },
     /// Confirming a lab upgrade before purchasing.
     ConfirmLabUpgrade,
 }
@@ -4360,34 +4363,32 @@ pub enum ResearchUiState {
 /// Built dynamically by `GameState::research_flat_items()`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResearchFlatItem {
-    /// An active field research project (index into `field_research` vec).
-    FieldActive(usize),
-    /// An available field research project (index into `available_projects(Field)`).
-    FieldAvailable(usize),
-    /// The single active applied research project.
-    AppliedActive,
-    /// An available applied research project (index into `available_projects(Applied)`).
-    AppliedAvailable(usize),
-    /// The single active basic research project.
-    BasicActive,
-    /// An available basic research project (index into `available_projects(Basic)`).
-    BasicAvailable(usize),
+    /// An active research project (index into `active_research` vec).
+    Active(usize),
+    /// An available (startable) project. `category` determines which
+    /// `available_*_projects()` list `project_idx` indexes into.
+    Available { category: ResearchCategory, project_idx: usize },
     /// The lab upgrade button.
     UpgradeLab,
-    /// Train Personnel — displayed in Lab section but uses the Applied research slot.
-    /// The usize is the index into `available_projects(Applied)`.
-    TrainPersonnel(usize),
 }
 
 impl ResearchFlatItem {
-    /// Which research track this item belongs to, if any.
-    pub fn track(&self) -> Option<ResearchTrack> {
+    /// Which research category this item belongs to, if any.
+    pub fn category(&self) -> Option<ResearchCategory> {
         match self {
-            Self::FieldActive(_) | Self::FieldAvailable(_) => Some(ResearchTrack::Field),
-            Self::AppliedActive | Self::AppliedAvailable(_) => Some(ResearchTrack::Applied),
-            Self::BasicActive | Self::BasicAvailable(_) => Some(ResearchTrack::Basic),
+            Self::Active(_) => None, // caller should look up the project's kind.category()
+            Self::Available { category, .. } => Some(*category),
             Self::UpgradeLab => None,
-            Self::TrainPersonnel(_) => Some(ResearchTrack::Applied),
+        }
+    }
+
+    /// The ResearchKind of this item, if it's an available project.
+    pub fn available_kind(&self, state: &GameState) -> Option<ResearchKind> {
+        match self {
+            Self::Available { category, project_idx } => {
+                state.available_projects(*category).get(*project_idx).cloned()
+            }
+            _ => None,
         }
     }
 }
@@ -5281,9 +5282,7 @@ impl GameState {
             regions,
             diseases,
             medicines,
-            field_research: vec![],
-            applied_research: None,
-            basic_research: None,
+            active_research: vec![],
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
             events: vec![],
@@ -5294,7 +5293,7 @@ impl GameState {
             last_crisis_resolved_tick: 0,
             auto_resolve_crises: HashMap::new(),
             history: vec![],
-            auto_research: [false; 3],
+            auto_repeat_research: vec![],
             auto_deploy: vec![],
             standing_orders: StandingOrders::default(),
             crisis_operations: vec![],
@@ -5506,9 +5505,7 @@ impl GameState {
     }
 
     pub fn personnel_busy(&self) -> u32 {
-        let field: u32 = self.field_research.iter().map(|p| p.personnel_assigned).sum();
-        let applied = self.applied_research.as_ref().map_or(0, |p| p.personnel_assigned);
-        let basic = self.basic_research.as_ref().map_or(0, |p| p.personnel_assigned);
+        let research: u32 = self.active_research.iter().map(|p| p.personnel_assigned).sum();
         let policy: u32 = self.policies.iter().enumerate()
             .map(|(i, p)| {
                 let traits = self.regions.get(i).map(|r| r.traits.as_slice()).unwrap_or(&[]);
@@ -5526,7 +5523,7 @@ impl GameState {
             _ => 0,
         }).sum();
         let crisis_ops: u32 = self.crisis_operations.iter().map(|op| op.personnel).sum();
-        field + applied + basic + policy + hospitals + intel + crisis_ops
+        research + policy + hospitals + intel + crisis_ops
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -6077,7 +6074,9 @@ impl GameState {
 
     /// Available field research projects (excludes currently active).
     pub fn available_field_projects(&self) -> Vec<ResearchKind> {
-        let active_kinds: Vec<&ResearchKind> = self.field_research.iter().map(|p| &p.kind).collect();
+        let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
+            .filter(|p| p.kind.category() == ResearchCategory::Field)
+            .map(|p| &p.kind).collect();
         let mut projects = Vec::new();
         // Identify Threat: diseases not fully known, sorted by knowledge ascending
         // (unknown diseases first, then partially identified)
@@ -6205,27 +6204,38 @@ impl GameState {
             .collect()
     }
 
-    /// Get the active research project for a given track.
-    /// For Field track (which supports multiple projects), returns the first.
-    pub fn research_slot(&self, track: ResearchTrack) -> Option<&ResearchProject> {
-        match track {
-            ResearchTrack::Field => self.field_research.first(),
-            ResearchTrack::Applied => self.applied_research.as_ref(),
-            ResearchTrack::Basic => self.basic_research.as_ref(),
+    /// All active projects in a given category.
+    pub fn active_in_category(&self, cat: ResearchCategory) -> Vec<&ResearchProject> {
+        self.active_research.iter()
+            .filter(|p| p.kind.category() == cat)
+            .collect()
+    }
+
+    /// Whether there's capacity to start another project in this category.
+    pub fn has_research_capacity(&self, cat: ResearchCategory) -> bool {
+        match cat {
+            ResearchCategory::Field => self.field_research_has_capacity(),
+            _ => self.active_in_category(cat).is_empty(),
         }
     }
 
     /// Whether field research has capacity for another project.
     pub fn field_research_has_capacity(&self) -> bool {
-        self.field_research.len() < MAX_FIELD_RESEARCH
+        self.active_in_category(ResearchCategory::Field).len() < MAX_FIELD_RESEARCH
     }
 
-    /// Available research projects for a given track (excludes currently active).
-    pub fn available_projects(&self, track: ResearchTrack) -> Vec<ResearchKind> {
-        match track {
-            ResearchTrack::Field => self.available_field_projects(),
-            ResearchTrack::Applied => self.available_applied_projects(),
-            ResearchTrack::Basic => self.available_basic_projects(),
+    /// Get the first active research project in a given category.
+    /// For Field (which supports multiple), returns the first.
+    pub fn research_slot(&self, cat: ResearchCategory) -> Option<&ResearchProject> {
+        self.active_research.iter().find(|p| p.kind.category() == cat)
+    }
+
+    /// Available research projects for a given category (excludes currently active).
+    pub fn available_projects(&self, cat: ResearchCategory) -> Vec<ResearchKind> {
+        match cat {
+            ResearchCategory::Field => self.available_field_projects(),
+            ResearchCategory::Applied => self.available_applied_projects(),
+            ResearchCategory::Basic => self.available_basic_projects(),
         }
     }
 
@@ -6235,48 +6245,61 @@ impl GameState {
         let mut items = Vec::new();
 
         // Field Research: active projects, then available (if capacity remains)
-        for i in 0..self.field_research.len() {
-            items.push(ResearchFlatItem::FieldActive(i));
+        let field_active: Vec<usize> = self.active_research.iter().enumerate()
+            .filter(|(_, p)| p.kind.category() == ResearchCategory::Field)
+            .map(|(i, _)| i)
+            .collect();
+        for &idx in &field_active {
+            items.push(ResearchFlatItem::Active(idx));
         }
         if self.field_research_has_capacity() {
-            for i in 0..self.available_projects(ResearchTrack::Field).len() {
-                items.push(ResearchFlatItem::FieldAvailable(i));
+            for i in 0..self.available_projects(ResearchCategory::Field).len() {
+                items.push(ResearchFlatItem::Available { category: ResearchCategory::Field, project_idx: i });
             }
         }
 
         // Applied Research: active project OR available projects
         // TrainPersonnel is skipped here — it appears in the Lab section instead.
-        let applied_projects = self.available_projects(ResearchTrack::Applied);
-        let applied_is_train = self.applied_research.as_ref()
+        let applied_active: Vec<usize> = self.active_research.iter().enumerate()
+            .filter(|(_, p)| p.kind.category() == ResearchCategory::Applied)
+            .map(|(i, _)| i)
+            .collect();
+        let applied_is_train = applied_active.first()
+            .and_then(|&i| self.active_research.get(i))
             .is_some_and(|p| matches!(p.kind, ResearchKind::TrainPersonnel));
-        if self.research_slot(ResearchTrack::Applied).is_some() && !applied_is_train {
-            items.push(ResearchFlatItem::AppliedActive);
-        } else if self.research_slot(ResearchTrack::Applied).is_none() {
-            for i in 0..applied_projects.len() {
-                if matches!(applied_projects[i], ResearchKind::TrainPersonnel) {
+        if !applied_active.is_empty() && !applied_is_train {
+            items.push(ResearchFlatItem::Active(applied_active[0]));
+        } else if applied_active.is_empty() {
+            let applied_projects = self.available_projects(ResearchCategory::Applied);
+            for (i, kind) in applied_projects.iter().enumerate() {
+                if matches!(kind, ResearchKind::TrainPersonnel) {
                     continue;
                 }
-                items.push(ResearchFlatItem::AppliedAvailable(i));
+                items.push(ResearchFlatItem::Available { category: ResearchCategory::Applied, project_idx: i });
             }
         }
 
         // Basic Research: active project OR available projects
-        if self.research_slot(ResearchTrack::Basic).is_some() {
-            items.push(ResearchFlatItem::BasicActive);
+        let basic_active: Vec<usize> = self.active_research.iter().enumerate()
+            .filter(|(_, p)| p.kind.category() == ResearchCategory::Basic)
+            .map(|(i, _)| i)
+            .collect();
+        if !basic_active.is_empty() {
+            items.push(ResearchFlatItem::Active(basic_active[0]));
         } else {
-            for i in 0..self.available_projects(ResearchTrack::Basic).len() {
-                items.push(ResearchFlatItem::BasicAvailable(i));
+            for i in 0..self.available_projects(ResearchCategory::Basic).len() {
+                items.push(ResearchFlatItem::Available { category: ResearchCategory::Basic, project_idx: i });
             }
         }
 
         // Lab section: Train Personnel (active or available) and lab upgrade
         if applied_is_train {
-            items.push(ResearchFlatItem::AppliedActive);
-        } else if self.research_slot(ResearchTrack::Applied).is_none() {
-            let applied_projects = self.available_projects(ResearchTrack::Applied);
+            items.push(ResearchFlatItem::Active(applied_active[0]));
+        } else if applied_active.is_empty() {
+            let applied_projects = self.available_projects(ResearchCategory::Applied);
             for (i, kind) in applied_projects.iter().enumerate() {
                 if matches!(kind, ResearchKind::TrainPersonnel) {
-                    items.push(ResearchFlatItem::TrainPersonnel(i));
+                    items.push(ResearchFlatItem::Available { category: ResearchCategory::Applied, project_idx: i });
                 }
             }
         }
@@ -6466,7 +6489,7 @@ impl GameState {
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
     pub fn available_basic_projects(&self) -> Vec<ResearchKind> {
-        let active_kind = self.basic_research.as_ref().map(|p| &p.kind);
+        let active_kind = self.research_slot(ResearchCategory::Basic).map(|p| &p.kind);
         BasicTech::all()
             .iter()
             .filter(|tech| {
@@ -6480,7 +6503,7 @@ impl GameState {
 
     /// Available applied research projects (excludes currently active).
     pub fn available_applied_projects(&self) -> Vec<ResearchKind> {
-        let active_kind = self.applied_research.as_ref().map(|p| &p.kind);
+        let active_kind = self.research_slot(ResearchCategory::Applied).map(|p| &p.kind);
         let mut projects = Vec::new();
         for (i, med) in self.medicines.iter().enumerate() {
             if med.unlocked {
@@ -6521,7 +6544,7 @@ impl GameState {
     /// Returns (disease_idx, reason_string) for each blocked disease.
     /// Used to show greyed-out "pending" entries in the Applied Research panel.
     pub fn blocked_medicine_developments(&self) -> Vec<(usize, String)> {
-        let active_kind = self.applied_research.as_ref().map(|p| &p.kind);
+        let active_kind = self.research_slot(ResearchCategory::Applied).map(|p| &p.kind);
         let has_targeted_drug_design = self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
 
         // Collect disease indices already covered by an available or active targeted medicine

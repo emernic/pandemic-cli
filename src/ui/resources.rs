@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchKind, ResearchTrack, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, ResearchCategory, ResearchKind, SimState, KNOWLEDGE_NAME, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: 4 rows (stats + income + research + border).
@@ -165,9 +165,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let mut spans: Vec<Span> = Vec::new();
 
         // Field research: show all active projects (or "None")
-        let field_auto = if state.auto_research[ResearchTrack::Field.index()] { "Field(A): " } else { "Field: " };
-        spans.push(Span::styled(field_auto, Style::default().fg(Color::DarkGray)));
-        if state.field_research.is_empty() {
+        spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
+        let field_projects = state.active_in_category(ResearchCategory::Field);
+        if field_projects.is_empty() {
             let has_field_projects = !state.available_field_projects().is_empty();
             if has_field_projects {
                 spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
@@ -175,7 +175,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
             }
         } else {
-            for (i, project) in state.field_research.iter().enumerate() {
+            for (i, project) in field_projects.iter().enumerate() {
                 if i > 0 {
                     spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
                 }
@@ -188,14 +188,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         // Applied and Basic tracks
-        for (label, track, project, color) in [
-            ("Applied", ResearchTrack::Applied, &state.applied_research, Color::Magenta),
-            ("Basic", ResearchTrack::Basic, &state.basic_research, Color::Green),
+        for (label, category, color) in [
+            ("Applied", ResearchCategory::Applied, Color::Magenta),
+            ("Basic", ResearchCategory::Basic, Color::Green),
         ] {
             spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            let auto_tag = if state.auto_research[track.index()] { "(A)" } else { "" };
-            spans.push(Span::styled(format!("{}{}: ", label, auto_tag), Style::default().fg(Color::DarkGray)));
-            if let Some(project) = project {
+            spans.push(Span::styled(format!("{}: ", label), Style::default().fg(Color::DarkGray)));
+            if let Some(project) = state.research_slot(category) {
                 let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
                 spans.push(Span::styled(
                     format!("{} {}%", compact_research_label(&project.kind, state), pct),
@@ -203,7 +202,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 ));
             } else {
                 // Check if there are available projects the player could start
-                let has_actionable = state.available_projects(track).iter()
+                let has_actionable = state.available_projects(category).iter()
                     .any(|p| !matches!(p, ResearchKind::TrainPersonnel));
                 if has_actionable {
                     spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));

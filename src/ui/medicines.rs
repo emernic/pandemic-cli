@@ -223,7 +223,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
 
             // Show manufacture hint when doses are depleted
             if med.doses <= 0.0 {
-                let is_manufacturing = state.applied_research.as_ref()
+                let is_manufacturing = state.research_slot(crate::state::ResearchCategory::Applied)
                     .is_some_and(|p| matches!(&p.kind, ResearchKind::ManufactureDoses { medicine_idx: mi } if *mi == med_idx));
                 if is_manufacturing {
                     lines.push(Line::from(Span::styled(
@@ -243,7 +243,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 med.strain_efficacy(d_idx, &state.diseases) < 1.0
             });
             if any_strain_outdated {
-                let retrial_in_progress = state.field_research.iter().any(|p| {
+                let retrial_in_progress = state.active_research.iter().filter(|p| p.kind.category() == crate::state::ResearchCategory::Field).any(|p| {
                     matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == med_idx)
                 });
                 if retrial_in_progress {
@@ -603,7 +603,7 @@ fn render_select_target(
         } else {
             String::new()
         };
-        let retrial_in_progress = state.field_research.iter().any(|p| {
+        let retrial_in_progress = state.active_research.iter().filter(|p| p.kind.category() == crate::state::ResearchCategory::Field).any(|p| {
             matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, disease_idx: di }
                 if *mi == medicine_idx && *di == disease_idx)
         });

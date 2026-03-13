@@ -410,7 +410,7 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.regions[0].healthcare_capacity = 0.10;
         // Create a completed field ops project
-        state.field_research.push(ResearchProject {
+        state.active_research.push(ResearchProject {
             kind: ResearchKind::FieldOperations {
                 region_idx: 0,
                 system: InfraSystem::Healthcare,
@@ -421,7 +421,7 @@ mod tests {
         });
         research::tick_research(&mut state, &mut rng);
         // Project should have completed and restored HC
-        assert!(state.field_research.is_empty(), "project should be consumed");
+        assert!(state.active_research.is_empty(), "project should be consumed");
         assert!((state.regions[0].healthcare_capacity - 0.40).abs() < 0.01,
             "HC should be 0.10 + FIELD_OPS_RESTORE = 0.40, got {}", state.regions[0].healthcare_capacity);
         assert!(state.events.iter().any(|e| matches!(e,

@@ -599,7 +599,7 @@ mod tests {
         let reserves_before = state.corporations[corp_idx].reserves;
 
         // Complete a DevelopMedicine project
-        state.applied_research = Some(ResearchProject {
+        state.active_research.push(ResearchProject {
             kind: ResearchKind::DevelopMedicine { medicine_idx: med_idx },
             progress: 199.0,
             required_ticks: 200.0,

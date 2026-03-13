@@ -515,7 +515,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     }
 
     // ── Research status ──
-    if !state.field_research.is_empty() || state.applied_research.is_some() || state.basic_research.is_some() {
+    if !state.active_research.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled("  ── RESEARCH ──", cyan)));
         lines.push(Line::from(""));
@@ -523,8 +523,9 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         let research_bar_w = (area.width as usize).saturating_sub(30).min(20);
 
         // Field research: show all active projects
-        for (i, proj) in state.field_research.iter().enumerate() {
-            let label = if state.field_research.len() > 1 {
+        let field_projects: Vec<_> = state.active_in_category(crate::state::ResearchCategory::Field);
+        for (i, proj) in field_projects.iter().enumerate() {
+            let label = if field_projects.len() > 1 {
                 format!("Field {}", i + 1)
             } else {
                 "Field".to_string()
@@ -548,11 +549,11 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         }
 
         // Applied and Basic: single-slot
-        for (label, project) in [
-            ("Applied", &state.applied_research),
-            ("Basic", &state.basic_research),
+        for (label, proj_opt) in [
+            ("Applied", state.research_slot(crate::state::ResearchCategory::Applied)),
+            ("Basic", state.research_slot(crate::state::ResearchCategory::Basic)),
         ] {
-            if let Some(proj) = project {
+            if let Some(proj) = proj_opt {
                 let pct = if proj.required_ticks > 0.0 {
                     proj.progress / proj.required_ticks
                 } else { 1.0 };

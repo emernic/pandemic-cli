@@ -18,7 +18,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameEvent, GameOutcome, GameState, Panel, ResearchTrack, UiState, ticks_to_days};
+use crate::state::{GameEvent, GameOutcome, GameState, Panel, UiState, ticks_to_days};
 use crate::format_number;
 
 /// Minimum terminal dimensions for playable layout.
@@ -341,15 +341,6 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let priority = if worst_eff < 0.25 { 2 } else if worst_eff < 0.50 { 4 } else { 7 };
                 (priority, msg.clone(), msg)
             }
-            GameEvent::ResearchAutoStarted { track } => {
-                let track_name = match track {
-                    ResearchTrack::Field => "Field",
-                    ResearchTrack::Applied => "Applied",
-                    ResearchTrack::Basic => "Basic",
-                };
-                let msg = format!("Auto-started {} research", track_name);
-                (8, msg.clone(), msg)
-            }
             GameEvent::CrisisAutoResolved { message } => {
                 let msg = format!("Auto-resolved: {}", message);
                 (5, msg.clone(), msg)
@@ -516,6 +507,10 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("Board authorized policy: {}", name);
                 let notification = format!("{}. Open [P] Policy to deploy.", msg);
                 (3, msg, notification)
+            }
+            GameEvent::ResearchAutoRestarted { kind } => {
+                let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines, &state.regions));
+                (8, msg.clone(), msg)
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };

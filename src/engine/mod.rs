@@ -462,7 +462,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             // Check if any identification research has ever been started:
             // either currently running as field research, or a disease has knowledge > 0
             // (meaning identification completed or is in progress).
-            let any_identification_started = new.field_research.iter()
+            let any_identification_started = new.active_research.iter()
                 .any(|fr| matches!(fr.kind, ResearchKind::IdentifyThreat { .. }))
                 || new.diseases.iter().any(|d| d.detected && d.knowledge > 0.0);
             if !any_identification_started {
@@ -758,8 +758,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone());
             CommandResult { message: msg, success }
         }
-        GameCommand::StartResearch { track, project_idx, double_personnel } => {
-            let (ok, msg) = research::start_research(state, *track, *project_idx, *double_personnel);
+        GameCommand::StartResearch { category, project_idx, double_personnel } => {
+            let (ok, msg) = research::start_research(state, *category, *project_idx, *double_personnel);
             CommandResult { message: msg, success: ok }
         }
         GameCommand::TogglePolicy {
@@ -800,9 +800,12 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             state.auto_deploy[*med_idx] = !state.auto_deploy[*med_idx];
             CommandResult { message: None, success: true }
         }
-        GameCommand::ToggleAutoResearch { track } => {
-            let idx = track.index();
-            state.auto_research[idx] = !state.auto_research[idx];
+        GameCommand::ToggleAutoRepeat { kind } => {
+            if let Some(pos) = state.auto_repeat_research.iter().position(|k| k == kind) {
+                state.auto_repeat_research.remove(pos);
+            } else {
+                state.auto_repeat_research.push(kind.clone());
+            }
             CommandResult { message: None, success: true }
         }
         GameCommand::UpgradeLab => {
@@ -1696,7 +1699,7 @@ mod tests {
         state = apply_action(&state, &Action::OpenResearch);
         assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
         let items = state.research_flat_items();
-        assert!(matches!(items.first(), Some(ResearchFlatItem::FieldActive(0))));
+        assert!(matches!(items.first(), Some(ResearchFlatItem::Active(0))));
 
         // Enter on active project should be a no-op (stays on BrowseAll)
         state = apply_action(&state, &Action::Confirm);
@@ -1823,7 +1826,7 @@ mod tests {
         // Strategy: treatment first (removes ~efficacy fraction of infected per deploy),
         // vaccination second (only with targeted meds — BS vaccination is a dose trap).
         // Prioritize worst-hit regions.
-        use crate::state::{ResearchTrack, ResearchKind, DeployTarget};
+        use crate::state::{ResearchCategory, ResearchKind, DeployTarget};
 
         fn simulate_competent(seed: u64) -> f64 {
             let mut state = GameState::new_default(seed);
@@ -1840,17 +1843,10 @@ mod tests {
                 }
                 if state.outcome != GameOutcome::Playing { break; }
 
-                // --- RESEARCH: all three tracks ---
-                // Keep research running to maintain agency and develop medicines.
-                // Only start new projects if we can afford them without going broke.
-                for track in [ResearchTrack::Field, ResearchTrack::Applied, ResearchTrack::Basic] {
-                    let is_active = match track {
-                        ResearchTrack::Field => !state.field_research.is_empty(),
-                        ResearchTrack::Applied => state.applied_research.is_some(),
-                        ResearchTrack::Basic => state.basic_research.is_some(),
-                    };
-                    if is_active { continue; }
-                    let projects = state.available_projects(track);
+                // --- RESEARCH: all three categories ---
+                for cat in [ResearchCategory::Field, ResearchCategory::Applied, ResearchCategory::Basic] {
+                    if !state.has_research_capacity(cat) { continue; }
+                    let projects = state.available_projects(cat);
                     if projects.is_empty() { continue; }
                     let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
                         ResearchKind::DevelopMedicine { .. } => 0,
@@ -1862,11 +1858,9 @@ mod tests {
                     });
                     if let Some((idx, kind)) = best {
                         let (_, _, cost_funding) = kind.costs(&state.medicines);
-                        // Keep a funding buffer to avoid draining to zero.
-                        // Research starts once income builds up enough.
                         if state.resources.funding >= cost_funding + 200.0 {
                             execute_command(&mut state, &GameCommand::StartResearch {
-                                track, project_idx: idx, double_personnel: false,
+                                category: cat, project_idx: idx, double_personnel: false,
                             });
                         }
                     }
@@ -3621,7 +3615,7 @@ mod tests {
         };
 
         let mut state = GameState::new_default(42);
-        state.applied_research = Some(ResearchProject {
+        state.active_research.push(ResearchProject {
             kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
             progress: 50.0,
             required_ticks: 200.0,
@@ -3648,7 +3642,7 @@ mod tests {
 
         // Choose option A (evacuate) — should destroy applied research
         let after = apply_action(&state, &Action::Confirm);
-        assert!(after.applied_research.is_none(),
+        assert!(after.research_slot(crate::state::ResearchCategory::Applied).is_none(),
             "applied research should be destroyed on evacuation");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
@@ -3662,7 +3656,7 @@ mod tests {
         };
 
         let mut state = GameState::new_default(42);
-        state.basic_research = Some(ResearchProject {
+        state.active_research.push(ResearchProject {
             kind: ResearchKind::BasicResearch { tech: BasicTech::TargetedDrugDesign },
             progress: 100.0,
             required_ticks: 240.0,
@@ -3689,7 +3683,7 @@ mod tests {
 
         // Choose option A (evacuate) — should destroy basic research
         let after = apply_action(&state, &Action::Confirm);
-        assert!(after.basic_research.is_none(),
+        assert!(after.research_slot(crate::state::ResearchCategory::Basic).is_none(),
             "basic research should be destroyed on evacuation");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
@@ -3702,7 +3696,7 @@ mod tests {
         };
 
         let mut state = GameState::new_default(42);
-        state.applied_research = Some(ResearchProject {
+        state.active_research.push(ResearchProject {
             kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
             progress: 50.0,
             required_ticks: 200.0,
@@ -3730,7 +3724,7 @@ mod tests {
 
         // Choose option B (contain) — should preserve research
         let after = apply_action(&state, &Action::Confirm);
-        assert!(after.applied_research.is_some(),
+        assert!(after.research_slot(crate::state::ResearchCategory::Applied).is_some(),
             "applied research should be preserved on containment");
         assert!(after.active_crisis.is_none(),
             "crisis should be resolved");
@@ -4093,14 +4087,14 @@ mod tests {
     fn data_leak_option_a_diverts_personnel_gains_pol() {
         use crate::state::{ResearchProject, ResearchKind};
         let mut state = GameState::new_default(42);
-        state.field_research = vec![ResearchProject {
+        state.active_research = vec![ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
             progress: 500.0,
             required_ticks: 1000.0,
             personnel_assigned: 3,
         }];
         let before_pol = state.resources.board_approval;
-        let before_progress = state.field_research[0].progress;
+        let before_progress = state.active_research[0].progress;
         // Use the real event (not setup_crisis stub) so option costs are present
         use crate::state::SimState;
         state.sim_state = SimState::Event { was_running: true };
@@ -4108,7 +4102,7 @@ mod tests {
         state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
         let after = apply_action(&state, &Action::Confirm);
         // Research progress should be unchanged (no rollback)
-        assert!((after.field_research.first().unwrap().progress - before_progress).abs() < 0.01,
+        assert!((after.active_research.first().unwrap().progress - before_progress).abs() < 0.01,
             "option A should not roll back research progress");
         // POL should increase
         assert!((after.resources.board_approval - (before_pol + 0.05)).abs() < 0.001,
@@ -6211,7 +6205,7 @@ mod tests {
         for d in &mut state.diseases {
             d.knowledge = 0.0;
         }
-        state.field_research.clear();
+        state.active_research.clear();
 
         // Tick until the inquiry fires (should be within a few ticks)
         let mut found = false;
