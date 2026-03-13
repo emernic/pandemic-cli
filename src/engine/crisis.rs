@@ -2516,8 +2516,8 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let policy = state.policies.get(region_idx).cloned().unwrap_or_default();
-            let (grievance_policy, _) = corp.sector.policy_grievance(&policy)
-                .unwrap_or(("restrictions", 0.0));
+            let grievance_policy = corp.sector.policy_grievance(&policy)
+                .unwrap_or("restrictions");
             let compensation = scaled_cost(state, 0.25, 200.0, 1500.0);
             let sector_label = corp.sector.label();
 
