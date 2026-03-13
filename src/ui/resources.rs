@@ -60,14 +60,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Span::styled(" \u{2500}", Style::default().fg(Color::DarkGray)) // ─ stable
             }
         },
-        // Next approval unlock hint
-        match state.next_approval_unlock() {
-            Some((name, threshold)) => Span::styled(
-                format!(" ({}@{:.0}%)", name, threshold * 100.0),
-                Style::default().fg(Color::DarkGray),
-            ),
-            None => Span::raw(""),
-        },
+        Span::raw(""),
         Span::raw("  "),
         Span::styled(
             format!("Funds: ¥{:.0}", state.resources.funding),
