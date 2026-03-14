@@ -68,7 +68,6 @@ Irreversible global decisions unlocked as the crisis worsens. Each one gives the
 
 - **Conscript Researchers** (500K+ infected) — more personnel, permanently reduced income
 - **Authorize Human Trials** (50M+ dead or 2+ critical regions) — faster clinical trials, risk of adverse events
-- **Suspend Regional Authority** (50M+ dead or 2+ critical regions) — neutralize all governors, no defiance or cooperation
 - **Sacrifice Region** (region collapsed or 500M+ dead) — abandon a region to boost income from the rest
 - **Fortify Region** (region collapsed or 500M+ dead) — restore one region's infrastructure, penalize all others
 - **Emergency Countermeasure** (3+ regions collapsed or 2B+ dead) — reduce all disease within-region and cross-region spread, at the cost of immediate civilian casualties

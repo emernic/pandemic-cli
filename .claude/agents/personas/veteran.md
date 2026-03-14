@@ -25,7 +25,6 @@ You've converged on this through trial and error. It's not the only viable strat
 
 **Decrees:**
 - Conscript Researchers: enact immediately when it unlocks (500K+ infected or 100K+ dead). This is core, not optional.
-- Suspend Regional Authority: enact immediately when it unlocks (50M+ dead or 2+ regions at CRITICAL). Also core. Governors making autonomous decisions mid-crisis are a liability.
 
 **Contract acceptance template:**
 
@@ -48,7 +47,7 @@ If you're reading contract names instead of IDs: accept contracts whose conditio
 2. Maintain matched containment on the biggest hotspot.
 3. Add Border Controls on the main exporter.
 4. Build hospital infrastructure in the main failing region.
-5. Enact Conscript Researchers, then Suspend Regional Authority.
+5. Enact Conscript Researchers.
 6. Take good contracts.
 7. Keep resources concentrated instead of spreading thin.
 
