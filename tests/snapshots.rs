@@ -46,23 +46,23 @@ fn dashboard_pol_breakdown() {
     assert!(output.contains("Board:"), "missing board satisfaction breakdown");
 }
 
-/// Smoke test: bargain option appears when governor is defiant.
+/// Smoke test: bargain option appears when governor is hostile.
 #[test]
-fn bargain_shown_for_defiant_governor() {
+fn bargain_shown_for_hostile_governor() {
     let mut state = GameState::new_default(42);
-    // Force Hardliner governor to be defiant
+    // Force Hardliner governor to be hostile
     state.regions[0].governor.personality = GovernorPersonality::Hardliner;
     state.regions[0].governor.cooperation = 20.0;
     // Open policy panel for region 0, then scroll down to the bargain item
     // (panel viewport is small, need to move selection to bring bargain into view)
     let mut steps: Vec<String> = vec!["p".to_string(), "enter".to_string()];
     // Navigate to Bargain at display position MANAGE_BARGAIN_POS.
-    // Layout: MANAGE_INFRA_BASE..MANAGE_APPEASE_POS-1 = infra repair,
-    //         MANAGE_APPEASE_POS = Appease, MANAGE_BARGAIN_POS = Bargain.
+    // Layout: MANAGE_INFRA_BASE..MANAGE_NEGOTIATE_POS-1 = infra repair,
+    //         MANAGE_NEGOTIATE_POS = Negotiate, MANAGE_BARGAIN_POS = Bargain.
     for _ in 0..MANAGE_BARGAIN_POS {
         steps.push("down".to_string());
     }
     let result = run_snapshot(state, &steps).unwrap();
-    assert!(result.screen.contains("Bargain: Grant Authority"), "missing bargain option for defiant Hardliner");
-    assert!(result.screen.contains("DEFIANT"), "missing DEFIANT label");
+    assert!(result.screen.contains("Bargain: Grant Authority"), "missing bargain option for hostile Hardliner");
+    assert!(result.screen.contains("HOSTILE"), "missing HOSTILE label");
 }

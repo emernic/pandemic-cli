@@ -10,6 +10,7 @@ use crate::state::{
     GameState, PolicyUiState, RegionPriority, RegionSpecialization, RegionTrait,
     ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     REGULATORY_APPARATUS_COST_MULT, KNOWLEDGE_PARTIAL_STATS,
+    INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
     TRAVEL_BAN_COST, TRAVEL_BAN_PERSONNEL,
     QUARANTINE_COST, QUARANTINE_PERSONNEL,
     DISCOURAGE_HOSP_COST, DISCOURAGE_HOSP_PERSONNEL, HOSPITAL_EXPOSURE_FACTOR,
@@ -26,8 +27,8 @@ use crate::state::{
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_SPREAD_WITHIN_MULT, COUNTERMEASURE_SPREAD_MULT,
-    MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
-    policy_display_order, APPEASE_COST, APPEASE_COOPERATION_GAIN,
+    MANAGE_PRIORITY_POS, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
+    policy_display_order, NEGOTIATE_COST, NEGOTIATE_COOPERATION_GAIN,
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
@@ -46,7 +47,7 @@ pub fn selection_max(ui_state: &PolicyUiState, state: &GameState) -> usize {
             } else if state.bargain_available(*region_idx) {
                 MANAGE_BARGAIN_POS
             } else {
-                MANAGE_APPEASE_POS
+                MANAGE_NEGOTIATE_POS
             }
         }
     }
@@ -437,10 +438,10 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         lines.push(Line::from(""));
     }
 
-    // Appease Governor action (after repair actions)
+    // Negotiate with Governor action (after repair actions)
     if !region.collapsed {
-        let appease_pos = MANAGE_APPEASE_POS;
-        let selected = state.ui.panel_selection == appease_pos;
+        let negotiate_pos = MANAGE_NEGOTIATE_POS;
+        let selected = state.ui.panel_selection == negotiate_pos;
         if selected { selected_line = Some(lines.len()); }
         let gov = &region.governor;
         let marker = if selected { "▶ " } else { "  " };
@@ -456,15 +457,15 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 Span::styled("LEADERLESS", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
             ]));
         } else {
-            let cooperation_color = if gov.is_defiant() {
+            let cooperation_color = if gov.is_hostile() {
                 Color::Red
             } else if gov.is_cooperative() {
                 Color::Green
             } else {
                 Color::Yellow
             };
-            let status_label = if gov.is_defiant() {
-                "DEFIANT"
+            let status_label = if gov.is_hostile() {
+                "HOSTILE"
             } else if gov.is_cooperative() {
                 "cooperative"
             } else {
@@ -473,7 +474,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             lines.push(Line::from(vec![
                 Span::styled(marker.to_string(), name_style),
                 Span::styled(
-                    format!("Appease {} ", gov.name),
+                    format!("Negotiate: {} ", gov.name),
                     name_style,
                 ),
                 Span::styled(
@@ -504,7 +505,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             lines.push(Line::from(vec![
                 Span::raw("      "),
                 Span::styled(
-                    format!("Cost: ¥{:.0}  →  +{:.0} co-op", APPEASE_COST, APPEASE_COOPERATION_GAIN),
+                    format!("Cost: ¥{:.0}  →  +{:.0} co-op", NEGOTIATE_COST, NEGOTIATE_COOPERATION_GAIN),
                     Style::default().fg(Color::Yellow),
                 ),
             ]));
@@ -514,7 +515,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     lines.push(Line::from(vec![
                         Span::raw("      "),
                         Span::styled(
-                            format!("⚠ Defiance: policies only {:.0}% effective in this region", eff * 100.0),
+                            format!("⚠ Hostile: policies only {:.0}% effective in this region", eff * 100.0),
                             Style::default().fg(Color::Red),
                         ),
                     ]));
@@ -522,16 +523,53 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     lines.push(Line::from(vec![
                         Span::raw("      "),
                         Span::styled(
-                            "Below 40 co-op → defiance → policies lose 30–60% effectiveness",
+                            "Below 40 → hostile. Above 80 → cooperative (−20% policy cost)",
                             Style::default().fg(Color::DarkGray),
                         ),
                 ]));
             }
             }
+            // Show cooperation pressure drivers
+            if !gov.is_dead() {
+                let infected: f64 = region.infections.iter().map(|inf| inf.infected).sum();
+                let pop = region.population as f64;
+                let death_frac = if pop > 0.0 { region.dead / pop } else { 0.0 };
+                let restrictive_count = [
+                    state.policies[region_idx].travel_ban,
+                    state.policies[region_idx].quarantine,
+                    state.policies[region_idx].martial_law,
+                    state.policies[region_idx].border_controls,
+                ].iter().filter(|&&b| b).count();
+
+                let mut pressures: Vec<&str> = Vec::new();
+                if infected > INFECTION_PRESSURE_CRIT {
+                    pressures.push("infections (CRIT)");
+                } else if infected > INFECTION_PRESSURE_HIGH {
+                    pressures.push("infections (HIGH)");
+                } else if infected > INFECTION_PRESSURE_MOD {
+                    pressures.push("infections");
+                }
+                if death_frac > 0.01 {
+                    pressures.push("deaths");
+                }
+                if restrictive_count > 0 {
+                    pressures.push("restrictive policies");
+                }
+
+                let pressure_text = if pressures.is_empty() {
+                    "Pressure: none".to_string()
+                } else {
+                    format!("Pressure: {}", pressures.join(", "))
+                };
+                lines.push(Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled(pressure_text, Style::default().fg(Color::DarkGray)),
+                ]));
+            }
         }
         lines.push(Line::from(""));
 
-        // Bargain option (below Appease, only when governor is defiant and bargain available)
+        // Bargain option (below Negotiate, only when governor is hostile and bargain available)
         if state.bargain_available(region_idx) {
             let bargain_pos = MANAGE_BARGAIN_POS;
             let selected = state.ui.panel_selection == bargain_pos;
@@ -587,7 +625,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                     name_style,
                 ),
                 Span::styled(
-                    "(DEFIANT)",
+                    "(HOSTILE)",
                     Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
             ]));

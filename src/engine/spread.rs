@@ -8,7 +8,7 @@ use crate::state::{
 
 /// Scale a policy reduction factor by governor effectiveness.
 /// For a policy that multiplies by `factor` (e.g., 0.3 = 70% reduction),
-/// defiance (effectiveness < 1.0) weakens the reduction:
+/// hostility (effectiveness < 1.0) weakens the reduction:
 ///   effective = 1.0 - (1.0 - factor) * effectiveness
 /// At effectiveness=1.0: returns factor unchanged.
 /// At effectiveness=0.7: a 0.3 factor becomes 0.51 (49% reduction instead of 70%).
@@ -257,7 +257,7 @@ pub(super) fn tick_spread_cross_region(
                         .map(|p| p.screening.spread_factor())
                         .unwrap_or(1.0);
                     // Travel ban supersedes border controls
-                    // Governor defiance weakens enforcement (use min effectiveness of both endpoints)
+                    // Governor hostility weakens enforcement (use min effectiveness of both endpoints)
                     let eff = dest_gov_eff.min(source_gov_eff);
                     let ban_factor = if source_has_travel_ban || dest_has_travel_ban {
                         let base_f = disease.transmission.travel_ban_factor();
