@@ -840,8 +840,10 @@ pub struct CommandResult {
 
 /// Dispatch cross-subsystem effects from crisis resolution.
 /// Called from both `execute_command` (manual) and `tick` (auto-resolve).
+/// When auto-resolving, updates the CrisisAutoResolved event message with the
+/// richer message from the subsystem (e.g. contract details).
 fn dispatch_crisis_post_action(state: &mut GameState, post_action: crisis::CrisisPostAction) -> Option<String> {
-    match post_action {
+    let msg = match post_action {
         crisis::CrisisPostAction::None => None,
         crisis::CrisisPostAction::AcceptContract => {
             let (_, msg) = contracts::accept_contract(state);
@@ -855,7 +857,19 @@ fn dispatch_crisis_post_action(state: &mut GameState, post_action: crisis::Crisi
             contracts::cancel_contract(state, board_member_idx);
             None
         }
+    };
+    // If the dispatch produced a richer message, update the most recent
+    // CrisisAutoResolved event so the event log shows contract details
+    // rather than the generic placeholder from crisis.rs.
+    if let Some(ref m) = msg {
+        for event in state.events.iter_mut().rev() {
+            if let GameEvent::CrisisAutoResolved { message } = event {
+                *message = m.clone();
+                break;
+            }
+        }
     }
+    msg
 }
 
 /// Execute a game command. Pure game logic — does NOT touch UI state.
