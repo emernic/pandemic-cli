@@ -129,7 +129,7 @@ Each subsystem module follows the same pattern:
 
 ### What stays in mod.rs
 
-`tick()`, `execute_command()`, and `initialize_game()` are the public entry points — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, board approval drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
+`tick()`, `execute_command()`, and `initialize_game()` are the public entry points — they stay in mod.rs. `tick()` also contains cross-cutting logic that spans multiple subsystems: resource income/upkeep, chairman approval drift, personnel attrition, disease detection, threat escalation alerts, threat level computation, disease emergence orchestration, regional collapse, defeat conditions, and history recording. This is ~300 lines of domain logic, not pure orchestration — but it's logic that touches multiple subsystems simultaneously and doesn't have a natural single-module home. If any chunk grows large enough to warrant extraction, it follows the same subsystem pattern.
 
 ## Event System
 
