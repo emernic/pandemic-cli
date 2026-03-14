@@ -312,8 +312,6 @@ pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 
 /// Ticks a neighboring-collapse disruption lasts (10 days).
 pub const COLLAPSE_DISRUPTION_TICKS: u64 = (10.0 * TICKS_PER_DAY) as u64;
-/// Medicine deployment cost multiplier for regions disrupted by a neighboring collapse.
-pub const DISRUPTION_MEDICINE_COST_MULT: f64 = 1.5;
 /// Delivery throughput reduction per collapsed neighbor (multiplicative).
 /// Each collapsed neighbor reduces throughput by this fraction.
 /// E.g., 0.15 means one collapsed neighbor → 85% throughput, two → 72%.
@@ -1842,7 +1840,7 @@ impl RegionTrait {
 /// Lost permanently when the region collapses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RegionSpecialization {
-    /// Medicine deployment to this region costs 30% less.
+    /// Medicine shipments to this region arrive 30% faster.
     PharmaHub,
     /// Healthcare capacity in this region degrades 40% slower.
     TropicalMedicine,
@@ -1860,7 +1858,7 @@ impl RegionSpecialization {
     /// Short label shown in the region detail panel.
     pub fn label(&self) -> &'static str {
         match self {
-            Self::PharmaHub => "Pharma Hub: Deploy Cost -30%",
+            Self::PharmaHub => "Pharma Hub: Shipping Time -30%",
             Self::TropicalMedicine => "Tropical Medicine: Healthcare Drain -40%",
             Self::RegulatoryApparatus => "Regulatory Apparatus: Policy Cost -25%",
             Self::CommunityNetworks => "Community Networks: Civil Order Drain -40%",
@@ -1870,8 +1868,8 @@ impl RegionSpecialization {
     }
 }
 
-/// PharmaHub: medicine deployment cost multiplier for the specialized region.
-pub const PHARMA_HUB_DEPLOY_DISCOUNT: f64 = 0.7;
+/// PharmaHub: shipping time multiplier for the specialized region (lower = faster).
+pub const PHARMA_HUB_SHIPPING_MULT: f64 = 0.7;
 /// RegulatoryApparatus: policy funding cost multiplier for the specialized region.
 pub const REGULATORY_APPARATUS_COST_MULT: f64 = 0.75;
 /// TropicalMedicine: healthcare capacity drain multiplier (lower = slower degradation).
@@ -2177,7 +2175,6 @@ pub struct Region {
     #[serde(default)]
     pub deploy_priority: RegionPriority,
     /// Tick until which this region suffers network disruption from a neighboring collapse.
-    /// While active: +50% medicine deployment costs (see DISRUPTION_MEDICINE_COST_MULT).
     /// Multiple collapses extend the duration (last-collapse-wins on end tick).
     #[serde(default)]
     pub disrupted_until: Option<u64>,
@@ -3277,13 +3274,6 @@ impl MechanismOfAction {
         (600_000_000.0 + 800_000_000.0 * (mult - 0.6) / 1.2).round()
     }
 
-    /// Deploy cost per use for this mechanism.
-    /// Fast mechanisms cost more per deployment; expensive ones are cheaper per use.
-    pub fn deploy_cost(&self) -> f64 {
-        let mult = self.dev_cost_multiplier();
-        // Scale from $65 (mult=0.6) to $35 (mult=1.8)
-        (65.0 - 30.0 * (mult - 0.6) / 1.2).round()
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3300,7 +3290,6 @@ pub struct Medicine {
     #[serde(default)]
     pub mechanism: Option<MechanismOfAction>,
     pub target_diseases: Vec<usize>,
-    pub cost: f64,
     pub doses: f64,
     /// Maximum doses this medicine can hold (set on creation, restored by manufacturing).
     /// Defaults to 0.0 on deserialization; `migrate()` sets it from `doses` for old saves.
@@ -3342,9 +3331,6 @@ pub struct Shipment {
     pub target: DeployTarget,
     /// Physical doses on the truck (deducted from inventory at dispatch).
     pub doses: f64,
-    /// Funding cost already paid at dispatch.
-    #[serde(default)]
-    pub cost: f64,
     /// Tick when this shipment next attempts delivery.
     pub arrive_tick: u64,
 }
@@ -3389,13 +3375,6 @@ pub struct DeployTarget {
 }
 
 impl Medicine {
-    /// Deployment cost based on the medicine's base cost. Deployment is
-    /// limited primarily by doses and cooldown, not funding. This keeps the
-    /// core gameplay loop (research -> deploy) affordable.
-    pub fn deploy_cost(&self) -> f64 {
-        self.cost
-    }
-
     /// Generate targeted medicines for a disease. For non-prion pathogens, produces
     /// one medicine per mechanism of action (3-4 options depending on pathogen type).
     /// Each mechanism has distinct tradeoffs: fast/cheap mechanisms are potent but
@@ -3426,7 +3405,6 @@ impl Medicine {
                     mode,
                     mechanism: Some(mech),
                     target_diseases: vec![disease_idx],
-                    cost: mech.deploy_cost(),
                     doses: 0.0,
                     max_doses: doses,
                     unlocked: false,
@@ -4171,7 +4149,7 @@ pub enum GameEvent {
         deaths: f64,
     },
     /// A non-collapsed region is now suffering network disruption from a neighboring collapse.
-    /// Policy costs +30%, medicine deployment costs +50% for 10 days.
+    /// Policy costs +30% for 10 days.
     NetworkDisruption {
         disrupted_region_idx: usize,
         collapsed_region_idx: usize,
@@ -5607,7 +5585,6 @@ impl GameState {
             mode: MedicineMode::Therapeutic,
             mechanism: None,
             target_diseases: all_disease_indices.clone(),
-            cost: 10.0,
             doses: 500_000.0,
             max_doses: 500_000.0,
             unlocked: true,
@@ -5892,11 +5869,6 @@ impl GameState {
 
     pub fn personnel_available(&self) -> u32 {
         self.resources.personnel.saturating_sub(self.personnel_busy())
-    }
-
-    /// Total cost of all pending medicine shipments (already paid, in transit).
-    pub fn pending_shipment_cost(&self) -> f64 {
-        self.pending_shipments.iter().map(|s| s.cost).sum()
     }
 
     pub fn total_policy_funding_cost(&self) -> f64 {
@@ -6729,24 +6701,6 @@ impl GameState {
         }
     }
 
-    /// Actual medicine deploy cost for a specific (medicine, region) pair.
-    /// Applies disruption multiplier and PharmaHub specialization discount.
-    /// Use this for both UI affordability preview and engine-side validation
-    /// so they can never drift apart.
-    pub fn medicine_deploy_cost(&self, medicine_idx: usize, region_idx: usize) -> f64 {
-        let base = self.medicines[medicine_idx].deploy_cost();
-        let disruption_mult = if self.regions[region_idx].is_disrupted(self.tick) {
-            DISRUPTION_MEDICINE_COST_MULT
-        } else {
-            1.0
-        };
-        let spec_mult = if self.regions[region_idx].has_specialization(RegionSpecialization::PharmaHub) {
-            PHARMA_HUB_DEPLOY_DISCOUNT
-        } else {
-            1.0
-        };
-        base * disruption_mult * spec_mult
-    }
 
     /// Approximate cross-region spread factor from `source` to `dest` (0.0–1.0).
     /// Accounts for travel bans, border controls, screening, island geography,
@@ -6847,11 +6801,6 @@ impl GameState {
     pub fn emergency_delivery_dose_cost(&self, medicine_idx: usize) -> f64 {
         let med = &self.medicines[medicine_idx];
         (med.max_doses * 0.10).min(50.0).min(med.doses)
-    }
-
-    /// Funding cost for an emergency sample delivery (half of a normal deployment).
-    pub fn emergency_delivery_funding_cost(&self, medicine_idx: usize, region_idx: usize) -> f64 {
-        self.medicine_deploy_cost(medicine_idx, region_idx) * 0.5
     }
 
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.

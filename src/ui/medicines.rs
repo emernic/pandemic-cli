@@ -223,10 +223,6 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                         format!("{} doses remaining", format_number(med.doses)),
                         Style::default().fg(dc),
                     ),
-                    Span::styled(
-                        format!("  ¥{:.0} per deploy", med.cost),
-                        Style::default().fg(Color::DarkGray),
-                    ),
                 ]));
             }
 

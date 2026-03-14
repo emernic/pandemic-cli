@@ -39,14 +39,10 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} supply lines collapsed")));
     }
-    let cost = state.medicine_deploy_cost(medicine_idx, region_idx);
     let med = &state.medicines[medicine_idx];
     let med_name = med.name.clone();
     let region_name = state.regions[region_idx].name.clone();
 
-    if state.resources.funding < cost {
-        return (false, Some(insufficient_funds_message(cost, state.resources.funding)));
-    }
     if state.medicines[medicine_idx].doses <= 0.0 {
         return (false, Some(format!("No doses remaining for {med_name}")));
     }
@@ -89,8 +85,7 @@ pub(super) fn deploy_medicine(
         };
     }
 
-    // Deduct cost and doses
-    state.resources.funding -= cost;
+    // Deduct doses
     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - doses_to_ship).max(0.0);
     state.medicines[medicine_idx].deployed_count += 1;
     state.total_doses_deployed += doses_to_ship;
@@ -105,19 +100,24 @@ pub(super) fn deploy_medicine(
     // Logistics sector bonus: delivery faster
     let logistics_bonus = state.sector_bonus(region_idx, crate::state::CorporationSector::Logistics);
     let logistics_mult = 1.0 - crate::state::CorporationSector::Logistics.max_bonus_pct() / 100.0 * logistics_bonus;
-    let arrive_tick = state.tick + (SHIPPING_TICKS as f64 * supply_mult * logistics_mult) as u64;
+    // PharmaHub specialization: 30% faster shipping
+    let pharma_mult = if state.regions[region_idx].has_specialization(crate::state::RegionSpecialization::PharmaHub) {
+        crate::state::PHARMA_HUB_SHIPPING_MULT
+    } else {
+        1.0
+    };
+    let arrive_tick = state.tick + (SHIPPING_TICKS as f64 * supply_mult * logistics_mult * pharma_mult) as u64;
     state.pending_shipments.push(Shipment {
         medicine_idx,
         region_idx,
         target,
         doses: doses_to_ship,
-        cost,
         arrive_tick,
     });
     state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
 
     let doses_str = crate::format_number(doses_to_ship);
-    let days = (SHIPPING_TICKS as f64 * supply_mult * logistics_mult) / crate::state::TICKS_PER_DAY;
+    let days = (SHIPPING_TICKS as f64 * supply_mult * logistics_mult * pharma_mult) / crate::state::TICKS_PER_DAY;
     let efficiency = state.regions[region_idx].delivery_efficiency();
     let eff_warning = if efficiency < 0.90 {
         format!(" ({:.0}% delivery efficiency)", efficiency * 100.0)
@@ -125,7 +125,7 @@ pub(super) fn deploy_medicine(
         String::new()
     };
     let msg = format!(
-        "Shipped {doses_str} doses of {med_name} to {region_name} (-¥{cost:.0}). Arriving in {days:.0} day{}.{eff_warning}", if days > 1.5 { "s" } else { "" }
+        "Shipped {doses_str} doses of {med_name} to {region_name}. Arriving in {days:.0} day{}.{eff_warning}", if days > 1.5 { "s" } else { "" }
     );
     (true, Some(msg))
 }
@@ -333,11 +333,6 @@ pub(super) fn emergency_sample_delivery(
     }
 
     let dose_cost = state.emergency_delivery_dose_cost(medicine_idx);
-    let funding_cost = state.emergency_delivery_funding_cost(medicine_idx, region_idx);
-
-    if state.resources.funding < funding_cost {
-        return (false, Some(insufficient_funds_message(funding_cost, state.resources.funding)));
-    }
 
     let delivery_personnel: u32 = 2;
     if state.personnel_available() < delivery_personnel {
@@ -357,8 +352,7 @@ pub(super) fn emergency_sample_delivery(
     let has_untested_match = active_diseases.iter()
         .any(|d_idx| !state.medicines[medicine_idx].tested_against.contains(d_idx));
 
-    // Deduct resources
-    state.resources.funding -= funding_cost;
+    // Deduct doses
     state.medicines[medicine_idx].doses -= dose_cost;
 
     // Tie up personnel for 1 day
@@ -416,8 +410,8 @@ pub(super) fn emergency_sample_delivery(
         )
     } else {
         format!(
-            "Delivered {} samples to {} in {} (-¥{:.0}, {:.0} doses). Cooperation improved.",
-            med_name, gov_name, region_name, funding_cost, dose_cost,
+            "Delivered {} samples to {} in {} ({:.0} doses). Cooperation improved.",
+            med_name, gov_name, region_name, dose_cost,
         )
     };
 
@@ -430,7 +424,7 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
 
 /// Auto-deploy medicines to the worst-affected regions. Called once per tick.
 /// For each medicine with auto_deploy enabled:
-/// - Must be unlocked, tested, have doses, and have affordable deploy cost
+/// - Must be unlocked, tested, and have doses
 /// - Finds the best region per medicine mode: vaccines target highest
 ///   susceptible population, therapeutics target most infected
 /// - Cooldown must be clear for the chosen region
@@ -515,11 +509,6 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
 
         if let Some(region_idx) = best_region {
             if best_score <= 0.0 {
-                continue;
-            }
-
-            // Check funding (including disruption multiplier and regional discount)
-            if state.resources.funding < state.medicine_deploy_cost(med_idx, region_idx) {
                 continue;
             }
 
