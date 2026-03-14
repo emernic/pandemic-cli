@@ -1032,13 +1032,13 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
         DecreeId::EmergencyCountermeasure => {
             // Emergency Countermeasure: reduce disease parameters, kill population
             use crate::state::{
-                COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT,
+                COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_SPREAD_WITHIN_MULT,
                 COUNTERMEASURE_SPREAD_MULT,
             };
             state.enacted_decrees.emergency_countermeasure = true;
-            // Reduce all disease infectivity and cross-region spread
+            // Reduce all disease within-region and cross-region spread
             for disease in &mut state.diseases {
-                disease.infectivity *= COUNTERMEASURE_INFECTIVITY_MULT;
+                disease.within_region_spread *= COUNTERMEASURE_SPREAD_WITHIN_MULT;
                 disease.cross_region_spread *= COUNTERMEASURE_SPREAD_MULT;
             }
             // Kill a fraction of the alive population in every non-collapsed region
@@ -1060,7 +1060,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
                 format!("{:.0}", total_killed)
             };
             (Some(format!(
-                "⚠ DECREE: Emergency countermeasure deployed. Pathogen infectivity halved. Cross-region spread reduced 75%. Casualties: {}.",
+                "⚠ DECREE: Emergency countermeasure deployed. Within-region spread halved. Cross-region spread reduced 75%. Casualties: {}.",
                 killed_str
             )), true)
         }
@@ -2191,7 +2191,7 @@ mod tests {
     fn emergency_countermeasure_reduces_disease_params_and_kills_population() {
         let mut state = screening_test_state();
         // Set up disease parameters
-        state.diseases[0].infectivity = 1.0;
+        state.diseases[0].within_region_spread = 1.0;
         state.diseases[0].cross_region_spread = 0.5;
         // Reset deaths but collapse 3 regions to keep decree 5 unlocked
         for region in &mut state.regions {
@@ -2211,9 +2211,9 @@ mod tests {
         assert!(state.enacted_decrees.emergency_countermeasure);
 
         // Disease params should be halved/quartered
-        let inf_mult = crate::state::COUNTERMEASURE_INFECTIVITY_MULT;
+        let inf_mult = crate::state::COUNTERMEASURE_SPREAD_WITHIN_MULT;
         let spread_mult = crate::state::COUNTERMEASURE_SPREAD_MULT;
-        assert!((state.diseases[0].infectivity - 1.0 * inf_mult).abs() < 0.01);
+        assert!((state.diseases[0].within_region_spread - 1.0 * inf_mult).abs() < 0.01);
         assert!((state.diseases[0].cross_region_spread - 0.5 * spread_mult).abs() < 0.01);
 
         // Population should have been killed

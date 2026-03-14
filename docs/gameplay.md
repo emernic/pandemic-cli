@@ -25,7 +25,7 @@ The game has an arc that the player discovers by playing, not by being told.
 Multiple concurrent diseases, procedurally generated. Each has:
 - **Pathogen type**: RNA Virus, DNA Virus, Bacterium, Fungus, Prion — each with different mutation rates and treatment requirements
 - **Transmission vector**: Airborne, Waterborne, Contact — each countered by different policies
-- **Parameters**: infectivity, lethality, recovery rate, cross-region spread rate
+- **Parameters**: within-region spread, lethality, recovery rate, cross-region spread rate
 - **Mutation**: diseases mutate over time, drifting away from your medicine calibrations. Genomic sequencing slows this. The arms race between your medicines and their mutations is a core tension.
 
 New diseases emerge throughout the game. The emergence rate scales with time.
@@ -75,7 +75,7 @@ Irreversible global decisions unlocked as the crisis worsens. Each one gives the
 - **Suspend Regional Authority** (50M+ dead or 2+ critical regions) — neutralize all governors, no defiance or cooperation
 - **Sacrifice Region** (region collapsed or 500M+ dead) — abandon a region to boost income from the rest
 - **Fortify Region** (region collapsed or 500M+ dead) — restore one region's infrastructure, penalize all others
-- **Emergency Countermeasure** (3+ regions collapsed or 2B+ dead) — reduce all disease infectivity and spread, at the cost of immediate civilian casualties
+- **Emergency Countermeasure** (3+ regions collapsed or 2B+ dead) — reduce all disease within-region and cross-region spread, at the cost of immediate civilian casualties
 
 These are one-way doors. The game doesn't tell you whether they were worth it.
 

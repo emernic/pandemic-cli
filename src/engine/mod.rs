@@ -1883,7 +1883,7 @@ mod tests {
         // Override to extreme parameters so all regions collapse quickly.
         // Normal game parameters (R0 3-5) cause loss via multiple diseases over 20 days.
         for disease in &mut state.diseases {
-            disease.infectivity = 0.5;
+            disease.within_region_spread = 0.5;
             disease.lethality = 0.1;
             disease.recovery_rate = 0.005;
             disease.cross_region_spread = 0.3;
@@ -1921,7 +1921,7 @@ mod tests {
     //
     // This test enforces a direct user requirement: with zero player intervention,
     // every seed must reach GameOutcome::Lost (all regions collapsed) within 90 days.
-    // If this test fails, disease parameters are too weak — increase infectivity
+    // If this test fails, disease parameters are too weak — increase within_region_spread
     // in PathogenType::stat_ranges(). Do NOT increase per-tick lethality or recovery
     // (that shortens infectious period and causes epidemic burnout — see stat_ranges()
     // comment). Do NOT raise the day ceiling or add seeds to skip. Do NOT add `#[ignore]`.
@@ -2341,7 +2341,7 @@ mod tests {
         // Set to day 20 — scaled disease should have 2.0x boosted stats
         state.tick = 20 * crate::state::TICKS_PER_DAY as u64;
         let disease_count = state.diseases.len();
-        let original_infectivity = state.diseases[0].infectivity;
+        let original_spread = state.diseases[0].within_region_spread;
         state = tick(&state);
 
         assert!(
@@ -2353,9 +2353,9 @@ mod tests {
         // it should be notably more infectious.
         let new_disease = &state.diseases[disease_count];
         assert!(
-            new_disease.infectivity > original_infectivity,
-            "late-game disease infectivity ({}) should exceed original ({})",
-            new_disease.infectivity, original_infectivity
+            new_disease.within_region_spread > original_spread,
+            "late-game disease within-region spread ({}) should exceed original ({})",
+            new_disease.within_region_spread, original_spread
         );
     }
 
@@ -2708,10 +2708,10 @@ mod tests {
         state.diseases[0].pathogen_type = crate::state::PathogenType::RnaVirus;
         // Make the disease very mild so regions don't collapse before mutation triggers.
         // This test verifies mutation mechanics work, not game balance.
-        state.diseases[0].infectivity = 0.005;
+        state.diseases[0].within_region_spread = 0.005;
         state.diseases[0].lethality = 0.0001;
         state.diseases[0].recovery_rate = 0.003;
-        let original_infectivity = state.diseases[0].infectivity;
+        let original_spread = state.diseases[0].within_region_spread;
         // Run enough ticks for mutation to be very likely (~25 expected at 0.001/tick × 25000).
         // Manually reset any new diseases that spawn to prevent stacking deaths.
         for _ in 0..25000 {
@@ -2738,8 +2738,8 @@ mod tests {
             state.tick,
         );
         assert_ne!(
-            state.diseases[0].infectivity, original_infectivity,
-            "infectivity should have changed after mutation"
+            state.diseases[0].within_region_spread, original_spread,
+            "within-region spread should have changed after mutation"
         );
     }
 
@@ -2753,7 +2753,7 @@ mod tests {
             b = tick(&b);
         }
         assert_eq!(a.diseases[0].strain_generation, b.diseases[0].strain_generation);
-        assert_eq!(a.diseases[0].infectivity, b.diseases[0].infectivity);
+        assert_eq!(a.diseases[0].within_region_spread, b.diseases[0].within_region_spread);
         assert_eq!(a.diseases[0].lethality, b.diseases[0].lethality);
     }
 
@@ -2765,7 +2765,7 @@ mod tests {
             name: "Test".into(),
             pathogen_type: PathogenType::RnaVirus,
             transmission: crate::state::TransmissionVector::Airborne,
-            infectivity: 0.05,
+            within_region_spread: 0.05,
             lethality: 0.01,
             cross_region_spread: 0.01,
             recovery_rate: 0.03,
@@ -2946,7 +2946,7 @@ mod tests {
             // New disease appeared — verify it's properly set up
             let new_idx = initial_diseases;
             let new_disease = &state.diseases[new_idx];
-            assert!(new_disease.infectivity > 0.0);
+            assert!(new_disease.within_region_spread > 0.0);
             assert!(new_disease.lethality > 0.0);
             assert_eq!(new_disease.knowledge, 0.0);
             // strain_generation may be > 0 if the disease mutated after spawning
@@ -3204,7 +3204,7 @@ mod tests {
 
         // Set first disease to Contact transmission (quarantine factor = 0.30)
         state.diseases[0].transmission = TransmissionVector::Contact;
-        state.diseases[0].infectivity = 0.02;
+        state.diseases[0].within_region_spread = 0.02;
         state.diseases[0].knowledge = 1.0;
         // Give the region a big susceptible pool
         state.regions[region_idx].get_or_create_infection(0).infected = 1000.0;
@@ -3221,7 +3221,7 @@ mod tests {
         let inf_with_q = s.exposed + s.infected;
 
         // Quarantine should reduce new infections significantly for Contact
-        // (quarantine_factor = 0.30, so infectivity drops to 30%)
+        // (quarantine_factor = 0.30, so within-region spread drops to 30%)
         assert!(inf_with_q < inf_no_q, "quarantine should reduce infections");
 
         // Now test Waterborne (quarantine factor = 0.75, less effective)
@@ -3236,11 +3236,11 @@ mod tests {
     }
 
     #[test]
-    fn discourage_hosp_reduces_infectivity() {
+    fn discourage_hosp_reduces_within_region_spread() {
         let mut state = GameState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
-        state.diseases[0].infectivity = 0.02;
+        state.diseases[0].within_region_spread = 0.02;
         state.diseases[0].lethality = 0.01;
         state.regions[region_idx].get_or_create_infection(0).infected = 5000.0;
 
@@ -3360,13 +3360,13 @@ mod tests {
     }
 
     #[test]
-    fn water_sanitation_reduces_waterborne_infectivity() {
+    fn water_sanitation_reduces_waterborne_within_region_spread() {
         use crate::state::TransmissionVector;
         let mut state = GameState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
         state.diseases[0].transmission = TransmissionVector::Waterborne;
-        state.diseases[0].infectivity = 0.02;
+        state.diseases[0].within_region_spread = 0.02;
         state.regions[region_idx].get_or_create_infection(0).infected = 1000.0;
 
         // Without sanitation
@@ -3690,7 +3690,7 @@ mod tests {
         // Set up a highly lethal disease to trigger game over (collapse all regions).
         // High cross_region_spread needed to reach refugia through sparser graph.
         for disease in &mut state.diseases {
-            disease.infectivity = 0.12;
+            disease.within_region_spread = 0.12;
             disease.lethality = 0.08;
             disease.recovery_rate = 0.002;
             disease.cross_region_spread = 0.20;

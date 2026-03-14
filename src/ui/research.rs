@@ -466,7 +466,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         }
         ResearchKind::SuppressPathogen { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
-            Some(format!("Current infectivity: {:.4} → {:.4}", disease.infectivity, disease.infectivity * 0.80))
+            Some(format!("Within-region spread: {:.4} → {:.4}", disease.within_region_spread, disease.within_region_spread * 0.80))
         }
         ResearchKind::AttenuatePathogen { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;

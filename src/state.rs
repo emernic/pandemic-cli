@@ -270,7 +270,7 @@ pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
 pub const DISCOURAGE_HOSP_COST: f64 = 0.0;
 pub const DISCOURAGE_HOSP_PERSONNEL: u32 = 0;
-/// Baseline hospital exposure increases infectivity by 25%.
+/// Baseline hospital exposure increases within-region spread by 25%.
 /// Discourage Hospitalization removes this penalty entirely.
 pub const HOSPITAL_EXPOSURE_FACTOR: f64 = 1.25;
 /// Co-infection lethality multiplier per additional active disease in the same
@@ -377,8 +377,8 @@ pub const SACRIFICE_INCOME_BONUS: f64 = 1.20;
 pub const FORTIFY_INFRA_PENALTY: f64 = 0.25;
 /// Emergency Countermeasure: fraction of alive population killed immediately.
 pub const COUNTERMEASURE_KILL_FRACTION: f64 = 0.10;
-/// Emergency Countermeasure: infectivity multiplier applied to all diseases.
-pub const COUNTERMEASURE_INFECTIVITY_MULT: f64 = 0.50;
+/// Emergency Countermeasure: within-region spread multiplier applied to all diseases.
+pub const COUNTERMEASURE_SPREAD_WITHIN_MULT: f64 = 0.50;
 /// Emergency Countermeasure: cross-region spread multiplier applied to all diseases.
 pub const COUNTERMEASURE_SPREAD_MULT: f64 = 0.25;
 /// The degree to which the board leverages its economic and political influence
@@ -868,7 +868,7 @@ pub struct RegionPolicy {
     /// Cheaper alternative to travel ban. Superseded by travel ban if both active.
     #[serde(default)]
     pub border_controls: bool,
-    /// Halves waterborne disease infectivity. No effect on airborne/contact.
+    /// Halves waterborne disease within-region spread. No effect on airborne/contact.
     #[serde(default)]
     pub water_sanitation: bool,
     /// Disease surveillance level — determines what fraction of infections
@@ -1085,7 +1085,7 @@ pub struct EnactedDecrees {
     /// lose 25% across all systems.
     #[serde(default)]
     pub fortified_region: Option<usize>,
-    /// Emergency Countermeasure: reduce all disease infectivity by 50% and
+    /// Emergency Countermeasure: reduce all disease within-region spread by 50% and
     /// cross-region spread by 75%. Kills 10% of alive population immediately.
     #[serde(default)]
     pub emergency_countermeasure: bool,
@@ -2440,7 +2440,7 @@ pub struct RegionDiseaseState {
 /// and which therapy types are effective.
 #[derive(Clone, Copy, Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PathogenType {
-    /// Fast-mutating, high infectivity, responds to antivirals
+    /// Fast-mutating, high within-region spread, responds to antivirals
     RnaVirus,
     /// Slower-mutating, stable, responds to antivirals
     DnaVirus,
@@ -2496,7 +2496,7 @@ impl PathogenType {
     /// Stat ranges tuned so total collapse occurs by day 90 without intervention.
     /// HARD REQUIREMENT: every seed must lose by day 90 with no player action.
     /// The enforcing test is `game_is_lost_within_90_days_without_intervention`.
-    /// If it starts failing, increase infectivity — do NOT relax the test.
+    /// If it starts failing, increase within_region_spread — do NOT relax the test.
     ///
     /// Design principle: long infectious period (16–30 days) with near-zero natural
     /// recovery. This lets the epidemic sweep through each region's full population
@@ -2506,16 +2506,16 @@ impl PathogenType {
     /// deaths — it makes the overall death toll LOWER by shortening infectious period.
     ///
     /// IFR = lethality / (lethality + recovery) ≈ 85–95% across all types.
-    /// R0 = infectivity / (lethality + recovery) ≈ 6–15 depending on type.
+    /// R0 = within_region_spread / (lethality + recovery) ≈ 6–15 depending on type.
     /// Attack rate ≈ 99%+ given high R0. Total deaths ≈ 85–95% of population.
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: very short incubation (0.5–1.5 days), fast spreader.
-            // Infectivity ~80% and cross-region ~2x vs pre-SEIR to compensate
+            // Within-region spread ~80% and cross-region ~2x vs pre-SEIR to compensate
             // for exposed compartment pipeline delay (SEIR reduces effective
             // growth rate at small population fractions).
             PathogenType::RnaVirus => DiseaseStatRanges {
-                infectivity: (0.009, 0.013),
+                within_region_spread: (0.009, 0.013),
                 lethality: (0.00040, 0.00070),
                 recovery: (0.00006, 0.00015),
                 cross_region: (0.012, 0.018),
@@ -2523,7 +2523,7 @@ impl PathogenType {
             },
             // DNA viruses: short incubation (1–2 days).
             PathogenType::DnaVirus => DiseaseStatRanges {
-                infectivity: (0.007, 0.011),
+                within_region_spread: (0.007, 0.011),
                 lethality: (0.00035, 0.00065),
                 recovery: (0.00004, 0.00010),
                 cross_region: (0.010, 0.015),
@@ -2531,7 +2531,7 @@ impl PathogenType {
             },
             // Bacteria: very short incubation (0.25–1.0 days).
             PathogenType::Bacterium => DiseaseStatRanges {
-                infectivity: (0.007, 0.009),
+                within_region_spread: (0.007, 0.009),
                 lethality: (0.00035, 0.00060),
                 recovery: (0.00010, 0.00020),
                 cross_region: (0.010, 0.013),
@@ -2539,7 +2539,7 @@ impl PathogenType {
             },
             // Fungi: moderate incubation (1–3 days).
             PathogenType::Fungus => DiseaseStatRanges {
-                infectivity: (0.006, 0.008),
+                within_region_spread: (0.006, 0.008),
                 lethality: (0.00030, 0.00055),
                 recovery: (0.00005, 0.00015),
                 cross_region: (0.008, 0.012),
@@ -2547,7 +2547,7 @@ impl PathogenType {
             },
             // Prions: long incubation (3–7 days) — silent spread before symptoms.
             PathogenType::Prion => DiseaseStatRanges {
-                infectivity: (0.006, 0.009),
+                within_region_spread: (0.006, 0.009),
                 lethality: (0.00045, 0.00090),
                 recovery: (0.00003, 0.00006),
                 cross_region: (0.008, 0.011),
@@ -2723,11 +2723,11 @@ impl TransmissionVector {
         }
     }
 
-    /// Infectivity multiplier when quarantine is active in a region.
+    /// Within-region spread multiplier when quarantine is active in a region.
     /// Lower = quarantine is more effective at reducing spread.
     pub fn quarantine_factor(&self) -> f64 {
         match self {
-            TransmissionVector::Airborne => 0.55,   // standard: 45% infectivity reduction
+            TransmissionVector::Airborne => 0.55,   // standard: 45% spread reduction
             TransmissionVector::Waterborne => 0.80,  // weak: only 20% reduction
             TransmissionVector::Contact => 0.35,     // strong: 65% reduction
         }
@@ -2764,7 +2764,7 @@ impl TransmissionVector {
 
 /// Stat ranges for procedural disease generation.
 struct DiseaseStatRanges {
-    infectivity: (f64, f64),
+    within_region_spread: (f64, f64),
     lethality: (f64, f64),
     recovery: (f64, f64),
     cross_region: (f64, f64),
@@ -2779,7 +2779,7 @@ pub struct Disease {
     pub pathogen_type: PathogenType,
     #[serde(default)]
     pub transmission: TransmissionVector,
-    pub infectivity: f64,
+    pub within_region_spread: f64,
     pub lethality: f64,
     pub cross_region_spread: f64,
     #[serde(default)]
@@ -2908,7 +2908,7 @@ impl Disease {
 
     /// Generate a random disease of the given pathogen type.
     ///
-    /// If `toughness_bias` is true, infectivity and lethality are biased toward
+    /// If `toughness_bias` is true, within-region spread and lethality are biased toward
     /// the upper end of their ranges (used for mid-game emergent diseases).
     pub fn generate(
         rng: &mut ChaCha8Rng,
@@ -2934,7 +2934,7 @@ impl Disease {
         };
 
         let transmission = pathogen_type.random_transmission(rng);
-        let infectivity = stat(rng, ranges.infectivity, toughness_bias);
+        let within_region_spread = stat(rng, ranges.within_region_spread, toughness_bias);
         let lethality = stat(rng, ranges.lethality, toughness_bias);
         let cross_region_spread = range_val(rng, ranges.cross_region);
         let recovery_rate = range_val(rng, ranges.recovery);
@@ -2952,7 +2952,7 @@ impl Disease {
             name,
             pathogen_type,
             transmission,
-            infectivity,
+            within_region_spread,
             lethality,
             cross_region_spread,
             recovery_rate,
@@ -3622,7 +3622,7 @@ pub enum ResearchKind {
     TrainPersonnel,
     /// Basic research — unlocks a technology in the tech tree.
     BasicResearch { tech: BasicTech },
-    /// Pathogen suppression — permanently reduces a disease's infectivity by ~20%.
+    /// Pathogen suppression — permanently reduces a disease's within-region spread by ~20%.
     /// Requires the CompetitiveDisplacement basic tech to be unlocked.
     SuppressPathogen { disease_idx: usize },
     /// Directed attenuation — permanently reduces a disease's lethality by ~30%.
@@ -3761,7 +3761,7 @@ pub enum BasicTech {
     /// Prereq: deploy 2+ different medicines.
     CombinationTherapy,
     /// Unlocks competitive displacement field research: release attenuated
-    /// strains that outcompete virulent wild-type, reducing infectivity.
+    /// strains that outcompete virulent wild-type, reducing within-region spread.
     /// Prereq: VaccinePlatform + CombinationTherapy.
     CompetitiveDisplacement,
     /// Unlocks directed attenuation field research: permanently reduce
@@ -3823,7 +3823,7 @@ impl BasicTech {
             BasicTech::VaccinePlatform => "3x effectiveness of preventive vaccination programs.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
-            BasicTech::CompetitiveDisplacement => "Release attenuated strains that outcompete virulent wild-type. Each project reduces infectivity 20%.",
+            BasicTech::CompetitiveDisplacement => "Release attenuated strains that outcompete virulent wild-type. Each project reduces within-region spread 20%.",
             BasicTech::DirectedAttenuation => "In-situ modification of pathogen virulence factors. Each project permanently reduces target lethality 30%.",
             BasicTech::GeneDriveContainment => "Self-propagating genetic modifications prevent pathogen establishment in new regions. Eliminates cross-region spread.",
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
@@ -4132,8 +4132,8 @@ pub enum GameEvent {
     DiseaseMutated {
         disease_idx: usize,
         new_generation: u32,
-        /// Infectivity change factor (e.g., 1.1 = +10%). Only meaningful with RapidSequencing.
-        infectivity_factor: f64,
+        /// Within-region spread change factor (e.g., 1.1 = +10%). Only meaningful with RapidSequencing.
+        spread_factor: f64,
         /// Lethality change factor (e.g., 0.9 = -10%). Only meaningful with RapidSequencing.
         lethality_factor: f64,
     },
@@ -4248,7 +4248,7 @@ pub enum GameEvent {
     DecreeUnlocked {
         decree: DecreeId,
     },
-    /// Suppression research complete — pathogen infectivity permanently reduced.
+    /// Suppression research complete — pathogen within-region spread permanently reduced.
     PathogenSuppressed {
         disease_idx: usize,
     },

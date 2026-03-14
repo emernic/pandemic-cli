@@ -166,7 +166,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
             ResearchKind::SuppressPathogen { disease_idx } => {
                 let d_idx = *disease_idx;
                 if let Some(disease) = state.diseases.get_mut(d_idx) {
-                    disease.infectivity *= 0.80;
+                    disease.within_region_spread *= 0.80;
                     state.pathogens_suppressed += 1;
                     state.events.push(GameEvent::PathogenSuppressed { disease_idx: d_idx });
                 }
@@ -1017,7 +1017,7 @@ mod tests {
     }
 
     #[test]
-    fn suppress_pathogen_reduces_infectivity_20_percent() {
+    fn suppress_pathogen_reduces_within_region_spread_20_percent() {
         use crate::state::KNOWLEDGE_FULL;
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = KNOWLEDGE_FULL;
@@ -1026,7 +1026,7 @@ mod tests {
         // Ensure disease is infecting somewhere
         state.regions[0].get_or_create_infection(0).infected = 1000.0;
 
-        let original_infectivity = state.diseases[0].infectivity;
+        let original_spread = state.diseases[0].within_region_spread;
 
         // Run suppression to near-completion and tick it over
         state.active_research = vec![ResearchProject {
@@ -1042,11 +1042,11 @@ mod tests {
         }
 
         assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "suppression project should have completed");
-        let reduced = state.diseases[0].infectivity;
-        let expected = original_infectivity * 0.80;
+        let reduced = state.diseases[0].within_region_spread;
+        let expected = original_spread * 0.80;
         assert!(
             (reduced - expected).abs() < 0.001,
-            "infectivity should drop by 20%: original={original_infectivity:.4}, expected={expected:.4}, got={reduced:.4}"
+            "within-region spread should drop by 20%: original={original_spread:.4}, expected={expected:.4}, got={reduced:.4}"
         );
         assert_eq!(state.pathogens_suppressed, 1, "suppression counter should increment");
     }
