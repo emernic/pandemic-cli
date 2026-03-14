@@ -4531,8 +4531,6 @@ pub enum CrisisKind {
 
     /// Quarterly performance review during the apocalypse.
     PerformanceReview,
-    /// Pharmaceutical corp offers money to rename a disease.
-    NamingRights { disease_idx: usize, payout: f64 },
     /// Unpaid intern claims a breakthrough. 50/50 gamble.
     InternDiscovery { cost: f64 },
     /// Oversight commission summons you for a formal review.
@@ -4683,7 +4681,6 @@ impl CrisisKind {
             CrisisKind::CultBlockade { .. } => "cult",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
             CrisisKind::PerformanceReview => "performance_review",
-            CrisisKind::NamingRights { .. } => "naming_rights",
             CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::CongressionalHearing => "congress",
             CrisisKind::ContractOffer { .. } => "contract_offer",
