@@ -186,8 +186,6 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         // --- Dark comedy: ramp in mid-to-late game ---
         // Performance review is funniest when things are falling apart
         "performance_review" => ramp_up(20.0, 36.0),
-        // Intern is mid-game comedy
-        "intern" => ramp_up(10.0, 20.0) * fade_out(50.0, 70.0),
         // Billionaire can show up mid-to-late
         "billionaire" => ramp_up(16.0, 30.0),
 
@@ -394,12 +392,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PerformanceReview);
     }
 
-
-    // Intern's discovery: day 10+
-    if day > 10.0 {
-        let cost = scaled_cost(state, 0.10, 100.0, 400.0);
-        candidates.push(CrisisKind::InternDiscovery { cost });
-    }
 
     // Ark Protocol: scheduled deterministically in tick() when 2+ regions collapse,
     // not generated randomly.
@@ -1012,30 +1004,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::InternDiscovery { cost } => {
-            CrisisEvent {
-                title: "Unsolicited Research Proposal".into(),
-                description: format!(
-                    "A junior analyst has submitted a research proposal through internal channels. \
-                     Preliminary review is inconclusive. Verification would cost ¥{:.0}.",
-                    cost,
-                ),
-                options: vec![ CrisisOption {
-                    label: "File it".into(),
-                    description: "Board notes your fiscal discipline.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Investigate (¥{:.0})", cost),
-                    description: "50% chance of a 2-day research breakthrough.".into(),
-                    cost: Some(CrisisCost { funding: *cost, personnel: 0, ..Default::default() }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-
         // --- Follow-up crisis types ---
 
         CrisisKind::CounterfeitEpidemic { region_idx } => {
@@ -2719,29 +2687,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Board notes your absence. A memo has been circulated.".into()
         }
 
-
-        (CrisisKind::InternDiscovery { .. }, 0) => {
-            // File it — board appreciates fiscal prudence
-            chairman_satisfaction_hit(state, 0.02);
-            "Proposal filed. The board notes your fiscal discipline.".into()
-        }
-        (CrisisKind::InternDiscovery { .. }, _) => {
-            // Pursue — 50/50 gamble (costs already deducted)
-            let lucky = state.rng_crisis.r#gen::<bool>();
-            if lucky {
-                let boost = 2.0 * TICKS_PER_DAY as f64;
-                if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Applied) {
-                    proj.progress += boost;
-                } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Field) {
-                    proj.progress += boost;
-                } else if let Some(proj) = state.active_research.iter_mut().find(|p| p.kind.category() == ResearchCategory::Basic) {
-                    proj.progress += boost;
-                }
-                "The intern was right. Research accelerated by 2 days.".into()
-            } else {
-                "The intern was not right.".into()
-            }
-        }
 
 
         // --- Follow-up crisis resolutions ---
