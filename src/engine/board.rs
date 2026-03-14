@@ -2,7 +2,7 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 
 use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState,
-    ModifierSource, SatisfactionModifier};
+    GovernorPersonality, ModifierSource, SatisfactionModifier};
 
 /// Generate board members from existing game entities at game start.
 /// Called after corporations and regions are initialized.
@@ -194,13 +194,96 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                 }
             }
             BoardRole::RegionGovernor { region_idx } => {
-                let gdp = state.regions.get(*region_idx)
+                let region = state.regions.get(*region_idx);
+                let gdp = region
                     .map(|r| if r.collapsed { 0.0 } else { r.gdp_fraction() })
                     .unwrap_or(0.0);
-                continuous.push(SatisfactionModifier {
-                    source: ModifierSource::RegionalGdp,
-                    value: gdp - 0.50,
-                });
+                let gov_personality = region.map(|r| r.governor.personality);
+
+                match gov_personality {
+                    Some(GovernorPersonality::Blowhard) => {
+                        // Blowhard: GDP matters less, hates restrictive policies.
+                        // 60% GDP weight + 40% policy freedom weight.
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: 0.6 * gdp - 0.30,
+                        });
+                        let restrictive = state.policies.get(*region_idx)
+                            .map(|p| [p.travel_ban, p.quarantine, p.martial_law, p.border_controls]
+                                .iter().filter(|&&b| b).count() as f64)
+                            .unwrap_or(0.0);
+                        // 0 policies = +0.20, 4 policies = -0.20
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RestrictivePolicies,
+                            value: 0.20 - restrictive * 0.10,
+                        });
+                    }
+                    Some(GovernorPersonality::Hardliner) => {
+                        // Hardliner: GDP matters less, furious about infections.
+                        // 50% GDP + 50% infection severity.
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: 0.5 * gdp - 0.25,
+                        });
+                        let infected = region.map(|r| r.total_infected()).unwrap_or(0.0);
+                        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
+                        // Low infections = +0.25, CRIT = -0.25
+                        let infection_score = if infected > SEVERITY_CRIT_THRESHOLD {
+                            -0.25
+                        } else if infected > SEVERITY_HIGH_THRESHOLD {
+                            -0.10
+                        } else if infected > SEVERITY_MOD_THRESHOLD {
+                            0.05
+                        } else {
+                            0.25
+                        };
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalInfections,
+                            value: infection_score,
+                        });
+                    }
+                    Some(GovernorPersonality::Operative) => {
+                        // Operative: GDP matters, also likes active contracts (deal flow).
+                        // 70% GDP + 30% contract activity.
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: 0.7 * gdp - 0.35,
+                        });
+                        let active_contracts = state.contracts.len() as f64;
+                        // 0 contracts = -0.15, 1 = 0.0, 2+ = +0.15
+                        let contract_score = (active_contracts * 0.15 - 0.15).clamp(-0.15, 0.15);
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::ActiveContracts,
+                            value: contract_score,
+                        });
+                    }
+                    Some(GovernorPersonality::Mobster) => {
+                        // Mobster: GDP matters less, wants to see fat funding reserves.
+                        // 50% GDP + 50% funding level.
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: 0.5 * gdp - 0.25,
+                        });
+                        let daily_income = state.funding_income_rate() * crate::state::TICKS_PER_DAY;
+                        let reserve_ratio = if daily_income > 0.0 {
+                            (state.resources.funding / daily_income).clamp(0.0, 10.0)
+                        } else {
+                            0.0
+                        };
+                        // 0 days reserve = -0.25, 5+ days = +0.25
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::FundingReserves,
+                            value: (reserve_ratio / 10.0 * 0.50 - 0.25).clamp(-0.25, 0.25),
+                        });
+                    }
+                    _ => {
+                        // Buffoon, Recluse, or unknown: pure GDP driver
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: gdp - 0.50,
+                        });
+                    }
+                }
             }
         }
 
@@ -422,7 +505,9 @@ mod tests {
         update_board_satisfaction(&mut state);
 
         let sat = state.board_satisfaction();
-        assert!((sat - 0.70).abs() < 0.05, "initial board satisfaction should be ~0.70 with skepticism, got {sat}");
+        // Governor personality modifiers can shift aggregate slightly from 0.70;
+        // allow wider tolerance since governor personalities now have secondary drivers
+        assert!((sat - 0.70).abs() < 0.10, "initial board satisfaction should be ~0.70 with skepticism, got {sat}");
     }
 
     #[test]
@@ -471,15 +556,92 @@ mod tests {
             _ => unreachable!(),
         };
 
+        // Record satisfaction at full GDP
+        update_board_satisfaction(&mut state);
+        let sat_full = state.board_members[gov_idx].satisfaction;
+
         // Set GDP to 50% of base (simulating economic damage from disease + policies)
         let base = state.regions[region_idx].base_gdp;
         state.regions[region_idx].gdp = base * 0.5;
         update_board_satisfaction(&mut state);
 
-        let sat = state.board_members[gov_idx].satisfaction;
-        // GDP fraction 0.5 minus initial skepticism 0.30 = 0.20
-        let expected = 0.5 - INITIAL_SKEPTICISM;
-        assert!((sat - expected).abs() < 0.01, "governor satisfaction should be GDP(0.5) - skepticism({INITIAL_SKEPTICISM}) = {expected}, got {sat}");
+        let sat_half = state.board_members[gov_idx].satisfaction;
+        // Regardless of personality weighting, lower GDP should reduce satisfaction
+        assert!(sat_half < sat_full, "governor satisfaction should drop with GDP: full={sat_full}, half={sat_half}");
+        // And it should be noticeably lower (GDP is a significant driver for all governor personalities)
+        assert!(sat_full - sat_half > 0.10, "GDP drop should meaningfully reduce satisfaction: full={sat_full}, half={sat_half}");
+    }
+
+    #[test]
+    fn hardliner_governor_board_member_reacts_to_infections() {
+        use crate::state::GovernorPersonality;
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+
+        // Force a specific governor to be Hardliner and place them on the board
+        state.regions[0].governor.personality = GovernorPersonality::Hardliner;
+        generate_board_members(&mut state);
+
+        // Find the governor member for region 0 (if they were selected)
+        let gov_idx = state.board_members.iter().position(|m| {
+            matches!(m.role, BoardRole::RegionGovernor { region_idx: 0 })
+        });
+        if gov_idx.is_none() {
+            // Region 0 wasn't picked for the board — skip this test run
+            return;
+        }
+        let gov_idx = gov_idx.unwrap();
+
+        // No infections: should have RegionalInfections modifier with positive value
+        update_board_satisfaction(&mut state);
+        let sat_clean = state.board_members[gov_idx].satisfaction;
+        let has_infection_modifier = state.board_members[gov_idx].modifiers.iter()
+            .any(|m| m.source == ModifierSource::RegionalInfections);
+        assert!(has_infection_modifier, "Hardliner should have RegionalInfections modifier");
+
+        // Add critical infections to region 0
+        state.regions[0].infections.push(crate::state::RegionDiseaseState {
+            disease_idx: 0,
+            exposed: 0.0,
+            infected: 200_000.0,
+            dead: 0.0,
+            immune: 0.0,
+        });
+        update_board_satisfaction(&mut state);
+        let sat_infected = state.board_members[gov_idx].satisfaction;
+
+        assert!(sat_infected < sat_clean, "Hardliner satisfaction should drop with infections: clean={sat_clean}, infected={sat_infected}");
+    }
+
+    #[test]
+    fn blowhard_governor_board_member_reacts_to_policies() {
+        use crate::state::GovernorPersonality;
+        let mut state = GameState::new_default(42);
+        crate::engine::corporations::generate_corporations(&mut state);
+
+        state.regions[0].governor.personality = GovernorPersonality::Blowhard;
+        generate_board_members(&mut state);
+
+        let gov_idx = state.board_members.iter().position(|m| {
+            matches!(m.role, BoardRole::RegionGovernor { region_idx: 0 })
+        });
+        if gov_idx.is_none() {
+            return;
+        }
+        let gov_idx = gov_idx.unwrap();
+
+        // No policies
+        update_board_satisfaction(&mut state);
+        let sat_free = state.board_members[gov_idx].satisfaction;
+
+        // Activate restrictive policies
+        state.policies[0].quarantine = true;
+        state.policies[0].travel_ban = true;
+        state.policies[0].border_controls = true;
+        update_board_satisfaction(&mut state);
+        let sat_restricted = state.board_members[gov_idx].satisfaction;
+
+        assert!(sat_restricted < sat_free, "Blowhard satisfaction should drop with restrictions: free={sat_free}, restricted={sat_restricted}");
     }
 
     #[test]
