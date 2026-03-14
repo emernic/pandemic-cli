@@ -71,30 +71,12 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
-                // Close the policy panel on crisis dismiss — there is no safe
-                // "browse" intermediate state to reset to (ManagePolicies is the
-                // top level and would allow a stray Enter to toggle a policy).
-                // The player can press P again to reopen.
-                if new.ui.policy_ui.is_some() {
-                    new.ui.open_panel = Panel::None;
-                    new.ui.policy_ui = None;
-                    new.ui.panel_selection = 0;
-                }
-                if new.ui.medicine_ui.is_some() {
-                    new.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
-                    new.ui.panel_selection = 0;
-                }
-                if new.ui.research_ui.is_some() {
-                    new.ui.research_ui = Some(ResearchUiState::BrowseAll);
-                    new.ui.panel_selection = 0;
-                }
-                if new.ui.operations_ui.is_some() {
-                    new.ui.operations_ui = Some(OpsUiState::BrowseOps);
-                    new.ui.panel_selection = 0;
-                }
-                if new.ui.ledger_ui.is_some() {
-                    new.ui.ledger_ui = Some(LedgerUiState::BrowseStocks);
-                    new.ui.panel_selection = 0;
+                // Restore the player to whatever panel/wizard state they were in
+                // before the crisis fired. Clamp panel_selection in case the crisis
+                // resolution changed the number of items in the active list.
+                let max = ui::panel_selection_max(&new.ui, &new);
+                if new.ui.panel_selection > max {
+                    new.ui.panel_selection = max;
                 }
                 // sim_state restoration (Event → Running/Paused) happens inside
                 // crisis::resolve_crisis() — no post-processing needed here.
@@ -798,14 +780,14 @@ mod tests {
     }
 
     #[test]
-    fn crisis_dismiss_closes_policy_panel() {
+    fn crisis_dismiss_preserves_policy_panel() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         // Set up state with policy panel open in ManagePolicies.
         let mut state = GameState::new_default(42);
         state.ui.open_panel = Panel::Policy;
         state.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: 0 });
-        state.ui.panel_selection = 0;
+        state.ui.panel_selection = 2;
 
         // Fire a crisis while in this state.
         state.sim_state = SimState::Event { was_running: true };
@@ -824,23 +806,18 @@ mod tests {
         let state = apply_action(&state, &Action::Confirm);
         assert!(state.active_crisis.is_none(), "crisis should be dismissed");
 
-        // Policy panel must be closed entirely — there is no safe intermediate state
-        // to reset to (ManagePolicies is the top level and is an "action" state).
-        // Closing prevents a stray Enter from accidentally toggling a policy.
-        assert_eq!(state.ui.open_panel, Panel::None,
-            "policy panel should close after crisis dismissal");
-        assert!(state.ui.policy_ui.is_none(),
-            "policy_ui should be None after crisis dismissal, got {:?}", state.ui.policy_ui);
-        assert_eq!(state.ui.panel_selection, 0);
-
-        // A stray Enter now does nothing (no panel open).
-        let state = apply_action(&state, &Action::Confirm);
-        assert!(!state.policies[0].border_controls,
-            "stray enter after crisis dismissal must not toggle border_controls");
+        // Policy panel and selection should be preserved — player returns
+        // to exactly where they were before the crisis.
+        assert_eq!(state.ui.open_panel, Panel::Policy,
+            "policy panel should stay open after crisis dismissal");
+        assert_eq!(state.ui.policy_ui, Some(PolicyUiState::ManagePolicies { region_idx: 0 }),
+            "policy_ui should be preserved after crisis dismissal");
+        assert_eq!(state.ui.panel_selection, 2,
+            "panel_selection should be preserved after crisis dismissal");
     }
 
     #[test]
-    fn crisis_dismiss_resets_ledger_wizard() {
+    fn crisis_dismiss_preserves_ledger_wizard() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         // Set up state with ledger panel open in ConfirmBuy.
@@ -866,11 +843,11 @@ mod tests {
         let state = apply_action(&state, &Action::Confirm);
         assert!(state.active_crisis.is_none(), "crisis should be dismissed");
 
-        // Ledger should reset to BrowseStocks, not stay in ConfirmBuy.
+        // Ledger should stay in ConfirmBuy — player returns to where they were.
         assert_eq!(state.ui.open_panel, Panel::Ledger,
             "ledger panel should stay open after crisis dismissal");
-        assert_eq!(state.ui.ledger_ui, Some(LedgerUiState::BrowseStocks),
-            "ledger_ui should reset to BrowseStocks after crisis dismissal");
+        assert_eq!(state.ui.ledger_ui, Some(LedgerUiState::ConfirmBuy { corp_idx: 0 }),
+            "ledger_ui should preserve wizard state after crisis dismissal");
     }
 
     #[test]
