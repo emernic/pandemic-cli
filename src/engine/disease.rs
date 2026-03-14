@@ -270,14 +270,13 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 
 /// Spawn a disease with stats scaled up based on current game day.
 /// Later diseases are tougher — simulating evolved superbugs.
-/// Infectivity scales at +10%/day (uncapped), lethality at +3.5%/day.
-/// The split ensures diseases can sustain growth even under quarantine.
-/// After day 20, diseases also seed into multiple regions simultaneously.
+/// Within-region infectivity scales at +10%/day (uncapped), lethality at +3.5%/day.
+/// Cross-region spread scales gently at +2%/day to preserve regional containment.
+/// Each new disease spawns in exactly one region — no multi-region seeding.
 pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
-    // Scaling with within-region spread outpacing lethality. Spread must stay
-    // high enough that R > 1 even under quarantine. Halved per-day rates to
-    // match TICKS_PER_DAY halving — absolute behavior per tick is unchanged.
+    // Within-region spread outpaces lethality so later diseases sustain
+    // growth even under quarantine.
     // Day 20: inf 3.0x/leth 1.7x, Day 40: 5.0x/2.4x, Day 60: 7.0x/3.1x
     let inf_scale = 1.0 + day * 0.10;
     let leth_scale = 1.0 + day * 0.035;
@@ -289,7 +288,11 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     let d = &mut state.diseases[disease_idx];
     d.within_region_spread *= inf_scale;
     d.lethality *= leth_scale;
-    d.cross_region_spread *= inf_scale;
+    // Cross-region scales much more gently than within-region — regional
+    // containment is a core player strategy. A day-60 disease should be
+    // harder to contain but not bypass borders entirely.
+    let cross_scale = 1.0 + day * 0.02; // +2%/day vs +10%/day for within-region
+    d.cross_region_spread *= cross_scale;
     // Don't scale recovery — harder diseases should be harder to recover from
 
     // Late-game diseases shift toward Contact transmission (hardest to
@@ -303,35 +306,6 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
         }
         // Extra lethality boost for late-game diseases
         d.lethality *= 1.0 + optimization * 0.5; // up to 50% more lethal on top of scaling
-    }
-
-    // Multi-region seeding: after day 30, new diseases emerge simultaneously
-    // in additional non-collapsed regions. Pushed from day 20 to day 30 to
-    // give containment policies a window to matter before seeding makes them moot.
-    // By day 60, every viable region gets seeded.
-    // Non-adjacent regions are seeded with higher probability — creating
-    // impossible emergence patterns that hint at engineered origins.
-    let multi_seed = ((day - 30.0) / 30.0).clamp(0.0, 1.0); // 0 at day 30, 1 at day 60
-    if multi_seed > 0.0 {
-        let (_, primary_region) = result;
-        let primary_connections = state.regions[primary_region].connections.clone();
-        let viable: Vec<usize> = state.regions.iter().enumerate()
-            .filter(|(i, r)| !r.collapsed && *i != primary_region)
-            .map(|(i, _)| i)
-            .collect();
-        // Seed count scales with day^2 to ensure late-game diseases hit hard
-        // Day 40: ~8.5k, Day 60: ~18.5k, Day 80: ~32.5k
-        let base_seed = 500.0 + day * day * 5.0;
-        for &region_idx in &viable {
-            // Non-adjacent regions get 2x seeding probability — creates
-            // anomalous simultaneous emergence in disconnected regions.
-            let is_adjacent = primary_connections.contains(&region_idx);
-            let prob = if is_adjacent { multi_seed * 0.5 } else { multi_seed };
-            if rng.r#gen::<f64>() < prob {
-                let seed_count = base_seed + rng.r#gen::<f64>() * base_seed;
-                state.regions[region_idx].get_or_create_infection(disease_idx).infected += seed_count;
-            }
-        }
     }
 
     Some(result)

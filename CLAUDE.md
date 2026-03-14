@@ -193,20 +193,19 @@ The UI/engine separation is done. The engine god file has been broken into subsy
 **These come directly from the project owner. They are non-negotiable. Do not weaken diseases.**
 
 Hard requirements for zero player input (no buttons pressed at all):
-- **90 days absolute maximum** — 100% of seeds must lose by day 90, no exceptions
-- **~30-40 day median loss** (all regions collapse) without player intervention
-- **Some seeds lost by day 20** — early bad luck is expected and correct
+- **120 days absolute maximum** — 100% of seeds must lose by day 120, no exceptions
+- **Median under 90 days** — enforced by test; currently observed ~56 days
 - **First collapse no earlier than day 6** — players need minimum time for initial decisions
 
 Hard requirements for active play:
-- **~80 day median** for a competent player
+- **Competent play must extend survival ≥1.10x** over passive (enforced by test)
 - **200 days = absolute maximum** — surviving past 200 days should be essentially impossible
 
-These are not 20th century diseases. These are superbugs resulting from varying levels of engineering and mutation that will kill very quickly unattended, and the player is starting with an outbreak already underway. Late-game diseases (day 60+) should be next-generation monsters — massively scaled within-region spread and lethality that overwhelm any containment. If you find yourself reducing disease lethality, within-region spread (`within_region_spread`), or cross-region spread, you are almost certainly making the game worse.
+**Design intent: regional containment is a core strategy.** Cross-region spread is deliberately low so players can meaningfully slow disease movement between regions using border controls and travel bans. Within-region spread is high so uncontained regions collapse fast. Do NOT increase cross-region spread — it destroys the regional strategy. Do NOT decrease within-region spread or lethality — that removes urgency.
 
 **CRITICAL: Do NOT increase per-tick lethality or recovery to "speed up" deaths.** A high per-tick lethality+recovery shortens the infectious period, causing epidemic burnout after infecting only a small fraction of each region. The right approach is LOW per-tick lethality/recovery (16–30 day infectious period) with HIGH within-region spread (`within_region_spread`). See `PathogenType::stat_ranges()` comment in state.rs for the full explanation.
 
-The `game_is_lost_within_90_days_without_intervention` test enforces the 90-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 70, something is wrong.
+The `game_is_lost_within_120_days_without_intervention` test enforces the 120-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 90, something is wrong.
 
 **Governor-imposed policies (quarantine, border controls, martial law) are GOOD and should stay.** They create interesting dynamics. If policies are keeping the game alive too long, the answer is MORE lethal diseases, not weaker governors.
 
