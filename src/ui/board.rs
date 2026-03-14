@@ -100,6 +100,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     format!(" ({})", personality.label()),
                     Style::default().fg(Color::DarkGray),
                 ));
+            } else if let BoardRole::RegionGovernor { region_idx } = &member.role {
+                if let Some(region) = state.regions.get(*region_idx) {
+                    name_spans.push(Span::styled(
+                        format!(" ({})", region.governor.personality.label()),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
             }
             lines.push(Line::from(name_spans));
 
@@ -163,12 +170,26 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     }
                     BoardRole::RegionGovernor { region_idx } => {
                         state.regions.get(*region_idx)
-                            .map(|r| if r.collapsed {
-                                format!("Demands: Rebuild {}", r.name)
-                            } else if r.gdp_fraction() < 0.6 {
-                                format!("Demands: Restore {} economy", r.name)
-                            } else {
-                                format!("Demands: Protect {} economy", r.name)
+                            .map(|r| {
+                                use crate::state::GovernorPersonality;
+                                if r.collapsed {
+                                    format!("Demands: Rebuild {}", r.name)
+                                } else {
+                                    match r.governor.personality {
+                                        GovernorPersonality::Blowhard =>
+                                            format!("Demands: Lift restrictions in {}", r.name),
+                                        GovernorPersonality::Hardliner =>
+                                            format!("Demands: Contain infections in {}", r.name),
+                                        GovernorPersonality::Operative =>
+                                            "Demands: Secure more contracts".to_string(),
+                                        GovernorPersonality::Mobster =>
+                                            "Demands: Increase funding reserves".to_string(),
+                                        _ if r.gdp_fraction() < 0.6 =>
+                                            format!("Demands: Restore {} economy", r.name),
+                                        _ =>
+                                            format!("Demands: Protect {} economy", r.name),
+                                    }
+                                }
                             })
                     }
                 };

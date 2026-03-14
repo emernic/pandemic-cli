@@ -1597,6 +1597,14 @@ pub enum ModifierSource {
     CrisisEffect,
     /// Contract loyalty bonus (held 10+ days).
     ContractLoyalty,
+    /// Regional infection severity (Hardliner governor personality).
+    RegionalInfections,
+    /// Restrictive policy count in governor's region (Blowhard governor personality).
+    RestrictivePolicies,
+    /// Active contract count (Operative governor personality).
+    ActiveContracts,
+    /// Funding reserves relative to daily income (Mobster governor personality).
+    FundingReserves,
 }
 
 impl ModifierSource {
@@ -1619,6 +1627,10 @@ impl ModifierSource {
             Self::ContractCanceled => "Contract canceled",
             Self::CrisisEffect => "Crisis effect",
             Self::ContractLoyalty => "Contract loyalty",
+            Self::RegionalInfections => "Regional infections",
+            Self::RestrictivePolicies => "Policy restrictions",
+            Self::ActiveContracts => "Active contracts",
+            Self::FundingReserves => "Funding reserves",
         }
     }
 
@@ -1626,7 +1638,9 @@ impl ModifierSource {
     pub fn is_continuous(&self) -> bool {
         matches!(self,
             Self::Base | Self::StockPerformance | Self::RegionalGdp |
-            Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment
+            Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment |
+            Self::RegionalInfections | Self::RestrictivePolicies |
+            Self::ActiveContracts | Self::FundingReserves
         )
     }
 }
