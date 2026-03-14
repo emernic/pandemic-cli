@@ -5242,8 +5242,9 @@ mod tests {
         state.regions[0].collapsed = true;
         state.regions[4].collapsed = true;
 
-        // Set up Ark Protocol crisis targeting region 2, select option A (accept)
-        setup_crisis(&mut state, CrisisKind::ArkProtocol { region_idx: 2 }, 0);
+        // Set up Ark Protocol crisis targeting region 2.
+        // Surviving regions are [1, 2, 3, 5], so region 2 is at index 1.
+        setup_crisis(&mut state, CrisisKind::ArkProtocol { region_idx: 2 }, 1);
         let after = apply_action(&state, &Action::Confirm);
 
         // Ark Protocol should be active on region 2

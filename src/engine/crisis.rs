@@ -1483,30 +1483,34 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             }
         }
         CrisisKind::ArkProtocol { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
+            let recommended_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let collapsed_count = state.regions.iter().filter(|r| r.collapsed).count();
-            let active_count = state.regions.iter().enumerate()
-                .filter(|(i, r)| !r.collapsed && !state.is_abandoned(*i))
-                .count();
+            let surviving: Vec<(usize, &str)> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, r)| (i, r.name.as_str()))
+                .collect();
+            let active_count = surviving.len();
+            let mut options: Vec<CrisisOption> = surviving.iter().map(|(_, name)| {
+                CrisisOption {
+                    label: format!("Consolidate in {}", name),
+                    description: "Pull out of all other regions.".into(),
+                    cost: None,
+                }
+            }).collect();
+            options.push(CrisisOption {
+                label: "Continue as-is".into(),
+                description: "Stay spread thin. Lose personnel and funding to overextension.".into(),
+                cost: Some(CrisisCost { funding: 150.0, personnel: 3, ..Default::default() }),
+            });
             CrisisEvent {
                 title: "Emergency Consolidation".into(),
                 description: format!(
                     "{} regions lost. Remaining personnel are overextended across {} active sites. \
                      Recommend pulling all operations back to {}.",
-                    collapsed_count, active_count, region_name,
+                    collapsed_count, active_count, recommended_name,
                 ),
-                options: vec![ CrisisOption {
-                    label: format!("Consolidate in {}", region_name),
-                    description: "Pull out of all other regions.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Continue as-is".into(),
-                    description: "Stay spread thin. Lose personnel and funding to overextension.".into(),
-                    cost: Some(CrisisCost { funding: 150.0, personnel: 3, ..Default::default() }),
-                },
-                ],
+                options,
                 kind,
                 tick_created: tick,
             }
@@ -2967,25 +2971,32 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             }
         }
 
-        (CrisisKind::ArkProtocol { region_idx }, 0) => {
-            // Activate Ark Protocol
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            state.ark_protocol = Some(*region_idx);
-            // Deactivate all policies in non-Ark regions
-            for (i, policy) in state.policies.iter_mut().enumerate() {
-                if i != *region_idx {
-                    policy.clear_all();
+        (CrisisKind::ArkProtocol { .. }, chosen) => {
+            // Build the same surviving-region list used at crisis creation time.
+            // The game is paused during crises, so regions can't collapse between
+            // build and resolution.
+            let surviving: Vec<usize> = state.regions.iter().enumerate()
+                .filter(|(_, r)| !r.collapsed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&target_idx) = surviving.get(chosen) {
+                // Player chose a region to consolidate into
+                let region_name = state.regions[target_idx].name.clone();
+                state.ark_protocol = Some(target_idx);
+                // Deactivate all policies in non-Ark regions
+                for (i, policy) in state.policies.iter_mut().enumerate() {
+                    if i != target_idx {
+                        policy.clear_all();
+                    }
                 }
+                state.events.push(GameEvent::ArkProtocolActivated {
+                    region_idx: target_idx,
+                });
+                format!("Consolidation complete. All operations moved to {}.", region_name)
+            } else {
+                // Last option = "Continue as-is", or out-of-range fallback
+                "Consolidation declined. Maintaining all active sites.".into()
             }
-            state.events.push(GameEvent::ArkProtocolActivated {
-                region_idx: *region_idx,
-            });
-            format!("Consolidation complete. All operations moved to {}.", region_name)
-        }
-        (CrisisKind::ArkProtocol { .. }, _) => {
-            // Declined — standard cooldown prevents re-fire
-            "Consolidation declined. Maintaining all active sites.".into()
         }
 
 
