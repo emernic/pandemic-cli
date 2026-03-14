@@ -4499,8 +4499,6 @@ pub enum CrisisKind {
     PersonnelCrisis { amount: u32 },
     /// Staff falling ill from the pandemic — temporarily unavailable, then recover.
     PersonnelSick { amount: u32, recovery_days: f64 },
-    /// Mutation surge — pay to gain knowledge or let it drift.
-    MutationSurge { disease_idx: usize },
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
     /// `wave` counts how many regions have collapsed so far (1 on first collapse).
     RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
@@ -4663,7 +4661,6 @@ impl CrisisKind {
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::PersonnelSick { .. } => "personnel_sick",
-            CrisisKind::MutationSurge { .. } => "mutation",
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
             CrisisKind::QuarantineRiot { .. } => "riot",
