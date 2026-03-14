@@ -247,18 +247,28 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                         });
                     }
                     Some(GovernorPersonality::Operative) => {
-                        // Operative: GDP matters, also likes active contracts (deal flow).
-                        // 70% GDP + 30% contract activity.
+                        // Operative: thrives in dysfunction. Penalized when governors
+                        // are cooperative (proper channels leave no room for backroom
+                        // deals). Creates tension: player wants high cooperation for
+                        // effective policies, but Operative wants chaos.
+                        // 60% GDP + 40% governor dysfunction.
                         continuous.push(SatisfactionModifier {
                             source: ModifierSource::RegionalGdp,
-                            value: 0.7 * gdp - 0.35,
+                            value: 0.6 * gdp - 0.30,
                         });
-                        let active_contracts = state.contracts.len() as f64;
-                        // 0 contracts = -0.15, 1 = 0.0, 2+ = +0.15
-                        let contract_score = (active_contracts * 0.15 - 0.15).clamp(-0.15, 0.15);
+                        let living_govs: Vec<f64> = state.regions.iter()
+                            .filter(|r| !r.governor.dead)
+                            .map(|r| r.governor.cooperation)
+                            .collect();
+                        let avg_coop = if living_govs.is_empty() { 60.0 } else {
+                            living_govs.iter().sum::<f64>() / living_govs.len() as f64
+                        };
+                        // avg_coop ~40 (defiant) = +0.20, ~60 (neutral) = 0.0,
+                        // ~80 (cooperative) = -0.20
+                        let dysfunction = ((60.0 - avg_coop) / 100.0).clamp(-0.20, 0.20);
                         continuous.push(SatisfactionModifier {
-                            source: ModifierSource::ActiveContracts,
-                            value: contract_score,
+                            source: ModifierSource::GovernorDysfunction,
+                            value: dysfunction,
                         });
                     }
                     Some(GovernorPersonality::Mobster) => {

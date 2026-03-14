@@ -1632,8 +1632,8 @@ pub enum ModifierSource {
     RegionalStanding,
     /// Restrictive policy count in governor's region (Blowhard governor personality).
     RestrictivePolicies,
-    /// Active contract count (Operative governor personality).
-    ActiveContracts,
+    /// Average governor cooperation level (Operative governor personality — prefers dysfunction).
+    GovernorDysfunction,
     /// Funding reserves relative to daily income (Mobster governor personality).
     FundingReserves,
 }
@@ -1660,7 +1660,7 @@ impl ModifierSource {
             Self::ContractLoyalty => "Contract loyalty",
             Self::RegionalStanding => "Regional standing",
             Self::RestrictivePolicies => "Policy restrictions",
-            Self::ActiveContracts => "Active contracts",
+            Self::GovernorDysfunction => "Governor dysfunction",
             Self::FundingReserves => "Funding reserves",
         }
     }
@@ -1671,7 +1671,7 @@ impl ModifierSource {
             Self::Base | Self::StockPerformance | Self::RegionalGdp |
             Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment |
             Self::RegionalStanding | Self::RestrictivePolicies |
-            Self::ActiveContracts | Self::FundingReserves
+            Self::GovernorDysfunction | Self::FundingReserves
         )
     }
 }
