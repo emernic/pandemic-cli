@@ -64,7 +64,7 @@ keypress → action.rs: key_to_action() → Action
 
 ### How simulation flows
 
-The canonical way to advance the game is `lib::tick_and_process(state)` — it calls `engine::tick()` then `ui::process_events()` as a single logical operation and is the only public API for advancing the simulation. Both `engine::tick()` and `ui::process_events()` are `pub(crate)`, so external callers cannot bypass `tick_and_process`. Engine unit tests may call `engine::tick()` directly to test game logic in isolation without UI state updates.
+The canonical way to advance the game is `lib::tick_and_process(state)` — it calls `engine::tick()` then `events::process_events()` as a single logical operation and is the only public API for advancing the simulation. Both `engine::tick()` and `events::process_events()` are `pub(crate)`, so external callers cannot bypass `tick_and_process`. Engine unit tests may call `engine::tick()` directly to test game logic in isolation without UI state updates.
 
 Each tick, `engine::tick()` orchestrates subsystems in order:
 
@@ -85,7 +85,7 @@ Each tick, `engine::tick()` orchestrates subsystems in order:
 15. Regional collapse (may trigger refugee crisis)
 16. Defeat conditions + history recording
 
-After each tick, `lib::tick_and_process()` calls `ui::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
+After each tick, `lib::tick_and_process()` calls `events::process_events()` to translate `GameEvent`s into UI responses (status messages, panel resets). Game-rule state transitions (pausing on game-over, entering event mode for crises) happen in `tick()` itself — the UI layer only handles presentation responses.
 
 ## Engine Module Structure
 
@@ -125,7 +125,7 @@ Each subsystem module follows the same pattern:
 2. Add `mod newsystem;` in `engine/mod.rs`
 3. If it has per-tick behavior: add a `tick_*()` function, call it from `tick()`
 4. If the player interacts with it: add a `GameCommand` variant in `state.rs`, add a handler function, dispatch in `execute_command()`
-5. If tick events need UI feedback: add a `GameEvent` variant, handle in `ui::process_events()`
+5. If tick events need UI feedback: add a `GameEvent` variant, handle in `events::process_events()`
 
 ### What stays in mod.rs
 
@@ -137,7 +137,7 @@ Each subsystem module follows the same pattern:
 
 **Game-rule transitions live in the engine:** When the game ends, `tick()` sets `outcome` and `sim_state = Paused`. When a crisis appears, `crisis::activate_crisis()` sets `active_crisis` and `sim_state = Event { was_running }`. Exception: collapse-triggered refugee crises are set inline in `tick()` directly (bypassing `activate_crisis()`). Disease detection no longer pauses the simulation; it fires a `DiseaseDetected` event shown in the top-right notification area. When a crisis is resolved, `crisis::resolve_crisis()` restores `sim_state` from `Event { was_running }` back to Running or Paused. The engine owns the full lifecycle — entry and exit. The UI layer does not touch `sim_state`.
 
-**UI responses live in `ui::process_events()`:** Called by `lib::tick_and_process()` after each tick, `process_events()` handles UI-specific reactions (close panels on game-over, reset crisis selection) and formats events into status messages. It does not mutate `sim_state`, `outcome`, or other game-rule state. It also performs noise-reduction filtering — for example, `DiseaseMutated` events are suppressed when no player medicine is affected by the mutation, since there is nothing actionable to show.
+**UI responses live in `events::process_events()`:** Called by `lib::tick_and_process()` after each tick, `process_events()` handles UI-specific reactions (close panels on game-over, reset crisis selection) and formats events into status messages. It does not mutate `sim_state`, `outcome`, or other game-rule state. It also performs noise-reduction filtering — for example, `DiseaseMutated` events are suppressed when no player medicine is affected by the mutation, since there is nothing actionable to show.
 
 When adding new event types: game-rule transitions go in `tick()`. Presentation responses go in `process_events()`.
 
@@ -145,7 +145,7 @@ When adding new event types: game-rule transitions go in `tick()`. Presentation 
 
 There are two distinct pipelines for player-visible messages, each serving a different purpose:
 
-1. **Tick-time events** → `GameEvent` enum → `ui::process_events()` → event log + status bar. These are asynchronous notifications (disease detected, shipment delivered, region collapsed). They need priority ordering, log persistence, and may trigger UI state changes (panel resets). Some events produce an enriched notification for the top-right status area that includes contextual action hints (e.g., "Use [R] Research"); the event log always receives the plain message without hints.
+1. **Tick-time events** → `GameEvent` enum → `events::process_events()` → event log + status bar. These are asynchronous notifications (disease detected, shipment delivered, region collapsed). They need priority ordering, log persistence, and may trigger UI state changes (panel resets). Some events produce an enriched notification for the top-right status area that includes contextual action hints (e.g., "Use [R] Research"); the event log always receives the plain message without hints.
 
 2. **Command responses** → `CommandResult.message` → `status_message`. These are synchronous feedback to a player action (deployed medicine, started research, toggled policy). Formatted directly in engine command handlers. Shown once in the status bar, not logged.
 

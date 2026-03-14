@@ -66,7 +66,7 @@ Subsystem modules depend only on `state.rs`, never on each other or on UI.
 1. Create `engine/newsystem.rs`
 2. Add tick helper(s) if it has per-tick behavior → call from `tick()` in mod.rs
 3. Add command handler(s) if the player interacts with it → add a `GameCommand` variant in state.rs, dispatch in `execute_command()`
-4. Add a `GameEvent` variant if tick events need UI feedback → handle in `ui::process_events()`
+4. Add a `GameEvent` variant if tick events need UI feedback → handle in `events::process_events()`
 5. Keep it `pub(super)` — only mod.rs calls into subsystem modules
 
 ### Input flow
@@ -153,8 +153,9 @@ src/
     contracts.rs      — Funding contract offers and conditions
     loans.rs          — Emergency loans, interest accrual
     infrastructure.rs — Hospital/intel degradation
+  events.rs        — Event consequence application (log, notifications, UI resets)
   ui/
-    mod.rs         — Layout orchestration, panel routing, process_events()
+    mod.rs         — Layout orchestration, panel routing
     home.rs        — Defeat screen
     region_list.rs — World map grid with connections
     threats.rs     — Disease info panel
