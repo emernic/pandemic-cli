@@ -1368,23 +1368,23 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.20, 150.0, 800.0);
             CrisisEvent {
-                title: format!("{}: Sovereignty Dispute", gov_name),
+                title: format!("{}: Priority Demand", gov_name),
                 description: format!(
-                    "{gov_name} has rejected your health directive in {region_name}. \
-                     Local authorities are blocking your field teams."),
+                    "{gov_name} is blocking N.W.H.O. field operations in {region_name}. \
+                     Cooperation resumes when {region_name} gets priority over competing regions."),
                 options: vec![ CrisisOption {
-                    label: "Withdraw teams".into(),
-                    description: format!("Quarantine, travel ban, martial law, and border controls all disabled in {region_name}."),
+                    label: "Concede priority".into(),
+                    description: format!("Cooperation +15. Board sees you caving to regional pressure. −5% chairman approval."),
                     cost: None,
                 },
                  CrisisOption {
-                    label: format!("Negotiate access (¥{cost:.0})"),
-                    description: "Pay for continued access. Governor will resent it.".into(),
+                    label: format!("Board pressure (¥{cost:.0})"),
+                    description: "Economic leverage forces compliance. Cooperation −10.".into(),
                     cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
-                    label: "Ignore the dispute".into(),
-                    description: format!("Quarantine and martial law dropped in {region_name}. Other policies remain. −5% board approval."),
+                    label: "Refuse".into(),
+                    description: format!("{gov_name} takes matters into their own hands. Cooperation −15. Governor imposes local quarantine and border controls."),
                     cost: None,
                 },
                 ],
@@ -2616,7 +2616,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             if governor_rebels {
                 let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 state.pending_crises.push((followup_tick, CrisisKind::GovernorHardliner { region_idx: *region_idx }));
-                "Compliance enforced. Governor threatening to defy authority.".into()
+                "Compliance enforced. Governor threatening to block operations.".into()
             } else {
                 "Compliance enforced. Effective but deeply resented.".into()
             }
@@ -3008,32 +3008,34 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
         }
 
         (CrisisKind::GovernorHardliner { region_idx }, 0) => {
-            // Withdraw teams — disable all restrictive policies
+            // Concede priority — cooperation boost but chairman hit
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation + 15.0).min(100.0);
+            }
+            chairman_satisfaction_hit(state, -0.05);
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.travel_ban = false;
-                policy.quarantine = false;
-                policy.martial_law = false;
-                policy.border_controls = false;
-            }
-            format!("Restrictive policies withdrawn in {}", region_name)
+            format!("{} given priority status. Board noted your concession.", region_name)
         }
-        (CrisisKind::GovernorHardliner { .. }, 1) => {
-            // Board pressure override — costs already deducted
-            "Board leverage applied. Governor forced to comply.".into()
+        (CrisisKind::GovernorHardliner { region_idx }, 1) => {
+            // Board pressure — costs already deducted, cooperation drops
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
+            }
+            "Board leverage applied. Compliance restored under protest.".into()
         }
         (CrisisKind::GovernorHardliner { region_idx }, _) => {
-            // Ignore the dispute — patchy enforcement, small chairman satisfaction hit
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            chairman_satisfaction_hit(state, -0.05);
-            // Disable only the most aggressive policies
-            if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.quarantine = false;
-                policy.martial_law = false;
+            // Refuse — governor takes unilateral action, imposes their own policies
+            if let Some(region) = state.regions.get_mut(*region_idx) {
+                region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
             }
-            format!("Dispute unresolved. Quarantine and martial law dropped in {}", region_name)
+            if let Some(policy) = state.policies.get_mut(*region_idx) {
+                policy.quarantine = true;
+                policy.border_controls = true;
+            }
+            let gov_name = state.regions.get(*region_idx)
+                .map(|r| r.governor.name.clone()).unwrap_or_else(|| "Unknown".into());
+            format!("{} imposed quarantine and border controls without authorization.", gov_name)
         }
 
         (CrisisKind::GovernorOperative { .. }, 0) => {
