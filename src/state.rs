@@ -4527,9 +4527,6 @@ pub enum CrisisKind {
 
     /// Quarterly performance review during the apocalypse.
     PerformanceReview,
-    /// Unpaid intern claims a breakthrough. 50/50 gamble.
-    InternDiscovery { cost: f64 },
-
     // --- Contract crises ---
 
     /// A board member offers a new contract. Interrupts gameplay so the player
@@ -4671,7 +4668,6 @@ impl CrisisKind {
             CrisisKind::CultBlockade { .. } => "cult",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
             CrisisKind::PerformanceReview => "performance_review",
-            CrisisKind::InternDiscovery { .. } => "intern",
             CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::ContractDemand { .. } => "contract_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
