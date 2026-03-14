@@ -386,7 +386,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         }
     }
 
-// Field team detained: requires collapsed region, non-bankrupt corp there, 4+ personnel
+    // Field team detained: requires collapsed region, non-bankrupt corp there, 4+ personnel
     if !state.corporations.is_empty() && state.resources.personnel >= 4 {
         let viable: Vec<(usize, usize)> = state.regions.iter().enumerate()
             .filter(|(_, r)| r.collapsed)
@@ -2966,7 +2966,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Blockade dissolved after days of delays. Supply lines degraded.".into()
         }
 
-(CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
+        (CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
             // Stay neutral — lose funding from both
             state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
             format!("Stayed neutral. Both canceled ¥{:.0} in contracts.", neutral_loss)
