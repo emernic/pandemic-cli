@@ -42,7 +42,7 @@ With `recovery_rate: 0.10, lethality: 0.02` → ~83% survive.
 ### Second disease
 
 Add Strain Beta to `new_default()` in a different region. Different character:
-slower infectivity, less lethal, higher cross-region spread, slow recovery (chronic).
+slower within-region spread, less lethal, higher cross-region spread, slow recovery (chronic).
 
 ### Threats panel (`src/ui/threats.rs`)
 
@@ -133,7 +133,7 @@ Display mode on disease stats line with per-mode color coding.
 
 Two levels of mutation in `tick()`:
 
-**Parameter drift:** With probability `mutation_rate`, small random walk on infectivity, lethality, drug_resistance. Gradual evolution.
+**Parameter drift:** With probability `mutation_rate`, small random walk on within-region spread, lethality, drug_resistance. Gradual evolution.
 
 **Variant spawning:** Very rare (`mutation_rate * 0.01`), only when total infected > 10K. Creates a new Disease with modified params, `parent_idx` pointing back. Caps: no variants beyond generation 3, max ~10 total diseases.
 
@@ -156,7 +156,7 @@ Recommendation: start with full cross-immunity (simplest). Add antigenic distanc
 
 ### Tests
 
-- `mutation_drift_occurs`: high mutation_rate, many ticks, verify infectivity changed
+- `mutation_drift_occurs`: high mutation_rate, many ticks, verify within-region spread changed
 - `variant_spawns`: high mutation_rate + high infected, verify `diseases.len()` increases
 - Determinism still holds (seeded RNG)
 

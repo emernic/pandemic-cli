@@ -140,8 +140,8 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
 
     // If Emergency Countermeasure has been enacted, new diseases are also affected.
     if state.enacted_decrees.emergency_countermeasure {
-        use crate::state::{COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT};
-        state.diseases[disease_idx].infectivity *= COUNTERMEASURE_INFECTIVITY_MULT;
+        use crate::state::{COUNTERMEASURE_SPREAD_WITHIN_MULT, COUNTERMEASURE_SPREAD_MULT};
+        state.diseases[disease_idx].within_region_spread *= COUNTERMEASURE_SPREAD_WITHIN_MULT;
         state.diseases[disease_idx].cross_region_spread *= COUNTERMEASURE_SPREAD_MULT;
     }
 
@@ -275,7 +275,7 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 /// After day 20, diseases also seed into multiple regions simultaneously.
 pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
-    // Scaling with infectivity outpacing lethality. Infectivity must stay
+    // Scaling with within-region spread outpacing lethality. Spread must stay
     // high enough that R > 1 even under quarantine. Halved per-day rates to
     // match TICKS_PER_DAY halving — absolute behavior per tick is unchanged.
     // Day 20: inf 3.0x/leth 1.7x, Day 40: 5.0x/2.4x, Day 60: 7.0x/3.1x
@@ -287,7 +287,7 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 
     // Boost the newly spawned disease's stats
     let d = &mut state.diseases[disease_idx];
-    d.infectivity *= inf_scale;
+    d.within_region_spread *= inf_scale;
     d.lethality *= leth_scale;
     d.cross_region_spread *= inf_scale;
     // Don't scale recovery — harder diseases should be harder to recover from

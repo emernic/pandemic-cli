@@ -25,7 +25,7 @@ use crate::state::{
     DecreeId, PolicyId, POLICY_COUNT,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
-    COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_INFECTIVITY_MULT, COUNTERMEASURE_SPREAD_MULT,
+    COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_SPREAD_WITHIN_MULT, COUNTERMEASURE_SPREAD_MULT,
     MANAGE_PRIORITY_POS, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, APPEASE_COST, APPEASE_COOPERATION_GAIN,
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
@@ -609,7 +609,7 @@ pub(crate) fn decree_description(decree: DecreeId) -> String {
         DecreeId::FortifyRegion => format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
             FORTIFY_INFRA_PENALTY * 100.0),
         DecreeId::EmergencyCountermeasure => format!("Within-region spread -{:.0}%, cross-region spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
-            (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
+            (1.0 - COUNTERMEASURE_SPREAD_WITHIN_MULT) * 100.0,
             (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
             COUNTERMEASURE_KILL_FRACTION * 100.0),
     }
@@ -804,10 +804,10 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy: PolicyId) -> Op
                 return None;
             }
             PolicyId::Quarantine => {
-                // infections prevented = infected × infectivity × (1 - factor) × susceptible/pop
+                // infections prevented = infected × spread × (1 - factor) × susceptible/pop
                 if susceptible > 0.0 {
                     let factor = disease.transmission.quarantine_factor();
-                    let prevented = inf.infected * disease.infectivity * (1.0 - factor) * gov_eff * (susceptible / pop);
+                    let prevented = inf.infected * disease.within_region_spread * (1.0 - factor) * gov_eff * (susceptible / pop);
                     total_impact += prevented;
                 }
                 impact_type = "infections";
@@ -816,7 +816,7 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy: PolicyId) -> Op
                 // infections prevented by removing hospital exposure
                 if susceptible > 0.0 {
                     // Baseline has HOSPITAL_EXPOSURE_FACTOR; removing it prevents this fraction
-                    let prevented = inf.infected * disease.infectivity * (HOSPITAL_EXPOSURE_FACTOR - 1.0) * gov_eff * (susceptible / pop);
+                    let prevented = inf.infected * disease.within_region_spread * (HOSPITAL_EXPOSURE_FACTOR - 1.0) * gov_eff * (susceptible / pop);
                     total_impact += prevented;
                 }
                 impact_type = "infections";
@@ -830,7 +830,7 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy: PolicyId) -> Op
                 if susceptible > 0.0 {
                     let factor = disease.transmission.water_sanitation_factor();
                     if factor < 1.0 {
-                        let prevented = inf.infected * disease.infectivity * (1.0 - factor) * gov_eff * (susceptible / pop);
+                        let prevented = inf.infected * disease.within_region_spread * (1.0 - factor) * gov_eff * (susceptible / pop);
                         total_impact += prevented;
                     }
                 }

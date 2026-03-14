@@ -66,42 +66,42 @@ pub(super) fn tick_spread_within(
                 }
 
                 let noise: f64 = 1.0 + (rng.r#gen::<f64>() - 0.5) * 0.1;
-                let mut infectivity = if quarantine_active {
+                let mut spread_rate = if quarantine_active {
                     let base_f = disease.transmission.quarantine_factor();
-                    disease.infectivity * scale_policy_factor(base_f, gov_eff)
+                    disease.within_region_spread * scale_policy_factor(base_f, gov_eff)
                 } else {
-                    disease.infectivity
+                    disease.within_region_spread
                 };
                 // Baseline: hospitals increase spread (+25% from hospital exposure).
                 // Discourage Hospitalization removes this penalty.
                 if !discourage_hosp {
-                    infectivity *= HOSPITAL_EXPOSURE_FACTOR;
+                    spread_rate *= HOSPITAL_EXPOSURE_FACTOR;
                 } else {
                     // Gov effectiveness: partial exposure remains with weak governors
                     let effective = 1.0 + (HOSPITAL_EXPOSURE_FACTOR - 1.0) * (1.0 - gov_eff);
-                    infectivity *= effective;
+                    spread_rate *= effective;
                 }
                 if sanitation_active {
                     let f = disease.transmission.water_sanitation_factor();
-                    infectivity *= scale_policy_factor(f, gov_eff);
+                    spread_rate *= scale_policy_factor(f, gov_eff);
                 }
                 // Screening identifies and isolates cases, reducing spread
                 let screening_factor = policy
                     .map(|p| scale_policy_factor(p.screening.spread_factor(), gov_eff))
                     .unwrap_or(1.0);
-                infectivity *= screening_factor;
+                spread_rate *= screening_factor;
                 // Dense Urban trait: +30% within-region spread
                 if region.has_trait(RegionTrait::DenseUrban) {
-                    infectivity *= 1.3;
+                    spread_rate *= 1.3;
                 }
                 // Infrastructure: civil order anarchy increases spread
                 if region.civil_order <= 0.0 {
-                    infectivity *= crate::state::CIVIL_ORDER_ANARCHY_SPREAD;
+                    spread_rate *= crate::state::CIVIL_ORDER_ANARCHY_SPREAD;
                 }
                 // SEIR: only infectious (not exposed) individuals transmit.
                 // New transmissions enter the exposed compartment.
                 let new_exposed =
-                    (infectivity * inf.infected * (susceptible / pop) * noise)
+                    (spread_rate * inf.infected * (susceptible / pop) * noise)
                         .max(0.0).min(susceptible);
 
                 // Drain exposed → infected at rate 1/incubation_ticks per tick.
@@ -390,7 +390,7 @@ pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
 
 
 /// Apply disease mutation. Each disease has a chance to mutate per tick,
-/// drifting infectivity and lethality parameters slightly.
+/// drifting within-region spread and lethality parameters slightly.
 ///
 /// Mutations are ±10% of the current value (uniform [0.9, 1.1]).
 /// Floor clamps prevent diseases from drifting to zero. No upper clamp —
@@ -404,17 +404,17 @@ pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
         let mutation_chance = disease.effective_mutation_rate();
         if rng.r#gen::<f64>() < mutation_chance {
             disease.strain_generation += 1;
-            // ±10% random walk on infectivity and lethality.
+            // ±10% random walk on within-region spread and lethality.
             let raw_inf = rng.r#gen::<f64>();
             let raw_leth = rng.r#gen::<f64>();
             let inf_factor = 1.0 + (raw_inf - 0.5) * 0.2;
             let leth_factor = 1.0 + (raw_leth - 0.5) * 0.2;
-            disease.infectivity = (disease.infectivity * inf_factor).max(0.001);
+            disease.within_region_spread = (disease.within_region_spread * inf_factor).max(0.001);
             disease.lethality = (disease.lethality * leth_factor).max(0.0001);
             new.events.push(GameEvent::DiseaseMutated {
                 disease_idx: d_idx,
                 new_generation: disease.strain_generation,
-                infectivity_factor: inf_factor,
+                spread_factor: inf_factor,
                 lethality_factor: leth_factor,
             });
         }

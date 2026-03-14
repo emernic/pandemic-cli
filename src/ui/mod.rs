@@ -279,7 +279,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let name = state.diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "?".to_string());
-                let msg = format!("Suppression complete: {} infectivity reduced 20%", name);
+                let msg = format!("Suppression complete: {} within-region spread reduced 20%", name);
                 (3, msg.clone(), msg)
             }
             GameEvent::PathogenAttenuated { disease_idx } => {
@@ -316,7 +316,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("{} personnel resigned, no funding", count);
                 (6, msg.clone(), msg)
             }
-            GameEvent::DiseaseMutated { disease_idx, infectivity_factor, lethality_factor, .. } => {
+            GameEvent::DiseaseMutated { disease_idx, spread_factor, lethality_factor, .. } => {
                 // Suppress mutation events when the player has no medicine affected by this mutation.
                 // The mutation still happened; we just don't generate noise when there's nothing to act on.
                 if !state.has_outdated_medicine(*disease_idx) {
@@ -331,7 +331,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                     .map(|m| m.strain_efficacy(*disease_idx, &state.diseases))
                     .fold(1.0_f64, f64::min);
                 let detail = if state.unlocked_techs.contains(&crate::state::BasicTech::RapidSequencing) {
-                    let inf_pct = (infectivity_factor - 1.0) * 100.0;
+                    let inf_pct = (spread_factor - 1.0) * 100.0;
                     let leth_pct = (lethality_factor - 1.0) * 100.0;
                     format!(" (within-region spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
                 } else {
