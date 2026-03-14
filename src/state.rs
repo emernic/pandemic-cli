@@ -3987,7 +3987,7 @@ impl ResearchKind {
             ResearchKind::ClinicalTrial { .. } => (2, 60.0, 200.0),
             ResearchKind::ManufactureDoses { .. } => (3, 120.0, 250.0),
             ResearchKind::GenomicSequencing { .. } => (5, 200.0, 500.0),
-            ResearchKind::TrainPersonnel => (1, 160.0, 150.0),
+            ResearchKind::TrainPersonnel => (5, 160.0, 150.0),
             ResearchKind::BasicResearch { tech } => match tech {
                 BasicTech::TargetedDrugDesign => (3, 240.0, 600.0),
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
