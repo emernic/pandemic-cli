@@ -21,7 +21,7 @@ use crate::state::{
     BORDER_CONTROLS_PERSONNEL,
     COLLAPSE_DISRUPTION_TICKS,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
-    GOVERNOR_ACTION_INTERVAL, GOVERNOR_DEFIANCE_THRESHOLD,
+    GOVERNOR_ACTION_INTERVAL, GOVERNOR_HOSTILITY_THRESHOLD,
     DISCOURAGE_HOSP_PERSONNEL,
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     MARTIAL_LAW_PERSONNEL,
@@ -418,33 +418,33 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
     }
 }
 
-/// Spend funds to boost a governor's cooperation.
-pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
-    use crate::state::{APPEASE_COST, APPEASE_COOPERATION_GAIN};
+/// Spend funds to negotiate with a governor, boosting cooperation.
+pub(super) fn negotiate_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+    use crate::state::{NEGOTIATE_COST, NEGOTIATE_COOPERATION_GAIN};
 
     if region_idx >= state.regions.len() {
         return (None, false);
     }
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
-        return (Some(format!("{name} has collapsed. No governor to appease.")), false);
+        return (Some(format!("{name} has collapsed. No governor to negotiate with.")), false);
     }
     if state.regions[region_idx].governor.is_dead() {
         let name = &state.regions[region_idx].name;
-        return (Some(format!("{name} is leaderless. No governor to appease.")), false);
+        return (Some(format!("{name} is leaderless. No governor to negotiate with.")), false);
     }
-    if state.resources.funding < APPEASE_COST {
-        return (Some(format!("Not enough funding (need ¥{APPEASE_COST:.0})")), false);
+    if state.resources.funding < NEGOTIATE_COST {
+        return (Some(format!("Not enough funding (need ¥{NEGOTIATE_COST:.0})")), false);
     }
-    state.resources.funding -= APPEASE_COST;
+    state.resources.funding -= NEGOTIATE_COST;
     let gov = &mut state.regions[region_idx].governor;
-    gov.cooperation = (gov.cooperation + APPEASE_COOPERATION_GAIN).min(100.0);
+    gov.cooperation = (gov.cooperation + NEGOTIATE_COOPERATION_GAIN).min(100.0);
     let name = &state.regions[region_idx].governor.name;
     let cooperation = state.regions[region_idx].governor.cooperation;
-    (Some(format!("{name} appeased. Co-Op now {cooperation:.0}. (-¥{APPEASE_COST:.0})")), true)
+    (Some(format!("Deal reached with {name}. Co-Op now {cooperation:.0}. (-¥{NEGOTIATE_COST:.0})")), true)
 }
 
-/// Personality-specific bargain with a defiant governor. Free in funding
+/// Personality-specific bargain with a hostile governor. Free in funding
 /// but costs something else depending on personality.
 pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
     if region_idx >= state.regions.len() {
@@ -458,8 +458,8 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
         let name = &state.regions[region_idx].name;
         return (Some(format!("{name} is leaderless. No governor to bargain with.")), false);
     }
-    if !state.regions[region_idx].governor.is_defiant() {
-        return (Some("Governor is not defiant. No bargain needed.".into()), false);
+    if !state.regions[region_idx].governor.is_hostile() {
+        return (Some("Governor is not hostile. No bargain needed.".into()), false);
     }
 
     let personality = state.regions[region_idx].governor.personality;
@@ -582,7 +582,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         // Severity drain: governors react to infection levels using the
         // infection pressure thresholds from state.rs.
         let severity_drain = if infected > INFECTION_PRESSURE_CRIT {
-            -0.015 // CRIT: ~1.8/day — mid-game defiance in ~14 days at this level
+            -0.015 // CRIT: ~1.8/day — mid-game hostility in ~14 days at this level
         } else if infected > INFECTION_PRESSURE_HIGH {
             -0.008 // HIGH: ~0.96/day
         } else if infected > INFECTION_PRESSURE_MOD {
@@ -657,9 +657,9 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         let new_cooperation = (current + total_drift).clamp(0.0, 100.0);
         state.regions[i].governor.cooperation = new_cooperation;
 
-        // Fire a personality-specific crisis when cooperation first drops below defiance threshold
-        if new_cooperation < GOVERNOR_DEFIANCE_THRESHOLD && !state.regions[i].governor.defiance_crisis_fired {
-            state.regions[i].governor.defiance_crisis_fired = true;
+        // Fire a personality-specific crisis when cooperation first drops below hostility threshold
+        if new_cooperation < GOVERNOR_HOSTILITY_THRESHOLD && !state.regions[i].governor.hostility_crisis_fired {
+            state.regions[i].governor.hostility_crisis_fired = true;
             let kind = match personality {
                 GovernorPersonality::Buffoon => CrisisKind::GovernorBuffoon { region_idx: i },
                 GovernorPersonality::Blowhard => CrisisKind::GovernorBlowhard { region_idx: i },
@@ -672,9 +672,9 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
             state.pending_crises.push((state.tick, kind));
         }
 
-        // Reset the flag when cooperation recovers above defiance threshold
-        if new_cooperation >= GOVERNOR_DEFIANCE_THRESHOLD && state.regions[i].governor.defiance_crisis_fired {
-            state.regions[i].governor.defiance_crisis_fired = false;
+        // Reset the flag when cooperation recovers above hostility threshold
+        if new_cooperation >= GOVERNOR_HOSTILITY_THRESHOLD && state.regions[i].governor.hostility_crisis_fired {
+            state.regions[i].governor.hostility_crisis_fired = false;
         }
 
         // GovernorSick: fire when region has HIGH+ infections and cooldown has passed (~30 days).
@@ -757,7 +757,7 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
     gov.cooperation = SUCCESSOR_COOPERATION;
     gov.dead = false;
     gov.succession_tick = None;
-    gov.defiance_crisis_fired = false;
+    gov.hostility_crisis_fired = false;
     gov.last_action_tick = state.tick;
     gov.bargain_count = 0;
     gov.income_skim = 0.0;
@@ -776,7 +776,7 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
     });
 }
 
-/// Tick autonomous governor actions. Defiant governors periodically act against
+/// Tick autonomous governor actions. Hostile governors periodically act against
 /// the player based on personality. Called from tick().
 pub(super) fn tick_governor_actions(state: &mut GameState) {
     let tick = state.tick;
@@ -791,7 +791,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
         if gov.dead {
             continue;
         }
-        if gov.cooperation >= GOVERNOR_DEFIANCE_THRESHOLD {
+        if gov.cooperation >= GOVERNOR_HOSTILITY_THRESHOLD {
             continue;
         }
         // Check cooldown
@@ -852,7 +852,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
             GovernorPersonality::Recluse => {
                 // Passive neglect: the governor has completely checked out.
                 // Mechanical consequence is through policy_effectiveness (0.4x vs 0.7x
-                // for other defiant governors) — policies barely work in this region.
+                // for other hostile governors) — policies barely work in this region.
                 Some(format!("{gov_name} is unreachable in {region_name}. Policies barely enforced."))
             }
             GovernorPersonality::Hardliner => {
@@ -1628,43 +1628,43 @@ mod tests {
     }
 
     #[test]
-    fn appease_governor_boosts_cooperation() {
+    fn negotiate_governor_boosts_cooperation() {
         let mut state = screening_test_state();
         state.regions[0].governor.cooperation = 50.0;
         let funding_before = state.resources.funding;
 
-        let (msg, ok) = appease_governor(&mut state, 0);
+        let (msg, ok) = negotiate_governor(&mut state, 0);
         assert!(ok, "should succeed with sufficient funds");
-        assert!(msg.unwrap().contains("appeased"));
+        assert!(msg.unwrap().contains("Deal reached"));
         assert!((state.regions[0].governor.cooperation - 65.0).abs() < 0.01);
-        assert!((state.resources.funding - (funding_before - crate::state::APPEASE_COST)).abs() < 0.01);
+        assert!((state.resources.funding - (funding_before - crate::state::NEGOTIATE_COST)).abs() < 0.01);
     }
 
     #[test]
-    fn appease_governor_blocked_by_insufficient_funds() {
+    fn negotiate_governor_blocked_by_insufficient_funds() {
         let mut state = screening_test_state();
         state.resources.funding = 50.0;
 
-        let (_, ok) = appease_governor(&mut state, 0);
+        let (_, ok) = negotiate_governor(&mut state, 0);
         assert!(!ok, "should fail without funds");
     }
 
     #[test]
-    fn appease_governor_blocked_for_collapsed_region() {
+    fn negotiate_governor_blocked_for_collapsed_region() {
         let mut state = screening_test_state();
         state.regions[0].collapsed = true;
 
-        let (msg, ok) = appease_governor(&mut state, 0);
+        let (msg, ok) = negotiate_governor(&mut state, 0);
         assert!(!ok, "should fail for collapsed region");
         assert!(msg.unwrap().contains("collapsed"));
     }
 
     #[test]
-    fn appease_governor_caps_at_100() {
+    fn negotiate_governor_caps_at_100() {
         let mut state = screening_test_state();
         state.regions[0].governor.cooperation = 95.0;
 
-        let (_, ok) = appease_governor(&mut state, 0);
+        let (_, ok) = negotiate_governor(&mut state, 0);
         assert!(ok);
         assert!((state.regions[0].governor.cooperation - 100.0).abs() < 0.01,
             "cooperation should cap at 100: got {}", state.regions[0].governor.cooperation);
@@ -1730,16 +1730,16 @@ mod tests {
     }
 
     #[test]
-    fn governor_defiance_reduces_policy_effectiveness() {
-        use crate::state::GOVERNOR_DEFIANCE_THRESHOLD;
+    fn governor_hostility_reduces_policy_effectiveness() {
+        use crate::state::GOVERNOR_HOSTILITY_THRESHOLD;
 
         let mut state = screening_test_state();
-        state.regions[0].governor.cooperation = GOVERNOR_DEFIANCE_THRESHOLD - 1.0;
-        assert!(state.regions[0].governor.is_defiant());
+        state.regions[0].governor.cooperation = GOVERNOR_HOSTILITY_THRESHOLD - 1.0;
+        assert!(state.regions[0].governor.is_hostile());
         assert!(state.regions[0].policy_effectiveness() < 1.0);
 
-        state.regions[0].governor.cooperation = GOVERNOR_DEFIANCE_THRESHOLD + 1.0;
-        assert!(!state.regions[0].governor.is_defiant());
+        state.regions[0].governor.cooperation = GOVERNOR_HOSTILITY_THRESHOLD + 1.0;
+        assert!(!state.regions[0].governor.is_hostile());
         assert!((state.regions[0].policy_effectiveness() - 1.0).abs() < 0.001);
     }
 
@@ -1858,10 +1858,10 @@ mod tests {
 
     // --- Governor autonomous action tests ---
 
-    fn defiant_governor_state(personality: GovernorPersonality) -> GameState {
+    fn hostile_governor_state(personality: GovernorPersonality) -> GameState {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.personality = personality;
-        state.regions[0].governor.cooperation = 20.0; // well below defiance threshold (40)
+        state.regions[0].governor.cooperation = 20.0; // well below hostility threshold (40)
         state.regions[0].governor.last_action_tick = 0;
         state.tick = GOVERNOR_ACTION_INTERVAL + 1; // past cooldown
         state
@@ -1869,7 +1869,7 @@ mod tests {
 
     #[test]
     fn buffoon_governor_breaks_policy() {
-        let mut state = defiant_governor_state(GovernorPersonality::Buffoon);
+        let mut state = hostile_governor_state(GovernorPersonality::Buffoon);
         state.policies[0].border_controls = true;
 
         tick_governor_actions(&mut state);
@@ -1884,7 +1884,7 @@ mod tests {
 
     #[test]
     fn blowhard_governor_drains_funding() {
-        let mut state = defiant_governor_state(GovernorPersonality::Blowhard);
+        let mut state = hostile_governor_state(GovernorPersonality::Blowhard);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
@@ -1899,7 +1899,7 @@ mod tests {
 
     #[test]
     fn recluse_governor_no_direct_resource_impact() {
-        let mut state = defiant_governor_state(GovernorPersonality::Recluse);
+        let mut state = hostile_governor_state(GovernorPersonality::Recluse);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
 
@@ -1916,7 +1916,7 @@ mod tests {
 
     #[test]
     fn hardliner_governor_imposes_policy() {
-        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
+        let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         assert!(!state.policies[0].quarantine);
 
         tick_governor_actions(&mut state);
@@ -1930,7 +1930,7 @@ mod tests {
 
     #[test]
     fn operative_governor_siphons_funding() {
-        let mut state = defiant_governor_state(GovernorPersonality::Operative);
+        let mut state = hostile_governor_state(GovernorPersonality::Operative);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
@@ -1945,7 +1945,7 @@ mod tests {
 
     #[test]
     fn mobster_governor_extorts_funding() {
-        let mut state = defiant_governor_state(GovernorPersonality::Mobster);
+        let mut state = hostile_governor_state(GovernorPersonality::Mobster);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
@@ -1959,23 +1959,23 @@ mod tests {
     }
 
     #[test]
-    fn recluse_defiant_policy_effectiveness_is_lower() {
-        use crate::state::{GOVERNOR_DEFIANCE_EFFECTIVENESS, RECLUSE_DEFIANCE_EFFECTIVENESS};
-        let mut state = defiant_governor_state(GovernorPersonality::Recluse);
-        assert!(state.regions[0].policy_effectiveness() < GOVERNOR_DEFIANCE_EFFECTIVENESS,
-            "Recluse policy effectiveness ({}) should be lower than standard defiance ({})",
-            state.regions[0].policy_effectiveness(), GOVERNOR_DEFIANCE_EFFECTIVENESS);
-        assert!((state.regions[0].policy_effectiveness() - RECLUSE_DEFIANCE_EFFECTIVENESS).abs() < 0.001);
+    fn recluse_hostile_policy_effectiveness_is_lower() {
+        use crate::state::{GOVERNOR_HOSTILITY_EFFECTIVENESS, RECLUSE_HOSTILITY_EFFECTIVENESS};
+        let mut state = hostile_governor_state(GovernorPersonality::Recluse);
+        assert!(state.regions[0].policy_effectiveness() < GOVERNOR_HOSTILITY_EFFECTIVENESS,
+            "Recluse policy effectiveness ({}) should be lower than standard hostility ({})",
+            state.regions[0].policy_effectiveness(), GOVERNOR_HOSTILITY_EFFECTIVENESS);
+        assert!((state.regions[0].policy_effectiveness() - RECLUSE_HOSTILITY_EFFECTIVENESS).abs() < 0.001);
 
-        // Compare with a non-Recluse defiant governor
+        // Compare with a non-Recluse hostile governor
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
-        assert!((state.regions[0].policy_effectiveness() - GOVERNOR_DEFIANCE_EFFECTIVENESS).abs() < 0.001,
-            "Non-Recluse defiant governor should use standard effectiveness");
+        assert!((state.regions[0].policy_effectiveness() - GOVERNOR_HOSTILITY_EFFECTIVENESS).abs() < 0.001,
+            "Non-Recluse hostile governor should use standard effectiveness");
     }
 
     #[test]
     fn governor_actions_respect_cooldown() {
-        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
+        let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.last_action_tick = state.tick; // just acted
 
         tick_governor_actions(&mut state);
@@ -1986,14 +1986,14 @@ mod tests {
     }
 
     #[test]
-    fn governor_actions_only_fire_when_defiant() {
-        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
+    fn governor_actions_only_fire_when_hostile() {
+        let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.cooperation = 50.0; // above threshold
 
         tick_governor_actions(&mut state);
 
         assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
-            "Governor above defiance threshold should not act");
+            "Governor above hostility threshold should not act");
     }
 
     #[test]
@@ -2236,19 +2236,19 @@ mod tests {
     }
 
     #[test]
-    fn dead_governor_is_not_defiant() {
+    fn dead_governor_is_not_hostile() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.cooperation = 10.0; // well below threshold
-        assert!(state.regions[0].governor.is_defiant());
+        assert!(state.regions[0].governor.is_hostile());
 
         state.regions[0].governor.dead = true;
-        assert!(!state.regions[0].governor.is_defiant());
+        assert!(!state.regions[0].governor.is_hostile());
         assert!(!state.regions[0].governor.is_cooperative());
     }
 
     #[test]
     fn dead_governor_no_autonomous_actions() {
-        let mut state = defiant_governor_state(GovernorPersonality::Hardliner);
+        let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.dead = true;
         let events_before = state.events.len();
 
@@ -2276,13 +2276,13 @@ mod tests {
     }
 
     #[test]
-    fn appease_blocked_for_dead_governor() {
+    fn negotiate_blocked_for_dead_governor() {
         let mut state = GameState::new_default(42);
         state.regions[0].governor.dead = true;
         state.resources.funding = 10000.0;
 
-        let (msg, ok) = appease_governor(&mut state, 0);
-        assert!(!ok, "Should not be able to appease a dead governor");
+        let (msg, ok) = negotiate_governor(&mut state, 0);
+        assert!(!ok, "Should not be able to negotiate with a dead governor");
         assert!(msg.unwrap().contains("leaderless"));
     }
 

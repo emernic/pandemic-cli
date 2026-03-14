@@ -936,14 +936,14 @@ pub const POLICY_COUNT: usize = 12;
 ///
 /// Layout: [0..POLICY_COUNT) = policy toggles in display order,
 ///         MANAGE_PRIORITY_POS = Deployment Priority cycle,
-///         MANAGE_APPEASE_POS = Appease Governor,
-///         MANAGE_BARGAIN_POS = Bargain (only when governor is defiant).
+///         MANAGE_NEGOTIATE_POS = Negotiate with Governor,
+///         MANAGE_BARGAIN_POS = Bargain (only when governor is hostile).
 ///
 /// Both `ui/policy.rs` (render_manage) and `state.rs` (handle_policy_confirm) use
 /// these constants so the two sites stay in sync automatically.
 pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT;
-pub const MANAGE_APPEASE_POS: usize = MANAGE_PRIORITY_POS + 1;
-pub const MANAGE_BARGAIN_POS: usize = MANAGE_APPEASE_POS + 1;
+pub const MANAGE_NEGOTIATE_POS: usize = MANAGE_PRIORITY_POS + 1;
+pub const MANAGE_BARGAIN_POS: usize = MANAGE_NEGOTIATE_POS + 1; // only shown when hostile
 
 
 /// Policy display order — grouped by function for the policy panel UI.
@@ -1909,29 +1909,29 @@ pub const LOGISTICS_HUB_SL_DRAIN_MULT: f64 = 0.6;
 pub const SURVEILLANCE_NETWORK_SCREENING_MULT: f64 = 1.5;
 
 /// Governor personality — character archetypes that determine how governors
-/// behave when loyal vs defiant. Each type requires a different player response.
+/// behave when cooperative vs hostile. Each type requires a different player response.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GovernorPersonality {
-    /// Breaks things by accident. Defiance: randomly deactivates a policy or
+    /// Breaks things by accident. When hostile: randomly deactivates a policy or
     /// wastes funding. Bargain: cheap (public praise) but cooperation decays fast.
     Buffoon,
-    /// All noise. Defiance: small funding drain + alarming event messages.
-    /// The real danger is wasting resources appeasing someone who'd shut up on their own.
+    /// All noise. When hostile: small funding drain + alarming event messages.
+    /// The real danger is wasting resources negotiating with someone who'd shut up on their own.
     /// Bargain: small cost, large cooperation gain.
     Blowhard,
-    /// Absent. Defiance: doesn't sabotage — just stops enforcing. Policy effects
+    /// Absent. When hostile: doesn't sabotage — just stops enforcing. Policy effects
     /// reduced in the region. Bargain: costs personnel (you send someone to manage).
     Recluse,
     /// Zero-sum nationalist. Sees other regions as competitors, not allies.
-    /// Less pliable generally. Defiance: unilaterally activates policies the player
+    /// Less pliable generally. When hostile: unilaterally activates policies the player
     /// didn't set, costing unbudgeted personnel and funding. Pleased when competing
     /// regions suffer. Bargain: give them authority (high cost).
     Hardliner,
-    /// Competent and helpful, always skimming. When loyal, policies more effective.
-    /// When defiant, continuous funding drain that grows over time.
+    /// Competent and helpful, always skimming. When cooperative, policies more effective.
+    /// When hostile, continuous funding drain that grows over time.
     /// Bargain: permanent cut of regional income.
     Operative,
-    /// Everything escalates. Defiance: periodic lump-sum demands that increase each time.
+    /// Everything escalates. When hostile: periodic lump-sum demands that increase each time.
     /// Bargain: pure money, most expensive, gets worse over time.
     Mobster,
 }
@@ -1950,19 +1950,19 @@ impl GovernorPersonality {
 }
 
 /// A regional governor who reacts to player decisions.
-/// Cooperation below 40 means defiance (policies less effective).
-/// Cooperation above 80 means cooperation bonus (cheaper policies).
+/// Cooperation below 40 means hostile (policies less effective, autonomous actions).
+/// Cooperation above 80 means cooperative (cheaper policies).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Governor {
     pub name: String,
     pub personality: GovernorPersonality,
     /// Cooperation 0-100. Starts at 60-80 depending on personality.
     pub cooperation: f64,
-    /// Whether the defiance crisis has already fired for this governor.
-    /// Reset when cooperation recovers above defiance threshold.
+    /// Whether the hostility crisis has already fired for this governor.
+    /// Reset when cooperation recovers above hostility threshold.
     #[serde(default)]
-    pub defiance_crisis_fired: bool,
-    /// Tick when the governor last took an autonomous defiance action.
+    pub hostility_crisis_fired: bool,
+    /// Tick when the governor last took an autonomous hostile action.
     #[serde(default)]
     pub last_action_tick: u64,
     /// Mobster: how many times the player has bargained (escalates cost).
@@ -1997,22 +1997,22 @@ pub const INFECTION_PRESSURE_CRIT: f64 = 100_000.0;
 pub const INFECTION_PRESSURE_HIGH: f64 = 10_000.0;
 pub const INFECTION_PRESSURE_MOD: f64 = 1_000.0;
 
-/// Cooperation threshold below which the governor becomes defiant.
-pub const GOVERNOR_DEFIANCE_THRESHOLD: f64 = 40.0;
+/// Cooperation threshold below which the governor becomes hostile.
+pub const GOVERNOR_HOSTILITY_THRESHOLD: f64 = 40.0;
 /// Cooperation threshold above which the governor provides cooperation bonuses.
 pub const GOVERNOR_COOPERATION_THRESHOLD: f64 = 80.0;
-/// Policy effectiveness multiplier when governor is defiant (most personalities).
-pub const GOVERNOR_DEFIANCE_EFFECTIVENESS: f64 = 0.7;
-/// Policy effectiveness for a defiant Recluse — worse than other personalities
+/// Policy effectiveness multiplier when governor is hostile (most personalities).
+pub const GOVERNOR_HOSTILITY_EFFECTIVENESS: f64 = 0.7;
+/// Policy effectiveness for a hostile Recluse — worse than other personalities
 /// because the governor has completely checked out.
-pub const RECLUSE_DEFIANCE_EFFECTIVENESS: f64 = 0.4;
+pub const RECLUSE_HOSTILITY_EFFECTIVENESS: f64 = 0.4;
 /// Policy cost multiplier when governor is cooperative.
 pub const GOVERNOR_COOPERATION_COST_MULT: f64 = 0.8;
-/// Cost to appease a governor.
-pub const APPEASE_COST: f64 = 200.0;
-/// Cooperation gain from appease action.
-pub const APPEASE_COOPERATION_GAIN: f64 = 15.0;
-/// Ticks between autonomous governor defiance actions (~2 days).
+/// Cost to negotiate with a governor.
+pub const NEGOTIATE_COST: f64 = 200.0;
+/// Cooperation gain from negotiate action.
+pub const NEGOTIATE_COOPERATION_GAIN: f64 = 15.0;
+/// Ticks between autonomous governor hostile actions (~2 days).
 pub const GOVERNOR_ACTION_INTERVAL: u64 = 240;
 /// Policy effectiveness when the region is leaderless (governor dead, no successor yet).
 pub const LEADERLESS_EFFECTIVENESS: f64 = 0.5;
@@ -2087,10 +2087,10 @@ impl Governor {
         self.dead
     }
 
-    /// Returns true if this governor is defiant (cooperation below threshold).
-    /// Dead governors are not defiant — they're absent entirely.
-    pub fn is_defiant(&self) -> bool {
-        !self.dead && self.cooperation < GOVERNOR_DEFIANCE_THRESHOLD
+    /// Returns true if this governor is hostile (cooperation below threshold).
+    /// Dead governors are not hostile — they're absent entirely.
+    pub fn is_hostile(&self) -> bool {
+        !self.dead && self.cooperation < GOVERNOR_HOSTILITY_THRESHOLD
     }
 
     /// Returns true if this governor provides cooperation bonuses.
@@ -2099,15 +2099,15 @@ impl Governor {
     }
 
     /// Policy effectiveness multiplier based on governor state.
-    /// 0.5 = leaderless (dead), 0.7 = defiant, 0.4 = defiant Recluse, 1.0 = normal.
+    /// 0.5 = leaderless (dead), 0.7 = hostile, 0.4 = hostile Recluse, 1.0 = normal.
     pub fn policy_effectiveness(&self) -> f64 {
         if self.dead {
             LEADERLESS_EFFECTIVENESS
-        } else if self.cooperation < GOVERNOR_DEFIANCE_THRESHOLD {
+        } else if self.cooperation < GOVERNOR_HOSTILITY_THRESHOLD {
             if self.personality == GovernorPersonality::Recluse {
-                RECLUSE_DEFIANCE_EFFECTIVENESS
+                RECLUSE_HOSTILITY_EFFECTIVENESS
             } else {
-                GOVERNOR_DEFIANCE_EFFECTIVENESS
+                GOVERNOR_HOSTILITY_EFFECTIVENESS
             }
         } else {
             1.0
@@ -2259,7 +2259,7 @@ fn default_governor() -> Governor {
         name: "Unknown".into(),
         personality: GovernorPersonality::Operative,
         cooperation: 70.0,
-        defiance_crisis_fired: false,
+        hostility_crisis_fired: false,
         last_action_tick: 0,
         bargain_count: 0,
         income_skim: 0.0,
@@ -2318,7 +2318,7 @@ impl Region {
     }
 
     /// Policy effectiveness multiplier based on governor cooperation and personality.
-    /// 1.0 when normal/cooperative, 0.7 when defiant, 0.4 when defiant Recluse.
+    /// 1.0 when normal/cooperative, 0.7 when hostile, 0.4 when hostile Recluse.
     pub fn policy_effectiveness(&self) -> f64 {
         self.governor.policy_effectiveness()
     }
@@ -4305,7 +4305,7 @@ pub enum GameEvent {
     ArkProtocolActivated {
         region_idx: usize,
     },
-    /// A defiant governor took an autonomous action.
+    /// A hostile governor took an autonomous action.
     GovernorAction {
         region_idx: usize,
         description: String,
@@ -4392,10 +4392,9 @@ pub enum GameCommand {
         decree: DecreeId,
         region_idx: Option<usize>,
     },
-    /// Spend funds to boost POL directly.
-    /// Spend funds to boost a governor's cooperation.
-    AppeaseGovernor { region_idx: usize },
-    /// Personality-specific bargain with a defiant governor (non-monetary cost).
+    /// Spend funds to boost a governor's cooperation through negotiation.
+    NegotiateGovernor { region_idx: usize },
+    /// Personality-specific bargain with a hostile governor (non-monetary cost).
     BargainWithGovernor { region_idx: usize },
     /// Toggle a standing order on/off.
     ToggleStandingOrder { kind: StandingOrderKind },
@@ -4524,7 +4523,7 @@ pub enum CrisisKind {
     /// Board member makes demands when contract condition satisfaction drops to warning zone.
     ContractDemand { template_id: u8 },
 
-    // --- Governor defiance crises (fired when cooperation drops below threshold) ---
+    // --- Governor hostility crises (fired when cooperation drops below threshold) ---
 
     /// Hardliner governor declares your directive illegitimate.
     GovernorHardliner { region_idx: usize },
@@ -5298,7 +5297,7 @@ impl GameState {
                     name: "Gov. Torres".into(),
                     personality: GovernorPersonality::Hardliner,
                     cooperation: 65.0,
-                    defiance_crisis_fired: false,
+                    hostility_crisis_fired: false,
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
@@ -5342,7 +5341,7 @@ impl GameState {
                     name: "Gov. Vasquez".into(),
                     personality: GovernorPersonality::Blowhard,
                     cooperation: 70.0,
-                    defiance_crisis_fired: false,
+                    hostility_crisis_fired: false,
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
@@ -5386,7 +5385,7 @@ impl GameState {
                     name: "Gov. Lindqvist".into(),
                     personality: GovernorPersonality::Operative,
                     cooperation: 75.0,
-                    defiance_crisis_fired: false,
+                    hostility_crisis_fired: false,
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
@@ -5430,7 +5429,7 @@ impl GameState {
                     name: "Gov. Okonkwo".into(),
                     personality: GovernorPersonality::Buffoon,
                     cooperation: 60.0,
-                    defiance_crisis_fired: false,
+                    hostility_crisis_fired: false,
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
@@ -5474,7 +5473,7 @@ impl GameState {
                     name: "Gov. Subramaniam".into(),
                     personality: GovernorPersonality::Recluse,
                     cooperation: 70.0,
-                    defiance_crisis_fired: false,
+                    hostility_crisis_fired: false,
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
@@ -5518,7 +5517,7 @@ impl GameState {
                     name: "Gov. Whitfield".into(),
                     personality: GovernorPersonality::Mobster,
                     cooperation: 75.0,
-                    defiance_crisis_fired: false,
+                    hostility_crisis_fired: false,
                     last_action_tick: 0,
                     bargain_count: 0,
                     income_skim: 0.0,
@@ -6179,17 +6178,17 @@ impl GameState {
     }
 
     /// Whether a personality-specific bargain is available for the given region.
-    /// Requires: non-collapsed region, defiant governor, and personality-specific
+    /// Requires: non-collapsed region, hostile governor, and personality-specific
     /// preconditions (Technocrat needs active applied research).
     pub fn bargain_available(&self, region_idx: usize) -> bool {
         let region = match self.regions.get(region_idx) {
             Some(r) => r,
             None => return false,
         };
-        if region.collapsed || region.governor.is_dead() || !region.governor.is_defiant() {
+        if region.collapsed || region.governor.is_dead() || !region.governor.is_hostile() {
             return false;
         }
-        // All personality types can always bargain when defiant
+        // All personality types can always bargain when hostile
         true
     }
 

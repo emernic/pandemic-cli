@@ -163,7 +163,7 @@ This is intentional. Command handlers have the context needed to compose feedbac
 **Named constants that tie the pieces together:**
 - `STANDING_ORDER_COUNT` — number of standing orders in Policy/BrowseRegions. Used by `panel_selection_max()` and asserted at render time in `ui/policy.rs`.
 - `FIELD_OP_TYPE_COUNT` — number of deployable op types in Operations/BrowseOps. Used by `panel_selection_max()` and the ops array in `ui/operations.rs`.
-- `MANAGE_*` constants — positions within Policy/ManagePolicies (policy toggles, infra repair, priority, appease, bargain). Shared between renderer and handler.
+- `MANAGE_*` constants — positions within Policy/ManagePolicies (policy toggles, infra repair, priority, negotiate, bargain). Shared between renderer and handler.
 
 **The invariant:** when adding a new item to any panel list, you must update both the renderer AND `panel_selection_max()`. The named constants enforce this for the fragile cases — if `STANDING_ORDER_COUNT` drifts from the actual array length, a `debug_assert` fires at render time.
 

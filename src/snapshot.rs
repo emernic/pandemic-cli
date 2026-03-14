@@ -377,17 +377,17 @@ mod tests {
     }
 
     #[test]
-    fn policy_panel_shows_appease() {
+    fn policy_panel_shows_negotiate() {
         let state = GameState::new_default(42);
-        // Open policy panel (goes directly to region management), navigate down to Appease.
-        // Appease is at position MANAGE_APPEASE_POS = POLICY_COUNT + 1 = 13.
+        // Open policy panel (goes directly to region management), navigate down to Negotiate.
+        // Negotiate is at position MANAGE_NEGOTIATE_POS = POLICY_COUNT + 1 = 13.
         let steps: Vec<String> = std::iter::once("p")
-            .chain(std::iter::repeat("down").take(crate::state::MANAGE_APPEASE_POS))
+            .chain(std::iter::repeat("down").take(crate::state::MANAGE_NEGOTIATE_POS))
             .map(|s| s.to_string())
             .collect();
         let result = run_snapshot(state, &steps).unwrap();
-        assert!(result.screen.contains("Appease Gov."),
-            "policy management should show Appease option");
+        assert!(result.screen.contains("Negotiate:"),
+            "policy management should show Negotiate option");
     }
 
     #[test]

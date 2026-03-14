@@ -112,7 +112,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // Governor cooperation drift — reacts to policies, deaths, and personality.
     policy::tick_governor_cooperation(&mut new);
 
-    // Governor autonomous actions — defiant governors act against the player.
+    // Governor autonomous actions — hostile governors act against the player.
     policy::tick_governor_actions(&mut new);
 
     // Standing orders — auto-enable policies when severity thresholds are crossed.
@@ -916,8 +916,8 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             let (msg, success) = policy::enact_decree(state, *decree, *region_idx);
             CommandResult { message: msg, success }
         }
-        GameCommand::AppeaseGovernor { region_idx } => {
-            let (msg, success) = policy::appease_governor(state, *region_idx);
+        GameCommand::NegotiateGovernor { region_idx } => {
+            let (msg, success) = policy::negotiate_governor(state, *region_idx);
             CommandResult { message: msg, success }
         }
         GameCommand::BargainWithGovernor { region_idx } => {
@@ -5498,11 +5498,11 @@ mod tests {
     }
 
     #[test]
-    fn bargain_fails_when_not_defiant() {
+    fn bargain_fails_when_not_hostile() {
         let mut state = GameState::new_default(42);
-        state.regions[0].governor.cooperation = 60.0; // above defiance threshold
+        state.regions[0].governor.cooperation = 60.0; // above hostility threshold
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
-        assert!(!ok, "bargain should fail when governor isn't defiant");
+        assert!(!ok, "bargain should fail when governor isn't hostile");
     }
 
     #[test]

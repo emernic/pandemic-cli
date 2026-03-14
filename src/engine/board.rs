@@ -260,7 +260,7 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                             .filter(|r| !r.governor.dead)
                             .fold((0.0, 0usize), |(s, c), r| (s + r.governor.cooperation, c + 1));
                         let avg_coop = if count == 0 { 60.0 } else { sum / count as f64 };
-                        // avg_coop ~40 (defiant) = +0.20, ~60 (neutral) = 0.0,
+                        // avg_coop ~40 (hostile) = +0.20, ~60 (neutral) = 0.0,
                         // ~80 (cooperative) = -0.20
                         let dysfunction = ((60.0 - avg_coop) / 100.0).clamp(-0.20, 0.20);
                         continuous.push(SatisfactionModifier {

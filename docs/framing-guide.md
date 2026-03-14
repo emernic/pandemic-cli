@@ -20,7 +20,7 @@ The UI uses short verbs for clarity. The underlying fiction is usually more spec
 
 - `Enable Quarantine` means the N.W.H.O. issues a directive and the governor enforces it locally.
 - `Build Screening` means the N.W.H.O. funds and stands up a program in cooperation with local authorities and infrastructure owners.
-- `Appease Governor` means money, concessions, or compensation are being used to improve compliance.
+- `Negotiate: Governor` means money, concessions, or compensation are being used to improve compliance.
 - `Accept Contract` means the player is accepting a board member's terms, not receiving neutral outside aid.
 - `Chairman Approval` is not public legitimacy. It is the chairman's willingness to keep backing you.
 - `Funding` is board-controlled operating budget plus attached money from contracts, not tax revenue.

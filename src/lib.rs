@@ -9,7 +9,7 @@ use action::Action;
 use engine::execute_command;
 use state::{
     DecreeId, DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
-    LedgerUiState, MANAGE_APPEASE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
+    LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
     MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
@@ -442,11 +442,11 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
     match ui.policy_ui.clone() {
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             if ui.panel_selection == MANAGE_BARGAIN_POS {
-                // Bargain with Governor (only when defiant)
+                // Bargain with Governor (only when hostile)
                 Some(GameCommand::BargainWithGovernor { region_idx })
-            } else if ui.panel_selection == MANAGE_APPEASE_POS {
-                // Appease Governor
-                Some(GameCommand::AppeaseGovernor { region_idx })
+            } else if ui.panel_selection == MANAGE_NEGOTIATE_POS {
+                // Negotiate with Governor
+                Some(GameCommand::NegotiateGovernor { region_idx })
             } else if ui.panel_selection == MANAGE_PRIORITY_POS {
                 // Cycle deployment priority
                 Some(GameCommand::CycleDeployPriority { region_idx })

@@ -814,15 +814,15 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 ),
             ]));
         } else {
-            let cooperation_color = if gov.is_defiant() {
+            let cooperation_color = if gov.is_hostile() {
                 Color::Red
             } else if gov.is_cooperative() {
                 Color::Green
             } else {
                 Color::Yellow
             };
-            let status = if gov.is_defiant() {
-                " DEFIANT"
+            let status = if gov.is_hostile() {
+                " HOSTILE"
             } else if gov.is_cooperative() {
                 " cooperative"
             } else {
@@ -854,6 +854,11 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                         Span::styled(
                             format!(" (policies {:.0}% effective)", eff * 100.0),
                             Style::default().fg(Color::Red),
+                        )
+                    } else if gov.is_cooperative() {
+                        Span::styled(
+                            " (−20% policy cost)",
+                            Style::default().fg(Color::Green),
                         )
                     } else {
                         Span::raw("")
