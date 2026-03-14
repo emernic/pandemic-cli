@@ -3966,7 +3966,7 @@ mod tests {
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            kind: CrisisKind::LabAccident { targets_basic: false },
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -3991,7 +3991,7 @@ mod tests {
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            kind: CrisisKind::LabAccident { targets_basic: false },
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -4015,7 +4015,7 @@ mod tests {
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
+            kind: CrisisKind::LabAccident { targets_basic: false },
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -4044,50 +4044,13 @@ mod tests {
         let mut state = GameState::new_default(42);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::SupplyDisruption { medicine_idx: 0 }, 0);
+        setup_crisis(&mut state, CrisisKind::LabAccident { targets_basic: false }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none());
         assert!((after.resources.funding - funding_before).abs() < 0.01,
             "free option should not deduct funding");
         assert_eq!(after.resources.personnel, personnel_before,
             "free option should not deduct personnel");
-    }
-
-    #[test]
-    fn supply_disruption_option_a_loses_half_doses() {
-        let mut state = GameState::new_default(42);
-        unlock_all_medicines(&mut state);
-        state.medicines[0].doses = 1000.0;
-        setup_crisis(&mut state, CrisisKind::SupplyDisruption { medicine_idx: 0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.active_crisis.is_none());
-        assert_eq!(after.medicines[0].doses, 500.0,
-            "option A should lose 50% doses");
-    }
-
-    #[test]
-    fn supply_disruption_option_b_loses_fifteen_percent() {
-        use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
-        unlock_all_medicines(&mut state);
-        state.medicines[0].doses = 1000.0;
-        // Option B costs $300 — set up with cost
-        state.sim_state = crate::state::SimState::Event { was_running: true };
-        state.ui.crisis_selection = 1;
-        state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::SupplyDisruption { medicine_idx: 0 },
-            title: "T".into(),
-            description: "T".into(),
-            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-             crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 300.0, personnel: 0, ..Default::default() }) },
-            ],
-            tick_created: 0,
-        });
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.active_crisis.is_none());
-        assert_eq!(after.medicines[0].doses, 850.0,
-            "option B should lose 15% of doses to transit delays");
     }
 
     #[test]

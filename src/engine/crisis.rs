@@ -171,7 +171,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         "lab" => fade_out(40.0, 60.0),
 
         // --- Mid-game: escalating pressure (ramp up day 10-24, fade after 50-70) ---
-        "supply" | "blackmarket" | "riot" | "mutation" |
+        "blackmarket" | "riot" | "mutation" |
         "diversion" | "exhaustion"
             => ramp_up(10.0, 24.0) * fade_out(50.0, 70.0),
 
@@ -206,16 +206,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     let day = state.tick as f64 / TICKS_PER_DAY;
 
     // --- Original crisis types ---
-
-    // Supply disruption: requires at least one medicine with doses
-    let meds_with_doses: Vec<usize> = state.medicines.iter().enumerate()
-        .filter(|(_, m)| m.unlocked && m.doses > 0.0)
-        .map(|(i, _)| i)
-        .collect();
-    if !meds_with_doses.is_empty() {
-        let idx = meds_with_doses[rng.r#gen::<usize>() % meds_with_doses.len()];
-        candidates.push(CrisisKind::SupplyDisruption { medicine_idx: idx });
-    }
 
     // Lab accident: requires active applied or basic research
     let has_applied = !state.active_in_category(ResearchCategory::Applied).is_empty();
@@ -491,37 +481,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
     let event = match &kind {
-        CrisisKind::SupplyDisruption { medicine_idx } => {
-            let med_name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str()).unwrap_or("Unknown");
-            let doses = state.medicines.get(*medicine_idx)
-                .map(|m| m.doses).unwrap_or(0.0);
-            let loss = (doses * 0.5).round();
-            CrisisEvent {
-                title: "Supply Chain Disruption".into(),
-                description: format!(
-                    "Cold chain failure en route. {} doses of {} at risk of spoilage.",
-                    crate::format_number(loss), med_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Accept losses".into(),
-                    description: format!("Lose {} doses", crate::format_number(loss)),
-                    cost: None,
-                },
-                 {
-                    let reroute_loss = (doses * 0.15).round();
-                    let cost = scaled_cost(state, 0.15, 100.0, 600.0);
-                    CrisisOption {
-                        label: format!("Emergency reroute (¥{:.0})", cost),
-                        description: format!("Save most of the shipment. {} doses still lost to transit delays.", crate::format_number(reroute_loss)),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::LabAccident { targets_basic } => {
             let track = if *targets_basic { "basic" } else { "applied" };
             CrisisEvent {
@@ -2385,27 +2344,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
     let mut post_action = CrisisPostAction::None;
     let msg = match (&crisis.kind, choice) {
         // --- Original crisis resolutions ---
-        (CrisisKind::SupplyDisruption { medicine_idx }, 0) => {
-            if let Some(med) = state.medicines.get_mut(*medicine_idx) {
-                let lost = (med.doses * 0.5).round();
-                med.doses = (med.doses - lost).max(0.0);
-                format!("Lost {} doses of {} to supply disruption",
-                    crate::format_number(lost), med.name)
-            } else {
-                "Supply disruption resolved".into()
-            }
-        }
-        (CrisisKind::SupplyDisruption { medicine_idx }, _) => {
-            // Emergency reroute — still lose 15% from transit delays
-            if let Some(med) = state.medicines.get_mut(*medicine_idx) {
-                let lost = (med.doses * 0.15).round();
-                med.doses = (med.doses - lost).max(0.0);
-                format!("Supply chain rerouted. {} doses of {} lost to transit delays.",
-                    crate::format_number(lost), med.name)
-            } else {
-                "Emergency reroute successful.".into()
-            }
-        }
         (CrisisKind::LabAccident { targets_basic }, 0) => {
             if *targets_basic {
                 state.active_research.retain(|p| p.kind.category() != ResearchCategory::Basic);
@@ -3630,12 +3568,6 @@ mod tests {
 assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             "cult blockade should be more likely late than early");
 
-        // Mid-game crises should peak in the middle
-        assert!(phase_weight("supply", 40.0) > phase_weight("supply", 2.0),
-            "supply disruption should be more likely mid-game than very early");
-        assert!(phase_weight("supply", 40.0) > phase_weight("supply", 80.0),
-            "supply disruption should be more likely mid-game than very late");
-
         // No crisis type should ever have zero weight (anachronistic = rare but possible)
         assert!(phase_weight("political", 60.0) > 0.0,
             "even late-game, bureaucratic crises should have non-zero weight");
@@ -3651,8 +3583,6 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.tick = (5.0 * TICKS_PER_DAY) as u64;
         // Ensure preconditions for various crisis types
         state.policies[0].quarantine = true;
-        state.medicines[0].doses = 50.0; // for supply disruption
-
         let mut tags: Vec<&str> = Vec::new();
         for seed in 0..50u64 {
             let mut r = ChaCha8Rng::seed_from_u64(seed);

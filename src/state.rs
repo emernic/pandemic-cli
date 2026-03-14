@@ -4489,8 +4489,6 @@ impl CrisisCost {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CrisisKind {
-    /// Supply chain disrupted — lose medicine doses or pay to protect them.
-    SupplyDisruption { medicine_idx: usize },
     /// Lab accident — lose applied or basic research, or spend resources to contain.
     LabAccident { targets_basic: bool },
     /// Political pressure — lift quarantine in a region or pay to resist.
@@ -4656,7 +4654,6 @@ impl CrisisKind {
     /// Used for cooldown tracking to prevent back-to-back repeats.
     pub fn tag(&self) -> &'static str {
         match self {
-            CrisisKind::SupplyDisruption { .. } => "supply",
             CrisisKind::LabAccident { .. } => "lab",
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
