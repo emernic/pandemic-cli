@@ -1265,6 +1265,8 @@ pub const CONTRACT_DEGRADE_RATE: f64 = 0.05 / 120.0;
 pub const CONTRACT_RECOVER_RATE: f64 = 0.02 / 120.0;
 /// Minimum ticks between contract demand crises from the same contract (~5 days).
 pub const CONTRACT_DEMAND_COOLDOWN: u64 = 600;
+/// Loyalty raise multiplier — contract income increases by this fraction (e.g. 0.15 = 15% raise).
+pub const LOYALTY_RAISE_FRACTION: f64 = 0.15;
 
 // Corporation system — regional economic entities.
 // Each region hosts 3 corporations from different sectors. Their financial health

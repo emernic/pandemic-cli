@@ -324,7 +324,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 let kind = CrisisKind::NewPathogenDetected { disease_idx };
                 if new.active_crisis.is_none() {
                     let alert = crisis::build_crisis_event(&new, kind);
-                    crisis::activate_crisis(&mut new, alert);
+                    let post = crisis::activate_crisis(&mut new, alert);
+                    dispatch_crisis_post_action(&mut new, post);
                 } else {
                     new.pending_crises.push((new.tick, kind));
                 }
@@ -418,7 +419,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         {
             let (_, kind) = new.pending_crises.remove(idx);
             let crisis = crisis::build_crisis_event(&new, kind);
-            crisis::activate_crisis(&mut new, crisis);
+            let post = crisis::activate_crisis(&mut new, crisis);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -442,7 +444,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 // Only fire if destination is still valid (uncollapsed).
                 if !new.regions[*to_region].collapsed {
                     let crisis = crisis::build_crisis_event(&new, kind);
-                    crisis::activate_crisis(&mut new, crisis);
+                    let post = crisis::activate_crisis(&mut new, crisis);
+                    dispatch_crisis_post_action(&mut new, post);
                 }
             } else if let CrisisKind::ArkProtocol { ref mut region_idx } = kind {
                 // Validate Ark target: if region collapsed since queuing, re-pick
@@ -462,7 +465,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 // Only fire if target is valid (uncollapsed).
                 if !new.regions[*region_idx].collapsed {
                     let crisis = crisis::build_crisis_event(&new, kind);
-                    crisis::activate_crisis(&mut new, crisis);
+                    let post = crisis::activate_crisis(&mut new, crisis);
+                    dispatch_crisis_post_action(&mut new, post);
                 }
             } else if matches!(kind,
                 CrisisKind::LoyaltyRaise { template_id } | CrisisKind::ContractDemand { template_id }
@@ -471,7 +475,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 // Contract was revoked/cancelled since this crisis was queued — drop it.
             } else {
                 let crisis = crisis::build_crisis_event(&new, kind);
-                crisis::activate_crisis(&mut new, crisis);
+                let post = crisis::activate_crisis(&mut new, crisis);
+                dispatch_crisis_post_action(&mut new, post);
             }
         }
     }
@@ -483,7 +488,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         && !new.board_members.is_empty()
     {
         let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardMeeting);
-        crisis::activate_crisis(&mut new, crisis);
+        let post = crisis::activate_crisis(&mut new, crisis);
+        dispatch_crisis_post_action(&mut new, post);
         // Schedule next meeting 7-10 days from now.
         let base = (7.0 * TICKS_PER_DAY) as u64;
         let range = (3.0 * TICKS_PER_DAY) as u64;
@@ -498,7 +504,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         && new.exceeds_embezzlement_threshold()
     {
         let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardEmbezzlementWarning);
-        crisis::activate_crisis(&mut new, crisis);
+        let post = crisis::activate_crisis(&mut new, crisis);
+        dispatch_crisis_post_action(&mut new, post);
     }
 
     // Board Research Inquiry: fires once around day 5 if no identification research has been
@@ -521,7 +528,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                 // Mark as fired immediately so it never fires again, even if manually cleared.
                 new.crisis_cooldowns.insert("board_research_inquiry".to_string(), new.tick);
                 let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardResearchInquiry);
-                crisis::activate_crisis(&mut new, crisis);
+                let post = crisis::activate_crisis(&mut new, crisis);
+                dispatch_crisis_post_action(&mut new, post);
             }
         }
     }
@@ -541,7 +549,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             && !on_cooldown
         {
             let crisis = crisis::build_crisis_event(&new, CrisisKind::VoteOfNoConfidence);
-            crisis::activate_crisis(&mut new, crisis);
+            let post = crisis::activate_crisis(&mut new, crisis);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -559,7 +568,8 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         && rng_crisis.r#gen::<f64>() < 1.0 / crisis_interval
     {
         if let Some(crisis) = crisis::generate_crisis(&new, &mut rng_crisis) {
-            crisis::activate_crisis(&mut new, crisis);
+            let post = crisis::activate_crisis(&mut new, crisis);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -828,6 +838,26 @@ pub struct CommandResult {
     pub success: bool,
 }
 
+/// Dispatch cross-subsystem effects from crisis resolution.
+/// Called from both `execute_command` (manual) and `tick` (auto-resolve).
+fn dispatch_crisis_post_action(state: &mut GameState, post_action: crisis::CrisisPostAction) -> Option<String> {
+    match post_action {
+        crisis::CrisisPostAction::None => None,
+        crisis::CrisisPostAction::AcceptContract => {
+            let (_, msg) = contracts::accept_contract(state);
+            msg
+        }
+        crisis::CrisisPostAction::RejectContract => {
+            let (_, msg) = contracts::reject_contract(state);
+            msg
+        }
+        crisis::CrisisPostAction::CancelContract { board_member_idx } => {
+            contracts::cancel_contract(state, board_member_idx);
+            None
+        }
+    }
+}
+
 /// Execute a game command. Pure game logic — does NOT touch UI state.
 /// The caller is responsible for UI transitions based on the result.
 pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResult {
@@ -859,7 +889,10 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             CommandResult { message: msg, success }
         }
         GameCommand::ResolveCrisis { choice } => {
-            let msg = crisis::resolve_crisis(state, *choice);
+            let (mut msg, post_action) = crisis::resolve_crisis(state, *choice);
+            if let Some(m) = dispatch_crisis_post_action(state, post_action) {
+                msg = m;
+            }
             CommandResult { message: Some(msg), success: true }
         }
         GameCommand::EnactDecree { decree, region_idx } => {
