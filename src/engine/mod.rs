@@ -606,7 +606,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             new.events.push(GameEvent::RegionCollapsed { region_idx: i, personnel_lost: lost_personnel });
 
             // Apply network disruption to connected non-collapsed regions.
-            // Medicine deployment costs +50% for 10 days (see DISRUPTION_MEDICINE_COST_MULT).
+            // Apply network disruption to connected non-collapsed regions for 10 days.
             let disruption_end = new.tick + COLLAPSE_DISRUPTION_TICKS;
             let connected: Vec<usize> = new.regions[i].connections.clone();
             for &c in &connected {
@@ -1422,11 +1422,10 @@ mod tests {
             Some(MedicineUiState::SelectRegion { .. })
         ));
         let funding_before = state.resources.funding;
-        let deploy_cost = state.medicine_deploy_cost(vax_idx, 0);
         let doses_before = state.medicines[vax_idx].doses;
         state = apply_action(&state, &Action::Confirm); // select region → deploys directly (tested, single target)
-        // Dispatch deducts cost and doses immediately, creates a pending shipment
-        assert_eq!(state.resources.funding, funding_before - deploy_cost, "cost deducted on dispatch");
+        // Dispatch deducts doses immediately (no funding cost), creates a pending shipment
+        assert_eq!(state.resources.funding, funding_before, "no funding cost on deploy");
         assert!(state.medicines[vax_idx].doses < doses_before, "doses deducted on dispatch");
         assert_eq!(state.pending_shipments.len(), 1, "should have one pending shipment");
         assert!(matches!(
@@ -1464,15 +1463,14 @@ mod tests {
         // Deploy treatment directly via engine API
         state.medicines[0].tested_against.push(0);
         let funding_before = state.resources.funding;
-        let deploy_cost = state.medicine_deploy_cost(0, ri);
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, ri,
             DeployTarget { disease_idx: 0 },
         );
         assert!(ok, "deployment should succeed");
 
-        // Dispatch: cost deducted, doses deducted, pending shipment created
-        assert_eq!(state.resources.funding, funding_before - deploy_cost);
+        // Dispatch: doses deducted (no funding cost), pending shipment created
+        assert_eq!(state.resources.funding, funding_before);
         assert!(
             state.medicines[0].doses < state.medicines[0].max_doses,
             "doses should have been deducted on dispatch"
@@ -1514,55 +1512,6 @@ mod tests {
             msg.as_ref().unwrap().contains("No doses remaining"),
             "expected no doses message, got: {:?}", msg
         );
-    }
-
-    #[test]
-    fn medicine_insufficient_funds() {
-        let mut state = GameState::new_default(42);
-        unlock_all_medicines(&mut state);
-        state.resources.funding = 5.0; // Below flat deploy cost of 10.0
-        state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // select medicine
-        state = apply_action(&state, &Action::Confirm); // select region → tries to deploy
-        let funding_before = state.resources.funding;
-        // With single-target tested medicine, confirm on region goes straight to deploy.
-        // But insufficient funds should block and show error.
-        assert_eq!(state.resources.funding, funding_before);
-        assert!(
-            state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"),
-            "expected insufficient funds message, got: {:?}",
-            state.ui.status_message
-        );
-        // Should stay on SelectRegion since deploy was blocked
-        assert!(
-            matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })),
-            "should stay on SelectRegion when funds insufficient, got: {:?}",
-            state.ui.medicine_ui
-        );
-    }
-
-    #[test]
-    fn untested_medicine_insufficient_funds_skips_warning() {
-        let mut state = GameState::new_default(42);
-        unlock_untested(&mut state);
-        state.resources.funding = 5.0; // Below flat deploy cost of 10.0
-        state = apply_action(&state, &Action::OpenMedicines);
-        state = apply_action(&state, &Action::Confirm); // select medicine
-        let funding_before = state.resources.funding;
-        state = apply_action(&state, &Action::Confirm); // select region → tries to deploy
-        // Should show funds error, NOT the untested warning
-        assert!(
-            state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"),
-            "expected funds error, got: {:?}",
-            state.ui.status_message
-        );
-        // Should stay on SelectRegion
-        assert!(
-            matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })),
-            "should stay on SelectRegion, not go to ConfirmDeploy, got: {:?}",
-            state.ui.medicine_ui
-        );
-        assert_eq!(state.resources.funding, funding_before);
     }
 
     #[test]
@@ -1726,7 +1675,7 @@ mod tests {
             matches!(state.ui.medicine_ui, Some(MedicineUiState::DeployResult { .. })),
             "should show DeployResult after deploy"
         );
-        assert!(state.resources.funding < funding_before, "should have spent funding");
+        assert_eq!(state.resources.funding, funding_before, "deploy should be free");
     }
 
     #[test]
@@ -1775,7 +1724,7 @@ mod tests {
             &mut state, 0, ri, DeployTarget { disease_idx: 0 },
         );
         assert!(ok, "tested medicine should deploy immediately");
-        assert!(state.resources.funding < funding_before, "should have spent funding");
+        assert_eq!(state.resources.funding, funding_before, "deploy should be free");
     }
 
     #[test]
@@ -2836,7 +2785,6 @@ mod tests {
             mode: crate::state::MedicineMode::Therapeutic,
             mechanism: None,
             target_diseases: vec![0],
-            cost: 100.0,
             doses: 1000.0,
             max_doses: 1000.0,
             unlocked: true,

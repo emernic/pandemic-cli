@@ -415,13 +415,12 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.ui.home_splash_done = true;
 
-        // Add a fake pending shipment with a known cost
+        // Add a fake pending shipment
         state.pending_shipments.push(Shipment {
             medicine_idx: 0,
             region_idx: 0,
             target: DeployTarget { disease_idx: 0 },
             doses: 1000.0,
-            cost: 250.0,
             arrive_tick: state.tick + TICKS_PER_DAY as u64,
         });
 

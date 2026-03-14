@@ -312,7 +312,6 @@ fn render_select_medicine(f: &mut Frame, area: Rect, state: &GameState) {
         let name_color = if is_selected { Color::Yellow } else { Color::White };
 
         let dose_cost = state.emergency_delivery_dose_cost(med_idx);
-        let funding_cost = state.emergency_delivery_funding_cost(med_idx, state.ui.map_selection);
 
         // Check if tested against diseases in the target region
         let region_diseases: Vec<usize> = state.regions[state.ui.map_selection].infections.iter()
@@ -337,7 +336,7 @@ fn render_select_medicine(f: &mut Frame, area: Rect, state: &GameState) {
             Span::styled(marker, Style::default().fg(Color::Yellow)),
             Span::styled(&med.name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
             Span::styled(
-                format!("  ({:.0} doses, ¥{:.0})", dose_cost, funding_cost),
+                format!("  ({:.0} doses)", dose_cost),
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
@@ -372,7 +371,6 @@ fn render_confirm_delivery(f: &mut Frame, area: Rect, state: &GameState, medicin
     let gov = &region.governor;
 
     let dose_cost = state.emergency_delivery_dose_cost(medicine_idx);
-    let funding_cost = state.emergency_delivery_funding_cost(medicine_idx, region_idx);
 
     let region_diseases: Vec<usize> = region.infections.iter()
         .map(|inf| inf.disease_idx)
@@ -397,7 +395,7 @@ fn render_confirm_delivery(f: &mut Frame, area: Rect, state: &GameState, medicin
     lines.push(Line::from(vec![
         Span::styled("  Cost: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("{:.0} doses + ¥{:.0} + 2 personnel (1 day)", dose_cost, funding_cost),
+            format!("{:.0} doses + 2 personnel (1 day)", dose_cost),
             Style::default().fg(Color::Yellow),
         ),
     ]));

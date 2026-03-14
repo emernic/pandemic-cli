@@ -335,14 +335,6 @@ fn try_deploy_or_confirm(
     disease_idx: usize,
 ) -> Option<GameCommand> {
     let target = DeployTarget { disease_idx };
-    let deploy_cost = state.medicine_deploy_cost(medicine_idx, region_idx);
-    if state.resources.funding < deploy_cost {
-        ui.status_message = Some(
-            format!("Insufficient funds! Need ¥{:.0}, have ¥{:.0}",
-                deploy_cost, state.resources.funding),
-        );
-        return None;
-    }
     let med = &state.medicines[medicine_idx];
     let is_tested = med.tested_against.contains(&disease_idx);
     if !is_tested {
