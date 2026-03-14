@@ -1,5 +1,5 @@
 use crate::state::{
-    FIELD_OPS_RESTORE, GameEvent, GameOutcome, GameState, InfraSystem, ResearchCategory,
+    FIELD_OPS_RESTORE, GameEvent, GameOutcome, GameState, InfraSystem,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -89,7 +89,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
         }
     });
     // Track which categories had completions for post-processing
-    let had_field_completion = completed.iter().any(|p| p.kind.category() == ResearchCategory::Field);
+    let had_field_completion = completed.iter().any(|p| p.kind.is_field_work());
 
     for project in &completed {
         match &project.kind {
@@ -333,7 +333,7 @@ mod tests {
     use crate::apply_action;
     use crate::engine::tick;
     use crate::state::{
-        GameOutcome, GameState, ResearchCategory, ResearchFlatItem, ResearchKind, ResearchProject,
+        GameOutcome, GameState, ResearchFlatItem, ResearchKind, ResearchProject,
     };
 
     /// Helper: open research panel, navigate to first available item matching `kind_pred`, and confirm through.
@@ -367,14 +367,14 @@ mod tests {
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Start
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
         assert_eq!(state.diseases[0].knowledge, 0.0);
 
         // Advance to completion (160 ticks at 1x speed)
         for _ in 0..160 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty()); // Project completed
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty()); // Project completed
         assert!((state.diseases[0].knowledge - 0.50).abs() < 0.01);
     }
 
@@ -387,14 +387,14 @@ mod tests {
         assert!(!state.medicines[0].unlocked);
 
         // Start applied research: Develop Antiviral-A
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
 
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         for _ in 0..200 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Applied).is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
         assert!(state.medicines[0].unlocked);
     }
 
@@ -409,12 +409,12 @@ mod tests {
         // Start field research: Clinical Trial
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::ClinicalTrial { .. }));
 
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         for _ in 0..160 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
         assert!(state.medicines[0].tested_against.contains(&0));
     }
 
@@ -428,7 +428,7 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Try to start
 
         // Should not have started
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
     }
 
     #[test]
@@ -448,9 +448,9 @@ mod tests {
         // At 2x ratio, diminishing returns gives 1.5x speed
         let expected = 1.5;
         assert!(
-            (state.active_in_category(ResearchCategory::Field).first().unwrap().progress - expected).abs() < 0.01,
+            (state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().first().unwrap().progress - expected).abs() < 0.01,
             "2x personnel should give 1.5x speed, got {}",
-            state.active_in_category(ResearchCategory::Field).first().unwrap().progress
+            state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().first().unwrap().progress
         );
     }
 
@@ -469,9 +469,9 @@ mod tests {
         state = tick(&state);
         let expected = 1.0;
         assert!(
-            (state.active_in_category(ResearchCategory::Field).first().unwrap().progress - expected).abs() < 0.01,
+            (state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().first().unwrap().progress - expected).abs() < 0.01,
             "3x personnel should give 1.0x speed, got {}",
-            state.active_in_category(ResearchCategory::Field).first().unwrap().progress
+            state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().first().unwrap().progress
         );
     }
 
@@ -483,16 +483,16 @@ mod tests {
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         // Start field research (first item in flat list)
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Field);
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
+        state = start_research_matching(&state, |k| k.is_field_work());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         // Start applied research
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         // Both running simultaneously
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
     }
 
     #[test]
@@ -504,13 +504,13 @@ mod tests {
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "should not start without funding");
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should not start without funding");
         assert!(state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"));
 
         // Give enough funding, should succeed (still on ConfirmProject screen)
         state.resources.funding = 500.0;
         state = apply_action(&state, &Action::Confirm); // Try again
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty(), "should start with sufficient funding");
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should start with sufficient funding");
         assert!(state.resources.funding < 500.0, "funding should be deducted");
     }
 
@@ -640,7 +640,7 @@ mod tests {
         });
         state = tick(&state);
 
-        assert!(state.active_in_category(ResearchCategory::Applied).is_empty(), "project should be complete");
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty(), "project should be complete");
         let expected_doses = state.medicines[0].max_doses * state.manufacturing_yield_bonus();
         assert_eq!(
             state.medicines[0].doses, expected_doses,
@@ -655,12 +655,12 @@ mod tests {
         let original_rate = state.diseases[0].pathogen_type.mutation_rate();
 
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::GenomicSequencing { .. }));
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         for _ in 0..200 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
         assert_eq!(state.diseases[0].sequencing_count, 1);
 
         let effective_rate = original_rate * 0.5_f64.powi(state.diseases[0].sequencing_count as i32);
@@ -673,12 +673,12 @@ mod tests {
         let initial_personnel = state.resources.personnel;
 
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         for _ in 0..160 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Applied).is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
     }
 
@@ -691,14 +691,14 @@ mod tests {
         assert!(state.unlocked_techs.is_empty());
 
         // Navigate: Research → find Basic → Confirm → Confirm
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Basic);
-        assert!(state.active_in_category(ResearchCategory::Basic).first().is_some(), "basic research should have started");
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::BasicResearch { .. }));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().first().is_some(), "basic research should have started");
 
         // Advance to completion (240 ticks at 1x speed)
         for _ in 0..240 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Basic).is_empty(), "project should be complete");
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().is_empty(), "project should be complete");
         assert!(
             state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign),
             "TargetedDrugDesign should be unlocked"
@@ -718,21 +718,21 @@ mod tests {
         // (it closes the panel first if already open)
 
         // Start field research
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Field);
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
+        state = start_research_matching(&state, |k| k.is_field_work());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         // Start applied research
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         // Start basic research
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Basic);
-        assert!(state.active_in_category(ResearchCategory::Basic).first().is_some());
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::BasicResearch { .. }));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().first().is_some());
 
         // All three running simultaneously
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some());
-        assert!(state.active_in_category(ResearchCategory::Basic).first().is_some());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().first().is_some());
     }
 
     #[test]
@@ -743,7 +743,7 @@ mod tests {
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "should not start research after game over");
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should not start research after game over");
     }
 
     #[test]
@@ -770,22 +770,22 @@ mod tests {
             },
         ];
 
-        assert_eq!(state.active_in_category(ResearchCategory::Field).len(), 2, "should have 2 parallel field projects");
+        assert_eq!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().len(), 2, "should have 2 parallel field projects");
         assert_eq!(state.personnel_busy(), 10, "10 personnel busy across 2 projects");
 
         // Advance until first project completes but second hasn't
         for _ in 0..55 {
             state = tick(&state);
         }
-        assert_eq!(state.active_in_category(ResearchCategory::Field).len(), 1, "first project should have completed");
-        assert!(matches!(&state.active_in_category(ResearchCategory::Field)[0].kind, ResearchKind::ClinicalTrial { .. }),
+        assert_eq!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().len(), 1, "first project should have completed");
+        assert!(matches!(&state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>()[0].kind, ResearchKind::ClinicalTrial { .. }),
             "remaining project should be the clinical trial");
 
         // Advance until second completes
         for _ in 0..50 {
             state = tick(&state);
         }
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "both projects should have completed");
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "both projects should have completed");
     }
 
     #[test]
@@ -813,7 +813,7 @@ mod tests {
             required_ticks: 160.0,
             personnel_assigned: 5,
         });
-        assert_eq!(state.active_in_category(ResearchCategory::Field).len(), 3);
+        assert_eq!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().len(), 3);
 
         // With no capacity limits, a 4th project should start if we have resources
         let available = state.all_available_projects();
@@ -973,8 +973,8 @@ mod tests {
         assert!(trial_idx.is_some(), "clinical trial should be available");
         let (ok, _) = super::start_research(&mut state, trial_idx.unwrap(), false);
         assert!(ok);
-        let normal_duration = state.active_in_category(ResearchCategory::Field).last().unwrap().required_ticks;
-        state.active_research.retain(|p| p.kind.category() != ResearchCategory::Field);
+        let normal_duration = state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().last().unwrap().required_ticks;
+        state.active_research.retain(|p| !p.kind.is_field_work());
 
         // Now enact human trials and start the same trial
         state.enacted_decrees.authorize_human_trials = true;
@@ -982,7 +982,7 @@ mod tests {
         let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
         let (ok, _) = super::start_research(&mut state, trial_idx.unwrap(), false);
         assert!(ok);
-        let fast_duration = state.active_in_category(ResearchCategory::Field).last().unwrap().required_ticks;
+        let fast_duration = state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().last().unwrap().required_ticks;
 
         // Duration should be halved
         assert!(
@@ -1041,7 +1041,7 @@ mod tests {
             state = tick(&state);
         }
 
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "suppression project should have completed");
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "suppression project should have completed");
         let reduced = state.diseases[0].within_region_spread;
         let expected = original_spread * 0.80;
         assert!(
@@ -1110,7 +1110,7 @@ mod tests {
             state = tick(&state);
         }
 
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "attenuation project should have completed");
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "attenuation project should have completed");
         let reduced = state.diseases[0].lethality;
         let expected = original_lethality * 0.70;
         assert!(
@@ -1142,7 +1142,7 @@ mod tests {
             state = tick(&state);
         }
 
-        assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "interdiction project should have completed");
+        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "interdiction project should have completed");
         assert!(
             state.diseases[0].cross_region_spread == 0.0,
             "cross-region spread should be eliminated, got {}",
@@ -1166,12 +1166,12 @@ mod tests {
 
         // Baseline: one tick at standard lab
         let base_state = tick(&state);
-        let base_progress = base_state.active_in_category(ResearchCategory::Field)[0].progress;
+        let base_progress = base_state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>()[0].progress;
 
         // Upgrade to level 1 (1.3x multiplier)
         state.lab_level = 1;
         let upgraded_state = tick(&state);
-        let upgraded_progress = upgraded_state.active_in_category(ResearchCategory::Field)[0].progress;
+        let upgraded_progress = upgraded_state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>()[0].progress;
 
         assert!(
             (upgraded_progress / base_progress - 1.3).abs() < 0.01,
@@ -1204,7 +1204,7 @@ mod tests {
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Start
-        assert!(!state.active_in_category(ResearchCategory::Field).is_empty());
+        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         // Advance to completion, checking events each tick (clone-and-mutate means
         // events are only on the state returned by the tick that generated them)
@@ -1229,8 +1229,8 @@ mod tests {
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         // Start develop medicine (applied research)
-        state = start_research_matching(&state, |k| k.category() == ResearchCategory::Applied && !matches!(k, ResearchKind::TrainPersonnel));
-        assert!(state.active_in_category(ResearchCategory::Applied).first().is_some(),
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some(),
             "Applied research should start. UI state: {:?}", state.ui.research_ui);
 
         // Advance to completion, checking events each tick
@@ -1275,7 +1275,7 @@ mod tests {
         // With StabilizedFormulation: get 125% of max_doses
         state.unlocked_techs.push(crate::state::BasicTech::StabilizedFormulation);
         state.medicines[0].doses = 0.0;
-        state.active_research.retain(|p| p.kind.category() != ResearchCategory::Applied);
+        state.active_research.retain(|p| !matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel));
         state.active_research.push(ResearchProject {
             kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
             progress: 14.0,
