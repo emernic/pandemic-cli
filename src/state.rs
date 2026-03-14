@@ -4512,8 +4512,6 @@ pub enum CrisisKind {
     CorporateSeizure { cooperate_loss: u32 },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
-    /// Warlord declares himself ruler of collapsed region, demands recognition.
-    WarlordDemand { region_idx: usize },
     /// Two corporations claim credit for your treatment breakthrough, threatening to cut contracts.
     VaccineDispute { neutral_loss: f64, credit_gain: f64, corp_a: String, corp_b: String },
 
@@ -4676,7 +4674,6 @@ impl CrisisKind {
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
             CrisisKind::CultBlockade { .. } => "cult",
-            CrisisKind::WarlordDemand { .. } => "warlord",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
             CrisisKind::PerformanceReview => "performance_review",
             CrisisKind::NamingRights { .. } => "naming_rights",
