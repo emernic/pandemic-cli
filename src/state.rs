@@ -4491,8 +4491,6 @@ impl CrisisCost {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CrisisKind {
-    /// Political pressure — lift quarantine in a region or pay to resist.
-    PoliticalPressure { region_idx: usize },
     /// Staff burnout — lose personnel or pay retention bonus.
     PersonnelCrisis { amount: u32 },
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
@@ -4649,7 +4647,6 @@ impl CrisisKind {
     /// Used for cooldown tracking to prevent back-to-back repeats.
     pub fn tag(&self) -> &'static str {
         match self {
-            CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
