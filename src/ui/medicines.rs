@@ -107,7 +107,11 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
 
             // Line 1: Name + deploying status
             let auto_on = state.auto_deploy.get(med_idx).copied().unwrap_or(false);
-            let has_shipments = state.pending_shipments.iter().any(|s| s.medicine_idx == med_idx);
+            let shipment_doses: f64 = state.pending_shipments.iter()
+                .filter(|s| s.medicine_idx == med_idx)
+                .map(|s| s.doses)
+                .sum();
+            let has_shipments = shipment_doses > 0.0;
             // Check if auto-deploy is ON but blocked because all tested diseases
             // have efficacy below the auto-deploy threshold.
             let auto_blocked = auto_on && {
@@ -120,13 +124,13 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 })
             };
             let (status_tag, status_color) = if auto_on && auto_blocked {
-                (" [INEFFECTIVE]", Color::Red)
+                (" [INEFFECTIVE]".to_string(), Color::Red)
             } else if auto_on {
-                (" [DEPLOYING]", Color::Green)
+                (" [DEPLOYING]".to_string(), Color::Green)
             } else if has_shipments {
-                (" [IN TRANSIT]", Color::Cyan)
+                (format!(" [IN TRANSIT: {} doses]", shipment_doses.round() as u64), Color::Cyan)
             } else {
-                ("", Color::Cyan)
+                (String::new(), Color::Cyan)
             };
             let mode_label = med.mode.label();
             let mode_color = match med.mode {
@@ -278,7 +282,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(
-                        format!("Shipping to {} ({:.1}d)", region_name, days_left),
+                        format!("Shipping {} doses to {} ({:.1}d)", s.doses.round() as u64, region_name, days_left),
                         Style::default().fg(Color::Cyan),
                     ),
                 ]));

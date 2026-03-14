@@ -361,9 +361,10 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         // Pending shipments line
         if !state.pending_shipments.is_empty() {
             let count = state.pending_shipments.len();
+            let total_doses: f64 = state.pending_shipments.iter().map(|s| s.doses).sum();
             lines.push(Line::from(vec![
                 Span::styled("  Shipments: ", dim),
-                Span::styled(format!("{} in transit", count), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{} in transit ({} doses)", count, total_doses.round() as u64), Style::default().fg(Color::Yellow)),
             ]));
         }
 
