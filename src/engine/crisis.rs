@@ -1181,7 +1181,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             CrisisEvent {
                 title: format!("{}: Price Adjustment", member_name),
                 description: format!(
-                    "{} wants to revisit the {} terms.\n\n\
+                    "{} offers to improve the {} terms.\n\n\
                      Citing the worsening situation and competing offers, {} is offering to \
                      raise the payout from ¥{:.0}/day to ¥{:.0}/day.\n\n\
                      You could likely get more by shopping around, but this is guaranteed.",

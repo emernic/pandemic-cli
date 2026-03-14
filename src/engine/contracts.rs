@@ -177,7 +177,7 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
 }
 
 /// Minimum days a contract must be held before a loyalty raise can be offered.
-const LOYALTY_RAISE_MIN_DAYS: f64 = 10.0;
+const LOYALTY_RAISE_MIN_DAYS: f64 = 30.0;
 /// Per-tick probability of a loyalty raise firing once eligible (~1.5%/tick ≈ ~84% within a day).
 const LOYALTY_RAISE_CHANCE: f64 = 0.015;
 
