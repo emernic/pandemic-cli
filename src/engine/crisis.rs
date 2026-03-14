@@ -176,7 +176,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
             => ramp_up(10.0, 24.0) * fade_out(50.0, 70.0),
 
         // --- Late-game: survival and power struggles (ramp up day 24-40) ---
-        "corporate_seizure" | "cult" | "who_evac" | "warlord" | "vaccine_dispute"
+        "corporate_seizure" | "cult" | "who_evac" | "vaccine_dispute"
             => ramp_up(24.0, 40.0),
 
         // Corporate detention: requires a collapsed region, so can't appear before ~day 10,
@@ -386,17 +386,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         }
     }
 
-    // Warlord demand: requires collapsed region
-    let collapsed: Vec<usize> = state.regions.iter().enumerate()
-        .filter(|(_, r)| r.collapsed)
-        .map(|(i, _)| i)
-        .collect();
-    if !collapsed.is_empty() {
-        let idx = collapsed[rng.r#gen::<usize>() % collapsed.len()];
-        candidates.push(CrisisKind::WarlordDemand { region_idx: idx });
-    }
-
-    // Field team detained: requires collapsed region, non-bankrupt corp there, 4+ personnel
+// Field team detained: requires collapsed region, non-bankrupt corp there, 4+ personnel
     if !state.corporations.is_empty() && state.resources.personnel >= 4 {
         let viable: Vec<(usize, usize)> = state.regions.iter().enumerate()
             .filter(|(_, r)| r.collapsed)
@@ -1107,34 +1097,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     label: "Wait them out".into(),
                     description: "Healthcare −10%, supply lines −15%. −5% board approval.".into(),
                     cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::WarlordDemand { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Warlord Seizes Control".into(),
-                description: format!(
-                    "A local commander has seized control of collapsed {}. \
-                     He's demanding tribute in exchange for allowing medical access.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Refuse".into(),
-                    description: format!("{} stays collapsed. No medical access, no future operations. +5% board approval.", region_name),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.25, 150.0, 800.0);
-                    CrisisOption {
-                        label: format!("Pay tribute (¥{:.0})", cost),
-                        description: format!("Medical access restored in {}", region_name),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
                 },
                 ],
                 kind,
@@ -3004,24 +2966,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Blockade dissolved after days of delays. Supply lines degraded.".into()
         }
 
-        (CrisisKind::WarlordDemand { region_idx }, 0) => {
-            // Refuse — gain chairman satisfaction, region stays collapsed
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            chairman_satisfaction_hit(state, 0.05);
-            format!("Refused the warlord. {} remains sealed.", region_name)
-        }
-        (CrisisKind::WarlordDemand { region_idx }, _) => {
-            // Pay tribute — costs already deducted, un-collapse the region
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.collapsed = false;
-            }
-            format!("Paid the warlord. Medical teams re-enter {}.", region_name)
-        }
-
-        (CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
+(CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
             // Stay neutral — lose funding from both
             state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
             format!("Stayed neutral. Both canceled ¥{:.0} in contracts.", neutral_loss)
@@ -3906,9 +3851,7 @@ mod tests {
         // Late-game survival crises should be absent early, present late
         assert!(phase_weight("corporate_seizure", 5.0) < phase_weight("corporate_seizure", 50.0),
             "corporate seizure should be more likely late than early");
-        assert!(phase_weight("warlord", 3.0) < phase_weight("warlord", 50.0),
-            "warlord demands should be more likely late than early");
-        assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
+assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             "cult blockade should be more likely late than early");
 
         // Mid-game crises should peak in the middle
@@ -3942,10 +3885,10 @@ mod tests {
             }
         }
 
-        // At day 5, late-game crises (corporate_seizure, cult, warlord, etc.) should
+        // At day 5, late-game crises (corporate_seizure, cult, etc.) should
         // be absent or extremely rare since they have near-zero weight
         let late_count = tags.iter()
-            .filter(|&&t| matches!(t, "corporate_seizure" | "cult" | "warlord" | "vaccine_dispute" | "who_evac"))
+            .filter(|&&t| matches!(t, "corporate_seizure" | "cult" | "vaccine_dispute" | "who_evac"))
             .count();
         assert!(late_count <= 2,
             "at day 5, late-game crises should be rare, got {}/{}",
