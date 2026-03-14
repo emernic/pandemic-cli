@@ -48,12 +48,13 @@ pub(super) fn deploy_medicine(
     }
 
     let disease_idx = target.disease_idx;
+    let deploy_mode = target.mode;
 
-    // Block deployment during per-disease cooldown
-    let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick, disease_idx);
+    // Block deployment during per-medicine cooldown
+    let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick, medicine_idx);
     if cooldown > 0 {
         let days = cooldown as f64 / crate::state::TICKS_PER_DAY;
-        return (false, Some(format!("{region_name} on cooldown for this disease, {days:.1} days remaining")));
+        return (false, Some(format!("{region_name} on cooldown for {med_name}, {days:.1} days remaining")));
     }
 
     // Estimate how many doses to dispatch based on current population
@@ -67,8 +68,7 @@ pub(super) fn deploy_medicine(
     let dead = region.dead;
     let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
-    let med_mode = state.medicines[medicine_idx].mode;
-    let doses_to_ship = match med_mode {
+    let doses_to_ship = match deploy_mode {
         MedicineMode::Vaccine => {
             let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
             state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult)
@@ -79,7 +79,7 @@ pub(super) fn deploy_medicine(
     };
 
     if doses_to_ship < 1.0 {
-        return match med_mode {
+        return match deploy_mode {
             MedicineMode::Vaccine => (false, Some(format!("No susceptible population in {region_name}"))),
             MedicineMode::Therapeutic => (false, Some(format!("No infected population in {region_name}"))),
         };
@@ -89,7 +89,7 @@ pub(super) fn deploy_medicine(
     state.medicines[medicine_idx].doses = (state.medicines[medicine_idx].doses - doses_to_ship).max(0.0);
     state.medicines[medicine_idx].deployed_count += 1;
     state.total_doses_deployed += doses_to_ship;
-    state.regions[region_idx].last_deploy_tick.insert(disease_idx, state.tick);
+    state.regions[region_idx].last_deploy_tick.insert(medicine_idx, state.tick);
 
     // Create the shipment — supply line degradation slows delivery
     let supply_mult = if state.regions[region_idx].supply_lines < crate::state::INFRA_CRITICAL {
@@ -199,8 +199,8 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut r
 
     let is_tested = state.medicines[med_idx].tested_against.contains(&disease_idx);
 
-    let med_mode = state.medicines[med_idx].mode;
-    let (adverse, people_treated, people_protected) = match med_mode {
+    let deploy_mode = shipment.target.mode;
+    let (adverse, people_treated, people_protected) = match deploy_mode {
         MedicineMode::Vaccine => {
             let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
             // Cap at effective doses (after infrastructure losses)
@@ -425,8 +425,7 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
 /// Auto-deploy medicines to the worst-affected regions. Called once per tick.
 /// For each medicine with auto_deploy enabled:
 /// - Must be unlocked, tested, and have doses
-/// - Finds the best region per medicine mode: vaccines target highest
-///   susceptible population, therapeutics target most infected
+/// - Always deploys as therapeutic (targets most infected region)
 /// - Cooldown must be clear for the chosen region
 pub(super) fn try_auto_deploy(state: &mut GameState) {
     // Grow auto_deploy vec if new medicines were created
@@ -453,12 +452,10 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             continue;
         }
 
-        let is_vaccine = med.mode == MedicineMode::Vaccine;
-
         // Find the best region to deploy to, respecting deployment priority.
         // Higher priority regions (High > Normal > Low) are served first.
         // CutOff regions are skipped entirely.
-        // Vaccines target highest susceptible population; therapeutics target most infected.
+        // Targets the region with the most infected population.
         let mut best_region: Option<usize> = None;
         let mut best_priority: u8 = u8::MAX;
         let mut best_score: f64 = 0.0;
@@ -474,7 +471,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             }
             let rank = priority.rank();
             for &d_idx in &tested {
-                if region.deploy_cooldown_remaining(state.tick, d_idx) > 0 {
+                if region.deploy_cooldown_remaining(state.tick, med_idx) > 0 {
                     continue;
                 }
                 // Skip diseases where resistance has made the medicine too weak.
@@ -483,20 +480,10 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 {
                     continue;
                 }
-                let score = if is_vaccine {
-                    // For vaccines: target regions with the most susceptible population
-                    let pop = region.population as f64;
-                    let inf = region.disease_state(d_idx);
-                    let exposed = inf.map(|i| i.exposed).unwrap_or(0.0);
-                    let infected = inf.map(|i| i.infected).unwrap_or(0.0);
-                    let immune = inf.map(|i| i.immune).unwrap_or(0.0);
-                    (pop - exposed - infected - region.dead - immune).max(0.0)
-                } else {
-                    // For therapeutics: target regions with the most infected
-                    region.disease_state(d_idx)
-                        .map(|inf| inf.infected)
-                        .unwrap_or(0.0)
-                };
+                // Target regions with the most infected
+                let score = region.disease_state(d_idx)
+                    .map(|inf| inf.infected)
+                    .unwrap_or(0.0);
                 // Prefer higher priority (lower rank), then highest score
                 if rank < best_priority || (rank == best_priority && score > best_score) {
                     best_priority = rank;
@@ -512,7 +499,10 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 continue;
             }
 
-            let target = DeployTarget { disease_idx: best_disease_idx };
+            let target = DeployTarget {
+                disease_idx: best_disease_idx,
+                mode: MedicineMode::Therapeutic,
+            };
 
             // deploy_medicine() fires MedicineShipped on success
             deploy_medicine(state, med_idx, region_idx, target);

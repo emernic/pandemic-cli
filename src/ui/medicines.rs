@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, Medicine, MedicineMode, MedicineUiState, ResearchKind, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
+use crate::state::{GameOutcome, GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
 use crate::ui::hint_line;
 use crate::format_number;
 
@@ -24,6 +24,7 @@ pub fn selection_max(ui_state: &MedicineUiState, state: &GameState) -> usize {
                 .deployable_diseases(&state.diseases).len()
                 .saturating_sub(1)
         }
+        MedicineUiState::SelectMode { .. } => 1, // 0=Treatment, 1=Vaccination
         MedicineUiState::ConfirmDeploy { .. }
         | MedicineUiState::DeployResult { .. } => 0,
     }
@@ -46,6 +47,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         }
         Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
             let (t, l) = render_select_disease(state, *medicine_idx, *region_idx);
+            (t, l, None)
+        }
+        Some(MedicineUiState::SelectMode { medicine_idx, region_idx, disease_idx }) => {
+            let (t, l) = render_select_mode(state, *medicine_idx, *region_idx, *disease_idx);
             (t, l, None)
         }
         Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target }) => {
@@ -132,14 +137,8 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             } else {
                 (String::new(), Color::Cyan)
             };
-            let mode_label = med.mode.label();
-            let mode_color = match med.mode {
-                MedicineMode::Vaccine => Color::Blue,
-                MedicineMode::Therapeutic => Color::Magenta,
-            };
             lines.push(Line::from(vec![
                 Span::styled(format!("{}{}", marker, med.name), style),
-                Span::styled(format!("  {}", mode_label), Style::default().fg(mode_color)),
                 Span::styled(status_tag, Style::default().fg(status_color)),
             ]));
 
@@ -488,6 +487,52 @@ fn render_select_disease(
     (format!(" {} → {} ", med.name, region.name), lines)
 }
 
+fn render_select_mode(
+    state: &GameState,
+    medicine_idx: usize,
+    region_idx: usize,
+    disease_idx: usize,
+) -> (String, Vec<Line<'static>>) {
+    let mut lines: Vec<Line> = Vec::new();
+    let med = &state.medicines[medicine_idx];
+    let region = &state.regions[region_idx];
+    let disease_name = state.diseases[disease_idx].display_name(disease_idx);
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("  Deploy {} to {} vs {}", med.name, region.name, disease_name),
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(""));
+
+    let options = [
+        ("Treatment", "Treat infected population"),
+        ("Vaccination", "Protect susceptible population"),
+    ];
+    for (i, (label, desc)) in options.iter().enumerate() {
+        let selected = state.ui.panel_selection == i;
+        let marker = if selected { "▶ " } else { "  " };
+        let style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        lines.push(Line::from(Span::styled(format!("  {}{}", marker, label), style)));
+        lines.push(Line::from(Span::styled(
+            format!("      {}", desc),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Select  [Enter] Confirm  [Esc] Back",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    (format!(" {} → {} ", med.name, region.name), lines)
+}
+
 fn render_confirm_deploy(
     state: &GameState,
     medicine_idx: usize,
@@ -499,10 +544,8 @@ fn render_confirm_deploy(
     let region = &state.regions[region_idx];
     let disease_name = state.diseases[disease_idx].display_name(disease_idx);
 
-    let action_desc = match med.mode {
-        MedicineMode::Vaccine => format!("Protect {} against {}", region.name, disease_name),
-        MedicineMode::Therapeutic => format!("Treat {} in {}", disease_name, region.name),
-    };
+    // Untested medicines always deploy as therapeutic
+    let action_desc = format!("Treat {} in {}", disease_name, region.name);
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(

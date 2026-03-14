@@ -871,11 +871,13 @@ mod tests {
     }
 
     #[test]
-    fn vaccine_platform_triples_vaccination() {
+    fn vaccine_platform_unlocks_vaccination() {
         let mut state = GameState::new_default(42);
+        assert!(!state.can_vaccinate(), "vaccination should be locked without VaccinePlatform");
         assert_eq!(state.vaccination_multiplier(), 1.0);
 
         state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
+        assert!(state.can_vaccinate(), "vaccination should be unlocked with VaccinePlatform");
         assert_eq!(state.vaccination_multiplier(), 3.0);
 
         // Verify estimate_vaccination uses the multiplier
@@ -884,7 +886,7 @@ mod tests {
         let boosted = med.estimate_vaccination(1_000_000.0, 1.0, 3.0);
         assert!(
             (boosted - base * 3.0).abs() < 1.0,
-            "VaccinePlatform should triple vaccination: base={base}, boosted={boosted}"
+            "VaccinePlatform 3x multiplier: base={base}, boosted={boosted}"
         );
     }
 

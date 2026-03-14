@@ -419,7 +419,7 @@ mod tests {
         state.pending_shipments.push(Shipment {
             medicine_idx: 0,
             region_idx: 0,
-            target: DeployTarget { disease_idx: 0 },
+            target: DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
             doses: 1000.0,
             arrive_tick: state.tick + TICKS_PER_DAY as u64,
         });
