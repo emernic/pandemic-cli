@@ -119,30 +119,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
     ]);
 
-    // Board budget line: fixed budget from the board + any active contracts
-    let income_line = {
-        let board_budget_day = state.board_budget_per_tick * TICKS_PER_DAY;
-        let mut spans: Vec<Span> = vec![
-            Span::styled("Board budget: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("¥{:.0}/day", board_budget_day),
-                Style::default().fg(if board_budget_day >= 200.0 { Color::Green } else if board_budget_day >= 100.0 { Color::Yellow } else { Color::Red }),
-            ),
-        ];
-        // Funding contracts — show aggregated total
-        if !state.contracts.is_empty() {
-            let contract_income_day = state.contract_income_rate() * TICKS_PER_DAY;
-            spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            spans.push(Span::styled(
-                format!("+¥{:.0}/day contracts", contract_income_day),
-                Style::default().fg(Color::Green),
-            ));
-        }
-
-        Line::from(spans)
-    };
-
-    let lines = vec![line1, income_line];
+    let lines = vec![line1];
 
     if let Some(notif) = &state.ui.event_notification {
         // Split: stats + research on left, event notification on right
