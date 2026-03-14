@@ -105,6 +105,53 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
     policy_cost
 }
 
+/// Tick nuclear state transitions. When a nuke in transit reaches its hit_tick,
+/// transition to Dropped: kill 99% of the population and any board members in the region.
+pub(super) fn tick_nuclear(state: &mut GameState) {
+    let tick = state.tick;
+    for region_idx in 0..state.policies.len() {
+        if let crate::state::NuclearState::Dropping { hit_tick } = state.policies[region_idx].nuclear_state {
+            if tick >= hit_tick {
+                // Transition to Dropped
+                state.policies[region_idx].nuclear_state = crate::state::NuclearState::Dropped;
+
+                // Kill 99% of remaining alive population
+                let region = &mut state.regions[region_idx];
+                let alive = region.alive();
+                let killed = alive * 0.99;
+                region.dead += killed;
+                // Attribute nuke deaths proportionally across disease pools
+                let total_inf_dead: f64 = region.infections.iter().map(|i| i.dead).sum();
+                let num_infections = region.infections.len().max(1) as f64;
+                for inf in &mut region.infections {
+                    let share = if total_inf_dead > 0.0 { inf.dead / total_inf_dead } else { 1.0 / num_infections };
+                    inf.dead += killed * share;
+                    inf.infected = 0.0;
+                    inf.immune = 0.0;
+                }
+
+                // Kill governor in the region (if alive and not evacuated)
+                if !state.regions[region_idx].governor.dead {
+                    state.regions[region_idx].governor.dead = true;
+                    state.regions[region_idx].governor.succession_tick = None; // no succession from a nuked region
+                }
+
+                // Kill board members physically in the region (not evacuated)
+                for member in &mut state.board_members {
+                    if member.region_idx == Some(region_idx) {
+                        member.dead = true;
+                    }
+                }
+
+                state.events.push(crate::state::GameEvent::NuclearImpact {
+                    region_idx,
+                    killed,
+                });
+            }
+        }
+    }
+}
+
 /// Toggle a policy for a region. Returns (message, success, gdp_policy_region) where success
 /// indicates the toggle actually happened (vs being rejected), and gdp_policy_region is
 /// Some(region_idx) when a GDP-hurting policy was enacted (for board notification).
@@ -273,33 +320,37 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
         }
         // Nuclear Annihilation: one-shot for collapsed regions only
         PolicyId::NuclearOption => {
-            if state.policies[region_idx].nuclear_annihilation {
-                (Some(format!("{region_name} has already been annihilated")), false)
+            if state.policies[region_idx].nuclear_state.is_active() {
+                let status = if state.policies[region_idx].nuclear_state.is_dropped() {
+                    "annihilated"
+                } else {
+                    "already targeted"
+                };
+                (Some(format!("{region_name} has already been {status}")), false)
             } else if !state.regions[region_idx].collapsed {
                 (Some("Nuclear annihilation is only available for collapsed regions".to_string()), false)
             } else if state.resources.funding < NUCLEAR_ANNIHILATION_COST {
                 (Some(format!("Not enough funding (need ¥{:.0})", NUCLEAR_ANNIHILATION_COST)), false)
             } else {
-                // Deduct one-time cost
+                // Deduct one-time cost and begin transit
                 state.resources.funding -= NUCLEAR_ANNIHILATION_COST;
-                state.policies[region_idx].nuclear_annihilation = true;
-                // Kill 99% of remaining alive population
-                let region = &mut state.regions[region_idx];
-                let alive = region.alive();
-                let killed = alive * 0.99;
-                region.dead += killed;
-                // Attribute nuke deaths proportionally across disease pools
-                // so they're visible in the UI (which sums inf.dead)
-                let total_inf_dead: f64 = region.infections.iter().map(|i| i.dead).sum();
-                let num_infections = region.infections.len().max(1) as f64;
-                for inf in &mut region.infections {
-                    let share = if total_inf_dead > 0.0 { inf.dead / total_inf_dead } else { 1.0 / num_infections };
-                    inf.dead += killed * share;
-                    inf.infected = 0.0;
-                    inf.immune = 0.0;
+                let hit_tick = state.tick + crate::state::NUCLEAR_TRANSIT_TICKS;
+                state.policies[region_idx].nuclear_state = crate::state::NuclearState::Dropping { hit_tick };
+
+                // Queue evacuation crisis for any board members in the region
+                let members_in_region: Vec<usize> = state.board_members.iter().enumerate()
+                    .filter(|(_, m)| m.region_idx == Some(region_idx))
+                    .map(|(i, _)| i)
+                    .collect();
+                if !members_in_region.is_empty() {
+                    state.pending_crises.push((
+                        state.tick,
+                        CrisisKind::NuclearEvacuation { region_idx },
+                    ));
                 }
-                (Some(format!("☢ {region_name} annihilated. {:.1}M dead. Disease eradicated.",
-                    killed / 1_000_000.0)), true)
+
+                (Some(format!("☢ Nuclear payload inbound to {region_name}. Impact in 12 hours.",
+                )), true)
             }
         }
         // Field Hospital / Medical Center: tiered per-region infrastructure

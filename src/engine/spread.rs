@@ -236,7 +236,7 @@ pub(super) fn tick_spread_cross_region(
                 .iter()
                 .filter_map(|&conn_idx| {
                     // Annihilated regions emit zero spread (population eliminated)
-                    if new.policies.get(conn_idx).is_some_and(|p| p.nuclear_annihilation) {
+                    if new.policies.get(conn_idx).is_some_and(|p| p.nuclear_state.is_dropped()) {
                         return None;
                     }
                     // Collapsed regions still emit spread, but at reduced rate

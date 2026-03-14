@@ -162,7 +162,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         (PolicyId::MartialLaw, "Martial Law", policy.martial_law,
          format!("¥{:.0}/day + {} pers.", MARTIAL_LAW_COST * spec_mult * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
          "Collapse threshold −15% (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra), MARTIAL_LAW_COST * spec_mult),
-        (PolicyId::NuclearOption, "Nuclear Option", policy.nuclear_annihilation,
+        (PolicyId::NuclearOption, "Nuclear Option", policy.nuclear_state.is_active(),
          format!("One-time: ¥{:.0}", NUCLEAR_ANNIHILATION_COST),
          "Eliminate 99% of population. Stops all disease spread.", None, 0.0),
         (PolicyId::FieldHospital,
@@ -319,7 +319,13 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         }
 
         // Tiered policies: show level instead of misleading [OFF] for surpassed tiers
-        let status = if *active {
+        let status = if *policy_id == PolicyId::NuclearOption && *active {
+            match policy.nuclear_state {
+                crate::state::NuclearState::Dropping { .. } => "[DROPPING]",
+                crate::state::NuclearState::Dropped => "[DROPPED] ",
+                _ => "[ON] ",
+            }
+        } else if *active {
             "[ON] "
         } else if policy_id.is_screening() {
             // Screening is tiered: check if current level is above this tier
@@ -344,7 +350,11 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         };
 
         let is_surpassed = status == "[PAST]" || status == "[Lv1]";
-        let status_style = if *active {
+        let status_style = if status == "[DROPPING]" {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else if status == "[DROPPED] " {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        } else if *active {
             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
         } else if is_surpassed {
             Style::default().fg(Color::Cyan)
