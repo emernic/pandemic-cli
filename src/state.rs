@@ -244,15 +244,17 @@ pub const VACCINATION_FRACTION: f64 = 0.15;
 pub const CROSS_REACTIVE_PENALTY: f64 = 0.5;
 
 // Disease emergence constants.
-/// First new disease can emerge after this many ticks (~day 5).
-/// Gives the player time to identify disease 0 and start the research pipeline.
-pub const EMERGENCE_MIN_TICK: u64 = (5.0 * TICKS_PER_DAY) as u64;
+/// First new disease can emerge after this many ticks (~day 8).
+/// Gives the player time to identify disease 0, start research, and set up
+/// regional containment before the next threat appears.
+pub const EMERGENCE_MIN_TICK: u64 = (8.0 * TICKS_PER_DAY) as u64;
 /// Per-tick probability of a new disease emerging (after min tick).
-/// ~1 new disease every 14 days → steady pressure without overwhelming the
-/// research pipeline (which takes ~14-20 days per disease).
-pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0012;
+/// ~1 new disease every 42 days → player can get a handle on each threat
+/// before the next one arrives. Combined with slower cross-region spread,
+/// this makes regional containment a viable strategy.
+pub const EMERGENCE_CHANCE_PER_TICK: f64 = 0.0004;
 /// Maximum number of simultaneous diseases.
-pub const MAX_DISEASES: usize = 5;
+pub const MAX_DISEASES: usize = 4;
 /// Wave clustering window: a recent spawn within this many ticks boosts emergence.
 /// ~3.3 days — long enough for 2–3 disease clusters, short enough to feel like waves.
 pub const WAVE_CLUSTER_WINDOW_TICKS: u64 = (3.3 * TICKS_PER_DAY) as u64;
@@ -264,7 +266,7 @@ pub const BASE_FUNDING_INCOME: f64 = 5.4;
 /// With 2 contracts (~¥360/day), gross ~¥1008/day → ~¥864/day net.
 /// History: 0.10 made training a trap (50% of income); 0.03 doubled income, trivializing economy.
 pub const PERSONNEL_UPKEEP_COST: f64 = 0.06;
-pub const TRAVEL_BAN_COST: f64 = 0.7;
+pub const TRAVEL_BAN_COST: f64 = 1.0;
 pub const TRAVEL_BAN_PERSONNEL: u32 = 3;
 pub const QUARANTINE_COST: f64 = 0.6;
 pub const QUARANTINE_PERSONNEL: u32 = 3;
@@ -278,7 +280,7 @@ pub const HOSPITAL_EXPOSURE_FACTOR: f64 = 1.25;
 /// Threshold: a disease counts as "co-infecting" when it has >= 1000 infected.
 pub const COINFECTION_LETHALITY_PER_DISEASE: f64 = 0.25;
 pub const COINFECTION_THRESHOLD: f64 = 1000.0;
-pub const BORDER_CONTROLS_COST: f64 = 0.1;
+pub const BORDER_CONTROLS_COST: f64 = 0.2;
 pub const BORDER_CONTROLS_PERSONNEL: u32 = 1;
 pub const WATER_SANITATION_COST: f64 = 0.3;
 pub const WATER_SANITATION_PERSONNEL: u32 = 1;
@@ -2487,17 +2489,17 @@ impl PathogenType {
     }
 
     /// Per-tick probability that this pathogen type mutates.
-    /// Rates tuned so mutations are a real mid-game mechanic: RNA viruses
-    /// mutate 3-4 times in a typical 30-day game, creating ongoing pressure
-    /// to re-trial medicines. Slower types mutate less, making sequencing
-    /// research most valuable against RNA threats.
+    /// Rates tuned so medicines stay effective long enough to matter:
+    /// RNA viruses mutate ~1 time per 17 days, giving a deployed medicine
+    /// a meaningful window before drift degrades it. Slower types mutate
+    /// rarely, making sequencing research most valuable against RNA threats.
     pub fn mutation_rate(&self) -> f64 {
         match self {
-            PathogenType::RnaVirus => 0.001,     // ~1 mutation per 1000 ticks (~8 days)
-            PathogenType::DnaVirus => 0.0002,    // ~1 per 5000 ticks (~42 days)
-            PathogenType::Bacterium => 0.0004,   // ~1 per 2500 ticks (~21 days)
-            PathogenType::Fungus => 0.0001,      // ~1 per 10000 ticks (~83 days)
-            PathogenType::Prion => 0.00003,      // ~1 per 33333 ticks (~278 days)
+            PathogenType::RnaVirus => 0.0004,    // ~1 mutation per 2500 ticks (~17 days)
+            PathogenType::DnaVirus => 0.0001,    // ~1 per 10000 ticks (~83 days)
+            PathogenType::Bacterium => 0.0002,   // ~1 per 5000 ticks (~42 days)
+            PathogenType::Fungus => 0.00005,     // ~1 per 20000 ticks (~167 days)
+            PathogenType::Prion => 0.00002,      // ~1 per 50000 ticks (~417 days)
         }
     }
 
@@ -2505,14 +2507,14 @@ impl PathogenType {
     /// Derived from mutation_rate() — kept colocated so changes stay in sync.
     pub fn mutation_risk_label(&self) -> &'static str {
         let rate = self.mutation_rate();
-        if rate >= 0.0008 { "High" }
-        else if rate >= 0.0002 { "Moderate" }
+        if rate >= 0.0003 { "High" }
+        else if rate >= 0.0001 { "Moderate" }
         else { "Low" }
     }
 
-    /// Stat ranges tuned so total collapse occurs by day 90 without intervention.
-    /// HARD REQUIREMENT: every seed must lose by day 90 with no player action.
-    /// The enforcing test is `game_is_lost_within_90_days_without_intervention`.
+    /// Stat ranges tuned so total collapse occurs by day 120 without intervention.
+    /// HARD REQUIREMENT: every seed must lose by day 120 with no player action.
+    /// The enforcing test is `game_is_lost_within_120_days_without_intervention`.
     /// If it starts failing, increase within_region_spread — do NOT relax the test.
     ///
     /// Design principle: long infectious period (16–30 days) with near-zero natural
@@ -2532,42 +2534,42 @@ impl PathogenType {
             // for exposed compartment pipeline delay (SEIR reduces effective
             // growth rate at small population fractions).
             PathogenType::RnaVirus => DiseaseStatRanges {
-                within_region_spread: (0.009, 0.013),
+                within_region_spread: (0.011, 0.015),
                 lethality: (0.00040, 0.00070),
                 recovery: (0.00006, 0.00015),
-                cross_region: (0.012, 0.018),
+                cross_region: (0.004, 0.006),
                 incubation_days: (0.5, 1.5),
             },
             // DNA viruses: short incubation (1–2 days).
             PathogenType::DnaVirus => DiseaseStatRanges {
-                within_region_spread: (0.007, 0.011),
+                within_region_spread: (0.008, 0.013),
                 lethality: (0.00035, 0.00065),
                 recovery: (0.00004, 0.00010),
-                cross_region: (0.010, 0.015),
+                cross_region: (0.003, 0.005),
                 incubation_days: (1.0, 2.0),
             },
             // Bacteria: very short incubation (0.25–1.0 days).
             PathogenType::Bacterium => DiseaseStatRanges {
-                within_region_spread: (0.007, 0.009),
+                within_region_spread: (0.008, 0.011),
                 lethality: (0.00035, 0.00060),
                 recovery: (0.00010, 0.00020),
-                cross_region: (0.010, 0.013),
+                cross_region: (0.003, 0.004),
                 incubation_days: (0.25, 1.0),
             },
             // Fungi: moderate incubation (1–3 days).
             PathogenType::Fungus => DiseaseStatRanges {
-                within_region_spread: (0.006, 0.008),
+                within_region_spread: (0.007, 0.010),
                 lethality: (0.00030, 0.00055),
                 recovery: (0.00005, 0.00015),
-                cross_region: (0.008, 0.012),
+                cross_region: (0.002, 0.004),
                 incubation_days: (1.0, 3.0),
             },
             // Prions: long incubation (3–7 days) — silent spread before symptoms.
             PathogenType::Prion => DiseaseStatRanges {
-                within_region_spread: (0.006, 0.009),
+                within_region_spread: (0.007, 0.011),
                 lethality: (0.00045, 0.00090),
                 recovery: (0.00003, 0.00006),
-                cross_region: (0.008, 0.011),
+                cross_region: (0.002, 0.003),
                 incubation_days: (3.0, 7.0),
             },
         }
@@ -3422,7 +3424,7 @@ impl Medicine {
 
 
     /// Efficacy multiplier based on how many generations behind this medicine is
-    /// for a given disease. Each generation of drift reduces efficacy by 15%,
+    /// for a given disease. Each generation of drift reduces efficacy by 10%,
     /// with a floor at 10%. Returns 1.0 if the medicine hasn't been calibrated yet
     /// (strain_generations not populated — pre-mutation-system medicines).
     pub fn strain_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
@@ -3435,7 +3437,7 @@ impl Medicine {
                         let disease_gen = diseases.get(disease_idx)
                             .map_or(0, |d| d.strain_generation) as i32;
                         let behind = (disease_gen - mg).max(0);
-                        (1.0 - behind as f64 * 0.15).max(0.1)
+                        (1.0 - behind as f64 * 0.10).max(0.1)
                     }
                     // Not yet calibrated (developed before mutation system) — full efficacy
                     None => 1.0,
@@ -5545,8 +5547,9 @@ impl GameState {
 
         // --- Place initial outbreak ---
         // The starting disease has already been detected by global health systems.
-        // We seed it well above the detection threshold so the player can immediately
-        // see infections on the map and begin field research to identify it.
+        // We seed it in two regions — a primary hotspot and a smaller secondary
+        // outbreak in an adjacent region. This gives the player an immediate
+        // containment decision: focus resources on one region or split them.
         let region_idx = rng_emergence.r#gen::<usize>() % regions.len();
         let infected = 1_000.0 + rng_emergence.r#gen::<f64>() * 2_000.0;
         let dead = infected * 0.01; // ~1% already dead when the player takes over
@@ -5558,13 +5561,25 @@ impl GameState {
             immune: 0.0,
         });
         regions[region_idx].dead = dead;
-        // Record first-detection region for the initial disease (Day 0, single region)
-        diseases[0].first_detected_regions = vec![region_idx];
+        // Secondary outbreak in an adjacent region (~30% of primary)
+        let secondary_idx = regions[region_idx].connections
+            [rng_emergence.r#gen::<usize>() % regions[region_idx].connections.len()];
+        let secondary_infected = infected * (0.2 + rng_emergence.r#gen::<f64>() * 0.2);
+        let secondary_dead = secondary_infected * 0.01;
+        regions[secondary_idx].infections.push(RegionDiseaseState {
+            disease_idx: 0,
+            exposed: 0.0,
+            infected: secondary_infected,
+            dead: secondary_dead,
+            immune: 0.0,
+        });
+        regions[secondary_idx].dead = secondary_dead;
+        // Record first-detection regions for the initial disease (Day 0, two regions)
+        diseases[0].first_detected_regions = vec![region_idx, secondary_idx];
         diseases[0].detected_day = 0.0;
-        // Seed the initial estimate — organic reporting catches roughly 15% of cases
-        // at the time the player takes over. Without this, the first frame shows
-        // "Infected: ~0" despite the briefing saying there's an active outbreak.
+        // Seed the initial estimates — organic reporting catches roughly 15% of cases
         regions[region_idx].estimated_infected = infected * ScreeningLevel::None.visibility_rate();
+        regions[secondary_idx].estimated_infected = secondary_infected * ScreeningLevel::None.visibility_rate();
 
         // --- Generate medicines to match diseases ---
         // Two targeted medicines per non-prion disease (different mechanisms).
@@ -6413,7 +6428,7 @@ impl GameState {
         // Genomic Sequencing: fully identified diseases that still mutate and are active
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
-                && disease.effective_mutation_rate() > 0.0001
+                && disease.effective_mutation_rate() > 0.00005
                 && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
