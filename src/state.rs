@@ -2185,9 +2185,9 @@ pub struct Region {
     /// healthcare = fewer deaths. Stacks with hospital_level. Default 1.0.
     #[serde(default = "default_one")]
     pub healthcare_modifier: f64,
-    /// Tick when medicine was last deployed to this region for each disease.
-    /// Keyed by disease_idx. Per-disease cooldown lets the player treat multiple
-    /// diseases in the same region without one blocking the others.
+    /// Tick when each medicine was last deployed to this region.
+    /// Keyed by medicine_idx. Per-medicine cooldown lets the player deploy
+    /// different medicines independently — one cooldown doesn't block another.
     #[serde(default)]
     pub last_deploy_tick: HashMap<usize, u64>,
     /// Healthcare capacity (0.0–1.0). Degrades as infection load grows.
@@ -2351,10 +2351,10 @@ impl Region {
         Some(deaths_remaining / self.cached_deaths_per_day)
     }
 
-    /// Remaining cooldown ticks before this region can receive a deployment
-    /// targeting the given disease. Returns 0 if ready.
-    pub fn deploy_cooldown_remaining(&self, current_tick: u64, disease_idx: usize) -> u64 {
-        match self.last_deploy_tick.get(&disease_idx) {
+    /// Remaining cooldown ticks before this medicine can be deployed to this
+    /// region again. Returns 0 if ready.
+    pub fn deploy_cooldown_remaining(&self, current_tick: u64, medicine_idx: usize) -> u64 {
+        match self.last_deploy_tick.get(&medicine_idx) {
             Some(&t) => {
                 let elapsed = current_tick.saturating_sub(t);
                 DEPLOY_COOLDOWN_TICKS.saturating_sub(elapsed)
@@ -3045,8 +3045,8 @@ pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
 /// Minimum effective efficacy for auto-deploy to fire. Below this threshold,
 /// deploying wastes doses on a near-useless medicine.
 pub const AUTO_DEPLOY_MIN_EFFICACY: f64 = 0.04;
-/// Deploy cooldown per disease per region in ticks (half a day).
-/// Per-disease cooldown means treating disease A doesn't block treating disease B.
+/// Deploy cooldown per medicine per region in ticks (half a day).
+/// Per-medicine cooldown means deploying medicine A doesn't block medicine B.
 pub const DEPLOY_COOLDOWN_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
 /// Shipping delay in ticks (half a day). Medicine effects apply on delivery.
 pub const SHIPPING_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
@@ -3316,10 +3316,6 @@ pub struct Medicine {
     pub name: String,
     #[serde(default)]
     pub therapy_type: TherapyType,
-    /// Whether this medicine is a vaccine or therapeutic. Determines deployment
-    /// behavior: vaccines protect susceptible, therapeutics treat infected.
-    #[serde(default)]
-    pub mode: MedicineMode,
     /// Molecular mechanism of action. `None` for broad-spectrum medicines.
     /// Targeted medicines get a specific mechanism assigned during development.
     #[serde(default)]
@@ -3402,11 +3398,14 @@ impl MedicineMode {
     }
 }
 
-/// What a medicine deployment targets: which disease in which mode.
-/// The mode (vaccine vs therapeutic) is determined by the medicine itself.
+/// What a medicine deployment targets: which disease and whether to treat
+/// infected (Therapeutic) or vaccinate susceptible (Vaccine).
+/// VaccinePlatform tech must be unlocked to deploy in Vaccine mode.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeployTarget {
     pub disease_idx: usize,
+    #[serde(default)]
+    pub mode: MedicineMode,
 }
 
 impl Medicine {
@@ -3430,28 +3429,23 @@ impl Medicine {
         // Safe to unwrap: prions return early above, all other types have a matched therapy.
         let therapy = pathogen_type.matched_therapy().unwrap();
 
-        mechs.iter().flat_map(|&mech| {
+        mechs.iter().map(|&mech| {
             let doses = mech.base_doses();
-            let base = |mode: MedicineMode| {
-                let prefix = mode.short_label();
-                Medicine {
-                    name: format!("{}-{}-{}", prefix, mech.short_label(), letter),
-                    therapy_type: therapy,
-                    mode,
-                    mechanism: Some(mech),
-                    target_diseases: vec![disease_idx],
-                    doses: 0.0,
-                    max_doses: doses,
-                    unlocked: false,
-                    tested_against: vec![],
-                    strain_generations: vec![],
-                    deployed_count: 0,
-                    total_treated: 0.0,
-                    total_protected: 0.0,
-                    manufacturer_corp_idx: None,
-                }
-            };
-            [base(MedicineMode::Therapeutic), base(MedicineMode::Vaccine)]
+            Medicine {
+                name: format!("{}-{}", mech.short_label(), letter),
+                therapy_type: therapy,
+                mechanism: Some(mech),
+                target_diseases: vec![disease_idx],
+                doses: 0.0,
+                max_doses: doses,
+                unlocked: false,
+                tested_against: vec![],
+                strain_generations: vec![],
+                deployed_count: 0,
+                total_treated: 0.0,
+                total_protected: 0.0,
+                manufacturer_corp_idx: None,
+            }
         }).collect()
     }
 
@@ -3756,7 +3750,9 @@ pub enum BasicTech {
     /// All field research (IdentifyThreat, ClinicalTrial, FieldOperations) completes 25% faster.
     /// Prereq: RapidSequencing (sequencing data guides field teams to high-value targets).
     MetagenomicSurveillance,
-    /// Triples preventive vaccination effectiveness.
+    /// Unlocks vaccination deployment mode for all medicines. Vaccinates 15% of
+    /// susceptible per deploy (3x with the multiplier). Without this tech, medicines
+    /// can only be deployed as therapeutics.
     /// Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform).
     VaccinePlatform,
     /// Reveals per-medicine resistance levels and trend indicators.
@@ -3828,7 +3824,7 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Bacteriophage-based treatment for bacterial pathogens. Low resistance development.",
             BasicTech::RapidSequencing => "50% faster sequencing. Reveals mutation drift rate and history.",
             BasicTech::MetagenomicSurveillance => "Environmental sample sequencing identifies pathogens without culture. Field research and clinical trials 25% faster.",
-            BasicTech::VaccinePlatform => "3x effectiveness of preventive vaccination programs.",
+            BasicTech::VaccinePlatform => "Unlocks vaccination deployment mode. Medicines can protect susceptible populations prophylactically.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
             BasicTech::CompetitiveDisplacement => "Release attenuated strains that outcompete virulent wild-type. Each project reduces within-region spread 20%.",
@@ -4739,6 +4735,8 @@ pub enum MedicineUiState {
     SelectRegion { medicine_idx: usize },
     /// Choose which disease to target (skipped for single-target medicines).
     SelectDisease { medicine_idx: usize, region_idx: usize },
+    /// Choose treatment vs vaccination (only shown when VaccinePlatform is unlocked).
+    SelectMode { medicine_idx: usize, region_idx: usize, disease_idx: usize },
     ConfirmDeploy { medicine_idx: usize, region_idx: usize, target: DeployTarget },
     /// Shown after a deployment completes, displaying the result prominently.
     DeployResult { medicine_idx: usize, message: String },
@@ -4991,6 +4989,18 @@ impl UiState {
                         }
                         self.panel_selection = 0;
                     }
+                    Some(MedicineUiState::SelectMode { medicine_idx, region_idx, .. }) => {
+                        let med = &medicines[medicine_idx];
+                        if med.deployable_diseases(diseases).len() == 1 {
+                            self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
+                        } else {
+                            self.medicine_ui = Some(MedicineUiState::SelectDisease {
+                                medicine_idx,
+                                region_idx,
+                            });
+                        }
+                        self.panel_selection = 0;
+                    }
                     Some(MedicineUiState::SelectDisease { medicine_idx, .. }) => {
                         self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
                         self.panel_selection = 0;
@@ -5172,6 +5182,14 @@ impl UiState {
                 self.panel_selection = order.iter()
                     .position(|&r| r == self.map_selection)
                     .unwrap_or(0);
+            }
+            Some(MedicineUiState::SelectMode { medicine_idx, .. }) => {
+                // Regress to region selection on map change
+                let med = *medicine_idx;
+                self.medicine_ui = Some(MedicineUiState::SelectRegion {
+                    medicine_idx: med,
+                });
+                self.panel_selection = 0;
             }
             Some(MedicineUiState::ConfirmDeploy { medicine_idx, .. }) => {
                 // Regress to region selection — don't silently change region on confirm screen
@@ -5627,7 +5645,7 @@ impl GameState {
         regions[secondary_idx].estimated_infected = secondary_infected * ScreeningLevel::None.visibility_rate();
 
         // --- Generate medicines to match diseases ---
-        // Two targeted medicines per non-prion disease (different mechanisms).
+        // One targeted medicine per mechanism per non-prion disease.
         // Prion diseases get no medicines — they are completely untreatable.
         let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
             .flat_map(|(i, d)| Medicine::targeted_medicines(i, d.pathogen_type))
@@ -5642,7 +5660,6 @@ impl GameState {
         medicines.push(Medicine {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
-            mode: MedicineMode::Therapeutic,
             mechanism: None,
             target_diseases: all_disease_indices.clone(),
             doses: 500_000.0,
@@ -6670,7 +6687,13 @@ impl GameState {
         ((target - current) / target).clamp(0.05, 1.0) // minimum 5% so it's never free
     }
 
-    /// Vaccination effectiveness multiplier. VaccinePlatform tech triples it.
+    /// Whether vaccination deployment mode is available (VaccinePlatform tech unlocked).
+    pub fn can_vaccinate(&self) -> bool {
+        self.unlocked_techs.contains(&BasicTech::VaccinePlatform)
+    }
+
+    /// Vaccination effectiveness multiplier. Always 3x when VaccinePlatform is unlocked
+    /// (the tech that enables vaccination also makes it potent).
     pub fn vaccination_multiplier(&self) -> f64 {
         if self.unlocked_techs.contains(&BasicTech::VaccinePlatform) {
             3.0
@@ -7059,12 +7082,12 @@ mod tests {
         let state = GameState::new_default(1);
         let disease_count = state.diseases.len();
         assert_eq!(disease_count, 1, "expected 1 starting disease, got {}", disease_count);
-        // Two targeted medicines per non-prion disease + one broad-spectrum
+        // One targeted medicine per mechanism per non-prion disease + one broad-spectrum
         let targeted_count: usize = state.medicines.iter()
             .filter(|m| m.target_diseases.len() == 1)
             .count();
-        assert!(targeted_count >= disease_count * 2,
-            "expected at least 2 targeted medicines per disease, got {targeted_count}");
+        assert!(targeted_count >= disease_count,
+            "expected at least 1 targeted medicine per disease, got {targeted_count}");
         assert_eq!(state.medicines.last().unwrap().therapy_type, TherapyType::BroadSpectrum);
         // Broad-spectrum starts unlocked; all others start locked
         let broad = state.medicines.last().unwrap();

@@ -1407,15 +1407,17 @@ mod tests {
     fn medicine_vaccination_deployment() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
-        // Find a vaccine medicine (mode == Vaccine)
-        let vax_idx = state.medicines.iter().position(|m| {
-            m.unlocked && m.mode == crate::state::MedicineMode::Vaccine
-        }).expect("should have a vaccine");
-        // Navigate to the vaccine in the list
+        // Unlock VaccinePlatform so vaccination mode is available
+        state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
+        // Find any tested, unlocked targeted medicine
+        let med_idx = state.medicines.iter().position(|m| {
+            m.unlocked && m.mechanism.is_some() && !m.tested_against.is_empty()
+        }).expect("should have a tested targeted medicine");
+        // Navigate to the medicine in the list
         state = apply_action(&state, &Action::OpenMedicines);
         assert_eq!(state.ui.open_panel, Panel::Medicines);
         let unlocked = state.unlocked_medicine_indices();
-        let list_pos = unlocked.iter().position(|&i| i == vax_idx).unwrap();
+        let list_pos = unlocked.iter().position(|&i| i == med_idx).unwrap();
         for _ in 0..list_pos {
             state = apply_action(&state, &Action::SelectNext);
         }
@@ -1424,12 +1426,19 @@ mod tests {
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectRegion { .. })
         ));
+        state = apply_action(&state, &Action::Confirm); // select region → goes to SelectMode (VaccinePlatform unlocked)
+        assert!(matches!(
+            state.ui.medicine_ui,
+            Some(MedicineUiState::SelectMode { .. })
+        ), "should be in SelectMode, got {:?}", state.ui.medicine_ui);
+        // Select Vaccination (index 1)
+        state = apply_action(&state, &Action::SelectNext); // move to Vaccination
         let funding_before = state.resources.funding;
-        let doses_before = state.medicines[vax_idx].doses;
-        state = apply_action(&state, &Action::Confirm); // select region → deploys directly (tested, single target)
+        let doses_before = state.medicines[med_idx].doses;
+        state = apply_action(&state, &Action::Confirm); // confirm vaccination deploy
         // Dispatch deducts doses immediately (no funding cost), creates a pending shipment
         assert_eq!(state.resources.funding, funding_before, "no funding cost on deploy");
-        assert!(state.medicines[vax_idx].doses < doses_before, "doses deducted on dispatch");
+        assert!(state.medicines[med_idx].doses < doses_before, "doses deducted on dispatch");
         assert_eq!(state.pending_shipments.len(), 1, "should have one pending shipment");
         assert!(matches!(
             state.ui.medicine_ui,
@@ -1468,7 +1477,7 @@ mod tests {
         let funding_before = state.resources.funding;
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, ri,
-            DeployTarget { disease_idx: 0 },
+            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
         );
         assert!(ok, "deployment should succeed");
 
@@ -1507,7 +1516,7 @@ mod tests {
         // Deploy directly via engine API (UI flow skips steps now)
         let funding_before = state.resources.funding;
         let (ok, msg) = medicine::deploy_medicine(
-            &mut state, 0, ri, DeployTarget { disease_idx: 0 },
+            &mut state, 0, ri, DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
         );
         assert!(!ok, "should fail when empty");
         assert_eq!(state.resources.funding, funding_before, "should not charge when empty");
@@ -1590,80 +1599,86 @@ mod tests {
     #[test]
     fn multi_target_medicine_shows_disease_selection() {
         let mut state = GameState::new_default(42);
-        // Find a vaccine (can deploy to any region with susceptible pop)
-        let vax_idx = state.medicines.iter().position(|m| {
-            m.mode == crate::state::MedicineMode::Vaccine
-        }).expect("should have a vaccine");
-        // Make this vaccine target two diseases
-        state.medicines[vax_idx].unlocked = true;
-        state.medicines[vax_idx].tested_against = vec![0, 1];
-        state.medicines[vax_idx].target_diseases = vec![0, 1];
-        state.medicines[vax_idx].doses = state.medicines[vax_idx].max_doses;
+        // Ensure infections exist (therapeutics need infected population)
+        state.regions[0].get_or_create_infection(0).infected = 50_000.0;
+        // Find any targeted medicine
+        let med_idx = state.medicines.iter().position(|m| {
+            m.mechanism.is_some()
+        }).expect("should have a targeted medicine");
+        // Make it target two diseases and be tested against both
+        state.medicines[med_idx].unlocked = true;
+        state.medicines[med_idx].tested_against = vec![0, 1];
+        state.medicines[med_idx].target_diseases = vec![0, 1];
+        state.medicines[med_idx].doses = state.medicines[med_idx].max_doses;
         // Add a second disease
         state.diseases.push(state.diseases[0].clone());
         state.diseases[1].detected = true;
 
         state = apply_action(&state, &Action::OpenMedicines);
         let unlocked = state.unlocked_medicine_indices();
-        let list_pos = unlocked.iter().position(|&i| i == vax_idx).unwrap();
+        let list_pos = unlocked.iter().position(|&i| i == med_idx).unwrap();
         for _ in 0..list_pos {
             state = apply_action(&state, &Action::SelectNext);
         }
-        state = apply_action(&state, &Action::Confirm); // select vaccine
+        state = apply_action(&state, &Action::Confirm); // select medicine
         state = apply_action(&state, &Action::Confirm); // select region → should go to SelectDisease
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::SelectDisease { .. })
         ), "multi-target should go to SelectDisease, got: {:?}", state.ui.medicine_ui);
 
-        // select disease 0 → deploys directly (tested vaccine with susceptible pop)
+        // select disease 0 → deploys directly (tested, no VaccinePlatform → therapeutic)
         state = apply_action(&state, &Action::Confirm);
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::DeployResult { .. })
-        ), "tested vaccine should deploy directly, got: {:?}", state.ui.medicine_ui);
+        ), "tested medicine should deploy directly without VaccinePlatform, got: {:?}", state.ui.medicine_ui);
     }
 
     #[test]
     fn single_target_medicine_deploys_directly() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
-        // Find a vaccine (can deploy to any region with susceptible pop)
-        let vax_idx = state.medicines.iter().position(|m| {
-            m.unlocked && m.mode == crate::state::MedicineMode::Vaccine
-        }).expect("should have a vaccine");
-        assert_eq!(state.medicines[vax_idx].target_diseases.len(), 1);
+        // Ensure there are infections in region 0 (therapeutics need infected population)
+        state.regions[0].get_or_create_infection(0).infected = 50_000.0;
+        // Find a single-target tested targeted medicine
+        let med_idx = state.medicines.iter().position(|m| {
+            m.unlocked && m.mechanism.is_some() && m.target_diseases.len() == 1
+        }).expect("should have a single-target medicine");
+        assert_eq!(state.medicines[med_idx].target_diseases.len(), 1);
 
         state = apply_action(&state, &Action::OpenMedicines);
         let unlocked = state.unlocked_medicine_indices();
-        let list_pos = unlocked.iter().position(|&i| i == vax_idx).unwrap();
+        let list_pos = unlocked.iter().position(|&i| i == med_idx).unwrap();
         for _ in 0..list_pos {
             state = apply_action(&state, &Action::SelectNext);
         }
-        state = apply_action(&state, &Action::Confirm); // select vaccine
-        state = apply_action(&state, &Action::Confirm); // select region → deploys directly
+        state = apply_action(&state, &Action::Confirm); // select medicine
+        state = apply_action(&state, &Action::Confirm); // select region → deploys directly (no VaccinePlatform)
         assert!(matches!(
             state.ui.medicine_ui,
             Some(MedicineUiState::DeployResult { .. })
-        ), "single-target tested vaccine should deploy directly, got: {:?}", state.ui.medicine_ui);
+        ), "single-target tested medicine should deploy directly, got: {:?}", state.ui.medicine_ui);
     }
 
     #[test]
     fn untested_medicine_requires_confirmation() {
         let mut state = GameState::new_default(42);
         unlock_untested(&mut state);
-        // Find a vaccine (can deploy to any region)
-        let vax_idx = state.medicines.iter().position(|m| {
-            m.unlocked && m.mode == crate::state::MedicineMode::Vaccine
-        }).expect("should have a vaccine");
+        // Ensure infections exist (therapeutics need infected population to deploy)
+        state.regions[0].get_or_create_infection(0).infected = 50_000.0;
+        // Find any targeted medicine (untested)
+        let med_idx = state.medicines.iter().position(|m| {
+            m.unlocked && m.mechanism.is_some()
+        }).expect("should have a targeted medicine");
         state = apply_action(&state, &Action::OpenMedicines);
         let unlocked = state.unlocked_medicine_indices();
-        let list_pos = unlocked.iter().position(|&i| i == vax_idx).unwrap();
+        let list_pos = unlocked.iter().position(|&i| i == med_idx).unwrap();
         for _ in 0..list_pos {
             state = apply_action(&state, &Action::SelectNext);
         }
         let funding_before = state.resources.funding;
-        state = apply_action(&state, &Action::Confirm); // select vaccine
+        state = apply_action(&state, &Action::Confirm); // select medicine
         state = apply_action(&state, &Action::Confirm); // select region → ConfirmDeploy (untested)
         assert!(
             matches!(state.ui.medicine_ui, Some(MedicineUiState::ConfirmDeploy { .. })),
@@ -1685,17 +1700,17 @@ mod tests {
     fn untested_medicine_cancel_returns_to_region() {
         let mut state = GameState::new_default(42);
         unlock_untested(&mut state);
-        // Find a vaccine (can deploy to any region)
-        let vax_idx = state.medicines.iter().position(|m| {
-            m.unlocked && m.mode == crate::state::MedicineMode::Vaccine
-        }).expect("should have a vaccine");
+        // Find any targeted medicine (untested)
+        let med_idx = state.medicines.iter().position(|m| {
+            m.unlocked && m.mechanism.is_some()
+        }).expect("should have a targeted medicine");
         state = apply_action(&state, &Action::OpenMedicines);
         let unlocked = state.unlocked_medicine_indices();
-        let list_pos = unlocked.iter().position(|&i| i == vax_idx).unwrap();
+        let list_pos = unlocked.iter().position(|&i| i == med_idx).unwrap();
         for _ in 0..list_pos {
             state = apply_action(&state, &Action::SelectNext);
         }
-        state = apply_action(&state, &Action::Confirm); // select vaccine
+        state = apply_action(&state, &Action::Confirm); // select medicine
         state = apply_action(&state, &Action::Confirm); // select region → ConfirmDeploy (untested)
         assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::ConfirmDeploy { .. })),
             "should be at ConfirmDeploy, got: {:?}", state.ui.medicine_ui);
@@ -1724,7 +1739,7 @@ mod tests {
         let funding_before = state.resources.funding;
         // Deploy directly via engine API — tested medicine should succeed
         let (ok, _msg) = medicine::deploy_medicine(
-            &mut state, 0, ri, DeployTarget { disease_idx: 0 },
+            &mut state, 0, ri, DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
         );
         assert!(ok, "tested medicine should deploy immediately");
         assert_eq!(state.resources.funding, funding_before, "deploy should be free");
@@ -2094,28 +2109,24 @@ mod tests {
                 for &(r_idx, d_idx, _infected) in &targets {
                     if state.resources.funding < min_funding { break; }
 
-                    // Find and deploy best therapeutic, then best vaccine.
-                    for mode in [crate::state::MedicineMode::Therapeutic, crate::state::MedicineMode::Vaccine] {
-                        let mut best: Option<usize> = None;
-                        let mut best_eff = 0.0f64;
-                        let mut best_is_targeted = false;
-                        for mi in 0..state.medicines.len() {
-                            let m = &state.medicines[mi];
-                            if m.mode != mode || !m.unlocked || m.doses <= 0.0 { continue; }
-                            if !m.tested_against.contains(&d_idx) { continue; }
-                            let eff = m.effective_efficacy(d_idx, &state.diseases);
-                            let is_targeted = m.therapy_type != crate::state::TherapyType::BroadSpectrum;
-                            if (is_targeted && !best_is_targeted) || (is_targeted == best_is_targeted && eff > best_eff) {
-                                best_eff = eff;
-                                best = Some(mi);
-                                best_is_targeted = is_targeted;
-                            }
+                    // Find and deploy best medicine as therapeutic.
+                    let mut best: Option<usize> = None;
+                    let mut best_eff = 0.0f64;
+                    let mut best_is_targeted = false;
+                    for mi in 0..state.medicines.len() {
+                        let m = &state.medicines[mi];
+                        if !m.unlocked || m.doses <= 0.0 { continue; }
+                        if !m.tested_against.contains(&d_idx) { continue; }
+                        let eff = m.effective_efficacy(d_idx, &state.diseases);
+                        let is_targeted = m.therapy_type != crate::state::TherapyType::BroadSpectrum;
+                        if (is_targeted && !best_is_targeted) || (is_targeted == best_is_targeted && eff > best_eff) {
+                            best_eff = eff;
+                            best = Some(mi);
+                            best_is_targeted = is_targeted;
                         }
-                        let Some(med_idx) = best else { continue; };
-                        // Skip BS vaccines (burns enormous doses for minimal coverage)
-                        if mode == crate::state::MedicineMode::Vaccine && !best_is_targeted { continue; }
-                        if state.resources.funding < min_funding { break; }
-                        let target = DeployTarget { disease_idx: d_idx };
+                    }
+                    if let Some(med_idx) = best {
+                        let target = DeployTarget { disease_idx: d_idx, mode: crate::state::MedicineMode::Therapeutic };
                         let result = execute_command(&mut state, &GameCommand::DeployMedicine {
                             medicine_idx: med_idx, region_idx: r_idx, target,
                         });
@@ -2428,7 +2439,7 @@ mod tests {
         // Deploy medicine to region 0 (creates a pending shipment)
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, 0,
-            DeployTarget { disease_idx: 0 },
+            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
         );
         assert!(ok, "deployment should succeed despite travel ban");
         assert_eq!(state.pending_shipments.len(), 1);
@@ -2784,7 +2795,6 @@ mod tests {
         let med = Medicine {
             name: "TestMed".into(),
             therapy_type: TherapyType::Antiviral,
-            mode: crate::state::MedicineMode::Therapeutic,
             mechanism: None,
             target_diseases: vec![0],
             doses: 1000.0,
@@ -2843,7 +2853,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick.clear();
-            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget { disease_idx });
+            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget { disease_idx, mode: crate::state::MedicineMode::Therapeutic });
             // Advance time to deliver this shipment
             state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
@@ -2869,7 +2879,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick.clear();
-            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget { disease_idx });
+            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget { disease_idx, mode: crate::state::MedicineMode::Therapeutic });
             state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
         }
@@ -2888,24 +2898,24 @@ mod tests {
             .filter(|m| m.target_diseases.contains(&0)
                 && m.therapy_type != TherapyType::BroadSpectrum)
             .collect();
-        // Each mechanism now generates both a vaccine and a therapeutic.
-        // Bacteria have 4 mechanisms (8 medicines), viruses/fungi have 3 (6 medicines).
-        assert!(targeted_meds.len() >= 6,
-            "should have 6+ targeted medicines for disease 0 (pairs), got {}: {:?}",
+        // One medicine per mechanism.
+        // Bacteria have 4 mechanisms, viruses/fungi have 3.
+        assert!(targeted_meds.len() >= 3,
+            "should have 3+ targeted medicines for disease 0, got {}: {:?}",
             targeted_meds.len(),
             targeted_meds.iter().map(|m| &m.name).collect::<Vec<_>>());
         for med in &targeted_meds {
             assert!(med.mechanism.is_some(),
                 "targeted medicine '{}' should have a mechanism", med.name);
         }
-        // Each mechanism should appear exactly twice (one vaccine, one therapeutic)
+        // Each mechanism should appear exactly once
         let mut mech_counts: std::collections::HashMap<_, u32> = std::collections::HashMap::new();
         for med in &targeted_meds {
             *mech_counts.entry(med.mechanism.unwrap()).or_default() += 1;
         }
         for (mech, count) in &mech_counts {
-            assert_eq!(*count, 2,
-                "mechanism {:?} should appear exactly twice (vax + trt), got {}", mech, count);
+            assert_eq!(*count, 1,
+                "mechanism {:?} should appear exactly once, got {}", mech, count);
         }
         // Each mechanism should have distinct tradeoff properties
         let fast_mech = targeted_meds.iter()
@@ -4606,13 +4616,13 @@ mod tests {
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
 
         // First deploy should succeed
-        let treat = DeployTarget { disease_idx };
+        let treat = DeployTarget { disease_idx, mode: crate::state::MedicineMode::Therapeutic };
         let (nav, msg) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone());
         assert!(nav, "first deploy should succeed");
         assert!(msg.unwrap().contains("Shipped"), "should show shipment message");
 
-        // Region should now have a cooldown set for this disease
-        assert!(state.regions[0].last_deploy_tick.contains_key(&disease_idx));
+        // Region should now have a cooldown set for this medicine
+        assert!(state.regions[0].last_deploy_tick.contains_key(&med_idx));
 
         // Second deploy at same tick should be blocked
         state.resources.funding = 1_000_000.0;
@@ -4629,9 +4639,9 @@ mod tests {
         assert!(nav3, "deploy after cooldown should succeed");
         assert!(msg3.unwrap().contains("Shipped"));
 
-        // Different region should still be deployable (cooldown is per-region-per-disease)
+        // Different region should still be deployable (cooldown is per-region-per-medicine)
         state.tick = 0;
-        state.regions[0].last_deploy_tick.insert(disease_idx, 0);
+        state.regions[0].last_deploy_tick.insert(med_idx, 0);
         state.regions[1].get_or_create_infection(disease_idx).infected = 50_000.0;
         state.resources.funding = 1_000_000.0;
         let (nav4, _) = medicine::deploy_medicine(&mut state, med_idx, 1, treat.clone());
@@ -5075,7 +5085,7 @@ mod tests {
 
         // Baseline: full infrastructure, deploy and deliver
         let mut baseline = state.clone();
-        let target = crate::state::DeployTarget { disease_idx: 0 };
+        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
         medicine::deploy_medicine(&mut baseline, 0, ri, target.clone());
         assert_eq!(baseline.pending_shipments.len(), 1);
         baseline.tick += crate::state::SHIPPING_TICKS + 1;
@@ -5086,7 +5096,7 @@ mod tests {
         let mut degraded = state.clone();
         degraded.regions[ri].supply_lines = 0.50;
         degraded.regions[ri].healthcare_capacity = 0.50;
-        let target = crate::state::DeployTarget { disease_idx: 0 };
+        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
         medicine::deploy_medicine(&mut degraded, 0, ri, target);
         assert_eq!(degraded.pending_shipments.len(), 1);
         degraded.tick += crate::state::SHIPPING_TICKS + 1;
@@ -5114,7 +5124,7 @@ mod tests {
         state.regions[ri].supply_lines = 0.60;
         state.regions[ri].healthcare_capacity = 0.70;
 
-        let target = crate::state::DeployTarget { disease_idx: 0 };
+        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
         medicine::deploy_medicine(&mut state, 0, ri, target);
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
@@ -5147,7 +5157,7 @@ mod tests {
 
         // No screening: targeting_efficiency = 0.50
         assert_eq!(state.policies[ri].screening, ScreeningLevel::None);
-        let target = crate::state::DeployTarget { disease_idx: 0 };
+        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
         medicine::deploy_medicine(&mut state, 0, ri, target.clone());
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng); }
@@ -5276,7 +5286,7 @@ mod tests {
 
         // Try deploying medicine to region 1 (abandoned)
         let (success, msg) = medicine::deploy_medicine(
-            &mut state, 0, 1, DeployTarget { disease_idx: 0 },
+            &mut state, 0, 1, DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
         );
         assert!(!success, "should block medicine deployment to abandoned region");
         assert!(msg.unwrap().contains("abandoned"));

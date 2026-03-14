@@ -10,7 +10,8 @@ use engine::execute_command;
 use state::{
     DecreeId, DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
-    MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem, ResearchUiState, SimState,
+    MedicineMode, MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem,
+    ResearchUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -308,8 +309,10 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     }
 }
 
-/// After selecting a disease, check funding and trial status, then either deploy
-/// directly or show the untested-medicine confirmation screen.
+/// After selecting a disease, check trial status and VaccinePlatform tech.
+/// - Untested: show confirmation screen (always therapeutic — can't vaccinate untested).
+/// - Tested + VaccinePlatform: show mode selection (treatment vs vaccination).
+/// - Tested + no VaccinePlatform: deploy immediately as therapeutic.
 fn try_deploy_or_confirm(
     ui: &mut UiState,
     state: &GameState,
@@ -317,17 +320,27 @@ fn try_deploy_or_confirm(
     region_idx: usize,
     disease_idx: usize,
 ) -> Option<GameCommand> {
-    let target = DeployTarget { disease_idx };
     let med = &state.medicines[medicine_idx];
     let is_tested = med.tested_against.contains(&disease_idx);
     if !is_tested {
+        let target = DeployTarget { disease_idx, mode: MedicineMode::Therapeutic };
         ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
             medicine_idx,
             region_idx,
             target,
         });
         None
+    } else if state.can_vaccinate() {
+        // Show mode selection: treatment vs vaccination
+        ui.medicine_ui = Some(MedicineUiState::SelectMode {
+            medicine_idx,
+            region_idx,
+            disease_idx,
+        });
+        ui.panel_selection = 0;
+        None
     } else {
+        let target = DeployTarget { disease_idx, mode: MedicineMode::Therapeutic };
         Some(GameCommand::DeployMedicine {
             medicine_idx,
             region_idx,
@@ -381,6 +394,20 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                 return try_deploy_or_confirm(ui, state, medicine_idx, region_idx, disease_idx);
             }
             None
+        }
+        Some(MedicineUiState::SelectMode { medicine_idx, region_idx, disease_idx }) => {
+            // 0 = Treatment, 1 = Vaccination
+            let mode = if ui.panel_selection == 0 {
+                MedicineMode::Therapeutic
+            } else {
+                MedicineMode::Vaccine
+            };
+            let target = DeployTarget { disease_idx, mode };
+            Some(GameCommand::DeployMedicine {
+                medicine_idx,
+                region_idx,
+                target,
+            })
         }
         Some(MedicineUiState::ConfirmDeploy {
             medicine_idx,
