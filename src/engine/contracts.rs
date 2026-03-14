@@ -180,8 +180,6 @@ fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
 const LOYALTY_RAISE_MIN_DAYS: f64 = 10.0;
 /// Per-tick probability of a loyalty raise firing once eligible (~1.5%/tick ≈ ~84% within a day).
 const LOYALTY_RAISE_CHANCE: f64 = 0.015;
-/// Loyalty raise multiplier — income increases by this fraction (e.g. 0.15 = 15% raise).
-pub(super) const LOYALTY_RAISE_FRACTION: f64 = 0.15;
 
 /// Check contracts held long enough to trigger a loyalty raise offer.
 pub(super) fn tick_loyalty_raises(state: &mut GameState, rng: &mut ChaCha8Rng) {
@@ -562,6 +560,7 @@ pub(super) fn cancel_contract(state: &mut GameState, board_member_idx: usize) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::LOYALTY_RAISE_FRACTION;
     use rand::SeedableRng;
 
     fn make_test_contract(condition: FundingCondition) -> FundingContract {
@@ -896,8 +895,15 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        // Resolve with option 0 (accept)
-        let msg = crisis::resolve_crisis(&mut state, 0);
+        // Resolve with option 0 (accept) — dispatch post-action as mod.rs would
+        let (mut msg, post_action) = crisis::resolve_crisis(&mut state, 0);
+        match post_action {
+            crisis::CrisisPostAction::AcceptContract => {
+                let (_, m) = accept_contract(&mut state);
+                if let Some(m) = m { msg = m; }
+            }
+            _ => {}
+        }
         assert!(msg.contains("Accepted"), "msg: {msg}");
         assert!(state.contract_offer.is_none(), "offer should be consumed");
         assert_eq!(state.contracts.len(), 1);
@@ -916,7 +922,14 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        let msg = crisis::resolve_crisis(&mut state, 1);
+        let (mut msg, post_action) = crisis::resolve_crisis(&mut state, 1);
+        match post_action {
+            crisis::CrisisPostAction::RejectContract => {
+                let (_, m) = reject_contract(&mut state);
+                if let Some(m) = m { msg = m; }
+            }
+            _ => {}
+        }
         assert!(msg.contains("displeased") || msg.contains("refused"), "msg: {msg}");
         assert!(state.contract_offer.is_none(), "offer should be cleared");
         assert!(state.contracts.is_empty());
@@ -1216,7 +1229,7 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        let msg = crisis::resolve_crisis(&mut state, 0);
+        let (msg, _) = crisis::resolve_crisis(&mut state, 0);
         assert!(msg.contains("raises") || msg.contains("increased"), "msg: {msg}");
         let expected = income_before * (1.0 + LOYALTY_RAISE_FRACTION);
         assert!((state.contracts[0].income - expected).abs() < 0.01,
@@ -1249,7 +1262,13 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        let msg = crisis::resolve_crisis(&mut state, 1);
+        let (msg, post_action) = crisis::resolve_crisis(&mut state, 1);
+        match post_action {
+            crisis::CrisisPostAction::CancelContract { board_member_idx } => {
+                cancel_contract(&mut state, board_member_idx);
+            }
+            _ => {}
+        }
         assert!(msg.contains("cancelled"), "msg: {msg}");
         assert!(state.contracts.is_empty(),
             "Contract should be cancelled when declining loyalty raise");

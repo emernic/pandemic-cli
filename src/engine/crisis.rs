@@ -5,8 +5,17 @@ use crate::state::{
     CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState,
     GovernorPersonality, LoanLender, ModifierSource, OperationSpec, ResearchKind,
     ResearchCategory, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
-    SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
+    LOYALTY_RAISE_FRACTION, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
+
+/// Post-resolution actions that require cross-subsystem calls.
+/// Returned by `resolve_crisis` so mod.rs can dispatch to the appropriate subsystem.
+pub(super) enum CrisisPostAction {
+    None,
+    AcceptContract,
+    RejectContract,
+    CancelContract { board_member_idx: usize },
+}
 
 /// Apply a satisfaction modifier to the chairman board member.
 /// Positive values boost satisfaction, negative values penalize it.
@@ -1604,7 +1613,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let member_name = state.board_members.get(member_idx)
                 .map(|m| m.name.as_str()).unwrap_or("Board member");
             let current_income = contract.map(|c| c.income).unwrap_or(0.0);
-            let raise_amount = current_income * super::contracts::LOYALTY_RAISE_FRACTION;
+            let raise_amount = current_income * LOYALTY_RAISE_FRACTION;
             let raise_per_day = raise_amount * TICKS_PER_DAY;
             let contract_name = contract.map(|c| c.name.as_str()).unwrap_or("Contract");
 
@@ -2600,7 +2609,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
 /// Activate a crisis: check for a saved auto-resolve preference and either
 /// resolve immediately or pause the game for player input.
 /// Called from tick() for both scheduled and randomly generated crises.
-pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
+pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) -> CrisisPostAction {
     let auto_choice = state.auto_resolve_crises.get(crisis.kind.tag()).copied();
     let can_auto = match auto_choice {
         Some(choice) => {
@@ -2611,13 +2620,15 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) {
     };
     state.active_crisis = Some(crisis);
     if can_auto {
-        let message = resolve_crisis(state, auto_choice.unwrap());
+        let (message, post_action) = resolve_crisis(state, auto_choice.unwrap());
         state.events.push(GameEvent::CrisisAutoResolved { message });
+        post_action
     } else {
         state.sim_state = SimState::Event {
             was_running: state.sim_state.is_running(),
         };
         state.events.push(GameEvent::CrisisStarted);
+        CrisisPostAction::None
     }
 }
 
@@ -2638,11 +2649,12 @@ pub(super) fn tick_crisis_operations(state: &mut GameState) {
     }
 }
 
-/// Apply the chosen crisis resolution. Returns a status message.
-pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
+/// Apply the chosen crisis resolution. Returns a status message and any
+/// cross-subsystem post-action for mod.rs to dispatch.
+pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, CrisisPostAction) {
     let crisis = match state.active_crisis.take() {
         Some(c) => c,
-        None => return "No active crisis".into(),
+        None => return ("No active crisis".into(), CrisisPostAction::None),
     };
 
     // Record cooldown for this crisis type
@@ -2672,6 +2684,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         }
     }
 
+    let mut post_action = CrisisPostAction::None;
     let msg = match (&crisis.kind, choice) {
         // --- Original crisis resolutions ---
         (CrisisKind::SupplyDisruption { medicine_idx }, 0) => {
@@ -3422,12 +3435,13 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
         // --- Contract offer resolutions ---
 
         (CrisisKind::ContractOffer { .. }, 0) => {
-            let (_, msg) = super::contracts::accept_contract(state);
-            msg.unwrap_or_else(|| "Contract offer expired.".into())
+            post_action = CrisisPostAction::AcceptContract;
+            // Message will be overridden by mod.rs with the actual result from contracts
+            "Contract offer accepted.".into()
         }
         (CrisisKind::ContractOffer { .. }, _) => {
-            let (_, msg) = super::contracts::reject_contract(state);
-            msg.unwrap_or_else(|| "Contract offer declined.".into())
+            post_action = CrisisPostAction::RejectContract;
+            "Contract offer declined.".into()
         }
 
         // --- Contract demand resolutions ---
@@ -3480,7 +3494,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
             if let Some(c) = state.contracts.iter_mut()
                 .find(|c| c.template_id == *template_id)
             {
-                c.income *= 1.0 + super::contracts::LOYALTY_RAISE_FRACTION;
+                c.income *= 1.0 + LOYALTY_RAISE_FRACTION;
             }
             if let Some(idx) = member_idx {
                 if let Some(member) = state.board_members.get_mut(idx) {
@@ -3499,7 +3513,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
                 .map(|m| m.name.clone())
                 .unwrap_or_else(|| "Board member".to_string());
             if let Some(idx) = member_idx {
-                super::contracts::cancel_contract(state, idx);
+                post_action = CrisisPostAction::CancelContract { board_member_idx: idx };
             }
             format!("{} contract cancelled. The board takes note.", member_name)
         }
@@ -4073,7 +4087,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> String {
     if let SimState::Event { was_running } = state.sim_state {
         state.sim_state = if was_running { SimState::Running } else { SimState::Paused };
     }
-    msg
+    (msg, post_action)
 }
 
 #[cfg(test)]
@@ -4194,7 +4208,7 @@ mod tests {
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
         let pending_before = state.pending_crises.len();
-        let msg = resolve_crisis(&mut state, 0); // Pay
+        let (msg, _) = resolve_crisis(&mut state, 0); // Pay
         assert!(state.pending_crises.len() > pending_before, "paying should schedule follow-up");
         assert!(state.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::FieldTeamDetainedAgain { .. })),
             "follow-up should be FieldTeamDetainedAgain");
@@ -4264,7 +4278,7 @@ mod tests {
 
         let funding_before = state.resources.funding;
         assert!(state.active_in_category(ResearchCategory::Field).is_empty(), "no research before resolution");
-        let msg = resolve_crisis(&mut state, 0); // Begin identification
+        let (msg, _) = resolve_crisis(&mut state, 0); // Begin identification
         assert!(!state.active_in_category(ResearchCategory::Field).is_empty(),
             "identification research should start after choosing option A");
         assert!(matches!(
@@ -4346,7 +4360,7 @@ mod tests {
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
         let funding_before = state.resources.funding;
-        let msg = resolve_crisis(&mut state, 0); // Begin identification
+        let (msg, _) = resolve_crisis(&mut state, 0); // Begin identification
         assert!(state.active_in_category(ResearchCategory::Field).is_empty(),
             "no research should start without enough personnel");
         assert_eq!(state.resources.funding, funding_before,
@@ -4696,7 +4710,7 @@ mod tests {
             s.active_crisis = Some(crisis);
             s.sim_state = SimState::Event { was_running: false };
 
-            let _msg = resolve_crisis(&mut s, worst_choice);
+            let (_msg, _) = resolve_crisis(&mut s, worst_choice);
 
             let has_death = s.pending_crises.iter()
                 .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
@@ -4717,7 +4731,7 @@ mod tests {
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let _msg = resolve_crisis(&mut state, 2); // Refuse (worst-case)
+        let (_msg, _) = resolve_crisis(&mut state, 2); // Refuse (worst-case)
 
         let has_death = state.pending_crises.iter()
             .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
@@ -4739,7 +4753,7 @@ mod tests {
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let _msg = resolve_crisis(&mut state, 1); // Refuse (worst-case)
+        let (_msg, _) = resolve_crisis(&mut state, 1); // Refuse (worst-case)
 
         let death_count = state.pending_crises.iter()
             .filter(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0))
@@ -4843,7 +4857,7 @@ mod tests {
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let msg = resolve_crisis(&mut state, 1); // Refuse
+        let (msg, _) = resolve_crisis(&mut state, 1); // Refuse
 
         assert!(state.regions[region_idx].supply_lines < supply_before,
             "supply lines should decrease on refusal");
