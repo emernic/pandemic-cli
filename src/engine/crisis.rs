@@ -2103,6 +2103,43 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
+
+        CrisisKind::NuclearEvacuation { region_idx } => {
+            let region_name = state.regions.get(*region_idx)
+                .map(|r| r.name.as_str()).unwrap_or("Unknown");
+            let members: Vec<String> = state.board_members.iter()
+                .filter(|m| m.region_idx == Some(*region_idx))
+                .map(|m| m.name.clone())
+                .collect();
+            let count = members.len();
+            let cost = crate::state::NUCLEAR_EVACUATION_COST_PER_MEMBER * count as f64;
+            let names = members.join(", ");
+            CrisisEvent {
+                title: "Emergency Evacuation Request".into(),
+                description: format!(
+                    "Nuclear payload inbound to {region_name}. {} board member{} ({names}) \
+                     demand{} immediate airlift. Evacuation costs ¥{cost:.0}.",
+                    count,
+                    if count == 1 { "" } else { "s" },
+                    if count == 1 { "s" } else { "" },
+                ),
+                options: vec![
+                    CrisisOption {
+                        label: format!("Evacuate (¥{cost:.0})"),
+                        description: format!("Airlift {count} board member{} to safety.",
+                            if count == 1 { "" } else { "s" }),
+                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                    },
+                    CrisisOption {
+                        label: "Let them die".into(),
+                        description: "They knew the risks. Save the money.".into(),
+                        cost: None,
+                    },
+                ],
+                kind,
+                tick_created: tick,
+            }
+        }
     };
     // INVARIANT: at least one option must be free so the player is never softlocked.
     debug_assert!(event.options.iter().any(|o| o.cost.is_none()),
@@ -3287,6 +3324,43 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 corp.last_demand_tick = Some(state.tick);
             }
             format!("{corp_name} retaliates. Supply lines and civil order reduced in {region_name}.")
+        }
+
+        // --- Nuclear evacuation resolutions ---
+
+        (CrisisKind::NuclearEvacuation { region_idx }, 0) => {
+            // Evacuate: move board members out of the region (cost already deducted).
+            let mut evacuated = Vec::new();
+            for member in &mut state.board_members {
+                if member.region_idx == Some(*region_idx) {
+                    evacuated.push(member.name.clone());
+                    member.region_idx = None; // relocated to safety
+                }
+            }
+            // Governor evacuated but region becomes leaderless — no point governing a crater.
+            // No succession scheduled since the region is about to be annihilated.
+            if !state.regions[*region_idx].governor.dead {
+                state.regions[*region_idx].governor.dead = true;
+                state.regions[*region_idx].governor.succession_tick = None;
+            }
+            let names = evacuated.join(", ");
+            format!("{names} evacuated by air. Region will be annihilated on impact.")
+        }
+        (CrisisKind::NuclearEvacuation { region_idx }, _) => {
+            // Let them die: chairman approval hit.
+            let members: Vec<String> = state.board_members.iter()
+                .filter(|m| m.region_idx == Some(*region_idx))
+                .map(|m| m.name.clone())
+                .collect();
+            let names = members.join(", ");
+            // Severe chairman satisfaction penalty for letting board members die
+            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+                chairman.add_modifier(
+                    crate::state::ModifierSource::CrisisEffect,
+                    -0.15,
+                );
+            }
+            format!("{names} will die in the blast. The board will remember this.")
         }
     };
     // Authority is an enum — no clamping needed.

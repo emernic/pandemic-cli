@@ -91,6 +91,20 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::White)
             };
 
+            // Dead members: show greyed out with death indicator
+            if member.dead {
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{}{}", marker, member.name), Style::default().fg(Color::DarkGray)),
+                    Span::styled(" [DEAD]", Style::default().fg(Color::Red)),
+                ]));
+                lines.push(Line::from(Span::styled(
+                    format!("    {}", member.title),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(""));
+                continue;
+            }
+
             // Name line (with personality in gray parentheses, like governor personalities)
             let mut name_spans: Vec<Span> = vec![
                 Span::styled(format!("{}{}", marker, member.name), style),

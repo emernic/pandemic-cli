@@ -394,6 +394,13 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("New governor in {}: {}", region_name, name);
                 (2, msg.clone(), msg)
             }
+            GameEvent::NuclearImpact { region_idx, killed } => {
+                let region_name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
+                let msg = format!("☢ {} annihilated. {:.1}M dead. Disease eradicated.",
+                    region_name, killed / 1_000_000.0);
+                (0, msg.clone(), msg)
+            }
             GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");

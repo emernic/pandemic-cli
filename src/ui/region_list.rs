@@ -207,9 +207,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let shows_immune = state.screening_shows_immune(idx);
         let is_ark = state.ark_protocol == Some(idx);
         let is_abandoned = state.is_abandoned(idx);
-        let board_count = state.board_members.iter().filter(|bm| bm.region_idx == Some(idx)).count();
+        let board_count = state.board_members.iter().filter(|bm| bm.region_idx == Some(idx) && !bm.dead).count();
         let martial_law = state.policies.get(idx).is_some_and(|p| p.martial_law);
-        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned, board_count, martial_law);
+        let nuclear_state = state.policies.get(idx).map(|p| p.nuclear_state).unwrap_or_default();
+        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned, board_count, martial_law, nuclear_state);
     }
 
     // Detail panel below the grid for the selected region
@@ -233,6 +234,7 @@ fn render_region_box(
     is_abandoned: bool,
     board_count: usize,
     martial_law: bool,
+    nuclear_state: crate::state::NuclearState,
 ) {
     let border_color = if is_ark {
         Color::Cyan
@@ -262,8 +264,11 @@ fn render_region_box(
     let immune = if shows_immune { region.detected_immune(diseases) } else { 0.0 };
     let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
+    let is_nuked = nuclear_state.is_dropped();
 
-    let threat = if is_ark {
+    let threat = if is_nuked {
+        ("☢", Color::Red)
+    } else if is_ark {
         ("HQ", Color::Cyan)
     } else if is_abandoned {
         ("GONE", Color::DarkGray)
@@ -369,6 +374,15 @@ fn render_region_box(
     // Line 3: Health bar (rendered intact, no markers embedded)
     if inner.height >= 3 && pop > 0.0 {
         let bar_w = iw;
+
+        if is_nuked {
+            // Nuked region: entire bar is dead — no ambiguity
+            let spans = vec![Span::styled(
+                "░".repeat(bar_w),
+                Style::default().fg(Color::DarkGray),
+            )];
+            lines.push(Line::from(spans));
+        } else {
         let mut inf_w = if infected > 0.0 {
             ((infected / pop) * bar_w as f64).round().max(1.0) as usize
         } else {
@@ -425,6 +439,7 @@ fn render_region_box(
             spans.push(Span::styled("█".repeat(remaining), Style::default().fg(sus_color)));
         }
         lines.push(Line::from(spans));
+        } // end non-nuked
 
         // Line 4: Collapse threshold indicator below the bar
         if inner.height >= 4 && !region.collapsed {

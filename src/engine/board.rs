@@ -48,6 +48,7 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             }],
             is_chairman,
             personality: Some(personality),
+            dead: false,
         });
     }
 
@@ -80,6 +81,7 @@ pub(super) fn generate_board_members(state: &mut GameState) {
             }],
             is_chairman: false,
             personality: None,
+            dead: false,
         });
         governor_count += 1;
     }
@@ -123,6 +125,9 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
     let survival_rate = global_survival_rate(state);
 
     for i in 0..state.board_members.len() {
+        if state.board_members[i].dead {
+            continue;
+        }
         // 1. Remove continuous modifiers (they'll be recomputed fresh)
         state.board_members[i].modifiers.retain(|m| !m.source.is_continuous());
 

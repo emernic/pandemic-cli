@@ -353,6 +353,37 @@ pub enum ScreeningLevel {
     MassRapid,
 }
 
+/// Nuclear option state machine. Transitions: Inactive → Dropping → Dropped.
+/// The nuke is in transit during Dropping (0.5 days); annihilation effects
+/// apply on transition to Dropped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum NuclearState {
+    #[default]
+    Inactive,
+    /// Payload is in transit. `hit_tick` is when it lands.
+    Dropping { hit_tick: u64 },
+    /// Nuke has landed. Region is annihilated.
+    Dropped,
+}
+
+impl NuclearState {
+    /// Returns true if the nuke has fully landed (region is annihilated).
+    pub fn is_dropped(&self) -> bool {
+        matches!(self, NuclearState::Dropped)
+    }
+
+    /// Returns true if the nuke is in any active state (dropping or dropped).
+    pub fn is_active(&self) -> bool {
+        !matches!(self, NuclearState::Inactive)
+    }
+}
+
+/// Ticks for the nuke to be in transit (0.5 days).
+pub const NUCLEAR_TRANSIT_TICKS: u64 = (0.5 * TICKS_PER_DAY) as u64;
+
+/// Cost per board member for emergency air evacuation from a nuked region.
+pub const NUCLEAR_EVACUATION_COST_PER_MEMBER: f64 = 500.0;
+
 // Emergency Decree constants — permanent, irreversible global decisions.
 pub const DECREE_COUNT: usize = 6;
 /// Number of standing orders shown in the Orders panel.
@@ -884,10 +915,9 @@ pub struct RegionPolicy {
     /// before collapse — cleared when region collapses like all other policies.
     #[serde(default)]
     pub martial_law: bool,
-    /// One-shot action for collapsed regions only. Kills 99% of remaining
-    /// population, eliminating disease spread from the region. Irreversible.
+    /// Nuclear option state: Inactive → Dropping (in transit) → Dropped (annihilated).
     #[serde(default)]
-    pub nuclear_annihilation: bool,
+    pub nuclear_state: NuclearState,
 }
 
 /// Total number of policy types available per region.
@@ -991,7 +1021,7 @@ impl RegionPolicy {
         self.travel_ban || self.quarantine || self.discourage_hosp
             || self.border_controls || self.water_sanitation
             || self.screening != ScreeningLevel::None
-            || self.martial_law || self.nuclear_annihilation
+            || self.martial_law || self.nuclear_state.is_active()
     }
 
     /// Count of active policy toggles (each boolean that's true, plus
@@ -1030,7 +1060,7 @@ impl RegionPolicy {
         self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
         self.martial_law = false;
-        // nuclear_annihilation is NOT cleared — it's permanent and post-collapse
+        // nuclear_state is NOT cleared — it's permanent and post-collapse
     }
 
     /// Access a boolean policy field by typed ID.
@@ -1042,12 +1072,13 @@ impl RegionPolicy {
             PolicyId::BorderControls => self.border_controls,
             PolicyId::WaterSanitation => self.water_sanitation,
             PolicyId::MartialLaw => self.martial_law,
-            PolicyId::NuclearOption => self.nuclear_annihilation,
+            PolicyId::NuclearOption => self.nuclear_state.is_active(),
             _ => false,
         }
     }
 
     /// Set a boolean policy field by typed ID.
+    /// Note: NuclearOption cannot be toggled via set_bool — use nuclear_state directly.
     pub fn set_bool(&mut self, policy: PolicyId, val: bool) {
         match policy {
             PolicyId::TravelBan => self.travel_ban = val,
@@ -1056,7 +1087,7 @@ impl RegionPolicy {
             PolicyId::BorderControls => self.border_controls = val,
             PolicyId::WaterSanitation => self.water_sanitation = val,
             PolicyId::MartialLaw => self.martial_law = val,
-            PolicyId::NuclearOption => self.nuclear_annihilation = val,
+            PolicyId::NuclearOption => {} // handled via nuclear_state directly
             _ => {}
         }
     }
@@ -1684,6 +1715,10 @@ pub struct BoardMember {
     /// Personality archetype for corporate leaders. None for governor members.
     #[serde(default)]
     pub personality: Option<BoardPersonality>,
+    /// Whether this board member is dead (killed in a nuked region, etc.).
+    /// Dead members have zero satisfaction weight and cannot participate in votes.
+    #[serde(default)]
+    pub dead: bool,
 }
 
 impl BoardMember {
@@ -4287,6 +4322,11 @@ pub enum GameEvent {
         region_idx: usize,
         name: String,
     },
+    /// Nuclear payload has impacted a region.
+    NuclearImpact {
+        region_idx: usize,
+        killed: f64,
+    },
     /// Infrastructure dropped below a breakpoint threshold.
     InfrastructureBreakpoint {
         region_idx: usize,
@@ -4505,6 +4545,11 @@ pub enum CrisisKind {
     /// Governor has died from the pandemic. Region becomes leaderless.
     GovernorDeath { region_idx: usize },
 
+    // --- Nuclear events ---
+
+    /// Board members in a nuked region demand emergency evacuation.
+    NuclearEvacuation { region_idx: usize },
+
     // --- Detection alert types ---
 
     /// New unknown pathogen detected. Interrupts with alert offering immediate identification.
@@ -4642,6 +4687,7 @@ impl CrisisKind {
             CrisisKind::LoanCallIn { .. } => "loan_call_in",
             CrisisKind::LoyaltyRaise { .. } => "loyalty_raise",
             CrisisKind::CorporateDemand { .. } => "corp_demand",
+            CrisisKind::NuclearEvacuation { .. } => "nuclear_evacuation",
         }
     }
 
@@ -6164,8 +6210,11 @@ impl GameState {
     /// incentive where good policies instantly tank satisfaction.
     pub fn board_satisfaction(&self) -> f64 {
         // Use individual board member satisfactions when available.
-        if !self.board_members.is_empty() {
-            let (weighted_total, weight_count) = self.board_members.iter().fold(
+        let living_members: Vec<&BoardMember> = self.board_members.iter()
+            .filter(|m| !m.dead)
+            .collect();
+        if !living_members.is_empty() {
+            let (weighted_total, weight_count) = living_members.iter().fold(
                 (0.0_f64, 0.0_f64),
                 |(total, count), m| {
                     let w = if m.is_chairman { 2.0 } else { 1.0 };
@@ -6724,8 +6773,8 @@ impl GameState {
     /// the engine's per-disease spread uses exact per-transmission factors instead.
     pub fn cross_region_spread_factor(&self, source: usize, dest: usize) -> f64 {
         // Annihilated regions neither send nor receive spread
-        if self.policies.get(source).is_some_and(|p| p.nuclear_annihilation)
-            || self.policies.get(dest).is_some_and(|p| p.nuclear_annihilation)
+        if self.policies.get(source).is_some_and(|p| p.nuclear_state.is_dropped())
+            || self.policies.get(dest).is_some_and(|p| p.nuclear_state.is_dropped())
         {
             return 0.0;
         }

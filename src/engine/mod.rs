@@ -95,6 +95,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     // Crisis operations — temporary personnel commitments from crisis resolutions.
     crisis::tick_crisis_operations(&mut new);
 
+    // Nuclear state transitions — land nukes that have reached their hit tick.
+    policy::tick_nuclear(&mut new);
+
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new);
     new.cumulative_policy_spending += policy_cost;
