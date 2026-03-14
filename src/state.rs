@@ -1583,10 +1583,10 @@ impl BoardPersonality {
     /// Short description of the chairman-specific power granted by this personality.
     pub fn chairman_effect_description(&self) -> &'static str {
         match self {
-            Self::Profiteer => "Chairman effect: Budget swings ±15% (vs ±10%)",
-            Self::Technocrat => "Chairman effect: Research costs -10%",
-            Self::Humanitarian => "Chairman effect: Approval target +5%",
-            Self::Dealmaker => "Chairman effect: Stock trade reactions 2x for all members",
+            Self::Profiteer => "Profiteer effect: Budget swings ±15% (vs ±10%)",
+            Self::Technocrat => "Technocrat effect: Research costs -10%",
+            Self::Humanitarian => "Humanitarian effect: Approval target +5%",
+            Self::Dealmaker => "Dealmaker effect: Stock trade reactions 2x for all members",
         }
     }
 }
