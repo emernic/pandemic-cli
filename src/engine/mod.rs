@@ -3468,7 +3468,7 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            kind: CrisisKind::MediaPanic,
             title: "Test Crisis".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "A".into(), cost: None },
@@ -3534,7 +3534,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.funding = 0.0; // broke
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            kind: CrisisKind::MediaPanic,
             title: "Burnout".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
@@ -3564,7 +3564,7 @@ mod tests {
         // Game is running, crisis fires
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            kind: CrisisKind::MediaPanic,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3587,7 +3587,7 @@ mod tests {
         // Game was paused when crisis fired
         state.sim_state = SimState::Event { was_running: false };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            kind: CrisisKind::MediaPanic,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3714,7 +3714,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.sim_state = SimState::Event { was_running: true };
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            kind: CrisisKind::MediaPanic,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3751,7 +3751,7 @@ mod tests {
 
         // Inject an active crisis
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::PersonnelCrisis { amount: 3 },
+            kind: CrisisKind::MediaPanic,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3816,128 +3816,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn lab_accident_evacuate_destroys_applied_research() {
-        use crate::state::{
-            CrisisEvent, CrisisKind, CrisisOption, ResearchProject, ResearchKind,
-        };
-
-        let mut state = GameState::new_default(42);
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
-            progress: 50.0,
-            required_ticks: 200.0,
-            personnel_assigned: 3,
-        });
-        state.sim_state = SimState::Event { was_running: true };
-        state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::LabAccident { targets_basic: false },
-            title: "Lab Accident".into(),
-            description: "Test".into(),
-            options: vec![ CrisisOption {
-                label: "Evacuate".into(),
-                description: "Lose research".into(),
-                cost: None,
-            },
-             CrisisOption {
-                label: "Contain".into(),
-                description: "Save research".into(),
-                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3, ..Default::default() }),
-            },
-            ],
-            tick_created: 0,
-        });
-
-        // Choose option A (evacuate) — should destroy applied research
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.active_in_category(crate::state::ResearchCategory::Applied).is_empty(),
-            "applied research should be destroyed on evacuation");
-        assert!(after.active_crisis.is_none(),
-            "crisis should be resolved");
-    }
-
-    #[test]
-    fn lab_accident_evacuate_destroys_basic_research() {
-        use crate::state::{
-            BasicTech, CrisisEvent, CrisisKind, CrisisOption,
-            ResearchProject, ResearchKind,
-        };
-
-        let mut state = GameState::new_default(42);
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::BasicResearch { tech: BasicTech::TargetedDrugDesign },
-            progress: 100.0,
-            required_ticks: 240.0,
-            personnel_assigned: 3,
-        });
-        state.sim_state = SimState::Event { was_running: true };
-        state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::LabAccident { targets_basic: true },
-            title: "Lab Accident".into(),
-            description: "Test".into(),
-            options: vec![ CrisisOption {
-                label: "Evacuate".into(),
-                description: "Lose research".into(),
-                cost: None,
-            },
-             CrisisOption {
-                label: "Contain".into(),
-                description: "Save research".into(),
-                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3, ..Default::default() }),
-            },
-            ],
-            tick_created: 0,
-        });
-
-        // Choose option A (evacuate) — should destroy basic research
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.active_in_category(crate::state::ResearchCategory::Basic).is_empty(),
-            "basic research should be destroyed on evacuation");
-        assert!(after.active_crisis.is_none(),
-            "crisis should be resolved");
-    }
-
-    #[test]
-    fn lab_accident_containment_preserves_research() {
-        use crate::state::{
-            CrisisEvent, CrisisKind, CrisisOption, ResearchProject, ResearchKind,
-        };
-
-        let mut state = GameState::new_default(42);
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
-            progress: 50.0,
-            required_ticks: 200.0,
-            personnel_assigned: 3,
-        });
-        state.sim_state = SimState::Event { was_running: true };
-        state.ui.crisis_selection = 1; // Select option B
-        state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::LabAccident { targets_basic: false },
-            title: "Lab Accident".into(),
-            description: "Test".into(),
-            options: vec![ CrisisOption {
-                label: "Evacuate".into(),
-                description: "Lose research".into(),
-                cost: None,
-            },
-             CrisisOption {
-                label: "Contain".into(),
-                description: "Save research".into(),
-                cost: Some(crate::state::CrisisCost { funding: 200.0, personnel: 3, ..Default::default() }),
-            },
-            ],
-            tick_created: 0,
-        });
-
-        // Choose option B (contain) — should preserve research
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(!after.active_in_category(crate::state::ResearchCategory::Applied).is_empty(),
-            "applied research should be preserved on containment");
-        assert!(after.active_crisis.is_none(),
-            "crisis should be resolved");
-    }
-
     // --- Crisis resolution effect tests ---
 
     /// Helper: create a crisis event and inject it into state with choice pre-selected.
@@ -3966,7 +3844,7 @@ mod tests {
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::LabAccident { targets_basic: false },
+            kind: CrisisKind::MediaPanic,
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -3991,7 +3869,7 @@ mod tests {
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::LabAccident { targets_basic: false },
+            kind: CrisisKind::MediaPanic,
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -4015,7 +3893,7 @@ mod tests {
         state.sim_state = SimState::Event { was_running: true };
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::LabAccident { targets_basic: false },
+            kind: CrisisKind::MediaPanic,
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -4044,7 +3922,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::LabAccident { targets_basic: false }, 0);
+        setup_crisis(&mut state, CrisisKind::MediaPanic, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none());
         assert!((after.resources.funding - funding_before).abs() < 0.01,

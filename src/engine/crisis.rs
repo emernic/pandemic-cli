@@ -167,9 +167,6 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         "media" | "whistleblower" | "hesitancy" | "aid" | "trial"
             => fade_out(30.0, 50.0),
 
-        // Lab accidents are early-mid (fade later, research keeps going)
-        "lab" => fade_out(40.0, 60.0),
-
         // --- Mid-game: escalating pressure (ramp up day 10-24, fade after 50-70) ---
         "blackmarket" | "riot" | "mutation" |
         "diversion" | "exhaustion"
@@ -204,19 +201,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     let day = state.tick as f64 / TICKS_PER_DAY;
 
     // --- Original crisis types ---
-
-    // Lab accident: requires active applied or basic research
-    let has_applied = !state.active_in_category(ResearchCategory::Applied).is_empty();
-    let has_basic = !state.active_in_category(ResearchCategory::Basic).is_empty();
-    if has_applied || has_basic {
-        // If both categories are running, randomly target one
-        let targets_basic = if has_applied && has_basic {
-            rng.r#gen::<bool>()
-        } else {
-            has_basic
-        };
-        candidates.push(CrisisKind::LabAccident { targets_basic });
-    }
 
     // Political pressure: requires active quarantine somewhere
     let quarantined: Vec<usize> = state.policies.iter().enumerate()
@@ -460,41 +444,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
     let event = match &kind {
-        CrisisKind::LabAccident { targets_basic } => {
-            let track = if *targets_basic { "basic" } else { "applied" };
-            CrisisEvent {
-                title: "Laboratory Accident".into(),
-                description: format!(
-                    "A containment breach in your research lab threatens \
-                    to destroy the current {} research project.", track
-                ),
-                options: vec![ CrisisOption {
-                    label: "Evacuate lab".into(),
-                    description: format!("Lose current {} research progress", track),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.10, 80.0, 400.0);
-                    CrisisOption {
-                        label: format!("Emergency containment (¥{:.0}, 3 personnel for 2d)", cost),
-                        description: "Breach contained. Research continues. Team returns in 2 days.".into(),
-                        cost: Some(CrisisCost {
-                            funding: cost,
-                            personnel: 3,
-                            operation: Some(OperationSpec { days: 2.0, label: "Containment Team".into() }),
-                        }),
-                    }
-                },
-                CrisisOption {
-                    label: "Leave it".into(),
-                    description: "Risk total loss if breach worsens. 30% chance it self-contains.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::PoliticalPressure { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -2275,33 +2224,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
     let mut post_action = CrisisPostAction::None;
     let msg = match (&crisis.kind, choice) {
         // --- Original crisis resolutions ---
-        (CrisisKind::LabAccident { targets_basic }, 0) => {
-            if *targets_basic {
-                state.active_research.retain(|p| p.kind.category() != ResearchCategory::Basic);
-                "Lab evacuated. Basic research project lost.".into()
-            } else {
-                state.active_research.retain(|p| p.kind.category() != ResearchCategory::Applied);
-                "Lab evacuated. Applied research project lost.".into()
-            }
-        }
-        (CrisisKind::LabAccident { .. }, 1) => {
-            "Containment successful. Research project saved.".into()
-        }
-        (CrisisKind::LabAccident { targets_basic }, _) => {
-            // Leave it — 70% chance of loss, 30% chance it self-contains
-            if state.rng_crisis.r#gen::<f64>() < 0.70 {
-                // Breach worsens — lose the research anyway
-                if *targets_basic {
-                    state.active_research.retain(|p| p.kind.category() != ResearchCategory::Basic);
-                    "Breach worsened. Basic research lost.".into()
-                } else {
-                    state.active_research.retain(|p| p.kind.category() != ResearchCategory::Applied);
-                    "Breach worsened. Applied research lost.".into()
-                }
-            } else {
-                "Breach self-contained. Research intact. Lucky.".into()
-            }
-        }
         (CrisisKind::PoliticalPressure { region_idx }, 0) => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());

@@ -4491,8 +4491,6 @@ impl CrisisCost {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CrisisKind {
-    /// Lab accident — lose applied or basic research, or spend resources to contain.
-    LabAccident { targets_basic: bool },
     /// Political pressure — lift quarantine in a region or pay to resist.
     PoliticalPressure { region_idx: usize },
     /// Staff burnout — lose personnel or pay retention bonus.
@@ -4651,7 +4649,6 @@ impl CrisisKind {
     /// Used for cooldown tracking to prevent back-to-back repeats.
     pub fn tag(&self) -> &'static str {
         match self {
-            CrisisKind::LabAccident { .. } => "lab",
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::RefugeeWave { .. } => "refugee",
