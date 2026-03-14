@@ -202,15 +202,11 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // --- Original crisis types ---
 
-    // Political pressure: requires active quarantine somewhere
+    // Quarantine-related crises need the list of quarantined regions
     let quarantined: Vec<usize> = state.policies.iter().enumerate()
         .filter(|(_, p)| p.quarantine)
         .map(|(i, _)| i)
         .collect();
-    if !quarantined.is_empty() {
-        let idx = quarantined[rng.r#gen::<usize>() % quarantined.len()];
-        candidates.push(CrisisKind::PoliticalPressure { region_idx: idx });
-    }
 
     // Personnel crisis: requires at least 5 personnel
     if state.resources.personnel >= 5 {
@@ -234,7 +230,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::BlackMarketMedicine { region_idx: idx });
     }
 
-    // Quarantine riot: requires quarantine active somewhere (different from PoliticalPressure)
+    // Quarantine riot: requires quarantine active somewhere
     if !quarantined.is_empty() && day > 10.0 {
         let idx = quarantined[rng.r#gen::<usize>() % quarantined.len()];
         candidates.push(CrisisKind::QuarantineRiot { region_idx: idx });
@@ -444,34 +440,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
     let event = match &kind {
-        CrisisKind::PoliticalPressure { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Political Pressure".into(),
-                description: format!(
-                    "The regional administration in {} is threatening to revoke \
-                     your quarantine operating authority.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Lift quarantine".into(),
-                    description: format!("Remove quarantine in {}", region_name),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.25, 150.0, 800.0);
-                    CrisisOption {
-                        label: format!("Resist (¥{:.0})", cost),
-                        description: "Quarantine holds.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::PersonnelCrisis { amount } => {
             let retention_cost = 500.0;
             CrisisEvent {
@@ -2223,18 +2191,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
 
     let mut post_action = CrisisPostAction::None;
     let msg = match (&crisis.kind, choice) {
-        // --- Original crisis resolutions ---
-        (CrisisKind::PoliticalPressure { region_idx }, 0) => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.quarantine = false;
-            }
-            format!("Quarantine lifted in {} due to political pressure", region_name)
-        }
-        (CrisisKind::PoliticalPressure { .. }, _) => {
-            "Quarantine authority maintained".into()
-        }
         (CrisisKind::PersonnelCrisis { amount }, 0) => {
             state.resources.personnel = state.resources.personnel.saturating_sub(*amount);
             // If personnel drops below what active research requires, cancel the
