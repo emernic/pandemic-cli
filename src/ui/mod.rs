@@ -465,8 +465,8 @@ pub(crate) fn process_events(state: &mut GameState) {
                     .map(|r| r.name.as_str()).unwrap_or("?");
                 let collapsed = state.regions.get(*collapsed_region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("?");
-                let msg = format!("Network disruption: supply routes through {} severed. {} medicine deployment +50% for 10 days",
-                    collapsed, disrupted);
+                let msg = format!("Network disruption: supply routes through {} severed by {} collapse",
+                    disrupted, collapsed);
                 (2, msg.clone(), msg)
             }
             GameEvent::ResearchHandoff { message } => {
