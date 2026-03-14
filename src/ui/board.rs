@@ -178,7 +178,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                                         GovernorPersonality::Blowhard =>
                                             format!("Demands: Lift restrictions in {}", r.name),
                                         GovernorPersonality::Hardliner =>
-                                            format!("Demands: Contain infections in {}", r.name),
+                                            format!("Demands: Prioritize {} over other regions", r.name),
                                         GovernorPersonality::Operative =>
                                             "Demands: Secure more contracts".to_string(),
                                         GovernorPersonality::Mobster =>
