@@ -536,7 +536,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
             let (bargain_name, cost_desc, cooperation_gain) = match gov.personality {
                 GovernorPersonality::Buffoon => (
                     "Public Praise",
-                    format!("-{:.0}% board approval", BARGAIN_BUFFOON_APPROVAL_COST * 100.0),
+                    format!("-{:.0}% chairman approval", BARGAIN_BUFFOON_APPROVAL_COST * 100.0),
                     BARGAIN_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Blowhard => (

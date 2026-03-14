@@ -4302,7 +4302,7 @@ pub enum GameEvent {
         label: String,
         personnel: u32,
     },
-    /// Board approval crossed a policy's threshold — that policy is now globally available.
+    /// Chairman approval crossed a policy's threshold — that policy is now globally available.
     PolicyAuthorized {
         policy: PolicyId,
     },

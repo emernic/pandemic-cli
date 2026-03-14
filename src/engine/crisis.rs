@@ -541,7 +541,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: format!("Close borders (−{}% board approval)", pol_pct),
+                    label: format!("Close borders (−{}% chairman approval)", pol_pct),
                     description: close_desc,
                     cost: None, // POL cost applied in resolve
                 },
@@ -600,7 +600,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Hire private security (−15% board approval, 2 personnel for 2d)".into(),
+                    label: "Hire private security (−15% chairman approval, 2 personnel for 2d)".into(),
                     description: "Maintain quarantine by force. Security team returns in 2 days.".into(),
                     cost: Some(CrisisCost {
                         funding: 0.0,
@@ -625,14 +625,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     Population-level noncompliance is rising.".into(),
                 options: vec![ CrisisOption {
                     label: "Deprioritize".into(),
-                    description: "−8% board approval as institutional trust degrades".into(),
+                    description: "−8% chairman approval as institutional trust degrades".into(),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.15, 100.0, 600.0);
                     CrisisOption {
                         label: format!("Restore comms infrastructure (¥{:.0}, 1 personnel for 2d)", cost),
-                        description: "Stabilize reporting systems, gain +5% board approval. Tech team returns in 2 days.".into(),
+                        description: "Stabilize reporting systems, gain +5% chairman approval. Tech team returns in 2 days.".into(),
                         cost: Some(CrisisCost {
                             funding: cost,
                             personnel: 1,
@@ -661,11 +661,11 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Maintain standards".into(),
-                    description: "−5% board approval".into(),
+                    description: "−5% chairman approval".into(),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Fast-track (+10% board approval)".into(),
+                    label: "Fast-track (+10% chairman approval)".into(),
                     description: "Clear for use 2 strain generations behind current variant. ~30% efficacy penalty from drift.".into(),
                     cost: None,
                 },
@@ -686,14 +686,14 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Enforce compliance".into(),
-                    description: "Maintains treatment coverage. −10% board approval, −15 governor cooperation.".into(),
+                    description: "Maintains treatment coverage. −10% chairman approval, −15 governor cooperation.".into(),
                     cost: None,
                 },
                  {
                     let cost = scaled_cost(state, 0.20, 120.0, 700.0);
                     CrisisOption {
                         label: format!("Incentive program (¥{:.0})", cost),
-                        description: format!("Buy cooperation in {}, gain +5% board approval", region_name),
+                        description: format!("Buy cooperation in {}, gain +5% chairman approval", region_name),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
@@ -840,7 +840,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Grant concessions".into(),
-                    description: "Deliveries resume, −8% board approval".into(),
+                    description: "Deliveries resume, −8% chairman approval".into(),
                     cost: None,
                 },
                  {
@@ -857,7 +857,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                 CrisisOption {
                     label: "Wait them out".into(),
-                    description: "Healthcare −10%, supply lines −15%. −5% board approval.".into(),
+                    description: "Healthcare −10%, supply lines −15%. −5% chairman approval.".into(),
                     cost: None,
                 },
                 ],
@@ -879,12 +879,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: format!("Back {corp_a}"),
-                    description: format!("+¥{:.0} from {corp_a}. −15% board approval. Expect sanctions from {corp_b} within days.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_a}. −15% chairman approval. Expect sanctions from {corp_b} within days.", credit_gain),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Back {corp_b}"),
-                    description: format!("+¥{:.0} from {corp_b}. −15% board approval. Expect sanctions from {corp_a} within days.", credit_gain),
+                    description: format!("+¥{:.0} from {corp_b}. −15% chairman approval. Expect sanctions from {corp_a} within days.", credit_gain),
                     cost: None,
                 },
                 ],
@@ -908,12 +908,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Attend the review".into(),
-                    description: "Lose 1 day of research progress. +5% board approval.".into(),
+                    description: "Lose 1 day of research progress. +5% chairman approval.".into(),
                     cost: None,
                 },
                  CrisisOption {
                     label: "\"I'm busy.\"".into(),
-                    description: "Research continues. −5% board approval.".into(),
+                    description: "Research continues. −5% chairman approval.".into(),
                     cost: None,
                 },
                 ],
@@ -992,7 +992,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "The corporation you cooperated with has reclassified your pathogen data as \
                      proprietary IP. Your researchers can no longer access their own findings.".into(),
                 options: vec![ CrisisOption {
-                    label: "Release the data (−10% board approval)".into(),
+                    label: "Release the data (−10% chairman approval)".into(),
                     description: "Override the IP claim. Board members with corporate ties won't appreciate it.".into(),
                     cost: None,
                 },
@@ -1050,12 +1050,12 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      The charges are unsubstantiated."),
                 options: vec![ CrisisOption {
                     label: "Ignore it".into(),
-                    description: format!("−3% board approval, but {} appreciates the restraint (+5 cooperation).", gov_name),
+                    description: format!("−3% chairman approval, but {} appreciates the restraint (+5 cooperation).", gov_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Counter-broadcast (¥{cost:.0})"),
-                    description: format!("+3% board approval, but public confrontation damages cooperation with {} (−5).", gov_name),
+                    description: format!("+3% chairman approval, but public confrontation damages cooperation with {} (−5).", gov_name),
                     cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                 },
                 ],
@@ -1075,7 +1075,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Field teams are operating without local authorization."),
                 options: vec![ CrisisOption {
                     label: "Work around them".into(),
-                    description: format!("−5 cooperation in {}, but +3% board approval for operational efficiency.", region_name),
+                    description: format!("−5 cooperation in {}, but +3% chairman approval for operational efficiency.", region_name),
                     cost: None,
                 },
                  CrisisOption {
@@ -1251,7 +1251,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                      Your field staff are aware. Inaction signals complicity."),
                 options: vec![ CrisisOption {
                     label: "Look the other way".into(),
-                    description: "−15% board approval. Your staff lose respect.".into(),
+                    description: "−15% chairman approval. Your staff lose respect.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1276,7 +1276,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     "{gov_name} wants ¥{demand:.0}. Last time it was less. Next time it will be more."),
                 options: vec![ CrisisOption {
                     label: "Refuse".into(),
-                    description: "−20% board approval. They'll make your life difficult.".into(),
+                    description: "−20% chairman approval. They'll make your life difficult.".into(),
                     cost: None,
                 },
                  CrisisOption {
@@ -1334,7 +1334,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "No treatment sent. Board approval drops. Governor's prognosis is poor.".into(),
+                            description: "No treatment sent. Chairman approval drops. Governor's prognosis is poor.".into(),
                             cost: None,
                         },
                         ],
@@ -1414,7 +1414,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "No medical expenses covered. Board approval drops. Income skim increases.".into(),
+                            description: "No medical expenses covered. Chairman approval drops. Income skim increases.".into(),
                             cost: None,
                         },
                         ],
@@ -1520,7 +1520,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 ),
                 options: vec![ CrisisOption {
                     label: "Accept the cuts".into(),
-                    description: format!("Lose ¥{funding_loss:.0} and −10% board approval"),
+                    description: format!("Lose ¥{funding_loss:.0} and −10% chairman approval"),
                     cost: None,
                 },
                  CrisisOption {
@@ -1659,7 +1659,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                             },
                             CrisisOption {
                                 label: "Default".into(),
-                                description: "2 researchers are 'unavailable' indefinitely. −10% board approval from smear campaign.".into(),
+                                description: "2 researchers are 'unavailable' indefinitely. −10% chairman approval from smear campaign.".into(),
                                 cost: None,
                             },
                         ],
@@ -1898,7 +1898,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 options: vec![
                     CrisisOption {
                         label: "Acknowledged".into(),
-                        description: "Accept the reprimand. Board approval decreases.".into(),
+                        description: "Accept the reprimand. Chairman approval decreases.".into(),
                         cost: None,
                     },
                     {

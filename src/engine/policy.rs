@@ -1087,7 +1087,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
 /// Execute standing orders for policy automation. Fires each tick.
 /// Auto-enables policies for regions that cross severity thresholds,
 /// provided the policy isn't already active and the player has the
-/// required board approval and personnel.
+/// required chairman approval and personnel.
 /// Returns region indices where GDP-hurting policies were enacted (for board notification).
 pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
     // Affordability guard: don't try to auto-enable policies when the player can't

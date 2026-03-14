@@ -45,7 +45,7 @@ Across the runs I played, the game started as a focused outbreak-management game
 The broad arc that showed up in those runs was:
 
 1. A single hotspot appears and you scramble to identify it.
-2. Board approval rises as the crisis becomes undeniable, unlocking stronger policies.
+2. Chairman approval rises as the crisis becomes undeniable, unlocking stronger policies.
 3. The first pathogen gets identified and the player starts the targeted-medicine pipeline.
 4. Additional pathogens appear before the first one is truly solved.
 5. The run becomes about triage: one anchor region, several secondary fires, board politics, contracts, and staffing shortages.
@@ -75,9 +75,9 @@ The game did not stay centered on one system for long. In the same 5-day span, I
 
 ## What The Main Systems Do In Practice
 
-### Board Approval
+### Chairman Approval
 
-Board approval is both a political meter and a policy gate.
+Chairman approval is both a political meter and a policy gate.
 
 - Early game starts around `10%`.
 - In the runs I played, it rose quickly during the first week if the outbreak was clearly worsening and the board had not yet turned hostile.
@@ -180,7 +180,7 @@ What usually happened in those runs:
 In observed runs:
 
 - early `Border Controls` was a common first move because it is cheap and available early
-- `Quarantine` became the main escalation once board approval crossed the mid-40s
+- `Quarantine` became the main escalation once chairman approval crossed the mid-40s
 - `Basic Screening` was often used to improve visibility and reduce wasted medicine
 
 The basic pattern was:
@@ -236,7 +236,7 @@ Typical state in those runs:
 - one starting hotspot with a few hundred infected
 - total dead still in the tens
 - `Funds` around `¥500` at start
-- `Board approval` around `10%`
+- `Chairman approval` around `10%`
 - fixed board budget around `¥390-406/day`
 
 Typical player actions:
@@ -259,7 +259,7 @@ This was the first real decision pivot in the sampled runs.
 Typical state from observed runs:
 
 - `Funds` often around `¥1200-2000`
-- `Board approval` often around `30-50%`
+- `Chairman approval` often around `30-50%`
 - global infections can still be numerically small, roughly `600` to `5K`
 - deaths were often in the `200-1300` range
 - first pathogen identification usually finishes here
@@ -290,7 +290,7 @@ By this stage, the game no longer felt like a single-outbreak response game.
 Observed state:
 
 - in the sampled runs, the first board meeting had often already cut the fixed budget
-- `Board approval` was often in the `60-70%` range
+- `Chairman approval` was often in the `60-70%` range
 - `Funds` were often around `¥1800-2600`
 - global infected was often in the `25K-100K+` range
 - deaths were often in the `5K-25K+` range
@@ -336,7 +336,7 @@ The exact shape varied a lot by seed, but the benchmark and my prior manual play
 
 - several pathogens are active
 - at least one region is visibly failing
-- board approval can remain high even while the board budget is shrinking
+- chairman approval can remain high even while the board budget is shrinking
 - the player is living on a mix of fixed budget plus contract income
 - infrastructure failure, delivery efficiency, and regional politics matter as much as raw infection numbers
 
