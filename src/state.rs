@@ -4533,8 +4533,6 @@ pub enum CrisisKind {
     PerformanceReview,
     /// Unpaid intern claims a breakthrough. 50/50 gamble.
     InternDiscovery { cost: f64 },
-    /// Oversight commission summons you for a formal review.
-    CongressionalHearing,
 
     // --- Contract crises ---
 
@@ -4577,8 +4575,6 @@ pub enum CrisisKind {
 
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
-    /// Follow-up to CongressionalHearing (Send deputy): formal censure.
-    ContemptOfCongress { fine: f64 },
     /// Follow-up to BlackMarketMedicine (Allow): counterfeit drugs killing people.
     CounterfeitEpidemic { region_idx: usize },
     /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
@@ -4682,7 +4678,6 @@ impl CrisisKind {
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
             CrisisKind::PerformanceReview => "performance_review",
             CrisisKind::InternDiscovery { .. } => "intern",
-            CrisisKind::CongressionalHearing => "congress",
             CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::ContractDemand { .. } => "contract_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
@@ -4695,7 +4690,6 @@ impl CrisisKind {
             CrisisKind::GovernorDeath { .. } => "gov_death",
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
-            CrisisKind::ContemptOfCongress { .. } => "contempt",
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::CorporateOverreach => "corporate_overreach",
