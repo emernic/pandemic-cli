@@ -4508,8 +4508,6 @@ pub enum CrisisKind {
     ResourceDiversion { disease_idx: usize, share_reward: f64, refuse_cost: f64 },
     /// Hospital workers collapsing — reduce shifts or push through.
     ExhaustionEpidemic { region_idx: usize, personnel_loss: u32 },
-    /// Whistleblower reports medicine side effects — halt or continue.
-    WhistleblowerReport { medicine_idx: usize },
     /// Board member's corporation deploys private security, demands operational control.
     CorporateSeizure { cooperate_loss: u32 },
     /// Cult blocks vaccination teams in a region.
@@ -4676,7 +4674,6 @@ impl CrisisKind {
             CrisisKind::CorruptOfficial { .. } => "corrupt",
             CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
-            CrisisKind::WhistleblowerReport { .. } => "whistleblower",
             CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
             CrisisKind::CultBlockade { .. } => "cult",
             CrisisKind::WarlordDemand { .. } => "warlord",

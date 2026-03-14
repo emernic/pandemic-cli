@@ -369,16 +369,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::ExhaustionEpidemic { region_idx: idx, personnel_loss });
     }
 
-    // Whistleblower report: requires medicine that's been deployed (has less than original doses)
-    let deployed_meds: Vec<usize> = state.medicines.iter().enumerate()
-        .filter(|(_, m)| m.unlocked && m.doses > 0.0 && m.doses < m.max_doses)
-        .map(|(i, _)| i)
-        .collect();
-    if !deployed_meds.is_empty() {
-        let idx = deployed_meds[rng.r#gen::<usize>() % deployed_meds.len()];
-        candidates.push(CrisisKind::WhistleblowerReport { medicine_idx: idx });
-    }
-
     // Corporate seizure: requires low authority and day > 16
     if state.resources.authority <= Authority::Low && day > 16.0 {
         let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
@@ -1077,30 +1067,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 CrisisOption {
                     label: format!("Ignore the warnings (−{} personnel)", (personnel_loss + 1) / 2),
                     description: "Some staff leave on their own. Hospitals stay open.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::WhistleblowerReport { medicine_idx } => {
-            let med_name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Whistleblower: Drug Side Effects".into(),
-                description: format!(
-                    "A researcher has flagged undisclosed side effects of {}.",
-                    med_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Halt deployment".into(),
-                    description: format!("Destroy 30% of {} doses, gain +5% board approval", med_name),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Continue deployment".into(),
-                    description: "Keep treating patients, −8% board approval".into(),
                     cost: None,
                 },
                 ],
@@ -3108,24 +3074,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             format!("{} workers left on their own. Surge continues.", partial_loss)
         }
 
-        (CrisisKind::WhistleblowerReport { medicine_idx }, 0) => {
-            // Halt deployment — destroy doses, gain chairman satisfaction
-            let msg = if let Some(med) = state.medicines.get_mut(*medicine_idx) {
-                let destroyed = (med.doses * 0.3).round();
-                med.doses = (med.doses - destroyed).max(0.0);
-                format!("Halted deployment of {}. {} doses destroyed.",
-                    med.name, crate::format_number(destroyed))
-            } else {
-                "Deployment halted".into()
-            };
-            chairman_satisfaction_hit(state, 0.05);
-            msg
-        }
-        (CrisisKind::WhistleblowerReport { .. }, _) => {
-            // Continue deployment — chairman satisfaction hit
-            chairman_satisfaction_hit(state, -0.08);
-            "Continuing deployment despite concerns. Public confidence shaken.".into()
-        }
 
         (CrisisKind::CorporateSeizure { cooperate_loss }, 0) => {
             // Cooperate — lose personnel, gain chairman satisfaction
