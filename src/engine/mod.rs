@@ -48,7 +48,7 @@ pub fn initialize_game(state: &mut GameState) {
 }
 
 /// External callers should use `lib::tick_and_process()` instead, which also
-/// calls `ui::process_events()` to materialize events into UI state. This
+/// calls `events::process_events()` to materialize events into UI state. This
 /// function is `pub(crate)` so engine unit tests can call it directly without
 /// going through the UI layer.
 pub(crate) fn tick(state: &GameState) -> GameState {

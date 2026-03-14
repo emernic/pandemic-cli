@@ -1,5 +1,6 @@
 pub mod action;
 pub mod engine;
+pub mod events;
 pub mod snapshot;
 pub mod state;
 pub mod ui;
@@ -67,7 +68,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
-                ui::process_events(&mut new);
+                events::process_events(&mut new);
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
@@ -227,7 +228,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
-                    ui::process_events(&mut new);
+                    events::process_events(&mut new);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
                         GameCommand::DeployMedicine { medicine_idx, .. } if result.success => {
@@ -273,13 +274,13 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 /// UI state (event log, notifications, panel resets).
 ///
 /// This is the canonical way to advance the game simulation. Both
-/// `engine::tick()` and `ui::process_events()` are `pub(crate)`, so external
+/// `engine::tick()` and `events::process_events()` are `pub(crate)`, so external
 /// callers must go through this function and cannot split the pairing.
 /// Engine unit tests may call `engine::tick()` directly to test game logic
 /// in isolation without UI state updates.
 pub fn tick_and_process(state: &GameState) -> GameState {
     let mut new = engine::tick(state);
-    ui::process_events(&mut new);
+    events::process_events(&mut new);
     new
 }
 
