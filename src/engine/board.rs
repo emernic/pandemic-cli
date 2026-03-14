@@ -256,13 +256,10 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                             source: ModifierSource::RegionalGdp,
                             value: 0.6 * gdp - 0.30,
                         });
-                        let living_govs: Vec<f64> = state.regions.iter()
+                        let (sum, count) = state.regions.iter()
                             .filter(|r| !r.governor.dead)
-                            .map(|r| r.governor.cooperation)
-                            .collect();
-                        let avg_coop = if living_govs.is_empty() { 60.0 } else {
-                            living_govs.iter().sum::<f64>() / living_govs.len() as f64
-                        };
+                            .fold((0.0, 0usize), |(s, c), r| (s + r.governor.cooperation, c + 1));
+                        let avg_coop = if count == 0 { 60.0 } else { sum / count as f64 };
                         // avg_coop ~40 (defiant) = +0.20, ~60 (neutral) = 0.0,
                         // ~80 (cooperative) = -0.20
                         let dysfunction = ((60.0 - avg_coop) / 100.0).clamp(-0.20, 0.20);
