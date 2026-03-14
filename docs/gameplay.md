@@ -32,13 +32,9 @@ New diseases emerge throughout the game. The emergence rate scales with time.
 
 ### Research Pipeline
 
-Three independent tracks run simultaneously:
+Research is a flat list of projects — no categories or tracks. Multiple projects can run simultaneously, gated by available personnel and funding. See `ResearchKind` in `state.rs` for the full set of project types.
 
-1. **Field Research** — boots on the ground. Identify unknown threats, run clinical trials, perform genomic sequencing, train personnel. Multiple projects can run in parallel, gated by available personnel.
-2. **Applied Research** — lab work. Develop medicines, manufacture doses. One project at a time.
-3. **Basic Research** — the tech tree. Unlock new capabilities: Targeted Drug Design, Monoclonal Antibodies, Phage Therapy, Rapid Sequencing, Vaccine Platform, Resistance Surveillance, Combination Therapy, Pathogen Suppression, Directed Attenuation, Genomic Interdiction.
-
-The pipeline for a single disease: **Unknown Threat → Identify (field) → Develop Medicine (applied) → Clinical Trial (field) → Deploy**. Each step takes time and resources. Skipping steps (deploying untested medicine) is possible but risky.
+The pipeline for a single disease: **Unknown Threat → Identify → Develop Medicine → Clinical Trial → Deploy**. Each step takes time and resources. Skipping steps (deploying untested medicine) is possible but risky.
 
 ### Medicines
 

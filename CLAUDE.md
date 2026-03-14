@@ -184,7 +184,7 @@ The UI/engine separation is done. The engine god file has been broken into subsy
 
 ### Key Game Systems
 
-- **Research pipeline**: Unknown threat → Identify (field research) → Develop medicine (applied research) → Clinical trial (field) → Deploy. Three tracks run simultaneously: field, applied, and basic. Don't touch research without understanding this full lifecycle.
+- **Research pipeline**: Unknown threat → Identify → Develop medicine → Clinical trial → Deploy. Research is a flat list of projects with no categories. Multiple projects run simultaneously, gated by personnel and funding. See `ResearchKind` in `state.rs`.
 - **Therapy/pathogen matching**: Medicines have a `TherapyType` (Antiviral, Antibiotic, BroadSpectrum), diseases have a `PathogenType` (RnaVirus, DnaVirus, Bacterium, Prion). Efficacy depends on the match. This affects deployment, balance, and player strategy.
 - **Mutation system**: Diseases mutate over time based on pathogen type. Medicines track which strain generation they were calibrated against. Drift reduces efficacy, prompting re-trials. This creates ongoing pressure even after developing a medicine.
 
@@ -228,7 +228,7 @@ cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half 
 
 **Left/right arrow keys always navigate the region map**, even when a panel is open. Up/down arrow keys navigate panel items when a panel is open, or the map when no panel is open.
 
-- **Never use left/right for panel item navigation.** All panel lists (threats, research categories, medicines, policies) must use up/down only.
+- **Never use left/right for panel item navigation.** All panel lists (threats, research, medicines, policies) must use up/down only.
 - Left/right use **reading order with wrap-around**: NA → Europe → Asia → SA → Africa → Oceania → NA (and reverse).
 - Up/down on the map move within the same column (no wrap).
 
