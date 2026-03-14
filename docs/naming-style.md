@@ -2,7 +2,7 @@
 
 Read this before naming or renaming player-facing things.
 
-Read [setting.md](/home/emernic/pandemic_cli_8/docs/setting.md) and [framing-guide.md](/home/emernic/pandemic_cli_8/docs/framing-guide.md) first.
+Read [setting.md](setting.md) and [framing-guide.md](framing-guide.md) first.
 
 This document is about names, not prose in general.
 
