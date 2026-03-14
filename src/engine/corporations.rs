@@ -96,8 +96,8 @@ pub(super) fn generate_corporations(state: &mut GameState) {
             // Board seat assigned randomly after all corps are created (see below)
             let board_seat = false;
 
-            // IPO price scales with revenue: target ~¥50-200 range
-            let ipo_price = (base_revenue * 1.5).clamp(20.0, 500.0);
+            // IPO price scales with revenue: target ~¥35-140 range
+            let ipo_price = (base_revenue * 1.05).clamp(14.0, 350.0);
             corps.push(Corporation {
                 name: name.to_string(),
                 director_surname: director_surname.to_string(),
