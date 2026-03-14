@@ -1597,8 +1597,8 @@ pub enum ModifierSource {
     CrisisEffect,
     /// Contract loyalty bonus (held 10+ days).
     ContractLoyalty,
-    /// Regional infection severity (Hardliner governor personality).
-    RegionalInfections,
+    /// Relative regional standing vs other regions (Hardliner governor personality).
+    RegionalStanding,
     /// Restrictive policy count in governor's region (Blowhard governor personality).
     RestrictivePolicies,
     /// Active contract count (Operative governor personality).
@@ -1627,7 +1627,7 @@ impl ModifierSource {
             Self::ContractCanceled => "Contract canceled",
             Self::CrisisEffect => "Crisis effect",
             Self::ContractLoyalty => "Contract loyalty",
-            Self::RegionalInfections => "Regional infections",
+            Self::RegionalStanding => "Regional standing",
             Self::RestrictivePolicies => "Policy restrictions",
             Self::ActiveContracts => "Active contracts",
             Self::FundingReserves => "Funding reserves",
@@ -1639,7 +1639,7 @@ impl ModifierSource {
         matches!(self,
             Self::Base | Self::StockPerformance | Self::RegionalGdp |
             Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment |
-            Self::RegionalInfections | Self::RestrictivePolicies |
+            Self::RegionalStanding | Self::RestrictivePolicies |
             Self::ActiveContracts | Self::FundingReserves
         )
     }
@@ -1897,8 +1897,10 @@ pub enum GovernorPersonality {
     /// Absent. Defiance: doesn't sabotage — just stops enforcing. Policy effects
     /// reduced in the region. Bargain: costs personnel (you send someone to manage).
     Recluse,
-    /// Does too much. Defiance: unilaterally activates policies the player didn't set,
-    /// costing unbudgeted personnel and funding. Bargain: give them authority (high cost).
+    /// Zero-sum nationalist. Sees other regions as competitors, not allies.
+    /// Less pliable generally. Defiance: unilaterally activates policies the player
+    /// didn't set, costing unbudgeted personnel and funding. Pleased when competing
+    /// regions suffer. Bargain: give them authority (high cost).
     Hardliner,
     /// Competent and helpful, always skimming. When loyal, policies more effective.
     /// When defiant, continuous funding drain that grows over time.

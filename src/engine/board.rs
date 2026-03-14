@@ -219,27 +219,26 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
                         });
                     }
                     Some(GovernorPersonality::Hardliner) => {
-                        // Hardliner: GDP matters less, furious about infections.
-                        // 50% GDP + 50% infection severity.
+                        // Zero-sum nationalist. Cares about their region's GDP
+                        // relative to other regions. Pleased when competitors suffer.
+                        // 50% own GDP + 50% relative standing vs others.
                         continuous.push(SatisfactionModifier {
                             source: ModifierSource::RegionalGdp,
                             value: 0.5 * gdp - 0.25,
                         });
-                        let infected = region.map(|r| r.total_infected()).unwrap_or(0.0);
-                        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
-                        // Low infections = +0.25, CRIT = -0.25
-                        let infection_score = if infected > SEVERITY_CRIT_THRESHOLD {
-                            -0.25
-                        } else if infected > SEVERITY_HIGH_THRESHOLD {
-                            -0.10
-                        } else if infected > SEVERITY_MOD_THRESHOLD {
-                            0.05
-                        } else {
-                            0.25
+                        // Compare own GDP fraction to average of other regions
+                        let other_gdps: Vec<f64> = state.regions.iter().enumerate()
+                            .filter(|(j, _)| *j != *region_idx)
+                            .map(|(_, r)| if r.collapsed { 0.0 } else { r.gdp_fraction() })
+                            .collect();
+                        let avg_other = if other_gdps.is_empty() { 0.5 } else {
+                            other_gdps.iter().sum::<f64>() / other_gdps.len() as f64
                         };
+                        // Positive when own GDP > average, negative when below
+                        let standing = (gdp - avg_other).clamp(-0.25, 0.25);
                         continuous.push(SatisfactionModifier {
-                            source: ModifierSource::RegionalInfections,
-                            value: infection_score,
+                            source: ModifierSource::RegionalStanding,
+                            value: standing,
                         });
                     }
                     Some(GovernorPersonality::Operative) => {
@@ -573,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn hardliner_governor_board_member_reacts_to_infections() {
+    fn hardliner_governor_board_member_reacts_to_relative_standing() {
         use crate::state::GovernorPersonality;
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
@@ -587,30 +586,26 @@ mod tests {
             matches!(m.role, BoardRole::RegionGovernor { region_idx: 0 })
         });
         if gov_idx.is_none() {
-            // Region 0 wasn't picked for the board — skip this test run
             return;
         }
         let gov_idx = gov_idx.unwrap();
 
-        // No infections: should have RegionalInfections modifier with positive value
+        // Should have a RegionalStanding modifier
         update_board_satisfaction(&mut state);
-        let sat_clean = state.board_members[gov_idx].satisfaction;
-        let has_infection_modifier = state.board_members[gov_idx].modifiers.iter()
-            .any(|m| m.source == ModifierSource::RegionalInfections);
-        assert!(has_infection_modifier, "Hardliner should have RegionalInfections modifier");
+        let has_standing = state.board_members[gov_idx].modifiers.iter()
+            .any(|m| m.source == ModifierSource::RegionalStanding);
+        assert!(has_standing, "Hardliner should have RegionalStanding modifier");
+        let sat_even = state.board_members[gov_idx].satisfaction;
 
-        // Add critical infections to region 0
-        state.regions[0].infections.push(crate::state::RegionDiseaseState {
-            disease_idx: 0,
-            exposed: 0.0,
-            infected: 200_000.0,
-            dead: 0.0,
-            immune: 0.0,
-        });
+        // Trash other regions' GDP — Hardliner should be happier (their region looks better)
+        for i in 1..state.regions.len() {
+            state.regions[i].gdp = state.regions[i].base_gdp * 0.3;
+        }
         update_board_satisfaction(&mut state);
-        let sat_infected = state.board_members[gov_idx].satisfaction;
+        let sat_others_down = state.board_members[gov_idx].satisfaction;
 
-        assert!(sat_infected < sat_clean, "Hardliner satisfaction should drop with infections: clean={sat_clean}, infected={sat_infected}");
+        assert!(sat_others_down > sat_even,
+            "Hardliner should be happier when competing regions suffer: even={sat_even}, others_down={sat_others_down}");
     }
 
     #[test]

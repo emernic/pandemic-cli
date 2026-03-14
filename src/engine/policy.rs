@@ -582,16 +582,24 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
                 -restrictive_count * 0.001
             }
             GovernorPersonality::Hardliner => {
-                // Angry about both restrictions AND suffering — hardest to manage.
-                let restriction_anger = -restrictive_count * 0.002;
-                let suffering_anger = if infected > SEVERITY_CRIT_THRESHOLD {
-                    -0.004
-                } else if infected > SEVERITY_HIGH_THRESHOLD {
+                // Zero-sum nationalist. Less pliable baseline, plus angry when
+                // their region is doing worse than the average of other regions.
+                let baseline_stubbornness = -0.003; // ~0.36/day passive decay
+                // Compare this region's infection burden to the average of others
+                let other_infected: f64 = (0..num_regions)
+                    .filter(|&j| j != i && !state.regions[j].collapsed)
+                    .map(|j| state.regions[j].total_infected())
+                    .sum::<f64>()
+                    / (num_regions.saturating_sub(1).max(1) as f64);
+                // Happy when their region has fewer infections than others
+                let relative_standing = if infected > other_infected * 2.0 {
+                    -0.004 // their region is much worse off — furious
+                } else if infected > other_infected {
                     -0.002
                 } else {
-                    0.0
+                    0.001 // their region is better off — slightly pleased
                 };
-                restriction_anger + suffering_anger
+                baseline_stubbornness + relative_standing
             }
             GovernorPersonality::Operative => {
                 // Passive cooperation gain when being paid (income_skim > 0).
@@ -1683,7 +1691,7 @@ mod tests {
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 200_000.0;
 
-        // Test Hardliner — angry about both restrictions AND suffering
+        // Test Hardliner — less pliable baseline + zero-sum standing pressure
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Hardliner;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 15) {

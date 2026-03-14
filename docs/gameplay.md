@@ -83,7 +83,7 @@ These are one-way doors. The game doesn't tell you whether they were worth it.
 
 Each region has a governor with a name, personality, and cooperation score.
 
-**Personalities**: Buffoon, Blowhard, Recluse, Hardliner, Operative, Mobster. Each has a unique bargain cost, cooperation pattern, and defiance behavior. A Blowhard hates restrictions but is cheap to buy off. A Hardliner is angry about both restrictions and suffering. An Operative demands permanent income cuts. A Mobster's price doubles every time you pay.
+**Personalities**: Buffoon, Blowhard, Recluse, Hardliner, Operative, Mobster. Each has a unique bargain cost, cooperation pattern, and defiance behavior. A Blowhard hates restrictions but is cheap to buy off. A Hardliner is stubborn and wants their region to come out ahead of competitors. An Operative demands permanent income cuts. A Mobster's price doubles every time you pay.
 
 **Cooperation** drifts continuously based on regional conditions, your policy choices, and personality. High cooperation means cheaper policies and cooperation. Low cooperation means defiance — governors can lift your quarantines, block your research, or demand military escalation. You can appease them with money, but you can't control them.
 
