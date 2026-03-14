@@ -4495,8 +4495,6 @@ pub enum CrisisKind {
     PoliticalPressure { region_idx: usize },
     /// Staff burnout — lose personnel or pay retention bonus.
     PersonnelCrisis { amount: u32 },
-    /// Staff falling ill from the pandemic — temporarily unavailable, then recover.
-    PersonnelSick { amount: u32, recovery_days: f64 },
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
     /// `wave` counts how many regions have collapsed so far (1 on first collapse).
     RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
@@ -4657,7 +4655,6 @@ impl CrisisKind {
             CrisisKind::LabAccident { .. } => "lab",
             CrisisKind::PoliticalPressure { .. } => "political",
             CrisisKind::PersonnelCrisis { .. } => "personnel",
-            CrisisKind::PersonnelSick { .. } => "personnel_sick",
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
             CrisisKind::QuarantineRiot { .. } => "riot",
