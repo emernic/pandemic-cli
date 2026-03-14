@@ -5,7 +5,7 @@ use crate::state::{
     CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState,
     GovernorPersonality, LoanLender, ModifierSource, OperationSpec, ResearchKind,
     ResearchCategory, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
-    LOYALTY_RAISE_FRACTION, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
+    LOYALTY_RAISE_FRACTION, TICKS_PER_DAY,
 };
 
 /// Post-resolution actions that require cross-subsystem calls.
@@ -439,16 +439,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     if day > 10.0 {
         let cost = scaled_cost(state, 0.10, 100.0, 400.0);
         candidates.push(CrisisKind::InternDiscovery { cost });
-    }
-
-    // Oversight summons: day 40+, requires 2+ regions in critical state
-    if day > 40.0 {
-        let crit_regions = state.regions.iter()
-            .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
-            .count();
-        if crit_regions >= 2 {
-            candidates.push(CrisisKind::CongressionalHearing);
-        }
     }
 
     // Ark Protocol: scheduled deterministically in tick() when 2+ regions collapse,
@@ -1164,56 +1154,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                     label: format!("Investigate (¥{:.0})", cost),
                     description: "50% chance of a 2-day research breakthrough.".into(),
                     cost: Some(CrisisCost { funding: *cost, personnel: 0, ..Default::default() }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::CongressionalHearing => {
-            CrisisEvent {
-                title: "Oversight Summons".into(),
-                description:
-                    "The N.W.H.O. Oversight Commission has summoned you for a formal review. \
-                     Agenda includes your crisis response record and the cafeteria budget. \
-                     Attendance is technically mandatory.".into(),
-                options: vec![ CrisisOption {
-                    label: "Testify in person".into(),
-                    description: "Lose 2 days of all research. +10% board approval.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Send a deputy".into(),
-                    description: "+2% board approval. 40% chance of censure (follow-up fine).".into(),
-                    cost: None,
-                },
-                CrisisOption {
-                    label: "Ignore the summons".into(),
-                    description: "Guaranteed censure. −15% board approval. Research uninterrupted.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::ContemptOfCongress { fine } => {
-            CrisisEvent {
-                title: "Formal Censure".into(),
-                description: format!(
-                    "The Oversight Commission was not satisfied with your deputy's testimony. \
-                     You have been formally censured. Fine: ¥{:.0}.",
-                    fine,
-                ),
-                options: vec![ CrisisOption {
-                    label: format!("Pay the fine (¥{:.0})", fine),
-                    description: "−8% board approval.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Appeal".into(),
-                    description: "Same cost, less reputational damage. −3% board approval.".into(),
-                    cost: Some(CrisisCost { funding: *fine, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -2989,47 +2929,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             }
         }
 
-        (CrisisKind::CongressionalHearing, 0) => {
-            // Testify honestly — lose 2 days research, gain chairman satisfaction
-            let loss = 2.0 * TICKS_PER_DAY as f64;
-            for proj in state.active_research.iter_mut() {
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
-            chairman_satisfaction_hit(state, 0.10);
-            "Review concluded. Commission notes your cooperation.".into()
-        }
-        (CrisisKind::CongressionalHearing, 1) => {
-            // Send deputy — small chairman satisfaction gain, 40% chance of contempt follow-up
-            chairman_satisfaction_hit(state, 0.02);
-            if state.rng_crisis.r#gen::<f64>() < 0.40 {
-                let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
-                let fine = scaled_cost(state, 0.15, 200.0, 600.0);
-                state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
-                "Deputy testified. The commission has requested a follow-up session.".into()
-            } else {
-                "Deputy testified. Commission satisfied.".into()
-            }
-        }
-        (CrisisKind::CongressionalHearing, _) => {
-            // Ignore the subpoena — guaranteed contempt, big chairman satisfaction hit, research continues
-            chairman_satisfaction_hit(state, -0.15);
-            let followup_tick = state.tick + (2.0 * TICKS_PER_DAY) as u64;
-            let fine = scaled_cost(state, 0.20, 300.0, 800.0);
-            state.pending_crises.push((followup_tick, CrisisKind::ContemptOfCongress { fine }));
-            "Summons ignored. Censure proceedings filed.".into()
-        }
-
-        (CrisisKind::ContemptOfCongress { fine }, 0) => {
-            // Pay fine — lose money and chairman satisfaction
-            state.resources.funding = (state.resources.funding - fine).max(0.0);
-            chairman_satisfaction_hit(state, -0.08);
-            format!("Fine paid. ¥{:.0} deducted.", fine)
-        }
-        (CrisisKind::ContemptOfCongress { .. }, _) => {
-            // Fight charges — pay same fine but less chairman satisfaction loss
-            chairman_satisfaction_hit(state, -0.03);
-            "Appeal filed. Legal fees applied.".into()
-        }
 
         // --- Follow-up crisis resolutions ---
 
