@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BoardPersonality, BoardRole, GameState, ModifierSource, TICKS_PER_DAY};
+use crate::state::{BoardPersonality, BoardRole, GameState, GovernorPersonality, ModifierSource, TICKS_PER_DAY};
 
 
 /// Maximum selection index for the board panel.
@@ -171,7 +171,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                     BoardRole::RegionGovernor { region_idx } => {
                         state.regions.get(*region_idx)
                             .map(|r| {
-                                use crate::state::GovernorPersonality;
                                 if r.collapsed {
                                     format!("Demands: Rebuild {}", r.name)
                                 } else {
