@@ -1984,6 +1984,8 @@ pub const BARGAIN_RECLUSE_PERSONNEL_COST: u32 = 2;
 pub const BARGAIN_HARDLINER_FUNDING_COST: f64 = 400.0;
 /// Operative bargain cost: fraction of regional income permanently skimmed.
 pub const BARGAIN_OPERATIVE_INCOME_CUT: f64 = 0.10;
+/// Maximum income skim an Operative governor can accumulate through bargains.
+pub const MAX_OPERATIVE_INCOME_SKIM: f64 = 0.50;
 /// Mobster bargain base cost: pure funding, escalates each time.
 pub const BARGAIN_MOBSTER_BASE_COST: f64 = 200.0;
 
