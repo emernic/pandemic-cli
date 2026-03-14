@@ -188,8 +188,8 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
         "performance_review" => ramp_up(20.0, 36.0),
         // Oversight summons is a late-game absurdity
         "congress" => ramp_up(36.0, 50.0),
-        // Naming rights and intern are mid-game comedy
-        "naming_rights" | "intern" => ramp_up(10.0, 20.0) * fade_out(50.0, 70.0),
+        // Intern is mid-game comedy
+        "intern" => ramp_up(10.0, 20.0) * fade_out(50.0, 70.0),
         // Billionaire can show up mid-to-late
         "billionaire" => ramp_up(16.0, 30.0),
 
