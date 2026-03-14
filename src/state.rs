@@ -71,7 +71,7 @@ pub struct GameState {
     #[serde(skip)]
     pub auto_deploy_blocked_notified: std::collections::HashSet<usize>,
     /// Persistent log of notable events with timestamps (day number, message).
-    /// Populated by the UI layer from transient `events`. Capped at 50 entries.
+    /// Populated by `events::process_events()` from transient `events`. Capped at 50 entries.
     #[serde(default)]
     pub event_log: VecDeque<(f64, String)>,
     /// Active crisis event requiring player decision. Game pauses while active.
