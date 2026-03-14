@@ -82,7 +82,7 @@ const TEMPLATES: &[Template] = &[
         relevance: RelevanceCheck::SignificantInfectionRate,
     },
     Template {
-        name: "Research Independence Pact",
+        name: "Research Personnel Guarantee",
         income: 2.0,
         condition: FundingCondition::ForbidDecree { decree: DecreeId::ConscriptResearchers },
         relevance: RelevanceCheck::DecreeUnlocked(DecreeId::ConscriptResearchers),
