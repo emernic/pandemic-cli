@@ -338,11 +338,9 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
                 state.policies[region_idx].nuclear_state = crate::state::NuclearState::Dropping { hit_tick };
 
                 // Queue evacuation crisis for any board members in the region
-                let members_in_region: Vec<usize> = state.board_members.iter().enumerate()
-                    .filter(|(_, m)| m.region_idx == Some(region_idx))
-                    .map(|(i, _)| i)
-                    .collect();
-                if !members_in_region.is_empty() {
+                let has_members = state.board_members.iter()
+                    .any(|m| m.region_idx == Some(region_idx) && !m.dead);
+                if has_members {
                     state.pending_crises.push((
                         state.tick,
                         CrisisKind::NuclearEvacuation { region_idx },

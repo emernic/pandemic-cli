@@ -2112,7 +2112,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
             let members: Vec<String> = state.board_members.iter()
-                .filter(|m| m.region_idx == Some(*region_idx))
+                .filter(|m| m.region_idx == Some(*region_idx) && !m.dead)
                 .map(|m| m.name.clone())
                 .collect();
             let count = members.len();
@@ -3358,9 +3358,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             format!("{names} evacuated by air. Region will be annihilated on impact.")
         }
         (CrisisKind::NuclearEvacuation { region_idx }, _) => {
-            // Let them die: chairman approval hit.
+            // Let them die: chairman satisfaction hit.
             let members: Vec<String> = state.board_members.iter()
-                .filter(|m| m.region_idx == Some(*region_idx))
+                .filter(|m| m.region_idx == Some(*region_idx) && !m.dead)
                 .map(|m| m.name.clone())
                 .collect();
             let names = members.join(", ");
