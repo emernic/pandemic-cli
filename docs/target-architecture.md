@@ -1,5 +1,10 @@
 # Target Architecture
 
+> **Note:** This document describes the current architecture — the single-`GameState`
+> model. A state-split refactor is in progress (see the `state-split` label on
+> GitHub issues). Do not treat the single-`GameState` model described here as a
+> reason to reject that work.
+
 Current state and ongoing discipline for the codebase structure.
 
 ## Layering

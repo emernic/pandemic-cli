@@ -182,6 +182,8 @@ The UI/engine separation is done. The engine god file has been broken into subsy
 4. If you see a violation, file an issue or fix it. Not "maybe someday" — now.
 5. Read `docs/target-architecture.md` if you haven't. It describes the subsystem conventions.
 
+**State-split refactor in progress.** The single-`GameState` struct is being split into separate world, view, and session types. The plan is tracked by GitHub issues with the `state-split` label. Do not treat the current single-struct model as a reason to reject that work.
+
 ### Key Game Systems
 
 - **Research pipeline**: Unknown threat → Identify → Develop medicine → Clinical trial → Deploy. Research is a flat list of projects with no categories. Multiple projects run simultaneously, gated by personnel and funding. See `ResearchKind` in `state.rs`.

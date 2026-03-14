@@ -4856,7 +4856,8 @@ pub struct UiState {
     pub policy_ui: Option<PolicyUiState>,
     /// Temporary status message shown above the hotkey bar (cleared on next action).
     /// Only set by command responses (deploy, research, etc.) — NOT by game events.
-    #[serde(default)]
+    /// Transient — not meaningful across sessions.
+    #[serde(skip)]
     pub status_message: Option<String>,
     /// Latest event notification shown in the top-right of the status bar.
     /// Set by process_events() when a game event fires; persists until replaced.
@@ -4887,7 +4888,8 @@ pub struct UiState {
     #[serde(default)]
     pub home_splash_revealed: bool,
     /// Game speed multiplier (1, 2, 4, 6). Affects real-time tick rate only.
-    #[serde(default = "default_speed")]
+    /// Transient — resets to 1× each session.
+    #[serde(skip, default = "default_speed")]
     pub speed_multiplier: u8,
     /// Whether the player dismissed the "terminal too small" warning overlay.
     /// Transient — resets each session so the warning re-appears if still too small.
