@@ -4490,8 +4490,6 @@ pub enum CrisisKind {
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
     /// `wave` counts how many regions have collapsed so far (1 on first collapse).
     RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
-    /// Research data leaked — go transparent or suppress.
-    DataLeak,
     /// Untested drugs on the black market — confiscate or allow.
     BlackMarketMedicine { region_idx: usize },
     /// Riots in quarantined region — use force or negotiate.
@@ -4579,10 +4577,6 @@ pub enum CrisisKind {
     EmbezzlementRing { stolen_per_day: f64 },
     /// Follow-up to CorporateSeizure (Cooperate): corporation claims your research as proprietary IP.
     CorporateOverreach,
-    /// Follow-up to DataLeak (Suppress): cover-up exposed, inquiry demanded.
-    PublicInquiry,
-    /// Follow-up to MediaPanic (Ignore): misinformation degrades screening.
-    Infodemic { region_idx: usize },
     /// Follow-up to VaccineDispute (Credit one side): losing corp retaliates.
     SanctionsThreat { funding_loss: f64, corp_name: String },
 
@@ -4667,7 +4661,6 @@ impl CrisisKind {
             CrisisKind::PersonnelSick { .. } => "personnel_sick",
             CrisisKind::MutationSurge { .. } => "mutation",
             CrisisKind::RefugeeWave { .. } => "refugee",
-            CrisisKind::DataLeak => "dataleak",
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
             CrisisKind::QuarantineRiot { .. } => "riot",
             CrisisKind::MediaPanic => "media",
@@ -4701,8 +4694,6 @@ impl CrisisKind {
             CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::CorporateOverreach => "corporate_overreach",
-            CrisisKind::PublicInquiry => "public_inquiry",
-            CrisisKind::Infodemic { .. } => "infodemic",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardMeeting => "board_meeting",
             CrisisKind::BoardEmbezzlementWarning => "board_embezzlement_warning",

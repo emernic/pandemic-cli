@@ -4391,12 +4391,12 @@ mod tests {
         state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
         state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
         // Pre-load an active crisis
-        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
+        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::MediaPanic));
         assert!(state.active_crisis.is_some());
         // Tick should trigger collapse but NOT override — queue as pending instead
         let after = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Research Data Leaked",
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Communications Failure",
             "existing crisis should NOT be overridden");
         assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
             "refugee crisis should be queued as pending");
@@ -4426,40 +4426,6 @@ mod tests {
             "CrisisAutoResolved event should be emitted");
     }
 
-    #[test]
-    fn data_leak_option_a_diverts_personnel() {
-        use crate::state::{ResearchProject, ResearchKind};
-        let mut state = GameState::new_default(42);
-        state.active_research = vec![ResearchProject {
-            kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
-            progress: 500.0,
-            required_ticks: 1000.0,
-            personnel_assigned: 3,
-        }];
-        let before_progress = state.active_research[0].progress;
-        // Use the real event (not setup_crisis stub) so option costs are present
-        use crate::state::SimState;
-        state.sim_state = SimState::Event { was_running: true };
-        state.ui.crisis_selection = 0;
-        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::DataLeak));
-        let after = apply_action(&state, &Action::Confirm);
-        // Research progress should be unchanged (no rollback)
-        assert!((after.active_research.first().unwrap().progress - before_progress).abs() < 0.01,
-            "option A should not roll back research progress");
-        // Personnel should be temporarily diverted
-        assert!(!after.crisis_operations.is_empty(), "option A should create a temporary operation");
-        assert_eq!(after.crisis_operations[0].personnel, 5, "operation should divert 5 personnel");
-    }
-
-    #[test]
-    fn data_leak_option_b_resolves() {
-        let mut state = GameState::new_default(42);
-        state.resources.authority = Authority::Maximum;
-        setup_crisis(&mut state, CrisisKind::DataLeak, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        // Crisis should be resolved
-        assert!(after.active_crisis.is_none(), "crisis should be resolved");
-    }
 
     #[test]
     fn black_market_option_a_treats_and_harms() {
@@ -5213,15 +5179,7 @@ mod tests {
         assert!(matches!(after.pending_crises[0].1, CrisisKind::EmbezzlementRing { .. }));
     }
 
-    #[test]
-    fn data_leak_suppress_schedules_inquiry_followup() {
-        let mut state = GameState::new_default(42);
-        state.tick = 1000;
-        setup_crisis(&mut state, CrisisKind::DataLeak, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.pending_crises.len(), 1);
-        assert!(matches!(after.pending_crises[0].1, CrisisKind::PublicInquiry));
-    }
+
 
     #[test]
     fn corporate_cooperate_schedules_overreach_followup() {
@@ -5238,10 +5196,9 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.tick = 100; // Pending check runs before tick increment
         state.last_contract_offer_tick = state.tick; // prevent contract offer from adding a pending crisis
-        state.pending_crises.push((100, CrisisKind::PublicInquiry));
+        state.pending_crises.push((100, CrisisKind::CorporateOverreach));
         let after = tick(&state);
         assert!(after.active_crisis.is_some(), "pending crisis should fire");
-        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Data Suppression Exposed");
         assert!(after.pending_crises.is_empty(), "fired crisis should be removed from pending");
     }
 
@@ -5249,7 +5206,7 @@ mod tests {
     fn pending_crisis_waits_if_not_due() {
         let mut state = GameState::new_default(42);
         state.tick = 50;
-        state.pending_crises.push((200, CrisisKind::PublicInquiry));
+        state.pending_crises.push((200, CrisisKind::CorporateOverreach));
         let after = tick(&state);
         assert!(after.active_crisis.is_none(), "should not fire yet");
         assert_eq!(after.pending_crises.len(), 1, "should still be pending");
@@ -5264,7 +5221,7 @@ mod tests {
         state.last_contract_offer_tick = state.tick;
         // Simulate a recently resolved crisis
         state.last_crisis_resolved_tick = state.tick - 10; // Only 10 ticks ago
-        state.pending_crises.push((state.tick, CrisisKind::PublicInquiry));
+        state.pending_crises.push((state.tick, CrisisKind::CorporateOverreach));
         let after = tick(&state);
         // Should NOT fire — gap not met
         assert!(after.active_crisis.is_none(),
