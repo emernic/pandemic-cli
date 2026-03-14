@@ -615,7 +615,6 @@ pub(crate) fn decree_description(decree: DecreeId) -> String {
         DecreeId::AuthorizeHumanTrials => "Clinical trials 50% faster, risk of adverse events (permanent)".to_string(),
         DecreeId::SacrificeRegion => format!("Abandon a region, +{:.0}% income from the rest (permanent)",
             (SACRIFICE_INCOME_BONUS - 1.0) * 100.0),
-        DecreeId::SuspendRegionalAuthority => "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
         DecreeId::FortifyRegion => format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
             FORTIFY_INFRA_PENALTY * 100.0),
         DecreeId::EmergencyCountermeasure => format!("Within-region spread -{:.0}%, cross-region spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",

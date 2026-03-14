@@ -425,9 +425,6 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
     if region_idx >= state.regions.len() {
         return (None, false);
     }
-    if state.enacted_decrees.suspend_regional_authority {
-        return (Some("Regional authority suspended. Governors are under central command.".to_string()), false);
-    }
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
         return (Some(format!("{name} has collapsed. No governor to appease.")), false);
@@ -452,9 +449,6 @@ pub(super) fn appease_governor(state: &mut GameState, region_idx: usize) -> (Opt
 pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
     if region_idx >= state.regions.len() {
         return (None, false);
-    }
-    if state.enacted_decrees.suspend_regional_authority {
-        return (Some("Regional authority suspended. Governors are under central command.".to_string()), false);
     }
     if state.regions[region_idx].collapsed {
         let name = &state.regions[region_idx].name;
@@ -549,10 +543,6 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 /// infection pressure thresholds (INFECTION_PRESSURE_CRIT/HIGH/MOD), which
 /// are lower than the UI severity labels the player sees.
 pub(super) fn tick_governor_cooperation(state: &mut GameState) {
-    // Suspend Regional Authority: all governors frozen under central command
-    if state.enacted_decrees.suspend_regional_authority {
-        return;
-    }
     let num_regions = state.regions.len();
     for i in 0..num_regions {
         if state.regions[i].collapsed {
@@ -789,10 +779,6 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
 /// Tick autonomous governor actions. Defiant governors periodically act against
 /// the player based on personality. Called from tick().
 pub(super) fn tick_governor_actions(state: &mut GameState) {
-    // Suspend Regional Authority: governors can't take autonomous actions
-    if state.enacted_decrees.suspend_regional_authority {
-        return;
-    }
     let tick = state.tick;
     let num_regions = state.regions.len();
 
@@ -1035,21 +1021,6 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
                 region_name, bonus_pct
             )), true)
         }
-        DecreeId::SuspendRegionalAuthority => {
-            // Suspend Regional Authority: neutralize all governors and freeze them.
-            // Set cooperation to 50 (neutral — no defiance, no cooperation bonuses)
-            // then tick_governor_cooperation/tick_governor_actions early-return permanently.
-            state.enacted_decrees.suspend_regional_authority = true;
-            for region in &mut state.regions {
-                if !region.collapsed {
-                    region.governor.cooperation = 50.0;
-                    region.governor.defiance_crisis_fired = false;
-                }
-            }
-            (Some(
-                "⚠ DECREE: Regional authority suspended. All governors placed under central command.".to_string()
-            ), true)
-        }
         DecreeId::FortifyRegion => {
             // Fortify Region: restore one region's infrastructure, penalize all others
             use crate::state::FORTIFY_INFRA_PENALTY;
@@ -1277,10 +1248,9 @@ mod tests {
         state.unlocked_techs.push(crate::state::BasicTech::RapidSequencing);
         state.unlocked_techs.push(crate::state::BasicTech::MetagenomicSurveillance);
         // Unlock all decrees by satisfying every severity threshold:
-        // - 3 collapses → unlocks decrees 4,5 (Fortify needs 1+, Emergency needs 3+)
+        // - 3 collapses → unlocks decrees 3,4 (Fortify needs 1+, Emergency needs 3+)
         // - 900K infected across 3 regions → unlocks decree 0 (500K+ infected)
-        //   and provides 3 CRIT regions → unlocks decrees 1,3
-        //   (Suspend Regional Authority needs 3+ CRIT)
+        //   and provides 3 CRIT regions → unlocks decree 1
         // We collapse regions 3-5 and infect regions 0,1,2 to avoid breaking tests
         // that operate on early regions.
         state.regions[3].collapsed = true;
@@ -2158,42 +2128,6 @@ mod tests {
             assert!(policy_name.contains("Hospitality Protection Fund"),
                 "auto-activation event should mention conflicting contract: {policy_name}");
         }
-    }
-
-    #[test]
-    fn suspend_regional_authority_freezes_governors() {
-        let mut state = screening_test_state();
-        state.regions[0].governor.cooperation = 20.0; // defiant
-        state.regions[1].governor.cooperation = 90.0; // cooperative
-
-        let (msg, ok) = enact_decree(&mut state, DecreeId::SuspendRegionalAuthority, None);
-        assert!(ok, "should succeed");
-        assert!(msg.unwrap().contains("suspended"));
-        assert!(state.enacted_decrees.suspend_regional_authority);
-
-        // All governors should be at neutral cooperation (50)
-        for region in &state.regions {
-            if !region.collapsed {
-                assert!((region.governor.cooperation - 50.0).abs() < 0.01,
-                    "governor cooperation should be 50, got {}", region.governor.cooperation);
-            }
-        }
-
-        // Cooperation should not drift after decree
-        let cooperation_before: Vec<f64> = state.regions.iter().map(|r| r.governor.cooperation).collect();
-        tick_governor_cooperation(&mut state);
-        for (i, region) in state.regions.iter().enumerate() {
-            assert!((region.governor.cooperation - cooperation_before[i]).abs() < 0.001,
-                "cooperation should not drift after decree");
-        }
-
-        // Governor actions should not fire
-        state.regions[0].governor.cooperation = 10.0; // Force below threshold for test
-        state.regions[0].governor.last_action_tick = 0;
-        let policies_before = state.policies[0].clone();
-        tick_governor_actions(&mut state);
-        // Policies unchanged (governor didn't act)
-        assert_eq!(state.policies[0].quarantine, policies_before.quarantine);
     }
 
     #[test]

@@ -385,7 +385,7 @@ pub const NUCLEAR_TRANSIT_TICKS: u64 = (0.5 * TICKS_PER_DAY) as u64;
 pub const NUCLEAR_EVACUATION_COST_PER_MEMBER: f64 = 500.0;
 
 // Emergency Decree constants — permanent, irreversible global decisions.
-pub const DECREE_COUNT: usize = 6;
+pub const DECREE_COUNT: usize = 5;
 /// Number of standing orders shown in the Orders panel.
 /// Must equal the length of the `standing_orders` array in `ui/operations.rs`.
 /// Used by `ui::operations::selection_max()` to bound navigation — if you add
@@ -602,7 +602,6 @@ pub enum DecreeId {
     ConscriptResearchers,
     AuthorizeHumanTrials,
     SacrificeRegion,
-    SuspendRegionalAuthority,
     FortifyRegion,
     EmergencyCountermeasure,
 }
@@ -613,7 +612,6 @@ impl DecreeId {
         DecreeId::ConscriptResearchers,
         DecreeId::AuthorizeHumanTrials,
         DecreeId::SacrificeRegion,
-        DecreeId::SuspendRegionalAuthority,
         DecreeId::FortifyRegion,
         DecreeId::EmergencyCountermeasure,
     ];
@@ -624,7 +622,6 @@ impl DecreeId {
             Self::ConscriptResearchers => "Conscript Researchers",
             Self::AuthorizeHumanTrials => "Authorize Human Trials",
             Self::SacrificeRegion => "Sacrifice Region",
-            Self::SuspendRegionalAuthority => "Suspend Regional Authority",
             Self::FortifyRegion => "Fortify Region",
             Self::EmergencyCountermeasure => "Emergency Countermeasure",
         }
@@ -636,7 +633,6 @@ impl DecreeId {
             Self::ConscriptResearchers => -0.05,
             Self::AuthorizeHumanTrials => -0.10,
             Self::SacrificeRegion => -0.10,
-            Self::SuspendRegionalAuthority => -0.15,
             Self::FortifyRegion => -0.10,
             Self::EmergencyCountermeasure => -0.20,
         }
@@ -648,9 +644,8 @@ impl DecreeId {
             Self::ConscriptResearchers => 0,
             Self::AuthorizeHumanTrials => 1,
             Self::SacrificeRegion => 2,
-            Self::SuspendRegionalAuthority => 3,
-            Self::FortifyRegion => 4,
-            Self::EmergencyCountermeasure => 5,
+            Self::FortifyRegion => 3,
+            Self::EmergencyCountermeasure => 4,
         }
     }
 
@@ -1108,10 +1103,6 @@ pub struct EnactedDecrees {
     /// Sacrifice Region: voluntarily collapse one region for +20% income from the rest.
     #[serde(default)]
     pub sacrificed_region: Option<usize>,
-    /// Suspend Regional Authority: freeze all governor cooperation. No drift, no
-    /// defiance, no cooperation bonuses. Board leverage overrides local governance.
-    #[serde(default)]
-    pub suspend_regional_authority: bool,
     /// Fortify Region: restore one region's infrastructure to 100%, all others
     /// lose 25% across all systems.
     #[serde(default)]
@@ -1128,7 +1119,6 @@ impl EnactedDecrees {
             DecreeId::ConscriptResearchers => self.conscript_researchers,
             DecreeId::AuthorizeHumanTrials => self.authorize_human_trials,
             DecreeId::SacrificeRegion => self.sacrificed_region.is_some(),
-            DecreeId::SuspendRegionalAuthority => self.suspend_regional_authority,
             DecreeId::FortifyRegion => self.fortified_region.is_some(),
             DecreeId::EmergencyCountermeasure => self.emergency_countermeasure,
         }
@@ -6173,7 +6163,6 @@ impl GameState {
             DecreeId::ConscriptResearchers => DecreeUnlockCondition { min_infected: Some(500_000.0), min_dead: Some(100_000.0), ..Default::default() },
             DecreeId::AuthorizeHumanTrials => DecreeUnlockCondition { min_dead: Some(50_000_000.0), min_crit_regions: Some(2), ..Default::default() },
             DecreeId::SacrificeRegion => DecreeUnlockCondition { min_dead: Some(500_000_000.0), min_crit_regions: Some(1), ..Default::default() },
-            DecreeId::SuspendRegionalAuthority => DecreeUnlockCondition { min_dead: Some(100_000_000.0), min_crit_regions: Some(3), ..Default::default() },
             DecreeId::FortifyRegion => DecreeUnlockCondition { min_dead: Some(200_000_000.0), min_collapsed_regions: Some(1), ..Default::default() },
             DecreeId::EmergencyCountermeasure => DecreeUnlockCondition { min_dead: Some(2_000_000_000.0), min_collapsed_regions: Some(3), ..Default::default() },
         }
