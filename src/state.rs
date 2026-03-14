@@ -3385,15 +3385,8 @@ impl Default for MedicineMode {
 impl MedicineMode {
     pub fn label(&self) -> &'static str {
         match self {
-            MedicineMode::Vaccine => "Vaccine",
-            MedicineMode::Therapeutic => "Therapeutic",
-        }
-    }
-
-    pub fn short_label(&self) -> &'static str {
-        match self {
-            MedicineMode::Vaccine => "Vax",
-            MedicineMode::Therapeutic => "Trt",
+            MedicineMode::Vaccine => "Vaccination",
+            MedicineMode::Therapeutic => "Treatment",
         }
     }
 }
