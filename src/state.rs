@@ -3986,7 +3986,7 @@ impl ResearchKind {
                 BasicTech::TargetedDrugDesign => (3, 240.0, 600.0),
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
-                BasicTech::RapidSequencing => (4, 300.0, 750.0),
+                BasicTech::RapidSequencing => (4, 300.0, 350.0),
                 BasicTech::MetagenomicSurveillance => (4, 280.0, 650.0),
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
