@@ -134,31 +134,31 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
     let policies: Vec<(PolicyId, &str, bool, String, &str, Option<u32>, f64)> = vec![
         (PolicyId::TravelBan, "Travel Ban", policy.travel_ban,
          format!("¥{:.0}/day + {} pers.", tb_cost * TICKS_PER_DAY, TRAVEL_BAN_PERSONNEL + infra_extra),
-         if trade_dep { "Blocks 50-95% spread to and from this region (varies by pathogen), 30% GDP penalty" }
-         else { "Blocks 50-95% spread to and from this region (varies by pathogen), 20% GDP penalty" },
+         if trade_dep { "Blocks 50-95% cross-region spread (varies by pathogen), 30% GDP penalty" }
+         else { "Blocks 50-95% cross-region spread (varies by pathogen), 20% GDP penalty" },
          Some(TRAVEL_BAN_PERSONNEL + infra_extra), tb_cost),
         (PolicyId::Quarantine, "Quarantine", policy.quarantine,
          format!("¥{:.0}/day + {} pers.", QUARANTINE_COST * spec_mult * TICKS_PER_DAY, QUARANTINE_PERSONNEL + infra_extra),
-         "20-65% infection rate reduction (varies by pathogen)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST * spec_mult),
+         "20-65% within-region spread reduction (varies by pathogen)", Some(QUARANTINE_PERSONNEL + infra_extra), QUARANTINE_COST * spec_mult),
         (PolicyId::DiscourageHosp, "Discourage Hospitalization", policy.discourage_hosp,
          "Free".to_string(),
-         "Removes hospital spread penalty, +50% lethality (no hospital care)",
+         "Removes within-region hospital spread penalty, +50% lethality (no hospital care)",
          Some(DISCOURAGE_HOSP_PERSONNEL + infra_extra), DISCOURAGE_HOSP_COST * spec_mult),
         (PolicyId::BorderControls, "Border Controls", policy.border_controls,
          format!("¥{:.0}/day + {} pers.", BORDER_CONTROLS_COST * spec_mult * TICKS_PER_DAY, BORDER_CONTROLS_PERSONNEL + infra_extra),
-         "Blocks 30% spread to and from this region", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST * spec_mult),
+         "Blocks 30% cross-region spread", Some(BORDER_CONTROLS_PERSONNEL + infra_extra), BORDER_CONTROLS_COST * spec_mult),
         (PolicyId::WaterSanitation, "Water Sanitation", policy.water_sanitation,
          format!("¥{:.0}/day + {} pers.", WATER_SANITATION_COST * spec_mult * TICKS_PER_DAY, WATER_SANITATION_PERSONNEL + infra_extra),
          "50% waterborne spread reduction within the region", Some(WATER_SANITATION_PERSONNEL + infra_extra), WATER_SANITATION_COST * spec_mult),
         (PolicyId::BasicScreening, "Basic Screening", policy.screening == ScreeningLevel::Basic,
          format!("¥{:.0}/day + {} pers.", SCREENING_BASIC_COST * spec_mult * TICKS_PER_DAY, 1 + infra_extra),
-         "40% visible, 10% spread reduction, 75% dose targeting, 30% faster detection (~4 day ramp-up)", Some(1 + infra_extra), SCREENING_BASIC_COST * spec_mult),
+         "40% visible, 10% all spread reduction, 75% dose targeting, 30% faster detection (~4 day ramp-up)", Some(1 + infra_extra), SCREENING_BASIC_COST * spec_mult),
         (PolicyId::AntigenScreening, "Antigen Screening", policy.screening == ScreeningLevel::Antigen,
          format!("¥{:.0}/day + {} pers.", SCREENING_ANTIGEN_COST * spec_mult * TICKS_PER_DAY, 2 + infra_extra),
-         "75% visible, 20% spread reduction, 90% dose targeting, detects incubating and immune (~4 day ramp-up)", Some(2 + infra_extra), SCREENING_ANTIGEN_COST * spec_mult),
+         "75% visible, 20% all spread reduction, 90% dose targeting, detects incubating and immune (~4 day ramp-up)", Some(2 + infra_extra), SCREENING_ANTIGEN_COST * spec_mult),
         (PolicyId::MassRapidScreen, "Mass Rapid Screen", policy.screening == ScreeningLevel::MassRapid,
          format!("¥{:.0}/day + {} pers.", SCREENING_MASS_RAPID_COST * spec_mult * TICKS_PER_DAY, 4 + infra_extra),
-         "95% visible, 30% spread reduction, 100% dose targeting, detects incubating and immune (~4 day ramp-up)", Some(4 + infra_extra), SCREENING_MASS_RAPID_COST * spec_mult),
+         "95% visible, 30% all spread reduction, 100% dose targeting, detects incubating and immune (~4 day ramp-up)", Some(4 + infra_extra), SCREENING_MASS_RAPID_COST * spec_mult),
         (PolicyId::MartialLaw, "Martial Law", policy.martial_law,
          format!("¥{:.0}/day + {} pers.", MARTIAL_LAW_COST * spec_mult * TICKS_PER_DAY, MARTIAL_LAW_PERSONNEL + infra_extra),
          "Collapse threshold −15% (must enact before collapse)", Some(MARTIAL_LAW_PERSONNEL + infra_extra), MARTIAL_LAW_COST * spec_mult),
@@ -608,7 +608,7 @@ pub(crate) fn decree_description(decree: DecreeId) -> String {
         DecreeId::SuspendRegionalAuthority => "Neutralize all governors. No defiance, no cooperation. (permanent)".to_string(),
         DecreeId::FortifyRegion => format!("Restore one region's infrastructure. Others: -{:.0}% infra. (permanent)",
             FORTIFY_INFRA_PENALTY * 100.0),
-        DecreeId::EmergencyCountermeasure => format!("Infectivity -{:.0}%, spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
+        DecreeId::EmergencyCountermeasure => format!("Within-region spread -{:.0}%, cross-region spread -{:.0}%. Kills {:.0}% of surviving population. (permanent)",
             (1.0 - COUNTERMEASURE_INFECTIVITY_MULT) * 100.0,
             (1.0 - COUNTERMEASURE_SPREAD_MULT) * 100.0,
             COUNTERMEASURE_KILL_FRACTION * 100.0),
@@ -748,7 +748,7 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy: PolicyId) ->
             }
             PolicyId::DiscourageHosp => { // removes hospital exposure
                 let reduction = (1.0 - 1.0 / HOSPITAL_EXPOSURE_FACTOR) * gov_eff * 100.0;
-                (format!("{name} ({}, -{reduction:.0}% spread)", vector.label()), Color::Green)
+                (format!("{name} ({}, -{reduction:.0}% within-region spread)", vector.label()), Color::Green)
             }
             PolicyId::WaterSanitation => {
                 match vector {

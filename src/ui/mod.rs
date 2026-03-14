@@ -333,7 +333,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let detail = if state.unlocked_techs.contains(&crate::state::BasicTech::RapidSequencing) {
                     let inf_pct = (infectivity_factor - 1.0) * 100.0;
                     let leth_pct = (lethality_factor - 1.0) * 100.0;
-                    format!(" (spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
+                    format!(" (within-region spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
                 } else {
                     String::new()
                 };
@@ -786,7 +786,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from(""),
             Line::from(Span::styled("  Civil Order (CO)", Style::default().fg(Color::Cyan))),
             Line::from("  Degrades from deaths, restrictive policies, and low HC."),
-            Line::from("  At 0%: +50% disease spread (anarchy)."),
+            Line::from("  At 0%: +50% within-region spread (anarchy)."),
             Line::from(""),
             Line::from(Span::styled("  Delivery Efficiency", Style::default().fg(Color::Cyan))),
             Line::from("  When deploying medicine, effective doses = HC × SL."),

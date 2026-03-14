@@ -961,7 +961,7 @@ impl RegionPolicy {
     }
 
     /// Funding cost adjusted for regional traits.
-    /// TradeDependent: travel ban costs 2x.
+    /// TradeDependent: travel ban costs 1.5x.
     /// Always pass the region's traits — use `&[]` only when no region context exists.
     pub fn funding_cost(&self, traits: &[RegionTrait]) -> f64 {
         self.active_policy_costs(traits).iter().map(|(_, c)| c).sum()
@@ -1813,8 +1813,8 @@ impl RegionTrait {
     pub fn effect(&self) -> &'static str {
         match self {
             RegionTrait::TradeDependent => "Travel ban costs 1.5x, GDP -30%",
-            RegionTrait::DenseUrban => "Spread rate +30%",
-            RegionTrait::IslandGeography => "Inbound spread -50%",
+            RegionTrait::DenseUrban => "Within-region spread +30%",
+            RegionTrait::IslandGeography => "Cross-region inbound spread -50%",
             RegionTrait::LowInfrastructure => "Policy personnel +1 each",
             RegionTrait::StrongPublicHealth => "Lethality -15% (lost if hospitals discouraged)",
             RegionTrait::ResilientPopulation => "Collapse threshold -10pp",
