@@ -9,9 +9,9 @@ use ratatui::{
 use crate::state::{GameOutcome, GameState, SimState, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
-/// Returns the height this bar needs: 3 rows (stats + income + border).
+/// Returns the height this bar needs: 2 rows (stats + border).
 pub fn height(_state: &GameState) -> u16 {
-    3
+    2
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
