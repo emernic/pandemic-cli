@@ -1299,22 +1299,35 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
 
             match personality {
                 GovernorPersonality::Buffoon => {
-                    let cost = scaled_cost(state, 0.12, 100.0, 500.0);
+                    // Find the largest non-bankrupt corporation in this region
+                    let corp = state.corporations.iter()
+                        .filter(|c| c.region_idx == *region_idx && !c.bankrupt)
+                        .max_by(|a, b| a.base_revenue.partial_cmp(&b.base_revenue).unwrap_or(std::cmp::Ordering::Equal));
+                    let corp_name = corp.map(|c| c.name.clone())
+                        .unwrap_or_else(|| format!("{region_name} Logistics"));
+                    let negotiate_target = corp.map(|c| format!("Dir. {}", c.director_surname))
+                        .unwrap_or_else(|| "their management".into());
+
                     CrisisEvent {
                         title: format!("{}: Evacuation Panic", gov_name),
                         description: format!(
-                            "{gov_name} tested positive and is deteriorating fast. Before anyone could \
-                             contain it, they announced a personal evacuation from {region_name} on \
-                             live broadcast. A regional corporation is threatening to follow suit."),
+                            "{gov_name} tested positive and went on live broadcast announcing a personal \
+                             evacuation from {region_name}. {corp_name} is now pulling logistics staff, \
+                             citing unsafe operating conditions."),
                         options: vec![ CrisisOption {
-                            label: "Damage control".into(),
-                            description: "Lose 1.5 days of research progress containing the fallout. Governor's condition goes unmonitored.".into(),
+                            label: "Stabilize the governor".into(),
+                            description: format!(
+                                "Send a medical team. {gov_name} gets treatment and stays in {region_name}. \
+                                 {corp_name} follows through on the pullout. Supply lines -20%. \
+                                 Cooperation -10."),
                             cost: None,
                         },
                         CrisisOption {
-                            label: format!("PR containment (¥{cost:.0})"),
-                            description: "Hire a crisis team. Corporation stays put. Governor receives care.".into(),
-                            cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
+                            label: format!("Secure {corp_name} operations"),
+                            description: format!(
+                                "Negotiate with {negotiate_target} to keep operations running. Supply lines intact. \
+                                 {gov_name} goes unmonitored. Cooperation -20."),
+                            cost: None,
                         },
                         ],
                         kind,
@@ -2895,17 +2908,22 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Operative);
             match (personality, choice) {
                 (GovernorPersonality::Buffoon, 0) => {
-                    // Damage control: lose 1.5 days research progress
-                    let loss = (TICKS_PER_DAY * 1.5) as f64;
-                    if let Some(proj) = state.active_research.first_mut() {
-                        proj.progress = (proj.progress - loss).max(0.0);
+                    // Stabilize the governor: governor survives, corp pulls logistics
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.supply_lines = (region.supply_lines - 0.20).max(0.0);
+                        region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                     }
-                    queue_governor_death_followup(state, *region_idx);
-                    "Spent a day and a half undoing the broadcast damage.".into()
+                    chairman_satisfaction_hit(state, -0.05);
+                    "Medical team sent. Governor stabilized. Logistics operations suspended.".into()
                 }
                 (GovernorPersonality::Buffoon, _) => {
-                    // PR containment: costs already deducted, corporation stays
-                    "Crisis team deployed. Corporation staying put. Governor recovering.".into()
+                    // Secure corporation: corp stays, governor unmonitored
+                    if let Some(region) = state.regions.get_mut(*region_idx) {
+                        region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
+                    }
+                    chairman_satisfaction_hit(state, 0.03);
+                    queue_governor_death_followup(state, *region_idx);
+                    "Operations secured. Governor's condition is deteriorating.".into()
                 }
                 (GovernorPersonality::Blowhard, 0) => {
                     // Send samples: lose 2 days research progress
@@ -3975,7 +3993,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
         // Test each personality's worst-case option
         let cases: Vec<(GovernorPersonality, usize)> = vec![
-            (GovernorPersonality::Buffoon, 0),    // Damage control
+            (GovernorPersonality::Buffoon, 1),    // Secure corporation (governor unmonitored)
             (GovernorPersonality::Blowhard, 1),   // Refuse
             (GovernorPersonality::Recluse, 0),    // Let them recover
             (GovernorPersonality::Hardliner, 2),  // Refuse
@@ -4002,6 +4020,36 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             assert!(has_death,
                 "{:?} worst-case (choice {}) should queue GovernorDeath", personality, worst_choice);
         }
+    }
+
+    #[test]
+    fn buffoon_sick_stabilize_governor_hits_supply_lines_not_death() {
+        let mut state = GameState::new_default(42);
+        state.tick = (15.0 * TICKS_PER_DAY) as u64;
+        state.regions[0].governor.personality = GovernorPersonality::Buffoon;
+        state.regions[0].governor.dead = false;
+        state.regions[0].supply_lines = 1.0;
+        let old_coop = state.regions[0].governor.cooperation;
+
+        let kind = CrisisKind::GovernorSick { region_idx: 0 };
+        let crisis = build_crisis_event(&state, kind);
+        state.active_crisis = Some(crisis);
+        state.sim_state = SimState::Event { was_running: false };
+
+        let (_msg, _) = resolve_crisis(&mut state, 0); // Stabilize governor
+
+        // Should NOT queue governor death
+        let has_death = state.pending_crises.iter()
+            .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
+        assert!(!has_death, "Stabilize governor should not queue GovernorDeath");
+
+        // Should hit supply lines
+        assert!(state.regions[0].supply_lines < 1.0,
+            "Supply lines should be reduced, got {}", state.regions[0].supply_lines);
+
+        // Should reduce cooperation
+        assert!(state.regions[0].governor.cooperation < old_coop,
+            "Cooperation should drop");
     }
 
     #[test]
