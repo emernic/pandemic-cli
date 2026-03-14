@@ -434,18 +434,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PerformanceReview);
     }
 
-    // Naming rights: day 16+, requires identified disease
-    if day > 16.0 {
-        let nameable: Vec<usize> = state.diseases.iter().enumerate()
-            .filter(|(_, d)| d.detected && d.knowledge > 0.5)
-            .map(|(i, _)| i)
-            .collect();
-        if !nameable.is_empty() {
-            let idx = nameable[rng.r#gen::<usize>() % nameable.len()];
-            let payout = scaled_cost(state, 0.40, 300.0, 2000.0);
-            candidates.push(CrisisKind::NamingRights { disease_idx: idx, payout });
-        }
-    }
 
     // Intern's discovery: day 10+
     if day > 10.0 {
@@ -1152,32 +1140,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: "\"I'm busy.\"".into(),
                     description: "Research continues. −5% board approval.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::NamingRights { disease_idx, payout } => {
-            let disease_name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| "the pathogen".into());
-            CrisisEvent {
-                title: "Naming Rights".into(),
-                description: format!(
-                    "A pharmaceutical consortium offers ¥{:.0} for the naming rights to {}. \
-                     The rename is cosmetic only.",
-                    payout, disease_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Decline".into(),
-                    description: "+3% board approval.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Accept (¥{:.0})", payout),
-                    description: "Disease renamed. −5% board approval.".into(),
                     cost: None,
                 },
                 ],
@@ -3003,27 +2965,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Board notes your absence. A memo has been circulated.".into()
         }
 
-        (CrisisKind::NamingRights { disease_idx, payout }, 0) => {
-            // Decline — gain chairman satisfaction
-            let _ = (disease_idx, payout);
-            chairman_satisfaction_hit(state, 0.03);
-            "Offer declined.".into()
-        }
-        (CrisisKind::NamingRights { disease_idx, payout }, _) => {
-            // Accept — gain money, chairman satisfaction hit, rename the disease
-            state.resources.funding += payout;
-            chairman_satisfaction_hit(state, -0.05);
-            let old_name = state.diseases.get(*disease_idx)
-                .map(|d| d.name.clone())
-                .unwrap_or_else(|| "Unknown".into());
-            let names = ["Karen-7", "BrandSynergy-X", "Profit Margin Syndrome", "CEO's Regret"];
-            let name_idx = (state.tick as usize) % names.len();
-            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
-                disease.name = names[name_idx].to_string();
-            }
-            format!("{} has been officially redesignated as \"{}\". ¥{:.0} deposited.",
-                old_name, names[name_idx], payout)
-        }
 
         (CrisisKind::InternDiscovery { .. }, 0) => {
             // File it — board appreciates fiscal prudence
