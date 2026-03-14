@@ -16,7 +16,7 @@ use crate::state::{
     BARGAIN_HARDLINER_FUNDING_COST,
     BARGAIN_COOPERATION_GAIN,
     BARGAIN_MOBSTER_BASE_COST,
-    BARGAIN_OPERATIVE_INCOME_CUT,
+    BARGAIN_OPERATIVE_INCOME_CUT, MAX_OPERATIVE_INCOME_SKIM,
     BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
     COLLAPSE_DISRUPTION_TICKS,
@@ -470,7 +470,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
         GovernorPersonality::Operative => {
             // Income Cut: permanent skim on regional income
             let gov = &mut state.regions[region_idx].governor;
-            gov.income_skim += BARGAIN_OPERATIVE_INCOME_CUT;
+            gov.income_skim = (gov.income_skim + BARGAIN_OPERATIVE_INCOME_CUT).min(MAX_OPERATIVE_INCOME_SKIM);
             gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
             let cooperation = gov.cooperation;
             let total_skim = gov.income_skim * 100.0;
