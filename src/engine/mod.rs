@@ -4206,27 +4206,6 @@ mod tests {
             "personnel should be fully available after recovery");
     }
 
-    #[test]
-    fn mutation_surge_option_b_gains_knowledge() {
-        use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
-        detect_all_diseases(&mut state);
-        let before = state.diseases[0].knowledge;
-        state.sim_state = crate::state::SimState::Event { was_running: true };
-        state.ui.crisis_selection = 1;
-        state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::MutationSurge { disease_idx: 0 },
-            title: "T".into(), description: "T".into(),
-            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-             crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 300.0, personnel: 0, ..Default::default() }) },
-            ],
-            tick_created: 0,
-        });
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.diseases[0].knowledge - (before + 0.15)).abs() < 0.001,
-            "option B should gain 0.15 knowledge");
-    }
 
     #[test]
     fn refugee_wave_option_a_transfers_population_and_infections() {

@@ -261,21 +261,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::PersonnelSick { amount, recovery_days });
     }
 
-    // Mutation surge: requires a disease with strain_generation > 0 AND active infections
-    let mutated: Vec<usize> = state.diseases.iter().enumerate()
-        .filter(|(i, d)| {
-            d.strain_generation > 0
-                && state.regions.iter().any(|r| {
-                    r.disease_state(*i).map_or(false, |ds| ds.infected > 0.0)
-                })
-        })
-        .map(|(i, _)| i)
-        .collect();
-    if !mutated.is_empty() {
-        let idx = mutated[rng.r#gen::<usize>() % mutated.len()];
-        candidates.push(CrisisKind::MutationSurge { disease_idx: idx });
-    }
-
     // --- New crisis types ---
 
     // RefugeeWave is triggered deterministically on collapse (see engine/mod.rs),
@@ -660,36 +645,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::MutationSurge { disease_idx } => {
-            let disease_name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
-            CrisisEvent {
-                title: "Mutation Surge".into(),
-                description: format!(
-                    "{} is undergoing rapid genetic drift. Emergency genomic analysis \
-                     could help track the changes.",
-                    disease_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Ignore".into(),
-                    description: "Pathogen knowledge drops 5% as the strain drifts.".into(),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.15, 100.0, 600.0);
-                    CrisisOption {
-                        label: format!("Emergency analysis (¥{:.0})", cost),
-                        description: "Current strain sequenced. +15% pathogen knowledge.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-
         // --- New crisis types ---
 
         CrisisKind::RefugeeWave { from_region, to_region, wave } => {
@@ -2598,23 +2553,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 }
             }
         }
-        (CrisisKind::MutationSurge { disease_idx }, 0) => {
-            // Ignoring a mutation surge means knowledge drifts as the pathogen changes
-            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
-                disease.knowledge = (disease.knowledge - 0.05).max(0.0);
-            }
-            "Mutation surge ignored. Pathogen knowledge degraded.".into()
-        }
-        (CrisisKind::MutationSurge { disease_idx }, _) => {
-            if let Some(disease) = state.diseases.get_mut(*disease_idx) {
-                disease.knowledge = (disease.knowledge + 0.15).min(1.0);
-                let name = disease.display_name(*disease_idx);
-                format!("Emergency analysis complete. Gained knowledge of {}.", name)
-            } else {
-                "Emergency analysis complete".into()
-            }
-        }
-
         // --- New crisis resolutions ---
 
         (CrisisKind::RefugeeWave { from_region, to_region, .. }, 0) => {
