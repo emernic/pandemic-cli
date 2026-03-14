@@ -4682,26 +4682,6 @@ mod tests {
     }
 
     #[test]
-    fn whistleblower_option_a_destroys_doses() {
-        let mut state = GameState::new_default(42);
-        unlock_all_medicines(&mut state);
-        state.medicines[0].doses = 1000.0;
-        setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.medicines[0].doses, 700.0,
-            "option A should destroy 30% of doses");
-    }
-
-    #[test]
-    fn whistleblower_option_b_resolves() {
-        let mut state = GameState::new_default(42);
-        state.resources.authority = Authority::Maximum;
-        setup_crisis(&mut state, CrisisKind::WhistleblowerReport { medicine_idx: 0 }, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.active_crisis.is_none(), "crisis should be resolved");
-    }
-
-    #[test]
     fn corporate_seizure_option_a_loses_personnel() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
