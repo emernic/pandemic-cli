@@ -83,11 +83,15 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
 
     let daily_income = state.funding_income_rate() * TICKS_PER_DAY;
 
-    // Loan amount: enough to cover ~3 days of net burn, clamped to sensible range
+    // Loan amount: enough to cover ~5 days of net burn, with floor based on daily income.
+    // Early game (income ~¥300-500/day): loans land ~¥500-1500
+    // Late game (income ~¥800+/day): loans scale up to stay meaningful
     let policy_cost = state.total_policy_funding_cost() * TICKS_PER_DAY;
     let net_burn = (policy_cost + state.personnel_upkeep_rate() * TICKS_PER_DAY - daily_income).max(50.0);
-    let amount = (net_burn * 3.0).clamp(100.0, 600.0);
-    let amount = (amount / 10.0).round() * 10.0; // round to nearest ¥10
+    let income_floor = daily_income * 2.0; // at minimum, offer ~2 days of income
+    let raw = (net_burn * 5.0).max(income_floor);
+    let amount = raw.clamp(500.0, 3000.0);
+    let amount = (amount / 50.0).round() * 50.0; // round to nearest ¥50
 
     // Try governor lender first (prefers highest cooperation among non-collapsed regions)
     let governor_lender = state.regions.iter().enumerate()
