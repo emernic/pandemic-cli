@@ -202,9 +202,9 @@ Hard requirements for active play:
 - **~80 day median** for a competent player
 - **200 days = absolute maximum** — surviving past 200 days should be essentially impossible
 
-These are not 20th century diseases. These are superbugs resulting from varying levels of engineering and mutation that will kill very quickly unattended, and the player is starting with an outbreak already underway. Late-game diseases (day 60+) should be next-generation monsters — massively scaled infectivity and lethality that overwhelm any containment. If you find yourself reducing disease lethality, infectivity, or cross-region spread, you are almost certainly making the game worse.
+These are not 20th century diseases. These are superbugs resulting from varying levels of engineering and mutation that will kill very quickly unattended, and the player is starting with an outbreak already underway. Late-game diseases (day 60+) should be next-generation monsters — massively scaled within-region spread and lethality that overwhelm any containment. If you find yourself reducing disease lethality, within-region spread (`within_region_spread`), or cross-region spread, you are almost certainly making the game worse.
 
-**CRITICAL: Do NOT increase per-tick lethality or recovery to "speed up" deaths.** A high per-tick lethality+recovery shortens the infectious period, causing epidemic burnout after infecting only a small fraction of each region. The right approach is LOW per-tick lethality/recovery (16–30 day infectious period) with HIGH infectivity. See `PathogenType::stat_ranges()` comment in state.rs for the full explanation.
+**CRITICAL: Do NOT increase per-tick lethality or recovery to "speed up" deaths.** A high per-tick lethality+recovery shortens the infectious period, causing epidemic burnout after infecting only a small fraction of each region. The right approach is LOW per-tick lethality/recovery (16–30 day infectious period) with HIGH within-region spread (`within_region_spread`). See `PathogenType::stat_ranges()` comment in state.rs for the full explanation.
 
 The `game_is_lost_within_90_days_without_intervention` test enforces the 90-day deadline across 50 seeds. The test uses a median assertion too — if median loss day exceeds 70, something is wrong.
 
