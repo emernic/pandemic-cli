@@ -7,7 +7,7 @@ use crate::state::{
     ScreeningLevel,
     DecreeId, PolicyId,
     QUARANTINE_COST, TRAVEL_BAN_COST,
-    SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD,
+    INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
     INFRA_STRESSED, SUPPLY_STRESSED_COST_MULT,
     REGULATORY_APPARATUS_COST_MULT, SURVEILLANCE_NETWORK_SCREENING_MULT,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
@@ -544,10 +544,10 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 
 /// Tick governor cooperation drift. Called once per tick from tick().
 ///
-/// Cooperation drifts based on infection severity, cumulative deaths, active
-/// restrictive policies, and personality. Governors react to the same
-/// severity thresholds the player sees (CRIT/HIGH/MOD/LOW/OK), so there
-/// is a clear mental model: "region is CRIT → governor is angry."
+/// Cooperation drifts based on infection pressure, cumulative deaths, active
+/// restrictive policies, and personality. Governors react to the engine's
+/// infection pressure thresholds (INFECTION_PRESSURE_CRIT/HIGH/MOD), which
+/// are lower than the UI severity labels the player sees.
 pub(super) fn tick_governor_cooperation(state: &mut GameState) {
     // Suspend Regional Authority: all governors frozen under central command
     if state.enacted_decrees.suspend_regional_authority {
@@ -590,13 +590,12 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         let base_drift = (50.0 - current) * 0.0001; // ~0.012/day per point away from 50
 
         // Severity drain: governors react to infection levels using the
-        // shared severity thresholds (CRIT/HIGH/MOD) from state.rs.
-        use crate::state::{SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
-        let severity_drain = if infected > SEVERITY_CRIT_THRESHOLD {
+        // infection pressure thresholds from state.rs.
+        let severity_drain = if infected > INFECTION_PRESSURE_CRIT {
             -0.015 // CRIT: ~1.8/day — mid-game defiance in ~14 days at this level
-        } else if infected > SEVERITY_HIGH_THRESHOLD {
+        } else if infected > INFECTION_PRESSURE_HIGH {
             -0.008 // HIGH: ~0.96/day
-        } else if infected > SEVERITY_MOD_THRESHOLD {
+        } else if infected > INFECTION_PRESSURE_MOD {
             -0.002 // MOD: ~0.24/day
         } else {
             0.0
@@ -618,7 +617,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
             GovernorPersonality::Blowhard => {
                 // Hates restrictive policies — extra drain. Happy when things are calm.
                 let restriction_anger = -restrictive_count * 0.004;
-                let calm_bonus = if restrictive_count == 0.0 && infected <= SEVERITY_HIGH_THRESHOLD {
+                let calm_bonus = if restrictive_count == 0.0 && infected <= INFECTION_PRESSURE_HIGH {
                     0.003
                 } else {
                     0.0
@@ -695,7 +694,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
             let sick_cooldown = (30.0 * TICKS_PER_DAY) as u64;
             let cooldown_ok = state.regions[i].governor.last_sick_tick
                 .map_or(true, |t| state.tick.saturating_sub(t) >= sick_cooldown);
-            if region_infected > SEVERITY_HIGH_THRESHOLD && cooldown_ok {
+            if region_infected > INFECTION_PRESSURE_HIGH && cooldown_ok {
                 state.regions[i].governor.last_sick_tick = Some(state.tick);
                 state.pending_crises.push((state.tick, CrisisKind::GovernorSick { region_idx: i }));
             }
@@ -705,7 +704,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         // Per-tick probability when infected > CRIT threshold AND death_frac > 5%.
         // ~0.0002/tick = ~1.2% per day at CRIT. Only fires once (governor dies).
         // Guard: don't fire if there's already a pending GovernorDeath for this region.
-        if infected > SEVERITY_CRIT_THRESHOLD && death_frac > 0.05 {
+        if infected > INFECTION_PRESSURE_CRIT && death_frac > 0.05 {
             let already_pending = state.pending_crises.iter()
                 .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == i));
             let already_active = state.active_crisis.as_ref()
@@ -1134,7 +1133,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
 }
 
 /// Execute standing orders for policy automation. Fires each tick.
-/// Auto-enables policies for regions that cross severity thresholds,
+/// Auto-enables policies for regions that cross infection pressure thresholds,
 /// provided the policy isn't already active and the player has the
 /// required chairman approval and personnel.
 /// Returns region indices where GDP-hurting policies were enacted (for board notification).
@@ -1153,7 +1152,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
 
         // Auto-quarantine at HIGH (10K+)
         if state.standing_orders.auto_quarantine_at_high
-            && infected > SEVERITY_HIGH_THRESHOLD
+            && infected > INFECTION_PRESSURE_HIGH
             && !state.policies[region_idx].quarantine
             && state.resources.funding > current_cost + QUARANTINE_COST
         {
@@ -1176,7 +1175,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
 
         // Auto-travel-ban at CRIT (100K+)
         if state.standing_orders.auto_travel_ban_at_crit
-            && infected > SEVERITY_CRIT_THRESHOLD
+            && infected > INFECTION_PRESSURE_CRIT
             && !state.policies[region_idx].travel_ban
             && state.resources.funding > current_cost + TRAVEL_BAN_COST
         {
@@ -2034,7 +2033,7 @@ mod tests {
         state.standing_orders.auto_quarantine_at_high = true;
 
         // Simulate a region at HIGH severity
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
         assert!(!state.policies[0].quarantine, "Quarantine should not be active yet");
 
         tick_standing_orders(&mut state);
@@ -2064,7 +2063,7 @@ mod tests {
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.policies[0].quarantine = true; // already active
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
 
         tick_standing_orders(&mut state);
 
@@ -2080,7 +2079,7 @@ mod tests {
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_travel_ban_at_crit = true;
 
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         assert!(!state.policies[0].travel_ban);
 
         tick_standing_orders(&mut state);
@@ -2095,7 +2094,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         // Both standing orders OFF (default)
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         tick_standing_orders(&mut state);
 
@@ -2148,7 +2147,7 @@ mod tests {
             loyalty_raise_offered: false,
             last_bonus_tick: 0,
         });
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_HIGH_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
 
         tick_standing_orders(&mut state);
 

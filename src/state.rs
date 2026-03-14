@@ -707,7 +707,7 @@ impl DecreeUnlockCondition {
         }
         if let Some(threshold) = self.min_crit_regions {
             let crit_count = state.regions.iter()
-                .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > SEVERITY_CRIT_THRESHOLD))
+                .filter(|r| !r.collapsed && r.infections.iter().any(|i| i.infected > INFECTION_PRESSURE_CRIT))
                 .count();
             if crit_count >= threshold { return true; }
         }
@@ -730,7 +730,7 @@ impl DecreeUnlockCondition {
             if v == 1 {
                 parts.push(format!(
                     "any region at CRITICAL ({}+ infected)",
-                    Self::format_threshold(SEVERITY_CRIT_THRESHOLD)
+                    Self::format_threshold(INFECTION_PRESSURE_CRIT)
                 ));
             } else {
                 parts.push(format!("{}+ regions at CRITICAL", v));
@@ -1993,11 +1993,19 @@ pub struct Governor {
 }
 
 
-/// Infection count thresholds for region severity levels.
-/// Used by both the UI (status labels) and the engine (governor cooperation drift).
-pub const SEVERITY_CRIT_THRESHOLD: f64 = 100_000.0;
-pub const SEVERITY_HIGH_THRESHOLD: f64 = 10_000.0;
-pub const SEVERITY_MOD_THRESHOLD: f64 = 1_000.0;
+/// Infection count thresholds for UI severity labels (CRIT/HIGH/MOD/LOW).
+/// These are what the player sees on the world map and region list.
+pub const SEVERITY_CRIT_THRESHOLD: f64 = 1_000_000_000.0;
+pub const SEVERITY_HIGH_THRESHOLD: f64 = 100_000_000.0;
+pub const SEVERITY_MOD_THRESHOLD: f64 = 1_000_000.0;
+
+/// Infection pressure thresholds used by engine mechanics (healthcare drain,
+/// governor cooperation, standing orders, etc.). These are deliberately much
+/// lower than the UI severity thresholds — the engine reacts to infection
+/// pressure long before the situation looks "CRIT" to the player.
+pub const INFECTION_PRESSURE_CRIT: f64 = 100_000.0;
+pub const INFECTION_PRESSURE_HIGH: f64 = 10_000.0;
+pub const INFECTION_PRESSURE_MOD: f64 = 1_000.0;
 
 /// Cooperation threshold below which the governor becomes defiant.
 pub const GOVERNOR_DEFIANCE_THRESHOLD: f64 = 40.0;

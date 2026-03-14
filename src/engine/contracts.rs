@@ -7,7 +7,7 @@ use crate::state::{
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
     CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
-    SEVERITY_HIGH_THRESHOLD,
+    INFECTION_PRESSURE_HIGH,
 };
 
 /// When a contract template becomes contextually relevant (worth offering).
@@ -49,7 +49,7 @@ impl RelevanceCheck {
             RelevanceCheck::DecreeUnlocked(idx) => state.decree_unlocked(*idx),
             RelevanceCheck::HighSeverityRisk => {
                 state.regions.iter().any(|r| {
-                    !r.collapsed && r.infections.iter().any(|i| i.infected >= SEVERITY_HIGH_THRESHOLD)
+                    !r.collapsed && r.infections.iter().any(|i| i.infected >= INFECTION_PRESSURE_HIGH)
                 })
             }
             RelevanceCheck::MinDeaths(threshold) => state.total_dead() >= *threshold,

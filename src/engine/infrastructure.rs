@@ -2,7 +2,7 @@ use crate::state::{
     BasicTech, CorporationSector, GameEvent, GameState, InfraSystem, PathogenType, RegionSpecialization,
     COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR,
     INFRA_CRITICAL, INFRA_STRESSED,
-    SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD,
+    INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
     TROPICAL_MEDICINE_HC_DRAIN_MULT, COMMUNITY_NETWORKS_CO_DRAIN_MULT, LOGISTICS_HUB_SL_DRAIN_MULT,
 };
 
@@ -41,12 +41,12 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         let mining_recovery_mult = 1.0 + CorporationSector::Mining.max_bonus_pct() / 100.0 * mining_bonus;
 
         // --- Healthcare Capacity ---
-        // Degrades from infection load (absolute thresholds matching severity levels)
-        let healthcare_drain = if infected > SEVERITY_CRIT_THRESHOLD {
+        // Degrades from infection load (using infection pressure thresholds)
+        let healthcare_drain = if infected > INFECTION_PRESSURE_CRIT {
             -0.0008 // ~0.096/day at CRIT — hits 50% in ~5 days from full
-        } else if infected > SEVERITY_HIGH_THRESHOLD {
+        } else if infected > INFECTION_PRESSURE_HIGH {
             -0.0003 // ~0.036/day at HIGH
-        } else if infected > SEVERITY_MOD_THRESHOLD {
+        } else if infected > INFECTION_PRESSURE_MOD {
             -0.00005 // ~0.006/day at MOD — very slow
         } else {
             0.0
@@ -77,7 +77,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             _ => 0.0,
         };
         // Natural recovery when not under pressure
-        let natural_healthcare_recovery = if infected <= SEVERITY_MOD_THRESHOLD {
+        let natural_healthcare_recovery = if infected <= INFECTION_PRESSURE_MOD {
             0.00008 // ~0.01/day — very slow natural healing
         } else {
             0.0
@@ -167,9 +167,9 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             })
             .map(|inf| inf.infected)
             .sum();
-        let rna_panic_drain = if rna_infected > SEVERITY_CRIT_THRESHOLD {
+        let rna_panic_drain = if rna_infected > INFECTION_PRESSURE_CRIT {
             -0.0003 // ~0.036/day — visible mass casualties from fast-moving RNA virus
-        } else if rna_infected > SEVERITY_HIGH_THRESHOLD {
+        } else if rna_infected > INFECTION_PRESSURE_HIGH {
             -0.00012 // ~0.014/day — growing unrest from RNA outbreak
         } else {
             0.0
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn healthcare_degrades_under_crit_infections() {
         let mut state = GameState::new_default(42);
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         assert_eq!(state.regions[0].healthcare_capacity, 1.0);
 
         // Tick many times (7 days — baseline hospital recovery partially counters drain)
@@ -332,7 +332,7 @@ mod tests {
     fn breakpoint_events_fire() {
         let mut state = GameState::new_default(42);
         state.regions[0].healthcare_capacity = 0.51;
-        state.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         // Tick until HC crosses 0.50
         for _ in 0..200 {
@@ -492,7 +492,7 @@ mod tests {
         use crate::state::BasicTech;
         // Without tech
         let mut state_no_tech = GameState::new_default(42);
-        state_no_tech.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state_no_tech.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         for _ in 0..(120 * 7) {
             tick_infrastructure(&mut state_no_tech);
         }
@@ -501,7 +501,7 @@ mod tests {
         // With tech
         let mut state_tech = GameState::new_default(42);
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
-        state_tech.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state_tech.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         for _ in 0..(120 * 7) {
             tick_infrastructure(&mut state_tech);
         }
@@ -577,13 +577,13 @@ mod tests {
         for r in &mut state_rna.regions { r.infections.clear(); r.dead = 0.0; }
         state_rna.diseases[0].pathogen_type = PathogenType::RnaVirus;
         state_rna.diseases[0].detected = true;
-        state_rna.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state_rna.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         let mut state_bact = GameState::new_default(42);
         for r in &mut state_bact.regions { r.infections.clear(); r.dead = 0.0; }
         state_bact.diseases[0].pathogen_type = PathogenType::Bacterium;
         state_bact.diseases[0].detected = true;
-        state_bact.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state_bact.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         for _ in 0..(120 * 10) {
             tick_infrastructure(&mut state_rna);
@@ -602,13 +602,13 @@ mod tests {
         for r in &mut state_detected.regions { r.infections.clear(); r.dead = 0.0; }
         state_detected.diseases[0].pathogen_type = PathogenType::RnaVirus;
         state_detected.diseases[0].detected = true;
-        state_detected.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state_detected.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         let mut state_undetected = GameState::new_default(42);
         for r in &mut state_undetected.regions { r.infections.clear(); r.dead = 0.0; }
         state_undetected.diseases[0].pathogen_type = PathogenType::RnaVirus;
         state_undetected.diseases[0].detected = false;
-        state_undetected.regions[0].get_or_create_infection(0).infected = SEVERITY_CRIT_THRESHOLD + 1.0;
+        state_undetected.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         for _ in 0..(120 * 10) {
             tick_infrastructure(&mut state_detected);
@@ -623,11 +623,11 @@ mod tests {
     #[test]
     fn fungal_infection_drains_healthcare_below_severity_threshold() {
         use crate::state::PathogenType;
-        // A small fungal infection (below SEVERITY_MOD_THRESHOLD) should still drain healthcare
+        // A small fungal infection (below INFECTION_PRESSURE_MOD) should still drain healthcare
         let mut state = GameState::new_default(42);
         for r in &mut state.regions { r.infections.clear(); r.dead = 0.0; }
         state.diseases[0].pathogen_type = PathogenType::Fungus;
-        // Set infected well below SEVERITY_MOD_THRESHOLD (1000)
+        // Set infected well below INFECTION_PRESSURE_MOD (1000)
         state.regions[0].get_or_create_infection(0).infected = 100.0;
 
         let initial_hc = state.regions[0].healthcare_capacity;
