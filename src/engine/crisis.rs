@@ -4,7 +4,7 @@ use crate::state::{
     ActiveLoan, Authority, BoardPersonality, BoardRole, CorporationSector, CrisisCost,
     CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState,
     GovernorPersonality, LoanLender, ModifierSource, OperationSpec, ResearchKind,
-    ResearchCategory, ScreeningLevel, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
+    ResearchCategory, SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     LOYALTY_RAISE_FRACTION, SEVERITY_CRIT_THRESHOLD, TICKS_PER_DAY,
 };
 
@@ -281,10 +281,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     // RefugeeWave is triggered deterministically on collapse (see engine/mod.rs),
     // not generated randomly.
 
-    // Data leak: requires any active research
-    if !state.active_research.is_empty() {
-        candidates.push(CrisisKind::DataLeak);
-    }
 
     // Black market medicine: requires detected disease with active infections in non-collapsed region
     let regions_with_infections: Vec<usize> = state.regions.iter().enumerate()
@@ -803,34 +799,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         "Accept a fraction of refugees into {}. Some spread, some die at the border.",
                         to_name,
                     ),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::DataLeak => {
-            CrisisEvent {
-                title: "Research Data Leaked".into(),
-                description: "Classified pathogen sequencing data has surfaced on external networks. Rivals and foreign intelligence are already analyzing it.".into(),
-                options: vec![ CrisisOption {
-                    label: "Issue a statement (5 personnel for 2d)".into(),
-                    description: "Dedicate a response team to manage disclosure. +5% board approval. Staff return in 2 days.".into(),
-                    cost: Some(CrisisCost {
-                        funding: 0.0,
-                        personnel: 5,
-                        operation: Some(OperationSpec { days: 2.0, label: "Response Team".into() }),
-                    }),
-                },
-                 CrisisOption {
-                    label: "Suppress the leak".into(),
-                    description: "Deny and contain. −10% board approval. Triggers a formal inquiry in ~5 days.".into(),
-                    cost: None,
-                },
-                CrisisOption {
-                    label: "No comment".into(),
-                    description: "Leak circulates. −7% board approval. 50% chance of regional infodemic within a week.".into(),
                     cost: None,
                 },
                 ],
@@ -1919,59 +1887,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 tick_created: tick,
             }
         }
-        CrisisKind::PublicInquiry => {
-            let cost = scaled_cost(state, 0.12, 80.0, 400.0);
-            CrisisEvent {
-                title: "Data Suppression Exposed".into(),
-                description:
-                    "The data leak you suppressed has resurfaced. A board member is calling \
-                     for a formal audit of your operational conduct.".into(),
-                options: vec![ CrisisOption {
-                    label: format!("Cooperate with audit (¥{cost:.0}, 3 personnel for 2d)"),
-                    description: "+10% board approval. Compliance team diverted for 2 days.".into(),
-                    cost: Some(CrisisCost {
-                        funding: cost,
-                        personnel: 3,
-                        operation: Some(OperationSpec { days: 2.0, label: "Audit Compliance".into() }),
-                    }),
-                },
-                 CrisisOption {
-                    label: "Stonewall".into(),
-                    description: "No cost. Board approval drops 20%.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::Infodemic { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Information Cascade".into(),
-                description: format!(
-                    "The earlier communications failure has cascaded in {region_name}. \
-                     Field teams report population is hiding symptoms and refusing screening."),
-                options: vec![ CrisisOption {
-                    label: "Accept reduced visibility".into(),
-                    description: format!("Screening drops one level in {region_name}."),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Restore screening infrastructure (1 personnel for 2d)".into(),
-                    description: "Maintain screening. Field team returns in 2 days.".into(),
-                    cost: Some(CrisisCost {
-                        funding: scaled_cost(state, 0.15, 100.0, 500.0),
-                        personnel: 1,
-                        operation: Some(OperationSpec { days: 2.0, label: "Screening Team".into() }),
-                    }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::SanctionsThreat { funding_loss, corp_name } => {
             CrisisEvent {
                 title: "Corporate Retaliation".into(),
@@ -2852,39 +2767,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             format!("Partial intake: {:.0}M accepted into {}. Rest turned away.", accepted_m, to_name)
         }
 
-        (CrisisKind::DataLeak, 0) => {
-            // Issue a statement — personnel diverted via CrisisCost, gain chairman satisfaction
-            chairman_satisfaction_hit(state, 0.05);
-            "Statement issued. Board confidence up. Response team deployed for 2 days.".into()
-        }
-        (CrisisKind::DataLeak, 1) => {
-            // Suppress — chairman satisfaction hit
-            chairman_satisfaction_hit(state, -0.10);
-            // Schedule follow-up: public inquiry in 5 days
-            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::PublicInquiry));
-            "Leak suppressed. Board confidence shaken. Inquiry risk elevated.".into()
-        }
-        (CrisisKind::DataLeak, _) => {
-            // No comment — moderate chairman satisfaction loss, 50% chance of follow-up
-            chairman_satisfaction_hit(state, -0.07);
-            if state.rng_crisis.r#gen::<bool>() {
-                let target = state.regions.iter().enumerate()
-                    .filter(|(_, r)| !r.collapsed)
-                    .max_by(|(_, a), (_, b)| {
-                        let a_inf: f64 = a.infections.iter().map(|i| i.infected).sum();
-                        let b_inf: f64 = b.infections.iter().map(|i| i.infected).sum();
-                        a_inf.partial_cmp(&b_inf).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|(i, _)| i)
-                    .unwrap_or(0);
-                let followup_tick = state.tick + (6.0 * TICKS_PER_DAY) as u64;
-                state.pending_crises.push((followup_tick, CrisisKind::Infodemic { region_idx: target }));
-                "No comment. Leak spreading.".into()
-            } else {
-                "No comment. Leak faded.".into()
-            }
-        }
 
         (CrisisKind::BlackMarketMedicine { region_idx }, 0) => {
             // Allow black market — some treated, some harmed
@@ -3696,36 +3578,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Consolidation declined. Maintaining all active sites.".into()
         }
 
-        (CrisisKind::PublicInquiry, 0) => {
-            // Cooperate with audit — funding + personnel cost already deducted, gain chairman satisfaction
-            chairman_satisfaction_hit(state, 0.10);
-            "Audit cooperation underway. Board confidence restored.".into()
-        }
-        (CrisisKind::PublicInquiry, _) => {
-            // Stonewall — chairman satisfaction hit
-            chairman_satisfaction_hit(state, -0.20);
-            "Stonewalled the audit. Board members are furious.".into()
-        }
-
-        (CrisisKind::Infodemic { region_idx }, 0) => {
-            // Accept reduced visibility — downgrade screening by one level
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.screening = match policy.screening {
-                    ScreeningLevel::MassRapid => ScreeningLevel::Antigen,
-                    ScreeningLevel::Antigen => ScreeningLevel::Basic,
-                    ScreeningLevel::Basic | ScreeningLevel::None => ScreeningLevel::None,
-                };
-            }
-            format!("Screening downgraded in {}", region_name)
-        }
-        (CrisisKind::Infodemic { region_idx }, _) => {
-            // Counter-information campaign — costs already deducted, screening maintained
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Screening infrastructure restored in {}", region_name)
-        }
 
         (CrisisKind::SanctionsThreat { funding_loss, .. }, 0) => {
             // Accept cuts — lose funding + chairman satisfaction hit
