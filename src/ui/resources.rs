@@ -6,12 +6,12 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, ResearchCategory, ResearchKind, SimState, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, GameState, SimState, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
-/// Returns the height this bar needs: 4 rows (stats + income + research + border).
+/// Returns the height this bar needs: 3 rows (stats + income + border).
 pub fn height(_state: &GameState) -> u16 {
-    4
+    3
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
@@ -142,65 +142,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         Line::from(spans)
     };
 
-    let mut lines = vec![line1, income_line];
-
-    // Always show research status line so empty slots are visible
-    {
-        let mut spans: Vec<Span> = Vec::new();
-
-        // Field research: show all active projects (or "None")
-        spans.push(Span::styled("Field: ", Style::default().fg(Color::DarkGray)));
-        let field_projects = state.active_in_category(ResearchCategory::Field);
-        if field_projects.is_empty() {
-            let has_field_projects = state.all_available_projects().iter()
-                .any(|p| p.category() == ResearchCategory::Field);
-            if has_field_projects {
-                spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
-            } else {
-                spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
-            }
-        } else {
-            for (i, project) in field_projects.iter().enumerate() {
-                if i > 0 {
-                    spans.push(Span::styled(", ", Style::default().fg(Color::DarkGray)));
-                }
-                let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
-                spans.push(Span::styled(
-                    format!("{} {}%", compact_research_label(&project.kind, state), pct),
-                    Style::default().fg(Color::Cyan),
-                ));
-            }
-        }
-
-        // Applied and Basic categories
-        for (label, cat, color) in [
-            ("Applied", ResearchCategory::Applied, Color::Magenta),
-            ("Basic", ResearchCategory::Basic, Color::Green),
-        ] {
-            spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-            spans.push(Span::styled(format!("{}: ", label), Style::default().fg(Color::DarkGray)));
-            let project = state.active_research.iter()
-                .find(|p| p.kind.category() == cat);
-            if let Some(project) = project {
-                let pct = (project.progress / project.required_ticks * 100.0).min(100.0) as u32;
-                spans.push(Span::styled(
-                    format!("{} {}%", compact_research_label(&project.kind, state), pct),
-                    Style::default().fg(color),
-                ));
-            } else {
-                // Check if there are available projects the player could start
-                let has_actionable = state.all_available_projects().iter()
-                    .any(|p| p.category() == cat && !matches!(p, ResearchKind::TrainPersonnel));
-                if has_actionable {
-                    spans.push(Span::styled("▶ available", Style::default().fg(Color::Yellow)));
-                } else {
-                    spans.push(Span::styled("None", Style::default().fg(Color::DarkGray)));
-                }
-            }
-        }
-
-        lines.push(Line::from(spans));
-    }
+    let lines = vec![line1, income_line];
 
     if let Some(notif) = &state.ui.event_notification {
         // Split: stats + research on left, event notification on right
@@ -229,18 +171,3 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     }
 }
 
-/// Compact research description for the header status line.
-/// Delegates to `ResearchKind::label()` for most variants, with abbreviations
-/// where the header needs shorter text.
-fn compact_research_label(kind: &ResearchKind, state: &GameState) -> String {
-    match kind {
-        ResearchKind::ManufactureDoses { medicine_idx } => {
-            let name = state.medicines.get(*medicine_idx)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-            format!("Mfg: {}", name)
-        }
-        ResearchKind::TrainPersonnel => "Training".to_string(),
-        _ => kind.label(state),
-    }
-}

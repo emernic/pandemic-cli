@@ -254,7 +254,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 med.strain_efficacy(d_idx, &state.diseases) < 1.0
             });
             if any_strain_outdated {
-                let retrial_in_progress = state.active_research.iter().filter(|p| p.kind.category() == crate::state::ResearchCategory::Field).any(|p| {
+                let retrial_in_progress = state.active_research.iter().any(|p| {
                     matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == med_idx)
                 });
                 if retrial_in_progress {

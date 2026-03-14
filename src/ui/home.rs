@@ -519,14 +519,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
         let research_bar_w = (area.width as usize).saturating_sub(30).min(20);
 
-        // Field research: show all active projects
-        let field_projects: Vec<_> = state.active_in_category(crate::state::ResearchCategory::Field);
-        for (i, proj) in field_projects.iter().enumerate() {
-            let label = if field_projects.len() > 1 {
-                format!("Field {}", i + 1)
-            } else {
-                "Field".to_string()
-            };
+        for proj in &state.active_research {
+            let label = proj.kind.label(state);
             let pct = if proj.required_ticks > 0.0 {
                 proj.progress / proj.required_ticks
             } else { 1.0 };
@@ -543,33 +537,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
                 yellow,
             ));
             lines.push(Line::from(spans));
-        }
-
-        // Applied and Basic: show first active project in each category
-        for (label, cat) in [
-            ("Applied", crate::state::ResearchCategory::Applied),
-            ("Basic", crate::state::ResearchCategory::Basic),
-        ] {
-            let proj_opt = state.active_research.iter()
-                .find(|p| p.kind.category() == cat);
-            if let Some(proj) = proj_opt {
-                let pct = if proj.required_ticks > 0.0 {
-                    proj.progress / proj.required_ticks
-                } else { 1.0 };
-                let remaining = proj.required_ticks - proj.progress;
-                let speed = proj.speed(&state.medicines);
-                let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
-
-                let mut spans = vec![
-                    Span::styled(format!("  {}: ", label), dim),
-                ];
-                spans.extend(bar(pct, research_bar_w, Color::Green));
-                spans.push(Span::styled(
-                    format!(" {:.0}% ({} left)", pct * 100.0, format_days(effective_remaining)),
-                    yellow,
-                ));
-                lines.push(Line::from(spans));
-            }
         }
     }
 

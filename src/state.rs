@@ -3580,27 +3580,6 @@ impl Medicine {
 
 }
 
-/// Research category — purely for UI grouping and display.
-/// Derived from `ResearchKind::category()`. Has no gameplay-mechanical effect;
-/// personnel and funding are the only constraints on starting research.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum ResearchCategory {
-    Field,
-    Applied,
-    Basic,
-}
-
-
-impl ResearchCategory {
-    pub fn name(self) -> &'static str {
-        match self {
-            ResearchCategory::Field => "Field",
-            ResearchCategory::Applied => "Applied",
-            ResearchCategory::Basic => "Basic",
-        }
-    }
-}
-
 /// An active research project.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ResearchProject {
@@ -3661,21 +3640,17 @@ pub enum ResearchKind {
 }
 
 impl ResearchKind {
-    /// Which category this research kind belongs to (UI grouping only).
-    pub fn category(&self) -> ResearchCategory {
-        match self {
+    /// Whether this research takes place in the field (vs. in the lab).
+    pub fn is_field_work(&self) -> bool {
+        matches!(self,
             Self::IdentifyThreat { .. }
             | Self::ClinicalTrial { .. }
             | Self::GenomicSequencing { .. }
             | Self::SuppressPathogen { .. }
             | Self::AttenuatePathogen { .. }
             | Self::InterdictPathogen { .. }
-            | Self::FieldOperations { .. } => ResearchCategory::Field,
-            Self::DevelopMedicine { .. }
-            | Self::ManufactureDoses { .. }
-            | Self::TrainPersonnel => ResearchCategory::Applied,
-            Self::BasicResearch { .. } => ResearchCategory::Basic,
-        }
+            | Self::FieldOperations { .. }
+        )
     }
 
     /// Whether this research kind supports auto-repeat.
@@ -6447,7 +6422,7 @@ impl GameState {
     /// Available field research projects (excludes currently active).
     pub(crate) fn available_field_projects(&self) -> Vec<ResearchKind> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| p.kind.category() == ResearchCategory::Field)
+            .filter(|p| p.kind.is_field_work())
             .map(|p| &p.kind).collect();
         let mut projects = Vec::new();
         // Identify Threat: diseases not fully known, sorted by knowledge ascending
@@ -6576,14 +6551,7 @@ impl GameState {
             .collect()
     }
 
-    /// All active projects in a given category.
-    pub fn active_in_category(&self, cat: ResearchCategory) -> Vec<&ResearchProject> {
-        self.active_research.iter()
-            .filter(|p| p.kind.category() == cat)
-            .collect()
-    }
-
-    /// All available research projects across all categories, concatenated.
+    /// All available research projects, concatenated.
     /// Field projects first, then Applied, then Basic.
     /// The index into this list is used by `ResearchFlatItem::Available` and
     /// `GameCommand::StartResearch`.
@@ -6599,42 +6567,13 @@ impl GameState {
     pub fn research_flat_items(&self) -> Vec<ResearchFlatItem> {
         let available = self.all_available_projects();
         let mut items = Vec::new();
-        let mut claimed_active = vec![false; self.active_research.len()];
 
-        // Build a stable canonical ordering by interleaving active projects
-        // back into the available list at their natural position.
-        // all_available_projects() excludes active projects, so we need to
-        // merge them back in by category order (Field, Applied, Basic).
-        for cat in [ResearchCategory::Field, ResearchCategory::Applied, ResearchCategory::Basic] {
-            // Collect available items in this category with their index into
-            // the full available list
-            let avail_in_cat: Vec<(usize, &ResearchKind)> = available.iter()
-                .enumerate()
-                .filter(|(_, k)| k.category() == cat)
-                .collect();
-            // Collect active items in this category
-            let active_in_cat: Vec<(usize, &ResearchProject)> = self.active_research.iter()
-                .enumerate()
-                .filter(|(_, p)| p.kind.category() == cat)
-                .collect();
-
-            // Active items first (they were started earlier, so lead their category),
-            // then available items. This keeps active items in their category
-            // group rather than jumping to a separate section.
-            for (ai, _proj) in &active_in_cat {
-                claimed_active[*ai] = true;
-                items.push(ResearchFlatItem::Active(*ai));
-            }
-            for (avail_idx, _kind) in &avail_in_cat {
-                items.push(ResearchFlatItem::Available(*avail_idx));
-            }
-        }
-
-        // Append any unclaimed active projects (edge case: conditions changed)
+        // Active projects first, then available projects — completely flat.
         for (ai, _) in self.active_research.iter().enumerate() {
-            if !claimed_active[ai] {
-                items.push(ResearchFlatItem::Active(ai));
-            }
+            items.push(ResearchFlatItem::Active(ai));
+        }
+        for (avail_idx, _) in available.iter().enumerate() {
+            items.push(ResearchFlatItem::Available(avail_idx));
         }
 
         if self.lab_level < 2 {
@@ -6918,7 +6857,7 @@ impl GameState {
     /// Available basic research projects — techs whose prereqs are met and not yet unlocked.
     pub(crate) fn available_basic_projects(&self) -> Vec<ResearchKind> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| p.kind.category() == ResearchCategory::Basic)
+            .filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. }))
             .map(|p| &p.kind).collect();
         BasicTech::all()
             .iter()
@@ -6934,7 +6873,7 @@ impl GameState {
     /// Available applied research projects (excludes currently active).
     pub(crate) fn available_applied_projects(&self) -> Vec<ResearchKind> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| p.kind.category() == ResearchCategory::Applied)
+            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel))
             .map(|p| &p.kind).collect();
         let mut projects = Vec::new();
         for (i, med) in self.medicines.iter().enumerate() {
@@ -6977,7 +6916,7 @@ impl GameState {
     /// Used to show greyed-out "pending" entries in the Applied Research panel.
     pub fn blocked_medicine_developments(&self) -> Vec<(usize, String)> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| p.kind.category() == ResearchCategory::Applied)
+            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel))
             .map(|p| &p.kind).collect();
         let has_targeted_drug_design = self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
 
