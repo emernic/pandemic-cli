@@ -78,17 +78,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Magenta));
 
-    // Scroll to keep the selected item visible. The panel's inner height
-    // is area.height minus 2 (top + bottom border).
     let inner_height = area.height.saturating_sub(2);
-    let scroll_offset = selected_line.map(|line| {
-        if line as u16 >= inner_height {
-            // Keep selected item ~1/3 from bottom so context is visible above
-            (line as u16).saturating_sub(inner_height * 2 / 3)
-        } else {
-            0
-        }
-    }).unwrap_or(0);
+    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
 
     let widget = Paragraph::new(lines)
         .block(block)

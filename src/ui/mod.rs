@@ -650,3 +650,41 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
     let widget = Paragraph::new(lines).block(block);
     f.render_widget(widget, area);
 }
+
+/// Compute scroll offset to keep the full selected item visible in a panel.
+///
+/// Items are separated by blank lines (width == 0). We scan forward from the
+/// selected item's first line to find where the item ends, then ensure the
+/// scroll offset keeps the entire item in the viewport.
+pub fn scroll_offset_for_selection(
+    lines: &[Line],
+    selected_line: Option<usize>,
+    inner_height: u16,
+) -> u16 {
+    let Some(start) = selected_line else {
+        return 0;
+    };
+
+    // Find the last content line of the selected item by scanning forward
+    // for the next blank-line separator (or end of content).
+    let end = if start + 1 < lines.len() {
+        lines[start + 1..]
+            .iter()
+            .position(|line| line.width() == 0)
+            .map(|off| start + off) // last content line is one before the blank
+            .unwrap_or(lines.len().saturating_sub(1))
+    } else {
+        start
+    };
+
+    let end_u16 = end as u16;
+    if end_u16 < inner_height {
+        // Entire item fits without scrolling
+        0
+    } else {
+        // Position the item's last line at ~2/3 down the viewport
+        let offset = end_u16.saturating_sub(inner_height * 2 / 3);
+        // Don't scroll past the item's first line
+        offset.min(start as u16)
+    }
+}
