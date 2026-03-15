@@ -1676,6 +1676,10 @@ pub enum ModifierSource {
     GovernorDysfunction,
     /// Funding reserves relative to daily income (Mobster governor personality).
     FundingReserves,
+    /// Personnel deployment rate (Buffoon governor personality — impressed by visible busyness).
+    PersonnelDeployment,
+    /// Own region's survival rate (Recluse governor personality — cares only about their people).
+    RegionalSurvival,
 }
 
 impl ModifierSource {
@@ -1702,6 +1706,8 @@ impl ModifierSource {
             Self::RestrictivePolicies => "Policy restrictions",
             Self::GovernorDysfunction => "Governor dysfunction",
             Self::FundingReserves => "Funding reserves",
+            Self::PersonnelDeployment => "Personnel deployment",
+            Self::RegionalSurvival => "Regional survival",
         }
     }
 
@@ -1711,7 +1717,8 @@ impl ModifierSource {
             Self::Base | Self::StockPerformance | Self::RegionalGdp |
             Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment |
             Self::RegionalStanding | Self::RestrictivePolicies |
-            Self::GovernorDysfunction | Self::FundingReserves
+            Self::GovernorDysfunction | Self::FundingReserves |
+            Self::PersonnelDeployment | Self::RegionalSurvival
         )
     }
 }
