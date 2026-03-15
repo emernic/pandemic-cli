@@ -465,17 +465,6 @@ impl Authority {
         }
     }
 
-    /// Personnel trickle rate (per day) at each authority level.
-    pub fn personnel_per_day(self) -> f64 {
-        match self {
-            Self::Minimal => 0.0,
-            Self::VeryLow => 0.5,
-            Self::Low => 1.0,
-            Self::Medium => 2.0,
-            Self::High => 3.0,
-            Self::Maximum => 5.0,
-        }
-    }
 }
 
 impl Default for Authority {
@@ -1744,9 +1733,6 @@ pub struct Resources {
     /// can only change by one level per meeting. Starts at Minimal.
     #[serde(default)]
     pub authority: Authority,
-    /// Fractional accumulator for authority-based personnel gains.
-    #[serde(default)]
-    pub personnel_accum: f64,
     /// Fractional accumulator for personnel attrition (when funding is $0).
     #[serde(default)]
     pub attrition_accum: f64,
@@ -4347,6 +4333,8 @@ pub enum GameCommand {
     CancelContract { board_member_idx: usize },
     /// Inject funding into a corporation's reserves to prevent bankruptcy.
     BailoutCorporation { corp_idx: usize },
+    /// Fire unassigned personnel to reduce upkeep costs.
+    FirePersonnel { count: u32 },
 }
 
 /// A crisis event that pauses the game and requires a player decision.
@@ -5624,7 +5612,6 @@ impl GameState {
                 funding: 500.0,
                 personnel: 20,
                 authority: Authority::Minimal,
-                personnel_accum: 0.0,
                 attrition_accum: 0.0,
                 last_funding_warning_tick: 0,
                 last_loan_offer_tick: 0,

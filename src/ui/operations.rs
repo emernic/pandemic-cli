@@ -13,8 +13,8 @@ use crate::state::{
 use super::hint_line;
 use super::policy::{decree_description, render_confirm_decree, render_region_select};
 
-/// Number of "field operations" items (Emergency Sample Delivery).
-const FIELD_OPS_COUNT: usize = 1;
+/// Number of "field operations" items (Emergency Sample Delivery, Fire Personnel).
+const FIELD_OPS_COUNT: usize = 2;
 
 /// Returns eligible medicine indices for emergency sample delivery.
 pub fn emergency_delivery_medicines(state: &GameState) -> Vec<usize> {
@@ -238,6 +238,43 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             Span::raw("    "),
             Span::styled(
                 "Send experimental samples to a regional governor. Costs doses and personnel.",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        row += 1;
+    }
+
+    // Fire Personnel
+    {
+        let is_selected = row == selected;
+        let marker = if is_selected { "▶ " } else { "  " };
+        let available = state.personnel_available();
+        let name_color = if available == 0 {
+            Color::DarkGray
+        } else if is_selected {
+            Color::Yellow
+        } else {
+            Color::Green
+        };
+        let upkeep_per_day = state.resources.personnel as f64
+            * crate::state::PERSONNEL_UPKEEP_COST
+            * crate::state::TICKS_PER_DAY;
+
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "Fire Personnel",
+                Style::default().fg(name_color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  ({} available, {} total, ¥{:.0}/day upkeep)", available, state.resources.personnel, upkeep_per_day),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(
+                "Dismiss 5 unassigned personnel to reduce upkeep costs.",
                 Style::default().fg(Color::DarkGray),
             ),
         ]));
