@@ -82,6 +82,16 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
                     render_available_project(&mut lines, kind, selected, state);
                 }
             }
+            crate::state::ResearchFlatItem::FullStockpile(kind) => {
+                if selected { selected_line = Some(lines.len()); }
+                let marker = if selected { "▶ " } else { "  " };
+                let auto_tag = if state.auto_repeat_research.contains(kind) { " AUTO" } else { "" };
+                lines.push(Line::from(Span::styled(
+                    format!("{}{}{} [FULL]", marker, kind.display_label(&state.diseases, &state.medicines, &state.regions), auto_tag),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(""));
+            }
             crate::state::ResearchFlatItem::UpgradeLab => {
                 lines.push(Line::from(""));
                 if selected { selected_line = Some(lines.len()); }

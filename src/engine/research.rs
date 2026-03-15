@@ -1,5 +1,5 @@
 use crate::state::{
-    FIELD_OPS_RESTORE, GameEvent, GameOutcome, GameState, InfraSystem,
+    AUTO_MANUFACTURE_THRESHOLD, FIELD_OPS_RESTORE, GameEvent, GameOutcome, GameState, InfraSystem,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -275,6 +275,15 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
     // Auto-repeat completed repeatable projects
     for project in &completed {
         if state.auto_repeat_research.contains(&project.kind) {
+            // Manufacturing only auto-repeats when doses drop to threshold
+            if let ResearchKind::ManufactureDoses { medicine_idx } = &project.kind {
+                let dose_frac = state.medicines.get(*medicine_idx)
+                    .map(|m| if m.max_doses > 0.0 { m.doses / m.max_doses } else { 1.0 })
+                    .unwrap_or(1.0);
+                if dose_frac > AUTO_MANUFACTURE_THRESHOLD {
+                    continue;
+                }
+            }
             let projects = state.all_available_projects();
             if let Some(idx) = projects.iter().position(|k| k == &project.kind) {
                 let (ok, _) = start_research(state, idx, false);
@@ -293,6 +302,15 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
 fn try_auto_repeat(state: &mut GameState) {
     let kinds_to_repeat: Vec<ResearchKind> = state.auto_repeat_research.clone();
     for kind in &kinds_to_repeat {
+        // Manufacturing only auto-repeats when doses drop to threshold
+        if let ResearchKind::ManufactureDoses { medicine_idx } = kind {
+            let dose_frac = state.medicines.get(*medicine_idx)
+                .map(|m| if m.max_doses > 0.0 { m.doses / m.max_doses } else { 1.0 })
+                .unwrap_or(1.0);
+            if dose_frac > AUTO_MANUFACTURE_THRESHOLD {
+                continue;
+            }
+        }
         let projects = state.all_available_projects();
         if let Some(idx) = projects.iter().position(|k| k == kind) {
             let (_, _, cost) = state.effective_costs(&projects[idx]);
