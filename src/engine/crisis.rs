@@ -666,7 +666,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                 },
                  CrisisOption {
                     label: "Fast-track (+10% chairman approval)".into(),
-                    description: "Clear for use 2 strain generations behind current variant. ~30% efficacy penalty from drift.".into(),
+                    description: "Clear for use 10 strain generations behind current variant. ~20% efficacy penalty from drift.".into(),
                     cost: None,
                 },
                 ],
@@ -2424,15 +2424,15 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Maintained trial standards. Board noted the delay.".into()
         }
         (CrisisKind::TrialShortcut { disease_idx, medicine_idx }, _) => {
-            // Fast-track — gain chairman satisfaction, mark medicine as tested but 2 generations behind
-            // current strain (30% efficacy penalty from drift).
+            // Fast-track — gain chairman satisfaction, mark medicine as tested but 10 generations behind
+            // current strain (~20% efficacy penalty from drift at 2%/gen).
             chairman_satisfaction_hit(state, 0.10);
             if let Some(medicine) = state.medicines.get_mut(*medicine_idx) {
                 if !medicine.tested_against.contains(disease_idx) {
                     medicine.tested_against.push(*disease_idx);
                 }
-                // Fast-track calibration: 2 generations behind → ~0.70x efficacy
-                medicine.set_strain_calibration_behind(*disease_idx, &state.diseases, 2);
+                // Fast-track calibration: 10 generations behind → ~0.80x efficacy
+                medicine.set_strain_calibration_behind(*disease_idx, &state.diseases, 10);
             }
             let name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))

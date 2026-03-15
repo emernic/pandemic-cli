@@ -2808,9 +2808,9 @@ mod tests {
             manufacturer_corp_idx: None,
         };
 
-        // 3 generations behind = 1.0 - 3*0.10 = 0.70
+        // 3 generations behind = 1.0 - 3*0.02 = 0.94
         let eff = med.strain_efficacy(0, &diseases);
-        assert!((eff - 0.70).abs() < 0.001, "expected 0.70, got {eff}");
+        assert!((eff - 0.94).abs() < 0.001, "expected 0.94, got {eff}");
 
         // Re-calibrated medicine should have full efficacy
         let med_current = Medicine {
@@ -4426,7 +4426,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
-        // Disease at gen 0 — fast-track should still impose 2-gen penalty
+        // Disease at gen 0 — fast-track should still impose 10-gen penalty
         assert_eq!(state.diseases[0].strain_generation, 0);
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
 
@@ -4435,11 +4435,11 @@ mod tests {
             "fast-track should mark medicine as tested");
         assert!(!after.medicines[0].strain_generations.is_empty(),
             "strain_generations should be populated");
-        assert_eq!(after.medicines[0].strain_generations[0], -2,
-            "at gen 0, fast-track should calibrate to gen -2");
+        assert_eq!(after.medicines[0].strain_generations[0], -10,
+            "at gen 0, fast-track should calibrate to gen -10");
         let efficacy = after.medicines[0].strain_efficacy(0, &after.diseases);
         assert!((efficacy - 0.80).abs() < 0.01,
-            "fast-track should always impose ~20% penalty (2 gens × 10%/gen), got {}", efficacy);
+            "fast-track should always impose ~20% penalty (10 gens × 2%/gen), got {}", efficacy);
         assert!(after.active_crisis.is_none());
     }
 
@@ -4453,11 +4453,11 @@ mod tests {
 
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.medicines[0].tested_against.contains(&0));
-        assert_eq!(after.medicines[0].strain_generations[0], 3,
-            "should be calibrated 2 generations behind current");
+        assert_eq!(after.medicines[0].strain_generations[0], -5,
+            "should be calibrated 10 generations behind current (5 - 10 = -5)");
         let efficacy = after.medicines[0].strain_efficacy(0, &after.diseases);
         assert!((efficacy - 0.80).abs() < 0.01,
-            "efficacy should be ~0.80 due to 2-gen drift (2 × 10%/gen), got {}", efficacy);
+            "efficacy should be ~0.80 due to 10-gen drift (10 × 2%/gen), got {}", efficacy);
     }
 
     #[test]
