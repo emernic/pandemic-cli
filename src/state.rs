@@ -3042,6 +3042,8 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 pub const TICKS_PER_DAY: f64 = 60.0;
 /// Personnel added per completed TrainPersonnel project.
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
+/// Auto-repeat manufacturing only triggers when doses drop to this fraction of max.
+pub const AUTO_MANUFACTURE_THRESHOLD: f64 = 0.25;
 /// Minimum effective efficacy for auto-deploy to fire. Below this threshold,
 /// deploying wastes doses on a near-useless medicine.
 pub const AUTO_DEPLOY_MIN_EFFICACY: f64 = 0.04;
@@ -4771,6 +4773,8 @@ pub enum ResearchFlatItem {
     Active(usize),
     /// An available (startable) project. Index into `all_available_projects()`.
     Available(usize),
+    /// Manufacturing with a full stockpile — visible for auto-toggle but not startable.
+    FullStockpile(ResearchKind),
     /// The lab upgrade button.
     UpgradeLab,
 }
@@ -6625,6 +6629,17 @@ impl GameState {
         }
         for (avail_idx, _) in available.iter().enumerate() {
             items.push(ResearchFlatItem::Available(avail_idx));
+        }
+
+        // Full-stockpile manufacturing: visible for auto-toggle but not startable
+        let active_kinds: Vec<&ResearchKind> = self.active_research.iter().map(|p| &p.kind).collect();
+        for (i, med) in self.medicines.iter().enumerate() {
+            if med.unlocked && med.doses >= med.max_doses {
+                let kind = ResearchKind::ManufactureDoses { medicine_idx: i };
+                if !active_kinds.contains(&&kind) {
+                    items.push(ResearchFlatItem::FullStockpile(kind));
+                }
+            }
         }
 
         if self.lab_level < 2 {

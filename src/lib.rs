@@ -199,6 +199,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                             ResearchFlatItem::Active(idx) => {
                                 new.active_research.get(*idx).map(|p| p.kind.clone())
                             }
+                            ResearchFlatItem::FullStockpile(k) => Some(k.clone()),
                             _ => None,
                         };
                         if let Some(kind) = kind {
@@ -452,6 +453,8 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
                     });
                     ui.panel_selection = 0;
                 }
+                // Full stockpile: Enter is a no-op
+                ResearchFlatItem::FullStockpile(_) => {}
             }
             None
         }
