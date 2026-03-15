@@ -7,6 +7,7 @@ pub mod operations;
 pub mod policy;
 pub mod lab;
 pub mod resources;
+pub mod tech_tree;
 pub mod threats;
 pub mod region_list;
 
@@ -36,6 +37,7 @@ pub fn is_size_warning_active(state: &AppState, cols: u16, rows: u16) -> bool {
 pub fn panel_selection_max(ui: &UiState, state: &AppState) -> usize {
     match ui.open_panel {
         Panel::Threats => threats::selection_max(state),
+        Panel::Research => tech_tree::node_count().saturating_sub(1),
         Panel::Medicines => match &ui.medicine_ui {
             Some(s) => medicines::selection_max(s, state),
             None => 0,
@@ -145,6 +147,7 @@ pub fn render(f: &mut Frame, state: &AppState) {
             }
             Panel::None => home::render(f, split[1], state),
             Panel::Threats => threats::render(f, split[1], state),
+            Panel::Research => tech_tree::render(f, split[1], state, state.ui.panel_selection),
             Panel::Medicines => medicines::render(f, split[1], state),
             Panel::Lab => lab::render(f, split[1], state),
             Panel::Policy => policy::render(f, split[1], state),
@@ -314,6 +317,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from(""),
             Line::from(Span::styled("Controls:", Style::default().fg(Color::Yellow))),
             Line::from("  [T] View active threats"),
+            Line::from("  [R] Research tech tree"),
             Line::from("  [L] Lab panel"),
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),

@@ -4,6 +4,7 @@ use crossterm::event::KeyCode;
 pub enum Action {
     TogglePause,
     OpenThreats,
+    OpenResearch,
     OpenLab,
     OpenMedicines,
     OpenPolicy,
@@ -33,6 +34,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
     match key {
         KeyCode::Char(' ') => Some(Action::TogglePause),
         KeyCode::Char('t') | KeyCode::Char('T') => Some(Action::OpenThreats),
+        KeyCode::Char('r') | KeyCode::Char('R') => Some(Action::OpenResearch),
         KeyCode::Char('l') | KeyCode::Char('L') => Some(Action::OpenLab),
         KeyCode::Char('m') | KeyCode::Char('M') => Some(Action::OpenMedicines),
         KeyCode::Char('p') | KeyCode::Char('P') => Some(Action::OpenPolicy),
@@ -63,6 +65,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
     match lower.as_str() {
         " " | "space" => Some(Action::TogglePause),
         "t" => Some(Action::OpenThreats),
+        "r" => Some(Action::OpenResearch),
         "l" => Some(Action::OpenLab),
         "m" => Some(Action::OpenMedicines),
         "p" => Some(Action::OpenPolicy),
