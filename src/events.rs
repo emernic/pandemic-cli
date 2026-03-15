@@ -430,7 +430,7 @@ pub(crate) fn process_events(state: &mut GameState) {
                 (3, msg, notification)
             }
             GameEvent::ResearchAutoRestarted { kind } => {
-                let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines, &state.regions));
+                let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines));
                 (8, msg.clone(), msg)
             }
             GameEvent::AutoDeployBlocked { medicine_idx } => {

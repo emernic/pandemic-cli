@@ -20,6 +20,7 @@ use crate::state::{
     BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
     COLLAPSE_DISRUPTION_TICKS,
+    REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_HOSTILITY_THRESHOLD,
     DISCOURAGE_HOSP_PERSONNEL,
@@ -201,6 +202,7 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
         PolicyId::MassRapidScreen => state.policies[region_idx].screening == ScreeningLevel::MassRapid,
         PolicyId::FieldHospital => state.regions[region_idx].hospital_level >= 2, // fully built = "active"
         PolicyId::IntelStation => false,
+        PolicyId::RebuildInfra => false, // action-based, never "active"
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy) {
         if !state.policy_research_met(policy) {
@@ -415,7 +417,48 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
                 (Some(format!("{region_name} already has Advanced Intel")), false)
             }
         }
+        PolicyId::RebuildInfra => {
+            rebuild_infrastructure(state, region_idx)
+        }
     }
+}
+
+/// One-shot infrastructure rebuild: repairs up to REBUILD_INFRA_MAX_REPAIR of each degraded stat.
+/// Cost is proportional to the total repair needed.
+fn rebuild_infrastructure(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+    let region_name = state.regions.get(region_idx)
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
+    let region = &state.regions[region_idx];
+    if region.collapsed {
+        return (Some(format!("{region_name} has collapsed. Cannot rebuild.")), false);
+    }
+
+    let hc_repair = (1.0 - region.healthcare_capacity).min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+    let sl_repair = (1.0 - region.supply_lines).min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+    let co_repair = (1.0 - region.civil_order).min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+    let total_repair = hc_repair + sl_repair + co_repair;
+
+    if total_repair < 0.001 {
+        return (Some(format!("{region_name}: no infrastructure needs repair")), false);
+    }
+
+    let cost = total_repair * REBUILD_INFRA_COST_PER_POINT;
+    if state.resources.funding < cost {
+        return (Some(format!("Not enough funding (need ¥{:.0})", cost)), false);
+    }
+
+    state.resources.funding -= cost;
+    state.regions[region_idx].healthcare_capacity = (state.regions[region_idx].healthcare_capacity + hc_repair).min(1.0);
+    state.regions[region_idx].supply_lines = (state.regions[region_idx].supply_lines + sl_repair).min(1.0);
+    state.regions[region_idx].civil_order = (state.regions[region_idx].civil_order + co_repair).min(1.0);
+
+    let mut repaired = Vec::new();
+    if hc_repair > 0.001 { repaired.push(format!("HC +{:.0}%", hc_repair * 100.0)); }
+    if sl_repair > 0.001 { repaired.push(format!("SL +{:.0}%", sl_repair * 100.0)); }
+    if co_repair > 0.001 { repaired.push(format!("CO +{:.0}%", co_repair * 100.0)); }
+
+    (Some(format!("{region_name}: rebuilt {} (¥{:.0})", repaired.join(", "), cost)), true)
 }
 
 /// Spend funds to negotiate with a governor, boosting cooperation.
@@ -1168,6 +1211,39 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
         }
     }
     gdp_regions
+}
+
+/// Auto-rebuild infrastructure for regions with auto_rebuild_infra enabled.
+/// Fires once per day (every TICKS_PER_DAY ticks) when any infra stat drops below threshold.
+pub(super) fn tick_auto_rebuild(state: &mut GameState) {
+    // Only fire once per day to avoid draining funds every tick
+    if state.tick % (TICKS_PER_DAY as u64) != 0 {
+        return;
+    }
+    let num_regions = state.regions.len();
+    for region_idx in 0..num_regions {
+        if !state.policies[region_idx].auto_rebuild_infra {
+            continue;
+        }
+        if state.regions[region_idx].collapsed || state.is_abandoned(region_idx) {
+            continue;
+        }
+        let region = &state.regions[region_idx];
+        let needs_repair = region.healthcare_capacity < REBUILD_INFRA_AUTO_THRESHOLD
+            || region.supply_lines < REBUILD_INFRA_AUTO_THRESHOLD
+            || region.civil_order < REBUILD_INFRA_AUTO_THRESHOLD;
+        if needs_repair {
+            let (msg, ok) = rebuild_infrastructure(state, region_idx);
+            if ok {
+                if let Some(m) = msg {
+                    state.events.push(GameEvent::PolicyAutoActivated {
+                        region_idx,
+                        policy_name: format!("Auto-rebuild: {}", m),
+                    });
+                }
+            }
+        }
+    }
 }
 
 /// Update screening infrastructure progress and estimated infection counts.
@@ -2295,5 +2371,107 @@ mod tests {
         let (msg, ok) = bargain_with_governor(&mut state, 0);
         assert!(!ok, "Should not be able to bargain with a dead governor");
         assert!(msg.unwrap().contains("leaderless"));
+    }
+
+    #[test]
+    fn rebuild_infra_repairs_degraded_systems() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.regions[0].healthcare_capacity = 0.80;
+        state.regions[0].supply_lines = 0.70;
+        state.regions[0].civil_order = 1.0; // already full
+
+        let (msg, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
+        assert!(ok, "rebuild should succeed: {:?}", msg);
+        // HC should repair by 10% (0.80 → 0.90), SL by 10% (0.70 → 0.80), CO unchanged
+        assert!((state.regions[0].healthcare_capacity - 0.90).abs() < 0.01,
+            "HC: {}", state.regions[0].healthcare_capacity);
+        assert!((state.regions[0].supply_lines - 0.80).abs() < 0.01,
+            "SL: {}", state.regions[0].supply_lines);
+        assert!((state.regions[0].civil_order - 1.0).abs() < 0.01,
+            "CO should be unchanged: {}", state.regions[0].civil_order);
+    }
+
+    #[test]
+    fn rebuild_infra_proportional_cost() {
+        use crate::state::REBUILD_INFRA_COST_PER_POINT;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        let before = state.resources.funding;
+
+        // Only HC degraded by 5%
+        state.regions[0].healthcare_capacity = 0.95;
+        state.regions[0].supply_lines = 1.0;
+        state.regions[0].civil_order = 1.0;
+
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
+        assert!(ok);
+        let cost = before - state.resources.funding;
+        let expected = 0.05 * REBUILD_INFRA_COST_PER_POINT; // only 5% of one system
+        assert!((cost - expected).abs() < 1.0,
+            "cost should be proportional: expected {}, got {}", expected, cost);
+    }
+
+    #[test]
+    fn rebuild_infra_rejects_when_nothing_to_repair() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        // All at 100%
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
+        assert!(!ok, "should reject when nothing needs repair");
+    }
+
+    #[test]
+    fn rebuild_infra_rejects_when_insufficient_funds() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 1.0; // nearly broke
+        state.regions[0].healthcare_capacity = 0.50;
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
+        assert!(!ok, "should reject when insufficient funds");
+    }
+
+    #[test]
+    fn rebuild_infra_rejects_collapsed_region() {
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.regions[0].collapsed = true;
+        state.regions[0].healthcare_capacity = 0.0;
+        let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
+        assert!(!ok, "should reject for collapsed region");
+    }
+
+    #[test]
+    fn auto_rebuild_fires_when_infra_below_threshold() {
+        use crate::state::TICKS_PER_DAY;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.policies[0].auto_rebuild_infra = true;
+        state.regions[0].healthcare_capacity = 0.85; // below 90% threshold
+
+        // Set tick to a day boundary so auto-rebuild fires
+        state.tick = TICKS_PER_DAY as u64;
+        tick_auto_rebuild(&mut state);
+
+        assert!(state.regions[0].healthcare_capacity > 0.85,
+            "HC should have been repaired: {}", state.regions[0].healthcare_capacity);
+    }
+
+    #[test]
+    fn auto_rebuild_skips_when_infra_above_threshold() {
+        use crate::state::TICKS_PER_DAY;
+        let mut state = GameState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.policies[0].auto_rebuild_infra = true;
+        // All above 90%
+        state.regions[0].healthcare_capacity = 0.95;
+        state.regions[0].supply_lines = 0.95;
+        state.regions[0].civil_order = 0.95;
+        let funding_before = state.resources.funding;
+
+        state.tick = TICKS_PER_DAY as u64;
+        tick_auto_rebuild(&mut state);
+
+        assert!((state.resources.funding - funding_before).abs() < 0.01,
+            "should not spend funds when all infra above threshold");
     }
 }

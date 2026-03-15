@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, RegionSpecialization, RegionTrait,
+    GameState, PolicyUiState, Region, RegionSpecialization, RegionTrait,
     ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     REGULATORY_APPARATUS_COST_MULT, KNOWLEDGE_PARTIAL_STATS,
     INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
@@ -23,6 +23,7 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
+    REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR,
     DecreeId, PolicyId, POLICY_COUNT,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
@@ -60,7 +61,7 @@ fn policy_section_header(display_pos: usize) -> Option<&'static str> {
         0 => Some("Detection"),
         3 => Some("Containment"),
         8 => Some("Infrastructure"),
-        10 => Some("Other"),
+        11 => Some("Other"),
         _ => None,
     }
 }
@@ -193,6 +194,19 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
              _ => "Early warning active. Pre-detection surveillance operational.",
          },
          None, 0.0),
+        (PolicyId::RebuildInfra,
+         "Rebuild Infrastructure",
+         policy.auto_rebuild_infra,
+         {
+             let repair_needed = rebuild_infra_repair_needed(region);
+             if repair_needed > 0.0 {
+                 format!("¥{:.0} (proportional)", repair_needed * REBUILD_INFRA_COST_PER_POINT)
+             } else {
+                 "No repairs needed".to_string()
+             }
+         },
+         "Repairs up to 10% of each degraded infra stat. X: toggle auto (fires at <90%)",
+         None, 0.0),
     ];
 
     // Reorder by canonical display order (grouped by function — see PolicyId::DISPLAY_ORDER).
@@ -317,6 +331,8 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
                 crate::state::NuclearState::Dropped => "[DROPPED] ",
                 _ => "[ON] ",
             }
+        } else if *policy_id == PolicyId::RebuildInfra && *active {
+            "[AUTO]"
         } else if *active {
             "[ON] "
         } else if policy_id.is_screening() {
@@ -868,4 +884,14 @@ fn impact_estimate(state: &GameState, region_idx: usize, policy: PolicyId) -> Op
             Style::default().fg(Color::Green),
         ),
     ]))
+}
+
+/// Total infrastructure repair needed for one activation (capped at REBUILD_INFRA_MAX_REPAIR per system).
+fn rebuild_infra_repair_needed(region: &Region) -> f64 {
+    let mut total = 0.0;
+    for &level in &[region.healthcare_capacity, region.supply_lines, region.civil_order] {
+        let deficit = 1.0 - level;
+        total += deficit.min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+    }
+    total
 }
