@@ -260,7 +260,7 @@ fn render_region_box(
 
     let infected = region.visible_infected_estimate(diseases);
     let immune = if shows_immune { region.visible_immune(diseases) } else { 0.0 };
-    let dead = region.visible_dead(diseases);
+    let dead = region.detected_dead(diseases);
     let pop = region.population as f64;
     let is_nuked = nuclear_state.is_dropped();
 
@@ -486,7 +486,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
     let shows_immune = state.screening_shows_immune(idx);
     let shows_exposed = state.screening_shows_exposed(idx);
     let immune = if shows_immune { region.visible_immune(&state.diseases) } else { 0.0 };
-    let dead = region.visible_dead(&state.diseases);
+    let dead = region.detected_dead(&state.diseases);
     let alive = pop - dead; // alive based on detected deaths only
 
     let label = Style::default().fg(Color::DarkGray);

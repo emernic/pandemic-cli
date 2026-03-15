@@ -283,7 +283,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
         chart_width,
         Color::Red,
         "Deaths",
-        &format_number(state.total_visible_dead()),
+        &format_number(state.total_dead_detected()),
     ));
 
     // ── Budget breakdown ──
