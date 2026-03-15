@@ -4785,6 +4785,16 @@ impl AppState {
 }
 
 impl UiState {
+    /// Clear all panel sub-states (medicine_ui, research_ui, etc.) to `None`.
+    fn clear_all_panel_substates(&mut self) {
+        self.medicine_ui = None;
+        self.research_ui = None;
+        self.policy_ui = None;
+        self.operations_ui = None;
+        self.board_ui = None;
+        self.ledger_ui = None;
+    }
+
     /// Toggle a panel open/closed. If deep in a panel wizard, pressing the same
     /// panel key resets to the top level instead of closing. Only closes when
     /// already at the top level.
@@ -4803,15 +4813,7 @@ impl UiState {
             if at_top {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
-                match panel {
-                    Panel::Medicines => self.medicine_ui = None,
-                    Panel::Research => self.research_ui = None,
-                    Panel::Policy => self.policy_ui = None,
-                    Panel::Operations => self.operations_ui = None,
-                    Panel::Board => self.board_ui = None,
-                    Panel::Ledger => self.ledger_ui = None,
-                    Panel::None | Panel::Threats | Panel::Help => {}
-                }
+                self.clear_all_panel_substates();
             } else {
                 // Reset to top level of this panel
                 self.panel_selection = 0;
@@ -4828,6 +4830,9 @@ impl UiState {
                 }
             }
         } else {
+            // Clear all panel sub-states so stale state from the previous panel
+            // doesn't confuse code that checks sub-state (e.g. selection stabilization).
+            self.clear_all_panel_substates();
             self.open_panel = panel;
             self.panel_selection = 0;
             // Once the player opens any panel, the home splash animation is done.
