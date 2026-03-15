@@ -86,7 +86,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         ),
         Span::raw("  "),
         {
-            let screened = state.total_infected_screened();
+            let screened = state.total_visible_infected_screened();
             let any_estimated = state.regions.iter().enumerate()
                 .any(|(i, _)| state.screening_visibility(i) < 1.0);
             let prefix = if any_estimated { "Infected: ~" } else { "Infected: " };
@@ -114,7 +114,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         },
         Span::raw("  "),
         Span::styled(
-            format!("Dead: {}", format_number(state.total_dead_detected())),
+            format!("Dead: {}", format_number(state.total_visible_dead())),
             Style::default().fg(Color::DarkGray),
         ),
     ]);

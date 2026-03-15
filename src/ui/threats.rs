@@ -41,7 +41,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                 selected_line = Some(lines.len());
             }
             let marker = if selected { "▶ " } else { "  " };
-            let style = if selected {
+            let base_style = if disease.hidden {
+                Style::default().fg(Color::DarkGray)
+            } else if selected {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
@@ -71,10 +73,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             }
 
             let display_name = disease.display_name(i);
-            lines.push(Line::from(Span::styled(
-                format!("{}{}", marker, display_name),
-                style,
-            )));
+            let hidden_tag = if disease.hidden { " [HIDDEN]" } else { "" };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}{}", marker, display_name), base_style),
+                Span::styled(hidden_tag.to_string(), Style::default().fg(Color::DarkGray)),
+            ]));
 
             if disease.knowledge < KNOWLEDGE_NAME {
                 // Detected but unidentified — show deaths if any

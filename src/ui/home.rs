@@ -276,14 +276,14 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
         chart_width,
         Color::Yellow,
         inf_label,
-        &format_number(state.total_infected_screened()),
+        &format_number(state.total_visible_infected_screened()),
     ));
     lines.extend(sparkline(
         &dead_data,
         chart_width,
         Color::Red,
         "Deaths",
-        &format_number(state.total_dead_detected()),
+        &format_number(state.total_visible_dead()),
     ));
 
     // ── Budget breakdown ──
@@ -462,8 +462,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
     lines.push(Line::from(""));
 
     for (i, disease) in state.diseases.iter().enumerate() {
-        // Skip undetected diseases — player shouldn't see them
-        if !disease.detected {
+        // Skip undetected or hidden diseases
+        if !disease.detected || disease.hidden {
             continue;
         }
 

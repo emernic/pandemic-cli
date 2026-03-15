@@ -398,6 +398,7 @@ fn spawn_variant(
         detected_day: 0.0,
         prev_day_observed_infected: 0.0,
         current_day_observed_infected: 0.0,
+        hidden: false,
     };
 
     // Ensure stats don't go below minimum floors
