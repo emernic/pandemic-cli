@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     ActiveLoan, Authority, BoardPersonality, BoardRole, CorporationSector, CrisisCost,
-    CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState,
+    CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, WorldState,
     GovernorPersonality, LoanLender, ModifierSource, OperationSpec, ResearchKind,
     CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     LOYALTY_RAISE_FRACTION, TICKS_PER_DAY,
@@ -19,7 +19,7 @@ pub(super) enum CrisisPostAction {
 
 /// Apply a satisfaction modifier to the chairman board member.
 /// Positive values boost satisfaction, negative values penalize it.
-fn chairman_satisfaction_hit(state: &mut GameState, amount: f64) {
+fn chairman_satisfaction_hit(state: &mut WorldState, amount: f64) {
     if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
         chairman.add_modifier(ModifierSource::CrisisEffect, amount);
     }
@@ -27,7 +27,7 @@ fn chairman_satisfaction_hit(state: &mut GameState, amount: f64) {
 
 /// Queue a GovernorDeath crisis after a delay, unless the governor is already dead
 /// or a GovernorDeath is already pending/active for this region.
-fn queue_governor_death_followup(state: &mut GameState, region_idx: usize) {
+fn queue_governor_death_followup(state: &mut WorldState, region_idx: usize) {
     let already_dead = state.regions.get(region_idx).map_or(true, |r| r.governor.dead);
     if already_dead {
         return;
@@ -45,7 +45,7 @@ fn queue_governor_death_followup(state: &mut GameState, region_idx: usize) {
 /// Scale a dollar amount relative to current funding.
 /// `fraction` is the target fraction of current funding (e.g., 0.15 = 15%).
 /// Result is clamped to [min, max] and rounded to nearest ¥10.
-fn scaled_cost(state: &GameState, fraction: f64, min: f64, max: f64) -> f64 {
+fn scaled_cost(state: &WorldState, fraction: f64, min: f64, max: f64) -> f64 {
     let raw = (state.resources.funding * fraction).clamp(min, max);
     (raw / 10.0).round() * 10.0
 }
@@ -74,7 +74,7 @@ fn board_budget_satisfaction_mult(board_sat: f64) -> f64 {
 ///   100M screened (1.3%)   → +0.34  (full crisis, near cap)
 ///   500M screened (6.4%)   → +0.40  (cap)
 /// Capped at +0.40 to prevent runaway budgets.
-fn crisis_urgency_boost(state: &GameState) -> f64 {
+fn crisis_urgency_boost(state: &WorldState) -> f64 {
     let screened = state.total_infected_screened();
     let population = state.initial_population();
     if population <= 0.0 || screened < 1000.0 {
@@ -88,7 +88,7 @@ fn crisis_urgency_boost(state: &GameState) -> f64 {
 /// Chairman mood shift applied on top of the budget multiplier.
 /// Content chairman (>0.7 satisfaction) steers meetings favorably; hostile pushes for cuts.
 /// Profiteer chairman amplifies swings: ±0.15 instead of the default ±0.10.
-fn chairman_funding_shift(state: &GameState) -> f64 {
+fn chairman_funding_shift(state: &WorldState) -> f64 {
     let chairman = match state.board_members.iter().find(|m| m.is_chairman) {
         Some(c) => c,
         None => return 0.0,
@@ -119,7 +119,7 @@ fn chairman_funding_shift(state: &GameState) -> f64 {
 /// infections rise (increasing urgency). The net effect keeps the budget
 /// roughly stable instead of death-spiraling. Better screening amplifies the
 /// urgency signal, rewarding investment in testing infrastructure.
-pub(super) fn compute_board_budget_per_tick(state: &GameState, board_sat: f64) -> f64 {
+pub(super) fn compute_board_budget_per_tick(state: &WorldState, board_sat: f64) -> f64 {
     let reference = state.reference_base_budget_per_tick;
     let base = if reference > 0.0 { reference } else { state.base_board_budget_per_tick() };
     let mult = board_budget_satisfaction_mult(board_sat);
@@ -195,7 +195,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
 
 /// Generate a crisis event based on current game state. Returns None if no
 /// suitable crisis can be generated (e.g., no valid targets for any crisis type).
-pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<CrisisEvent> {
+pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<CrisisEvent> {
     let mut candidates: Vec<CrisisKind> = Vec::new();
     let day = state.tick as f64 / TICKS_PER_DAY;
 
@@ -410,7 +410,7 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 /// Build a CrisisEvent with human-readable text for the given kind.
 /// INVARIANT: at least one option must be free (cost: None) so the player
 /// is never softlocked.
-pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisEvent {
+pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> CrisisEvent {
     let tick = state.tick;
     let event = match &kind {
         CrisisKind::PersonnelCrisis { amount } => {
@@ -2048,7 +2048,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
 /// Activate a crisis: check for a saved auto-resolve preference and either
 /// resolve immediately or pause the game for player input.
 /// Called from tick() for both scheduled and randomly generated crises.
-pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent, events: &mut Vec<GameEvent>) -> CrisisPostAction {
+pub(super) fn activate_crisis(state: &mut WorldState, crisis: CrisisEvent, events: &mut Vec<GameEvent>) -> CrisisPostAction {
     let auto_choice = state.auto_resolve_crises.get(crisis.kind.tag()).copied();
     let can_auto = match auto_choice {
         Some(choice) => {
@@ -2069,7 +2069,7 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent, events
 }
 
 /// Tick all active crisis operations. Complete ones that expire and return their personnel.
-pub(super) fn tick_crisis_operations(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_crisis_operations(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     let mut i = 0;
     while i < state.crisis_operations.len() {
         state.crisis_operations[i].ticks_remaining -= 1.0;
@@ -2087,7 +2087,7 @@ pub(super) fn tick_crisis_operations(state: &mut GameState, events: &mut Vec<Gam
 
 /// Apply the chosen crisis resolution. Returns a status message and any
 /// cross-subsystem post-action for mod.rs to dispatch.
-pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut Vec<GameEvent>) -> (String, CrisisPostAction) {
+pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut Vec<GameEvent>) -> (String, CrisisPostAction) {
     let crisis = match state.active_crisis.take() {
         Some(c) => c,
         None => return ("No active crisis".into(), CrisisPostAction::None),
@@ -3198,6 +3198,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::GameState;
     use crate::state::RegionDiseaseState;
 
     #[test]
@@ -3404,7 +3405,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // Tick until a NewPathogenDetected crisis fires (or give up after many ticks)
         let mut crisis_fired = false;
         for _ in 0..500 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if state.active_crisis.as_ref().is_some_and(|c|
                 matches!(c.kind, CrisisKind::NewPathogenDetected { .. })) {
                 crisis_fired = true;
@@ -3734,7 +3735,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let max_ticks = 20;
         let mut current = state;
         for _ in 0..max_ticks {
-            (current, _) = tick(&current);
+            current = current.with_world(tick(&current).0);
             if let Some(ref crisis) = current.active_crisis {
                 if crisis.kind.tag() == "vote_no_confidence" {
                     found = true;
@@ -3766,15 +3767,16 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         };
         state.corporations[corp_idx].share_price = 0.0;
         state.corporations[corp_idx].bankrupt = true;
-        state.chairman_hostile_since = Some(state.tick - (4.0 * crate::state::TICKS_PER_DAY) as u64);
+        let tick = state.tick;
+        state.chairman_hostile_since = Some(tick - (4.0 * crate::state::TICKS_PER_DAY) as u64);
 
         // Set cooldown from recent firing
-        state.crisis_cooldowns.insert("vote_no_confidence".to_string(), state.tick - 100);
+        state.crisis_cooldowns.insert("vote_no_confidence".to_string(), tick - 100);
 
         // Tick a few times — should NOT fire due to cooldown
         let mut current = state;
         for _ in 0..10 {
-            (current, _) = crate::engine::tick(&current);
+            current = current.with_world(crate::engine::tick(&current).0);
             if let Some(ref crisis) = current.active_crisis {
                 assert_ne!(crisis.kind.tag(), "vote_no_confidence",
                     "should not fire while on cooldown");
@@ -4013,12 +4015,12 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
 
         // Enable all policies everywhere and depress all biotech corps
-        for (i, policy) in state.policies.iter_mut().enumerate() {
+        for (i, policy) in state.world.policies.iter_mut().enumerate() {
             policy.quarantine = true;
             policy.travel_ban = true;
             policy.martial_law = true;
             // Also depress all biotech corps in this region
-            for corp in state.corporations.iter_mut().filter(|c| c.region_idx == i) {
+            for corp in state.world.corporations.iter_mut().filter(|c| c.region_idx == i) {
                 corp.revenue = corp.base_revenue * 0.30;
             }
         }

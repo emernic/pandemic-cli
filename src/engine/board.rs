@@ -1,7 +1,7 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState,
+use crate::state::{BoardMember, BoardPersonality, BoardRole, WorldState,
     GovernorPersonality, ModifierSource, SatisfactionModifier};
 
 /// Generate board members from existing game entities at game start.
@@ -11,7 +11,7 @@ use crate::state::{BoardMember, BoardPersonality, BoardRole, GameState,
 /// - 4 corporate leaders (randomly chosen — may stack in the same region)
 /// - 2 governors who also sit on the board (dual-role creates strategic tension)
 /// - Total: 6 members
-pub(super) fn generate_board_members(state: &mut GameState) {
+pub(super) fn generate_board_members(state: &mut WorldState) {
     let mut members = Vec::new();
     let mut chairman_assigned = false;
 
@@ -119,7 +119,7 @@ const CHAIRMAN_HOSTILE_THRESHOLD: f64 = 0.20;
 /// Continuous modifiers (Base, Stock, GDP, etc.) are cleared and recomputed.
 /// Event-driven modifiers (trades, contracts, crises) decay toward 0.
 /// Called once per tick from the main tick loop.
-pub(super) fn update_board_satisfaction(state: &mut GameState) {
+pub(super) fn update_board_satisfaction(state: &mut WorldState) {
     // Pre-compute shared values outside the member loop
     let research_util = research_utilization(state);
     let survival_rate = global_survival_rate(state);
@@ -326,7 +326,7 @@ pub(super) fn update_board_satisfaction(state: &mut GameState) {
 }
 
 /// Stock performance component: share_price / ipo_price, clamped 0–1.
-fn stock_performance(state: &GameState, corp_idx: usize) -> f64 {
+fn stock_performance(state: &WorldState, corp_idx: usize) -> f64 {
     state.corporations.get(corp_idx)
         .map(|c| if c.bankrupt { 0.0 } else {
             (c.share_price / c.ipo_price).clamp(0.0, 1.0)
@@ -337,7 +337,7 @@ fn stock_performance(state: &GameState, corp_idx: usize) -> f64 {
 /// Research pipeline utilization: fraction of available research being pursued.
 /// Computed as active / (active + available). If the player is researching
 /// everything they can, this returns 1.0. If nothing is researchable yet, 1.0.
-fn research_utilization(state: &GameState) -> f64 {
+fn research_utilization(state: &WorldState) -> f64 {
     let active = state.active_research.len() as f64;
     let available = state.all_available_projects().len() as f64;
     let total = active + available;
@@ -349,7 +349,7 @@ fn research_utilization(state: &GameState) -> f64 {
 }
 
 /// Global survival rate: fraction of initial population still alive.
-fn global_survival_rate(state: &GameState) -> f64 {
+fn global_survival_rate(state: &WorldState) -> f64 {
     let initial_pop = state.initial_population();
     if initial_pop <= 0.0 {
         0.0
@@ -389,7 +389,7 @@ const TECHNOCRAT_RESEARCH_BOOST: f64 = 0.03;
 /// - Positive when you invest in their corp
 /// - Negative when you invest in a same-sector rival
 /// Returns a short reaction hint for the transaction message.
-pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<String> {
+pub(super) fn on_buy_shares(state: &mut WorldState, corp_idx: usize) -> Option<String> {
     let bought_sector = match state.corporations.get(corp_idx) {
         Some(c) => c.sector,
         None => return None,
@@ -437,7 +437,7 @@ pub(super) fn on_buy_shares(state: &mut GameState, corp_idx: usize) -> Option<St
 /// Apply board member satisfaction modifiers when player sells shares.
 /// Only the member whose corp was sold reacts (negatively).
 /// Returns a short reaction hint for the transaction message.
-pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<String> {
+pub(super) fn on_sell_shares(state: &mut WorldState, corp_idx: usize) -> Option<String> {
     // Dealmaker chairman doubles stock trade reactions for ALL board members
     let dealmaker_mult = if state.chairman_personality() == Some(BoardPersonality::Dealmaker) {
         2.0
@@ -461,7 +461,7 @@ pub(super) fn on_sell_shares(state: &mut GameState, corp_idx: usize) -> Option<S
 /// Apply satisfaction penalty to Profiteer board members when a GDP-hurting policy
 /// is enacted in their corporation's region.
 /// GDP-hurting policies: travel ban (0), quarantine (1), martial law (8).
-pub(super) fn on_gdp_policy_enacted(state: &mut GameState, region_idx: usize) {
+pub(super) fn on_gdp_policy_enacted(state: &mut WorldState, region_idx: usize) {
     for member in state.board_members.iter_mut() {
         if member.personality != Some(BoardPersonality::Profiteer) {
             continue;
@@ -473,7 +473,7 @@ pub(super) fn on_gdp_policy_enacted(state: &mut GameState, region_idx: usize) {
 }
 
 /// Apply satisfaction boost to Technocrat board members when research completes.
-pub(super) fn on_research_completed(state: &mut GameState) {
+pub(super) fn on_research_completed(state: &mut WorldState) {
     for member in state.board_members.iter_mut() {
         if member.personality == Some(BoardPersonality::Technocrat) {
             member.add_modifier(ModifierSource::ResearchCompleted, TECHNOCRAT_RESEARCH_BOOST);
@@ -697,7 +697,7 @@ mod tests {
         let max_tick = meeting_tick + 100; // small buffer
         let mut found_meeting = false;
         while state.tick <= max_tick {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if let Some(ref crisis) = state.active_crisis {
                 if crisis.kind.tag() == "board_meeting" {
                     found_meeting = true;

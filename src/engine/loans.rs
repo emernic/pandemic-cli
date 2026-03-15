@@ -1,12 +1,12 @@
 use crate::state::{
-    CrisisKind, GameState, LoanLender,
+    CrisisKind, WorldState, LoanLender,
     LOAN_CORP_INTEREST_RATE, LOAN_GOVERNOR_INTEREST_RATE,
     LOAN_MAX_SIMULTANEOUS, LOAN_OFFER_COOLDOWN, TICKS_PER_DAY,
 };
 
 /// Accrue daily interest on all active loans, and queue hostile follow-up
 /// crises when loans become overdue. Called each tick.
-pub(super) fn tick_loans(state: &mut GameState) {
+pub(super) fn tick_loans(state: &mut WorldState) {
     if state.loans.is_empty() {
         return;
     }
@@ -43,7 +43,7 @@ pub(super) fn tick_loans(state: &mut GameState) {
 
 /// Repay a loan in full. Returns the amount repaid (or 0.0 if out of funds or bad index).
 /// Removes the loan from state.loans on success.
-pub(super) fn repay_loan(state: &mut GameState, loan_idx: usize) -> f64 {
+pub(super) fn repay_loan(state: &mut WorldState, loan_idx: usize) -> f64 {
     if loan_idx >= state.loans.len() {
         return 0.0;
     }
@@ -61,7 +61,7 @@ pub(super) fn repay_loan(state: &mut GameState, loan_idx: usize) -> f64 {
 ///
 /// Selects the best available lender: prefers a high-cooperation governor; falls back
 /// to a healthy corporation. Returns a CrisisKind if a loan offer should be queued.
-pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
+pub(super) fn maybe_queue_loan_offer(state: &mut WorldState) {
     // Rate limit
     if state.tick.saturating_sub(state.resources.last_loan_offer_tick) < LOAN_OFFER_COOLDOWN {
         return;

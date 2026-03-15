@@ -11,16 +11,26 @@
 
 use pandemic_cli_lib::snapshot::run_snapshot;
 use pandemic_cli_lib::state::{
-    CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameState, MedicineUiState, Panel,
-    ResearchUiState,
+    AppState, CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameState, MedicineUiState,
+    Panel, ResearchUiState, SaveFile, SessionState,
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/// Serialize then deserialize a GameState, simulating a save/load cycle.
+/// Serialize then deserialize via SaveFile, simulating a save/load cycle.
+/// Session state resets on load (speed, status message, etc.).
 fn round_trip(state: &GameState) -> GameState {
-    let json = serde_json::to_string(state).expect("serialize");
-    serde_json::from_str(&json).expect("deserialize")
+    let sf = SaveFile {
+        world: state.world.clone(),
+        ui: state.ui.clone(),
+    };
+    let json = serde_json::to_string(&sf).expect("serialize");
+    let restored: SaveFile = serde_json::from_str(&json).expect("deserialize");
+    AppState {
+        world: restored.world,
+        ui: restored.ui,
+        session: SessionState::default(),
+    }
 }
 
 /// Build a minimal crisis event for testing.

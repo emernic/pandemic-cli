@@ -1,5 +1,5 @@
 use crate::state::{
-    BasicTech, CorporationSector, GameEvent, GameState, InfraSystem, PathogenType, RegionSpecialization,
+    BasicTech, CorporationSector, GameEvent, WorldState, InfraSystem, PathogenType, RegionSpecialization,
     COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR,
     INFRA_CRITICAL, INFRA_STRESSED,
     INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
@@ -12,7 +12,7 @@ use crate::state::{
 /// - Healthcare: degrades from infection load (hospitals overwhelmed)
 /// - Supply lines: degrades from death rate and travel bans
 /// - Civil order: degrades from deaths, restrictive policies, and low healthcare
-pub(super) fn tick_infrastructure(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_infrastructure(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     // ResilientGrids tech: disease-caused drains are 20% slower.
     let resilience_mult = if state.unlocked_techs.contains(&BasicTech::ResilientGrids) {
         0.80
@@ -625,7 +625,7 @@ mod tests {
         state_two.regions[0].get_or_create_infection(0).infected = 100.0;
         // Need a second disease entry
         if state_two.diseases.len() < 2 {
-            state_two.diseases.push(state_two.diseases[0].clone());
+            { let d = state_two.world.diseases[0].clone(); state_two.world.diseases.push(d); };
         }
         state_two.diseases[1].pathogen_type = PathogenType::Fungus;
         state_two.regions[0].get_or_create_infection(1).infected = 100.0;

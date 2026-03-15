@@ -3,7 +3,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
     BoardPersonality, CrisisKind, DecreeId, FundingCondition, FundingContract, GameEvent,
-    GameState, ModifierSource, PolicyId,
+    WorldState, ModifierSource, PolicyId,
     CONTRACT_FIRST_OFFER_TICK, CONTRACT_OFFER_INTERVAL, MAX_CONTRACTS, TICKS_PER_DAY,
     CONTRACT_CONDITION_WARN, CONTRACT_CONDITION_REVOKE,
     CONTRACT_DEGRADE_RATE, CONTRACT_RECOVER_RATE, CONTRACT_DEMAND_COOLDOWN,
@@ -28,7 +28,7 @@ enum RelevanceCheck {
 }
 
 impl RelevanceCheck {
-    fn is_relevant(&self, state: &GameState) -> bool {
+    fn is_relevant(&self, state: &WorldState) -> bool {
         match self {
             RelevanceCheck::Always => true,
             RelevanceCheck::MultiRegionalSpread => {
@@ -141,7 +141,7 @@ const TIME_ESCALATION_PER_DAY: f64 = 0.02;
 
 /// Build a FundingContract from a template index, assigned to a specific board member.
 /// Prices escalate based on game day and how many times this template was previously declined.
-fn build_contract(template_id: u8, board_member_idx: usize, state: &GameState, rng: &mut ChaCha8Rng) -> FundingContract {
+fn build_contract(template_id: u8, board_member_idx: usize, state: &WorldState, rng: &mut ChaCha8Rng) -> FundingContract {
     let t = &TEMPLATES[template_id as usize];
     let variance = 0.8 + rng.r#gen::<f64>() * 0.4; // 0.8 to 1.2
 
@@ -170,7 +170,7 @@ fn build_contract(template_id: u8, board_member_idx: usize, state: &GameState, r
 
 /// Whether a template is contextually relevant given the current game state.
 /// Delegates to the template's own relevance check — no magic index mapping needed.
-fn is_contextually_relevant(template_id: usize, state: &GameState) -> bool {
+fn is_contextually_relevant(template_id: usize, state: &WorldState) -> bool {
     TEMPLATES.get(template_id)
         .map(|t| t.relevance.is_relevant(state))
         .unwrap_or(true)
@@ -182,7 +182,7 @@ const LOYALTY_RAISE_MIN_DAYS: f64 = 30.0;
 const LOYALTY_RAISE_CHANCE: f64 = 0.015;
 
 /// Check contracts held long enough to trigger a loyalty raise offer.
-pub(super) fn tick_loyalty_raises(state: &mut GameState, rng: &mut ChaCha8Rng) {
+pub(super) fn tick_loyalty_raises(state: &mut WorldState, rng: &mut ChaCha8Rng) {
     let min_ticks = (LOYALTY_RAISE_MIN_DAYS * TICKS_PER_DAY) as u64;
 
     for contract in &mut state.contracts {
@@ -223,7 +223,7 @@ const PATRON_BONUS_DOSE_FRACTION: f64 = 0.20;
 /// Check satisfied contracts for patron bonus eligibility and grant bonuses.
 /// Bonuses are modest one-time perks: funding, personnel, research speed, or dose refill.
 /// The bonus type is determined by the offering board member's personality.
-pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_patron_bonuses(state: &mut WorldState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
     let min_held_ticks = (PATRON_BONUS_MIN_HELD_DAYS * TICKS_PER_DAY) as u64;
     let cooldown_ticks = (PATRON_BONUS_COOLDOWN_DAYS * TICKS_PER_DAY) as u64;
 
@@ -306,7 +306,7 @@ pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng, e
 }
 
 /// Pick a random active research project index, if any exist.
-fn pick_random_research(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize> {
+fn pick_random_research(state: &WorldState, rng: &mut ChaCha8Rng) -> Option<usize> {
     if state.active_research.is_empty() {
         return None;
     }
@@ -315,7 +315,7 @@ fn pick_random_research(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize
 }
 
 /// Pick a random medicine index that has been deployed (has max_doses > 0), if any.
-fn pick_random_medicine(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize> {
+fn pick_random_medicine(state: &WorldState, rng: &mut ChaCha8Rng) -> Option<usize> {
     let deployed: Vec<usize> = state.medicines.iter().enumerate()
         .filter(|(_, m)| m.max_doses > 0.0 && m.doses < m.max_doses)
         .map(|(i, _)| i)
@@ -328,7 +328,7 @@ fn pick_random_medicine(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize
 }
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
-pub(super) fn tick_check_contracts(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_check_contracts(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     // First pass: compute satisfaction changes (need immutable borrow for is_met)
     let updates: Vec<(usize, bool)> = state.contracts.iter().enumerate()
         .map(|(i, c)| (i, c.condition.is_met(state)))
@@ -398,7 +398,7 @@ pub(super) fn tick_check_contracts(state: &mut GameState, events: &mut Vec<GameE
 /// Generate a new contract offer if enough time has passed and slots are available.
 /// The offering board member is chosen randomly from members who don't already have
 /// an active contract.
-pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_offer_contracts(state: &mut WorldState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
     // Don't offer if already have a pending offer
     if state.contract_offer.is_some() {
         return;
@@ -468,7 +468,7 @@ pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng, 
 /// Accept the current contract offer. Returns (success, message).
 /// Accepting boosts the offering board member's satisfaction and penalizes all others.
 /// Called from crisis resolution (ContractOffer) and unit tests.
-pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
+pub(super) fn accept_contract(state: &mut WorldState) -> (bool, Option<String>) {
     if let Some(contract) = state.contract_offer.take() {
         if state.contracts.len() >= MAX_CONTRACTS {
             state.contract_offer = Some(contract);
@@ -505,7 +505,7 @@ pub(super) fn accept_contract(state: &mut GameState) -> (bool, Option<String>) {
 /// Reject (dismiss) the current contract offer.
 /// Refusing penalizes the offering board member's satisfaction and records the decline
 /// so future re-offers of the same template come at a higher price.
-pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
+pub(super) fn reject_contract(state: &mut WorldState) -> (bool, Option<String>) {
     if let Some(contract) = state.contract_offer.take() {
         let offerer_idx = contract.board_member_idx;
         let offerer_name = state.board_members.get(offerer_idx)
@@ -533,7 +533,7 @@ pub(super) fn reject_contract(state: &mut GameState) -> (bool, Option<String>) {
 
 /// Cancel an active contract by board member index.
 /// Removes the contract, frees the slot, and penalizes the offering member's satisfaction.
-pub(super) fn cancel_contract(state: &mut GameState, board_member_idx: usize) -> (bool, Option<String>) {
+pub(super) fn cancel_contract(state: &mut WorldState, board_member_idx: usize) -> (bool, Option<String>) {
     let pos = state.contracts.iter().position(|c| c.board_member_idx == board_member_idx);
     if let Some(idx) = pos {
         let contract = state.contracts.remove(idx);
@@ -559,6 +559,7 @@ pub(super) fn cancel_contract(state: &mut GameState, board_member_idx: usize) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::GameState;
     use crate::state::LOYALTY_RAISE_FRACTION;
     use rand::SeedableRng;
 
@@ -578,7 +579,7 @@ mod tests {
         }
     }
 
-    fn make_offer(state: &mut GameState) {
+    fn make_offer(state: &mut WorldState) {
         state.contract_offer = Some(make_test_contract(
             FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
         ));
@@ -739,7 +740,7 @@ mod tests {
     }
 
     /// Set up board members for tests that need them (tick_offer_contracts requires board members)
-    fn setup_board(state: &mut GameState) {
+    fn setup_board(state: &mut WorldState) {
         crate::engine::corporations::generate_corporations(state);
         crate::engine::board::generate_board_members(state);
     }

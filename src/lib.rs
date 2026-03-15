@@ -120,7 +120,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
         Action::OpenBoard => new.ui.toggle_panel(Panel::Board, new.regions.len()),
         Action::OpenLedger => new.ui.toggle_panel(Panel::Ledger, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
-        Action::ClosePanel => new.ui.close_panel(&new.medicines, &new.diseases),
+        Action::ClosePanel => new.ui.close_panel(&new.world.medicines, &new.world.diseases),
         Action::GoHome => new.ui.go_home(),
         Action::SelectNext => {
             let max = ui::panel_selection_max(&new.ui, &new);
@@ -322,7 +322,12 @@ pub fn tick_and_process(state: &GameState) -> GameState {
         None
     };
 
-    let (mut new, tick_events) = engine::tick(state);
+    let (new_world, tick_events) = engine::tick(state);
+    let mut new = GameState {
+        world: new_world,
+        ui: state.ui.clone(),
+        session: state.session.clone(),
+    };
     events::process_events(&mut new, &tick_events);
 
     // Stabilize research panel selection: find the same item in the new list.

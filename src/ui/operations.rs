@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    DecreeId, GameState, OpsUiState, TICKS_PER_DAY,
+    DecreeId, GameState, OpsUiState, WorldState, TICKS_PER_DAY,
     DECREE_COUNT, STANDING_ORDER_COUNT,
 };
 use super::hint_line;
@@ -125,7 +125,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
             } else {
                 Style::default().fg(Color::DarkGray)
             };
-            let hint = GameState::decree_unlock_hint(decree);
+            let hint = WorldState::decree_unlock_hint(decree);
             lines.push(Line::from(vec![
                 Span::styled(marker, name_style),
                 Span::styled("🔒 ", Style::default().fg(Color::DarkGray)),

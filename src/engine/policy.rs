@@ -2,7 +2,7 @@ use rand::Rng;
 
 use crate::state::{
     CorporationSector,
-    CrisisKind, FundingCondition, GameEvent, GameState, GovernorPersonality,
+    CrisisKind, FundingCondition, GameEvent, WorldState, GovernorPersonality,
     ModifierSource, RegionSpecialization, RegionTrait,
     ScreeningLevel,
     DecreeId, PolicyId,
@@ -36,7 +36,7 @@ use crate::state::{
 };
 
 /// Return names of active contracts whose ForbidPolicy condition matches the given policy.
-fn conflicting_contract_names(state: &GameState, policy: PolicyId) -> Vec<String> {
+fn conflicting_contract_names(state: &WorldState, policy: PolicyId) -> Vec<String> {
     state.contracts.iter()
         .filter(|c| matches!(c.condition, FundingCondition::ForbidPolicy { policy: p } if p == policy))
         .map(|c| c.name.clone())
@@ -46,7 +46,7 @@ fn conflicting_contract_names(state: &GameState, policy: PolicyId) -> Vec<String
 /// Enforce policy costs: suspend most expensive policies one at a time
 /// until affordable, then deduct the total cost. Returns the total
 /// policy cost (needed by the caller for funding warning calculations).
-pub(super) fn tick_enforce_costs(state: &mut GameState, events: &mut Vec<GameEvent>) -> f64 {
+pub(super) fn tick_enforce_costs(state: &mut WorldState, events: &mut Vec<GameEvent>) -> f64 {
     let mut policy_cost = state.total_policy_funding_cost();
     while policy_cost > 0.0 && state.resources.funding < policy_cost {
         // Find the most expensive active individual policy across all regions.
@@ -108,7 +108,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState, events: &mut Vec<GameEve
 
 /// Tick nuclear state transitions. When a nuke in transit reaches its hit_tick,
 /// transition to Dropped: kill 99% of the population and any board members in the region.
-pub(super) fn tick_nuclear(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_nuclear(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     let tick = state.tick;
     for region_idx in 0..state.policies.len() {
         if let crate::state::NuclearState::Dropping { hit_tick } = state.policies[region_idx].nuclear_state {
@@ -157,7 +157,7 @@ pub(super) fn tick_nuclear(state: &mut GameState, events: &mut Vec<GameEvent>) {
 /// indicates the toggle actually happened (vs being rejected), and gdp_policy_region is
 /// Some(region_idx) when a GDP-hurting policy was enacted (for board notification).
 /// Does not touch UI state.
-pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool, Option<usize>) {
+pub(super) fn toggle_policy(state: &mut WorldState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool, Option<usize>) {
     let (msg, success) = toggle_policy_inner(state, region_idx, policy);
     // Signal GDP-hurting policy enactment for board notification by the orchestrator.
     // A GDP-hurting policy was enacted if the toggle succeeded and the policy is now active.
@@ -173,7 +173,7 @@ pub(super) fn toggle_policy(state: &mut GameState, region_idx: usize, policy: Po
     (msg, success, gdp_region)
 }
 
-fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool) {
+fn toggle_policy_inner(state: &mut WorldState, region_idx: usize, policy: PolicyId) -> (Option<String>, bool) {
     if region_idx >= state.policies.len() {
         return (None, false);
     }
@@ -419,7 +419,7 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
 
 /// One-shot infrastructure rebuild: repairs up to REBUILD_INFRA_MAX_REPAIR of each degraded stat.
 /// Cost is proportional to the total repair needed.
-fn rebuild_infrastructure(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+fn rebuild_infrastructure(state: &mut WorldState, region_idx: usize) -> (Option<String>, bool) {
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.clone())
         .unwrap_or_else(|| "Unknown".to_string());
@@ -456,7 +456,7 @@ fn rebuild_infrastructure(state: &mut GameState, region_idx: usize) -> (Option<S
 }
 
 /// Spend funds to negotiate with a governor, boosting cooperation.
-pub(super) fn negotiate_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+pub(super) fn negotiate_governor(state: &mut WorldState, region_idx: usize) -> (Option<String>, bool) {
     use crate::state::{NEGOTIATE_COST, NEGOTIATE_COOPERATION_GAIN};
 
     if region_idx >= state.regions.len() {
@@ -483,7 +483,7 @@ pub(super) fn negotiate_governor(state: &mut GameState, region_idx: usize) -> (O
 
 /// Personality-specific bargain with a hostile governor. Free in funding
 /// but costs something else depending on personality.
-pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) -> (Option<String>, bool) {
+pub(super) fn bargain_with_governor(state: &mut WorldState, region_idx: usize) -> (Option<String>, bool) {
     if region_idx >= state.regions.len() {
         return (None, false);
     }
@@ -579,7 +579,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 /// restrictive policies, and personality. Governors react to the engine's
 /// infection pressure thresholds (INFECTION_PRESSURE_CRIT/HIGH/MOD), which
 /// are lower than the UI severity labels the player sees.
-pub(super) fn tick_governor_cooperation(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_governor_cooperation(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     let num_regions = state.regions.len();
     for i in 0..num_regions {
         if state.regions[i].collapsed {
@@ -747,7 +747,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState, events: &mut Vec<
 }
 
 /// Handle governor succession: replace the dead governor with a new one.
-fn tick_governor_succession(state: &mut GameState, region_idx: usize, events: &mut Vec<GameEvent>) {
+fn tick_governor_succession(state: &mut WorldState, region_idx: usize, events: &mut Vec<GameEvent>) {
     use crate::state::{GovernorPersonality, SUCCESSOR_COOPERATION};
 
     // Pick a random personality (different from the deceased)
@@ -815,7 +815,7 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize, events: &m
 
 /// Tick autonomous governor actions. Hostile governors periodically act against
 /// the player based on personality. Called from tick().
-pub(super) fn tick_governor_actions(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_governor_actions(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     let tick = state.tick;
     let num_regions = state.regions.len();
 
@@ -961,7 +961,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState, events: &mut Vec<Game
 
 /// Enact an emergency decree. Permanent, irreversible.
 /// Returns (message, success).
-pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: Option<usize>, events: &mut Vec<GameEvent>) -> (Option<String>, bool) {
+pub(super) fn enact_decree(state: &mut WorldState, decree: DecreeId, region_idx: Option<usize>, events: &mut Vec<GameEvent>) -> (Option<String>, bool) {
     use crate::state::{
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
         SACRIFICE_INCOME_BONUS, DecreeId,
@@ -1144,7 +1144,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
 /// provided the policy isn't already active and the player has the
 /// required chairman approval and personnel.
 /// Returns region indices where GDP-hurting policies were enacted (for board notification).
-pub(super) fn tick_standing_orders(state: &mut GameState, events: &mut Vec<GameEvent>) -> Vec<usize> {
+pub(super) fn tick_standing_orders(state: &mut WorldState, events: &mut Vec<GameEvent>) -> Vec<usize> {
     // Affordability guard: don't try to auto-enable policies when the player can't
     // sustain the current cost load. Prevents oscillation where cost enforcement
     // suspends a policy and this function immediately re-enables it.
@@ -1208,7 +1208,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState, events: &mut Vec<GameE
 
 /// Auto-rebuild infrastructure for regions with auto_rebuild_infra enabled.
 /// Fires once per day (every TICKS_PER_DAY ticks) when any infra stat drops below threshold.
-pub(super) fn tick_auto_rebuild(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_auto_rebuild(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     // Only fire once per day to avoid draining funds every tick
     if state.tick % (TICKS_PER_DAY as u64) != 0 {
         return;
@@ -1247,7 +1247,7 @@ pub(super) fn tick_auto_rebuild(state: &mut GameState, events: &mut Vec<GameEven
 ///    Convergence rate depends on screening level and progress — without screening,
 ///    the estimate lags days behind reality (genuine fog of war). With Mass Rapid
 ///    at full progress, it tracks near-real-time.
-pub(super) fn tick_screening(state: &mut GameState) {
+pub(super) fn tick_screening(state: &mut WorldState) {
     let none_rate = ScreeningLevel::None.convergence_rate();
 
     for i in 0..state.regions.len() {
@@ -1417,8 +1417,9 @@ mod tests {
         // Clear infections so tick doesn't muddy funding math
         for r in &mut state.regions { r.infections.clear(); }
 
-        let tick_events;
-        (state, tick_events) = tick(&state);
+        let tick_result = tick(&state);
+        state = state.with_world(tick_result.0);
+        let tick_events = tick_result.1;
         assert_eq!(state.policies[0].screening, ScreeningLevel::None,
             "High screening should be suspended when unaffordable");
         assert!(tick_events.iter().any(|e|
@@ -1436,7 +1437,7 @@ mod tests {
         state.resources.funding = 0.8;
         for r in &mut state.regions { r.infections.clear(); }
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         // Both cost ¥0.6; one should be suspended. The enforcement loop finds
         // whichever it encounters first at the max cost — just verify one survived.
         let screening_alive = state.policies[0].screening != ScreeningLevel::None;

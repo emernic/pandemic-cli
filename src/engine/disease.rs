@@ -4,13 +4,13 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, MAX_DISEASES, Medicine,
+    Disease, GameEvent, WorldState, MAX_DISEASES, Medicine,
     PathogenType, RegionDiseaseState, ScreeningLevel, TherapyType, TransmissionVector, TICKS_PER_DAY,
 };
 
 /// Spawn a new disease: pick a pathogen type, slot the disease, and place the initial outbreak.
 /// Returns (disease_idx, region_idx) on success, None if at capacity with no recyclable slots.
-pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
+pub(super) fn spawn_disease(state: &mut WorldState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     // If at capacity, try to recycle a burned-out disease slot.
     let recycle_idx = if state.diseases.len() >= MAX_DISEASES {
         find_burned_out_disease(state)
@@ -222,7 +222,7 @@ pub(super) fn spawn_disease(state: &mut GameState, rng: &mut ChaCha8Rng) -> Opti
 }
 
 /// Find a disease with zero infected/exposed across all regions (fully burned out).
-fn find_burned_out_disease(state: &GameState) -> Option<usize> {
+fn find_burned_out_disease(state: &WorldState) -> Option<usize> {
     for (d_idx, _disease) in state.diseases.iter().enumerate() {
         let total_active: f64 = state.regions.iter()
             .filter_map(|r| r.disease_state(d_idx))
@@ -273,7 +273,7 @@ fn lerp_round(start: f64, end: f64, t: f64) -> usize {
 /// Within-region infectivity scales at +10%/day (uncapped), lethality at +3.5%/day.
 /// Cross-region spread scales gently at +2%/day to preserve regional containment.
 /// Each new disease spawns in exactly one region — no multi-region seeding.
-pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
+pub(super) fn spawn_disease_scaled(state: &mut WorldState, rng: &mut ChaCha8Rng) -> Option<(usize, usize)> {
     let day = state.tick as f64 / TICKS_PER_DAY;
     // Within-region spread outpaces lethality so later diseases sustain
     // growth even under quarantine.
@@ -314,7 +314,7 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 /// Check each original (non-variant) disease for variant spawning.
 /// Each disease rolls against its effective_variant_rate() per tick.
 /// Only root diseases (variant_number == 0) can spawn variants.
-pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_variant_spawning(state: &mut WorldState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
     // Collect spawn candidates: (parent_idx, effective_rate)
     let candidates: Vec<(usize, f64)> = state.diseases.iter().enumerate()
         .filter(|(_, d)| d.variant_number == 0) // only root diseases spawn variants
@@ -339,7 +339,7 @@ pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng,
 /// Spawn a variant of the given parent disease.
 /// Returns the new disease index on success, None if at capacity.
 fn spawn_variant(
-    state: &mut GameState,
+    state: &mut WorldState,
     parent_idx: usize,
     rng: &mut ChaCha8Rng,
 ) -> Option<usize> {

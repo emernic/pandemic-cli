@@ -1,23 +1,20 @@
 //! Centralized save/load for game state.
 //!
 //! Both interactive and snapshot modes go through this module for all
-//! file I/O, deserialization, migration, and bootstrap. The later
-//! state-split cutover can change this one seam instead of every caller.
+//! file I/O, deserialization, migration, and bootstrap. Saves use the
+//! `SaveFile` format (world + UI state); session state is reconstructed
+//! fresh on every load.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::engine;
-use crate::state::GameState;
+use crate::state::{AppState, SaveFile, SessionState, UiState, WorldState};
 
 /// A ready-to-run game state loaded (or created) from a persistence path.
-///
-/// Callers receive this after `load_or_create` and can start running
-/// the game immediately. The later state-split work will add fresh
-/// `SessionState` construction here without changing callers.
 pub struct LoadedGame {
-    pub state: GameState,
+    pub state: AppState,
 }
 
 /// Errors from persistence operations.
@@ -50,48 +47,58 @@ impl From<std::io::Error> for PersistenceError {
 
 /// Load a game from `path`, or create a new one if the file is missing/empty.
 ///
-/// This is the single entry point for obtaining a ready-to-run `GameState`.
+/// This is the single entry point for obtaining a ready-to-run `AppState`.
 /// It handles: file I/O, deserialization, migration, and game-system bootstrap
 /// (`initialize_game`). Both interactive and snapshot callers use this.
 pub fn load_or_create(path: Option<&str>, seed: u64) -> Result<LoadedGame, PersistenceError> {
-    let mut state = match path {
+    let (mut world, ui) = match path {
         Some(p) if Path::new(p).exists() => {
             let data = fs::read_to_string(p)?;
             if data.trim().is_empty() {
-                GameState::new_default(seed)
+                (WorldState::new_default(seed), UiState::default())
             } else {
-                let mut s: GameState = serde_json::from_str(&data).map_err(|e| {
+                let mut sf: SaveFile = serde_json::from_str(&data).map_err(|e| {
                     PersistenceError::Corrupt {
                         path: p.to_string(),
                         detail: e.to_string(),
                     }
                 })?;
-                s.migrate();
-                s
+                sf.world.migrate();
+                (sf.world, sf.ui)
             }
         }
-        _ => GameState::new_default(seed),
+        _ => (WorldState::new_default(seed), UiState::default()),
     };
 
     // Bootstrap game systems (corporations, board) for new games.
     // Loaded saves already have this data; initialize_game checks and skips.
-    engine::initialize_game(&mut state);
+    engine::initialize_game(&mut world);
 
-    Ok(LoadedGame { state })
+    Ok(LoadedGame {
+        state: AppState {
+            world,
+            ui,
+            session: SessionState::default(),
+        },
+    })
 }
 
 /// Save game state to `path`, creating parent directories as needed.
 ///
 /// Uses atomic write (temp file + rename) so an interrupted save never
 /// leaves a truncated or empty file at the target path.
-pub fn save(state: &GameState, path: &str) -> Result<(), PersistenceError> {
+pub fn save(state: &AppState, path: &str) -> Result<(), PersistenceError> {
     let target = Path::new(path);
     if let Some(parent) = target.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)?;
         }
     }
-    let json = serde_json::to_string_pretty(state)
+    let sf = SaveFile {
+        world: state.world.clone(),
+        ui: state.ui.clone(),
+    };
+    let json = serde_json::to_string_pretty(&sf)
         .map_err(|e| PersistenceError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
 
     // Write to a sibling temp file, then atomically rename.
