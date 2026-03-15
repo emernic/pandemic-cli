@@ -149,6 +149,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                     }
                 }
             }
+            // Show physical location when it differs from the default
+            let default_location = match &member.role {
+                BoardRole::CorporateLeader { corp_idx } => {
+                    state.corporations.get(*corp_idx).map(|c| c.region_idx)
+                }
+                BoardRole::RegionGovernor { region_idx } => Some(*region_idx),
+            };
+            if member.region_idx != default_location {
+                let loc_name = member.region_idx
+                    .and_then(|ri| state.regions.get(ri).map(|r| r.name.as_str()))
+                    .unwrap_or("unknown");
+                connections.push(format!("[In: {}]", loc_name));
+            }
 
             if !connections.is_empty() {
                 detail_spans.push(Span::styled(

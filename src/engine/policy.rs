@@ -130,10 +130,21 @@ pub(super) fn tick_nuclear(state: &mut WorldState, events: &mut Vec<GameEvent>) 
                     inf.immune = 0.0;
                 }
 
-                // Kill governor in the region (if alive and not evacuated)
-                if !state.regions[region_idx].governor.dead {
+                // Kill governor if physically present (not evacuated elsewhere)
+                let gov_phys = state.regions[region_idx].governor.physical_location(region_idx);
+                if !state.regions[region_idx].governor.dead && gov_phys == region_idx {
                     state.regions[region_idx].governor.dead = true;
                     state.regions[region_idx].governor.succession_tick = None; // no succession from a nuked region
+                }
+
+                // Kill any governor from another region who relocated here
+                for ri in 0..state.regions.len() {
+                    if ri == region_idx { continue; }
+                    let gov = &state.regions[ri].governor;
+                    if !gov.dead && gov.physical_location(ri) == region_idx {
+                        state.regions[ri].governor.dead = true;
+                        state.regions[ri].governor.succession_tick = None;
+                    }
                 }
 
                 // Kill board members physically in the region (not evacuated)
@@ -715,24 +726,37 @@ pub(super) fn tick_governor_cooperation(state: &mut WorldState, events: &mut Vec
             state.regions[i].governor.hostility_crisis_fired = false;
         }
 
-        // GovernorSick: fire when region has HIGH+ infections and cooldown has passed (~30 days).
-        // Skip dead governors.
+        // GovernorSick: fire based on infection at the governor's PHYSICAL location.
+        // A governor who evacuated to a safe region won't get sick from their governed region.
         if !state.regions[i].collapsed && !state.regions[i].governor.dead {
-            let region_infected: f64 = state.regions[i].infections.iter().map(|inf| inf.infected).sum();
+            let phys_loc = state.regions[i].governor.physical_location(i);
+            let phys_infected: f64 = state.regions.get(phys_loc)
+                .map(|r| r.infections.iter().map(|inf| inf.infected).sum())
+                .unwrap_or(0.0);
             let sick_cooldown = (30.0 * TICKS_PER_DAY) as u64;
             let cooldown_ok = state.regions[i].governor.last_sick_tick
                 .map_or(true, |t| state.tick.saturating_sub(t) >= sick_cooldown);
-            if region_infected > INFECTION_PRESSURE_HIGH && cooldown_ok {
+            if phys_infected > INFECTION_PRESSURE_HIGH && cooldown_ok {
                 state.regions[i].governor.last_sick_tick = Some(state.tick);
                 state.pending_crises.push(CrisisKind::GovernorSick { region_idx: i });
             }
         }
 
-        // Governor death: rare event in critically infected regions with significant deaths.
+        // Governor death: rare event based on infection at governor's PHYSICAL location.
         // Per-tick probability when infected > CRIT threshold AND death_frac > 5%.
         // ~0.0002/tick = ~1.2% per day at CRIT. Only fires once (governor dies).
         // Guard: skip dead governors and don't fire if there's already a pending GovernorDeath.
-        if !state.regions[i].governor.dead && infected > INFECTION_PRESSURE_CRIT && death_frac > 0.05 {
+        let phys_loc = state.regions[i].governor.physical_location(i);
+        let (phys_infected, phys_death_frac) = state.regions.get(phys_loc)
+            .map(|r| {
+                let inf: f64 = r.infections.iter().map(|inf| inf.infected).sum();
+                let dead_total = r.total_dead();
+                let pop = r.population as f64;
+                let dfrac = if pop > 0.0 { dead_total / pop } else { 0.0 };
+                (inf, dfrac)
+            })
+            .unwrap_or((0.0, 0.0));
+        if !state.regions[i].governor.dead && phys_infected > INFECTION_PRESSURE_CRIT && phys_death_frac > 0.05 {
             let already_pending = state.pending_crises.iter()
                 .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == i));
             let already_active = state.active_crisis.as_ref()
@@ -800,11 +824,13 @@ fn tick_governor_succession(state: &mut WorldState, region_idx: usize, events: &
     gov.bargain_count = 0;
     gov.income_skim = 0.0;
     gov.last_sick_tick = None;
+    gov.physical_region_idx = None; // New governor starts in their governed region
 
     // Update the board member if this governor sits on the board
     for member in &mut state.board_members {
         if matches!(member.role, crate::state::BoardRole::RegionGovernor { region_idx: ri } if ri == region_idx) {
             member.name = new_name.clone();
+            member.region_idx = Some(region_idx); // New governor starts in their governed region
         }
     }
 
