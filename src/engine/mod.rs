@@ -491,13 +491,11 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
             && day >= 5.0
             && !already_fired
         {
-            // Check if any identification research has ever been started:
-            // either currently running as field research, or a disease has knowledge > 0
-            // (meaning identification completed or is in progress).
-            let any_identification_started = new.active_research.iter()
-                .any(|fr| matches!(fr.kind, ResearchKind::IdentifyThreat { .. }))
+            // Check if any research at all has been started — active projects,
+            // or evidence of past identification (knowledge > 0).
+            let any_research_started = !new.active_research.is_empty()
                 || new.diseases.iter().any(|d| d.detected && d.knowledge > 0.0);
-            if !any_identification_started {
+            if !any_research_started {
                 // Mark as fired immediately so it never fires again, even if manually cleared.
                 new.crisis_cooldowns.insert("board_research_inquiry".to_string(), new.tick);
                 let crisis = crisis::build_crisis_event(&new, CrisisKind::BoardResearchInquiry);
