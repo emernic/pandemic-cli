@@ -9,7 +9,7 @@
 //! from the engine or UI/render layer directly.
 
 use crate::format_number;
-use crate::state::{GameEvent, GameState, Panel, ticks_to_days};
+use crate::state::{GameEvent, AppState, Panel, ticks_to_days};
 
 const EVENT_LOG_MAX: usize = 50;
 
@@ -23,7 +23,7 @@ const EVENT_LOG_MAX: usize = 50;
 /// - event prioritization and suppression rules
 ///
 /// Events are passed explicitly from the caller (tick or command result).
-pub(crate) fn process_events(state: &mut GameState, events: &[GameEvent]) {
+pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
     if events.is_empty() {
         return;
     }

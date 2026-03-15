@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// This captures the player's *intent* — whether they want the simulation to advance.
 /// Actual tick advancement depends on this AND whether the game is blocked (crisis, game over).
-/// Use `GameState::is_effectively_running()` to check if ticks should advance.
+/// Use `WorldState::is_effectively_running()` to check if ticks should advance.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SimState {
     Running,
@@ -235,8 +235,8 @@ pub struct WorldState {
 ///
 /// This is the in-memory model passed through the game loop. Engine code
 /// operates on `WorldState` only; UI code reads both `world` and `ui`.
-/// `Deref`/`DerefMut` target `WorldState` so callers can access world fields
-/// directly (e.g. `state.diseases` instead of `state.world.diseases`).
+/// `Deref`/`DerefMut` target `WorldState` so callers can transparently access
+/// world fields (e.g. `state.diseases`) without going through `.world`.
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub world: WorldState,
@@ -264,9 +264,6 @@ pub struct SaveFile {
     pub ui: UiState,
 }
 
-/// Transitional alias — issue #2299 will remove this and update all call sites
-/// to use `AppState` (or `WorldState` where only world data is needed).
-pub type GameState = AppState;
 
 /// A point-in-time snapshot for dashboard sparkline charts.
 /// Values are player-visible estimates (screened/detected), not ground truth.
@@ -1260,7 +1257,7 @@ fn default_satisfaction() -> f64 {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FundingContract {
     pub name: String,
-    /// Index into `GameState::board_members` identifying who offered this contract.
+    /// Index into `AppState::board_members` identifying who offered this contract.
     #[serde(default)]
     pub board_member_idx: usize,
     /// Per-tick income while contract is active.
@@ -3376,7 +3373,7 @@ pub struct Medicine {
     /// Cumulative people protected (vaccinated) across all deployments.
     #[serde(default)]
     pub total_protected: f64,
-    /// Index into `GameState::corporations` for this medicine's manufacturing partner.
+    /// Index into `AppState::corporations` for this medicine's manufacturing partner.
     /// `None` for the starting broad-spectrum medicine (no specific manufacturer).
     /// When development completes and the manufacturer has a board seat, the board
     /// member's satisfaction increases (via a reserves boost to their corporation).
@@ -3905,7 +3902,7 @@ impl ResearchKind {
     /// a dev_cost_multiplier that scales base costs (3 personnel, 200 ticks, $500).
     /// Broad-spectrum (multi-target, no mechanism) uses fixed high costs.
     /// These are BASE costs. Tech modifiers (RapidSequencing, MetagenomicSurveillance) are
-    /// applied in GameState::effective_costs(), not here.
+    /// applied in AppState::effective_costs(), not here.
     pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
@@ -4117,7 +4114,7 @@ pub enum GameEvent {
         collapsed_region_idx: usize,
     },
     /// The game just ended (defeat). UI should pause and close panels.
-    /// The actual outcome is on `GameState::outcome`; this just signals the transition.
+    /// The actual outcome is on `AppState::outcome`; this just signals the transition.
     /// A new funding contract offer is available.
     ContractOffered { name: String },
     /// A board member is unhappy — contract condition satisfaction dropped to warning level.
@@ -4640,7 +4637,7 @@ pub enum ResearchUiState {
 }
 
 /// A selectable item in the flat research panel list.
-/// Built dynamically by `GameState::research_flat_items()`.
+/// Built dynamically by `AppState::research_flat_items()`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResearchFlatItem {
     /// An active research project (index into `active_research` vec).
@@ -6882,7 +6879,7 @@ mod tests {
 
     #[test]
     fn json_roundtrip() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let sf = SaveFile { world: state.world.clone(), ui: state.ui.clone() };
         let json = serde_json::to_string_pretty(&sf).unwrap();
         let restored: SaveFile = serde_json::from_str(&json).unwrap();
@@ -6900,7 +6897,7 @@ mod tests {
 
     #[test]
     fn default_state_has_initial_infection() {
-        let state = GameState::new_default(1);
+        let state = AppState::new_default(1);
         assert!(state.total_infected() > 0.0);
         assert!(state.total_dead() > 0.0);
         assert!(state.diseases[0].detected);
@@ -6908,7 +6905,7 @@ mod tests {
 
     #[test]
     fn default_state_has_medicines() {
-        let state = GameState::new_default(1);
+        let state = AppState::new_default(1);
         let disease_count = state.diseases.len();
         assert_eq!(disease_count, 1, "expected 1 starting disease, got {}", disease_count);
         // One targeted medicine per mechanism per non-prion disease + one broad-spectrum
@@ -6937,8 +6934,8 @@ mod tests {
 
     #[test]
     fn procedural_generation_varies_by_seed() {
-        let state1 = GameState::new_default(1);
-        let state2 = GameState::new_default(999);
+        let state1 = AppState::new_default(1);
+        let state2 = AppState::new_default(999);
         // Different seeds should produce different disease names (with very high probability)
         let names1: Vec<_> = state1.diseases.iter().map(|d| d.name.clone()).collect();
         let names2: Vec<_> = state2.diseases.iter().map(|d| d.name.clone()).collect();
@@ -6947,8 +6944,8 @@ mod tests {
 
     #[test]
     fn procedural_generation_is_deterministic() {
-        let state1 = GameState::new_default(42);
-        let state2 = GameState::new_default(42);
+        let state1 = AppState::new_default(42);
+        let state2 = AppState::new_default(42);
         let names1: Vec<_> = state1.diseases.iter().map(|d| d.name.clone()).collect();
         let names2: Vec<_> = state2.diseases.iter().map(|d| d.name.clone()).collect();
         assert_eq!(names1, names2, "same seed should produce same diseases");
@@ -6959,7 +6956,7 @@ mod tests {
     fn each_disease_starts_in_different_region() {
         // Test across several seeds
         for seed in 0..20 {
-            let state = GameState::new_default(seed);
+            let state = AppState::new_default(seed);
             let mut infected_regions: Vec<usize> = Vec::new();
             for (ri, region) in state.regions.iter().enumerate() {
                 if !region.infections.is_empty() {
@@ -6996,7 +6993,7 @@ mod tests {
 
     #[test]
     fn defeat_tips_no_research() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let tips = state.defeat_tips();
         assert!(!tips.is_empty());
         assert!(tips[0].contains("identified"), "should suggest identifying threats: {:?}", tips);
@@ -7004,7 +7001,7 @@ mod tests {
 
     #[test]
     fn defeat_tips_with_identified_but_no_medicine() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for d in &mut state.diseases {
             d.knowledge = KNOWLEDGE_NAME;
         }
@@ -7015,7 +7012,7 @@ mod tests {
 
     #[test]
     fn targeted_medicine_requires_full_study() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Reset broad-spectrum to locked so we can test the knowledge-gate logic
         for med in &mut state.medicines {
             if med.therapy_type == TherapyType::BroadSpectrum {
@@ -7062,7 +7059,7 @@ mod tests {
 
     #[test]
     fn mechanism_branching_shows_all_variants() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Full knowledge + TargetedDrugDesign unlocks all mechanism variants
         for d in &mut state.diseases {
             d.knowledge = KNOWLEDGE_FULL;
@@ -7103,7 +7100,7 @@ mod tests {
 
     #[test]
     fn mechanism_efficacy_affects_deployment() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Disease 0 is always a Bacterium in seed 42 — both mechanisms must exist
         let fast_idx = state.medicines.iter().position(|m|
             m.mechanism == Some(MechanismOfAction::CellWallInhibitor)
@@ -7121,7 +7118,7 @@ mod tests {
 
     #[test]
     fn defeat_tips_no_false_never_deployed_after_deploy() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.medicines[0].unlocked = true;
         state.medicines[0].deployed_count = 3;
         // Even if doses are back at max (re-manufactured), deployed_count tracks it
@@ -7140,7 +7137,7 @@ mod tests {
 
     #[test]
     fn all_regions_have_traits() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         for region in &state.regions {
             assert!(!region.traits.is_empty(),
                 "{} should have at least one trait", region.name);
@@ -7173,7 +7170,7 @@ mod tests {
 
     #[test]
     fn metagenomic_surveillance_prereq_requires_rapid_sequencing() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Without RapidSequencing, prereq is not met
         assert!(!state.unlocked_techs.contains(&BasicTech::RapidSequencing));
         assert!(!BasicTech::MetagenomicSurveillance.prerequisites_met(&state));
@@ -7184,7 +7181,7 @@ mod tests {
 
     #[test]
     fn metagenomic_surveillance_reduces_identify_threat_duration() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let kind = ResearchKind::IdentifyThreat { disease_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
         state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
@@ -7199,7 +7196,7 @@ mod tests {
 
     #[test]
     fn metagenomic_surveillance_reduces_clinical_trial_duration() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let kind = ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
         state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
@@ -7215,7 +7212,7 @@ mod tests {
 
     #[test]
     fn metagenomic_surveillance_does_not_affect_genomic_sequencing() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let kind = ResearchKind::GenomicSequencing { disease_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
         state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
@@ -7239,7 +7236,7 @@ mod tests {
 
     #[test]
     fn automated_synthesis_prereq_requires_developed_medicine() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // No targeted medicines unlocked yet (broad-spectrum starts unlocked but has no mechanism)
         assert!(state.medicines.iter().all(|m| m.mechanism.is_none() || !m.unlocked));
         assert!(!BasicTech::AutomatedSynthesis.prerequisites_met(&state));
@@ -7252,7 +7249,7 @@ mod tests {
 
     #[test]
     fn distributed_storage_prereq_requires_automated_synthesis() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         assert!(!BasicTech::StabilizedFormulation.prerequisites_met(&state));
         state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
         assert!(BasicTech::StabilizedFormulation.prerequisites_met(&state));
@@ -7260,7 +7257,7 @@ mod tests {
 
     #[test]
     fn automated_synthesis_reduces_manufacture_doses_duration() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let kind = ResearchKind::ManufactureDoses { medicine_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
         state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
@@ -7275,7 +7272,7 @@ mod tests {
 
     #[test]
     fn automated_synthesis_does_not_affect_develop_medicine_duration() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let kind = ResearchKind::DevelopMedicine { medicine_idx: 0 };
         let (_, base_duration, _) = state.effective_costs(&kind);
         state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
@@ -7288,7 +7285,7 @@ mod tests {
 
     #[test]
     fn stabilized_formulation_boosts_manufacturing_yield() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let base = state.manufacturing_yield_bonus();
         assert!((base - 1.0).abs() < 0.001, "base yield should be 1.0 without tech");
         state.unlocked_techs.push(BasicTech::StabilizedFormulation);
@@ -7313,7 +7310,7 @@ mod tests {
     #[test]
     fn board_budget_is_fixed_between_meetings() {
         // Board budget doesn't change when regions get infected — it's set at board meetings.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
 
         let baseline = state.funding_income_rate();

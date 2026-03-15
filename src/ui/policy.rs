@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, Region, RegionSpecialization, RegionTrait,
+    AppState, PolicyUiState, Region, RegionSpecialization, RegionTrait,
     ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     REGULATORY_APPARATUS_COST_MULT, KNOWLEDGE_PARTIAL_STATS,
     INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
@@ -40,7 +40,7 @@ use crate::ui::hint_line;
 use crate::format_number;
 
 /// Maximum selection index for the policy panel in its current sub-state.
-pub fn selection_max(ui_state: &PolicyUiState, state: &GameState) -> usize {
+pub fn selection_max(ui_state: &PolicyUiState, state: &AppState) -> usize {
     match ui_state {
         PolicyUiState::ManagePolicies { region_idx } => {
             if state.regions.get(*region_idx).is_some_and(|r| r.collapsed) {
@@ -66,7 +66,7 @@ fn policy_section_header(display_pos: usize) -> Option<&'static str> {
     }
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let (title, lines, selected_line) = match &state.ui.policy_ui {
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             render_manage(state, *region_idx)
@@ -89,7 +89,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 }
 
 
-fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let region = &state.regions[region_idx];
@@ -634,7 +634,7 @@ pub(crate) fn decree_description(decree: DecreeId) -> String {
     }
 }
 
-pub(crate) fn render_confirm_decree(state: &GameState, decree: DecreeId) -> (String, Vec<Line<'static>>, Option<usize>) {
+pub(crate) fn render_confirm_decree(state: &AppState, decree: DecreeId) -> (String, Vec<Line<'static>>, Option<usize>) {
     let name = decree.display_name();
     let desc = decree_description(decree);
     let cost = decree.chairman_cost();
@@ -664,7 +664,7 @@ pub(crate) fn render_confirm_decree(state: &GameState, decree: DecreeId) -> (Str
     (format!(" ⚠ CONFIRM DECREE: {} ", name.to_uppercase()), lines, None)
 }
 
-pub(crate) fn render_region_select(state: &GameState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
+pub(crate) fn render_region_select(state: &AppState, title: &str, action: &str, description: &str) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
@@ -715,7 +715,7 @@ pub(crate) fn render_region_select(state: &GameState, title: &str, action: &str,
 
 /// Generate an effectiveness hint line for transmission-sensitive policies.
 /// Shows per-disease reduction percentages based on transmission vector.
-fn effectiveness_hint(state: &GameState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
+fn effectiveness_hint(state: &AppState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
     // Only transmission-sensitive policies get hints
     if !matches!(policy, PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp | PolicyId::WaterSanitation) {
         return None;
@@ -791,7 +791,7 @@ fn effectiveness_hint(state: &GameState, region_idx: usize, policy: PolicyId) ->
 
 /// Estimated daily impact for an active policy. Shows approximate infections
 /// or deaths prevented per day based on current disease parameters and counts.
-fn impact_estimate(state: &GameState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
+fn impact_estimate(state: &AppState, region_idx: usize, policy: PolicyId) -> Option<Line<'static>> {
     let region = &state.regions[region_idx];
     let pop = region.population as f64;
     if pop <= 0.0 {

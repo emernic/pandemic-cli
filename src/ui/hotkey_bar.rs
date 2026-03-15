@@ -6,9 +6,9 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, Panel};
+use crate::state::{GameOutcome, AppState, Panel};
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let hotkeys = vec![
         ("T", "Threats", Panel::Threats),
         ("R", "Research", Panel::Research),

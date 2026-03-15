@@ -6,15 +6,15 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BasicTech, GameState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, PathogenType, TICKS_PER_DAY, grid_reading_order};
+use crate::state::{BasicTech, AppState, KNOWLEDGE_NAME, KNOWLEDGE_PARTIAL_STATS, PathogenType, TICKS_PER_DAY, grid_reading_order};
 use crate::format_number;
 
 /// Maximum selection index for the threats panel.
-pub fn selection_max(state: &GameState) -> usize {
+pub fn selection_max(state: &AppState) -> usize {
     state.diseases.len().saturating_sub(1)
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
 
@@ -367,7 +367,7 @@ fn format_deaths_line(deaths: f64, grand_total: f64) -> String {
 /// Collect disease warning indicators as (text, color, bold) tuples.
 /// Callers decide how to display them (inline, stacked, etc.).
 fn disease_warnings(
-    state: &GameState,
+    state: &AppState,
     disease_idx: usize,
 ) -> Vec<(String, Color, bool)> {
     let disease = &state.diseases[disease_idx];
@@ -396,7 +396,7 @@ enum MedStatus {
     None,       // nothing
 }
 
-fn medicine_status_for_disease(state: &GameState, disease_idx: usize) -> MedStatus {
+fn medicine_status_for_disease(state: &AppState, disease_idx: usize) -> MedStatus {
     // Check medicines targeting this disease
     for med in &state.medicines {
         if med.target_diseases.contains(&disease_idx) && med.unlocked {
@@ -419,7 +419,7 @@ fn medicine_status_for_disease(state: &GameState, disease_idx: usize) -> MedStat
     MedStatus::None
 }
 
-fn render_disease_detail(lines: &mut Vec<Line>, state: &GameState, disease_idx: usize) {
+fn render_disease_detail(lines: &mut Vec<Line>, state: &AppState, disease_idx: usize) {
     let hdr = Style::default().fg(Color::DarkGray);
     let has_forecast = state.has_forecasting();
     // Check if any region has sub-100% visibility (screening not maxed)

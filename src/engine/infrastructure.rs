@@ -243,12 +243,12 @@ fn emit_breakpoint_events(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::AppState;
 
     #[test]
     fn healthcare_degrades_under_crit_infections() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         assert_eq!(state.regions[0].healthcare_capacity, 1.0);
 
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn healthcare_stable_without_infections() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Clear all infections
         for r in &mut state.regions {
             r.infections.clear();
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn supply_lines_degrade_with_deaths() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * 0.06; // >5% dead
 
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn civil_order_degrades_with_deaths_and_restrictions() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * 0.06;
         state.policies[0].quarantine = true;
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn healthcare_cascade_accelerates_civil_order() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Manually set healthcare to critical
         state.regions[0].healthcare_capacity = 0.20;
         let pop = state.regions[0].population as f64;
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn breakpoint_events_fire() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].healthcare_capacity = 0.51;
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
@@ -358,7 +358,7 @@ mod tests {
     #[test]
     fn quarantine_drains_civil_order_faster_than_other_policies() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // No deaths — isolate quarantine drain effect
         state.regions[0].dead = 0.0;
         for r in &mut state.regions {
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn collapsed_region_has_zero_infrastructure() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].collapsed = true;
         state.regions[0].healthcare_capacity = 0.50;
 
@@ -409,7 +409,7 @@ mod tests {
     fn collapse_reduces_neighbor_delivery_throughput() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // NA (idx 0) is connected to SA (idx 1) and Europe (idx 2).
         // Verify baseline: no collapsed neighbors → penalty = 1.0
         tick_infrastructure(&mut state, &mut events);
@@ -439,11 +439,11 @@ mod tests {
     #[test]
     fn resilient_grids_prereq_requires_targeted_drug_design() {
         use crate::state::BasicTech;
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Without TargetedDrugDesign, prereq not met
         assert!(!BasicTech::ResilientGrids.prerequisites_met(&state));
 
-        let mut state2 = GameState::new_default(42);
+        let mut state2 = AppState::new_default(42);
         state2.unlocked_techs.push(BasicTech::TargetedDrugDesign);
         assert!(BasicTech::ResilientGrids.prerequisites_met(&state2));
     }
@@ -453,7 +453,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         // Without tech
-        let mut state_no_tech = GameState::new_default(42);
+        let mut state_no_tech = AppState::new_default(42);
         state_no_tech.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         for _ in 0..(120 * 7) {
             tick_infrastructure(&mut state_no_tech, &mut events);
@@ -461,7 +461,7 @@ mod tests {
         let hc_no_tech = state_no_tech.regions[0].healthcare_capacity;
 
         // With tech
-        let mut state_tech = GameState::new_default(42);
+        let mut state_tech = AppState::new_default(42);
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         state_tech.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         for _ in 0..(120 * 7) {
@@ -478,12 +478,12 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         let pop = {
-            let s = GameState::new_default(42);
+            let s = AppState::new_default(42);
             s.regions[0].population as f64
         };
 
         // Without tech
-        let mut state_no_tech = GameState::new_default(42);
+        let mut state_no_tech = AppState::new_default(42);
         state_no_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
             tick_infrastructure(&mut state_no_tech, &mut events);
@@ -491,7 +491,7 @@ mod tests {
         let sl_no_tech = state_no_tech.regions[0].supply_lines;
 
         // With tech
-        let mut state_tech = GameState::new_default(42);
+        let mut state_tech = AppState::new_default(42);
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         state_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
@@ -508,12 +508,12 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         let pop = {
-            let s = GameState::new_default(42);
+            let s = AppState::new_default(42);
             s.regions[0].population as f64
         };
 
         // Without tech
-        let mut state_no_tech = GameState::new_default(42);
+        let mut state_no_tech = AppState::new_default(42);
         state_no_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
             tick_infrastructure(&mut state_no_tech, &mut events);
@@ -521,7 +521,7 @@ mod tests {
         let co_no_tech = state_no_tech.regions[0].civil_order;
 
         // With tech
-        let mut state_tech = GameState::new_default(42);
+        let mut state_tech = AppState::new_default(42);
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         state_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
@@ -538,13 +538,13 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         // Set up two identical states: one with an RNA virus, one with a bacterium
-        let mut state_rna = GameState::new_default(42);
+        let mut state_rna = AppState::new_default(42);
         for r in &mut state_rna.regions { r.infections.clear(); r.dead = 0.0; }
         state_rna.diseases[0].pathogen_type = PathogenType::RnaVirus;
         state_rna.diseases[0].detected = true;
         state_rna.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
-        let mut state_bact = GameState::new_default(42);
+        let mut state_bact = AppState::new_default(42);
         for r in &mut state_bact.regions { r.infections.clear(); r.dead = 0.0; }
         state_bact.diseases[0].pathogen_type = PathogenType::Bacterium;
         state_bact.diseases[0].detected = true;
@@ -564,13 +564,13 @@ mod tests {
     fn rna_panic_only_affects_detected_diseases() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
-        let mut state_detected = GameState::new_default(42);
+        let mut state_detected = AppState::new_default(42);
         for r in &mut state_detected.regions { r.infections.clear(); r.dead = 0.0; }
         state_detected.diseases[0].pathogen_type = PathogenType::RnaVirus;
         state_detected.diseases[0].detected = true;
         state_detected.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
-        let mut state_undetected = GameState::new_default(42);
+        let mut state_undetected = AppState::new_default(42);
         for r in &mut state_undetected.regions { r.infections.clear(); r.dead = 0.0; }
         state_undetected.diseases[0].pathogen_type = PathogenType::RnaVirus;
         state_undetected.diseases[0].detected = false;
@@ -591,7 +591,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         // A small fungal infection (below INFECTION_PRESSURE_MOD) should still drain healthcare
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for r in &mut state.regions { r.infections.clear(); r.dead = 0.0; }
         state.diseases[0].pathogen_type = PathogenType::Fungus;
         // Set infected well below INFECTION_PRESSURE_MOD (1000)
@@ -613,13 +613,13 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         // One fungal infection
-        let mut state_one = GameState::new_default(42);
+        let mut state_one = AppState::new_default(42);
         for r in &mut state_one.regions { r.infections.clear(); r.dead = 0.0; }
         state_one.diseases[0].pathogen_type = PathogenType::Fungus;
         state_one.regions[0].get_or_create_infection(0).infected = 100.0;
 
         // Two fungal infections
-        let mut state_two = GameState::new_default(42);
+        let mut state_two = AppState::new_default(42);
         for r in &mut state_two.regions { r.infections.clear(); r.dead = 0.0; }
         state_two.diseases[0].pathogen_type = PathogenType::Fungus;
         state_two.regions[0].get_or_create_infection(0).infected = 100.0;
@@ -643,7 +643,7 @@ mod tests {
     fn non_fungal_has_no_drain_below_severity_threshold() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for r in &mut state.regions { r.infections.clear(); r.dead = 0.0; }
         state.diseases[0].pathogen_type = PathogenType::Bacterium;
         state.regions[0].get_or_create_infection(0).infected = 100.0;
@@ -662,7 +662,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         // Travel ban drain on supply lines should be unaffected
-        let mut state_no_tech = GameState::new_default(42);
+        let mut state_no_tech = AppState::new_default(42);
         // Clear infections so only policy drain acts
         for r in &mut state_no_tech.regions {
             r.infections.clear();
@@ -674,7 +674,7 @@ mod tests {
         }
         let sl_no_tech = state_no_tech.regions[0].supply_lines;
 
-        let mut state_tech = GameState::new_default(42);
+        let mut state_tech = AppState::new_default(42);
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         for r in &mut state_tech.regions {
             r.infections.clear();

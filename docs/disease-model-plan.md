@@ -16,7 +16,7 @@ The foundation. Without recovery, every disease is 100% fatal given enough time.
 
 Both use `#[serde(default)]` for save file compatibility.
 
-Add `total_recovered()` helpers on `Region` and `GameState`.
+Add `total_recovered()` helpers on `Region` and `AppState`.
 
 ### Engine changes (`src/engine.rs`)
 

@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{map_grid_pos, GameState, Region, MAP_GRID_LEN,
+use crate::state::{map_grid_pos, AppState, Region, MAP_GRID_LEN,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
     SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, SEVERITY_MOD_THRESHOLD};
 
@@ -54,7 +54,7 @@ enum ConnStrength {
 }
 
 /// Classify connection strength between two regions (takes max of both directions).
-fn connection_strength(state: &GameState, a: usize, b: usize) -> ConnStrength {
+fn connection_strength(state: &AppState, a: usize, b: usize) -> ConnStrength {
     let factor = state.cross_region_spread_factor(a, b)
         .max(state.cross_region_spread_factor(b, a));
 
@@ -68,7 +68,7 @@ fn connection_strength(state: &GameState, a: usize, b: usize) -> ConnStrength {
 }
 
 /// Build drawable connections from region topology, classifying each by kind.
-fn drawable_connections(state: &GameState) -> Vec<MapConnection> {
+fn drawable_connections(state: &AppState) -> Vec<MapConnection> {
     let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
     for (i, region) in state.regions.iter().enumerate() {
@@ -86,7 +86,7 @@ fn drawable_connections(state: &GameState) -> Vec<MapConnection> {
 }
 
 /// Find connections for a region that can't be drawn on the grid.
-fn non_drawable_connections(state: &GameState, region_idx: usize) -> Vec<usize> {
+fn non_drawable_connections(state: &AppState, region_idx: usize) -> Vec<usize> {
     state.regions[region_idx]
         .connections
         .iter()
@@ -106,7 +106,7 @@ fn specialization_label(region: &crate::state::Region) -> &'static str {
     }
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let block = Block::default()
         .title(" World Map ")
         .borders(Borders::ALL)
@@ -459,7 +459,7 @@ fn render_region_box(
 }
 
 /// Detail panel below the region grid showing full info for the selected region.
-fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
+fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
     let idx = state.ui.map_selection;
     let region = match state.regions.get(idx) {
         Some(r) => r,

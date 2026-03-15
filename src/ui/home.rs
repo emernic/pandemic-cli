@@ -7,11 +7,11 @@ use ratatui::{
 };
 
 use crate::format_number;
-use crate::state::{GameState, TICKS_PER_DAY, SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, format_days};
+use crate::state::{AppState, TICKS_PER_DAY, SEVERITY_CRIT_THRESHOLD, SEVERITY_HIGH_THRESHOLD, format_days};
 
 // ── Splash (first visit) ──────────────────────────────────────────────
 
-fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
+fn build_splash_content(state: &AppState) -> Vec<(String, Style)> {
     let red = Style::default().fg(Color::Red);
     let white = Style::default().fg(Color::White);
     let dim = Style::default().fg(Color::DarkGray);
@@ -97,7 +97,7 @@ fn render_truncated(segments: &[(String, Style)], max_lines: usize) -> Vec<Line<
     lines
 }
 
-fn render_splash(f: &mut Frame, area: Rect, state: &GameState) {
+fn render_splash(f: &mut Frame, area: Rect, state: &AppState) {
     let segments = build_splash_content(state);
 
     // One full line per tick for a snappy typewriter effect.
@@ -179,7 +179,7 @@ fn bar(filled: f64, width: usize, fill_color: Color) -> Vec<Span<'static>> {
     ]
 }
 
-fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
+fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
     let dim = Style::default().fg(Color::DarkGray);
     let cyan = Style::default().fg(Color::Cyan);
     let yellow = Style::default().fg(Color::Yellow);
@@ -572,7 +572,7 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &GameState) {
 
 // ── Public entry point ────────────────────────────────────────────────
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     if state.ui.home_splash_done {
         render_dashboard(f, area, state);
     } else {

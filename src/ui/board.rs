@@ -6,11 +6,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BoardPersonality, BoardRole, GameState, GovernorPersonality, ModifierSource, TICKS_PER_DAY};
+use crate::state::{BoardPersonality, BoardRole, AppState, GovernorPersonality, ModifierSource, TICKS_PER_DAY};
 
 
 /// Maximum selection index for the board panel.
-pub fn selection_max(state: &GameState) -> usize {
+pub fn selection_max(state: &AppState) -> usize {
     state.board_members.len().saturating_sub(1)
 }
 
@@ -27,7 +27,7 @@ fn satisfaction_display(satisfaction: f64) -> (&'static str, Color) {
     }
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
 
@@ -237,7 +237,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, member_idx: usize) {
+fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &AppState, member_idx: usize) {
     let member = &state.board_members[member_idx];
     let hdr = Style::default().fg(Color::DarkGray);
 
@@ -326,7 +326,7 @@ fn render_member_detail(lines: &mut Vec<Line<'static>>, state: &GameState, membe
 
 /// Build a short context string for a modifier line (e.g., stock price, GDP status).
 fn modifier_context(
-    state: &GameState,
+    state: &AppState,
     member: &crate::state::BoardMember,
     source: &ModifierSource,
 ) -> String {

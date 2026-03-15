@@ -559,7 +559,7 @@ pub(super) fn cancel_contract(state: &mut WorldState, board_member_idx: usize) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::AppState;
     use crate::state::LOYALTY_RAISE_FRACTION;
     use rand::SeedableRng;
 
@@ -587,7 +587,7 @@ mod tests {
 
     #[test]
     fn accept_contract_adds_income_and_clears_offer() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let income_before = state.funding_income_rate();
         make_offer(&mut state);
 
@@ -604,7 +604,7 @@ mod tests {
 
     #[test]
     fn reject_contract_clears_offer_without_adding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         make_offer(&mut state);
 
         let (ok, _) = reject_contract(&mut state);
@@ -615,14 +615,14 @@ mod tests {
 
     #[test]
     fn accept_fails_when_no_offer() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let (ok, _) = accept_contract(&mut state);
         assert!(!ok);
     }
 
     #[test]
     fn accept_blocked_at_max_contracts() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for i in 0..MAX_CONTRACTS {
             state.contracts.push(FundingContract {
                 name: format!("Contract {i}"),
@@ -649,7 +649,7 @@ mod tests {
     #[test]
     fn satisfaction_degrades_when_condition_violated() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = 1.0;
         state.contracts.push(c);
@@ -670,7 +670,7 @@ mod tests {
     #[test]
     fn satisfaction_recovers_when_condition_restored() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut c = make_test_contract(FundingCondition::NoCollapse);
         c.satisfaction = 0.5; // Start at warning level
         state.contracts.push(c);
@@ -685,7 +685,7 @@ mod tests {
     #[test]
     fn warning_fires_at_threshold() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5; // Just above warning
         state.contracts.push(c);
@@ -703,7 +703,7 @@ mod tests {
     #[test]
     fn revocation_at_low_satisfaction() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = CONTRACT_CONDITION_REVOKE + 0.0001; // Just above revocation
         c.warned = true;
@@ -719,7 +719,7 @@ mod tests {
     #[test]
     fn satisfied_contract_survives_check() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.contracts.push(FundingContract {
             name: "Stable Deal".to_string(),
             board_member_idx: 0,
@@ -748,7 +748,7 @@ mod tests {
     #[test]
     fn offer_generated_at_first_offer_tick() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         // Set deaths so MaxDeaths templates are contextually relevant
@@ -770,7 +770,7 @@ mod tests {
     #[test]
     fn no_offer_when_at_max_contracts() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
 
@@ -797,7 +797,7 @@ mod tests {
     #[test]
     fn no_duplicate_offer_while_pending() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
@@ -815,7 +815,7 @@ mod tests {
     #[test]
     fn warning_queues_contract_demand_crisis() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 500;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5;
@@ -838,7 +838,7 @@ mod tests {
     #[test]
     fn contract_demand_cooldown_prevents_repeat() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 1000;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         // Already warned recently, satisfaction recovered and dropped again
@@ -858,7 +858,7 @@ mod tests {
     #[test]
     fn contract_demand_fires_after_cooldown_expires() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 1000;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5;
@@ -875,7 +875,7 @@ mod tests {
     #[test]
     fn offer_queues_crisis_interrupt() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
@@ -897,7 +897,7 @@ mod tests {
     fn contract_crisis_accept_adds_to_contracts() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         make_offer(&mut state);
         let offer_name = state.contract_offer.as_ref().unwrap().name.clone();
 
@@ -927,7 +927,7 @@ mod tests {
     fn contract_crisis_decline_clears_offer() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         make_offer(&mut state);
 
         let crisis_event = crisis::build_crisis_event(
@@ -951,7 +951,7 @@ mod tests {
 
     #[test]
     fn accept_boosts_offerer_penalizes_others() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
 
         // Create offer from board member 0
@@ -979,7 +979,7 @@ mod tests {
 
     #[test]
     fn refuse_penalizes_offerer_only() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
 
         let mut offer = make_test_contract(FundingCondition::NoCollapse);
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn decline_records_template_for_escalation() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         make_offer(&mut state); // template_id = 4
         assert!(state.contract_decline_counts.is_empty());
 
@@ -1015,7 +1015,7 @@ mod tests {
 
     #[test]
     fn escalating_prices_increase_with_declines() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(99);
 
         // Build contract with no declines
@@ -1035,7 +1035,7 @@ mod tests {
 
     #[test]
     fn escalating_prices_increase_with_game_day() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Day 0
         let mut rng1 = ChaCha8Rng::seed_from_u64(99);
@@ -1053,7 +1053,7 @@ mod tests {
     #[test]
     fn type_exclusivity_blocks_same_condition_type() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
@@ -1093,7 +1093,7 @@ mod tests {
 
     #[test]
     fn cancel_contract_removes_and_penalizes() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
 
         // Add a contract from board member 0
@@ -1123,7 +1123,7 @@ mod tests {
 
     #[test]
     fn cancel_contract_fails_without_contract() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
 
         let (ok, msg) = cancel_contract(&mut state, 0);
@@ -1133,7 +1133,7 @@ mod tests {
 
     #[test]
     fn loyalty_raise_not_offered_before_min_days() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let accepted = 100;
         state.contracts.push(FundingContract {
@@ -1161,7 +1161,7 @@ mod tests {
 
     #[test]
     fn loyalty_raise_offered_after_min_days() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let accepted = 100;
         state.contracts.push(FundingContract {
@@ -1193,7 +1193,7 @@ mod tests {
 
     #[test]
     fn loyalty_raise_only_fires_once_per_contract() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.contracts.push(FundingContract {
             name: "Test".to_string(),
@@ -1221,7 +1221,7 @@ mod tests {
     fn loyalty_raise_crisis_accept_increases_income() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         state.contracts.push(FundingContract {
             name: "Test".to_string(),
@@ -1257,7 +1257,7 @@ mod tests {
     fn loyalty_raise_crisis_decline_cancels_contract() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         state.contracts.push(FundingContract {
             name: "Test".to_string(),
@@ -1294,7 +1294,7 @@ mod tests {
     #[test]
     fn patron_bonus_requires_high_satisfaction() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(99);
 
@@ -1327,7 +1327,7 @@ mod tests {
     #[test]
     fn patron_bonus_fires_with_high_satisfaction() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
@@ -1364,7 +1364,7 @@ mod tests {
     #[test]
     fn patron_bonus_respects_cooldown() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 

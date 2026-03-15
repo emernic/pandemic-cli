@@ -18,7 +18,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, Panel, UiState, ticks_to_days};
+use crate::state::{GameOutcome, AppState, Panel, UiState, ticks_to_days};
 use crate::format_number;
 
 /// Minimum terminal dimensions for playable layout.
@@ -26,14 +26,14 @@ pub const MIN_COLS: u16 = 80;
 pub const MIN_ROWS: u16 = 24;
 
 /// Returns true when the size warning overlay is being displayed.
-pub fn is_size_warning_active(state: &GameState, cols: u16, rows: u16) -> bool {
+pub fn is_size_warning_active(state: &AppState, cols: u16, rows: u16) -> bool {
     !state.session.size_warning_dismissed && (cols < MIN_COLS || rows < MIN_ROWS)
 }
 
 /// Maximum selection index for the current panel and UI sub-state.
 /// Dispatches to each panel module's `selection_max` so item-count logic
 /// lives alongside the renderers instead of being centralised in state.rs.
-pub fn panel_selection_max(ui: &UiState, state: &GameState) -> usize {
+pub fn panel_selection_max(ui: &UiState, state: &AppState) -> usize {
     match ui.open_panel {
         Panel::Threats => threats::selection_max(state),
         Panel::Medicines => match &ui.medicine_ui {
@@ -63,7 +63,7 @@ pub fn panel_selection_max(ui: &UiState, state: &GameState) -> usize {
 
 /// Build a hint line like "[Enter] Select  [Esc] Close", omitting the Enter
 /// portion when the game is over (Confirm is blocked post-game).
-pub fn hint_line(state: &GameState, enter_label: &str, esc_label: &str) -> Line<'static> {
+pub fn hint_line(state: &AppState, enter_label: &str, esc_label: &str) -> Line<'static> {
     let hint = if state.outcome == GameOutcome::Playing {
         format!("  [Enter] {enter_label}  [Esc] {esc_label}")
     } else {
@@ -105,7 +105,7 @@ pub fn sparkline(history: &[f64], width: usize) -> (String, Color) {
     (chart, color)
 }
 
-pub fn render(f: &mut Frame, state: &GameState) {
+pub fn render(f: &mut Frame, state: &AppState) {
     let area = f.area();
     if is_size_warning_active(state, area.width, area.height) {
         render_size_warning(f, area);
@@ -182,7 +182,7 @@ fn render_size_warning(f: &mut Frame, area: Rect) {
     f.render_widget(paragraph, area);
 }
 
-fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize, state: &GameState) {
+fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, selection: usize, state: &AppState) {
     let auto_resolve = state.ui.crisis_auto_resolve;
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
@@ -365,7 +365,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
     f.render_widget(widget, area);
 }
 
-fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
+fn render_game_over(f: &mut Frame, area: Rect, state: &AppState) {
     let (title, border_color) = (" DEFEAT ", Color::Red);
 
     let total_dead = state.total_dead();

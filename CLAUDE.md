@@ -152,7 +152,7 @@ cargo run -- --snapshot        # snapshot mode (for AI/automated testing)
 
 ## Architecture
 
-All game state lives in one `GameState` struct (src/state.rs). Two pure functions drive everything:
+All game state lives in `AppState` (src/state.rs). Two pure functions drive everything:
 - `tick()` (src/engine/mod.rs) — advances simulation one step
 - `apply_action()` (src/lib.rs) — routes player input to UI state machines or engine commands
 
@@ -182,7 +182,7 @@ The UI/engine separation is done. The engine god file has been broken into subsy
 4. If you see a violation, file an issue or fix it. Not "maybe someday" — now.
 5. Read `docs/target-architecture.md` if you haven't. It describes the subsystem conventions.
 
-**State-split refactor in progress.** The single-`GameState` struct is being split into separate world, view, and session types. The plan is tracked by GitHub issues with the `state-split` label. Do not treat the current single-struct model as a reason to reject that work.
+**State split is complete.** `AppState` combines `WorldState`, `UiState`, and `SessionState`. Engine functions take `&mut WorldState` directly.
 
 ### Key Game Systems
 
@@ -431,7 +431,7 @@ Give sub-agents the raw material and a clear goal, but let them figure out the s
 
 - **No backwards compatibility concerns.** This game is not deployed in the wild. Save files are deleted between playtests by both humans and AI agents. Do NOT keep deprecated fields, variants, or `#[serde(default)]` annotations "for save file compatibility." If a field is unused, delete it. If a struct changes shape, just change it. The `#[serde(default)]` and `#[serde(alias)]` infrastructure is there so we CAN handle compatibility later when the game ships. Until then, dead fields kept "for compat" are pure complexity waste.
 - **When in doubt, Google it.** Do not guess about tool behavior, API syntax, library features, or Claude Code capabilities (hooks, skills, settings, etc.). These change frequently. A quick web search takes seconds; confidently stating something wrong wastes everyone's time. This applies especially to Claude Code's own documentation — always verify rather than assume.
-- **Before adding a field to any struct, audit all construction sites first.** Run `Grep pattern="StructName {" path="src/"` to find every place the struct is constructed, then update them all in one pass. Do NOT add the field and reactively fix compiler errors one by one — that workflow leads to partial fixes, broken intermediate states, and wasted build cycles. This applies to any widely-used struct (`GameState`, `CrisisCost`, `RegionInfection`, etc.).
+- **Before adding a field to any struct, audit all construction sites first.** Run `Grep pattern="StructName {" path="src/"` to find every place the struct is constructed, then update them all in one pass. Do NOT add the field and reactively fix compiler errors one by one — that workflow leads to partial fixes, broken intermediate states, and wasted build cycles. This applies to any widely-used struct (`AppState`, `WorldState`, `CrisisCost`, `RegionInfection`, etc.).
 - Rust 2024 edition: `gen` is reserved — use `r#gen()` for `rand::Rng::gen()`
 - Diseases use vec index, not an id field (`RegionInfection.disease_idx`)
 - `tick()` is NOT an Action — simulation steps and player actions are separate concepts

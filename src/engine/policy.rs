@@ -1306,12 +1306,12 @@ pub(super) fn tick_screening(state: &mut WorldState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{Authority, DecreeId, GameState, PolicyId, ScreeningLevel};
+    use crate::state::{Authority, DecreeId, AppState, PolicyId, ScreeningLevel};
     use crate::engine::tick;
 
     /// Helper: set up a state with full POL and plenty of personnel for screening tests.
-    fn screening_test_state() -> GameState {
-        let mut state = GameState::new_default(42);
+    fn screening_test_state() -> AppState {
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
         state.resources.authority = Authority::Maximum;
         state.resources.funding = 10_000.0;
@@ -1359,7 +1359,7 @@ mod tests {
 
     #[test]
     fn screening_authority_gating() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         // Basic screening has no authority requirement — always available
         state.resources.authority = Authority::Minimal;
@@ -1450,7 +1450,7 @@ mod tests {
 
     #[test]
     fn screening_lowers_detection_threshold() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Place undetected disease just below the screening-reduced threshold
         state.diseases[0].detected = false;
         // High screening at full progress: threshold = 10,000 * 0.15 = 1,500
@@ -1638,7 +1638,7 @@ mod tests {
     #[test]
     fn decree_blocked_by_insufficient_severity() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         // Fresh game: no deaths, no collapses — all decrees should be locked
 
@@ -1943,8 +1943,8 @@ mod tests {
 
     // --- Governor autonomous action tests ---
 
-    fn hostile_governor_state(personality: GovernorPersonality) -> GameState {
-        let mut state = GameState::new_default(42);
+    fn hostile_governor_state(personality: GovernorPersonality) -> AppState {
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = personality;
         state.regions[0].governor.cooperation = 20.0; // well below hostility threshold (40)
         state.regions[0].governor.last_action_tick = 0;
@@ -2092,7 +2092,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_fires_at_high() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
 
@@ -2110,7 +2110,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_does_not_fire_below_threshold() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
 
@@ -2125,7 +2125,7 @@ mod tests {
     #[test]
     fn standing_order_auto_quarantine_skips_already_active() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.policies[0].quarantine = true; // already active
@@ -2142,7 +2142,7 @@ mod tests {
     #[test]
     fn standing_order_auto_travel_ban_fires_at_crit() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_travel_ban_at_crit = true;
 
@@ -2159,7 +2159,7 @@ mod tests {
     #[test]
     fn standing_order_disabled_does_not_fire() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         // Both standing orders OFF (default)
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
@@ -2173,7 +2173,7 @@ mod tests {
 
     #[test]
     fn toggle_policy_warns_about_contract_conflict() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.contracts.push(crate::state::FundingContract {
             name: "Hospitality Protection Fund".to_string(),
@@ -2200,7 +2200,7 @@ mod tests {
     #[test]
     fn standing_order_auto_activation_warns_about_contract_conflict() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.contracts.push(crate::state::FundingContract {
@@ -2328,7 +2328,7 @@ mod tests {
     #[test]
     fn dead_governor_reduces_policy_effectiveness() {
         use crate::state::LEADERLESS_EFFECTIVENESS;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         assert!(!state.regions[0].governor.is_dead());
         assert!((state.regions[0].policy_effectiveness() - 1.0).abs() < 0.001);
 
@@ -2339,7 +2339,7 @@ mod tests {
 
     #[test]
     fn dead_governor_is_not_hostile() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.cooperation = 10.0; // well below threshold
         assert!(state.regions[0].governor.is_hostile());
 
@@ -2363,7 +2363,7 @@ mod tests {
     fn governor_succession_replaces_dead_governor() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::SUCCESSOR_COOPERATION;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.dead = true;
         state.regions[0].governor.succession_tick = Some(100);
         state.tick = 100;
@@ -2379,7 +2379,7 @@ mod tests {
 
     #[test]
     fn negotiate_blocked_for_dead_governor() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.dead = true;
         state.resources.funding = 10000.0;
 
@@ -2390,7 +2390,7 @@ mod tests {
 
     #[test]
     fn bargain_blocked_for_dead_governor() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.dead = true;
         state.regions[0].governor.cooperation = 10.0;
 
@@ -2401,7 +2401,7 @@ mod tests {
 
     #[test]
     fn rebuild_infra_repairs_degraded_systems() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         state.regions[0].healthcare_capacity = 0.80;
         state.regions[0].supply_lines = 0.70;
@@ -2421,7 +2421,7 @@ mod tests {
     #[test]
     fn rebuild_infra_proportional_cost() {
         use crate::state::REBUILD_INFRA_COST_PER_POINT;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         let before = state.resources.funding;
 
@@ -2440,7 +2440,7 @@ mod tests {
 
     #[test]
     fn rebuild_infra_rejects_when_nothing_to_repair() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         // All at 100%
         let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
@@ -2449,7 +2449,7 @@ mod tests {
 
     #[test]
     fn rebuild_infra_rejects_when_insufficient_funds() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 1.0; // nearly broke
         state.regions[0].healthcare_capacity = 0.50;
         let (_, ok, _) = toggle_policy(&mut state, 0, PolicyId::RebuildInfra);
@@ -2458,7 +2458,7 @@ mod tests {
 
     #[test]
     fn rebuild_infra_rejects_collapsed_region() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         state.regions[0].collapsed = true;
         state.regions[0].healthcare_capacity = 0.0;
@@ -2470,7 +2470,7 @@ mod tests {
     fn auto_rebuild_fires_when_infra_below_threshold() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         state.policies[0].auto_rebuild_infra = true;
         state.regions[0].healthcare_capacity = 0.85; // below 90% threshold
@@ -2487,7 +2487,7 @@ mod tests {
     fn auto_rebuild_skips_when_infra_above_threshold() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         state.policies[0].auto_rebuild_infra = true;
         // All above 90%

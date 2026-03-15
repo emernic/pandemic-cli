@@ -137,7 +137,7 @@ Simulation advances in discrete ticks (internal unit). The UI displays "days" (1
 src/
   lib.rs           — apply_action() routing, re-exports format_number() from state.rs
   main.rs          — CLI args (clap), interactive loop, file I/O
-  state.rs         — GameState and all data structs, constants, query methods
+  state.rs         — AppState, WorldState, and all data structs, constants, query methods
   action.rs        — Action enum, key-to-action mapping
   snapshot.rs      — Non-interactive snapshot mode for testing
   engine/

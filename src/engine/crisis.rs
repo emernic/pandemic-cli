@@ -2753,7 +2753,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::AppState;
     use crate::state::RegionDiseaseState;
 
     #[test]
@@ -2777,7 +2777,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Day 5: early game
         state.tick = (5.0 * TICKS_PER_DAY) as u64;
         // Ensure preconditions for various crisis types
@@ -2805,7 +2805,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (20.0 * TICKS_PER_DAY) as u64;
         // Collapse a region and ensure it has a non-bankrupt corporation
@@ -2833,7 +2833,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn field_team_detained_pay_schedules_followup() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (20.0 * TICKS_PER_DAY) as u64;
         state.regions[0].collapsed = true;
@@ -2867,7 +2867,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn field_team_detained_write_off_loses_personnel() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (20.0 * TICKS_PER_DAY) as u64;
         state.regions[0].collapsed = true;
@@ -2894,7 +2894,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn new_pathogen_detected_offers_identification() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0; // Unknown — needs identification
         state.resources.funding = 2000.0;
@@ -2916,7 +2916,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn new_pathogen_detected_begin_identification_starts_research() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
         state.resources.funding = 2000.0;
@@ -2950,7 +2950,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         use crate::apply_action;
         use crate::engine::tick;
 
-        let mut state = GameState::new_default(99);
+        let mut state = AppState::new_default(99);
         // Ensure disease 0 is NOT yet detected so detection happens during ticks
         state.diseases[0].detected = false;
 
@@ -3000,7 +3000,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn new_pathogen_detected_refunds_funding_if_insufficient_personnel() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
         state.resources.funding = 2000.0;
@@ -3023,7 +3023,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn new_pathogen_detected_dismiss_does_nothing() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
         state.resources.funding = 2000.0;
@@ -3042,7 +3042,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn new_pathogen_detected_no_identification_when_already_researching() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
         // Already identifying disease 0
@@ -3063,7 +3063,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn chairman_mood_shifts_board_budget() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
@@ -3096,7 +3096,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn crisis_urgency_increases_budget_with_visible_infections() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
 
         assert!(state.reference_base_budget_per_tick > 0.0,
@@ -3156,7 +3156,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn chairman_text_appears_in_board_communique() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
@@ -3181,7 +3181,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn vote_no_confidence_names_chairman_and_corp() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
@@ -3207,7 +3207,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn vote_no_confidence_concessions_boost_chairman() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
         state.resources.funding = 5000.0;
@@ -3236,7 +3236,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn vote_no_confidence_stand_firm_cuts_budget() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
         state.resources.funding = 5000.0;
         state.resources.authority = Authority::Medium;
@@ -3260,7 +3260,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     fn vote_no_confidence_fires_after_3_days_hostile() {
         use crate::engine::tick;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
         state.tick = (11.0 * crate::state::TICKS_PER_DAY) as u64; // past day 10 gate
@@ -3303,7 +3303,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn vote_no_confidence_respects_cooldown() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
         state.tick = (15.0 * crate::state::TICKS_PER_DAY) as u64;
@@ -3340,7 +3340,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn governor_sick_worst_case_queues_death() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
 
         // Test each personality's worst-case option
@@ -3377,7 +3377,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn buffoon_sick_stabilize_governor_hits_supply_lines_not_death() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
         state.regions[0].governor.personality = GovernorPersonality::Buffoon;
         state.regions[0].governor.dead = false;
@@ -3408,7 +3408,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn governor_sick_worst_case_skips_if_already_dead() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
         state.regions[0].governor.dead = true;
@@ -3428,7 +3428,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn governor_sick_worst_case_skips_if_death_already_pending() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
         state.regions[0].governor.personality = GovernorPersonality::Operative;
         state.regions[0].governor.dead = false;
@@ -3454,7 +3454,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
 
@@ -3495,7 +3495,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
 
@@ -3528,7 +3528,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn corporate_demand_refuse_damages_infrastructure() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = 1000;
 
@@ -3562,7 +3562,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
 
@@ -3595,7 +3595,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn board_meeting_raises_authority_when_pressure_high() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
@@ -3640,7 +3640,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
     #[test]
     fn board_meeting_lowers_authority_when_pressure_low() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
@@ -3677,7 +3677,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PolicyId;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 

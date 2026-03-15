@@ -25,19 +25,19 @@ For each test you're about to write, ask: "Could this plausibly fail?" If you al
 
 **No padding.** A file with 3 tests that each catch a different real bug beats 15 tests that all pass trivially. Don't test simple field access, trivial constructors, or anything where the compiler does the work.
 
-**Use real state, not abstractions.** `GameState::new_default(seed)` and the real `tick()`/`apply_action()` functions, not mock objects. The whole engine is pure and deterministic — there's no reason to mock anything.
+**Use real state, not abstractions.** `AppState::new_default(seed)` and the real `tick()`/`apply_action()` functions, not mock objects. The whole engine is pure and deterministic — there's no reason to mock anything.
 
 ## Use existing patterns
 
 Before writing new test infrastructure, check what already exists:
 
-- **`GameState::new_default(seed)`** — deterministic initial state with seeded ChaCha8Rng. Use seed `42` by convention.
-- **`tick(&state) -> GameState`** and **`apply_action(&state, &Action) -> GameState`** — the two pure functions that drive everything. Clone-and-mutate, so you can chain them.
+- **`AppState::new_default(seed)`** — deterministic initial state with seeded ChaCha8Rng. Use seed `42` by convention.
+- **`tick(&state) -> AppState`** and **`apply_action(&state, &Action) -> AppState`** — the two pure functions that drive everything. Clone-and-mutate, so you can chain them.
 - **`render_to_string(&state) -> String`** and **`run_snapshot(state, steps) -> SnapshotResult`** — for rendering and integration smoke tests. Use structural assertions (`assert!(output.contains("..."))`), NOT exact-match snapshot libraries.
 - **Inline `#[cfg(test)] mod tests`** in each source file for unit tests.
 - **`tests/snapshots.rs`** for integration snapshot tests.
 
-**Only build custom state when you need a specific configuration no default provides** — a region with specific immunity levels, a disease with particular stats, resources set to a specific amount. If you just need "a game state," use `GameState::new_default(42)`.
+**Only build custom state when you need a specific configuration no default provides** — a region with specific immunity levels, a disease with particular stats, resources set to a specific amount. If you just need "a game state," use `AppState::new_default(42)`.
 
 **Don't define helper functions at the top of your test module** unless they're genuinely reused across multiple tests in that module. More than 2-3 bespoke helpers means you're over-specifying.
 
@@ -58,7 +58,7 @@ Two tests that verify different emergent behaviors of the disease spread engine:
 ```rust
 #[test]
 fn immune_reduces_susceptible_pool() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     // Set immunity to near-total in Asia to shrink the susceptible pool
     state.regions[4].get_or_create_infection(0).immune = 4_000_000_000.0;
     let before = state.regions[4].disease_state(0).unwrap().infected;
@@ -66,7 +66,7 @@ fn immune_reduces_susceptible_pool() {
     let growth = after.regions[4].disease_state(0).unwrap().infected - before;
 
     // Compare against a baseline with no immunity
-    let state2 = GameState::new_default(42);
+    let state2 = AppState::new_default(42);
     let after2 = tick(&state2);
     let growth2 = after2.regions[4].disease_state(0).unwrap().infected
         - state2.regions[4].disease_state(0).unwrap().infected;
@@ -80,7 +80,7 @@ fn immune_reduces_susceptible_pool() {
 
 #[test]
 fn disease_can_spread_into_vaccinated_region() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     // Pre-vaccinate North America — disease should still arrive
     state.regions[0].infections.push(RegionDiseaseState {
         disease_idx: 0,
@@ -111,7 +111,7 @@ From the medicine deployment tests — one test covers the full vaccination flow
 ```rust
 #[test]
 fn medicine_vaccination_deployment() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state = apply_action(&state, &Action::OpenMedicines);
     assert_eq!(state.ui.open_panel, Panel::Medicines);
     state = apply_action(&state, &Action::Confirm);
