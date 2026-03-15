@@ -4796,7 +4796,7 @@ impl UiState {
     /// Toggle a panel open/closed. If deep in a panel wizard, pressing the same
     /// panel key resets to the top level instead of closing. Only closes when
     /// already at the top level.
-    pub fn toggle_panel(&mut self, panel: Panel, _num_regions: usize) {
+    pub fn toggle_panel(&mut self, panel: Panel) {
         if self.open_panel == panel {
             // Check if we're deeper than the top level — if so, reset to top
             let at_top = match panel {
@@ -4858,7 +4858,7 @@ impl UiState {
     }
 
     /// Handle Escape — go back one step in the current panel's wizard, or close the panel.
-    pub fn close_panel(&mut self, _medicines: &[Medicine], _diseases: &[Disease]) {
+    pub fn close_panel(&mut self) {
         match self.open_panel {
             Panel::Medicines => {
                 match self.medicine_ui.clone() {

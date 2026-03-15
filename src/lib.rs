@@ -112,15 +112,15 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 };
             }
         }
-        Action::OpenThreats => new.ui.toggle_panel(Panel::Threats, new.regions.len()),
-        Action::OpenResearch => new.ui.toggle_panel(Panel::Research, new.regions.len()),
-        Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines, new.regions.len()),
-        Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy, new.regions.len()),
-        Action::OpenOperations => new.ui.toggle_panel(Panel::Operations, new.regions.len()),
-        Action::OpenBoard => new.ui.toggle_panel(Panel::Board, new.regions.len()),
-        Action::OpenStocks => new.ui.toggle_panel(Panel::Ledger, new.regions.len()),
-        Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
-        Action::ClosePanel => new.ui.close_panel(&new.world.medicines, &new.world.diseases),
+        Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
+        Action::OpenResearch => new.ui.toggle_panel(Panel::Research),
+        Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines),
+        Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy),
+        Action::OpenOperations => new.ui.toggle_panel(Panel::Operations),
+        Action::OpenBoard => new.ui.toggle_panel(Panel::Board),
+        Action::OpenStocks => new.ui.toggle_panel(Panel::Ledger),
+        Action::OpenHelp => new.ui.toggle_panel(Panel::Help),
+        Action::ClosePanel => new.ui.close_panel(),
         Action::GoHome => new.ui.go_home(),
         Action::SelectNext => {
             let max = ui::panel_selection_max(&new.ui, &new);
