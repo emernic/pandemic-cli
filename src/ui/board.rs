@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{BoardPersonality, BoardRole, AppState, GovernorPersonality, ModifierSource, TICKS_PER_DAY};
+use crate::state::{BoardRole, AppState, ModifierSource, TICKS_PER_DAY};
 
 
 /// Maximum selection index for the board panel.
@@ -159,56 +159,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
 
             lines.push(Line::from(detail_spans));
 
-            // Active demand summary (if board satisfaction is low enough that demands fire)
+            // Active demand summary — show the worst modifier driving unhappiness
             if member.satisfaction < 0.5 {
-                let demand_text = match &member.role {
-                    BoardRole::CorporateLeader { corp_idx } => {
-                        let corp_name = state.corporations.get(*corp_idx)
-                            .map(|c| c.name.as_str()).unwrap_or("corporation");
-                        let bankrupt = state.corporations.get(*corp_idx)
-                            .map_or(false, |c| c.bankrupt);
-                        if bankrupt {
-                            Some(format!("Demands: Restore {} operations", corp_name))
-                        } else {
-                            Some(match member.personality {
-                                Some(BoardPersonality::Technocrat) =>
-                                    "Demands: Staff research programs".to_string(),
-                                Some(BoardPersonality::Humanitarian) =>
-                                    "Demands: Prioritize disease containment".to_string(),
-                                Some(BoardPersonality::Dealmaker) =>
-                                    format!("Demands: Invest in {}", corp_name),
-                                Some(BoardPersonality::Profiteer) | None =>
-                                    "Demands: Roll back restrictive policies".to_string(),
-                            })
-                        }
-                    }
-                    BoardRole::RegionGovernor { region_idx } => {
-                        state.regions.get(*region_idx)
-                            .map(|r| {
-                                if r.collapsed {
-                                    format!("Demands: Rebuild {}", r.name)
-                                } else {
-                                    match r.governor.personality {
-                                        GovernorPersonality::Blowhard =>
-                                            format!("Demands: Lift restrictions in {}", r.name),
-                                        GovernorPersonality::Hardliner =>
-                                            format!("Demands: Prioritize {} over other regions", r.name),
-                                        GovernorPersonality::Operative =>
-                                            "Demands: Secure more contracts".to_string(),
-                                        GovernorPersonality::Mobster =>
-                                            "Demands: Increase funding reserves".to_string(),
-                                        GovernorPersonality::Buffoon =>
-                                            "Demands: Put more people to work".to_string(),
-                                        GovernorPersonality::Recluse =>
-                                            format!("Demands: Keep {} alive", r.name),
-                                    }
-                                }
-                            })
-                    }
-                };
+                let demand_text = worst_modifier_demand(state, i);
                 if let Some(text) = demand_text {
                     lines.push(Line::from(Span::styled(
-                        format!("    {}", text),
+                        format!("    Unhappy: {}", text),
                         Style::default().fg(Color::LightRed),
                     )));
                 }
@@ -369,4 +325,71 @@ fn modifier_context(
         }
         _ => String::new(),
     }
+}
+
+/// Find the most negative satisfaction modifier and return a human-readable
+/// demand string explaining why this board member is unhappy.
+fn worst_modifier_demand(state: &AppState, member_idx: usize) -> Option<String> {
+    let modifiers = state.member_satisfaction_modifiers(member_idx);
+    // Find the most negative non-Base modifier
+    let worst = modifiers.iter()
+        .filter(|m| m.source != ModifierSource::Base)
+        .min_by(|a, b| a.value.partial_cmp(&b.value).unwrap_or(std::cmp::Ordering::Equal))?;
+
+    if worst.value >= 0.0 {
+        return None; // No negative modifiers — shouldn't happen at <50% but be safe
+    }
+
+    let member = &state.board_members[member_idx];
+    Some(match &worst.source {
+        ModifierSource::StockPerformance => {
+            let corp_name = member.corp_idx
+                .and_then(|idx| state.corporations.get(idx))
+                .map(|c| c.name.as_str())
+                .unwrap_or("corporation");
+            format!("{} stock is down", corp_name)
+        }
+        ModifierSource::RegionalGdp => {
+            let region_name = member.region_idx
+                .and_then(|idx| state.regions.get(idx))
+                .map(|r| r.name.as_str())
+                .unwrap_or("region");
+            format!("{} GDP declining", region_name)
+        }
+        ModifierSource::ResearchUtilization => "Research capacity underused".to_string(),
+        ModifierSource::GlobalSurvival => "Too many lives lost".to_string(),
+        ModifierSource::PlayerInvestment => {
+            let corp_name = member.corp_idx
+                .and_then(|idx| state.corporations.get(idx))
+                .map(|c| c.name.as_str())
+                .unwrap_or("corporation");
+            format!("Wants investment in {}", corp_name)
+        }
+        ModifierSource::InitialSkepticism => "Doesn't trust you yet".to_string(),
+        ModifierSource::RestrictivePolicies => {
+            let region_name = member.region_idx
+                .and_then(|idx| state.regions.get(idx))
+                .map(|r| r.name.as_str())
+                .unwrap_or("region");
+            format!("Too many restrictions in {}", region_name)
+        }
+        ModifierSource::RegionalStanding => {
+            let region_name = member.region_idx
+                .and_then(|idx| state.regions.get(idx))
+                .map(|r| r.name.as_str())
+                .unwrap_or("region");
+            format!("{} falling behind other regions", region_name)
+        }
+        ModifierSource::GovernorDysfunction => "Governors too cooperative".to_string(),
+        ModifierSource::FundingReserves => "Funding reserves too low".to_string(),
+        ModifierSource::PersonnelDeployment => "Not enough personnel deployed".to_string(),
+        ModifierSource::RegionalSurvival => {
+            let region_name = member.region_idx
+                .and_then(|idx| state.regions.get(idx))
+                .map(|r| r.name.as_str())
+                .unwrap_or("region");
+            format!("{} losing population", region_name)
+        }
+        other => format!("{}", other.label()),
+    })
 }

@@ -13,7 +13,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, WorldState, ResearchKind,
+    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, WorldState,
     StandingOrderKind,
     COLLAPSE_DEATH_RATE, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
