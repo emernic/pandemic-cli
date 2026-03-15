@@ -314,7 +314,7 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 /// Check each original (non-variant) disease for variant spawning.
 /// Each disease rolls against its effective_variant_rate() per tick.
 /// Only root diseases (variant_number == 0) can spawn variants.
-pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng) {
+pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
     // Collect spawn candidates: (parent_idx, effective_rate)
     let candidates: Vec<(usize, f64)> = state.diseases.iter().enumerate()
         .filter(|(_, d)| d.variant_number == 0) // only root diseases spawn variants
@@ -328,7 +328,7 @@ pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng)
         // Try to spawn a variant
         if let Some(variant_idx) = spawn_variant(state, parent_idx, rng) {
             let parent_name = state.diseases[parent_idx].name.clone();
-            state.events.push(GameEvent::VariantEmerged {
+            events.push(GameEvent::VariantEmerged {
                 disease_idx: variant_idx,
                 parent_name,
             });

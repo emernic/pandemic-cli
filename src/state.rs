@@ -62,10 +62,6 @@ pub struct GameState {
     pub enacted_decrees: EnactedDecrees,
     #[serde(default)]
     pub outcome: GameOutcome,
-    /// Events from the most recent tick. Consumed by the UI layer for status
-    /// messages. Cleared at the start of each tick.
-    #[serde(skip)]
-    pub events: Vec<GameEvent>,
     /// Tracks which medicines have already fired a DeployBlocked event
     /// this session, to avoid spamming the log every tick.
     #[serde(skip)]
@@ -5438,7 +5434,6 @@ impl GameState {
             active_research: vec![],
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
-            events: vec![],
             deploy_blocked_notified: std::collections::HashSet::new(),
             event_log: VecDeque::new(),
             active_crisis: None,

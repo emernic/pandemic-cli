@@ -12,7 +12,7 @@ use crate::state::{
 /// - Healthcare: degrades from infection load (hospitals overwhelmed)
 /// - Supply lines: degrades from death rate and travel bans
 /// - Civil order: degrades from deaths, restrictive policies, and low healthcare
-pub(super) fn tick_infrastructure(state: &mut GameState) {
+pub(super) fn tick_infrastructure(state: &mut GameState, events: &mut Vec<GameEvent>) {
     // ResilientGrids tech: disease-caused drains are 20% slower.
     let resilience_mult = if state.unlocked_techs.contains(&BasicTech::ResilientGrids) {
         0.80
@@ -94,7 +94,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
             + (hospital_recovery + hospital_building_recovery + natural_healthcare_recovery) * mining_recovery_mult)
             .clamp(0.0, 1.0);
         state.regions[i].healthcare_capacity = new_healthcare;
-        emit_breakpoint_events(state, i, InfraSystem::Healthcare, old_healthcare, new_healthcare);
+        emit_breakpoint_events(i, InfraSystem::Healthcare, old_healthcare, new_healthcare, events);
 
         // --- Supply Lines ---
         // Degrades from death rate and travel bans
@@ -130,7 +130,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         let new_supply = (old_supply + supply_drain * sl_spec_mult * energy_drain_mult + natural_supply_recovery * mining_recovery_mult)
             .clamp(0.0, 1.0);
         state.regions[i].supply_lines = new_supply;
-        emit_breakpoint_events(state, i, InfraSystem::SupplyLines, old_supply, new_supply);
+        emit_breakpoint_events(i, InfraSystem::SupplyLines, old_supply, new_supply, events);
 
         // --- Civil Order ---
         // Degrades from deaths, restrictive policies, and healthcare collapse
@@ -201,7 +201,7 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
         let new_civil = (old_civil + civil_drain * co_spec_mult * energy_drain_mult + natural_civil_recovery * mining_recovery_mult)
             .clamp(0.0, 1.0);
         state.regions[i].civil_order = new_civil;
-        emit_breakpoint_events(state, i, InfraSystem::CivilOrder, old_civil, new_civil);
+        emit_breakpoint_events(i, InfraSystem::CivilOrder, old_civil, new_civil, events);
     }
 
     // --- Collapse supply chain penalty ---
@@ -222,16 +222,16 @@ pub(super) fn tick_infrastructure(state: &mut GameState) {
 
 /// Emit GameEvent when infrastructure crosses a breakpoint threshold.
 fn emit_breakpoint_events(
-    state: &mut GameState,
     region_idx: usize,
     system: InfraSystem,
     old: f64,
     new: f64,
+    events: &mut Vec<GameEvent>,
 ) {
     let thresholds = [INFRA_STRESSED, INFRA_CRITICAL, 0.0];
     for &threshold in &thresholds {
         if old > threshold && new <= threshold {
-            state.events.push(GameEvent::InfrastructureBreakpoint {
+            events.push(GameEvent::InfrastructureBreakpoint {
                 region_idx,
                 system,
                 threshold,
@@ -247,13 +247,14 @@ mod tests {
 
     #[test]
     fn healthcare_degrades_under_crit_infections() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         assert_eq!(state.regions[0].healthcare_capacity, 1.0);
 
         // Tick many times (7 days — baseline hospital recovery partially counters drain)
         for _ in 0..(120 * 7) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         assert!(state.regions[0].healthcare_capacity < 0.6,
             "HC should degrade under CRIT: {}", state.regions[0].healthcare_capacity);
@@ -261,13 +262,14 @@ mod tests {
 
     #[test]
     fn healthcare_stable_without_infections() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         // Clear all infections
         for r in &mut state.regions {
             r.infections.clear();
         }
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         assert!((state.regions[0].healthcare_capacity - 1.0).abs() < 0.01,
             "HC should stay at 1.0 without infections: {}", state.regions[0].healthcare_capacity);
@@ -275,12 +277,13 @@ mod tests {
 
     #[test]
     fn supply_lines_degrade_with_deaths() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * 0.06; // >5% dead
 
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         assert!(state.regions[0].supply_lines < 0.95,
             "SL should degrade with high deaths: {}", state.regions[0].supply_lines);
@@ -288,6 +291,7 @@ mod tests {
 
     #[test]
     fn civil_order_degrades_with_deaths_and_restrictions() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * 0.06;
@@ -295,7 +299,7 @@ mod tests {
         state.policies[0].travel_ban = true;
 
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         assert!(state.regions[0].civil_order < 0.95,
             "CO should degrade with deaths and restrictions: {}", state.regions[0].civil_order);
@@ -303,6 +307,7 @@ mod tests {
 
     #[test]
     fn healthcare_cascade_accelerates_civil_order() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         // Manually set healthcare to critical
         state.regions[0].healthcare_capacity = 0.20;
@@ -311,7 +316,7 @@ mod tests {
 
         let initial_civil = state.regions[0].civil_order;
         for _ in 0..(120 * 5) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         let civil_with_cascade = state.regions[0].civil_order;
 
@@ -319,7 +324,7 @@ mod tests {
         state.regions[0].civil_order = initial_civil;
         state.regions[0].healthcare_capacity = 1.0;
         for _ in 0..(120 * 5) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         let civil_without_cascade = state.regions[0].civil_order;
 
@@ -330,20 +335,21 @@ mod tests {
 
     #[test]
     fn breakpoint_events_fire() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.regions[0].healthcare_capacity = 0.51;
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         // Tick until HC crosses 0.50
         for _ in 0..200 {
-            state.events.clear();
-            tick_infrastructure(&mut state);
+            events.clear();
+            tick_infrastructure(&mut state, &mut events);
             if state.regions[0].healthcare_capacity <= 0.50 {
                 break;
             }
         }
 
-        assert!(state.events.iter().any(|e| matches!(e,
+        assert!(events.iter().any(|e| matches!(e,
             GameEvent::InfrastructureBreakpoint { system: InfraSystem::Healthcare, threshold, .. }
             if (*threshold - 0.50).abs() < 0.01
         )), "should fire STRESSED breakpoint event");
@@ -351,6 +357,7 @@ mod tests {
 
     #[test]
     fn quarantine_drains_civil_order_faster_than_other_policies() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         // No deaths — isolate quarantine drain effect
         state.regions[0].dead = 0.0;
@@ -362,7 +369,7 @@ mod tests {
         state.policies[0].quarantine = true;
         let initial = state.regions[0].civil_order;
         for _ in 0..(120 * 15) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         let co_with_quarantine = state.regions[0].civil_order;
 
@@ -371,7 +378,7 @@ mod tests {
         state.policies[0].quarantine = false;
         state.policies[0].travel_ban = true;
         for _ in 0..(120 * 15) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         let co_with_travel_ban = state.regions[0].civil_order;
 
@@ -386,11 +393,12 @@ mod tests {
 
     #[test]
     fn collapsed_region_has_zero_infrastructure() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.regions[0].collapsed = true;
         state.regions[0].healthcare_capacity = 0.50;
 
-        tick_infrastructure(&mut state);
+        tick_infrastructure(&mut state, &mut events);
         assert_eq!(state.regions[0].healthcare_capacity, 0.0);
         assert_eq!(state.regions[0].supply_lines, 0.0);
         assert_eq!(state.regions[0].civil_order, 0.0);
@@ -399,24 +407,25 @@ mod tests {
 
     #[test]
     fn collapse_reduces_neighbor_delivery_throughput() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR;
         let mut state = GameState::new_default(42);
         // NA (idx 0) is connected to SA (idx 1) and Europe (idx 2).
         // Verify baseline: no collapsed neighbors → penalty = 1.0
-        tick_infrastructure(&mut state);
+        tick_infrastructure(&mut state, &mut events);
         assert!((state.regions[0].collapse_supply_penalty - 1.0).abs() < 0.001,
             "No collapsed neighbors should give penalty 1.0, got {}", state.regions[0].collapse_supply_penalty);
 
         // Collapse SA (idx 1) — NA should get a throughput penalty
         state.regions[1].collapsed = true;
-        tick_infrastructure(&mut state);
+        tick_infrastructure(&mut state, &mut events);
         let expected_one = 1.0 - COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR;
         assert!((state.regions[0].collapse_supply_penalty - expected_one).abs() < 0.001,
             "One collapsed neighbor: expected {}, got {}", expected_one, state.regions[0].collapse_supply_penalty);
 
         // Also collapse Europe (idx 2) — NA now has 2 collapsed neighbors
         state.regions[2].collapsed = true;
-        tick_infrastructure(&mut state);
+        tick_infrastructure(&mut state, &mut events);
         let expected_two = (1.0 - COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR).powi(2);
         assert!((state.regions[0].collapse_supply_penalty - expected_two).abs() < 0.001,
             "Two collapsed neighbors: expected {}, got {}", expected_two, state.regions[0].collapse_supply_penalty);
@@ -441,12 +450,13 @@ mod tests {
 
     #[test]
     fn resilient_grids_slows_healthcare_degradation() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         // Without tech
         let mut state_no_tech = GameState::new_default(42);
         state_no_tech.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         for _ in 0..(120 * 7) {
-            tick_infrastructure(&mut state_no_tech);
+            tick_infrastructure(&mut state_no_tech, &mut events);
         }
         let hc_no_tech = state_no_tech.regions[0].healthcare_capacity;
 
@@ -455,7 +465,7 @@ mod tests {
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         state_tech.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         for _ in 0..(120 * 7) {
-            tick_infrastructure(&mut state_tech);
+            tick_infrastructure(&mut state_tech, &mut events);
         }
         let hc_tech = state_tech.regions[0].healthcare_capacity;
 
@@ -465,6 +475,7 @@ mod tests {
 
     #[test]
     fn resilient_grids_slows_supply_line_degradation() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         let pop = {
             let s = GameState::new_default(42);
@@ -475,7 +486,7 @@ mod tests {
         let mut state_no_tech = GameState::new_default(42);
         state_no_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_no_tech);
+            tick_infrastructure(&mut state_no_tech, &mut events);
         }
         let sl_no_tech = state_no_tech.regions[0].supply_lines;
 
@@ -484,7 +495,7 @@ mod tests {
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         state_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_tech);
+            tick_infrastructure(&mut state_tech, &mut events);
         }
         let sl_tech = state_tech.regions[0].supply_lines;
 
@@ -494,6 +505,7 @@ mod tests {
 
     #[test]
     fn resilient_grids_slows_civil_order_degradation() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         let pop = {
             let s = GameState::new_default(42);
@@ -504,7 +516,7 @@ mod tests {
         let mut state_no_tech = GameState::new_default(42);
         state_no_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_no_tech);
+            tick_infrastructure(&mut state_no_tech, &mut events);
         }
         let co_no_tech = state_no_tech.regions[0].civil_order;
 
@@ -513,7 +525,7 @@ mod tests {
         state_tech.unlocked_techs.push(BasicTech::ResilientGrids);
         state_tech.regions[0].dead = pop * 0.06;
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_tech);
+            tick_infrastructure(&mut state_tech, &mut events);
         }
         let co_tech = state_tech.regions[0].civil_order;
 
@@ -523,6 +535,7 @@ mod tests {
 
     #[test]
     fn rna_virus_causes_extra_civil_order_drain() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         // Set up two identical states: one with an RNA virus, one with a bacterium
         let mut state_rna = GameState::new_default(42);
@@ -538,8 +551,8 @@ mod tests {
         state_bact.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_rna);
-            tick_infrastructure(&mut state_bact);
+            tick_infrastructure(&mut state_rna, &mut events);
+            tick_infrastructure(&mut state_bact, &mut events);
         }
 
         assert!(state_rna.regions[0].civil_order < state_bact.regions[0].civil_order,
@@ -549,6 +562,7 @@ mod tests {
 
     #[test]
     fn rna_panic_only_affects_detected_diseases() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         let mut state_detected = GameState::new_default(42);
         for r in &mut state_detected.regions { r.infections.clear(); r.dead = 0.0; }
@@ -563,8 +577,8 @@ mod tests {
         state_undetected.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_detected);
-            tick_infrastructure(&mut state_undetected);
+            tick_infrastructure(&mut state_detected, &mut events);
+            tick_infrastructure(&mut state_undetected, &mut events);
         }
 
         assert!(state_detected.regions[0].civil_order < state_undetected.regions[0].civil_order,
@@ -574,6 +588,7 @@ mod tests {
 
     #[test]
     fn fungal_infection_drains_healthcare_below_severity_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         // A small fungal infection (below INFECTION_PRESSURE_MOD) should still drain healthcare
         let mut state = GameState::new_default(42);
@@ -585,7 +600,7 @@ mod tests {
         let initial_hc = state.regions[0].healthcare_capacity;
         // Run for 30 days — natural recovery and hospital recovery will fight the drain
         for _ in 0..(120 * 30) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         // HC should be lower than initial despite being below normal drain thresholds
         assert!(state.regions[0].healthcare_capacity < initial_hc,
@@ -595,6 +610,7 @@ mod tests {
 
     #[test]
     fn fungal_drain_stacks_with_multiple_infections() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         // One fungal infection
         let mut state_one = GameState::new_default(42);
@@ -615,8 +631,8 @@ mod tests {
         state_two.regions[0].get_or_create_infection(1).infected = 100.0;
 
         for _ in 0..(120 * 20) {
-            tick_infrastructure(&mut state_one);
-            tick_infrastructure(&mut state_two);
+            tick_infrastructure(&mut state_one, &mut events);
+            tick_infrastructure(&mut state_two, &mut events);
         }
         assert!(state_two.regions[0].healthcare_capacity < state_one.regions[0].healthcare_capacity,
             "Two fungal infections should drain more than one: two={} one={}",
@@ -625,6 +641,7 @@ mod tests {
 
     #[test]
     fn non_fungal_has_no_drain_below_severity_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PathogenType;
         let mut state = GameState::new_default(42);
         for r in &mut state.regions { r.infections.clear(); r.dead = 0.0; }
@@ -632,7 +649,7 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = 100.0;
 
         for _ in 0..(120 * 30) {
-            tick_infrastructure(&mut state);
+            tick_infrastructure(&mut state, &mut events);
         }
         // HC should be at or above initial (natural recovery with no real drain)
         assert!(state.regions[0].healthcare_capacity >= 1.0 - 0.01,
@@ -642,6 +659,7 @@ mod tests {
 
     #[test]
     fn resilient_grids_does_not_affect_policy_drain() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::BasicTech;
         // Travel ban drain on supply lines should be unaffected
         let mut state_no_tech = GameState::new_default(42);
@@ -652,7 +670,7 @@ mod tests {
         }
         state_no_tech.policies[0].travel_ban = true;
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_no_tech);
+            tick_infrastructure(&mut state_no_tech, &mut events);
         }
         let sl_no_tech = state_no_tech.regions[0].supply_lines;
 
@@ -664,7 +682,7 @@ mod tests {
         }
         state_tech.policies[0].travel_ban = true;
         for _ in 0..(120 * 10) {
-            tick_infrastructure(&mut state_tech);
+            tick_infrastructure(&mut state_tech, &mut events);
         }
         let sl_tech = state_tech.regions[0].supply_lines;
 

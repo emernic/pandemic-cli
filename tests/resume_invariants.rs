@@ -279,19 +279,8 @@ fn session_reset_size_warning_dismissed() {
     );
 }
 
-#[test]
-fn session_reset_transient_events_not_persisted() {
-    let state = GameState::new_default(42);
-    // Advance a tick to generate transient events
-    let result = run_snapshot(state, &["t1".to_string()]).unwrap();
-
-    let restored = round_trip(&result.state);
-
-    assert!(
-        restored.events.is_empty(),
-        "transient per-tick events must not persist across save/load"
-    );
-}
+// Transient events no longer live on GameState — they flow explicitly
+// through tick/command return values. No save/load invariant to test.
 
 #[test]
 fn session_reset_crisis_dismissal_restores_fresh_default() {
