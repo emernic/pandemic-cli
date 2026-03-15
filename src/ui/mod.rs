@@ -5,7 +5,7 @@ pub mod ledger;
 pub mod medicines;
 pub mod operations;
 pub mod policy;
-pub mod research;
+pub mod lab;
 pub mod resources;
 pub mod threats;
 pub mod region_list;
@@ -40,8 +40,8 @@ pub fn panel_selection_max(ui: &UiState, state: &AppState) -> usize {
             Some(s) => medicines::selection_max(s, state),
             None => 0,
         },
-        Panel::Research => match &ui.research_ui {
-            Some(s) => research::selection_max(s, state),
+        Panel::Lab => match &ui.lab_ui {
+            Some(s) => lab::selection_max(s, state),
             None => 0,
         },
         Panel::Policy => match &ui.policy_ui {
@@ -146,7 +146,7 @@ pub fn render(f: &mut Frame, state: &AppState) {
             Panel::None => home::render(f, split[1], state),
             Panel::Threats => threats::render(f, split[1], state),
             Panel::Medicines => medicines::render(f, split[1], state),
-            Panel::Research => research::render(f, split[1], state),
+            Panel::Lab => lab::render(f, split[1], state),
             Panel::Policy => policy::render(f, split[1], state),
             Panel::Operations => operations::render(f, split[1], state),
             Panel::Board => board::render(f, split[1], state),
@@ -300,7 +300,7 @@ fn textwrap(s: &str, max_width: usize) -> Vec<String> {
 
 fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
     let title = match panel {
-        Panel::Research => " Research ",
+        Panel::Lab => " Lab ",
         Panel::Help => " Help ",
         _ => " Panel ",
     };
@@ -314,7 +314,7 @@ fn render_placeholder_panel(f: &mut Frame, area: Rect, panel: &Panel) {
             Line::from(""),
             Line::from(Span::styled("Controls:", Style::default().fg(Color::Yellow))),
             Line::from("  [T] View active threats"),
-            Line::from("  [R] Research panel"),
+            Line::from("  [L] Lab panel"),
             Line::from("  [M] Medicines panel"),
             Line::from("  [P] Policy panel"),
             Line::from("  [O] Orders panel"),
@@ -642,7 +642,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &AppState) {
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  [Q] Save & Quit  [T/R/M] Browse panels",
+        "  [Q] Save & Quit  [T/L/M] Browse panels",
         Style::default().fg(Color::DarkGray),
     )));
 

@@ -328,12 +328,12 @@ mod tests {
     /// Helper: open research panel, navigate to first available item matching `kind_pred`, and confirm through.
     fn start_research_matching(state: &AppState, kind_pred: impl Fn(&ResearchKind) -> bool) -> AppState {
         // Ensure panel is closed first, then open fresh
-        let mut s = if state.ui.open_panel == crate::state::Panel::Research {
+        let mut s = if state.ui.open_panel == crate::state::Panel::Lab {
             apply_action(state, &Action::ClosePanel)
         } else {
             state.clone()
         };
-        s = apply_action(&s, &Action::OpenResearch);
+        s = apply_action(&s, &Action::OpenLab);
         let items = s.research_flat_items();
         let available = s.all_available_projects();
         let idx = items.iter().position(|item| {
@@ -353,7 +353,7 @@ mod tests {
     fn research_identify_increases_knowledge() {
         let mut state = AppState::new_default(42);
         // Start identify project on disease 0 (first item in flat list)
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
@@ -412,7 +412,7 @@ mod tests {
         let mut state = AppState::new_default(42);
         state.resources.personnel = 0; // No personnel
 
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
 
@@ -490,7 +490,7 @@ mod tests {
         // Identify costs $350; set funding to $100 so it fails
         state.resources.funding = 100.0;
 
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should not start without funding");
@@ -702,7 +702,7 @@ mod tests {
         let mut state = AppState::new_default(42);
         state.outcome = GameOutcome::Lost;
         // Try to start research
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should not start research after game over");
@@ -1165,7 +1165,7 @@ mod tests {
             }
         }
         // Start identify on disease 0 (first item in flat list)
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
@@ -1197,7 +1197,7 @@ mod tests {
         // Start develop medicine (applied research)
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some(),
-            "Applied research should start. UI state: {:?}", state.ui.research_ui);
+            "Applied research should start. UI state: {:?}", state.ui.lab_ui);
 
         // Advance to completion, checking events each tick
         let mut found_handoff = false;

@@ -13,7 +13,7 @@ use pandemic_cli_lib::engine;
 use pandemic_cli_lib::snapshot::run_snapshot;
 use pandemic_cli_lib::state::{
     AppState, CrisisCost, CrisisEvent, CrisisKind, CrisisOption, MedicineUiState,
-    Panel, ResearchUiState, SaveFile, SessionState,
+    Panel, LabUiState, SaveFile, SessionState,
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -94,8 +94,8 @@ fn resume_preserves_medicine_wizard_state() {
 #[test]
 fn resume_preserves_research_wizard_state() {
     let mut state = engine::new_game(42);
-    state.ui.open_panel = Panel::Research;
-    state.ui.research_ui = Some(ResearchUiState::ConfirmProject {
+    state.ui.open_panel = Panel::Lab;
+    state.ui.lab_ui = Some(LabUiState::ConfirmProject {
         project_idx: 0,
         double_personnel: true,
     });
@@ -103,8 +103,8 @@ fn resume_preserves_research_wizard_state() {
     let restored = round_trip(&state);
 
     assert_eq!(
-        restored.ui.research_ui,
-        Some(ResearchUiState::ConfirmProject {
+        restored.ui.lab_ui,
+        Some(LabUiState::ConfirmProject {
             project_idx: 0,
             double_personnel: true,
         }),
