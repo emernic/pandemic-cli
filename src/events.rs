@@ -56,7 +56,19 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     Some(spec) => format!(". {} lost", spec.label()),
                     None => String::new(),
                 };
-                let msg = format!("COLLAPSE: {} has fallen! {} regions remain{}", region_name, remaining, spec_suffix);
+                // Count non-collapsed neighbors whose supply routes are affected
+                let affected_neighbors = region
+                    .map(|r| r.connections.iter()
+                        .filter(|&&c| !state.regions[c].collapsed)
+                        .count())
+                    .unwrap_or(0);
+                let supply_suffix = if affected_neighbors > 0 {
+                    format!(". Supply routes degraded in {} neighbor{}", affected_neighbors,
+                        if affected_neighbors > 1 { "s" } else { "" })
+                } else {
+                    String::new()
+                };
+                let msg = format!("COLLAPSE: {} has fallen! {} regions remain{}{}", region_name, remaining, spec_suffix, supply_suffix);
                 let notification = if *personnel_lost > 0 {
                     format!("{}. {} personnel lost.", msg, personnel_lost)
                 } else {
