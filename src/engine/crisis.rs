@@ -241,17 +241,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::TrialShortcut { disease_idx: d_idx, medicine_idx: m_idx });
     }
 
-    // Vaccine hesitancy: requires any unlocked medicine AND region with active infections
-    // (noncompliance only makes sense where medical directives are being issued)
-    let regions_with_medical_activity: Vec<usize> = state.regions.iter().enumerate()
-        .filter(|(_, r)| !r.collapsed && r.infections.iter().any(|i| i.infected > 100.0))
-        .map(|(i, _)| i)
-        .collect();
-    if state.medicines.iter().any(|m| m.unlocked) && !regions_with_medical_activity.is_empty() {
-        let idx = regions_with_medical_activity[rng.r#gen::<usize>() % regions_with_medical_activity.len()];
-        candidates.push(CrisisKind::VaccineHesitancy { region_idx: idx });
-    }
-
     // Corrupt official: requires funding > 500
     if state.resources.funding > 500.0 {
         let stolen = (state.resources.funding * 0.15).min(500.0).round();
@@ -591,39 +580,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                  CrisisOption {
                     label: "Fast-track (+10% chairman approval)".into(),
                     description: "Clear for use 10 strain generations behind current variant. ~20% efficacy penalty from drift.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::VaccineHesitancy { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Treatment Noncompliance".into(),
-                description: format!(
-                    "Compliance rates in {} have dropped below operational thresholds. \
-                     Population is refusing medical directives.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Enforce compliance".into(),
-                    description: "Maintains treatment coverage. −10% chairman approval, −15 governor cooperation.".into(),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.20, 120.0, 700.0);
-                    CrisisOption {
-                        label: format!("Incentive program (¥{:.0})", cost),
-                        description: format!("Buy cooperation in {}, gain +5% chairman approval", region_name),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
-                },
-                CrisisOption {
-                    label: "Accept noncompliance".into(),
-                    description: format!("Let {} refuse. Reduced treatment coverage.", region_name),
                     cost: None,
                 },
                 ],
@@ -2318,45 +2274,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut 
             format!("Fast-tracked {} treatment trial.", name)
         }
 
-        (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
-            // Mandate — chairman satisfaction hit + governor cooperation drops + possible nationalist rebellion
-            chairman_satisfaction_hit(state, -0.10);
-            let mut governor_rebels = false;
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
-                // If cooperation drops below 30, governor may rebel against directive overreach
-                if region.governor.cooperation < 30.0 {
-                    governor_rebels = true;
-                }
-            }
-            if governor_rebels {
-                state.pending_crises.push(CrisisKind::GovernorHardliner { region_idx: *region_idx });
-                "Compliance enforced. Governor threatening to block operations.".into()
-            } else {
-                "Compliance enforced. Effective but deeply resented.".into()
-            }
-        }
-        (CrisisKind::VaccineHesitancy { region_idx }, 1) => {
-            // Education campaign — costs already deducted, gain chairman satisfaction
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            chairman_satisfaction_hit(state, 0.05);
-            format!("Incentive program deployed in {}. Compliance rates improving.", region_name)
-        }
-        (CrisisKind::VaccineHesitancy { region_idx }, _) => {
-            // Accept noncompliance — infections spike from untreated spread
-            chairman_satisfaction_hit(state, -0.05);
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                for inf in &mut region.infections {
-                    if inf.infected > 100.0 {
-                        inf.infected *= 1.10;
-                    }
-                }
-            }
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            format!("Noncompliance accepted in {}. Infections spreading unchecked.", region_name)
-        }
 
         (CrisisKind::CorruptOfficial { stolen }, 0) => {
             // Ignore — lose the stolen money (amount locked at generation time)

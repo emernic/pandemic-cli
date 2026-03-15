@@ -4069,35 +4069,6 @@ mod tests {
         assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
-    #[test]
-    fn vaccine_hesitancy_option_a_resolves() {
-        let mut state = GameState::new_default(42);
-        state.resources.authority = Authority::Maximum;
-        setup_crisis(&mut state, CrisisKind::VaccineHesitancy { region_idx: 0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.active_crisis.is_none(), "crisis should be resolved");
-    }
-
-    #[test]
-    fn vaccine_hesitancy_option_b_costs_funding() {
-        use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
-        state.resources.funding = 1000.0;
-        // Crisis active — blocking derived from active_crisis
-        state.ui.crisis_selection = 1;
-        state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::VaccineHesitancy { region_idx: 0 },
-            title: "T".into(), description: "T".into(),
-            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-             crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 400.0, personnel: 0, ..Default::default() }) },
-            ],
-            tick_created: 0,
-        });
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 600.0).abs() < 1.0,
-            "option B should cost 400 funding");
-    }
 
     #[test]
     fn corrupt_official_option_a_loses_funding() {
