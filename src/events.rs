@@ -337,15 +337,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("Standing order: {policy_name} auto-activated");
                 (8, msg.clone(), msg)
             }
-            GameEvent::NetworkDisruption { disrupted_region_idx, collapsed_region_idx } => {
-                let disrupted = state.regions.get(*disrupted_region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("?");
-                let collapsed = state.regions.get(*collapsed_region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("?");
-                let msg = format!("Network disruption: supply routes through {} severed by {} collapse",
-                    disrupted, collapsed);
-                (2, msg.clone(), msg)
-            }
             GameEvent::ResearchHandoff { message } => {
                 (2, message.clone(), message.clone())
             }

@@ -368,9 +368,6 @@ pub const INTEL_STATION_PERSONNEL: u32 = 1;
 pub const ADVANCED_INTEL_COST: f64 = 150.0;
 /// Advanced Intel ongoing personnel requirement (replaces Level 1 cost).
 pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
-
-/// Ticks a neighboring-collapse disruption lasts (10 days).
-pub const COLLAPSE_DISRUPTION_TICKS: u64 = (10.0 * TICKS_PER_DAY) as u64;
 /// Delivery throughput reduction per collapsed neighbor (multiplicative).
 /// Each collapsed neighbor reduces throughput by this fraction.
 /// E.g., 0.15 means one collapsed neighbor → 85% throughput, two → 72%.
@@ -2199,10 +2196,6 @@ pub struct Region {
     /// At 0: spread rate +50% (anarchy). Also factors into GDP via infrastructure health.
     #[serde(default = "default_one")]
     pub civil_order: f64,
-    /// Tick until which this region suffers network disruption from a neighboring collapse.
-    /// Multiple collapses extend the duration (last-collapse-wins on end tick).
-    #[serde(default)]
-    pub disrupted_until: Option<u64>,
     /// Supply chain throughput penalty from collapsed neighbors (0.0–1.0 multiplier).
     /// 1.0 = no penalty, lower = fewer doses delivered. Each collapsed neighbor
     /// reduces throughput by COLLAPSE_THROUGHPUT_PENALTY_PER_NEIGHBOR (multiplicative).
@@ -2279,11 +2272,6 @@ impl Region {
     /// True if this region has the given specialization and hasn't collapsed.
     pub fn has_specialization(&self, s: RegionSpecialization) -> bool {
         !self.collapsed && self.specialization == Some(s)
-    }
-
-    /// True if this region is currently experiencing network disruption.
-    pub fn is_disrupted(&self, current_tick: u64) -> bool {
-        self.disrupted_until.map_or(false, |t| t > current_tick)
     }
 
     pub fn alive(&self) -> f64 {
@@ -4107,12 +4095,6 @@ pub enum GameEvent {
         region_idx: usize,
         deaths: f64,
     },
-    /// A non-collapsed region is now suffering network disruption from a neighboring collapse.
-    /// Policy costs +30% for 10 days.
-    NetworkDisruption {
-        disrupted_region_idx: usize,
-        collapsed_region_idx: usize,
-    },
     /// The game just ended (defeat). UI should pause and close panels.
     /// The actual outcome is on `AppState::outcome`; this just signals the transition.
     /// A new funding contract offer is available.
@@ -5194,7 +5176,6 @@ impl WorldState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -5236,7 +5217,6 @@ impl WorldState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -5278,7 +5258,6 @@ impl WorldState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -5320,7 +5299,6 @@ impl WorldState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -5362,7 +5340,6 @@ impl WorldState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,
@@ -5404,7 +5381,6 @@ impl WorldState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
                 screening_noise_bias: 0.0,

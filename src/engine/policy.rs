@@ -19,7 +19,6 @@ use crate::state::{
     BARGAIN_OPERATIVE_INCOME_CUT, MAX_OPERATIVE_INCOME_SKIM,
     BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
-    COLLAPSE_DISRUPTION_TICKS,
     REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_HOSTILITY_THRESHOLD,
@@ -1026,22 +1025,8 @@ pub(super) fn enact_decree(state: &mut WorldState, decree: DecreeId, region_idx:
             }
             // Notify the UI
             events.push(GameEvent::RegionCollapsed { region_idx: r_idx, personnel_lost: 0 });
-            // Apply network disruption to connected non-collapsed regions (same as natural collapse)
-            let disruption_end = state.tick + COLLAPSE_DISRUPTION_TICKS;
-            let connected: Vec<usize> = state.regions[r_idx].connections.clone();
-            for &c in &connected {
-                if !state.regions[c].collapsed {
-                    state.regions[c].disrupted_until = Some(
-                        state.regions[c].disrupted_until.map_or(disruption_end, |t| t.max(disruption_end))
-                    );
-                    events.push(GameEvent::NetworkDisruption {
-                        disrupted_region_idx: c,
-                        collapsed_region_idx: r_idx,
-                    });
-                }
-            }
             // Schedule refugee wave toward a non-collapsed neighbor (if any)
-            let neighbors: Vec<usize> = connected.iter()
+            let neighbors: Vec<usize> = state.regions[r_idx].connections.iter()
                 .filter(|&&c| !state.regions[c].collapsed)
                 .copied()
                 .collect();
