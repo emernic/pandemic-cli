@@ -4391,8 +4391,6 @@ pub enum CrisisKind {
     BlackMarketMedicine { region_idx: usize },
     /// Pressure to skip clinical trials — fast-track marks medicine tested but with strain drift penalty.
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
-    /// Public refusing vaccines — education campaign or mandate.
-    VaccineHesitancy { region_idx: usize },
     /// Corrupt official siphoning funds — amount locked at generation time.
     CorruptOfficial { stolen: f64 },
     /// Powerful nation wants your research data — share or refuse.
@@ -4543,7 +4541,6 @@ impl CrisisKind {
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
             CrisisKind::TrialShortcut { .. } => "trial",
-            CrisisKind::VaccineHesitancy { .. } => "hesitancy",
             CrisisKind::CorruptOfficial { .. } => "corrupt",
             CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
