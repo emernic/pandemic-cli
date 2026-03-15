@@ -1,6 +1,4 @@
-use std::fs;
 use std::io;
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
@@ -13,6 +11,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use pandemic_cli_lib::action::{key_to_action, Action};
 use pandemic_cli_lib::apply_action;
+use pandemic_cli_lib::persistence;
 use pandemic_cli_lib::snapshot;
 use pandemic_cli_lib::state::GameState;
 use pandemic_cli_lib::tick_and_process;
@@ -62,38 +61,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let save_file = if let Some(path) = cli.save_file.clone() {
         Some(path)
     } else if cli.snapshot {
-        let path = auto_snapshot_save_path();
+        let path = persistence::auto_snapshot_save_path();
         snapshot_autosave_notice = Some(path.clone());
         Some(path)
     } else {
         Some("save.json".into())
     };
 
-    // Load or create state
-    let mut state: GameState = if let Some(ref path) = save_file {
-        if std::path::Path::new(path).exists() {
-            let data = fs::read_to_string(path)?;
-            if data.trim().is_empty() {
-                GameState::new_default(seed)
-            } else {
-                let mut s: GameState = serde_json::from_str(&data)
-                    .map_err(|e| format!(
-                        "Failed to load save file '{}': {}\nThe file may be corrupted. Delete it to start a new game.",
-                        path, e
-                    ))?;
-                s.migrate();
-                s
-            }
-        } else {
-            GameState::new_default(seed)
-        }
-    } else {
-        GameState::new_default(seed)
-    };
-
-    // Initialize game systems (corporations, board) for new games.
-    // Loaded saves already have this data; initialize_game checks and skips.
-    pandemic_cli_lib::engine::initialize_game(&mut state);
+    // Load or create state through the centralized persistence seam
+    let loaded = persistence::load_or_create(save_file.as_deref(), seed)
+        .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+    let state = loaded.state;
 
     if cli.snapshot {
         // Build step sequence: --do takes priority if provided, otherwise
@@ -113,11 +91,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // through `head` or similar, SIGPIPE kills the process on print,
         // so the save must happen first.
         if let Some(ref path) = save_file {
-            if let Some(parent) = std::path::Path::new(path).parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let json = serde_json::to_string_pretty(&result.state)?;
-            fs::write(path, json)?;
+            persistence::save(&result.state, path)
+                .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
         }
         if let Some(ref path) = snapshot_autosave_notice {
             println!("No save file passed in. Creating {}.", path);
@@ -132,16 +107,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         run_interactive(state, save_file)
     }
-}
-
-fn auto_snapshot_save_path() -> String {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_nanos();
-    let mut path = PathBuf::from("saves");
-    path.push(format!("playtest-{}-{}.json", std::process::id(), nanos));
-    path.to_string_lossy().into_owned()
 }
 
 fn install_panic_hook() {
@@ -175,11 +140,8 @@ fn run_interactive(
 
     // Save state on quit
     if let Some(path) = save_path {
-        if let Some(parent) = std::path::Path::new(&path).parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let json = serde_json::to_string_pretty(&state)?;
-        fs::write(&path, json)?;
+        persistence::save(&state, &path)
+            .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
         eprintln!("Game saved to {}", path);
     }
 
@@ -279,11 +241,11 @@ fn game_loop(
 
 #[cfg(test)]
 mod tests {
-    use super::auto_snapshot_save_path;
+    use pandemic_cli_lib::persistence;
 
     #[test]
     fn auto_snapshot_save_uses_gitignored_saves_directory() {
-        let path = auto_snapshot_save_path();
+        let path = persistence::auto_snapshot_save_path();
         assert!(path.starts_with("saves/"));
         assert!(path.ends_with(".json"));
         assert!(path.contains("playtest-"));

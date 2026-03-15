@@ -1,6 +1,7 @@
 pub mod action;
 pub mod engine;
 pub mod events;
+pub mod persistence;
 pub mod snapshot;
 pub mod state;
 pub mod ui;
