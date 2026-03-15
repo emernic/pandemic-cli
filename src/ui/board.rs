@@ -201,10 +201,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                                             "Demands: Put more people to work".to_string(),
                                         GovernorPersonality::Recluse =>
                                             format!("Demands: Keep {} alive", r.name),
-                                        _ if r.gdp_fraction() < 0.6 =>
-                                            format!("Demands: Restore {} economy", r.name),
-                                        _ =>
-                                            format!("Demands: Protect {} economy", r.name),
                                     }
                                 }
                             })
