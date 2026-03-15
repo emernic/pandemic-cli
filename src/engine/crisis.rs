@@ -1850,15 +1850,15 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             // most recent field research — not enough staff to sustain it.
             let research_demand: u32 =
                 state.active_research.iter().map(|p| p.personnel_assigned).sum();
-            let removed_field = {
+            if research_demand > state.resources.personnel {
                 let idx = state.active_research.iter().rposition(|p| p.kind.is_field_work());
-                if let Some(i) = idx { state.active_research.remove(i); true } else { false }
-            };
-            if research_demand > state.resources.personnel
-                && removed_field
-            {
-                format!("Lost {} personnel. Field research cancelled, insufficient staff.",
-                    amount)
+                if let Some(i) = idx {
+                    state.active_research.remove(i);
+                    format!("Lost {} personnel. Field research cancelled, insufficient staff.",
+                        amount)
+                } else {
+                    format!("Lost {} personnel to attrition", amount)
+                }
             } else {
                 format!("Lost {} personnel to attrition", amount)
             }
