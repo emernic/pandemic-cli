@@ -4174,11 +4174,6 @@ pub enum GameEvent {
     PathogenInterdicted {
         disease_idx: usize,
     },
-    /// Field operations completed: infrastructure system stabilized in a region.
-    InfrastructureStabilized {
-        region_idx: usize,
-        system: InfraSystem,
-    },
     /// A medicine shipment was dispatched and is in transit.
     MedicineShipped {
         medicine_idx: usize,
