@@ -1,5 +1,5 @@
 use crate::state::{
-    AUTO_MANUFACTURE_THRESHOLD, GameEvent, GameOutcome, GameState,
+    AUTO_MANUFACTURE_THRESHOLD, GameEvent, GameOutcome, WorldState,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -9,7 +9,7 @@ use crate::state::{
 /// `project_idx` indexes into `state.all_available_projects()`.
 ///
 /// Returns (success, message).
-pub(super) fn start_research(state: &mut GameState, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
+pub(super) fn start_research(state: &mut WorldState, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
@@ -59,7 +59,7 @@ pub(super) fn start_research(state: &mut GameState, project_idx: usize, double_p
 /// beyond 2x personnel = negative returns (too many cooks).
 /// Returns the number of research completions that should trigger board notifications
 /// (DevelopMedicine and BasicResearch completions boost Technocrat satisfaction).
-pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng, events: &mut Vec<GameEvent>) -> u32 {
+pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, events: &mut Vec<GameEvent>) -> u32 {
     // Proactively auto-repeat on idle categories
     try_auto_repeat(state, events);
 
@@ -270,7 +270,7 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng, eve
 
 /// Try to auto-repeat any repeatable research that has auto-repeat enabled.
 /// Called at the start of each tick.
-fn try_auto_repeat(state: &mut GameState, events: &mut Vec<GameEvent>) {
+fn try_auto_repeat(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     let kinds_to_repeat: Vec<ResearchKind> = state.auto_repeat_research.clone();
     for kind in &kinds_to_repeat {
         // Manufacturing only auto-repeats when doses drop to threshold
@@ -298,7 +298,7 @@ fn try_auto_repeat(state: &mut GameState, events: &mut Vec<GameEvent>) {
 
 /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
 /// Returns (success, message).
-pub(super) fn upgrade_lab(state: &mut GameState) -> (bool, Option<String>) {
+pub(super) fn upgrade_lab(state: &mut WorldState) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
@@ -322,7 +322,7 @@ mod tests {
     use crate::apply_action;
     use crate::engine::tick;
     use crate::state::{
-        GameEvent, GameOutcome, GameState, ResearchFlatItem, ResearchKind, ResearchProject,
+        GameOutcome, GameState, ResearchFlatItem, ResearchKind, ResearchProject,
     };
 
     /// Helper: open research panel, navigate to first available item matching `kind_pred`, and confirm through.
@@ -361,7 +361,7 @@ mod tests {
 
         // Advance to completion (160 ticks at 1x speed)
         for _ in 0..160 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty()); // Project completed
         assert!((state.diseases[0].knowledge - 0.50).abs() < 0.01);
@@ -381,7 +381,7 @@ mod tests {
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         for _ in 0..200 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
         assert!(state.medicines[0].unlocked);
@@ -401,7 +401,7 @@ mod tests {
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         for _ in 0..160 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
         assert!(state.medicines[0].tested_against.contains(&0));
@@ -433,7 +433,7 @@ mod tests {
             personnel_assigned: 10, // 2x base (5) — peak of diminishing returns
         }];
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         // At 2x ratio, diminishing returns gives 1.5x speed
         let expected = 1.5;
         assert!(
@@ -455,7 +455,7 @@ mod tests {
             personnel_assigned: 15, // 3x base (5)
         }];
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         let expected = 1.0;
         assert!(
             (state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().first().unwrap().progress - expected).abs() < 0.01,
@@ -515,7 +515,7 @@ mod tests {
             personnel_assigned: 5,
         });
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         assert!(state.medicines[0].unlocked);
     }
 
@@ -531,7 +531,7 @@ mod tests {
             personnel_assigned: 5,
         }];
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         assert!(state.medicines[0].tested_against.contains(&0));
         assert!(state.medicines[0].target_diseases.contains(&0));
     }
@@ -552,7 +552,7 @@ mod tests {
         assert!(!state.deploy_enabled.get(0).copied().unwrap_or(false),
             "deploy should be off before trial");
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
 
         assert!(state.medicines[0].tested_against.contains(&0),
             "medicine should be tested after trial");
@@ -601,7 +601,7 @@ mod tests {
             required_ticks: 15.0,
             personnel_assigned: 3,
         });
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
 
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty(), "project should be complete");
         let expected_doses = state.medicines[0].max_doses * state.manufacturing_yield_bonus();
@@ -621,7 +621,7 @@ mod tests {
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
         for _ in 0..200 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
         assert_eq!(state.diseases[0].sequencing_count, 1);
@@ -639,7 +639,7 @@ mod tests {
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         for _ in 0..160 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
@@ -659,7 +659,7 @@ mod tests {
 
         // Advance to completion (240 ticks at 1x speed)
         for _ in 0..240 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().is_empty(), "project should be complete");
         assert!(
@@ -737,7 +737,7 @@ mod tests {
 
         // Advance until first project completes but second hasn't
         for _ in 0..55 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert_eq!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().len(), 1, "first project should have completed");
         assert!(matches!(&state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>()[0].kind, ResearchKind::ClinicalTrial { .. }),
@@ -745,7 +745,7 @@ mod tests {
 
         // Advance until second completes
         for _ in 0..50 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "both projects should have completed");
     }
@@ -1002,7 +1002,7 @@ mod tests {
 
         // Tick to complete
         for _ in 0..5 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "suppression project should have completed");
@@ -1071,7 +1071,7 @@ mod tests {
         }];
 
         for _ in 0..5 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "attenuation project should have completed");
@@ -1103,7 +1103,7 @@ mod tests {
         }];
 
         for _ in 0..5 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "interdiction project should have completed");
@@ -1174,8 +1174,9 @@ mod tests {
         // events are only on the state returned by the tick that generated them)
         let mut found_handoff = false;
         for _ in 0..200 {
-            let tick_events;
-            (state, tick_events) = tick(&state);
+            let tick_result = tick(&state);
+            state = state.with_world(tick_result.0);
+            let tick_events = tick_result.1;
             if tick_events.iter().any(|e|
                 matches!(e, GameEvent::ResearchHandoff { message } if message.contains("development available"))
             ) {
@@ -1201,8 +1202,9 @@ mod tests {
         // Advance to completion, checking events each tick
         let mut found_handoff = false;
         for _ in 0..600 {
-            let tick_events;
-            (state, tick_events) = tick(&state);
+            let tick_result = tick(&state);
+            state = state.with_world(tick_result.0);
+            let tick_events = tick_result.1;
             if tick_events.iter().any(|e|
                 matches!(e, GameEvent::ResearchHandoff { message } if message.contains("clinical trial"))
             ) {

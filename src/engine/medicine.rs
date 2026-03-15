@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisOperation, DeployTarget, GameEvent, GameOutcome, GameState, MedicineMode,
+    CrisisOperation, DeployTarget, GameEvent, GameOutcome, WorldState, MedicineMode,
     RegionDiseaseState, Shipment, SHIPPING_TICKS, TICKS_PER_DAY,
 };
 
@@ -15,7 +15,7 @@ use crate::state::{
 ///
 /// Adverse reactions are checked at delivery time (see `deliver_shipment`).
 pub(super) fn deploy_medicine(
-    state: &mut GameState,
+    state: &mut WorldState,
     medicine_idx: usize,
     region_idx: usize,
     target: DeployTarget,
@@ -129,7 +129,7 @@ pub(super) fn deploy_medicine(
 /// Process arriving shipments. Called each tick. Delivers doses that have
 /// arrived and discards shipments to collapsed regions. Travel bans restrict
 /// civilian movement but do not block medical supply shipments.
-pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_shipments(state: &mut WorldState, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
     let mut i = 0;
     while i < state.pending_shipments.len() {
         let reg_idx = state.pending_shipments[i].region_idx;
@@ -162,7 +162,7 @@ pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::
 /// how many can be administered, and collapsed neighbors reduce throughput
 /// further. These multiply, so degraded regions receive far fewer effective
 /// doses. Wasted doses are lost permanently.
-fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
+fn deliver_shipment(state: &mut WorldState, shipment: &Shipment, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
     let med_idx = shipment.medicine_idx;
     let reg_idx = shipment.region_idx;
 
@@ -277,7 +277,7 @@ fn apply_immune_and_deaths(
 /// Mechanism-specific multipliers further modify: cheap/fast mechanisms
 /// have high resistance rates, expensive/durable ones have low rates.
 /// CombinationTherapy tech halves all resistance buildup.
-fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
+fn build_resistance(state: &mut WorldState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
     let med = &state.medicines[medicine_idx];
     let mechanism = med.mechanism;
     let base = if is_treatment { 0.006 } else { 0.001 };
@@ -303,7 +303,7 @@ fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usi
 ///
 /// Returns (success, message).
 pub(super) fn emergency_sample_delivery(
-    state: &mut GameState,
+    state: &mut WorldState,
     medicine_idx: usize,
     region_idx: usize,
     rng: &mut impl Rng,
@@ -418,7 +418,7 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
 /// - Always deploys as therapeutic (targets most infected region)
 /// - Respects per-medicine region filter (empty = all regions)
 /// - Cooldown must be clear for the chosen region
-pub(super) fn try_auto_deploy(state: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent>) {
     // Grow deploy vecs if new medicines were created
     while state.deploy_enabled.len() < state.medicines.len() {
         state.deploy_enabled.push(false);
@@ -499,12 +499,12 @@ pub(super) fn try_auto_deploy(state: &mut GameState, events: &mut Vec<GameEvent>
         } else {
             // No valid target found — check if ALL tested diseases are below efficacy
             // threshold and notify the player once.
-            if !state.session.deploy_blocked_notified.contains(&med_idx) {
+            if !state.deploy_blocked_notified.contains(&med_idx) {
                 let all_blocked = tested.iter().all(|&d_idx| {
                     state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::DEPLOY_MIN_EFFICACY
                 });
                 if all_blocked {
-                    state.session.deploy_blocked_notified.insert(med_idx);
+                    state.deploy_blocked_notified.insert(med_idx);
                     events.push(crate::state::GameEvent::DeployBlocked { medicine_idx: med_idx });
                 }
             }

@@ -13,7 +13,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind,
+    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, WorldState, ResearchKind,
     StandingOrderKind,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
@@ -27,7 +27,7 @@ use crate::state::{
 /// Initialize game systems that run after basic state construction.
 /// Called once for new games (not for loaded saves that already have this data).
 /// Generates corporations and board members from the initial game state.
-pub fn initialize_game(state: &mut GameState) {
+pub fn initialize_game(state: &mut WorldState) {
     if state.corporations.is_empty() {
         corporations::generate_corporations(state);
     }
@@ -51,7 +51,7 @@ pub fn initialize_game(state: &mut GameState) {
 /// calls `events::process_events()` to materialize events into UI state. This
 /// function is `pub(crate)` so engine unit tests can call it directly without
 /// going through the UI layer.
-pub(crate) fn tick(state: &GameState) -> (GameState, Vec<GameEvent>) {
+pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     let mut new = state.clone();
     let mut events: Vec<GameEvent> = Vec::new();
 
@@ -742,7 +742,7 @@ pub(crate) fn tick(state: &GameState) -> (GameState, Vec<GameEvent>) {
 /// Update per-disease observed infection estimates from screened data.
 /// Every tick: compute per-disease screened infected total and store as current estimate.
 /// At day boundaries: rotate current into prev, giving a 1-day comparison window for Rt.
-fn snapshot_disease_observations(state: &mut GameState) {
+fn snapshot_disease_observations(state: &mut WorldState) {
     let is_day_boundary = state.tick > 0 && state.tick % (TICKS_PER_DAY as u64) == 0;
 
     for disease_idx in 0..state.diseases.len() {
@@ -778,7 +778,7 @@ fn snapshot_disease_observations(state: &mut GameState) {
 const GDP_SMOOTHING: f64 = 0.10 / crate::state::TICKS_PER_DAY;
 
 /// Update each region's GDP toward its computed target.
-fn tick_gdp(state: &mut GameState) {
+fn tick_gdp(state: &mut WorldState) {
     for i in 0..state.regions.len() {
         if state.regions[i].collapsed {
             state.regions[i].gdp = 0.0;
@@ -803,7 +803,7 @@ pub struct CommandResult {
 /// Called from both `execute_command` (manual) and `tick` (auto-resolve).
 /// When auto-resolving, updates the CrisisAutoResolved event message with the
 /// richer message from the subsystem (e.g. contract details).
-fn dispatch_crisis_post_action(state: &mut GameState, post_action: crisis::CrisisPostAction, events: &mut Vec<GameEvent>) -> Option<String> {
+fn dispatch_crisis_post_action(state: &mut WorldState, post_action: crisis::CrisisPostAction, events: &mut Vec<GameEvent>) -> Option<String> {
     let msg = match post_action {
         crisis::CrisisPostAction::None => None,
         crisis::CrisisPostAction::AcceptContract => {
@@ -835,7 +835,7 @@ fn dispatch_crisis_post_action(state: &mut GameState, post_action: crisis::Crisi
 
 /// Execute a game command. Pure game logic — does NOT touch UI state.
 /// The caller is responsible for UI transitions based on the result.
-pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResult {
+pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResult {
     let mut events: Vec<GameEvent> = Vec::new();
     if state.outcome != GameOutcome::Playing {
         return CommandResult { message: None, success: false, events: Vec::new() };
@@ -916,7 +916,7 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             state.deploy_enabled[*med_idx] = !was_enabled;
             // When first enabling, ensure deploy_regions is empty (= all regions)
             // Reset blocked notification so the player gets re-notified if still blocked
-            state.session.deploy_blocked_notified.remove(med_idx);
+            state.deploy_blocked_notified.remove(med_idx);
             CommandResult { message: None, success: true, events: Vec::new() }
         }
         GameCommand::ToggleDeployRegion { med_idx, region_idx } => {
@@ -1142,10 +1142,10 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, GameState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, ResearchUiState};
+    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, GameState, WorldState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
-    fn unlock_all_medicines(state: &mut GameState) {
+    fn unlock_all_medicines(state: &mut WorldState) {
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
@@ -1154,14 +1154,14 @@ mod tests {
     }
 
     /// Helper: mark all diseases as detected (most tests assume this).
-    fn detect_all_diseases(state: &mut GameState) {
+    fn detect_all_diseases(state: &mut WorldState) {
         for d in &mut state.diseases {
             d.detected = true;
         }
     }
 
     /// Helper: find the region index that has the primary (first) disease outbreak.
-    fn primary_outbreak_region(state: &GameState) -> usize {
+    fn primary_outbreak_region(state: &WorldState) -> usize {
         state.regions.iter().position(|r|
             r.infections.iter().any(|i| i.disease_idx == 0 && i.infected > 0.0)
         ).expect("should have a region with disease 0")
@@ -1185,7 +1185,7 @@ mod tests {
         let state = GameState::new_default(42);
         let mut s = state;
         for _ in 0..20 {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
         assert!(s.total_dead() > 0.0, "should have some deaths after 20 ticks");
     }
@@ -1204,8 +1204,8 @@ mod tests {
         let mut a = state.clone();
         let mut b = state;
         for _ in 0..50 {
-            (a, _) = tick(&a);
-            (b, _) = tick(&b);
+            a = a.with_world(tick(&a).0);
+            b = b.with_world(tick(&b).0);
         }
         assert_eq!(a.total_infected(), b.total_infected());
         assert_eq!(a.total_dead(), b.total_dead());
@@ -1217,7 +1217,7 @@ mod tests {
         let state = GameState::new_default(42);
         let mut s = state;
         for _ in 0..50 {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
         assert!(
             s.total_immune() > 0.0,
@@ -1231,7 +1231,7 @@ mod tests {
         let state = GameState::new_default(42);
         let mut s = state;
         for _ in 0..100 {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
         for region in &s.regions {
             let pop = region.population as f64;
@@ -1263,7 +1263,7 @@ mod tests {
         let mut s = state;
         // With smaller initial seed (500-2500), need more ticks for cross-region spread
         for _ in 0..1000 {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
         let infected_regions = s
             .regions
@@ -1409,7 +1409,7 @@ mod tests {
         state.regions[clean_region].get_or_create_infection(0).immune = 100_000_000.0;
         let mut s = state;
         for _ in 0..200 {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
         let imm = s.regions[clean_region]
             .infections
@@ -1470,7 +1470,7 @@ mod tests {
         // with the manual deploy this test is exercising.
         for flag in &mut state.deploy_enabled { *flag = false; }
         for _ in 0..20 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         let ri = primary_outbreak_region(&state);
         let infected_before = state.regions[ri].disease_state(0).unwrap().infected;
@@ -1514,7 +1514,7 @@ mod tests {
         unlock_all_medicines(&mut state);
         state.medicines[0].doses = 0.0; // Empty
         for _ in 0..20 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         let ri = primary_outbreak_region(&state);
 
@@ -1592,7 +1592,7 @@ mod tests {
     }
 
     /// Helper: unlock medicines but leave them untested.
-    fn unlock_untested(state: &mut GameState) {
+    fn unlock_untested(state: &mut WorldState) {
         for med in &mut state.medicines {
             med.unlocked = true;
             med.doses = med.max_doses;
@@ -1651,7 +1651,7 @@ mod tests {
         state.medicines[med_idx].target_diseases = vec![0, 1];
         state.medicines[med_idx].doses = state.medicines[med_idx].max_doses;
         // Add a second disease
-        state.diseases.push(state.diseases[0].clone());
+        { let d = state.world.diseases[0].clone(); state.world.diseases.push(d); };
         state.diseases[1].detected = true;
 
         let mut events: Vec<GameEvent> = Vec::new();
@@ -1698,7 +1698,7 @@ mod tests {
         unlock_all_medicines(&mut state); // tested
         // Advance time so there are infections to treat
         for _ in 0..20 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         let ri = primary_outbreak_region(&state);
         let funding_before = state.resources.funding;
@@ -1758,9 +1758,11 @@ mod tests {
     fn map_navigation_with_panel_open() {
         let mut state = GameState::new_default(42);
         // Need at least 2 diseases so the panel has items to navigate
-        state.diseases.push(crate::state::Disease::generate(
-            &mut state.rng_emergence.clone(), crate::state::PathogenType::Bacterium, &[], true,
-        ));
+        {
+            let mut rng = state.world.rng_emergence.clone();
+            let d = crate::state::Disease::generate(&mut rng, crate::state::PathogenType::Bacterium, &[], true);
+            state.world.diseases.push(d);
+        }
         // Open threats panel — up/down should navigate panel, not map
         let s = apply_action(&state, &Action::OpenThreats);
         assert_eq!(s.ui.map_selection, 0);
@@ -1876,7 +1878,7 @@ mod tests {
         }
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..10000 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if state.outcome != GameOutcome::Playing {
                 break;
             }
@@ -1924,7 +1926,7 @@ mod tests {
             board::generate_board_members(&mut state);
             let max_ticks = 120 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
-                (state, _) = tick(&state);
+                state = state.with_world(tick(&state).0);
                 if state.active_crisis.is_some() {
                     state.active_crisis = None;
                 }
@@ -1979,7 +1981,7 @@ mod tests {
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             let mut total_deploys = 0u32;
             for _ in 0..max_ticks {
-                (state, _) = tick(&state);
+                state = state.with_world(tick(&state).0);
                 if state.active_crisis.is_some() {
                     state.active_crisis = None;
                 }
@@ -2117,7 +2119,7 @@ mod tests {
             board::generate_board_members(&mut state);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
-                (state, _) = tick(&state);
+                state = state.with_world(tick(&state).0);
                 if state.active_crisis.is_some() {
                     state.active_crisis = None;
                 }
@@ -2165,7 +2167,7 @@ mod tests {
             let mut state = GameState::new_default(seed);
             let max_ticks = 6 * TICKS_PER_DAY as u64;
             for t in 0..max_ticks {
-                (state, _) = tick(&state);
+                state = state.with_world(tick(&state).0);
                 if state.active_crisis.is_some() {
                     state.active_crisis = None;
                 }
@@ -2194,7 +2196,7 @@ mod tests {
         state.medicines[0].tested_against = (0..disease_count).collect();
         // Advance past emergence threshold so burn-out spawn can fire
         state.tick = crate::state::EMERGENCE_MIN_TICK + 1;
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         // Game should NOT end — there is no victory. Instead, a new disease spawns.
         assert_eq!(state.outcome, GameOutcome::Playing);
         assert!(
@@ -2230,7 +2232,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;
         let tick_before = state.tick;
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         assert_eq!(state.tick, tick_before, "tick should not advance after game over");
     }
 
@@ -2240,7 +2242,7 @@ mod tests {
         let ri = primary_outbreak_region(&state);
         // Set up a region with sub-person infected count
         state.regions[ri].get_or_create_infection(0).infected = 0.7;
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         // Should have snapped to 0 (sub-person counts are meaningless)
         assert_eq!(
             state.regions[ri].disease_state(0).unwrap().infected, 0.0,
@@ -2254,13 +2256,13 @@ mod tests {
         let ri = primary_outbreak_region(&state);
         let pop = state.regions[ri].population as f64;
         // Add a second disease with heavy infection in the same region
-        state.diseases.push(state.diseases[0].clone());
+        { let d = state.world.diseases[0].clone(); state.world.diseases.push(d); };
         state.regions[ri].get_or_create_infection(1).infected = pop * 0.3;
         // Also boost first disease
         state.regions[ri].get_or_create_infection(0).infected = pop * 0.3;
         // Run many ticks — both diseases should share the population
         for _ in 0..2000 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if state.active_crisis.is_some() {
                 state.active_crisis = None;
             }
@@ -2289,13 +2291,13 @@ mod tests {
 
         let mut dual = single.clone();
         // Add a second disease with significant infection
-        dual.diseases.push(dual.diseases[0].clone());
+        { let d = dual.world.diseases[0].clone(); dual.world.diseases.push(d); }
         dual.regions[ri].get_or_create_infection(1).infected = 100_000.0;
 
         // Run some ticks
         for _ in 0..100 {
-            (single, _) = tick(&single);
-            (dual, _) = tick(&dual);
+            single = single.with_world(tick(&single).0);
+            dual = dual.with_world(tick(&dual).0);
         }
 
         let single_dead = single.regions[ri].dead;
@@ -2316,7 +2318,7 @@ mod tests {
         state.tick = 20 * crate::state::TICKS_PER_DAY as u64;
         let disease_count = state.diseases.len();
         let original_spread = state.diseases[0].within_region_spread;
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
 
         assert!(
             state.diseases.len() > disease_count,
@@ -2349,7 +2351,7 @@ mod tests {
             region.infections.clear();
         }
         state.tick = 20 * crate::state::TICKS_PER_DAY as u64;
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         // Should have recycled a slot — disease count stays at MAX_DISEASES
         assert_eq!(state.diseases.len(), MAX_DISEASES,
             "should recycle a slot, not exceed MAX_DISEASES");
@@ -2364,7 +2366,7 @@ mod tests {
         // Run without travel ban
         let mut no_ban = state.clone();
         for _ in 0..100 {
-            (no_ban, _) = tick(&no_ban);
+            no_ban = no_ban.with_world(tick(&no_ban).0);
         }
         let no_ban_regions_infected: usize = no_ban.regions.iter()
             .filter(|r| r.total_infected() > 0.0)
@@ -2377,7 +2379,7 @@ mod tests {
         }
         let mut with_ban = state;
         for _ in 0..100 {
-            (with_ban, _) = tick(&with_ban);
+            with_ban = with_ban.with_world(tick(&with_ban).0);
         }
         let ban_regions_infected: usize = with_ban.regions.iter()
             .filter(|r| r.total_infected() > 0.0)
@@ -2483,14 +2485,14 @@ mod tests {
         // Run without quarantine
         let mut no_q = state.clone();
         for _ in 0..50 {
-            (no_q, _) = tick(&no_q);
+            no_q = no_q.with_world(tick(&no_q).0);
         }
 
         // Run with quarantine on the primary outbreak region
         state.policies[ri].quarantine = true;
         let mut with_q = state;
         for _ in 0..50 {
-            (with_q, _) = tick(&with_q);
+            with_q = with_q.with_world(tick(&with_q).0);
         }
 
         assert!(
@@ -2507,14 +2509,14 @@ mod tests {
         // Run baseline (hospitals active by default)
         let mut baseline = state.clone();
         for _ in 0..50 {
-            (baseline, _) = tick(&baseline);
+            baseline = baseline.with_world(tick(&baseline).0);
         }
 
         // Run with discourage hospitalization on the primary outbreak region
         state.policies[ri].discourage_hosp = true;
         let mut with_dh = state;
         for _ in 0..50 {
-            (with_dh, _) = tick(&with_dh);
+            with_dh = with_dh.with_world(tick(&with_dh).0);
         }
 
         assert!(
@@ -2534,7 +2536,7 @@ mod tests {
         // Now tick with travel ban
         let funding_before = state.resources.funding;
         state.policies[0].travel_ban = true; // $0.7/tick, also reduces region 0 GDP
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         let net_change = state.resources.funding - funding_before;
 
         // Should have deducted travel ban cost and reduced region income
@@ -2551,7 +2553,7 @@ mod tests {
         state.policies[0].travel_ban = true; // $0.7/tick — most expensive
         state.policies[0].quarantine = true; // $0.6/tick
         let tick_events;
-        (state, tick_events) = tick(&state);
+        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
         // Should have suspended travel ban (most expensive) but kept quarantine
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended");
         assert!(state.policies[0].quarantine, "quarantine should survive");
@@ -2570,7 +2572,7 @@ mod tests {
         state.policies[0].discourage_hosp = true;
         // Enough for quarantine + discourage hosp ($1.0) but not all three ($2.0)
         state.resources.funding = 1.2;
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         // Travel ban ($1.0, most expensive) should be suspended
         assert!(!state.policies[0].travel_ban, "travel ban should be suspended first");
         assert!(state.policies[0].quarantine, "quarantine should survive tick 1");
@@ -2595,7 +2597,7 @@ mod tests {
         // Start at a realistic tick so the rate limit (once per day) allows firing.
         state.tick = TICKS_PER_DAY as u64;
         let tick_events;
-        (state, tick_events) = tick(&state);
+        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
         assert!(
             tick_events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should emit FundingWarning when runway is low"
@@ -2608,7 +2610,7 @@ mod tests {
         state.policies[0].travel_ban = true; // $1/tick
         state.resources.funding = 1000.0; // Plenty of runway after deduction
         let tick_events;
-        (state, tick_events) = tick(&state);
+        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
         assert!(
             !tick_events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should not warn when funding is high"
@@ -2623,7 +2625,7 @@ mod tests {
         // nothing to suspend.
         state.resources.funding = 0.0;
         let tick_events;
-        (state, tick_events) = tick(&state);
+        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
         assert!(
             !tick_events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should not warn about policy suspension when no policies are active"
@@ -2666,8 +2668,8 @@ mod tests {
         let mut a = state.clone();
         let mut b = state;
         for _ in 0..1000 {
-            (a, _) = tick(&a);
-            (b, _) = tick(&b);
+            a = a.with_world(tick(&a).0);
+            b = b.with_world(tick(&b).0);
         }
         assert_eq!(a.diseases[0].within_region_spread, b.diseases[0].within_region_spread);
         assert_eq!(a.diseases[0].lethality, b.diseases[0].lethality);
@@ -2845,7 +2847,7 @@ mod tests {
         // With EMERGENCE_MIN_TICK=840 and EMERGENCE_CHANCE=0.0007,
         // we need ~2500 eligible ticks for reliable emergence.
         for _ in 0..3500 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         // With 0.07% chance per tick over ~2660 eligible ticks,
@@ -3316,7 +3318,7 @@ mod tests {
         // With CRISIS_INTERVAL=840, we need ~5000 ticks for P(no crisis) < 1%.
         let mut found_crisis = false;
         for _ in 0..5000 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if state.active_crisis.is_some() {
                 found_crisis = true;
                 break;
@@ -3626,7 +3628,7 @@ mod tests {
 
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..20000 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if state.outcome != GameOutcome::Playing {
                 break;
             }
@@ -3649,7 +3651,7 @@ mod tests {
         let mut auto_resolved = false;
         for _ in 0..5000 {
             let tick_events;
-            (state, tick_events) = tick(&state);
+            { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
             // If a personnel crisis auto-resolved, the game isn't in Event state
             // (it may be Paused from a DiseaseDetected in the same tick, which is fine)
             if tick_events.iter().any(|e| matches!(e, GameEvent::CrisisAutoResolved { .. })) {
@@ -4257,7 +4259,7 @@ mod tests {
         let mut all_tick_events = Vec::new();
         for _ in 0..ticks_needed {
             let tick_events;
-            (state2, tick_events) = tick(&state2);
+            { let r = tick(&state2); state2 = state2.with_world(r.0); tick_events = r.1; }
             all_tick_events.extend(tick_events);
         }
         assert_eq!(state2.crisis_operations.len(), 0,
@@ -4368,7 +4370,7 @@ mod tests {
 
         // Run many ticks to allow HGT to accumulate
         for _ in 0..1200 { // ~10 days
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         // Disease 1 should have gained meaningful broad-spectrum resistance
@@ -4408,7 +4410,7 @@ mod tests {
         state.regions[region_idx].get_or_create_infection(1).infected = 1000.0;
 
         for _ in 0..1200 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         // Virus should NOT gain resistance from bacterial HGT
@@ -4433,7 +4435,7 @@ mod tests {
         state.regions[region_idx].dead = pop * 0.6; // above collapse threshold
 
         // Tick to trigger collapse detection
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
         assert!(state.regions[region_idx].collapsed, "region should have collapsed");
 
         // Personnel should be reduced by 2
@@ -4677,7 +4679,7 @@ mod tests {
         // Run for 2+ days to ensure the rate sampler fires at least once
         let ticks = (2.5 * TICKS_PER_DAY) as usize;
         for _ in 0..ticks {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         let region = &state.regions[region_idx];
         // The outbreak region should have deaths and a positive rate
@@ -4784,7 +4786,8 @@ mod tests {
         // Only region 0 has infections, but it's on cooldown
         for r in &mut state.regions { r.infections.clear(); }
         state.regions[0].get_or_create_infection(0).infected = 100_000.0;
-        state.regions[0].last_deploy_tick.insert(0, state.tick);
+        let current_tick = state.tick;
+        state.regions[0].last_deploy_tick.insert(0, current_tick);
         state.deploy_enabled = vec![true];
 
         let (_, tick_events) = tick(&state);
@@ -4804,7 +4807,7 @@ mod tests {
         unlock_all_medicines(&mut state);
         // Advance to get some infected
         for _ in 0..20 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         let ri = primary_outbreak_region(&state);
@@ -4845,7 +4848,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         for _ in 0..20 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         let ri = primary_outbreak_region(&state);
 
@@ -4881,7 +4884,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         for _ in 0..20 {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
         let ri = primary_outbreak_region(&state);
 
@@ -5403,7 +5406,7 @@ mod tests {
             let mut state = GameState::new_default(seed);
             // Advance to day 50 (well into wave clustering territory)
             for _ in 0..(50 * TICKS_PER_DAY as u64) {
-                (state, _) = tick(&state);
+                state = state.with_world(tick(&state).0);
                 if matches!(state.outcome, crate::state::GameOutcome::Lost) {
                     break;
                 }
@@ -5433,7 +5436,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Advance to day 20 (before wave clustering kicks in at day 24)
         for _ in 0..(20 * TICKS_PER_DAY as u64) {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
             if matches!(state.outcome, crate::state::GameOutcome::Lost) {
                 break;
             }
@@ -5460,7 +5463,7 @@ mod tests {
         // Run one day worth of ticks
         let mut s = state.clone();
         for _ in 0..(TICKS_PER_DAY as u64) {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
 
         let alive_after = s.regions[0].alive();
@@ -5495,7 +5498,7 @@ mod tests {
         // Run many ticks — should not go below floor
         let mut s = state.clone();
         for _ in 0..(TICKS_PER_DAY as u64 * 10) {
-            (s, _) = tick(&s);
+            s = s.with_world(tick(&s).0);
         }
 
         let alive_after = s.regions[0].alive();
@@ -5673,7 +5676,7 @@ mod tests {
         let mut found = false;
         let mut current = state;
         for _ in 0..20 {
-            (current, _) = tick(&current);
+            current = current.with_world(tick(&current).0);
             if let Some(ref crisis) = current.active_crisis {
                 if crisis.kind.tag() == "board_research_inquiry" {
                     found = true;
@@ -5702,7 +5705,7 @@ mod tests {
 
         let mut current = state;
         for _ in 0..20 {
-            (current, _) = tick(&current);
+            current = current.with_world(tick(&current).0);
             if let Some(ref crisis) = current.active_crisis {
                 assert_ne!(crisis.kind.tag(), "board_research_inquiry",
                     "Board Research Inquiry should NOT fire when identification has been started");

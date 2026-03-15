@@ -2,7 +2,7 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 
 use crate::state::{
-    Corporation, CorporationSector, GameEvent, GameState,
+    Corporation, CorporationSector, GameEvent, WorldState,
     CORPORATE_TAX_RATE, CORP_COST_RATIO, CORP_STARTING_RESERVE_DAYS, TICKS_PER_DAY,
 };
 
@@ -57,7 +57,7 @@ const REGION_CORPS: [[(CorporationSector, &str, &str); 3]; 6] = [
 /// Old formula: BASE_FUNDING_INCOME × (region_pop / total_pop) × income_modifier = region income/tick.
 /// New: sum(corp.base_revenue) × TAX_RATE / TICKS_PER_DAY = region income/tick.
 /// So corp base_revenue (per day) = old_region_income_per_tick × TICKS_PER_DAY / TAX_RATE / 3.
-pub(super) fn generate_corporations(state: &mut GameState) {
+pub(super) fn generate_corporations(state: &mut WorldState) {
     let total_pop: f64 = state.regions.iter().map(|r| r.population as f64).sum();
     if total_pop <= 0.0 {
         return;
@@ -147,7 +147,7 @@ pub(super) fn generate_corporations(state: &mut GameState) {
 /// Called after corporations are generated, and again when new diseases emerge
 /// (which create new medicines). Only touches medicines with `manufacturer_corp_idx: None`
 /// that aren't already unlocked.
-pub(super) fn assign_manufacturers(state: &mut GameState) {
+pub(super) fn assign_manufacturers(state: &mut WorldState) {
     if state.corporations.is_empty() {
         return;
     }
@@ -194,7 +194,7 @@ pub(super) fn assign_manufacturers(state: &mut GameState) {
 /// revenue. Uses the same three-term model as `tick_share_prices` but with no
 /// revenue signal (revenue == prev_revenue pre-game). This gives sparklines a
 /// natural look from the first frame instead of starting as a single flat dot.
-fn warm_up_price_history(state: &mut GameState) {
+fn warm_up_price_history(state: &mut WorldState) {
     use rand::SeedableRng;
     const WARMUP_DAYS: usize = 10;
 
@@ -227,7 +227,7 @@ fn warm_up_price_history(state: &mut GameState) {
 /// Revenue flows from GDP: sector_pool × (company_capacity / total_capacity).
 /// Each corp's capacity = base_revenue × region.gdp_fraction ^ sector.crisis_exposure.
 /// When a competitor's region tanks, surviving peers capture more of the pool.
-pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_corporations(state: &mut WorldState, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
     // Handle collapsed regions first — bankrupt all corps in collapsed regions.
     for c_idx in 0..state.corporations.len() {
         if state.corporations[c_idx].bankrupt {
@@ -361,7 +361,7 @@ pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chach
 /// Three-term stock price model: gravity + signal + variable volatility.
 /// Gravity weakly pulls toward fair value (5%/day). Signal creates trending
 /// from revenue changes. Volatility scales with the magnitude of change.
-fn tick_share_prices(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
+fn tick_share_prices(state: &mut WorldState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
     for c_idx in 0..state.corporations.len() {
         let corp = &state.corporations[c_idx];
 
@@ -417,6 +417,7 @@ fn tick_share_prices(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::GameState;
     use crate::engine::tick;
     use crate::state::GameCommand;
 
@@ -465,7 +466,7 @@ mod tests {
 
         // Run for 20 days to let disease spread
         for _ in 0..(20 * TICKS_PER_DAY as u64) {
-            (state, _) = tick(&state);
+            state = state.with_world(tick(&state).0);
         }
 
         let later_revenue: f64 = state.corporations.iter()
@@ -644,7 +645,7 @@ mod tests {
             personnel_assigned: 5,
         });
 
-        (state, _) = tick(&state);
+        state = state.with_world(tick(&state).0);
 
         assert!(state.medicines[med_idx].unlocked, "medicine should be unlocked");
         assert!(

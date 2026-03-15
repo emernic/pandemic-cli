@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    Disease, GameEvent, GameState, PathogenType, RegionTrait,
+    Disease, GameEvent, WorldState, PathogenType, RegionTrait,
     COINFECTION_LETHALITY_PER_DISEASE, COINFECTION_THRESHOLD,
     HOSPITAL_EXPOSURE_FACTOR, TICKS_PER_DAY,
 };
@@ -33,7 +33,7 @@ struct DiseaseOutflows {
 /// from all other diseases' infected/immune pools (dead people can't be sick
 /// with or immune to anything).
 pub(super) fn tick_spread_within(
-    new: &mut GameState,
+    new: &mut WorldState,
     diseases: &[Disease],
     rng: &mut impl Rng,
 ) {
@@ -213,7 +213,7 @@ pub(super) fn tick_spread_within(
 /// Spread diseases between connected regions. Clones regions internally for
 /// snapshot-based diffusion. Uses `diseases` from the original tick state.
 pub(super) fn tick_spread_cross_region(
-    new: &mut GameState,
+    new: &mut WorldState,
     diseases: &[Disease],
     rng: &mut impl Rng,
     events: &mut Vec<GameEvent>,
@@ -333,7 +333,7 @@ pub(super) fn tick_spread_cross_region(
 /// within a typical game's timeframe.
 /// Only fires when both diseases have active infections in at least one
 /// shared region (conjugation requires physical proximity).
-pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_horizontal_gene_transfer(new: &mut WorldState, events: &mut Vec<GameEvent>) {
     // Collect indices of all Bacterium diseases
     let bacteria: Vec<usize> = new.diseases.iter().enumerate()
         .filter(|(_, d)| d.pathogen_type == PathogenType::Bacterium)

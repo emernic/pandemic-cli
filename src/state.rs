@@ -41,9 +41,6 @@ pub struct SessionState {
     pub status_message: Option<String>,
     /// Whether the player dismissed the "terminal too small" warning overlay.
     pub size_warning_dismissed: bool,
-    /// Tracks which medicines have already fired a DeployBlocked event
-    /// this session, to avoid spamming the log every tick.
-    pub deploy_blocked_notified: std::collections::HashSet<usize>,
 }
 
 impl Default for SessionState {
@@ -52,14 +49,13 @@ impl Default for SessionState {
             speed_multiplier: 1,
             status_message: None,
             size_warning_dismissed: false,
-            deploy_blocked_notified: std::collections::HashSet::new(),
         }
     }
 }
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GameState {
+pub struct WorldState {
     pub tick: u64,
     #[serde(default)]
     pub sim_state: SimState,
@@ -93,9 +89,6 @@ pub struct GameState {
     pub enacted_decrees: EnactedDecrees,
     #[serde(default)]
     pub outcome: GameOutcome,
-    /// Session-only runtime state. Not serialized — resets on every load.
-    #[serde(skip)]
-    pub session: SessionState,
     /// Persistent log of notable events with timestamps (day number, message).
     /// Populated by `events::process_events()`. Capped at 50 entries.
     #[serde(default)]
@@ -231,8 +224,49 @@ pub struct GameState {
     /// Whether the board has sent the formal embezzlement warning letter.
     #[serde(default)]
     pub embezzlement_warned: bool,
+    /// Tracks which medicines have already fired a DeployBlocked event
+    /// this session, to avoid spamming the log every tick.
+    /// Not persisted — resets on every load.
+    #[serde(skip)]
+    pub deploy_blocked_notified: std::collections::HashSet<usize>,
+}
+
+/// Runtime state combining world, UI, and session data.
+///
+/// This is the in-memory model passed through the game loop. Engine code
+/// operates on `WorldState` only; UI code reads both `world` and `ui`.
+/// `Deref`/`DerefMut` target `WorldState` so callers can access world fields
+/// directly (e.g. `state.diseases` instead of `state.world.diseases`).
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub world: WorldState,
+    pub ui: UiState,
+    pub session: SessionState,
+}
+
+impl std::ops::Deref for AppState {
+    type Target = WorldState;
+    fn deref(&self) -> &WorldState {
+        &self.world
+    }
+}
+
+impl std::ops::DerefMut for AppState {
+    fn deref_mut(&mut self) -> &mut WorldState {
+        &mut self.world
+    }
+}
+
+/// On-disk save format. Session state is not persisted.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SaveFile {
+    pub world: WorldState,
     pub ui: UiState,
 }
+
+/// Transitional alias — issue #2299 will remove this and update all call sites
+/// to use `AppState` (or `WorldState` where only world data is needed).
+pub type GameState = AppState;
 
 /// A point-in-time snapshot for dashboard sparkline charts.
 /// Values are player-visible estimates (screened/detected), not ground truth.
@@ -713,7 +747,7 @@ pub struct DecreeUnlockCondition {
 
 impl DecreeUnlockCondition {
     /// Check whether this condition is met given the current game state.
-    pub fn is_met(&self, state: &GameState) -> bool {
+    pub fn is_met(&self, state: &WorldState) -> bool {
         if let Some(threshold) = self.min_infected {
             if state.total_infected() >= threshold { return true; }
         }
@@ -1196,7 +1230,7 @@ impl FundingCondition {
     }
 
     /// Check whether this condition is currently satisfied.
-    pub fn is_met(&self, state: &GameState) -> bool {
+    pub fn is_met(&self, state: &WorldState) -> bool {
         match self {
             Self::ForbidPolicy { policy } => {
                 !state.policies.iter().any(|p| p.is_active(*policy))
@@ -3586,7 +3620,7 @@ impl ResearchKind {
 
     /// Human-readable label for this research kind, respecting disease knowledge level.
     /// Used by both UI (header status) and engine (event log messages).
-    pub fn label(&self, state: &GameState) -> String {
+    pub fn label(&self, state: &WorldState) -> String {
         match self {
             Self::IdentifyThreat { disease_idx } => {
                 let name = state.diseases.get(*disease_idx)
@@ -3750,7 +3784,7 @@ impl BasicTech {
     }
 
     /// Prerequisites: returns list of (tech prereqs, description of other prereqs).
-    pub fn prerequisites_met(&self, state: &GameState) -> bool {
+    pub fn prerequisites_met(&self, state: &WorldState) -> bool {
         match self {
             BasicTech::TargetedDrugDesign => {
                 // Prereq: identified any pathogen (any disease with knowledge > 0)
@@ -4374,7 +4408,7 @@ pub struct CrisisOperation {
 
 impl CrisisCost {
     /// Check if the player can afford this cost.
-    pub fn affordable(&self, state: &GameState) -> bool {
+    pub fn affordable(&self, state: &WorldState) -> bool {
         state.resources.funding >= self.funding
             && state.personnel_available() >= self.personnel
     }
@@ -4654,7 +4688,7 @@ pub enum ResearchFlatItem {
 
 impl ResearchFlatItem {
     /// The ResearchKind of this item, if it's an available project.
-    pub fn available_kind(&self, state: &GameState) -> Option<ResearchKind> {
+    pub fn available_kind(&self, state: &WorldState) -> Option<ResearchKind> {
         match self {
             Self::Available(idx) => {
                 state.all_available_projects().get(*idx).cloned()
@@ -4665,7 +4699,7 @@ impl ResearchFlatItem {
 
     /// Resolve this item to its underlying ResearchKind identity.
     /// Used to stabilize panel_selection across ticks when the list changes.
-    pub fn to_kind(&self, state: &GameState) -> Option<ResearchKind> {
+    pub fn to_kind(&self, state: &WorldState) -> Option<ResearchKind> {
         match self {
             Self::Active(idx) => state.active_research.get(*idx).map(|p| p.kind.clone()),
             Self::Available(idx) => state.all_available_projects().get(*idx).cloned(),
@@ -4766,6 +4800,47 @@ pub struct UiState {
     /// First Enter press sets this; second Enter press sets `home_splash_done`.
     #[serde(default)]
     pub home_splash_revealed: bool,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            open_panel: Panel::None,
+            panel_selection: 0,
+            medicine_ui: None,
+            map_selection: 0,
+            research_ui: None,
+            policy_ui: None,
+            event_notification: None,
+            crisis_selection: 0,
+            crisis_auto_resolve: false,
+            operations_ui: None,
+            board_ui: None,
+            ledger_ui: None,
+            home_splash_done: false,
+            home_splash_revealed: false,
+        }
+    }
+}
+
+impl AppState {
+    pub fn new_default(seed: u64) -> Self {
+        Self {
+            world: WorldState::new_default(seed),
+            ui: UiState::default(),
+            session: SessionState::default(),
+        }
+    }
+
+    /// Replace the world state, keeping UI and session state.
+    /// Used after `engine::tick()` returns a new `WorldState`.
+    pub fn with_world(&self, world: WorldState) -> Self {
+        Self {
+            world,
+            ui: self.ui.clone(),
+            session: self.session.clone(),
+        }
+    }
 }
 
 impl UiState {
@@ -5090,7 +5165,7 @@ pub enum MapDirection {
     Right,
 }
 
-impl GameState {
+impl WorldState {
     /// Whether the game is blocked from advancing: active crisis or game over.
     pub fn is_blocked(&self) -> bool {
         self.active_crisis.is_some() || self.outcome != GameOutcome::Playing
@@ -5497,7 +5572,7 @@ impl GameState {
             active_research: vec![],
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
-            session: SessionState::default(),
+            deploy_blocked_notified: std::collections::HashSet::new(),
             event_log: VecDeque::new(),
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
@@ -5534,22 +5609,6 @@ impl GameState {
             loans: vec![],
             cumulative_policy_spending: 0.0,
             embezzlement_warned: false,
-            ui: UiState {
-                open_panel: Panel::None,
-                panel_selection: 0,
-                medicine_ui: None,
-                map_selection: 0,
-                research_ui: None,
-                policy_ui: None,
-                event_notification: None,
-                crisis_selection: 0,
-                crisis_auto_resolve: false,
-                operations_ui: None,
-                board_ui: None,
-                ledger_ui: None,
-                home_splash_done: false,
-                home_splash_revealed: false,
-            },
         }
     }
 
@@ -6857,18 +6916,17 @@ mod tests {
     #[test]
     fn json_roundtrip() {
         let state = GameState::new_default(42);
-        let json = serde_json::to_string_pretty(&state).unwrap();
-        let restored: GameState = serde_json::from_str(&json).unwrap();
-        assert_eq!(state.tick, restored.tick);
-        assert_eq!(state.regions.len(), restored.regions.len());
-        assert_eq!(state.diseases.len(), restored.diseases.len());
+        let sf = SaveFile { world: state.world.clone(), ui: state.ui.clone() };
+        let json = serde_json::to_string_pretty(&sf).unwrap();
+        let restored: SaveFile = serde_json::from_str(&json).unwrap();
+        assert_eq!(state.tick, restored.world.tick);
+        assert_eq!(state.regions.len(), restored.world.regions.len());
+        assert_eq!(state.diseases.len(), restored.world.diseases.len());
 
         // Verify idempotent roundtrip: deserialize→serialize→deserialize→serialize
-        // should produce identical JSON. (The first serialize may differ from the
-        // in-memory f64 due to float representation, but subsequent roundtrips
-        // must be stable.)
+        // should produce identical JSON.
         let json2 = serde_json::to_string_pretty(&restored).unwrap();
-        let restored2: GameState = serde_json::from_str(&json2).unwrap();
+        let restored2: SaveFile = serde_json::from_str(&json2).unwrap();
         let json3 = serde_json::to_string_pretty(&restored2).unwrap();
         assert_eq!(json2, json3);
     }
