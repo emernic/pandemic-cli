@@ -82,16 +82,22 @@ pub fn load_or_create(path: Option<&str>, seed: u64) -> Result<LoadedGame, Persi
 
 /// Save game state to `path`, creating parent directories as needed.
 ///
-/// Used by both snapshot (save-before-print) and interactive (save-on-quit).
+/// Uses atomic write (temp file + rename) so an interrupted save never
+/// leaves a truncated or empty file at the target path.
 pub fn save(state: &GameState, path: &str) -> Result<(), PersistenceError> {
-    if let Some(parent) = Path::new(path).parent() {
+    let target = Path::new(path);
+    if let Some(parent) = target.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)?;
         }
     }
     let json = serde_json::to_string_pretty(state)
         .map_err(|e| PersistenceError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
-    fs::write(path, json)?;
+
+    // Write to a sibling temp file, then atomically rename.
+    let tmp_path = target.with_extension("tmp");
+    fs::write(&tmp_path, &json)?;
+    fs::rename(&tmp_path, target)?;
     Ok(())
 }
 
