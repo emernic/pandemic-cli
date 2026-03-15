@@ -241,10 +241,14 @@ fn render_crisis(f: &mut Frame, area: Rect, crisis: &crate::state::CrisisEvent, 
             format!("  {}{}: {}{}", marker, label, option.label, suffix),
             style,
         )));
-        lines.push(Line::from(Span::styled(
-            format!("      {}", option.description),
-            if !affordable { Style::default().fg(Color::Red) } else { Style::default().fg(Color::DarkGray) },
-        )));
+        let desc_style = if !affordable { Style::default().fg(Color::Red) } else { Style::default().fg(Color::DarkGray) };
+        let desc_max_width = max_width.saturating_sub(6); // 6 chars indent
+        for desc_line in textwrap(&option.description, desc_max_width) {
+            lines.push(Line::from(Span::styled(
+                format!("      {}", desc_line),
+                desc_style,
+            )));
+        }
         lines.push(Line::from(""));
     }
 

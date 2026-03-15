@@ -848,8 +848,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         .max_by(|a, b| a.base_revenue.partial_cmp(&b.base_revenue).unwrap_or(std::cmp::Ordering::Equal));
                     let corp_name = corp.map(|c| c.name.clone())
                         .unwrap_or_else(|| format!("{region_name} Logistics"));
-                    let negotiate_target = corp.map(|c| format!("Dir. {}", c.director_surname))
-                        .unwrap_or_else(|| "their management".into());
 
                     CrisisEvent {
                         title: format!("{}: Evacuation Panic", gov_name),
@@ -860,16 +858,15 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         options: vec![ CrisisOption {
                             label: "Stabilize the governor".into(),
                             description: format!(
-                                "Send a medical team. {gov_name} gets treatment and stays in {region_name}. \
-                                 {corp_name} follows through on the pullout. Supply lines -20%. \
-                                 Cooperation -10."),
+                                "Medical team treats {gov_name}. {corp_name} pulls out anyway. \
+                                 Supply lines -20%, cooperation -10, chairman disapproves."),
                             cost: None,
                         },
                         CrisisOption {
                             label: format!("Secure {corp_name} operations"),
                             description: format!(
-                                "Negotiate with {negotiate_target} to keep operations running. Supply lines intact. \
-                                 {gov_name} goes unmonitored. Cooperation -20."),
+                                "Keep {corp_name} running. {gov_name} gets no treatment. \
+                                 Cooperation -20. Governor may not survive."),
                             cost: None,
                         },
                         ],
