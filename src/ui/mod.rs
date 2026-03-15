@@ -9,6 +9,7 @@ pub mod research;
 pub mod resources;
 pub mod threats;
 pub mod region_list;
+pub mod tech_tree;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -53,6 +54,7 @@ pub fn panel_selection_max(ui: &UiState, state: &AppState) -> usize {
             None => 0,
         },
         Panel::Board => board::selection_max(state),
+        Panel::TechTree => tech_tree::node_count().saturating_sub(1),
         Panel::Ledger => match &ui.ledger_ui {
             Some(s) => ledger::selection_max(s, state),
             None => 0,
@@ -151,6 +153,7 @@ pub fn render(f: &mut Frame, state: &AppState) {
             Panel::Operations => operations::render(f, split[1], state),
             Panel::Board => board::render(f, split[1], state),
             Panel::Ledger => ledger::render(f, split[1], state),
+            Panel::TechTree => tech_tree::render(f, split[1], state, state.ui.panel_selection),
             panel => render_placeholder_panel(f, split[1], panel),
         }
     }

@@ -120,6 +120,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
         Action::OpenBoard => new.ui.toggle_panel(Panel::Board, new.regions.len()),
         Action::OpenLedger => new.ui.toggle_panel(Panel::Ledger, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
+        Action::OpenTechTree => new.ui.toggle_panel(Panel::TechTree, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(&new.world.medicines, &new.world.diseases),
         Action::GoHome => new.ui.go_home(),
         Action::SelectNext => {

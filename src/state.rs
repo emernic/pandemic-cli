@@ -4574,6 +4574,7 @@ pub enum Panel {
     Board,
     Ledger,
     Help,
+    TechTree,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -4799,7 +4800,7 @@ impl UiState {
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
                 Panel::Ledger => matches!(self.ledger_ui, Some(LedgerUiState::BrowseStocks) | None),
-                Panel::None | Panel::Threats | Panel::Help => true,
+                Panel::None | Panel::Threats | Panel::Help | Panel::TechTree => true,
             };
             if at_top {
                 self.open_panel = Panel::None;
@@ -4817,7 +4818,7 @@ impl UiState {
                     Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
                     Panel::Board => self.board_ui = Some(BoardUiState::BrowseMembers),
                     Panel::Ledger => self.ledger_ui = Some(LedgerUiState::BrowseStocks),
-                    Panel::None | Panel::Threats | Panel::Help => {}
+                    Panel::None | Panel::Threats | Panel::Help | Panel::TechTree => {}
                 }
             }
         } else {
@@ -4845,7 +4846,7 @@ impl UiState {
                 Panel::Ledger => {
                     self.ledger_ui = Some(LedgerUiState::BrowseStocks);
                 }
-                Panel::None | Panel::Threats | Panel::Help => {}
+                Panel::None | Panel::Threats | Panel::Help | Panel::TechTree => {}
             }
         }
     }
@@ -4927,7 +4928,7 @@ impl UiState {
                     }
                 }
             }
-            Panel::None | Panel::Threats | Panel::Help => {
+            Panel::None | Panel::Threats | Panel::Help | Panel::TechTree => {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
                 self.medicine_ui = None;
