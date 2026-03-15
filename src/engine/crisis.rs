@@ -902,21 +902,25 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                     CrisisEvent {
                         title: format!("{}: Gone Dark", gov_name),
                         description: format!(
-                            "{gov_name} has disappeared from all communications. Regional staff in \
-                             {region_name} say the governor is bedridden and getting worse. Policy \
-                             enforcement has stalled."),
+                            "{gov_name} has cut all communications. Staff in {region_name} say \
+                             the governor locked themselves in their residence and won't come out. \
+                             Regional policy enforcement has stopped."),
                         options: vec![ CrisisOption {
-                            label: "Leave them be".into(),
-                            description: format!("No intervention. Cooperation drops in {}. Governor may not recover.", region_name),
+                            label: "Leave them alone".into(),
+                            description: format!(
+                                "No intervention. Cooperation drops sharply in {region_name}. \
+                                 If {gov_name} doesn't re-emerge, the region loses its governor."),
                             cost: None,
                         },
                         CrisisOption {
-                            label: "Send a management team (2 personnel for 5d)".into(),
-                            description: "Personnel run the region directly until the governor recovers.".into(),
+                            label: "Send advisors (2 personnel for 5d)".into(),
+                            description: format!(
+                                "Your people talk {gov_name} through it and keep policy running \
+                                 while they stabilize."),
                             cost: Some(CrisisCost {
                                 funding: 0.0,
                                 personnel: 2,
-                                operation: Some(OperationSpec { days: 5.0, label: "Regional Management Team".into() }),
+                                operation: Some(OperationSpec { days: 5.0, label: "Governor Advisory Team".into() }),
                             }),
                         },
                         ],
@@ -2188,19 +2192,19 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                     "Refused. The broadcast was not flattering.".into()
                 }
                 (GovernorPersonality::Recluse, 0) => {
-                    // Let them recover: reduced policy effectiveness handled by cooperation drop
+                    // Leave them alone: sharp cooperation drop + possible governor death
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
+                        region.governor.cooperation = (region.governor.cooperation - 25.0).max(0.0);
                     }
                     queue_governor_death_followup(state, *region_idx);
-                    "No intervention. Region running on autopilot.".into()
+                    "No intervention. The region has no effective leadership.".into()
                 }
                 (GovernorPersonality::Recluse, _) => {
-                    // Send management team: personnel cost already deducted
+                    // Send advisors: personnel cost already deducted, cooperation boost
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
+                        region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
                     }
-                    "Management team dispatched. Policies back on track.".into()
+                    "Advisors dispatched. Governor is cooperating again.".into()
                 }
                 (GovernorPersonality::Hardliner, 0) => {
                     // Divert personnel: costs already deducted, cooperation boost
@@ -3235,7 +3239,7 @@ mod tests {
         let cases: Vec<(GovernorPersonality, usize)> = vec![
             (GovernorPersonality::Buffoon, 1),    // Secure corporation (governor unmonitored)
             (GovernorPersonality::Blowhard, 1),   // Refuse
-            (GovernorPersonality::Recluse, 0),    // Let them recover
+            (GovernorPersonality::Recluse, 0),    // Leave them alone
             (GovernorPersonality::Hardliner, 2),  // Refuse
             (GovernorPersonality::Operative, 1),  // Refuse
             (GovernorPersonality::Mobster, 2),     // Refuse
