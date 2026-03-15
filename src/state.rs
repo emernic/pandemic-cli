@@ -81,14 +81,9 @@ pub struct GameState {
     /// Used to prevent the same crisis type repeating within CRISIS_TYPE_COOLDOWN ticks.
     #[serde(default)]
     pub crisis_cooldowns: HashMap<String, u64>,
-    /// Scheduled follow-up crises from previous choices. Each entry is
-    /// (fire_at_tick, crisis_kind). Checked every tick; fires when due.
+    /// Queued crises waiting to fire. Fires immediately when no other crisis is active.
     #[serde(default)]
-    pub pending_crises: Vec<(u64, CrisisKind)>,
-    /// Tick when the last crisis was resolved. Used to enforce a minimum gap
-    /// between consecutive crises so they don't become white noise.
-    #[serde(default)]
-    pub last_crisis_resolved_tick: u64,
+    pub pending_crises: Vec<CrisisKind>,
     /// Auto-resolve preferences: crisis tag → choice index (0 = A, 1 = B).
     /// When a crisis fires whose tag matches, it's resolved immediately without pausing.
     #[serde(default)]
@@ -4590,22 +4585,6 @@ impl CrisisKind {
         }
     }
 
-    /// Whether this crisis kind should fire immediately, bypassing CRISIS_MIN_GAP.
-    /// Pathogen detections and governor crises are time-sensitive: the player needs
-    /// to respond before the situation evolves further.
-    pub fn bypasses_crisis_gap(&self) -> bool {
-        matches!(self,
-            CrisisKind::NewPathogenDetected { .. }
-            | CrisisKind::GovernorHardliner { .. }
-            | CrisisKind::GovernorBlowhard { .. }
-            | CrisisKind::GovernorRecluse { .. }
-            | CrisisKind::GovernorOperative { .. }
-            | CrisisKind::GovernorBuffoon { .. }
-            | CrisisKind::GovernorMobster { .. }
-            | CrisisKind::GovernorSick { .. }
-            | CrisisKind::GovernorDeath { .. }
-        )
-    }
 }
 
 /// Crisis events start appearing after this many ticks (~3 days).
@@ -4614,9 +4593,6 @@ pub const CRISIS_MIN_TICK: u64 = (3.0 * TICKS_PER_DAY) as u64;
 pub const CRISIS_INTERVAL: u64 = (7.0 * TICKS_PER_DAY) as u64;
 /// Minimum ticks before the same crisis type can repeat (~15 days).
 pub const CRISIS_TYPE_COOLDOWN: u64 = (15.0 * TICKS_PER_DAY) as u64;
-/// Minimum ticks between any two consecutive crises (~1.5 days).
-/// Prevents crisis spam during collapse cascades and late-game.
-pub const CRISIS_MIN_GAP: u64 = (1.5 * TICKS_PER_DAY) as u64;
 
 /// Total infected across all regions at which a disease is detected by health systems.
 /// Below this, the disease spreads silently and is invisible to the player.
@@ -5612,7 +5588,6 @@ impl GameState {
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
             pending_crises: vec![],
-            last_crisis_resolved_tick: 0,
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_repeat_research: vec![],
