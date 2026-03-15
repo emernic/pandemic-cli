@@ -69,13 +69,13 @@ fn resume_preserves_open_panel_and_selection() {
 fn resume_preserves_medicine_wizard_state() {
     let mut state = GameState::new_default(42);
     state.ui.open_panel = Panel::Medicines;
-    state.ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx: 1 });
+    state.ui.medicine_ui = Some(MedicineUiState::RegionFilter { medicine_idx: 1 });
 
     let restored = round_trip(&state);
 
     assert_eq!(
         restored.ui.medicine_ui,
-        Some(MedicineUiState::SelectRegion { medicine_idx: 1 }),
+        Some(MedicineUiState::RegionFilter { medicine_idx: 1 }),
         "medicine wizard step lost on resume"
     );
 }

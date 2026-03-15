@@ -9,9 +9,9 @@ pub mod ui;
 use action::Action;
 use engine::execute_command;
 use state::{
-    DecreeId, DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
+    DecreeId, DECREE_COUNT, GameCommand, GameOutcome, GameState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
-    MedicineMode, MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
+    MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
     ResearchFlatItem, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
@@ -225,13 +225,21 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     }
                 }
             }
-            // Toggle auto-deploy when browsing medicines
+            // Open region filter when browsing medicines
             else if new.ui.open_panel == Panel::Medicines
                 && matches!(new.ui.medicine_ui, None | Some(MedicineUiState::BrowseMedicines))
             {
                 let unlocked = new.unlocked_medicine_indices();
                 if let Some(&med_idx) = unlocked.get(new.ui.panel_selection) {
-                    execute_command(&mut new, &GameCommand::ToggleAutoDeploy { med_idx });
+                    new.ui.medicine_ui = Some(MedicineUiState::RegionFilter { medicine_idx: med_idx });
+                    new.ui.panel_selection = 0;
+                }
+            }
+            // Toggle region in region filter sub-menu
+            else if new.ui.open_panel == Panel::Medicines {
+                if let Some(MedicineUiState::RegionFilter { medicine_idx }) = new.ui.medicine_ui.clone() {
+                    // X does nothing in region filter (Enter toggles regions)
+                    let _ = medicine_idx;
                 }
             }
         }
@@ -248,14 +256,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     events::process_events(&mut new);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
-                        GameCommand::DeployMedicine { medicine_idx, .. } if result.success => {
-                            let msg = result.message.clone().unwrap_or_default();
-                            new.ui.medicine_ui = Some(MedicineUiState::DeployResult {
-                                medicine_idx: *medicine_idx,
-                                message: msg,
-                            });
-                            new.ui.panel_selection = 0;
-                        }
                         GameCommand::StartResearch { .. } if result.success => {
                             new.ui.research_ui = Some(ResearchUiState::BrowseAll);
                             new.ui.panel_selection = 0;
@@ -364,120 +364,26 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     }
 }
 
-/// After selecting a disease, check trial status and VaccinePlatform tech.
-/// - Untested: show confirmation screen (always therapeutic — can't vaccinate untested).
-/// - Tested + VaccinePlatform: show mode selection (treatment vs vaccination).
-/// - Tested + no VaccinePlatform: deploy immediately as therapeutic.
-fn try_deploy_or_confirm(
-    ui: &mut UiState,
-    state: &GameState,
-    medicine_idx: usize,
-    region_idx: usize,
-    disease_idx: usize,
-) -> Option<GameCommand> {
-    let med = &state.medicines[medicine_idx];
-    let is_tested = med.tested_against.contains(&disease_idx);
-    if !is_tested {
-        let target = DeployTarget { disease_idx, mode: MedicineMode::Therapeutic };
-        ui.medicine_ui = Some(MedicineUiState::ConfirmDeploy {
-            medicine_idx,
-            region_idx,
-            target,
-        });
-        None
-    } else if state.can_vaccinate() {
-        // Show mode selection: treatment vs vaccination
-        ui.medicine_ui = Some(MedicineUiState::SelectMode {
-            medicine_idx,
-            region_idx,
-            disease_idx,
-        });
-        ui.panel_selection = 0;
-        None
-    } else {
-        let target = DeployTarget { disease_idx, mode: MedicineMode::Therapeutic };
-        Some(GameCommand::DeployMedicine {
-            medicine_idx,
-            region_idx,
-            target,
-        })
-    }
-}
 
 fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     match ui.medicine_ui.clone() {
         Some(MedicineUiState::BrowseMedicines) => {
+            // Enter toggles deployment on/off
             let unlocked = state.unlocked_medicine_indices();
             if let Some(&med_idx) = unlocked.get(ui.panel_selection) {
-                ui.medicine_ui =
-                    Some(MedicineUiState::SelectRegion { medicine_idx: med_idx });
-                // Pre-select the region matching the current map selection
-                let order = grid_reading_order(state.regions.len());
-                ui.panel_selection = order.iter()
-                    .position(|&idx| idx == ui.map_selection)
-                    .unwrap_or(0);
+                return Some(GameCommand::ToggleDeploy { med_idx });
             }
             None
         }
-        Some(MedicineUiState::SelectRegion { medicine_idx }) => {
+        Some(MedicineUiState::RegionFilter { medicine_idx }) => {
+            // Enter toggles individual regions on/off
             let order = grid_reading_order(state.regions.len());
-            let region_idx = order.get(ui.panel_selection).copied().unwrap_or(0);
-            if region_idx < state.regions.len() {
-                let med = &state.medicines[medicine_idx];
-                let deployable = med.deployable_diseases(&state.diseases);
-                let has_known_incompatible = state.diseases.iter().enumerate()
-                    .any(|(i, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME && !deployable.contains(&i));
-                if deployable.len() == 1 && !has_known_incompatible {
-                    // Only one deployable disease and no incompatible ones to explain:
-                    // skip disease selection and go straight to deploy.
-                    let disease_idx = deployable[0];
-                    return try_deploy_or_confirm(ui, state, medicine_idx, region_idx, disease_idx);
-                } else {
-                    ui.medicine_ui = Some(MedicineUiState::SelectDisease {
-                        medicine_idx,
-                        region_idx,
-                    });
-                }
-                ui.panel_selection = 0;
+            if let Some(&region_idx) = order.get(ui.panel_selection) {
+                return Some(GameCommand::ToggleDeployRegion {
+                    med_idx: medicine_idx,
+                    region_idx,
+                });
             }
-            None
-        }
-        Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
-            let med = &state.medicines[medicine_idx];
-            let deployable = med.deployable_diseases(&state.diseases);
-            if let Some(&disease_idx) = deployable.get(ui.panel_selection) {
-                return try_deploy_or_confirm(ui, state, medicine_idx, region_idx, disease_idx);
-            }
-            None
-        }
-        Some(MedicineUiState::SelectMode { medicine_idx, region_idx, disease_idx }) => {
-            // 0 = Treatment, 1 = Vaccination
-            let mode = if ui.panel_selection == 0 {
-                MedicineMode::Therapeutic
-            } else {
-                MedicineMode::Vaccine
-            };
-            let target = DeployTarget { disease_idx, mode };
-            Some(GameCommand::DeployMedicine {
-                medicine_idx,
-                region_idx,
-                target,
-            })
-        }
-        Some(MedicineUiState::ConfirmDeploy {
-            medicine_idx,
-            region_idx,
-            target,
-        }) => {
-            Some(GameCommand::DeployMedicine {
-                medicine_idx,
-                region_idx,
-                target,
-            })
-        }
-        Some(MedicineUiState::DeployResult { medicine_idx, .. }) => {
-            ui.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-            ui.panel_selection = 0;
             None
         }
         None => None,
@@ -976,31 +882,25 @@ mod tests {
     }
 
     #[test]
-    fn select_region_syncs_with_map_navigation() {
+    fn enter_on_browse_medicines_toggles_deploy_enabled() {
         use crate::state::MedicineUiState;
 
         let mut state = GameState::new_default(42);
-        // Unlock a medicine so we can enter the deploy wizard
+        // Unlock a medicine so the panel has content
         state.medicines[0].unlocked = true;
         state.medicines[0].doses = 100.0;
 
-        // Open medicines panel, select first medicine, enter SelectRegion
+        // Open medicines panel — should be in BrowseMedicines
         let state = apply_action(&state, &Action::OpenMedicines);
-        let state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })));
+        assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines)));
 
-        // Press right — map and list cursor should both move
-        let state = apply_action(&state, &Action::SelectRight);
-        assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::SelectRegion { .. })),
-            "should stay in SelectRegion after left/right");
-        // The map moved, so panel_selection should update to match
-        assert_ne!(state.ui.map_selection, 0,
-            "map should have moved from initial position");
-        // Verify the list cursor tracks the map
-        let order = crate::state::grid_reading_order(state.regions.len());
-        let expected = order.iter().position(|&r| r == state.ui.map_selection).unwrap_or(0);
-        assert_eq!(state.ui.panel_selection, expected,
-            "list cursor should follow map selection");
+        // Enter toggles deploy_enabled for the selected medicine
+        let was_enabled = state.deploy_enabled.get(0).copied().unwrap_or(false);
+        let state = apply_action(&state, &Action::Confirm);
+        assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines)),
+            "Enter should stay in BrowseMedicines");
+        assert_ne!(state.deploy_enabled.get(0).copied().unwrap_or(false), was_enabled,
+            "deploy_enabled should have toggled");
     }
 
     #[test]

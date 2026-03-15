@@ -6,8 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, KNOWLEDGE_NAME, TICKS_PER_DAY};
-use crate::ui::hint_line;
+use crate::state::{GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, TICKS_PER_DAY, AUTO_DEPLOY_MIN_EFFICACY};
 use crate::format_number;
 
 /// Maximum selection index for the medicines panel in its current sub-state.
@@ -16,17 +15,9 @@ pub fn selection_max(ui_state: &MedicineUiState, state: &GameState) -> usize {
         MedicineUiState::BrowseMedicines => {
             state.unlocked_medicine_indices().len().saturating_sub(1)
         }
-        MedicineUiState::SelectRegion { .. } => {
+        MedicineUiState::RegionFilter { .. } => {
             state.regions.len().saturating_sub(1)
         }
-        MedicineUiState::SelectDisease { medicine_idx, .. } => {
-            state.medicines[*medicine_idx]
-                .deployable_diseases(&state.diseases).len()
-                .saturating_sub(1)
-        }
-        MedicineUiState::SelectMode { .. } => 1, // 0=Treatment, 1=Vaccination
-        MedicineUiState::ConfirmDeploy { .. }
-        | MedicineUiState::DeployResult { .. } => 0,
     }
 }
 
@@ -42,24 +33,8 @@ fn dose_color(med: &Medicine) -> Color {
 
 pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     let (title, lines, selected_line) = match &state.ui.medicine_ui {
-        Some(MedicineUiState::SelectRegion { medicine_idx }) => {
-            render_select_region(state, *medicine_idx)
-        }
-        Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
-            let (t, l) = render_select_disease(state, *medicine_idx, *region_idx);
-            (t, l, None)
-        }
-        Some(MedicineUiState::SelectMode { medicine_idx, region_idx, disease_idx }) => {
-            let (t, l) = render_select_mode(state, *medicine_idx, *region_idx, *disease_idx);
-            (t, l, None)
-        }
-        Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, target }) => {
-            let (t, l) = render_confirm_deploy(state, *medicine_idx, *region_idx, target.disease_idx);
-            (t, l, None)
-        }
-        Some(MedicineUiState::DeployResult { medicine_idx, message }) => {
-            let (t, l) = render_deploy_result(state, *medicine_idx, message);
-            (t, l, None)
+        Some(MedicineUiState::RegionFilter { medicine_idx }) => {
+            render_region_filter(state, *medicine_idx)
         }
         _ => render_browse(state),
     };
@@ -105,27 +80,47 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             };
 
             // Line 1: Name + deploying status
-            let auto_on = state.auto_deploy.get(med_idx).copied().unwrap_or(false);
+            let deploy_on = state.deploy_enabled.get(med_idx).copied().unwrap_or(false);
             let shipment_doses: f64 = state.pending_shipments.iter()
                 .filter(|s| s.medicine_idx == med_idx)
                 .map(|s| s.doses)
                 .sum();
             let has_shipments = shipment_doses > 0.0;
-            // Check if auto-deploy is ON but blocked because all tested diseases
-            // have efficacy below the auto-deploy threshold.
-            let auto_blocked = auto_on && {
+            // Check if deploy is ON but blocked because all tested diseases
+            // have efficacy below the deployment threshold.
+            let deploy_blocked = deploy_on && {
                 let tested: Vec<usize> = med.deployable_diseases(&state.diseases)
                     .into_iter()
                     .filter(|d_idx| med.tested_against.contains(d_idx))
                     .collect();
                 !tested.is_empty() && tested.iter().all(|&d_idx| {
-                    med.effective_efficacy(d_idx, &state.diseases) < crate::state::AUTO_DEPLOY_MIN_EFFICACY
+                    med.effective_efficacy(d_idx, &state.diseases) < AUTO_DEPLOY_MIN_EFFICACY
                 })
             };
-            let (status_tag, status_color) = if auto_on && auto_blocked {
+
+            // Region filter summary
+            let region_filter = state.deploy_regions.get(med_idx);
+            let filter_note = if deploy_on {
+                if let Some(regions) = region_filter {
+                    if regions.is_empty() {
+                        String::new() // all regions
+                    } else {
+                        let names: Vec<&str> = regions.iter()
+                            .filter_map(|&r| state.regions.get(r).map(|reg| reg.name.as_str()))
+                            .collect();
+                        format!(" ({})", names.join(", "))
+                    }
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
+            let (status_tag, status_color) = if deploy_on && deploy_blocked {
                 (" [INEFFECTIVE]".to_string(), Color::Red)
-            } else if auto_on {
-                (" [DEPLOYING]".to_string(), Color::Green)
+            } else if deploy_on {
+                (format!(" [DEPLOYING]{}", filter_note), Color::Green)
             } else if has_shipments {
                 (format!(" [IN TRANSIT: {} doses]", shipment_doses.round() as u64), Color::Cyan)
             } else {
@@ -195,7 +190,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                 }
             }
 
-            // Line 3: Doses remaining + cost per deploy
+            // Line 3: Doses remaining
             let dc = dose_color(med);
             if med.doses <= 0.0 {
                 let is_manufacturing = state.active_research.iter()
@@ -292,12 +287,12 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        let auto_status = unlocked.get(state.ui.panel_selection)
-            .and_then(|&(med_idx, _)| state.auto_deploy.get(med_idx).copied())
+        let deploy_status = unlocked.get(state.ui.panel_selection)
+            .and_then(|&(med_idx, _)| state.deploy_enabled.get(med_idx).copied())
             .unwrap_or(false);
-        let auto_label = if auto_status { "ON" } else { "OFF" };
+        let deploy_label = if deploy_status { "Stop" } else { "Deploy" };
         lines.push(Line::from(Span::styled(
-            format!("  [X] Auto-deploy {}  [Enter] Target manually  [Esc] Close", auto_label),
+            format!("  [Enter] {}  [X] Region filter  [Esc] Close", deploy_label),
             Style::default().fg(Color::DarkGray),
         )));
     }
@@ -305,10 +300,13 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
     (" Medicines ".to_string(), lines, selected_line)
 }
 
-fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_region_filter(state: &GameState, medicine_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let med = &state.medicines[medicine_idx];
+
+    let region_filter = state.deploy_regions.get(medicine_idx);
+    let filter_is_all = region_filter.map(|s| s.is_empty()).unwrap_or(true);
 
     let order = grid_reading_order(state.regions.len());
     for (display_pos, &region_idx) in order.iter().enumerate() {
@@ -317,28 +315,28 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
         if selected {
             selected_line = Some(lines.len());
         }
+
+        // Determine if this region is enabled
+        let region_enabled = if filter_is_all {
+            true
+        } else {
+            region_filter.map(|s| s.contains(&region_idx)).unwrap_or(true)
+        };
+
+        let toggle = if region_enabled { "[✓]" } else { "[ ]" };
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
+        } else if region_enabled {
             Style::default().fg(Color::White)
+        } else {
+            Style::default().fg(Color::DarkGray)
         };
 
-        // Show region stats: population, screened infected, total dead (detected only)
         let infected = region.screened_infected();
-        let dead = region.detected_dead(&state.diseases);
-
-        // Show per-disease cooldown for diseases this medicine targets in this region
-        let deployable = med.deployable_diseases(&state.diseases);
-        let cooldowns: Vec<(usize, u64)> = deployable.iter()
-            .filter_map(|&d_idx| {
-                let remaining = region.deploy_cooldown_remaining(state.tick, d_idx);
-                if remaining > 0 { Some((d_idx, remaining)) } else { None }
-            })
-            .collect();
 
         let mut spans = vec![
-            Span::styled(format!("{}{:<14}", marker, region.name), style),
+            Span::styled(format!("{}{} {:<14}", marker, toggle, region.name), style),
             Span::styled(
                 format!("{:>6} pop", format_number(region.population as f64)),
                 Style::default().fg(Color::Cyan),
@@ -349,272 +347,20 @@ fn render_select_region(state: &GameState, medicine_idx: usize) -> (String, Vec<
                 Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
             ),
         ];
-        if dead > 0.0 {
+
+        if region.collapsed {
             spans.push(Span::raw("  "));
-            spans.push(Span::styled(
-                format!("{:>6} dead", format_number(dead)),
-                Style::default().fg(Color::DarkGray),
-            ));
+            spans.push(Span::styled("COLLAPSED", Style::default().fg(Color::Red)));
         }
-        if !cooldowns.is_empty() {
-            let all_on_cooldown = cooldowns.len() == deployable.len();
-            if all_on_cooldown {
-                // Every targetable disease is on cooldown — show simple message
-                let max_ticks = cooldowns.iter().map(|(_, t)| *t).max().unwrap_or(0);
-                let hours = ((max_ticks as f64 / TICKS_PER_DAY) * 24.0).ceil() as u64;
-                spans.push(Span::raw("  "));
-                spans.push(Span::styled(
-                    format!("[cooldown {}h]", hours),
-                    Style::default().fg(Color::Yellow),
-                ));
-            } else {
-                // Some diseases on cooldown, others ready — show which
-                let names: Vec<&str> = cooldowns.iter()
-                    .filter_map(|(d_idx, _)| state.diseases.get(*d_idx).map(|d| d.name.as_str()))
-                    .collect();
-                spans.push(Span::raw("  "));
-                spans.push(Span::styled(
-                    format!("[cooldown: {}]", names.join(", ")),
-                    Style::default().fg(Color::Yellow),
-                ));
-            }
-        }
-        let eff = region.delivery_efficiency();
-        if eff < 0.90 {
-            spans.push(Span::raw("  "));
-            let eff_color = if eff < 0.50 { Color::Red } else { Color::Yellow };
-            spans.push(Span::styled(
-                format!("{:.0}% eff", eff * 100.0),
-                Style::default().fg(eff_color),
-            ));
-        }
+
         lines.push(Line::from(spans));
     }
 
     lines.push(Line::from(""));
-    let hint = if state.outcome == GameOutcome::Playing {
-        "  [↑/↓ ←/→] Navigate  [Enter] Select  [Esc] Back"
-    } else {
-        "  [Esc] Back"
-    };
-    lines.push(Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))));
-
-    (format!(" Deploy: {} ", med.name), lines, selected_line)
-}
-
-fn render_select_disease(
-    state: &GameState,
-    medicine_idx: usize,
-    region_idx: usize,
-) -> (String, Vec<Line<'static>>) {
-    let mut lines: Vec<Line> = Vec::new();
-    let med = &state.medicines[medicine_idx];
-    let region = &state.regions[region_idx];
-
-    let deployable = med.deployable_diseases(&state.diseases);
-    for (i, &disease_idx) in deployable.iter().enumerate() {
-        let selected = state.ui.panel_selection == i;
-        let marker = if selected { "▶ " } else { "  " };
-        let disease_name = state.diseases.get(disease_idx)
-            .map(|d| d.display_name(disease_idx))
-            .unwrap_or_else(|| "Unknown".to_string());
-        let cross_reactive = med.is_cross_reactive(disease_idx);
-
-        let inf = region.infections.iter().find(|inf| inf.disease_idx == disease_idx);
-        let infected = inf.map(|i| i.infected).unwrap_or(0.0);
-
-        let style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        let mut spans = vec![Span::styled(format!("{}{}", marker, disease_name), style)];
-        if cross_reactive {
-            spans.push(Span::styled(
-                " (cross-reactive, 50% eff)",
-                Style::default().fg(Color::DarkGray),
-            ));
-        }
-        lines.push(Line::from(spans));
-        lines.push(Line::from(vec![
-            Span::raw("    "),
-            Span::styled(
-                format!("{} infected", format_number(infected)),
-                Style::default().fg(if infected > 0.0 { Color::Red } else { Color::DarkGray }),
-            ),
-        ]));
-    }
-
-    // Show incompatible diseases grayed out so the player understands why they can't be targeted.
-    let incompatible: Vec<usize> = state.diseases.iter().enumerate()
-        .filter(|(i, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME && !deployable.contains(i))
-        .map(|(i, _)| i)
-        .collect();
-    if !incompatible.is_empty() {
-        lines.push(Line::from(""));
-        for &disease_idx in &incompatible {
-            let name = state.diseases[disease_idx].display_name(disease_idx);
-            let reason = if !state.diseases[disease_idx].pathogen_type.is_treatable() {
-                "prion, untreatable".to_string()
-            } else {
-                format!("{}, incompatible", med.therapy_type.label())
-            };
-            lines.push(Line::from(vec![
-                Span::styled(format!("  {}", name), Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!(" ({})", reason),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-    }
-
-    lines.push(Line::from(""));
-    let hint = if state.outcome == GameOutcome::Playing {
-        "  [←/→] Change region  [Enter] Select  [Esc] Back"
-    } else {
-        "  [Esc] Back"
-    };
-    lines.push(Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))));
-
-    (format!(" {} → {} ", med.name, region.name), lines)
-}
-
-fn render_select_mode(
-    state: &GameState,
-    medicine_idx: usize,
-    region_idx: usize,
-    disease_idx: usize,
-) -> (String, Vec<Line<'static>>) {
-    let mut lines: Vec<Line> = Vec::new();
-    let med = &state.medicines[medicine_idx];
-    let region = &state.regions[region_idx];
-    let disease_name = state.diseases[disease_idx].display_name(disease_idx);
-
-    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        format!("  Deploy {} to {} vs {}", med.name, region.name, disease_name),
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
-
-    let options = [
-        ("Treatment", "Treat infected population"),
-        ("Vaccination", "Protect susceptible population"),
-    ];
-    for (i, (label, desc)) in options.iter().enumerate() {
-        let selected = state.ui.panel_selection == i;
-        let marker = if selected { "▶ " } else { "  " };
-        let style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        lines.push(Line::from(Span::styled(format!("  {}{}", marker, label), style)));
-        lines.push(Line::from(Span::styled(
-            format!("      {}", desc),
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Enter] Confirm  [Esc] Back",
+        "  [Enter] Toggle region  [Esc] Back",
         Style::default().fg(Color::DarkGray),
     )));
 
-    (format!(" {} → {} ", med.name, region.name), lines)
-}
-
-fn render_confirm_deploy(
-    state: &GameState,
-    medicine_idx: usize,
-    region_idx: usize,
-    disease_idx: usize,
-) -> (String, Vec<Line<'static>>) {
-    let mut lines: Vec<Line> = Vec::new();
-    let med = &state.medicines[medicine_idx];
-    let region = &state.regions[region_idx];
-    let disease_name = state.diseases[disease_idx].display_name(disease_idx);
-
-    // Untested medicines always deploy as therapeutic
-    let action_desc = format!("Treat {} in {}", disease_name, region.name);
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        format!("  {}", action_desc),
-        Style::default().fg(Color::Cyan),
-    )));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  ⚠ WARNING: UNTESTED MEDICINE",
-        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-    )));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        format!("  Not tested against {}.", disease_name),
-        Style::default().fg(Color::Yellow),
-    )));
-    lines.push(Line::from(Span::styled(
-        "  25% chance of adverse effects (20% of doses)",
-        Style::default().fg(Color::Yellow),
-    )));
-    lines.push(Line::from(Span::styled(
-        "  will KILL instead of help.",
-        Style::default().fg(Color::Yellow),
-    )));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  Deploy anyway?",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-    )));
-    lines.push(Line::from(""));
-    lines.push(hint_line(state, "Confirm", "Cancel"));
-
-    (format!(" ⚠ {} ", med.name), lines)
-}
-
-fn render_deploy_result(
-    state: &GameState,
-    medicine_idx: usize,
-    message: &str,
-) -> (String, Vec<Line<'static>>) {
-    let mut lines: Vec<Line> = Vec::new();
-    let med_name = state.medicines.get(medicine_idx)
-        .map(|m| m.name.as_str())
-        .unwrap_or("Unknown");
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        format!("  {}", message),
-        Style::default().fg(Color::Green),
-    )));
-    lines.push(Line::from(""));
-
-    // Show updated medicine state
-    if let Some(med) = state.medicines.get(medicine_idx) {
-        let dc = dose_color(med);
-        let dose_text = if med.doses <= 0.0 {
-            "EMPTY".to_string()
-        } else {
-            format!("{}/{}", format_number(med.doses), format_number(med.max_doses))
-        };
-        lines.push(Line::from(vec![
-            Span::styled("  Doses remaining: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(dose_text, Style::default().fg(dc)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("  Funding: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("¥{:.0}", state.resources.funding),
-                Style::default().fg(Color::Yellow),
-            ),
-        ]));
-    }
-
-    lines.push(Line::from(""));
-    lines.push(hint_line(state, "Continue", "Back"));
-
-    (format!(" ✓ {} [Dispatched] ", med_name), lines)
+    (format!(" {} — Region Filter ", med.name), lines, selected_line)
 }

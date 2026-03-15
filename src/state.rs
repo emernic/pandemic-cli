@@ -66,10 +66,10 @@ pub struct GameState {
     /// messages. Cleared at the start of each tick.
     #[serde(skip)]
     pub events: Vec<GameEvent>,
-    /// Tracks which medicines have already fired an AutoDeployBlocked event
+    /// Tracks which medicines have already fired a DeployBlocked event
     /// this session, to avoid spamming the log every tick.
     #[serde(skip)]
-    pub auto_deploy_blocked_notified: std::collections::HashSet<usize>,
+    pub deploy_blocked_notified: std::collections::HashSet<usize>,
     /// Persistent log of notable events with timestamps (day number, message).
     /// Populated by `events::process_events()` from transient `events`. Capped at 50 entries.
     #[serde(default)]
@@ -93,10 +93,15 @@ pub struct GameState {
     /// this set.
     #[serde(default)]
     pub auto_repeat_research: Vec<ResearchKind>,
-    /// Auto-deploy: automatically deploy tested medicines to the worst-affected
-    /// region each tick cycle. Per-medicine toggle, indexed by medicine index.
+    /// Per-medicine deployment toggle. When enabled, medicine is automatically
+    /// deployed each tick cycle to the worst-affected eligible region.
     #[serde(default)]
-    pub auto_deploy: Vec<bool>,
+    pub deploy_enabled: Vec<bool>,
+    /// Per-medicine region filter. When a medicine is deployed, only regions
+    /// in this set receive doses. Empty set = all regions eligible.
+    /// An empty BTreeSet means "all regions" (default when first enabled).
+    #[serde(default)]
+    pub deploy_regions: Vec<std::collections::BTreeSet<usize>>,
     /// Standing orders: automation rules that fire during tick when conditions are met.
     #[serde(default)]
     pub standing_orders: StandingOrders,
@@ -4109,9 +4114,9 @@ pub enum GameEvent {
     ResearchHandoff { message: String },
     /// Personnel left due to unpaid wages (funding at $0).
     PersonnelAttrition { count: u32 },
-    /// Auto-deploy was blocked for a medicine because its effective efficacy
+    /// Deployment was blocked for a medicine because its effective efficacy
     /// against all tested diseases is below the deployment threshold.
-    AutoDeployBlocked { medicine_idx: usize },
+    DeployBlocked { medicine_idx: usize },
     /// Bacterial horizontal gene transfer — broad-spectrum resistance spread
     /// from one bacterium to another.
     ResistanceTransferred {
@@ -4293,8 +4298,10 @@ pub enum GameCommand {
     BargainWithGovernor { region_idx: usize },
     /// Toggle a standing order on/off.
     ToggleStandingOrder { kind: StandingOrderKind },
-    /// Toggle auto-deploy for a specific medicine.
-    ToggleAutoDeploy { med_idx: usize },
+    /// Toggle deployment on/off for a specific medicine.
+    ToggleDeploy { med_idx: usize },
+    /// Toggle a region in/out of a medicine's deployment filter.
+    ToggleDeployRegion { med_idx: usize, region_idx: usize },
     /// Toggle auto-rebuild infrastructure for a region.
     ToggleAutoRebuild { region_idx: usize },
     /// Toggle auto-repeat for a specific repeatable research project.
@@ -4614,14 +4621,8 @@ pub enum Panel {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MedicineUiState {
     BrowseMedicines,
-    SelectRegion { medicine_idx: usize },
-    /// Choose which disease to target (skipped for single-target medicines).
-    SelectDisease { medicine_idx: usize, region_idx: usize },
-    /// Choose treatment vs vaccination (only shown when VaccinePlatform is unlocked).
-    SelectMode { medicine_idx: usize, region_idx: usize, disease_idx: usize },
-    ConfirmDeploy { medicine_idx: usize, region_idx: usize, target: DeployTarget },
-    /// Shown after a deployment completes, displaying the result prominently.
-    DeployResult { medicine_idx: usize, message: String },
+    /// Region filter sub-menu: toggle which regions receive this medicine.
+    RegionFilter { medicine_idx: usize },
 }
 
 /// Policy panel UI state machine.
@@ -4727,8 +4728,7 @@ pub struct UiState {
     ///
     /// - `Panel::Threats`                     → index into display_order (diseases sorted by deaths desc)
     /// - `Panel::Medicines / BrowseMedicines` → index into unlocked medicines
-    /// - `Panel::Medicines / SelectRegion`    → index into grid_reading_order(regions)
-    /// - `Panel::Medicines / SelectDisease`   → index into deployable_diseases list
+    /// - `Panel::Medicines / RegionFilter`    → index into grid_reading_order(regions)
     /// - `Panel::Research / BrowseAll`         → index into `research_flat_items()` flat list
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → decrees, standing orders, loans
@@ -4864,43 +4864,11 @@ impl UiState {
     }
 
     /// Handle Escape — go back one step in the current panel's wizard, or close the panel.
-    pub fn close_panel(&mut self, medicines: &[Medicine], diseases: &[Disease]) {
+    pub fn close_panel(&mut self, _medicines: &[Medicine], _diseases: &[Disease]) {
         match self.open_panel {
             Panel::Medicines => {
                 match self.medicine_ui.clone() {
-                    Some(MedicineUiState::DeployResult { medicine_idx, .. }) => {
-                        self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-                        self.panel_selection = 0;
-                    }
-                    Some(MedicineUiState::ConfirmDeploy { medicine_idx, region_idx, .. }) => {
-                        let med = &medicines[medicine_idx];
-                        if med.deployable_diseases(diseases).len() == 1 {
-                            self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-                        } else {
-                            self.medicine_ui = Some(MedicineUiState::SelectDisease {
-                                medicine_idx,
-                                region_idx,
-                            });
-                        }
-                        self.panel_selection = 0;
-                    }
-                    Some(MedicineUiState::SelectMode { medicine_idx, region_idx, .. }) => {
-                        let med = &medicines[medicine_idx];
-                        if med.deployable_diseases(diseases).len() == 1 {
-                            self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-                        } else {
-                            self.medicine_ui = Some(MedicineUiState::SelectDisease {
-                                medicine_idx,
-                                region_idx,
-                            });
-                        }
-                        self.panel_selection = 0;
-                    }
-                    Some(MedicineUiState::SelectDisease { medicine_idx, .. }) => {
-                        self.medicine_ui = Some(MedicineUiState::SelectRegion { medicine_idx });
-                        self.panel_selection = 0;
-                    }
-                    Some(MedicineUiState::SelectRegion { .. }) => {
+                    Some(MedicineUiState::RegionFilter { .. }) => {
                         self.medicine_ui = Some(MedicineUiState::BrowseMedicines);
                         self.panel_selection = 0;
                     }
@@ -5055,47 +5023,12 @@ impl UiState {
     }
 
     /// Keep region-specific panel views in sync with the map selection.
-    fn sync_panel_region(&mut self, num_regions: usize) {
+    fn sync_panel_region(&mut self, _num_regions: usize) {
         if let Some(PolicyUiState::ManagePolicies { region_idx }) = &mut self.policy_ui {
             *region_idx = self.map_selection;
         }
-        match &self.medicine_ui {
-            Some(MedicineUiState::SelectDisease { medicine_idx, region_idx }) => {
-                if *region_idx != self.map_selection {
-                    let med = *medicine_idx;
-                    self.medicine_ui = Some(MedicineUiState::SelectDisease {
-                        medicine_idx: med,
-                        region_idx: self.map_selection,
-                    });
-                    self.panel_selection = 0;
-                }
-            }
-            Some(MedicineUiState::SelectRegion { .. }) => {
-                // Keep list cursor in sync with map — left/right should move the
-                // deploy target, consistent with how deeper wizard steps work.
-                let order = grid_reading_order(num_regions);
-                self.panel_selection = order.iter()
-                    .position(|&r| r == self.map_selection)
-                    .unwrap_or(0);
-            }
-            Some(MedicineUiState::SelectMode { medicine_idx, .. }) => {
-                // Regress to region selection on map change
-                let med = *medicine_idx;
-                self.medicine_ui = Some(MedicineUiState::SelectRegion {
-                    medicine_idx: med,
-                });
-                self.panel_selection = 0;
-            }
-            Some(MedicineUiState::ConfirmDeploy { medicine_idx, .. }) => {
-                // Regress to region selection — don't silently change region on confirm screen
-                let med = *medicine_idx;
-                self.medicine_ui = Some(MedicineUiState::SelectRegion {
-                    medicine_idx: med,
-                });
-                self.panel_selection = 0;
-            }
-            _ => {}
-        }
+        // No medicine sub-states need map-sync anymore (RegionFilter uses
+        // its own region list, not map_selection).
     }
 
 }
@@ -5583,7 +5516,7 @@ impl GameState {
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
             events: vec![],
-            auto_deploy_blocked_notified: std::collections::HashSet::new(),
+            deploy_blocked_notified: std::collections::HashSet::new(),
             event_log: VecDeque::new(),
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
@@ -5591,7 +5524,8 @@ impl GameState {
             auto_resolve_crises: HashMap::new(),
             history: vec![],
             auto_repeat_research: vec![],
-            auto_deploy: vec![],
+            deploy_enabled: vec![],
+            deploy_regions: vec![],
             standing_orders: StandingOrders::default(),
             crisis_operations: vec![],
             pending_shipments: vec![],

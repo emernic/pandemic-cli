@@ -128,10 +128,10 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
                     medicine_idx: m_idx,
                     disease_idx: d_idx,
                 });
-                while state.auto_deploy.len() <= m_idx {
-                    state.auto_deploy.push(false);
+                while state.deploy_enabled.len() <= m_idx {
+                    state.deploy_enabled.push(false);
                 }
-                state.auto_deploy[m_idx] = true;
+                state.deploy_enabled[m_idx] = true;
                 if state.enacted_decrees.authorize_human_trials {
                     let roll: f64 = rng.r#gen();
                     if roll < crate::state::HUMAN_TRIALS_ADVERSE_CHANCE {
@@ -560,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn clinical_trial_enables_auto_deploy() {
+    fn clinical_trial_enables_deploy() {
         let mut state = GameState::new_default(42);
         state.medicines[0].unlocked = true;
 
@@ -571,16 +571,16 @@ mod tests {
             personnel_assigned: 5,
         }];
 
-        // auto_deploy should be false/absent before trial completes
-        assert!(!state.auto_deploy.get(0).copied().unwrap_or(false),
-            "auto_deploy should be off before trial");
+        // deploy should be disabled before trial completes
+        assert!(!state.deploy_enabled.get(0).copied().unwrap_or(false),
+            "deploy should be off before trial");
 
         state = tick(&state);
 
         assert!(state.medicines[0].tested_against.contains(&0),
             "medicine should be tested after trial");
-        assert!(state.auto_deploy.get(0).copied().unwrap_or(false),
-            "auto_deploy should be enabled automatically after trial completes");
+        assert!(state.deploy_enabled.get(0).copied().unwrap_or(false),
+            "deploy should be enabled automatically after trial completes");
     }
 
     #[test]
