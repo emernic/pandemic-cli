@@ -4095,7 +4095,7 @@ mod tests {
     fn corporate_seizure_option_a_loses_personnel() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 4 }, 0);
+        setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 4, board_member_idx: 0, corp_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.resources.personnel, before_personnel - 4,
             "option A should lose scaled personnel");
@@ -4530,10 +4530,10 @@ mod tests {
     fn corporate_cooperate_schedules_overreach_followup() {
         let mut state = GameState::new_default(42);
         state.tick = 1000;
-        setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 3 }, 0);
+        setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 3, board_member_idx: 0, corp_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.pending_crises.len(), 1);
-        assert!(matches!(after.pending_crises[0], CrisisKind::CorporateOverreach));
+        assert!(matches!(after.pending_crises[0], CrisisKind::CorporateOverreach { .. }));
     }
 
     #[test]
@@ -4541,7 +4541,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.tick = 100; // Pending check runs before tick increment
         state.last_contract_offer_tick = state.tick; // prevent contract offer from adding a pending crisis
-        state.pending_crises.push(CrisisKind::CorporateOverreach);
+        state.pending_crises.push(CrisisKind::CorporateOverreach { corp_idx: 0, board_member_idx: 0 });
         let (after, _) = tick(&state);
         assert!(after.active_crisis.is_some(), "pending crisis should fire");
         assert!(after.pending_crises.is_empty(), "fired crisis should be removed from pending");
