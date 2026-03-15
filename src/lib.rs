@@ -281,8 +281,47 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 /// Engine unit tests may call `engine::tick()` directly to test game logic
 /// in isolation without UI state updates.
 pub fn tick_and_process(state: &GameState) -> GameState {
+    // Capture the currently-selected research item before the tick so we can
+    // stabilize panel_selection afterward. When new research options appear
+    // (new disease identified, project completes, etc.) the flat list shifts
+    // and the index-based selection would jump to a different item.
+    let selected_research_item = if matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+        let items = state.research_flat_items();
+        items.get(state.ui.panel_selection).cloned()
+    } else {
+        None
+    };
+
     let mut new = engine::tick(state);
     events::process_events(&mut new);
+
+    // Stabilize research panel selection: find the same item in the new list.
+    if let Some(ref old_item) = selected_research_item {
+        if matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+            let new_items = new.research_flat_items();
+            let old_kind = old_item.to_kind(state);
+            let found = match old_item {
+                ResearchFlatItem::UpgradeLab => {
+                    new_items.iter().position(|item| matches!(item, ResearchFlatItem::UpgradeLab))
+                }
+                _ => {
+                    old_kind.as_ref().and_then(|kind| {
+                        new_items.iter().position(|item| item.to_kind(&new).as_ref() == Some(kind))
+                    })
+                }
+            };
+            if let Some(pos) = found {
+                new.ui.panel_selection = pos;
+            } else {
+                // Item no longer exists (e.g., project completed); clamp to valid range.
+                let max = new_items.len().saturating_sub(1);
+                if new.ui.panel_selection > max {
+                    new.ui.panel_selection = max;
+                }
+            }
+        }
+    }
+
     new
 }
 
@@ -942,5 +981,61 @@ mod tests {
         let expected = order.iter().position(|&r| r == state.ui.map_selection).unwrap_or(0);
         assert_eq!(state.ui.panel_selection, expected,
             "list cursor should follow map selection");
+    }
+
+    #[test]
+    fn research_selection_stable_when_new_items_appear() {
+        use crate::state::{ResearchProject, ResearchUiState, Panel};
+
+        let mut state = GameState::new_default(42);
+        // Open the research panel in BrowseAll mode
+        state.ui.open_panel = Panel::Research;
+        state.ui.research_ui = Some(ResearchUiState::BrowseAll);
+        // Pause so tick doesn't advance simulation (we want controlled changes)
+        state.sim_state = SimState::Paused;
+
+        let items_before = state.research_flat_items();
+        assert!(items_before.len() >= 2, "need at least 2 items to test selection stability");
+
+        // Select the second item and record its identity
+        state.ui.panel_selection = 1;
+        let selected_kind = items_before[1].to_kind(&state);
+
+        // Add a new active research project, which will push all Available items
+        // down by one position in the flat list
+        let first_available = items_before.iter()
+            .find_map(|item| item.available_kind(&state))
+            .expect("should have at least one available project");
+        let (personnel, ticks, _funding) = state.effective_costs(&first_available);
+        state.active_research.push(ResearchProject {
+            kind: first_available,
+            progress: 0.0,
+            required_ticks: ticks,
+            personnel_assigned: personnel,
+        });
+
+        // The flat list has changed — the old index 1 now points to a different item
+        let items_shifted = state.research_flat_items();
+        let _naive_kind = items_shifted.get(1).and_then(|item| item.to_kind(&state));
+        // The shift should have changed what index 1 points to (unless item 1 was the
+        // newly-added active project, which is unlikely but possible)
+        // Either way, tick_and_process should stabilize the selection
+
+        let new_state = tick_and_process(&state);
+
+        if let Some(ref kind) = selected_kind {
+            // The selection should now point to the same ResearchKind
+            let new_items = new_state.research_flat_items();
+            let new_selected = new_items.get(new_state.ui.panel_selection)
+                .and_then(|item| item.to_kind(&new_state));
+            assert_eq!(new_selected.as_ref(), Some(kind),
+                "research selection should track the same item after list changes");
+        }
+        // If selected_kind was None (UpgradeLab), the UpgradeLab item should still be selected
+        if matches!(items_before[1], ResearchFlatItem::UpgradeLab) {
+            let new_items = new_state.research_flat_items();
+            assert!(matches!(new_items.get(new_state.ui.panel_selection), Some(ResearchFlatItem::UpgradeLab)),
+                "UpgradeLab selection should be preserved");
+        }
     }
 }

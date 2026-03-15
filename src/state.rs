@@ -4782,6 +4782,17 @@ impl ResearchFlatItem {
             _ => None,
         }
     }
+
+    /// Resolve this item to its underlying ResearchKind identity.
+    /// Used to stabilize panel_selection across ticks when the list changes.
+    pub fn to_kind(&self, state: &GameState) -> Option<ResearchKind> {
+        match self {
+            Self::Active(idx) => state.active_research.get(*idx).map(|p| p.kind.clone()),
+            Self::Available(idx) => state.all_available_projects().get(*idx).cloned(),
+            Self::FullStockpile(kind) => Some(kind.clone()),
+            Self::UpgradeLab => None,
+        }
+    }
 }
 
 /// Operations/Orders panel UI state machine.
