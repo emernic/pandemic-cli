@@ -4389,8 +4389,6 @@ pub enum CrisisKind {
     RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
     /// Untested drugs on the black market — confiscate or allow.
     BlackMarketMedicine { region_idx: usize },
-    /// Media causing panic — address it or ignore.
-    MediaPanic,
     /// Pressure to skip clinical trials — fast-track marks medicine tested but with strain drift penalty.
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
     /// Public refusing vaccines — education campaign or mandate.
@@ -4544,7 +4542,6 @@ impl CrisisKind {
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
-            CrisisKind::MediaPanic => "media",
             CrisisKind::TrialShortcut { .. } => "trial",
             CrisisKind::VaccineHesitancy { .. } => "hesitancy",
             CrisisKind::CorruptOfficial { .. } => "corrupt",
