@@ -212,37 +212,12 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("{} personnel resigned, no funding", count);
                 (6, msg.clone(), msg)
             }
-            GameEvent::DiseaseMutated { disease_idx, spread_factor, lethality_factor, .. } => {
-                // Suppress mutation events when the player has no medicine affected by this mutation.
-                // The mutation still happened; we just don't generate noise when there's nothing to act on.
-                if !state.has_outdated_medicine(*disease_idx) {
-                    continue;
-                }
+            GameEvent::VariantEmerged { disease_idx, parent_name } => {
                 let name = state.diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| format!("Pathogen #{}", disease_idx + 1));
-                let worst_eff = state.medicines.iter()
-                    .filter(|m| m.target_diseases.contains(disease_idx)
-                        && (m.tested_against.contains(disease_idx) || m.unlocked))
-                    .map(|m| m.strain_efficacy(*disease_idx, &state.diseases))
-                    .fold(1.0_f64, f64::min);
-                let detail = if state.unlocked_techs.contains(&crate::state::BasicTech::RapidSequencing) {
-                    let inf_pct = (spread_factor - 1.0) * 100.0;
-                    let leth_pct = (lethality_factor - 1.0) * 100.0;
-                    format!(" (within-region spread {:+.0}%, lethality {:+.0}%)", inf_pct, leth_pct)
-                } else {
-                    String::new()
-                };
-                let eff_pct = (worst_eff * 100.0).round() as u32;
-                let msg = if worst_eff < 0.25 {
-                    format!("CRITICAL: {} medicine only {}% effective{}. Re-trial now!", name, eff_pct, detail)
-                } else if worst_eff < 0.50 {
-                    format!("WARNING: {} medicine degraded to {}% efficacy{}. Re-trial recommended.", name, eff_pct, detail)
-                } else {
-                    format!("{} mutated{}. Efficacy {}%.", name, detail, eff_pct)
-                };
-                let priority = if worst_eff < 0.25 { 2 } else if worst_eff < 0.50 { 4 } else { 7 };
-                (priority, msg.clone(), msg)
+                let msg = format!("NEW VARIANT: {} emerged from {}", name, parent_name);
+                (2, msg.clone(), msg)
             }
             GameEvent::CrisisAutoResolved { message } => {
                 let msg = format!("Auto-resolved: {}", message);

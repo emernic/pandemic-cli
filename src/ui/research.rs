@@ -417,9 +417,9 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
         }
         ResearchKind::GenomicSequencing { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
-            let current_rate = disease.effective_mutation_rate();
+            let current_rate = disease.effective_variant_rate();
             let new_rate = current_rate * 0.5;
-            Some(format!("Mutation rate: {:.4} → {:.4}", current_rate, new_rate))
+            Some(format!("Variant spawn rate: {:.4} → {:.4}", current_rate, new_rate))
         }
         ResearchKind::TrainPersonnel => {
             let added_upkeep = TRAIN_PERSONNEL_BATCH as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
@@ -484,10 +484,7 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             let med = state.medicines.get(*medicine_idx)?;
             let is_retrial = med.tested_against.contains(disease_idx);
             if is_retrial {
-                let strain_eff = med.strain_efficacy(*disease_idx, &state.diseases);
-                let behind = med.mutations_behind(*disease_idx, &state.diseases);
-                Some(format!("Recalibrate strain drift ({} mutation{} behind, strain eff {:.0}%)",
-                    behind, if behind == 1 { "" } else { "s" }, strain_eff * 100.0))
+                Some("Re-trial — promotes to primary target (removes cross-reactive penalty)".to_string())
             } else {
                 Some("First trial — tests efficacy and enables deployment".to_string())
             }

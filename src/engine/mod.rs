@@ -71,11 +71,11 @@ pub(crate) fn tick(state: &GameState) -> GameState {
     let mut rng_research = new.rng_research.clone();
     let mut rng_misc = new.rng_misc.clone();
 
-    // Disease spread and mutation
+    // Disease spread and variant spawning
     spread::tick_spread_within(&mut new, &state.diseases, &mut rng_spread);
     spread::tick_spread_cross_region(&mut new, &state.diseases, &mut rng_spread);
-    spread::tick_mutation(&mut new, &mut rng_spread);
     spread::tick_horizontal_gene_transfer(&mut new);
+    disease::tick_variant_spawning(&mut new, &mut rng_spread);
 
     // Research progress
     let research_completions = research::tick_research(&mut new, &mut rng_research);
@@ -2630,48 +2630,7 @@ mod tests {
     }
 
     #[test]
-    fn disease_mutates_over_time() {
-        let mut state = GameState::new_default(42);
-        state.diseases[0].pathogen_type = crate::state::PathogenType::RnaVirus;
-        // Make the disease very mild so regions don't collapse before mutation triggers.
-        // This test verifies mutation mechanics work, not game balance.
-        state.diseases[0].within_region_spread = 0.005;
-        state.diseases[0].lethality = 0.0001;
-        state.diseases[0].recovery_rate = 0.003;
-        let original_spread = state.diseases[0].within_region_spread;
-        // Run enough ticks for mutation to be very likely (~25 expected at 0.001/tick × 25000).
-        // Manually reset any new diseases that spawn to prevent stacking deaths.
-        for _ in 0..25000 {
-            if state.outcome != GameOutcome::Playing {
-                break;
-            }
-            state = tick(&state);
-            if state.active_crisis.is_some() {
-                state.active_crisis = None;
-                state.sim_state = crate::state::SimState::Running;
-            }
-            // Remove any newly emerged diseases so only disease 0 runs
-            while state.diseases.len() > 1 {
-                let extra = state.diseases.len() - 1;
-                state.diseases.remove(extra);
-                for r in &mut state.regions {
-                    r.infections.retain(|inf| inf.disease_idx == 0);
-                }
-            }
-        }
-        assert!(
-            state.diseases[0].strain_generation > 0,
-            "RNA virus should have mutated at least once (ran {} ticks, rate=0.0004/tick)",
-            state.tick,
-        );
-        assert_ne!(
-            state.diseases[0].within_region_spread, original_spread,
-            "within-region spread should have changed after mutation"
-        );
-    }
-
-    #[test]
-    fn mutation_is_deterministic() {
+    fn simulation_is_deterministic() {
         let state = GameState::new_default(42);
         let mut a = state.clone();
         let mut b = state;
@@ -2679,64 +2638,55 @@ mod tests {
             a = tick(&a);
             b = tick(&b);
         }
-        assert_eq!(a.diseases[0].strain_generation, b.diseases[0].strain_generation);
         assert_eq!(a.diseases[0].within_region_spread, b.diseases[0].within_region_spread);
         assert_eq!(a.diseases[0].lethality, b.diseases[0].lethality);
+        assert_eq!(a.diseases.len(), b.diseases.len());
     }
 
     #[test]
-    fn strain_efficacy_degrades_with_mutation() {
-        use crate::state::{Disease, Medicine, TherapyType, PathogenType};
+    fn variant_spawns_from_parent_disease() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
 
-        let diseases = vec![Disease {
-            name: "Test".into(),
-            pathogen_type: PathogenType::RnaVirus,
-            transmission: crate::state::TransmissionVector::Airborne,
-            within_region_spread: 0.05,
-            lethality: 0.01,
-            cross_region_spread: 0.01,
-            recovery_rate: 0.03,
-            knowledge: 1.0,
-            strain_generation: 3,
-            sequencing_count: 0,
-            detected: true,
-            spawned_at_tick: 0,
-            mechanism_resistance: vec![],
-            sequence_group: None,
-            incubation_ticks: 3.0 * crate::state::TICKS_PER_DAY,
-            first_detected_regions: vec![],
-            detected_day: 0.0,
-            prev_day_observed_infected: 0.0,
-            current_day_observed_infected: 0.0,
-        }];
+        let mut state = GameState::new_default(42);
+        state.tick = 20 * crate::state::TICKS_PER_DAY as u64; // day 20
 
-        let med = Medicine {
-            name: "TestMed".into(),
-            therapy_type: TherapyType::Antiviral,
-            mechanism: None,
-            target_diseases: vec![0],
-            doses: 1000.0,
-            max_doses: 1000.0,
-            unlocked: true,
-            tested_against: vec![0],
-            strain_generations: vec![0], // calibrated at gen 0, disease is at gen 3
-            deployed_count: 0,
-            total_treated: 0.0,
-            total_protected: 0.0,
-            manufacturer_corp_idx: None,
-        };
+        let initial_count = state.diseases.len();
+        let parent_name = state.diseases[0].name.clone();
 
-        // 3 generations behind = 1.0 - 3*0.02 = 0.94
-        let eff = med.strain_efficacy(0, &diseases);
-        assert!((eff - 0.94).abs() < 0.001, "expected 0.94, got {eff}");
+        // Force a variant spawn by calling the function directly with high probability
+        let mut rng = ChaCha8Rng::seed_from_u64(123);
+        // Try many times since the rate is low
+        let mut spawned = false;
+        for _ in 0..100000 {
+            disease::tick_variant_spawning(&mut state, &mut rng);
+            if state.diseases.len() > initial_count {
+                spawned = true;
+                break;
+            }
+        }
+        assert!(spawned, "variant should have spawned after many attempts");
 
-        // Re-calibrated medicine should have full efficacy
-        let med_current = Medicine {
-            strain_generations: vec![3],
-            ..med.clone()
-        };
-        let eff2 = med_current.strain_efficacy(0, &diseases);
-        assert!((eff2 - 1.0).abs() < 0.001, "expected 1.0, got {eff2}");
+        let variant = &state.diseases[state.diseases.len() - 1];
+        assert!(variant.parent_lineage.is_some(),
+            "variant should have parent_lineage set");
+        assert_eq!(variant.parent_lineage.as_deref(), Some(parent_name.as_str()),
+            "variant lineage should match parent name");
+        assert!(variant.variant_number > 0,
+            "variant_number should be > 0");
+        assert!(variant.name.contains("II") || variant.name.contains("III"),
+            "variant name should have roman numeral suffix: {}", variant.name);
+        assert!(!variant.detected,
+            "variant should start undetected");
+        // Stats should be boosted relative to parent
+        assert!(variant.within_region_spread > state.diseases[0].within_region_spread,
+            "variant should have higher spread than parent");
+
+        // Should have targeted medicines
+        let has_med = state.medicines.iter().any(|m| {
+            m.target_diseases.contains(&(state.diseases.len() - 1))
+        });
+        assert!(has_med, "variant should have targeted medicines");
     }
 
     #[test]
@@ -2874,7 +2824,7 @@ mod tests {
             assert!(new_disease.within_region_spread > 0.0);
             assert!(new_disease.lethality > 0.0);
             assert_eq!(new_disease.knowledge, 0.0);
-            // strain_generation may be > 0 if the disease mutated after spawning
+            // variant_number should be 0 for newly emerged (non-variant) diseases
 
             // Matching medicine should exist
             assert!(state.medicines.len() > initial_medicines);
@@ -4340,42 +4290,18 @@ mod tests {
     }
 
     #[test]
-    fn trial_shortcut_fast_track_marks_tested_with_penalty() {
+    fn trial_shortcut_fast_track_marks_tested_and_targeted() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
-        // Disease at gen 0 — fast-track should still impose 10-gen penalty
-        assert_eq!(state.diseases[0].strain_generation, 0);
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
 
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.medicines[0].tested_against.contains(&0),
             "fast-track should mark medicine as tested");
-        assert!(!after.medicines[0].strain_generations.is_empty(),
-            "strain_generations should be populated");
-        assert_eq!(after.medicines[0].strain_generations[0], -10,
-            "at gen 0, fast-track should calibrate to gen -10");
-        let efficacy = after.medicines[0].strain_efficacy(0, &after.diseases);
-        assert!((efficacy - 0.80).abs() < 0.01,
-            "fast-track should always impose ~20% penalty (10 gens × 2%/gen), got {}", efficacy);
+        assert!(after.medicines[0].target_diseases.contains(&0),
+            "fast-track should add disease as primary target");
         assert!(after.active_crisis.is_none());
-    }
-
-    #[test]
-    fn trial_shortcut_fast_track_with_mutated_disease_has_drift() {
-        let mut state = GameState::new_default(42);
-        unlock_all_medicines(&mut state);
-        state.medicines[0].tested_against.clear();
-        state.diseases[0].strain_generation = 5;
-        setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
-
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.medicines[0].tested_against.contains(&0));
-        assert_eq!(after.medicines[0].strain_generations[0], -5,
-            "should be calibrated 10 generations behind current (5 - 10 = -5)");
-        let efficacy = after.medicines[0].strain_efficacy(0, &after.diseases);
-        assert!((efficacy - 0.80).abs() < 0.01,
-            "efficacy should be ~0.80 due to 10-gen drift (10 × 2%/gen), got {}", efficacy);
     }
 
     #[test]
@@ -4392,16 +4318,13 @@ mod tests {
     }
 
     #[test]
-    fn trial_shortcut_generates_at_any_strain_gen() {
+    fn trial_shortcut_generates_when_untested_exists() {
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
         state.tick = 5000; // past CRISIS_MIN_TICK
-        // Disease at gen 0 — TrialShortcut should still be possible
-        // (penalty mechanism uses i32 strain_generations, works at any gen)
-        state.diseases[0].strain_generation = 0;
         let mut got_trial = false;
         for seed in 0..500u64 {
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -4412,7 +4335,7 @@ mod tests {
                 }
             }
         }
-        assert!(got_trial, "TrialShortcut should generate even at gen 0");
+        assert!(got_trial, "TrialShortcut should generate when untested disease exists");
     }
 
 

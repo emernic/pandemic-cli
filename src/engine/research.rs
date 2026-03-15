@@ -116,13 +116,6 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
                     if !medicine.target_diseases.contains(&d_idx) {
                         medicine.target_diseases.push(d_idx);
                     }
-                    let pos = medicine.target_diseases.iter().position(|&d| d == d_idx).unwrap();
-                    let current_gen = state.diseases.get(d_idx)
-                        .map_or(0, |d| d.strain_generation) as i32;
-                    while medicine.strain_generations.len() <= pos {
-                        medicine.strain_generations.push(0);
-                    }
-                    medicine.strain_generations[pos] = current_gen;
                 }
                 state.events.push(GameEvent::TrialCompleted {
                     medicine_idx: m_idx,
@@ -191,10 +184,6 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
                 let m_idx = *medicine_idx;
                 if let Some(medicine) = state.medicines.get_mut(m_idx) {
                     medicine.unlocked = true;
-                    medicine.strain_generations = medicine.target_diseases.iter()
-                        .map(|&d_idx| state.diseases.get(d_idx)
-                            .map_or(0, |d| d.strain_generation as i32))
-                        .collect();
                 }
                 state.events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
                 board_notify_count += 1;
@@ -515,34 +504,25 @@ mod tests {
     }
 
     #[test]
-    fn develop_medicine_sets_strain_generation() {
+    fn develop_medicine_unlocks() {
         let mut state = GameState::new_default(42);
-        state.diseases[0].strain_generation = 2;
         state.diseases[0].knowledge = 1.0;
 
-        // Start and complete DevelopMedicine for medicine 0 (targets disease 0)
         state.active_research.push(ResearchProject {
             kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
-            progress: 24.0, // will complete on next tick
+            progress: 24.0,
             required_ticks: 25.0,
             personnel_assigned: 5,
         });
 
         state = tick(&state);
         assert!(state.medicines[0].unlocked);
-        assert_eq!(
-            state.medicines[0].strain_generations,
-            vec![2],
-            "medicine should be calibrated to disease generation at completion"
-        );
     }
 
     #[test]
-    fn clinical_trial_updates_strain_generation() {
+    fn clinical_trial_adds_target_and_tested() {
         let mut state = GameState::new_default(42);
-        state.diseases[0].strain_generation = 3;
         state.medicines[0].unlocked = true;
-        state.medicines[0].strain_generations = vec![0]; // outdated
 
         state.active_research = vec![ResearchProject {
             kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
@@ -553,10 +533,7 @@ mod tests {
 
         state = tick(&state);
         assert!(state.medicines[0].tested_against.contains(&0));
-        assert!(
-            state.medicines[0].strain_generations[0] >= 3,
-            "clinical trial should update strain calibration"
-        );
+        assert!(state.medicines[0].target_diseases.contains(&0));
     }
 
     #[test]
@@ -602,20 +579,6 @@ mod tests {
         assert!(narrow_funding < broad_funding, "narrow should cost less funding");
     }
 
-    #[test]
-    fn outdated_strain_shows_retrial_available() {
-        let mut state = GameState::new_default(42);
-        state.diseases[0].strain_generation = 2;
-        state.medicines[0].unlocked = true;
-        state.medicines[0].tested_against = vec![0];
-        state.medicines[0].strain_generations = vec![0]; // outdated
-
-        let field_projects = state.available_field_projects();
-        let has_retrial = field_projects.iter().any(|k| matches!(k,
-            ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 }
-        ));
-        assert!(has_retrial, "should offer clinical trial for strain-outdated medicine");
-    }
 
     #[test]
     fn manufacture_doses_restores_supply() {
@@ -943,7 +906,7 @@ mod tests {
                 ResearchKind::GenomicSequencing { disease_idx: 0 }
             )),
             "sequencing should not be available when effective rate ({}) is below threshold",
-            state.diseases[0].effective_mutation_rate()
+            state.diseases[0].effective_variant_rate()
         );
 
         // After 2 sequencings: 0.0002 * 0.5^2 = 0.00005 > 0.000005 — still available
@@ -954,7 +917,7 @@ mod tests {
                 ResearchKind::GenomicSequencing { disease_idx: 0 }
             )),
             "sequencing should still be available when effective rate ({}) is above threshold",
-            state.diseases[0].effective_mutation_rate()
+            state.diseases[0].effective_variant_rate()
         );
     }
 

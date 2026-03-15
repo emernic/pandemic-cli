@@ -241,8 +241,8 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
     // Trial shortcut: requires an unlocked medicine that targets a disease it hasn't
-    // been trialled against yet. Fast-tracking calibrates the medicine 2 generations
-    // behind the current strain (30% efficacy penalty via i32 strain_generations).
+    // been trialled against yet. Fast-tracking marks the medicine as tested, promoting
+    // it from cross-reactive (0.5x) to primary target (1.0x) efficacy.
     let trial_candidates: Vec<(usize, usize)> = state.medicines.iter().enumerate()
         .filter(|(_, m)| m.unlocked)
         .flat_map(|(m_idx, m)| {
@@ -2420,20 +2420,20 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             "Maintained trial standards. Board noted the delay.".into()
         }
         (CrisisKind::TrialShortcut { disease_idx, medicine_idx }, _) => {
-            // Fast-track — gain chairman satisfaction, mark medicine as tested but 10 generations behind
-            // current strain (~20% efficacy penalty from drift at 2%/gen).
+            // Fast-track — gain chairman satisfaction, mark medicine as tested against the disease.
             chairman_satisfaction_hit(state, 0.10);
             if let Some(medicine) = state.medicines.get_mut(*medicine_idx) {
                 if !medicine.tested_against.contains(disease_idx) {
                     medicine.tested_against.push(*disease_idx);
                 }
-                // Fast-track calibration: 10 generations behind → ~0.80x efficacy
-                medicine.set_strain_calibration_behind(*disease_idx, &state.diseases, 10);
+                if !medicine.target_diseases.contains(disease_idx) {
+                    medicine.target_diseases.push(*disease_idx);
+                }
             }
             let name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
                 .unwrap_or_else(|| "the pathogen".into());
-            format!("Fast-tracked {} treatment. Deployed at reduced efficacy.", name)
+            format!("Fast-tracked {} treatment trial.", name)
         }
 
         (CrisisKind::VaccineHesitancy { region_idx }, 0) => {
