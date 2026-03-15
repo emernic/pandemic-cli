@@ -9,7 +9,7 @@ use action::Action;
 use engine::execute_command;
 use state::{
     DecreeId, DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
-    LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS, MANAGE_PRIORITY_POS,
+    LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineMode, MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem,
     ResearchUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
@@ -516,9 +516,6 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
             } else if ui.panel_selection == MANAGE_NEGOTIATE_POS {
                 // Negotiate with Governor
                 Some(GameCommand::NegotiateGovernor { region_idx })
-            } else if ui.panel_selection == MANAGE_PRIORITY_POS {
-                // Cycle deployment priority
-                Some(GameCommand::CycleDeployPriority { region_idx })
             } else {
                 // Map display position to PolicyId via sorted display order
                 let policy = policy_display_order()[ui.panel_selection];
