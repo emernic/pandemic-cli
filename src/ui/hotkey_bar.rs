@@ -16,7 +16,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         ("P", "Policy", Panel::Policy),
         ("O", "Orders", Panel::Operations),
         ("B", "Board", Panel::Board),
-        ("L", "Ledger", Panel::Ledger),
+        ("S", "Stocks", Panel::Ledger),
     ];
 
     let mut spans: Vec<Span> = Vec::new();
