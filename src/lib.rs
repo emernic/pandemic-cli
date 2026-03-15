@@ -118,7 +118,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
         Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy, new.regions.len()),
         Action::OpenOperations => new.ui.toggle_panel(Panel::Operations, new.regions.len()),
         Action::OpenBoard => new.ui.toggle_panel(Panel::Board, new.regions.len()),
-        Action::OpenLedger => new.ui.toggle_panel(Panel::Ledger, new.regions.len()),
+        Action::OpenStocks => new.ui.toggle_panel(Panel::Ledger, new.regions.len()),
         Action::OpenHelp => new.ui.toggle_panel(Panel::Help, new.regions.len()),
         Action::ClosePanel => new.ui.close_panel(&new.world.medicines, &new.world.diseases),
         Action::GoHome => new.ui.go_home(),
@@ -918,7 +918,7 @@ mod tests {
         state.resources.funding = cost + 500.0;
 
         // Open ledger, confirm on first corp → ConfirmBuy
-        let state = apply_action(&state, &Action::OpenLedger);
+        let state = apply_action(&state, &Action::OpenStocks);
         assert_eq!(state.ui.open_panel, Panel::Ledger);
         let state = apply_action(&state, &Action::Confirm);
         assert!(matches!(state.ui.ledger_ui, Some(LedgerUiState::ConfirmBuy { corp_idx: 0 })));

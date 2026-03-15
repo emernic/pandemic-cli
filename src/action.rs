@@ -9,7 +9,7 @@ pub enum Action {
     OpenPolicy,
     OpenOperations,
     OpenBoard,
-    OpenLedger,
+    OpenStocks,
     OpenHelp,
     ClosePanel,
     SelectNext,
@@ -38,7 +38,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('p') | KeyCode::Char('P') => Some(Action::OpenPolicy),
         KeyCode::Char('o') | KeyCode::Char('O') => Some(Action::OpenOperations),
         KeyCode::Char('b') | KeyCode::Char('B') => Some(Action::OpenBoard),
-        KeyCode::Char('l') | KeyCode::Char('L') => Some(Action::OpenLedger),
+        KeyCode::Char('s') | KeyCode::Char('S') => Some(Action::OpenStocks),
         KeyCode::Char('?') => Some(Action::OpenHelp),
         KeyCode::Esc => Some(Action::ClosePanel),
         KeyCode::Down => Some(Action::SelectNext),
@@ -68,7 +68,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "p" => Some(Action::OpenPolicy),
         "o" => Some(Action::OpenOperations),
         "b" => Some(Action::OpenBoard),
-        "l" | "ledger" => Some(Action::OpenLedger),
+        "s" | "stocks" => Some(Action::OpenStocks),
         "?" => Some(Action::OpenHelp),
         "esc" => Some(Action::ClosePanel),
         "down" => Some(Action::SelectNext),
@@ -118,9 +118,9 @@ mod tests {
         assert_eq!(string_to_action("M"), Some(Action::OpenMedicines));
         assert_eq!(string_to_action("Q"), Some(Action::Quit));
 
-        assert_eq!(string_to_action("l"), Some(Action::OpenLedger));
-        assert_eq!(string_to_action("L"), Some(Action::OpenLedger));
-        assert_eq!(string_to_action("ledger"), Some(Action::OpenLedger));
+        assert_eq!(string_to_action("s"), Some(Action::OpenStocks));
+        assert_eq!(string_to_action("S"), Some(Action::OpenStocks));
+        assert_eq!(string_to_action("stocks"), Some(Action::OpenStocks));
 
         assert_eq!(string_to_action("home"), Some(Action::GoHome));
         assert_eq!(string_to_action("Home"), Some(Action::GoHome));
