@@ -4109,28 +4109,6 @@ mod tests {
     }
 
     #[test]
-    fn exhaustion_epidemic_option_a_enables_discourage_hosp() {
-        let mut state = GameState::new_default(42);
-        assert!(!state.policies[0].discourage_hosp);
-        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0, personnel_loss: 3 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.policies[0].discourage_hosp,
-            "option A should enable discourage hospitalization");
-    }
-
-    #[test]
-    fn exhaustion_epidemic_option_b_loses_personnel() {
-        let mut state = GameState::new_default(42);
-        let before = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::ExhaustionEpidemic { region_idx: 0, personnel_loss: 3 }, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.resources.personnel, before - 3,
-            "option B should lose scaled personnel");
-        assert!(!after.policies[0].discourage_hosp,
-            "option B should keep hospitals running (no discourage)");
-    }
-
-    #[test]
     fn corporate_seizure_option_a_loses_personnel() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;

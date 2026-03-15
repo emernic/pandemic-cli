@@ -247,23 +247,6 @@ pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<
         candidates.push(CrisisKind::CorruptOfficial { stolen });
     }
 
-    // Exhaustion epidemic: fires when hospitals are overwhelmed by patient volume.
-    // Requires: hospitals running (not discouraged) AND significant infection load.
-    // Discourage Hospitalization prevents this — fewer patients means no staff burnout.
-    let hospitals_active: Vec<usize> = state.policies.iter().enumerate()
-        .filter(|(i, p)| {
-            !p.discourage_hosp
-                && !state.regions[*i].collapsed
-                && state.regions[*i].total_infected() > 10_000.0
-        })
-        .map(|(i, _)| i)
-        .collect();
-    if !hospitals_active.is_empty() {
-        let idx = hospitals_active[rng.r#gen::<usize>() % hospitals_active.len()];
-        let personnel_loss = ((state.resources.personnel as f64 * 0.15).round() as u32).clamp(2, 5);
-        candidates.push(CrisisKind::ExhaustionEpidemic { region_idx: idx, personnel_loss });
-    }
-
     // Corporate seizure: requires low authority and day > 16
     if state.resources.authority <= Authority::Low && day > 16.0 {
         let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
@@ -597,40 +580,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         personnel: 2,
                         operation: Some(OperationSpec { days: 3.0, label: "Audit Team".into() }),
                     }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::ExhaustionEpidemic { region_idx, personnel_loss } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Healthcare Worker Collapse".into(),
-                description: format!(
-                    "Hospital staff in {} are collapsing from overwork. \
-                     Patient volume is unsustainable at this pace.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Discourage hospitalization (policy)".into(),
-                    description: format!(
-                        "Enable Discourage Hospitalization policy in {}. \
-                         Reduces hospital spread but increases lethality. Can be toggled off later.",
-                        region_name
-                    ),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Push through (−{} personnel)", personnel_loss),
-                    description: "Keep hospitals open. Some workers quit permanently.".into(),
-                    cost: None, // Personnel cost applied in resolve
-                },
-                CrisisOption {
-                    label: format!("Ignore the warnings (−{} personnel)", (personnel_loss + 1) / 2),
-                    description: "Some staff leave on their own. Hospitals stay open.".into(),
-                    cost: None,
                 },
                 ],
                 kind,
@@ -2250,26 +2199,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             "Investigation successful. Funds recovered, official removed.".into()
         }
 
-        (CrisisKind::ExhaustionEpidemic { region_idx, .. }, 0) => {
-            // Discourage hospitalization — enable the policy to reduce hospital load
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.discourage_hosp = true;
-            }
-            format!("Hospitalization discouraged in {}. Staff recovering.", region_name)
-        }
-        (CrisisKind::ExhaustionEpidemic { personnel_loss, .. }, 1) => {
-            // Push through — lose personnel
-            state.resources.personnel = state.resources.personnel.saturating_sub(*personnel_loss);
-            format!("{} workers quit permanently", personnel_loss)
-        }
-        (CrisisKind::ExhaustionEpidemic { personnel_loss, .. }, _) => {
-            // Ignore the warnings — some staff leave on their own (half the loss)
-            let partial_loss = (*personnel_loss + 1) / 2; // round up
-            state.resources.personnel = state.resources.personnel.saturating_sub(partial_loss);
-            format!("{} workers left on their own. Surge continues.", partial_loss)
-        }
 
 
         (CrisisKind::CorporateSeizure { cooperate_loss }, 0) => {
