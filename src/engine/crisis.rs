@@ -213,15 +213,6 @@ pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<
     // not generated randomly.
 
 
-    // Black market medicine: requires detected disease with active infections in non-collapsed region
-    let regions_with_infections: Vec<usize> = state.regions.iter().enumerate()
-        .filter(|(_, r)| !r.collapsed && r.infections.iter().any(|i| i.infected > 1000.0))
-        .map(|(i, _)| i)
-        .collect();
-    if !regions_with_infections.is_empty() {
-        let idx = regions_with_infections[rng.r#gen::<usize>() % regions_with_infections.len()];
-        candidates.push(CrisisKind::BlackMarketMedicine { region_idx: idx });
-    }
 
 
 
@@ -502,33 +493,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::BlackMarketMedicine { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Black Market Drugs".into(),
-                description: format!(
-                    "Desperate people in {} are buying untested drugs on the black market.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Allow it".into(),
-                    description: "Some are treated, but 20% suffer adverse reactions".into(),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.10, 80.0, 400.0);
-                    CrisisOption {
-                        label: format!("Confiscate (¥{:.0})", cost),
-                        description: "Seize the drugs. Governor cooperation improves.".into(),
-                        cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::TrialShortcut { disease_idx, medicine_idx } => {
             let disease_name = state.diseases.get(*disease_idx)
                 .map(|d| d.display_name(*disease_idx))
@@ -715,36 +679,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
         }
         // --- Follow-up crisis types ---
 
-        CrisisKind::CounterfeitEpidemic { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            let crackdown_cost = scaled_cost(state, 0.20, 150.0, 800.0);
-            CrisisEvent {
-                title: "Counterfeit Medicine Deaths".into(),
-                description: format!(
-                    "The black market drugs you tolerated in {} have spawned a counterfeit industry. \
-                     Fake medicines are killing patients. The knockoffs look identical to real treatments.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Accept the casualties".into(),
-                    description: format!("10% of infected in {} die, but preserves governor relations and resources.", region_name),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Crackdown (¥{:.0}, 2 personnel for 2d)", crackdown_cost),
-                    description: format!("Stop the deaths, but enforcement raids damage cooperation in {} (−10).", region_name),
-                    cost: Some(CrisisCost {
-                        funding: crackdown_cost,
-                        personnel: 2,
-                        operation: Some(OperationSpec { days: 2.0, label: "Enforcement Team".into() }),
-                    }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::EmbezzlementRing { stolen_per_day } => {
             let total_stolen = stolen_per_day * 4.0;
             let purge_cost = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(3, 6);
@@ -2080,36 +2014,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
         }
 
 
-        (CrisisKind::BlackMarketMedicine { region_idx }, 0) => {
-            // Allow black market — some treated, some harmed
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                let mut total_harmed = 0.0;
-                for inf in &mut region.infections {
-                    if inf.infected > 100.0 {
-                        let treated = inf.infected * 0.05;
-                        let harmed = treated * 0.2;
-                        inf.infected -= treated;
-                        inf.immune += treated - harmed;
-                        inf.dead += harmed;
-                        total_harmed += harmed;
-                    }
-                }
-                region.dead += total_harmed;
-            }
-            state.pending_crises.push(CrisisKind::CounterfeitEpidemic { region_idx: *region_idx });
-            format!("Black market drugs allowed in {}. Some treated, some suffered adverse reactions.", region_name)
-        }
-        (CrisisKind::BlackMarketMedicine { region_idx }, _) => {
-            // Confiscate — governor appreciates enforcement of order
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
-            }
-            format!("Black market drugs confiscated in {}. Governor cooperation improved.", region_name)
-        }
 
 
         (CrisisKind::TrialShortcut { .. }, 0) => {
@@ -2229,33 +2133,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 
         // --- Follow-up crisis resolutions ---
 
-        (CrisisKind::CounterfeitEpidemic { region_idx }, 0) => {
-            // Accept casualties — more deaths in the region
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                let mut total_killed = 0.0;
-                for inf in &mut region.infections {
-                    if inf.infected > 100.0 {
-                        let killed = inf.infected * 0.10;
-                        inf.infected -= killed;
-                        inf.dead += killed;
-                        total_killed += killed;
-                    }
-                }
-                region.dead += total_killed;
-            }
-            format!("Counterfeit medicines killing patients in {}", region_name)
-        }
-        (CrisisKind::CounterfeitEpidemic { region_idx }, _) => {
-            // Crackdown — costs already deducted, cooperation hit from enforcement
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
-            }
-            format!("Counterfeit ring in {} dismantled. Governor unhappy about enforcement raids.", region_name)
-        }
 
         (CrisisKind::EmbezzlementRing { .. }, 0) => {
             // Purge department — lose personnel

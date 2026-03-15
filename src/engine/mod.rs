@@ -4005,23 +4005,6 @@ mod tests {
     }
 
 
-    #[test]
-    fn black_market_option_a_treats_and_harms() {
-        let mut state = GameState::new_default(42);
-        // Need infections > 100 for the effect to kick in
-        state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, exposed: 0.0, infected: 10_000.0, dead: 0.0, immune: 0.0,
-        }];
-        let before_dead = state.regions[0].dead;
-        setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        let inf = after.regions[0].disease_state(0).unwrap();
-        // 5% treated, of which 20% harmed
-        assert!(inf.infected < 10_000.0, "some should be treated");
-        assert!(inf.immune > 0.0, "some should gain immunity");
-        assert!(inf.dead > 0.0, "some should die from adverse reactions");
-        assert!(after.regions[0].dead > before_dead, "region dead should increase");
-    }
 
     #[test]
     fn crisis_option_a_resolves() {
@@ -4529,28 +4512,6 @@ mod tests {
 
     // --- Crisis chain tests ---
 
-    #[test]
-    fn black_market_allow_schedules_counterfeit_followup() {
-        let mut state = GameState::new_default(42);
-        state.tick = 1000;
-        state.regions[0].infections = vec![RegionDiseaseState {
-            disease_idx: 0, exposed: 0.0, infected: 10_000.0, dead: 0.0, immune: 0.0,
-        }];
-        setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.pending_crises.len(), 1, "should schedule one follow-up");
-        assert!(matches!(after.pending_crises[0], CrisisKind::CounterfeitEpidemic { region_idx: 0 }),
-            "follow-up should be CounterfeitEpidemic for region 0");
-    }
-
-    #[test]
-    fn black_market_confiscate_no_followup() {
-        let mut state = GameState::new_default(42);
-        state.tick = 1000;
-        setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(after.pending_crises.is_empty(), "confiscating should NOT schedule follow-up");
-    }
 
     #[test]
     fn corruption_ignore_schedules_embezzlement_followup() {
