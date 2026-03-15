@@ -272,29 +272,6 @@ pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<
         }
     }
 
-    // Vaccine dispute: requires day > 30, at least one unlocked medicine, at least 2 corps
-    if day > 30.0 && state.medicines.iter().any(|m| m.unlocked) {
-        let neutral_loss = scaled_cost(state, 0.20, 100.0, 700.0);
-        let credit_gain = scaled_cost(state, 0.30, 150.0, 800.0);
-        // Prefer biotech corps, fall back to any non-bankrupt corp
-        let biotech: Vec<&str> = state.corporations.iter()
-            .filter(|c| !c.bankrupt && c.sector == CorporationSector::Biotech)
-            .map(|c| c.name.as_str())
-            .collect();
-        let any_corps: Vec<&str> = state.corporations.iter()
-            .filter(|c| !c.bankrupt)
-            .map(|c| c.name.as_str())
-            .collect();
-        let pool = if biotech.len() >= 2 { &biotech } else { &any_corps };
-        if pool.len() >= 2 {
-            let idx_a = rng.r#gen::<usize>() % pool.len();
-            let idx_b = (idx_a + 1 + rng.r#gen::<usize>() % (pool.len() - 1)) % pool.len();
-            let corp_a = pool[idx_a].to_string();
-            let corp_b = pool[idx_b].to_string();
-            candidates.push(CrisisKind::VaccineDispute { neutral_loss, credit_gain, corp_a, corp_b });
-        }
-    }
-
     // --- Dark comedy events ---
 
     // Performance review: day 24+ (the board doesn't care about your little pandemic)
@@ -595,34 +572,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::VaccineDispute { neutral_loss, credit_gain, corp_a, corp_b } => {
-            CrisisEvent {
-                title: "Attribution Dispute".into(),
-                description: format!(
-                    "{corp_a} and {corp_b} are both claiming credit for your treatment breakthrough. \
-                     Each is threatening to pull funding unless you back their side."
-                ),
-                options: vec![ CrisisOption {
-                    label: "Stay neutral".into(),
-                    description: format!("Both cancel contracts. −¥{:.0} total.", neutral_loss),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Back {corp_a}"),
-                    description: format!("+¥{:.0} from {corp_a}. −15% chairman approval. Expect sanctions from {corp_b} within days.", credit_gain),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Back {corp_b}"),
-                    description: format!("+¥{:.0} from {corp_b}. −15% chairman approval. Expect sanctions from {corp_a} within days.", credit_gain),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-
         // --- Dark comedy events ---
 
         CrisisKind::PerformanceReview => {
@@ -1118,32 +1067,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                     collapsed_count, active_count, recommended_name,
                 ),
                 options,
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::SanctionsThreat { funding_loss, corp_name } => {
-            CrisisEvent {
-                title: "Corporate Retaliation".into(),
-                description: format!(
-                    "{corp_name} is pulling its contracts. \
-                     They're threatening to freeze your accounts and block supply access."
-                ),
-                options: vec![ CrisisOption {
-                    label: "Accept the cuts".into(),
-                    description: format!("Lose ¥{funding_loss:.0} and −10% chairman approval"),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Negotiate a settlement (2 personnel for 3d)".into(),
-                    description: "Costs resources but preserves contracts. Envoys return in 3 days.".into(),
-                    cost: Some(CrisisCost {
-                        funding: scaled_cost(state, 0.20, 150.0, 600.0),
-                        personnel: 2,
-                        operation: Some(OperationSpec { days: 3.0, label: "Diplomatic Envoys".into() }),
-                    }),
-                },
-                ],
                 kind,
                 tick_created: tick,
             }
@@ -2005,21 +1928,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             "Blockade dissolved after days of delays. Supply lines degraded.".into()
         }
 
-        (CrisisKind::VaccineDispute { neutral_loss, .. }, 0) => {
-            // Stay neutral — lose funding from both
-            state.resources.funding = (state.resources.funding - neutral_loss).max(0.0);
-            format!("Stayed neutral. Both canceled ¥{:.0} in contracts.", neutral_loss)
-        }
-        (CrisisKind::VaccineDispute { credit_gain, corp_a, corp_b, .. }, option) => {
-            // Back one corp — gain funding, chairman satisfaction hit, schedule retaliation from the other
-            let (backed, retaliator) = if option == 1 { (corp_a, corp_b) } else { (corp_b, corp_a) };
-            state.resources.funding += credit_gain;
-            chairman_satisfaction_hit(state, -0.15);
-            let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
-            state.pending_crises.push(CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator.clone() });
-            format!("Backed {}. ¥{:.0} deposited. {} is furious.", backed, credit_gain, retaliator)
-        }
-
         // --- Dark comedy event resolutions ---
 
         (CrisisKind::PerformanceReview, 0) => {
@@ -2398,17 +2306,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             }
         }
 
-
-        (CrisisKind::SanctionsThreat { funding_loss, .. }, 0) => {
-            // Accept cuts — lose funding + chairman satisfaction hit
-            state.resources.funding = (state.resources.funding - funding_loss).max(0.0);
-            chairman_satisfaction_hit(state, -0.10);
-            format!("Contracts canceled. ¥{:.0} lost.", funding_loss)
-        }
-        (CrisisKind::SanctionsThreat { .. }, _) => {
-            // Negotiate settlement — costs already deducted, contracts preserved
-            "Settlement reached. Contracts preserved.".into()
-        }
 
         // --- Emergency loan crises ---
 
