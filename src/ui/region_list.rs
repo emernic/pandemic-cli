@@ -721,27 +721,26 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
         let hc = region.healthcare_capacity;
         let sl = region.supply_lines;
         let co = region.civil_order;
-        // Only show infrastructure when at least one system is degraded
+        lines.push(Line::from(vec![
+            Span::styled("Infra: ", label),
+            Span::styled("HC ", label),
+            Span::styled(
+                format!("{}%", (hc * 100.0) as u32),
+                Style::default().fg(infra_color(hc)),
+            ),
+            Span::styled("  SL ", label),
+            Span::styled(
+                format!("{}%", (sl * 100.0) as u32),
+                Style::default().fg(infra_color(sl)),
+            ),
+            Span::styled("  CO ", label),
+            Span::styled(
+                format!("{}%", (co * 100.0) as u32),
+                Style::default().fg(infra_color(co)),
+            ),
+        ]));
+        // Show effect warnings for stressed/critical systems
         if hc < 1.0 || sl < 1.0 || co < 1.0 {
-            lines.push(Line::from(vec![
-                Span::styled("Infra: ", label),
-                Span::styled("HC ", label),
-                Span::styled(
-                    format!("{}%", (hc * 100.0) as u32),
-                    Style::default().fg(infra_color(hc)),
-                ),
-                Span::styled("  SL ", label),
-                Span::styled(
-                    format!("{}%", (sl * 100.0) as u32),
-                    Style::default().fg(infra_color(sl)),
-                ),
-                Span::styled("  CO ", label),
-                Span::styled(
-                    format!("{}%", (co * 100.0) as u32),
-                    Style::default().fg(infra_color(co)),
-                ),
-            ]));
-            // Show effect warnings for stressed/critical systems
             let mut effects: Vec<Span> = Vec::new();
             if hc < crate::state::INFRA_CRITICAL {
                 effects.push(Span::styled(
