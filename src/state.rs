@@ -4421,8 +4421,6 @@ pub enum CrisisKind {
     /// Refugees flooding from collapsed region — accept (spread disease) or turn away (lose POL).
     /// `wave` counts how many regions have collapsed so far (1 on first collapse).
     RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
-    /// Untested drugs on the black market — confiscate or allow.
-    BlackMarketMedicine { region_idx: usize },
     /// Pressure to skip clinical trials — fast-track marks medicine tested but with strain drift penalty.
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
     /// Corrupt official siphoning funds — amount locked at generation time.
@@ -4480,8 +4478,6 @@ pub enum CrisisKind {
 
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
-    /// Follow-up to BlackMarketMedicine (Allow): counterfeit drugs killing people.
-    CounterfeitEpidemic { region_idx: usize },
     /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
     EmbezzlementRing { stolen_per_day: f64 },
     /// Follow-up to CorporateSeizure (Cooperate): corporation claims your research as proprietary IP.
@@ -4565,7 +4561,6 @@ impl CrisisKind {
         match self {
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::RefugeeWave { .. } => "refugee",
-            CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
             CrisisKind::TrialShortcut { .. } => "trial",
             CrisisKind::CorruptOfficial { .. } => "corrupt",
             CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
@@ -4582,7 +4577,6 @@ impl CrisisKind {
             CrisisKind::GovernorDeath { .. } => "gov_death",
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
-            CrisisKind::CounterfeitEpidemic { .. } => "counterfeit",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::CorporateOverreach => "corporate_overreach",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
