@@ -650,12 +650,6 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 Style::default().fg(Color::Cyan),
             ));
         }
-        if region.is_disrupted(state.tick) {
-            econ_spans.push(Span::styled(
-                "  [DISRUPTED]",
-                Style::default().fg(Color::Red),
-            ));
-        }
         lines.push(Line::from(econ_spans));
         // Regional specialization
         let spec_label = specialization_label(region);

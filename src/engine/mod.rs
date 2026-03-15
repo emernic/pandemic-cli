@@ -15,7 +15,7 @@ use rand::Rng;
 use crate::state::{
     CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, WorldState, ResearchKind,
     StandingOrderKind,
-    COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
+    COLLAPSE_DEATH_RATE, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, PERSONNEL_UPKEEP_COST, TICKS_PER_DAY,
@@ -576,23 +576,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
             let lost_personnel = 2u32.min(new.resources.personnel);
             new.resources.personnel = new.resources.personnel.saturating_sub(lost_personnel);
             events.push(GameEvent::RegionCollapsed { region_idx: i, personnel_lost: lost_personnel });
-
-            // Apply network disruption to connected non-collapsed regions.
-            // Apply network disruption to connected non-collapsed regions for 10 days.
-            let disruption_end = new.tick + COLLAPSE_DISRUPTION_TICKS;
-            let connected: Vec<usize> = new.regions[i].connections.clone();
-            for &c in &connected {
-                if !new.regions[c].collapsed {
-                    // Extend disruption if already active; otherwise set it fresh.
-                    new.regions[c].disrupted_until = Some(
-                        new.regions[c].disrupted_until.map_or(disruption_end, |t| t.max(disruption_end))
-                    );
-                    events.push(GameEvent::NetworkDisruption {
-                        disrupted_region_idx: c,
-                        collapsed_region_idx: i,
-                    });
-                }
-            }
 
             // Schedule refugee crisis toward a non-collapsed neighbor (if any).
             // Queued as pending so it respects the minimum gap between crises,
