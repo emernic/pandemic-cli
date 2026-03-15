@@ -4056,42 +4056,6 @@ mod tests {
 
 
     #[test]
-    fn corrupt_official_option_a_loses_funding() {
-        let mut state = GameState::new_default(42);
-        state.resources.funding = 2000.0;
-        let stolen = (2000.0_f64 * 0.15).min(500.0).round(); // 300
-        setup_crisis(&mut state, CrisisKind::CorruptOfficial { stolen }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - (2000.0 - stolen)).abs() < 1.0,
-            "option A should lose 15% of funding (capped at 500)");
-    }
-
-    #[test]
-    fn corrupt_official_option_b_prevents_theft() {
-        use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
-        state.resources.funding = 2000.0;
-        // Crisis active — blocking derived from active_crisis
-        state.ui.crisis_selection = 1;
-        state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::CorruptOfficial { stolen: 300.0 },
-            title: "T".into(), description: "T".into(),
-            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-             crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 0.0, personnel: 2, ..Default::default() }) },
-            ],
-            tick_created: 0,
-        });
-        let before_personnel = state.resources.personnel;
-        let after = apply_action(&state, &Action::Confirm);
-        // Option B: funding unchanged (just personnel cost), no theft
-        assert_eq!(after.resources.funding, 2000.0,
-            "option B should not lose funding");
-        assert_eq!(after.resources.personnel, before_personnel - 2,
-            "option B should cost 2 personnel");
-    }
-
-    #[test]
     fn corporate_seizure_option_a_loses_personnel() {
         let mut state = GameState::new_default(42);
         let before_personnel = state.resources.personnel;
@@ -4513,16 +4477,6 @@ mod tests {
     // --- Crisis chain tests ---
 
 
-    #[test]
-    fn corruption_ignore_schedules_embezzlement_followup() {
-        let mut state = GameState::new_default(42);
-        state.tick = 1000;
-        state.resources.funding = 2000.0;
-        setup_crisis(&mut state, CrisisKind::CorruptOfficial { stolen: 200.0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.pending_crises.len(), 1);
-        assert!(matches!(after.pending_crises[0], CrisisKind::EmbezzlementRing { .. }));
-    }
 
 
 

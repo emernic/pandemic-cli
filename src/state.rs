@@ -4423,8 +4423,6 @@ pub enum CrisisKind {
     RefugeeWave { from_region: usize, to_region: usize, #[serde(default = "default_one_u8")] wave: u8 },
     /// Pressure to skip clinical trials — fast-track marks medicine tested but with strain drift penalty.
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
-    /// Corrupt official siphoning funds — amount locked at generation time.
-    CorruptOfficial { stolen: f64 },
     /// Board member's corporation deploys private security, demands operational control.
     CorporateSeizure { cooperate_loss: u32, board_member_idx: usize, corp_idx: usize },
     /// Cult blocks vaccination teams in a region.
@@ -4476,8 +4474,6 @@ pub enum CrisisKind {
 
     // --- Follow-up crisis types (spawned by earlier choices) ---
 
-    /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
-    EmbezzlementRing { stolen_per_day: f64 },
     /// Follow-up to CorporateSeizure (Cooperate): corporation claims your research as proprietary IP.
     CorporateOverreach { corp_idx: usize, board_member_idx: usize },
     /// Follow-up to VaccineDispute (Credit one side): losing corp retaliates.
@@ -4560,7 +4556,6 @@ impl CrisisKind {
             CrisisKind::PersonnelCrisis { .. } => "personnel",
             CrisisKind::RefugeeWave { .. } => "refugee",
             CrisisKind::TrialShortcut { .. } => "trial",
-            CrisisKind::CorruptOfficial { .. } => "corrupt",
             CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
             CrisisKind::CultBlockade { .. } => "cult",
             CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
@@ -4574,7 +4569,6 @@ impl CrisisKind {
             CrisisKind::GovernorDeath { .. } => "gov_death",
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
-            CrisisKind::EmbezzlementRing { .. } => "embezzlement",
             CrisisKind::CorporateOverreach { .. } => "corporate_overreach",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardMeeting => "board_meeting",
