@@ -818,18 +818,20 @@ mod tests {
     #[test]
     fn vaccine_platform_prereqs() {
         let mut state = AppState::new_default(42);
-        // No advanced drug tech → not available
+        // No chain prereqs → not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
             ResearchKind::BasicResearch { tech: crate::state::BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should not be available without mAb or Phage");
+        )), "VaccinePlatform should not be available without PhageTherapy");
 
-        // Unlock MonoclonalAntibodies → available
+        // Unlock full column 0 chain up to PhageTherapy → available
+        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
         state.unlocked_techs.push(crate::state::BasicTech::MonoclonalAntibodies);
+        state.unlocked_techs.push(crate::state::BasicTech::PhageTherapy);
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
             ResearchKind::BasicResearch { tech: crate::state::BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should be available after MonoclonalAntibodies");
+        )), "VaccinePlatform should be available after PhageTherapy");
     }
 
     #[test]
@@ -854,26 +856,33 @@ mod tests {
 
     #[test]
     fn combination_therapy_prereqs() {
+        use crate::state::BasicTech;
         let mut state = AppState::new_default(42);
-        // No deployed medicines → not available
+        // No chain prereqs or deployed medicines → not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CombinationTherapy }
-        )), "CombinationTherapy should not be available without 2+ deployed medicines");
+            ResearchKind::BasicResearch { tech: BasicTech::CombinationTherapy }
+        )), "CombinationTherapy should not be available without prereqs");
 
-        // Deploy only 1 medicine → still not available
+        // Unlock column 1 chain (RapidSeq → ResSurv → MetaSurv → EpiForecasting)
+        state.unlocked_techs.push(BasicTech::RapidSequencing);
+        state.unlocked_techs.push(BasicTech::ResistanceSurveillance);
+        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
+        state.unlocked_techs.push(BasicTech::EpidemiologicalForecasting);
+
+        // Chain prereq met but no deployed medicines → still not available
         state.medicines[0].deployed_count = 1;
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CombinationTherapy }
+            ResearchKind::BasicResearch { tech: BasicTech::CombinationTherapy }
         )), "CombinationTherapy should not be available with only 1 deployed medicine");
 
         // Deploy a second medicine → available
         state.medicines[1].deployed_count = 1;
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CombinationTherapy }
-        )), "CombinationTherapy should be available after deploying 2+ different medicines");
+            ResearchKind::BasicResearch { tech: BasicTech::CombinationTherapy }
+        )), "CombinationTherapy should be available with EpiForecasting + 2+ deployed medicines");
     }
 
     #[test]
@@ -957,27 +966,28 @@ mod tests {
 
     #[test]
     fn pathogen_suppression_prereqs() {
+        use crate::state::BasicTech;
         let mut state = AppState::new_default(42);
 
         // No prereqs — not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CompetitiveDisplacement }
-        )), "CompetitiveDisplacement should not be available without VaccinePlatform + CombinationTherapy");
+            ResearchKind::BasicResearch { tech: BasicTech::CompetitiveDisplacement }
+        )), "CompetitiveDisplacement should not be available without ResilientGrids + CombinationTherapy");
 
-        // Only VaccinePlatform — still not available
-        state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
+        // Only ResilientGrids — still not available
+        state.unlocked_techs.push(BasicTech::ResilientGrids);
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CompetitiveDisplacement }
-        )), "CompetitiveDisplacement requires both techs, not just VaccinePlatform");
+            ResearchKind::BasicResearch { tech: BasicTech::CompetitiveDisplacement }
+        )), "CompetitiveDisplacement requires both techs, not just ResilientGrids");
 
         // Both prereqs — available
-        state.unlocked_techs.push(crate::state::BasicTech::CombinationTherapy);
+        state.unlocked_techs.push(BasicTech::CombinationTherapy);
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::CompetitiveDisplacement }
-        )), "CompetitiveDisplacement should be available with VaccinePlatform + CombinationTherapy");
+            ResearchKind::BasicResearch { tech: BasicTech::CompetitiveDisplacement }
+        )), "CompetitiveDisplacement should be available with ResilientGrids + CombinationTherapy");
     }
 
     #[test]

@@ -437,14 +437,14 @@ mod tests {
     }
 
     #[test]
-    fn resilient_grids_prereq_requires_targeted_drug_design() {
+    fn resilient_grids_prereq_requires_vaccine_platform() {
         use crate::state::BasicTech;
         let state = AppState::new_default(42);
-        // Without TargetedDrugDesign, prereq not met
+        // Without VaccinePlatform, prereq not met
         assert!(!BasicTech::ResilientGrids.prerequisites_met(&state));
 
         let mut state2 = AppState::new_default(42);
-        state2.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+        state2.unlocked_techs.push(BasicTech::VaccinePlatform);
         assert!(BasicTech::ResilientGrids.prerequisites_met(&state2));
     }
 

@@ -3678,38 +3678,28 @@ impl ResearchKind {
 /// field research speed, vaccination effectiveness, etc.).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BasicTech {
+    // ── Column 0: Drug design → interventions ──────────────────────
     /// Unlocks targeted drug development (Antiviral / Antibiotic).
     /// Prereq: identify any pathogen.
     TargetedDrugDesign,
     /// Unlocks monoclonal antibody development for viruses.
-    /// Prereq: TargetedDrugDesign + fully studied any virus (knowledge >= 1.0).
+    /// Prereq: TargetedDrugDesign.
     MonoclonalAntibodies,
     /// Unlocks phage therapy development for bacteria.
-    /// Prereq: TargetedDrugDesign + fully studied any bacterium (knowledge >= 1.0).
+    /// Prereq: MonoclonalAntibodies.
     PhageTherapy,
-    /// Halves genomic sequencing duration and reveals mutation stat details.
-    /// Prereq: completed at least one genomic sequencing project.
-    RapidSequencing,
-    /// All field research (IdentifyThreat, ClinicalTrial) completes 25% faster.
-    /// Prereq: RapidSequencing (sequencing data guides field teams to high-value targets).
-    MetagenomicSurveillance,
     /// Unlocks vaccination deployment mode for all medicines. Vaccinates 15% of
     /// susceptible per deploy (3x with the multiplier). Without this tech, medicines
     /// can only be deployed as therapeutics.
-    /// Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform).
+    /// Prereq: PhageTherapy.
     VaccinePlatform,
-    /// Reveals per-medicine resistance levels and trend indicators.
-    /// Without this, players see efficacy dropping but don't know if it's
-    /// strain drift (fixable by re-trial) or resistance (need new drug).
-    /// Prereq: RapidSequencing.
-    ResistanceSurveillance,
-    /// Halves resistance buildup from all drug deployments. Multi-drug
-    /// protocols make it harder for pathogens to evolve resistance.
-    /// Prereq: deploy 2+ different medicines.
-    CombinationTherapy,
+    /// Disease-caused infrastructure degradation (HC/SL/CO) is 20% slower globally.
+    /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
+    /// Prereq: VaccinePlatform.
+    ResilientGrids,
     /// Unlocks competitive displacement field research: release attenuated
     /// strains that outcompete virulent wild-type, reducing within-region spread.
-    /// Prereq: VaccinePlatform + CombinationTherapy.
+    /// Prereq: ResilientGrids + CombinationTherapy (cross-chain merge).
     CompetitiveDisplacement,
     /// Unlocks directed attenuation field research: permanently reduce
     /// a disease's lethality by modifying its virulence factors in situ.
@@ -3719,6 +3709,29 @@ pub enum BasicTech {
     /// genetic modifications prevent pathogen establishment in new regions.
     /// Prereq: DirectedAttenuation.
     GeneDriveContainment,
+
+    // ── Column 1: Sequencing → surveillance ──────────────────────
+    /// Halves genomic sequencing duration and reveals mutation stat details.
+    /// Prereq: completed at least one genomic sequencing project.
+    RapidSequencing,
+    /// Reveals per-medicine resistance levels and trend indicators.
+    /// Without this, players see efficacy dropping but don't know if it's
+    /// strain drift (fixable by re-trial) or resistance (need new drug).
+    /// Prereq: RapidSequencing.
+    ResistanceSurveillance,
+    /// All field research (IdentifyThreat, ClinicalTrial) completes 25% faster.
+    /// Prereq: ResistanceSurveillance.
+    MetagenomicSurveillance,
+    /// Unlocks 20-day death projections in the Threats panel for each detected disease.
+    /// Shows where the outbreak is heading, not just where it is.
+    /// Prereq: MetagenomicSurveillance.
+    EpidemiologicalForecasting,
+    /// Halves resistance buildup from all drug deployments. Multi-drug
+    /// protocols make it harder for pathogens to evolve resistance.
+    /// Prereq: EpidemiologicalForecasting + deploy 2+ different medicines.
+    CombinationTherapy,
+
+    // ── Column 2: Manufacturing ──────────────────────────────────
     /// Reduces ManufactureDoses applied research duration by 35%.
     /// Prereq: at least one targeted medicine developed (mechanism.is_some() && unlocked).
     /// Note: when a Biotech corp is healthy, bonus could be increased to 50% (#1381).
@@ -3727,14 +3740,6 @@ pub enum BasicTech {
     /// reduce cold-chain waste). Stacks multiplicatively with Europe's yield bonus.
     /// Prereq: AutomatedSynthesis.
     StabilizedFormulation,
-    /// Disease-caused infrastructure degradation (HC/SL/CO) is 20% slower globally.
-    /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
-    /// Prereq: TargetedDrugDesign.
-    ResilientGrids,
-    /// Unlocks 20-day death projections in the Threats panel for each detected disease.
-    /// Shows where the outbreak is heading, not just where it is.
-    /// Prereq: RapidSequencing + ResistanceSurveillance.
-    EpidemiologicalForecasting,
 }
 
 impl BasicTech {
@@ -3780,53 +3785,29 @@ impl BasicTech {
         }
     }
 
-    /// Prerequisites: returns list of (tech prereqs, description of other prereqs).
+    /// Whether all prerequisites for this tech are satisfied.
     pub fn prerequisites_met(&self, state: &WorldState) -> bool {
         match self {
+            // ── Column 0: Drug design → interventions ──────────────
             BasicTech::TargetedDrugDesign => {
                 // Prereq: identified any pathogen (any disease with knowledge > 0)
                 state.diseases.iter().any(|d| d.knowledge > 0.0)
             }
             BasicTech::MonoclonalAntibodies => {
-                // Prereq: TargetedDrugDesign + fully studied any virus
                 state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
-                    && state.diseases.iter().any(|d| {
-                        d.knowledge >= 1.0
-                            && matches!(d.pathogen_type, PathogenType::RnaVirus | PathogenType::DnaVirus)
-                    })
             }
             BasicTech::PhageTherapy => {
-                // Prereq: TargetedDrugDesign + fully studied any bacterium
-                state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
-                    && state.diseases.iter().any(|d| {
-                        d.knowledge >= 1.0 && d.pathogen_type == PathogenType::Bacterium
-                    })
-            }
-            BasicTech::RapidSequencing => {
-                // Prereq: completed at least one genomic sequencing on any disease
-                state.diseases.iter().any(|d| d.sequencing_count > 0)
+                state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
             }
             BasicTech::VaccinePlatform => {
-                // Prereq: MonoclonalAntibodies or PhageTherapy (need advanced drug platform)
-                state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
-                    || state.unlocked_techs.contains(&BasicTech::PhageTherapy)
+                state.unlocked_techs.contains(&BasicTech::PhageTherapy)
             }
-            BasicTech::MetagenomicSurveillance => {
-                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
-            }
-            BasicTech::ResistanceSurveillance => {
-                // Prereq: RapidSequencing (need sequencing infrastructure to monitor resistance)
-                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
-            }
-            BasicTech::CombinationTherapy => {
-                // Prereq: deployed 2+ different medicines (any region/disease)
-                let distinct_deployed = state.medicines.iter()
-                    .filter(|m| m.deployed_count > 0)
-                    .count();
-                distinct_deployed >= 2
+            BasicTech::ResilientGrids => {
+                state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
             }
             BasicTech::CompetitiveDisplacement => {
-                state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
+                // Cross-chain merge: column 0 + column 1
+                state.unlocked_techs.contains(&BasicTech::ResilientGrids)
                     && state.unlocked_techs.contains(&BasicTech::CombinationTherapy)
             }
             BasicTech::DirectedAttenuation => {
@@ -3835,19 +3816,36 @@ impl BasicTech {
             BasicTech::GeneDriveContainment => {
                 state.unlocked_techs.contains(&BasicTech::DirectedAttenuation)
             }
+
+            // ── Column 1: Sequencing → surveillance ────────────────
+            BasicTech::RapidSequencing => {
+                // Prereq: completed at least one genomic sequencing on any disease
+                state.diseases.iter().any(|d| d.sequencing_count > 0)
+            }
+            BasicTech::ResistanceSurveillance => {
+                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
+            }
+            BasicTech::MetagenomicSurveillance => {
+                state.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
+            }
+            BasicTech::EpidemiologicalForecasting => {
+                state.unlocked_techs.contains(&BasicTech::MetagenomicSurveillance)
+            }
+            BasicTech::CombinationTherapy => {
+                // Chain prereq + non-tech prereq: deploy 2+ different medicines
+                state.unlocked_techs.contains(&BasicTech::EpidemiologicalForecasting)
+                    && state.medicines.iter()
+                        .filter(|m| m.deployed_count > 0)
+                        .count() >= 2
+            }
+
+            // ── Column 2: Manufacturing ────────────────────────────
             BasicTech::AutomatedSynthesis => {
                 // Prereq: at least one targeted medicine developed (not broad-spectrum)
                 state.medicines.iter().any(|m| m.mechanism.is_some() && m.unlocked)
             }
             BasicTech::StabilizedFormulation => {
                 state.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
-            }
-            BasicTech::ResilientGrids => {
-                state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
-            }
-            BasicTech::EpidemiologicalForecasting => {
-                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
-                    && state.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
             }
         }
     }
@@ -3856,39 +3854,42 @@ impl BasicTech {
     pub fn prereq_description(&self) -> &'static str {
         match self {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
-            BasicTech::MonoclonalAntibodies => "Targeted Drug Design + study any virus",
-            BasicTech::PhageTherapy => "Targeted Drug Design + study any bacterium",
-            BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
-            BasicTech::MetagenomicSurveillance => "Rapid Sequencing",
-            BasicTech::VaccinePlatform => "Monoclonal Antibodies or Phage Therapy",
-            BasicTech::ResistanceSurveillance => "Rapid Sequencing",
-            BasicTech::CombinationTherapy => "Deploy 2+ different medicines",
-            BasicTech::CompetitiveDisplacement => "Vaccine Platform + Combination Therapy",
+            BasicTech::MonoclonalAntibodies => "Targeted Drug Design",
+            BasicTech::PhageTherapy => "Monoclonal Antibodies",
+            BasicTech::VaccinePlatform => "Phage Therapy",
+            BasicTech::ResilientGrids => "Vaccine Platform",
+            BasicTech::CompetitiveDisplacement => "Resilient Grids + Combination Therapy",
             BasicTech::DirectedAttenuation => "Competitive Displacement",
             BasicTech::GeneDriveContainment => "Directed Attenuation",
+            BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
+            BasicTech::ResistanceSurveillance => "Rapid Sequencing",
+            BasicTech::MetagenomicSurveillance => "Resistance Surveillance",
+            BasicTech::EpidemiologicalForecasting => "Metagenomic Surveillance",
+            BasicTech::CombinationTherapy => "Epidemiological Forecasting + deploy 2+ medicines",
             BasicTech::AutomatedSynthesis => "Develop any targeted medicine",
             BasicTech::StabilizedFormulation => "Automated Synthesis",
-            BasicTech::ResilientGrids => "Targeted Drug Design",
-            BasicTech::EpidemiologicalForecasting => "Rapid Sequencing + Resistance Surveillance",
         }
     }
 
-    /// All techs in display order.
+    /// All techs in display order (column 0, then column 1, then column 2).
     pub fn all() -> &'static [BasicTech] {
         &[
+            // Column 0: Drug design → interventions
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
-            BasicTech::ResilientGrids,
-            BasicTech::RapidSequencing,
-            BasicTech::MetagenomicSurveillance,
             BasicTech::VaccinePlatform,
-            BasicTech::ResistanceSurveillance,
-            BasicTech::EpidemiologicalForecasting,
-            BasicTech::CombinationTherapy,
+            BasicTech::ResilientGrids,
             BasicTech::CompetitiveDisplacement,
             BasicTech::DirectedAttenuation,
             BasicTech::GeneDriveContainment,
+            // Column 1: Sequencing → surveillance
+            BasicTech::RapidSequencing,
+            BasicTech::ResistanceSurveillance,
+            BasicTech::MetagenomicSurveillance,
+            BasicTech::EpidemiologicalForecasting,
+            BasicTech::CombinationTherapy,
+            // Column 2: Manufacturing
             BasicTech::AutomatedSynthesis,
             BasicTech::StabilizedFormulation,
         ]
@@ -7149,13 +7150,15 @@ mod tests {
     }
 
     #[test]
-    fn metagenomic_surveillance_prereq_requires_rapid_sequencing() {
+    fn metagenomic_surveillance_prereq_requires_resistance_surveillance() {
         let mut state = AppState::new_default(42);
-        // Without RapidSequencing, prereq is not met
-        assert!(!state.unlocked_techs.contains(&BasicTech::RapidSequencing));
+        // Without ResistanceSurveillance, prereq is not met
         assert!(!BasicTech::MetagenomicSurveillance.prerequisites_met(&state));
-        // After unlocking RapidSequencing, prereq is met
+        // RapidSequencing alone is not enough
         state.unlocked_techs.push(BasicTech::RapidSequencing);
+        assert!(!BasicTech::MetagenomicSurveillance.prerequisites_met(&state));
+        // After unlocking ResistanceSurveillance, prereq is met
+        state.unlocked_techs.push(BasicTech::ResistanceSurveillance);
         assert!(BasicTech::MetagenomicSurveillance.prerequisites_met(&state));
     }
 
@@ -7204,13 +7207,13 @@ mod tests {
     }
 
     #[test]
-    fn metagenomic_surveillance_appears_in_all_after_rapid_sequencing() {
+    fn metagenomic_surveillance_appears_in_all_after_resistance_surveillance() {
         let all = BasicTech::all();
-        let rs_pos = all.iter().position(|t| *t == BasicTech::RapidSequencing).unwrap();
-        let ps_pos = all.iter().position(|t| *t == BasicTech::MetagenomicSurveillance).unwrap();
+        let rs_pos = all.iter().position(|t| *t == BasicTech::ResistanceSurveillance).unwrap();
+        let ms_pos = all.iter().position(|t| *t == BasicTech::MetagenomicSurveillance).unwrap();
         assert!(
-            ps_pos == rs_pos + 1,
-            "MetagenomicSurveillance should appear immediately after RapidSequencing in all()"
+            ms_pos == rs_pos + 1,
+            "MetagenomicSurveillance should appear immediately after ResistanceSurveillance in all()"
         );
     }
 
