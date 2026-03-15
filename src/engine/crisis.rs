@@ -1502,8 +1502,8 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
             CrisisEvent {
                 title: "Board Inquiry: Research Status".into(),
                 description: format!(
-                    "{} has requested a formal update on pathogen identification efforts. \
-                     No field research has been initiated. The board expects a response.",
+                    "{} has requested a formal update on research operations. \
+                     No research programs have been initiated. The board expects a response.",
                     chairman_name
                 ),
                 options: vec![
