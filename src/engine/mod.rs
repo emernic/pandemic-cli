@@ -4115,27 +4115,6 @@ mod tests {
         )), "should fire CrisisTeamReturned event");
     }
 
-#[test]
-    fn vaccine_dispute_option_a_loses_funding() {
-        let mut state = AppState::new_default(42);
-        state.resources.funding = 1000.0;
-        setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0, corp_a: "Seraph Genomics".to_string(), corp_b: "Caliber Bioscience".to_string() }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 800.0).abs() < 1.0,
-            "option A should lose scaled neutral_loss ($200)");
-    }
-
-    #[test]
-    fn vaccine_dispute_option_b_gains_funding() {
-        let mut state = AppState::new_default(42);
-        state.resources.funding = 1000.0;
-        state.resources.authority = Authority::Maximum;
-        setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0, corp_a: "Seraph Genomics".to_string(), corp_b: "Caliber Bioscience".to_string() }, 1);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!((after.resources.funding - 1300.0).abs() < 1.0,
-            "option B should gain scaled credit_gain ($300)");
-    }
-
     #[test]
     fn trial_shortcut_fast_track_marks_tested_and_targeted() {
         let mut state = AppState::new_default(42);

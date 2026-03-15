@@ -4400,9 +4400,6 @@ pub enum CrisisKind {
     CorporateSeizure { cooperate_loss: u32, board_member_idx: usize, corp_idx: usize },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
-    /// Two corporations claim credit for your treatment breakthrough, threatening to cut contracts.
-    VaccineDispute { neutral_loss: f64, credit_gain: f64, corp_a: String, corp_b: String },
-
     // --- Dark comedy events (personality and flavor) ---
 
     /// Quarterly performance review during the apocalypse.
@@ -4449,9 +4446,6 @@ pub enum CrisisKind {
 
     /// Follow-up to CorporateSeizure (Cooperate): corporation claims your research as proprietary IP.
     CorporateOverreach { corp_idx: usize, board_member_idx: usize },
-    /// Follow-up to VaccineDispute (Credit one side): losing corp retaliates.
-    SanctionsThreat { funding_loss: f64, corp_name: String },
-
     // --- Corporate crises ---
 
     /// Scheduled board meeting communiqué. Fires on a recurring timer (~every 10 days).
@@ -4531,7 +4525,6 @@ impl CrisisKind {
             CrisisKind::TrialShortcut { .. } => "trial",
             CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
             CrisisKind::CultBlockade { .. } => "cult",
-            CrisisKind::VaccineDispute { .. } => "vaccine_dispute",
             CrisisKind::PerformanceReview => "performance_review",
             CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::ContractDemand { .. } => "contract_demand",
@@ -4543,7 +4536,6 @@ impl CrisisKind {
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
             CrisisKind::CorporateOverreach { .. } => "corporate_overreach",
-            CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardMeeting => "board_meeting",
             CrisisKind::BoardEmbezzlementWarning => "board_embezzlement_warning",
             CrisisKind::VoteOfNoConfidence => "vote_no_confidence",
