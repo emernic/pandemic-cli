@@ -238,10 +238,21 @@ pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<
         candidates.push(CrisisKind::CorruptOfficial { stolen });
     }
 
-    // Corporate seizure: requires low authority and day > 16
+    // Corporate seizure: requires low authority and day > 16, and a board member with a non-bankrupt corp
     if state.resources.authority <= Authority::Low && day > 16.0 {
-        let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
-        candidates.push(CrisisKind::CorporateSeizure { cooperate_loss });
+        // Pick the most dissatisfied board member who has a non-bankrupt corporation
+        let actor = state.board_members.iter().enumerate()
+            .filter(|(_, m)| !m.dead)
+            .filter_map(|(bi, m)| {
+                m.corp_idx
+                    .filter(|&ci| state.corporations.get(ci).is_some_and(|c| !c.bankrupt))
+                    .map(|ci| (bi, ci, m.satisfaction))
+            })
+            .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
+        if let Some((board_member_idx, corp_idx, _)) = actor {
+            let cooperate_loss = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(2, 6);
+            candidates.push(CrisisKind::CorporateSeizure { cooperate_loss, board_member_idx, corp_idx });
+        }
     }
 
     // --- Late-game crisis types (day-gated) ---
@@ -550,16 +561,22 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::CorporateSeizure { cooperate_loss } => {
+        CrisisKind::CorporateSeizure { cooperate_loss, board_member_idx, corp_idx } => {
+            let member_name = state.board_members.get(*board_member_idx)
+                .map(|m| m.name.as_str()).unwrap_or("A board member");
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.as_str()).unwrap_or("A corporation");
             CrisisEvent {
-                title: "Corporate Security Takeover".into(),
-                description: "A board member's corporation has deployed private security to your \
-                    facilities. They are demanding operational authority, citing asset protection.".into(),
+                title: format!("{}: Security Takeover", corp_name),
+                description: format!(
+                    "{corp_name} has deployed private security to your facilities. \
+                     {member_name} is demanding operational authority, citing asset protection."
+                ),
                 options: vec![ CrisisOption {
                     label: format!("Cooperate (−{} personnel, +15% approval)", cooperate_loss),
                     description: format!(
-                        "Permanently lose {} personnel. The board approves, but corporate control over your operations deepens.",
-                        cooperate_loss
+                        "Permanently lose {} personnel. The board approves, but {} deepens corporate control over your operations.",
+                        cooperate_loss, corp_name
                     ),
                     cost: None,
                 },
@@ -567,13 +584,13 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                     let cost = scaled_cost(state, 0.30, 200.0, 1000.0);
                     CrisisOption {
                         label: format!("Resist (¥{:.0})", cost),
-                        description: "Pay to fight the takeover, keep your team".into(),
+                        description: format!("Pay to fight {}'s takeover, keep your team.", corp_name),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
                 },
                 CrisisOption {
                     label: "Stall".into(),
-                    description: "Buy time. They may come back.".into(),
+                    description: format!("Buy time. {} may come back.", member_name),
                     cost: None,
                 },
                 ],
@@ -710,26 +727,32 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::CorporateOverreach => {
+        CrisisKind::CorporateOverreach { corp_idx, board_member_idx } => {
+            let corp_name = state.corporations.get(*corp_idx)
+                .map(|c| c.name.as_str()).unwrap_or("The corporation");
+            let member_name = state.board_members.get(*board_member_idx)
+                .map(|m| m.name.as_str()).unwrap_or("The board member");
             let resist_cost = scaled_cost(state, 0.25, 200.0, 800.0);
             CrisisEvent {
-                title: "Research Data Seized".into(),
-                description:
-                    "The corporation you cooperated with has reclassified your pathogen data as \
-                     proprietary IP. Your researchers can no longer access their own findings.".into(),
+                title: format!("{}: Data Seized", corp_name),
+                description: format!(
+                    "{corp_name} has reclassified your pathogen data as proprietary IP. \
+                     {member_name} says the data belongs to the corporation now. \
+                     Your researchers can no longer access their own findings."
+                ),
                 options: vec![ CrisisOption {
                     label: "Release the data (−10% chairman approval)".into(),
-                    description: "Override the IP claim. Board members with corporate ties won't appreciate it.".into(),
+                    description: format!("Override {}'s IP claim. Board members with corporate ties won't appreciate it.", corp_name),
                     cost: None,
                 },
                  CrisisOption {
                     label: format!("Legal challenge (¥{:.0})", resist_cost),
-                    description: "Sue for access. Preserves research independence.".into(),
+                    description: format!("Sue {} for access. Preserves research independence.", corp_name),
                     cost: Some(CrisisCost { funding: resist_cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
                     label: "Accept it".into(),
-                    description: "Lose access to your research data. No cost.".into(),
+                    description: format!("Lose access to data {} claimed. No cost.", corp_name),
                     cost: None,
                 },
                 ],
@@ -2053,23 +2076,23 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 
 
 
-        (CrisisKind::CorporateSeizure { cooperate_loss }, 0) => {
+        (CrisisKind::CorporateSeizure { cooperate_loss, board_member_idx, corp_idx }, 0) => {
             // Cooperate — lose personnel, gain chairman satisfaction
             state.resources.personnel = state.resources.personnel.saturating_sub(*cooperate_loss);
             chairman_satisfaction_hit(state, 0.15);
-            state.pending_crises.push(CrisisKind::CorporateOverreach);
+            state.pending_crises.push(CrisisKind::CorporateOverreach { corp_idx: *corp_idx, board_member_idx: *board_member_idx });
             format!("Transferred {} staff to corporate oversight. Agency retains nominal control.", cooperate_loss)
         }
         (CrisisKind::CorporateSeizure { .. }, 1) => {
             // Resist — costs already deducted
             "Corporate takeover averted. Independence maintained.".into()
         }
-        (CrisisKind::CorporateSeizure { .. }, _) => {
+        (CrisisKind::CorporateSeizure { board_member_idx, corp_idx, .. }, _) => {
             // Stall — buy time, they may return
             chairman_satisfaction_hit(state, -0.05);
             if state.rng_crisis.r#gen::<bool>() {
                 let cooperate_loss = ((state.resources.personnel as f64 * 0.25).round() as u32).clamp(2, 8);
-                state.pending_crises.push(CrisisKind::CorporateSeizure { cooperate_loss });
+                state.pending_crises.push(CrisisKind::CorporateSeizure { cooperate_loss, board_member_idx: *board_member_idx, corp_idx: *corp_idx });
                 "Negotiations stalled. They'll be back.".into()
             } else {
                 "Stalling worked. Corporate security withdrew.".into()
@@ -2151,16 +2174,16 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             format!("Embezzlement tolerated. ¥{:.0} lost. They're still at it.", loss)
         }
 
-        (CrisisKind::CorporateOverreach, 0) => {
+        (CrisisKind::CorporateOverreach { .. }, 0) => {
             // Override restriction — chairman satisfaction hit, data restored to research teams
             chairman_satisfaction_hit(state, -0.10);
             "Restriction overridden. Data restored to research teams.".into()
         }
-        (CrisisKind::CorporateOverreach, 1) => {
+        (CrisisKind::CorporateOverreach { .. }, 1) => {
             // Legal challenge — costs already deducted
             "Legal challenge successful. Research independence restored.".into()
         }
-        (CrisisKind::CorporateOverreach, _) => {
+        (CrisisKind::CorporateOverreach { .. }, _) => {
             // Accept IP claim — lose research progress
             let loss = TICKS_PER_DAY as f64;
             if let Some(proj) = state.active_research.first_mut() {

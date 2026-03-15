@@ -4426,7 +4426,7 @@ pub enum CrisisKind {
     /// Corrupt official siphoning funds — amount locked at generation time.
     CorruptOfficial { stolen: f64 },
     /// Board member's corporation deploys private security, demands operational control.
-    CorporateSeizure { cooperate_loss: u32 },
+    CorporateSeizure { cooperate_loss: u32, board_member_idx: usize, corp_idx: usize },
     /// Cult blocks vaccination teams in a region.
     CultBlockade { region_idx: usize },
     /// Two corporations claim credit for your treatment breakthrough, threatening to cut contracts.
@@ -4481,7 +4481,7 @@ pub enum CrisisKind {
     /// Follow-up to CorruptOfficial (Ignore): corruption has spread to a ring.
     EmbezzlementRing { stolen_per_day: f64 },
     /// Follow-up to CorporateSeizure (Cooperate): corporation claims your research as proprietary IP.
-    CorporateOverreach,
+    CorporateOverreach { corp_idx: usize, board_member_idx: usize },
     /// Follow-up to VaccineDispute (Credit one side): losing corp retaliates.
     SanctionsThreat { funding_loss: f64, corp_name: String },
 
@@ -4578,7 +4578,7 @@ impl CrisisKind {
             CrisisKind::NewPathogenDetected { .. } => "new_pathogen",
             CrisisKind::ArkProtocol { .. } => "ark_protocol",
             CrisisKind::EmbezzlementRing { .. } => "embezzlement",
-            CrisisKind::CorporateOverreach => "corporate_overreach",
+            CrisisKind::CorporateOverreach { .. } => "corporate_overreach",
             CrisisKind::SanctionsThreat { .. } => "sanctions",
             CrisisKind::BoardMeeting => "board_meeting",
             CrisisKind::BoardEmbezzlementWarning => "board_embezzlement_warning",
