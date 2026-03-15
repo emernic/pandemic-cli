@@ -117,7 +117,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         },
         Span::raw("  "),
         Span::styled(
-            format!("Dead: {}", format_number(state.total_visible_dead())),
+            format!("Dead: {}", format_number(state.total_dead_detected())),
             Style::default().fg(Color::DarkGray),
         ),
     ]);

@@ -2459,14 +2459,6 @@ impl Region {
             .sum()
     }
 
-    /// Total dead from detected, non-hidden diseases (for filtered UI display).
-    pub fn visible_dead(&self, diseases: &[Disease]) -> f64 {
-        self.infections.iter()
-            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected && !d.hidden))
-            .map(|inf| inf.dead)
-            .sum()
-    }
-
     /// Total immune from detected, non-hidden diseases (for filtered UI display).
     pub fn visible_immune(&self, diseases: &[Disease]) -> f64 {
         self.infections.iter()
@@ -5726,19 +5718,6 @@ impl WorldState {
         self.regions.iter()
             .map(|r| r.visible_infected_estimate(&self.diseases))
             .sum()
-    }
-
-    /// Total dead from non-hidden diseases plus collapse deaths.
-    pub fn total_visible_dead(&self) -> f64 {
-        let disease_dead: f64 = self.regions.iter()
-            .flat_map(|r| &r.infections)
-            .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected && !d.hidden))
-            .map(|inf| inf.dead)
-            .sum();
-        let collapse_dead: f64 = self.regions.iter()
-            .map(|r| r.collapse_deaths)
-            .sum();
-        disease_dead + collapse_dead
     }
 
     pub fn personnel_busy(&self) -> u32 {
