@@ -22,8 +22,6 @@ use crate::state::{
     WAVE_CLUSTER_WINDOW_TICKS,
 };
 
-/// Advance the simulation by one tick.
-///
 /// Initialize game systems that run after basic state construction.
 /// Called once for new games (not for loaded saves that already have this data).
 /// Generates corporations and board members from the initial game state.
