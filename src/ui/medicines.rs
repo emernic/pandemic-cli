@@ -149,8 +149,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                     } else {
                         Color::DarkGray
                     };
-                    let strain_eff = med.strain_efficacy(d_idx, &state.diseases);
-                    let drift_note = if strain_eff < 1.0 { " (outdated)" } else { "" };
+                    let cross_reactive = med.is_cross_reactive(d_idx);
 
                     let mut spans = vec![
                         Span::raw("    "),
@@ -163,9 +162,9 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                             Style::default().fg(Color::White),
                         ),
                     ];
-                    if !drift_note.is_empty() {
+                    if cross_reactive {
                         spans.push(Span::styled(
-                            drift_note,
+                            " (cross-reactive)",
                             Style::default().fg(Color::Yellow),
                         ));
                     }
@@ -235,27 +234,6 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                         Style::default().fg(Color::Green),
                     ),
                 ]));
-            }
-
-            // Warnings: strain drift needing action
-            let any_strain_outdated = med.target_diseases.iter().any(|&d_idx| {
-                med.strain_efficacy(d_idx, &state.diseases) < 1.0
-            });
-            if any_strain_outdated {
-                let retrial_in_progress = state.active_research.iter().any(|p| {
-                    matches!(&p.kind, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == med_idx)
-                });
-                if retrial_in_progress {
-                    lines.push(Line::from(Span::styled(
-                        "    Re-trial in progress",
-                        Style::default().fg(Color::Yellow),
-                    )));
-                } else {
-                    lines.push(Line::from(Span::styled(
-                        "    Strain drifted — re-trial needed (Research [R] > Field)",
-                        Style::default().fg(Color::Red),
-                    )));
-                }
             }
 
             // Pending shipments

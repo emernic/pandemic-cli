@@ -372,12 +372,6 @@ pub(super) fn emergency_sample_delivery(
             cooperation_change = 10.0;
         }
 
-        // Set strain calibration 10 generations behind for untested diseases
-        for &d_idx in &active_diseases {
-            if !state.medicines[medicine_idx].tested_against.contains(&d_idx) {
-                state.medicines[medicine_idx].set_strain_calibration_behind(d_idx, &state.diseases, 10);
-            }
-        }
     } else if has_tested_match {
         // Tested medicine for an active disease: strong cooperation boost
         cooperation_change = 20.0;

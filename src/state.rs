@@ -2454,10 +2454,9 @@ impl PathogenType {
         }
     }
 
-    /// Per-tick probability that this pathogen type mutates.
-    /// Rates tuned so medicines stay effective for a meaningful window after
-    /// deployment. Each mutation only costs 2% efficacy (see strain_efficacy),
-    /// so even RNA viruses need many mutations to seriously degrade a medicine.
+    /// Per-tick probability that this pathogen type spawns a variant.
+    /// Higher rates for rapidly evolving pathogens (RNA viruses),
+    /// lower for stable ones (prions).
     pub fn mutation_rate(&self) -> f64 {
         match self {
             PathogenType::RnaVirus => 0.0002,    // ~1 mutation per 5000 ticks (~83 days)
@@ -2770,12 +2769,14 @@ pub struct Disease {
     pub recovery_rate: f64,
     #[serde(default)]
     pub knowledge: f64,
-    /// How many times this disease has mutated. Medicines developed against
-    /// earlier generations become less effective.
+    /// Root ancestor's name for variant diseases. None for original diseases.
     #[serde(default)]
-    pub strain_generation: u32,
+    pub parent_lineage: Option<String>,
+    /// 0 for original diseases, 1+ for variants (II, III, etc.).
+    #[serde(default)]
+    pub variant_number: u32,
     /// Number of times genomic sequencing has been completed on this disease.
-    /// Each sequencing halves the effective mutation rate.
+    /// Each sequencing halves the effective variant spawn rate.
     #[serde(default)]
     pub sequencing_count: u32,
     /// Whether this disease has been detected by global health systems.
@@ -2884,9 +2885,9 @@ impl Disease {
         }
     }
 
-    /// Effective mutation rate after genomic sequencing reductions.
+    /// Effective variant spawn rate after genomic sequencing reductions.
     /// Each sequencing halves the rate: base_rate * 0.5^sequencing_count.
-    pub fn effective_mutation_rate(&self) -> f64 {
+    pub fn effective_variant_rate(&self) -> f64 {
         self.pathogen_type.mutation_rate() * 0.5_f64.powi(self.sequencing_count as i32)
     }
 
@@ -2941,7 +2942,8 @@ impl Disease {
             cross_region_spread,
             recovery_rate,
             knowledge: 0.0,
-            strain_generation: 0,
+            parent_lineage: None,
+            variant_number: 0,
             sequencing_count: 0,
             detected: true, // callers override to false for new diseases
             spawned_at_tick: 0, // callers override to current tick when spawning
@@ -3264,12 +3266,6 @@ pub struct Medicine {
     /// Disease indices this medicine has been clinically trialed against.
     #[serde(default)]
     pub tested_against: Vec<usize>,
-    /// Strain generation this medicine was calibrated for, per target disease.
-    /// Parallel to `target_diseases`. When a disease mutates past this generation,
-    /// the medicine becomes less effective. Re-running a clinical trial updates this.
-    /// Signed to allow negative values (fast-tracked medicines start behind gen 0).
-    #[serde(default)]
-    pub strain_generations: Vec<i32>,
     /// Number of times this medicine has been successfully deployed.
     #[serde(default)]
     pub deployed_count: u32,
@@ -3367,7 +3363,6 @@ impl Medicine {
                 max_doses: doses,
                 unlocked: false,
                 tested_against: vec![],
-                strain_generations: vec![],
                 deployed_count: 0,
                 total_treated: 0.0,
                 total_protected: 0.0,
@@ -3376,70 +3371,6 @@ impl Medicine {
         }).collect()
     }
 
-
-    /// Efficacy multiplier based on how many generations behind this medicine is
-    /// for a given disease. Each generation of drift reduces efficacy by 2%,
-    /// with a floor at 10%. Returns 1.0 if the medicine hasn't been calibrated yet
-    /// (strain_generations not populated — pre-mutation-system medicines).
-    pub fn strain_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
-        let pos = self.target_diseases.iter().position(|&d| d == disease_idx);
-        match pos {
-            Some(i) => {
-                let med_gen = self.strain_generations.get(i).copied();
-                match med_gen {
-                    Some(mg) => {
-                        let disease_gen = diseases.get(disease_idx)
-                            .map_or(0, |d| d.strain_generation) as i32;
-                        let behind = (disease_gen - mg).max(0);
-                        (1.0 - behind as f64 * 0.02).max(0.1)
-                    }
-                    // Not yet calibrated (developed before mutation system) — full efficacy
-                    None => 1.0,
-                }
-            }
-            None => 1.0,
-        }
-    }
-
-    /// How many strain generations behind this medicine is for a given disease.
-    /// Returns 0 if not calibrated or disease not targeted.
-    pub fn mutations_behind(&self, disease_idx: usize, diseases: &[Disease]) -> u32 {
-        let pos = self.target_diseases.iter().position(|&d| d == disease_idx);
-        match pos {
-            Some(i) => {
-                let med_gen = self.strain_generations.get(i).copied();
-                match med_gen {
-                    Some(mg) => {
-                        let disease_gen = diseases.get(disease_idx)
-                            .map_or(0, |d| d.strain_generation) as i32;
-                        (disease_gen - mg).max(0) as u32
-                    }
-                    None => 0,
-                }
-            }
-            None => 0,
-        }
-    }
-
-    /// Set strain calibration for a disease to N generations behind the current
-    /// strain. Used by TrialShortcut and EmergencySampleDelivery to fast-track
-    /// testing with a built-in efficacy penalty.
-    /// `generations_behind` is typically 2 (yielding ~0.70x efficacy from drift).
-    pub fn set_strain_calibration_behind(
-        &mut self,
-        disease_idx: usize,
-        diseases: &[Disease],
-        generations_behind: i32,
-    ) {
-        if let Some(pos) = self.target_diseases.iter().position(|&d| d == disease_idx) {
-            let current_gen = diseases.get(disease_idx)
-                .map_or(0, |d| d.strain_generation) as i32;
-            while self.strain_generations.len() <= pos {
-                self.strain_generations.push(0);
-            }
-            self.strain_generations[pos] = current_gen - generations_behind;
-        }
-    }
 
     /// Efficacy multiplier from mechanism resistance (0.2–1.0). Reads resistance
     /// from the disease based on this medicine's mechanism of action.
@@ -3494,7 +3425,7 @@ impl Medicine {
     }
 
     /// Combined efficacy when deploying this medicine against a disease.
-    /// Factors: therapy type × mechanism × strain calibration × cross-reactivity × resistance.
+    /// Factors: therapy type × mechanism × cross-reactivity × resistance.
     pub fn effective_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
         let therapy_efficacy = diseases.get(disease_idx)
             .map(|d| self.therapy_type.efficacy(&d.pathogen_type))
@@ -3502,14 +3433,13 @@ impl Medicine {
         let mechanism_eff = self.mechanism
             .map(|m| m.efficacy_modifier())
             .unwrap_or(1.0);
-        let strain_eff = self.strain_efficacy(disease_idx, diseases);
         let cross_reactive = if self.is_cross_reactive(disease_idx) {
             CROSS_REACTIVE_PENALTY
         } else {
             1.0
         };
         let resistance = self.resistance_factor(disease_idx, diseases);
-        therapy_efficacy * mechanism_eff * strain_eff * cross_reactive * resistance
+        therapy_efficacy * mechanism_eff * cross_reactive * resistance
     }
 
 }
@@ -4040,14 +3970,10 @@ pub enum GameEvent {
     },
     /// Funding is low — player has only a few ticks of policy runway left.
     FundingWarning,
-    /// A disease mutated, changing its strain generation and stats.
-    DiseaseMutated {
+    /// A variant of an existing disease has emerged as a new threat.
+    VariantEmerged {
         disease_idx: usize,
-        new_generation: u32,
-        /// Within-region spread change factor (e.g., 1.1 = +10%). Only meaningful with RapidSequencing.
-        spread_factor: f64,
-        /// Lethality change factor (e.g., 0.9 = -10%). Only meaningful with RapidSequencing.
-        lethality_factor: f64,
+        parent_name: String,
     },
     /// A previously undetected disease has been detected by health systems.
     DiseaseDetected {
@@ -5480,7 +5406,6 @@ impl GameState {
             max_doses: 500_000.0,
             unlocked: true,
             tested_against: all_disease_indices.clone(),
-            strain_generations: vec![],
             deployed_count: 0,
             total_treated: 0.0,
             total_protected: 0.0,
@@ -6152,15 +6077,6 @@ impl GameState {
         best
     }
 
-    /// Whether any tested/unlocked medicines targeting this disease have fallen behind
-    /// the current strain generation (i.e., mutation has reduced their efficacy).
-    pub fn has_outdated_medicine(&self, disease_idx: usize) -> bool {
-        self.medicines.iter().any(|m| {
-            m.target_diseases.contains(&disease_idx)
-                && (m.tested_against.contains(&disease_idx) || m.unlocked)
-                && m.strain_efficacy(disease_idx, &self.diseases) < 1.0
-        })
-    }
 
     /// True if any deployed medicine targeting this disease has significant resistance (≥30%).
     pub fn has_resistant_medicine(&self, disease_idx: usize) -> bool {
@@ -6298,7 +6214,7 @@ impl GameState {
         // Genomic Sequencing: fully identified diseases that still mutate and are active
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
-                && disease.effective_mutation_rate() > 0.000005
+                && disease.effective_variant_rate() > 0.000005
                 && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
@@ -6348,19 +6264,11 @@ impl GameState {
             if !med.unlocked {
                 continue;
             }
-            for (target_pos, &d_idx) in med.target_diseases.iter().enumerate() {
+            for &d_idx in &med.target_diseases {
                 if !self.disease_has_infected(d_idx) {
                     continue;
                 }
-                let needs_trial = if !med.tested_against.contains(&d_idx) {
-                    true // Never tested
-                } else {
-                    // Tested, but check if strain has drifted
-                    let med_gen = med.strain_generations.get(target_pos).copied().unwrap_or(0);
-                    let disease_gen = self.diseases.get(d_idx)
-                        .map_or(0, |d| d.strain_generation) as i32;
-                    disease_gen > med_gen
-                };
+                let needs_trial = !med.tested_against.contains(&d_idx);
                 if needs_trial {
                     let kind = ResearchKind::ClinicalTrial {
                         medicine_idx: i,

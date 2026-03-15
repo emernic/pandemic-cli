@@ -113,9 +113,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
                         ));
                     }
                 }
-                if disease.strain_generation > 0 {
+                if let Some(ref lineage) = disease.parent_lineage {
                     id_spans.push(Span::styled(
-                        format!(" · Gen {}", disease.strain_generation),
+                        format!(" · Variant of {}", lineage),
                         Style::default().fg(Color::DarkGray),
                     ));
                 }
@@ -378,9 +378,6 @@ fn disease_warnings(
     if !disease.pathogen_type.is_treatable() {
         warnings.push(("UNTREATABLE".to_string(), Color::Red, true));
         return warnings; // No medicine indicators relevant for untreatable diseases
-    }
-    if state.has_outdated_medicine(disease_idx) {
-        warnings.push(("Medicines outdated!".to_string(), Color::Red, false));
     }
     if state.has_resistance_surveillance() && state.has_resistant_medicine(disease_idx) {
         warnings.push(("Resistance building!".to_string(), Color::Yellow, false));

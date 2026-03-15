@@ -389,34 +389,3 @@ pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
 }
 
 
-/// Apply disease mutation. Each disease has a chance to mutate per tick,
-/// drifting within-region spread and lethality parameters slightly.
-///
-/// Mutations are ±10% of the current value (uniform [0.9, 1.1]).
-/// Floor clamps prevent diseases from drifting to zero. No upper clamp —
-/// spawn_disease_scaled produces diseases with stats well above base ranges,
-/// and hard upper clamps would nerf them on first mutation. The ±10% random
-/// walk has slight geometric downward drift (E[ln(factor)] < 0), so diseases
-/// naturally weaken over time without needing a ceiling.
-pub(super) fn tick_mutation(new: &mut GameState, rng: &mut impl Rng) {
-    // Disease mutation (sequencing reduces mutation rate by half per level)
-    for (d_idx, disease) in new.diseases.iter_mut().enumerate() {
-        let mutation_chance = disease.effective_mutation_rate();
-        if rng.r#gen::<f64>() < mutation_chance {
-            disease.strain_generation += 1;
-            // ±10% random walk on within-region spread and lethality.
-            let raw_inf = rng.r#gen::<f64>();
-            let raw_leth = rng.r#gen::<f64>();
-            let inf_factor = 1.0 + (raw_inf - 0.5) * 0.2;
-            let leth_factor = 1.0 + (raw_leth - 0.5) * 0.2;
-            disease.within_region_spread = (disease.within_region_spread * inf_factor).max(0.001);
-            disease.lethality = (disease.lethality * leth_factor).max(0.0001);
-            new.events.push(GameEvent::DiseaseMutated {
-                disease_idx: d_idx,
-                new_generation: disease.strain_generation,
-                spread_factor: inf_factor,
-                lethality_factor: leth_factor,
-            });
-        }
-    }
-}

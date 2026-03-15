@@ -4,7 +4,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    Disease, GameState, MAX_DISEASES, Medicine,
+    Disease, GameEvent, GameState, MAX_DISEASES, Medicine,
     PathogenType, RegionDiseaseState, ScreeningLevel, TherapyType, TransmissionVector, TICKS_PER_DAY,
 };
 
@@ -309,4 +309,183 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
     }
 
     Some(result)
+}
+
+/// Check each original (non-variant) disease for variant spawning.
+/// Uses the same per-tick probability as the old mutation system.
+/// Only root diseases (variant_number == 0) can spawn variants.
+pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng) {
+    // Collect spawn candidates: (parent_idx, effective_rate)
+    let candidates: Vec<(usize, f64)> = state.diseases.iter().enumerate()
+        .filter(|(_, d)| d.variant_number == 0) // only root diseases spawn variants
+        .map(|(i, d)| (i, d.effective_variant_rate()))
+        .collect();
+
+    for (parent_idx, rate) in candidates {
+        if rng.r#gen::<f64>() >= rate {
+            continue;
+        }
+        // Try to spawn a variant
+        if let Some(variant_idx) = spawn_variant(state, parent_idx, rng) {
+            let parent_name = state.diseases[parent_idx].name.clone();
+            state.events.push(GameEvent::VariantEmerged {
+                disease_idx: variant_idx,
+                parent_name,
+            });
+        }
+    }
+}
+
+/// Spawn a variant of the given parent disease.
+/// Returns the new disease index on success, None if at capacity.
+fn spawn_variant(
+    state: &mut GameState,
+    parent_idx: usize,
+    rng: &mut ChaCha8Rng,
+) -> Option<usize> {
+    // Check capacity — try to recycle a burned-out slot
+    let recycle_idx = if state.diseases.len() >= MAX_DISEASES {
+        find_burned_out_disease(state)
+    } else {
+        None
+    };
+    if state.diseases.len() >= MAX_DISEASES && recycle_idx.is_none() {
+        return None;
+    }
+
+    let parent = &state.diseases[parent_idx];
+    let parent_name = parent.name.clone();
+    let lineage_name = parent.parent_lineage.clone().unwrap_or_else(|| parent_name.clone());
+
+    // Count existing variants of this lineage to determine variant_number
+    let existing_variants = state.diseases.iter()
+        .filter(|d| {
+            d.parent_lineage.as_deref() == Some(&lineage_name)
+        })
+        .count() as u32;
+    let variant_number = existing_variants + 1;
+
+    // Generate variant name: "Parent II", "Parent III", etc.
+    let variant_name = format!("{} {}", lineage_name, roman_numeral(variant_number + 1));
+
+    // Scale stats relative to parent, boosted by time elapsed since parent spawned.
+    // This means variants are always tougher than their parents.
+    let parent_day = parent.spawned_at_tick as f64 / TICKS_PER_DAY;
+    let current_day = state.tick as f64 / TICKS_PER_DAY;
+    let days_elapsed = (current_day - parent_day).max(1.0);
+    let inf_boost = 1.0 + days_elapsed * 0.10;
+    let leth_boost = 1.0 + days_elapsed * 0.035;
+    let cross_boost = 1.0 + days_elapsed * 0.02;
+
+    let mut variant = Disease {
+        name: variant_name,
+        pathogen_type: parent.pathogen_type,
+        transmission: parent.transmission,
+        within_region_spread: parent.within_region_spread * inf_boost,
+        lethality: parent.lethality * leth_boost,
+        cross_region_spread: parent.cross_region_spread * cross_boost,
+        recovery_rate: parent.recovery_rate,
+        knowledge: parent.knowledge * 0.4, // 40% of parent's knowledge
+        parent_lineage: Some(lineage_name),
+        variant_number,
+        sequencing_count: 0, // variants need their own sequencing
+        detected: false,
+        spawned_at_tick: state.tick,
+        mechanism_resistance: vec![],
+        sequence_group: None,
+        incubation_ticks: parent.incubation_ticks,
+        first_detected_regions: vec![],
+        detected_day: 0.0,
+        prev_day_observed_infected: 0.0,
+        current_day_observed_infected: 0.0,
+    };
+
+    // Ensure stats don't go below minimum floors
+    variant.within_region_spread = variant.within_region_spread.max(0.001);
+    variant.lethality = variant.lethality.max(0.0001);
+
+    // Place the variant in a random non-collapsed region
+    let valid_regions: Vec<usize> = state.regions.iter().enumerate()
+        .filter(|(_, r)| !r.collapsed)
+        .map(|(i, _)| i)
+        .collect();
+    if valid_regions.is_empty() {
+        return None;
+    }
+    let region_idx = valid_regions[rng.r#gen::<usize>() % valid_regions.len()];
+
+    let disease_idx = if let Some(idx) = recycle_idx {
+        // Recycle burned-out slot — same cleanup as spawn_disease
+        state.diseases[idx] = variant;
+        if idx < state.intel_pre_detection_briefed.len() {
+            state.intel_pre_detection_briefed[idx] = false;
+        }
+        for region in &mut state.regions {
+            region.infections.retain(|inf| inf.disease_idx != idx);
+        }
+        state.active_research.retain(|r| !r.references_disease(idx));
+        // Remove old targeted medicines (keep broad-spectrum)
+        state.medicines.retain(|m| {
+            m.therapy_type == TherapyType::BroadSpectrum
+                || !(m.target_diseases.len() == 1 && m.target_diseases[0] == idx)
+        });
+        idx
+    } else {
+        let idx = state.diseases.len();
+        state.diseases.push(variant);
+        idx
+    };
+
+    // Seed initial infection
+    let initial_infected = 10.0;
+    state.regions[region_idx].infections.push(RegionDiseaseState {
+        disease_idx,
+        exposed: 0.0,
+        infected: initial_infected,
+        dead: 0.0,
+        immune: 0.0,
+    });
+
+    // Generate targeted medicines for the variant (same as new disease emergence)
+    let new_meds = Medicine::targeted_medicines(disease_idx, state.diseases[disease_idx].pathogen_type);
+    state.medicines.extend(new_meds);
+
+    // Update broad-spectrum medicine to also target variant.
+    // BS medicines work against any pathogen type without per-disease
+    // clinical trials, so we register both target and tested status.
+    for med in &mut state.medicines {
+        if med.therapy_type == TherapyType::BroadSpectrum {
+            if !med.target_diseases.contains(&disease_idx) {
+                med.target_diseases.push(disease_idx);
+            }
+            if !med.tested_against.contains(&disease_idx) {
+                med.tested_against.push(disease_idx);
+            }
+        }
+    }
+
+    // Apply Emergency Countermeasure if enacted
+    if state.enacted_decrees.emergency_countermeasure {
+        use crate::state::{COUNTERMEASURE_SPREAD_WITHIN_MULT, COUNTERMEASURE_SPREAD_MULT};
+        state.diseases[disease_idx].within_region_spread *= COUNTERMEASURE_SPREAD_WITHIN_MULT;
+        state.diseases[disease_idx].cross_region_spread *= COUNTERMEASURE_SPREAD_MULT;
+    }
+
+    Some(disease_idx)
+}
+
+/// Convert a number to a Roman numeral string (for variant naming).
+fn roman_numeral(n: u32) -> String {
+    match n {
+        2 => "II".into(),
+        3 => "III".into(),
+        4 => "IV".into(),
+        5 => "V".into(),
+        6 => "VI".into(),
+        7 => "VII".into(),
+        8 => "VIII".into(),
+        9 => "IX".into(),
+        10 => "X".into(),
+        _ => format!("{}", n),
+    }
 }
