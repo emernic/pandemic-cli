@@ -6,12 +6,12 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, LedgerUiState};
+use crate::state::{AppState, LedgerUiState};
 use crate::format_number;
 use super::sparkline;
 
 /// Maximum selection index for the ledger panel in its current sub-state.
-pub fn selection_max(ui_state: &LedgerUiState, state: &GameState) -> usize {
+pub fn selection_max(ui_state: &LedgerUiState, state: &AppState) -> usize {
     match ui_state {
         LedgerUiState::BrowseStocks => state.corporations.len().saturating_sub(1),
         LedgerUiState::ConfirmBuy { .. } | LedgerUiState::ConfirmSell { .. } | LedgerUiState::ConfirmBailout { .. } => 0,
@@ -39,7 +39,7 @@ fn daily_change(history: &[f64], current: f64) -> (f64, Color) {
     (pct, color)
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let hdr = Style::default().fg(Color::DarkGray);

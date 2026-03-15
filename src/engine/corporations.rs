@@ -417,13 +417,13 @@ fn tick_share_prices(state: &mut WorldState, rng_misc: &mut rand_chacha::ChaCha8
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::AppState;
     use crate::engine::tick;
     use crate::state::GameCommand;
 
     #[test]
     fn generate_creates_18_corporations_across_6_regions() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
         assert_eq!(state.corporations.len(), 18);
         // 3 per region
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn four_random_board_seats_assigned() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
         let board_count = state.corporations.iter().filter(|c| c.board_seat).count();
         assert_eq!(board_count, 4, "should have exactly 4 board seats");
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn board_budget_set_after_initialization() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
         let income = state.funding_income_rate();
         assert!(
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn corporations_lose_revenue_under_disease_pressure() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
         let initial_revenue: f64 = state.corporations.iter().map(|c| c.revenue).sum();
 
@@ -482,7 +482,7 @@ mod tests {
     #[test]
     fn collapsed_region_bankrupts_all_corps() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         // Manually collapse North America
@@ -499,7 +499,7 @@ mod tests {
 
     #[test]
     fn bankrupt_corps_dont_affect_fixed_budget() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
 
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn board_satisfaction_drops_with_bankruptcies() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         let sat_before = state.board_satisfaction();
@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     fn manufacturers_assigned_to_locked_medicines() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         // Every locked (not-yet-developed) medicine should have a manufacturer
@@ -569,7 +569,7 @@ mod tests {
 
     #[test]
     fn broad_spectrum_has_no_manufacturer() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         // The starting broad-spectrum medicine is unlocked and should have no manufacturer
@@ -587,7 +587,7 @@ mod tests {
         let mut found_board = false;
         let mut found_non_board = false;
         for seed in 0..10 {
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             generate_corporations(&mut state);
 
             for med in &state.medicines {
@@ -612,11 +612,11 @@ mod tests {
         use crate::state::{ResearchKind, ResearchProject};
 
         // Try multiple seeds to find one where a locked medicine has a board-seat manufacturer
-        let mut state = GameState::new_default(0);
+        let mut state = AppState::new_default(0);
         let mut med_idx = 0;
         let mut found = false;
         for seed in 0..20 {
-            state = GameState::new_default(seed);
+            state = AppState::new_default(seed);
             generate_corporations(&mut state);
             state.diseases[0].knowledge = 1.0;
             if let Some((i, _)) = state.medicines.iter().enumerate().find(|(_, m)| {
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn new_disease_medicines_get_manufacturers() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         let initial_med_count = state.medicines.len();
@@ -694,7 +694,7 @@ mod tests {
 
     #[test]
     fn bailout_restores_reserves_and_deducts_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         // Drain a corp's reserves to 10%
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn bailout_rejected_for_bankrupt_corp() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
         state.corporations[0].bankrupt = true;
         state.resources.funding = 10_000.0;
@@ -739,7 +739,7 @@ mod tests {
 
     #[test]
     fn bailout_rejected_with_insufficient_funds() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
         state.corporations[0].reserves = 0.1;
         let cost = state.corporations[0].bailout_cost();

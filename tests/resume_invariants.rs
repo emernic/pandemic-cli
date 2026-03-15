@@ -11,7 +11,7 @@
 
 use pandemic_cli_lib::snapshot::run_snapshot;
 use pandemic_cli_lib::state::{
-    AppState, CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameState, MedicineUiState,
+    AppState, CrisisCost, CrisisEvent, CrisisKind, CrisisOption, MedicineUiState,
     Panel, ResearchUiState, SaveFile, SessionState,
 };
 
@@ -19,7 +19,7 @@ use pandemic_cli_lib::state::{
 
 /// Serialize then deserialize via SaveFile, simulating a save/load cycle.
 /// Session state resets on load (speed, status message, etc.).
-fn round_trip(state: &GameState) -> GameState {
+fn round_trip(state: &AppState) -> AppState {
     let sf = SaveFile {
         world: state.world.clone(),
         ui: state.ui.clone(),
@@ -64,7 +64,7 @@ fn fake_crisis() -> CrisisEvent {
 
 #[test]
 fn resume_preserves_open_panel_and_selection() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     // Player opened the Threats panel and scrolled down
     state.ui.open_panel = Panel::Threats;
     state.ui.panel_selection = 2;
@@ -77,7 +77,7 @@ fn resume_preserves_open_panel_and_selection() {
 
 #[test]
 fn resume_preserves_medicine_wizard_state() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.ui.open_panel = Panel::Medicines;
     state.ui.medicine_ui = Some(MedicineUiState::RegionFilter { medicine_idx: 1 });
 
@@ -92,7 +92,7 @@ fn resume_preserves_medicine_wizard_state() {
 
 #[test]
 fn resume_preserves_research_wizard_state() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.ui.open_panel = Panel::Research;
     state.ui.research_ui = Some(ResearchUiState::ConfirmProject {
         project_idx: 0,
@@ -113,7 +113,7 @@ fn resume_preserves_research_wizard_state() {
 
 #[test]
 fn resume_preserves_map_selection() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.ui.map_selection = 4; // Africa
 
     let restored = round_trip(&state);
@@ -123,7 +123,7 @@ fn resume_preserves_map_selection() {
 
 #[test]
 fn resume_preserves_active_crisis_with_selection_state() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.active_crisis = Some(fake_crisis());
     // Player had scrolled to option B and toggled auto-resolve
     state.ui.crisis_selection = 1;
@@ -157,7 +157,7 @@ fn resume_preserves_active_crisis_with_selection_state() {
 
 #[test]
 fn resume_preserves_splash_progression() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     // Player has completed the splash animation
     state.ui.home_splash_done = true;
     state.ui.home_splash_revealed = true;
@@ -176,7 +176,7 @@ fn resume_preserves_splash_progression() {
 
 #[test]
 fn resume_preserves_event_log_continuity() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.event_log.push_back((1.0, "First disease detected".into()));
     state.event_log.push_back((3.5, "Region collapsed".into()));
 
@@ -189,7 +189,7 @@ fn resume_preserves_event_log_continuity() {
 
 #[test]
 fn resume_preserves_history_snapshots() {
-    let state = GameState::new_default(42);
+    let state = AppState::new_default(42);
     // Advance some ticks to generate history entries
     let result = run_snapshot(state, &["d5".to_string()]).unwrap();
     let pre_save_history_len = result.state.history.len();
@@ -206,7 +206,7 @@ fn resume_preserves_history_snapshots() {
 
 #[test]
 fn resume_preserves_event_notification() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.ui.event_notification = Some("Disease mutated!".into());
 
     let restored = round_trip(&state);
@@ -223,7 +223,7 @@ fn resume_snapshot_continues_same_playthrough() {
     // Simulate what snapshot autosave does: run some steps, serialize,
     // deserialize, run more steps. The game should continue from where it
     // left off (same tick, same diseases, same state).
-    let state = GameState::new_default(42);
+    let state = AppState::new_default(42);
     let after_day1 = run_snapshot(state, &["d1".to_string()]).unwrap();
     let tick_after_day1 = after_day1.state.tick;
     let diseases_after_day1 = after_day1.state.diseases.len();
@@ -251,7 +251,7 @@ fn resume_snapshot_continues_same_playthrough() {
 
 #[test]
 fn session_reset_status_message_not_persisted() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.session.status_message = Some("Medicine deployed!".into());
 
     let restored = round_trip(&state);
@@ -264,7 +264,7 @@ fn session_reset_status_message_not_persisted() {
 
 #[test]
 fn session_reset_speed_multiplier_resets() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.session.speed_multiplier = 4;
 
     let restored = round_trip(&state);
@@ -277,7 +277,7 @@ fn session_reset_speed_multiplier_resets() {
 
 #[test]
 fn session_reset_size_warning_dismissed() {
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.session.size_warning_dismissed = true;
 
     let restored = round_trip(&state);
@@ -288,7 +288,7 @@ fn session_reset_size_warning_dismissed() {
     );
 }
 
-// Transient events no longer live on GameState — they flow explicitly
+// Transient events no longer live on AppState — they flow explicitly
 // through tick/command return values. No save/load invariant to test.
 
 #[test]
@@ -297,7 +297,7 @@ fn session_reset_crisis_dismissal_unblocks_game() {
     // After the player dismisses the crisis, the game should no longer be blocked.
     // Pacing (Running/Paused) is independent of crises — it stays whatever
     // it was before the crisis fired. Blocking is derived from active_crisis.
-    let mut state = GameState::new_default(42);
+    let mut state = AppState::new_default(42);
     state.active_crisis = Some(fake_crisis());
 
     let restored = round_trip(&state);

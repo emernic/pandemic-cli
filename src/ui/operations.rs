@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    DecreeId, GameState, OpsUiState, WorldState, TICKS_PER_DAY,
+    DecreeId, AppState, OpsUiState, WorldState, TICKS_PER_DAY,
     DECREE_COUNT, STANDING_ORDER_COUNT,
 };
 use super::hint_line;
@@ -17,7 +17,7 @@ use super::policy::{decree_description, render_confirm_decree, render_region_sel
 const FIELD_OPS_COUNT: usize = 2;
 
 /// Returns eligible medicine indices for emergency sample delivery.
-pub fn emergency_delivery_medicines(state: &GameState) -> Vec<usize> {
+pub fn emergency_delivery_medicines(state: &AppState) -> Vec<usize> {
     state.medicines.iter().enumerate()
         .filter(|(_, m)| m.unlocked && m.doses > 0.0)
         .map(|(i, _)| i)
@@ -25,7 +25,7 @@ pub fn emergency_delivery_medicines(state: &GameState) -> Vec<usize> {
 }
 
 /// Maximum selection index for the operations panel in its current sub-state.
-pub fn selection_max(ui_state: &OpsUiState, state: &GameState) -> usize {
+pub fn selection_max(ui_state: &OpsUiState, state: &AppState) -> usize {
     match ui_state {
         OpsUiState::BrowseOps => {
             (DECREE_COUNT + STANDING_ORDER_COUNT + FIELD_OPS_COUNT + state.loans.len())
@@ -43,7 +43,7 @@ pub fn selection_max(ui_state: &OpsUiState, state: &GameState) -> usize {
     }
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     match &state.ui.operations_ui {
         Some(OpsUiState::BrowseOps) | None => render_browse(f, area, state),
         Some(OpsUiState::ConfirmDecree { decree }) => {
@@ -77,7 +77,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     }
 }
 
-fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
+fn render_browse(f: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
     let selected = state.ui.panel_selection;
     let mut row = 0;
@@ -331,7 +331,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_select_medicine(f: &mut Frame, area: Rect, state: &GameState) {
+fn render_select_medicine(f: &mut Frame, area: Rect, state: &AppState) {
     let eligible = emergency_delivery_medicines(state);
     let selected = state.ui.panel_selection;
     let region_name = &state.regions[state.ui.map_selection].name;
@@ -410,7 +410,7 @@ fn render_select_medicine(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_confirm_delivery(f: &mut Frame, area: Rect, state: &GameState, medicine_idx: usize) {
+fn render_confirm_delivery(f: &mut Frame, area: Rect, state: &AppState, medicine_idx: usize) {
     let med = &state.medicines[medicine_idx];
     let region_idx = state.ui.map_selection;
     let region = &state.regions[region_idx];

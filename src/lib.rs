@@ -9,7 +9,7 @@ pub mod ui;
 use action::Action;
 use engine::execute_command;
 use state::{
-    DecreeId, DECREE_COUNT, GameCommand, GameOutcome, GameState,
+    DecreeId, DECREE_COUNT, GameCommand, GameOutcome, AppState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
     ResearchFlatItem, ResearchUiState, SimState,
@@ -27,7 +27,7 @@ use state::{
 /// Wizard confirm logic (handle_confirm and friends below) lives here too —
 /// it's the "what happens when you press Enter" half of the coordination layer,
 /// complementing the post-command UI navigation done inline after execute_command.
-pub fn apply_action(state: &GameState, action: &Action) -> GameState {
+pub fn apply_action(state: &AppState, action: &Action) -> AppState {
     let mut new = state.clone();
     new.session.status_message = None;
 
@@ -287,7 +287,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 /// callers must go through this function and cannot split the pairing.
 /// Engine unit tests may call `engine::tick()` directly to test game logic
 /// in isolation without UI state updates.
-pub fn tick_and_process(state: &GameState) -> GameState {
+pub fn tick_and_process(state: &AppState) -> AppState {
     // Capture the identity of the currently-selected panel item before the tick
     // so we can stabilize panel_selection afterward.  Index-based selections
     // jump when the underlying list grows, shrinks, or is re-sorted.
@@ -323,7 +323,7 @@ pub fn tick_and_process(state: &GameState) -> GameState {
     };
 
     let (new_world, tick_events) = engine::tick(state);
-    let mut new = GameState {
+    let mut new = AppState {
         world: new_world,
         ui: state.ui.clone(),
         session: state.session.clone(),
@@ -406,7 +406,7 @@ pub use state::format_number;
 // navigation/panel methods; lib.rs owns what happens when the player acts.
 
 /// Dispatch Confirm to the active panel's wizard handler.
-fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.open_panel {
         Panel::Medicines => handle_medicine_confirm(ui, state),
         Panel::Research => handle_research_confirm(ui, state),
@@ -418,7 +418,7 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
     }
 }
 
-fn handle_threats_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_threats_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     let display_order = state.threats_display_order();
     let disease_idx = display_order.get(ui.panel_selection).copied()?;
     // Only allow toggling detected diseases
@@ -429,7 +429,7 @@ fn handle_threats_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCom
 }
 
 
-fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.medicine_ui.clone() {
         Some(MedicineUiState::BrowseMedicines) => {
             // Enter toggles deployment on/off
@@ -454,7 +454,7 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
     }
 }
 
-fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.research_ui.clone() {
         Some(ResearchUiState::BrowseAll) => {
             let items = state.research_flat_items();
@@ -492,7 +492,7 @@ fn handle_research_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCo
     }
 }
 
-fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCommand> {
+fn handle_policy_confirm(ui: &mut UiState, _state: &AppState) -> Option<GameCommand> {
     match ui.policy_ui.clone() {
         Some(PolicyUiState::ManagePolicies { region_idx }) => {
             if ui.panel_selection == MANAGE_BARGAIN_POS {
@@ -514,7 +514,7 @@ fn handle_policy_confirm(ui: &mut UiState, _state: &GameState) -> Option<GameCom
     }
 }
 
-fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_operations_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.operations_ui.clone() {
         Some(OpsUiState::BrowseOps) => {
             let so_base = DECREE_COUNT;
@@ -618,7 +618,7 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
 /// Buy quantity: 10 shares per confirm press. Keeps the interaction snappy.
 const LEDGER_TRADE_QUANTITY: u32 = 10;
 
-fn handle_ledger_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+fn handle_ledger_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.ledger_ui.clone() {
         Some(LedgerUiState::BrowseStocks) => {
             let corp_idx = ui.panel_selection;
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn speed_cycles_through_multipliers() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         assert_eq!(state.session.speed_multiplier, 1);
 
         let state = apply_action(&state, &Action::SpeedUp);
@@ -676,7 +676,7 @@ mod tests {
 
     #[test]
     fn pause_resets_speed() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let state = apply_action(&state, &Action::SpeedUp);
         assert_eq!(state.session.speed_multiplier, 2);
 
@@ -688,7 +688,7 @@ mod tests {
 
     #[test]
     fn speed_up_ignored_when_paused() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let state = apply_action(&state, &Action::TogglePause); // pause
         let state = apply_action(&state, &Action::SpeedUp);
         assert_eq!(state.session.speed_multiplier, 1); // unchanged
@@ -699,7 +699,7 @@ mod tests {
     fn auto_resolve_toggle_during_crisis() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
@@ -724,7 +724,7 @@ mod tests {
     fn auto_resolve_saves_preference_on_confirm() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
@@ -751,7 +751,7 @@ mod tests {
     fn auto_resolve_no_preference_without_toggle() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
@@ -772,7 +772,7 @@ mod tests {
     fn manual_confirm_clears_existing_preference() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Pre-existing preference for aid crises
         state.auto_resolve_crises.insert("personnel".to_string(), 0);
 
@@ -795,7 +795,7 @@ mod tests {
 
     #[test]
     fn jump_to_item_moves_panel_selection() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
 
         // No panel open — JumpToItem should be ignored
         let state = apply_action(&state, &Action::JumpToItem { index: 2 });
@@ -821,7 +821,7 @@ mod tests {
 
     #[test]
     fn panel_hotkey_resets_to_top_when_deep_in_wizard() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Open research → confirm first item → now at ConfirmProject
         let state = apply_action(&state, &Action::OpenResearch);
         assert_eq!(state.ui.open_panel, Panel::Research);
@@ -844,7 +844,7 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         // Set up state with policy panel open in ManagePolicies.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.ui.open_panel = Panel::Policy;
         state.ui.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: 0 });
         state.ui.panel_selection = 2;
@@ -881,7 +881,7 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         // Set up state with ledger panel open in ConfirmBuy.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.ui.open_panel = Panel::Ledger;
         state.ui.ledger_ui = Some(LedgerUiState::ConfirmBuy { corp_idx: 0 });
         state.ui.panel_selection = 0;
@@ -912,7 +912,7 @@ mod tests {
 
     #[test]
     fn ledger_bailout_ui_flow() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
         // Drain corp 0's reserves so the bailout is meaningful
         state.corporations[0].reserves = state.corporations[0].max_reserves * 0.1;
@@ -949,7 +949,7 @@ mod tests {
     fn enter_on_browse_medicines_toggles_deploy_enabled() {
         use crate::state::MedicineUiState;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Unlock a medicine so the panel has content
         state.medicines[0].unlocked = true;
         state.medicines[0].doses = 100.0;
@@ -971,7 +971,7 @@ mod tests {
     fn research_selection_stable_when_new_items_appear() {
         use crate::state::{ResearchProject, ResearchUiState, Panel};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Open the research panel in BrowseAll mode
         state.ui.open_panel = Panel::Research;
         state.ui.research_ui = Some(ResearchUiState::BrowseAll);
@@ -1027,7 +1027,7 @@ mod tests {
     fn threats_selection_stable_when_display_order_changes() {
         use crate::state::Panel;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.ui.open_panel = Panel::Threats;
         state.sim_state = SimState::Paused;
 
@@ -1062,7 +1062,7 @@ mod tests {
     fn medicines_selection_stable_when_new_medicine_unlocked() {
         use crate::state::{MedicineUiState, Panel};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.ui.open_panel = Panel::Medicines;
         state.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
         state.sim_state = SimState::Paused;

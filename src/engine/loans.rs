@@ -141,7 +141,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut WorldState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{ActiveLoan, GameState, LoanLender, TICKS_PER_DAY};
+    use crate::state::{ActiveLoan, AppState, LoanLender, TICKS_PER_DAY};
 
     fn make_loan(outstanding: f64, due_day: f64) -> ActiveLoan {
         ActiveLoan {
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn interest_accrues_on_active_loan() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let initial = 200.0;
         state.loans.push(make_loan(initial, 100.0)); // due_day well in future
         let before = state.loans[0].outstanding;
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn overdue_loan_queues_hostile_crisis() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64; // day 15
         // Loan due on day 10 — already overdue
         state.loans.push(make_loan(200.0, 10.0));
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn loan_offer_queued_when_policies_suspended() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         // Advance tick past the cooldown window
         state.tick = LOAN_OFFER_COOLDOWN + 100;
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn repay_loan_removes_loan_and_deducts_funds() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 500.0;
         state.loans.push(make_loan(200.0, 100.0));
 
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn repay_loan_fails_if_insufficient_funds() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 100.0;
         state.loans.push(make_loan(200.0, 100.0));
 

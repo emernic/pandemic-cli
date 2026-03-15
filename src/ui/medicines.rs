@@ -6,11 +6,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, TICKS_PER_DAY, DEPLOY_MIN_EFFICACY};
+use crate::state::{AppState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, TICKS_PER_DAY, DEPLOY_MIN_EFFICACY};
 use crate::format_number;
 
 /// Maximum selection index for the medicines panel in its current sub-state.
-pub fn selection_max(ui_state: &MedicineUiState, state: &GameState) -> usize {
+pub fn selection_max(ui_state: &MedicineUiState, state: &AppState) -> usize {
     match ui_state {
         MedicineUiState::BrowseMedicines => {
             state.unlocked_medicine_indices().len().saturating_sub(1)
@@ -31,7 +31,7 @@ fn dose_color(med: &Medicine) -> Color {
     }
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let (title, lines, selected_line) = match &state.ui.medicine_ui {
         Some(MedicineUiState::RegionFilter { medicine_idx }) => {
             render_region_filter(state, *medicine_idx)
@@ -53,7 +53,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
     f.render_widget(widget, area);
 }
 
-fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_browse(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let unlocked_indices = state.unlocked_medicine_indices();
@@ -278,7 +278,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
     (" Medicines ".to_string(), lines, selected_line)
 }
 
-fn render_region_filter(state: &GameState, medicine_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_region_filter(state: &AppState, medicine_idx: usize) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let med = &state.medicines[medicine_idx];

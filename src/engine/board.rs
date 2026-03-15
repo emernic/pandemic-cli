@@ -484,11 +484,11 @@ pub(super) fn on_research_completed(state: &mut WorldState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::GameState;
+    use crate::state::AppState;
 
     #[test]
     fn board_members_generated_from_corporations_and_governors() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -509,7 +509,7 @@ mod tests {
     fn board_satisfaction_matches_old_aggregate() {
         // After generation, corporate leaders should have satisfaction 1.0 minus
         // initial skepticism (0.30), so board_satisfaction() should return ~0.70
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
         // Run one tick to compute satisfaction with skepticism
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     fn bankrupt_corp_reduces_member_satisfaction() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn governor_member_satisfaction_tracks_gdp() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -586,7 +586,7 @@ mod tests {
     #[test]
     fn hardliner_governor_board_member_reacts_to_relative_standing() {
         use crate::state::GovernorPersonality;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
 
         // Force a specific governor to be Hardliner and place them on the board
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn blowhard_governor_board_member_reacts_to_policies() {
         use crate::state::GovernorPersonality;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
 
         state.regions[0].governor.personality = GovernorPersonality::Blowhard;
@@ -653,7 +653,7 @@ mod tests {
 
     #[test]
     fn gdp_target_drops_with_containment_policies() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let base_gdp = state.regions[0].base_gdp;
         // No policies: GDP target should be close to base_gdp (no disease yet)
         let target = state.gdp_target(0);
@@ -671,7 +671,7 @@ mod tests {
 
     #[test]
     fn board_meeting_scheduled_around_day_7() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -686,7 +686,7 @@ mod tests {
     fn board_meeting_fires_on_schedule() {
         use crate::engine::tick;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -719,7 +719,7 @@ mod tests {
 
     #[test]
     fn buying_own_corp_boosts_member_satisfaction() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -740,7 +740,7 @@ mod tests {
 
     #[test]
     fn buying_rival_sector_penalizes_member() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -771,7 +771,7 @@ mod tests {
 
     #[test]
     fn selling_own_corp_penalizes_member() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 
@@ -791,7 +791,7 @@ mod tests {
 
     #[test]
     fn buying_unrelated_sector_no_effect() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         generate_board_members(&mut state);
 

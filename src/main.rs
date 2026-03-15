@@ -13,7 +13,7 @@ use pandemic_cli_lib::action::{key_to_action, Action};
 use pandemic_cli_lib::apply_action;
 use pandemic_cli_lib::persistence;
 use pandemic_cli_lib::snapshot;
-use pandemic_cli_lib::state::GameState;
+use pandemic_cli_lib::state::AppState;
 use pandemic_cli_lib::tick_and_process;
 use pandemic_cli_lib::ui;
 
@@ -120,7 +120,7 @@ fn install_panic_hook() {
 }
 
 fn run_interactive(
-    state: GameState,
+    state: AppState,
     save_path: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     install_panic_hook();
@@ -154,8 +154,8 @@ const EVENT_INPUT_LOCKOUT: Duration = Duration::from_millis(500);
 
 fn game_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    mut state: GameState,
-) -> Result<GameState, Box<dyn std::error::Error>> {
+    mut state: AppState,
+) -> Result<AppState, Box<dyn std::error::Error>> {
     let tick_duration = Duration::from_millis(500);
     let mut last_tick = Instant::now();
     // Track when a crisis event appeared so we can block Enter briefly

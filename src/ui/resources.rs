@@ -6,15 +6,15 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameOutcome, GameState, SimState, TICKS_PER_DAY, ticks_to_days};
+use crate::state::{GameOutcome, AppState, SimState, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
 /// Returns the height this bar needs: 2 rows (stats + border).
-pub fn height(_state: &GameState) -> u16 {
+pub fn height(_state: &AppState) -> u16 {
     2
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let pause_indicator = match &state.outcome {
         GameOutcome::Lost => Span::styled(" DEFEAT ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
         GameOutcome::Playing => if state.active_crisis.is_some() {

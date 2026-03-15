@@ -2,7 +2,7 @@ use ratatui::{backend::TestBackend, Terminal};
 
 use crate::action::string_to_action;
 use crate::apply_action;
-use crate::state::{GameState, GameOutcome, SimState};
+use crate::state::{AppState, GameOutcome, SimState};
 use crate::tick_and_process;
 use crate::ui;
 
@@ -10,7 +10,7 @@ use crate::ui;
 #[derive(Debug)]
 pub struct SnapshotResult {
     pub screen: String,
-    pub state: GameState,
+    pub state: AppState,
 }
 
 /// Parse a snapshot step string. Returns either a tick count or a key string.
@@ -57,7 +57,7 @@ enum StopReason {
 ///
 /// This mirrors interactive mode: crises interrupt progression and require
 /// player input before play can continue.
-fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
+fn advance_ticks(state: &mut AppState, n: u64) -> StopReason {
     if state.active_crisis.is_some() {
         return StopReason::CrisisStarted; // Don't advance even one tick with a pending crisis
     }
@@ -92,7 +92,7 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
 ///
 /// Returns both the rendered screen and the updated state.
 pub fn run_snapshot(
-    mut state: GameState,
+    mut state: AppState,
     steps: &[String],
 ) -> Result<SnapshotResult, String> {
     // ⛔ THE USER HAS DECREED: no key step may follow a time-advance step in the same
@@ -168,7 +168,7 @@ pub fn run_snapshot(
     Ok(SnapshotResult { screen, state })
 }
 
-pub fn render_to_string(state: &GameState) -> String {
+pub fn render_to_string(state: &AppState) -> String {
     let backend = TestBackend::new(200, 48);
     let mut terminal = Terminal::new(backend).unwrap();
 
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn snapshot_default_renders() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let output = render_to_string(&state);
         assert!(output.contains("RUNNING"));
         assert!(output.contains("Asia"));
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn snapshot_with_days() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // d1 = 1 day = 60 ticks (TICKS_PER_DAY = 60)
         let result = run_snapshot(state, &["d1".to_string()]).unwrap();
         assert!(result.screen.contains("Day: 1.0"));
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn snapshot_with_raw_ticks() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Legacy: t10 = 10 raw ticks. 10/60 ≈ 0.167 → "Day: 0.2"
         let result = run_snapshot(state, &["t10".to_string()]).unwrap();
         assert!(result.screen.contains("Day: 0.2"));
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn snapshot_with_key() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let result = run_snapshot(state, &["t".to_string()]).unwrap();
         assert!(result.screen.contains("Threats"));
         // Diseases start undetected — shown as "?" until detection threshold is reached
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn snapshot_with_multiple_keys() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Navigate to Threats then press down to select second item
         let result = run_snapshot(state, &["t".to_string(), "down".to_string()]).unwrap();
         assert!(result.screen.contains("Threats"));
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn snapshot_invalid_key() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let result = run_snapshot(state, &["!".to_string()]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown key"));
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn snapshot_keys_before_advance() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Keys before a time advance are allowed — open threats panel, then advance 1 day
         let result = run_snapshot(
             state,
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn snapshot_rejects_key_after_ticks() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Key after time advance must be rejected — this is the pattern that bypasses crisis events
         let result = run_snapshot(state, &["d1".to_string(), "enter".to_string()]);
         assert!(result.is_err());
@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn snapshot_rejects_any_key_after_ticks() {
         // The rule applies to all keys, not just enter
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let result = run_snapshot(state, &["d1".to_string(), "r".to_string()]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("follows a time-advance step"));
@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn snapshot_stops_on_crisis() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // d60 will hit crises. Snapshot should stop at the first one.
         let result = run_snapshot(state, &["d60".to_string()]).unwrap();
         // Either a crisis is active (stopped at crisis) or game over occurred.
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn snapshot_stops_on_game_over() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Force game over state
         state.outcome = GameOutcome::Lost;
         let tick_before = state.tick;
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn disease_detection_fires_crisis_alert() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Set first disease just below detection threshold so it triggers during ticks.
         // Detection threshold is 10,000 total infected across all regions.
         state.diseases[0].detected = false;
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn defeat_screen_shows_collapse_timeline() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.outcome = GameOutcome::Lost;
         // Simulate collapse at different times
         state.regions[0].collapsed = true;
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn orders_panel_shows_decrees() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let result = run_snapshot(state, &["o".to_string()]).unwrap();
         assert!(result.screen.contains("Emergency Decrees"),
             "orders panel should show decrees section");
@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn region_detail_shows_governor() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let screen = render_to_string(&state);
         // Governor name and personality should be visible in the selected region's detail
         assert!(screen.contains("Gov."),
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn policy_panel_shows_negotiate() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Open policy panel (goes directly to region management), navigate down to Negotiate.
         // Negotiate is at position MANAGE_NEGOTIATE_POS = POLICY_COUNT = 12.
         let steps: Vec<String> = std::iter::once("p")
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn defeat_screen_shows_pathogen_report_and_score() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.outcome = GameOutcome::Lost;
         state.tick = 2400; // 20 days
         // Give disease 0 some deaths
@@ -414,7 +414,7 @@ mod tests {
     fn budget_panel_shows_pending_shipments() {
         use crate::state::{DeployTarget, Shipment, TICKS_PER_DAY};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.ui.home_splash_done = true;
 
         // Add a fake pending shipment

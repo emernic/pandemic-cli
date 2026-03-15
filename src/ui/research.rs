@@ -6,11 +6,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{AppState, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the research panel in its current sub-state.
-pub fn selection_max(ui_state: &ResearchUiState, state: &GameState) -> usize {
+pub fn selection_max(ui_state: &ResearchUiState, state: &AppState) -> usize {
     match ui_state {
         ResearchUiState::BrowseAll => {
             state.research_flat_items().len().saturating_sub(1)
@@ -19,7 +19,7 @@ pub fn selection_max(ui_state: &ResearchUiState, state: &GameState) -> usize {
     }
 }
 
-pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
+pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let (title, lines, selected_line) = match &state.ui.research_ui {
         Some(ResearchUiState::BrowseAll) => render_flat(state),
         Some(ResearchUiState::ConfirmProject { project_idx, double_personnel }) => {
@@ -48,7 +48,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
 }
 
 /// Render the flat research panel: one unified list, no section headers.
-fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>) {
+fn render_flat(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
     let items = state.research_flat_items();
@@ -141,7 +141,7 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
 }
 
 /// Render an active research project (shows progress).
-fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state::ResearchProject, selected: bool, state: &GameState) {
+fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state::ResearchProject, selected: bool, state: &AppState) {
     let marker = if selected { "▶ " } else { "  " };
     let style = if selected {
         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -182,7 +182,7 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
 }
 
 /// Render an available (startable) research project with cost details.
-fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind, selected: bool, state: &GameState) {
+fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind, selected: bool, state: &AppState) {
     let marker = if selected { "▶ " } else { "  " };
     let style = if selected {
         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -212,7 +212,7 @@ fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind,
     lines.push(Line::from(""));
 }
 
-fn render_confirm(state: &GameState, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
+fn render_confirm(state: &AppState, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let projects = state.all_available_projects();
 
@@ -302,7 +302,7 @@ fn render_confirm(state: &GameState, project_idx: usize, double_personnel: bool)
     (" Confirm Research ".to_string(), lines)
 }
 
-fn render_confirm_lab_upgrade(state: &GameState) -> (String, Vec<Line<'static>>) {
+fn render_confirm_lab_upgrade(state: &AppState) -> (String, Vec<Line<'static>>) {
     let mut lines: Vec<Line> = Vec::new();
     let (cost, next_name, pct) = if state.lab_level == 0 {
         (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
@@ -354,7 +354,7 @@ fn render_confirm_lab_upgrade(state: &GameState) -> (String, Vec<Line<'static>>)
 
 /// Label showing the manufacturing corporation for a medicine.
 /// Returns " | Mfg: CorpName (+Approval)" or " | Mfg: CorpName" or "".
-fn manufacturer_label(med: &Medicine, state: &GameState) -> String {
+fn manufacturer_label(med: &Medicine, state: &AppState) -> String {
     let corp_idx = match med.manufacturer_corp_idx {
         Some(idx) => idx,
         None => return String::new(),
@@ -371,7 +371,7 @@ fn manufacturer_label(med: &Medicine, state: &GameState) -> String {
 }
 
 /// Supplementary detail line for a research project (targets, knowledge, etc).
-fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
+fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
     match kind {
         ResearchKind::DevelopMedicine { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;

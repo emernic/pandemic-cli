@@ -322,11 +322,11 @@ mod tests {
     use crate::apply_action;
     use crate::engine::tick;
     use crate::state::{
-        GameOutcome, GameState, ResearchFlatItem, ResearchKind, ResearchProject,
+        GameOutcome, AppState, ResearchFlatItem, ResearchKind, ResearchProject,
     };
 
     /// Helper: open research panel, navigate to first available item matching `kind_pred`, and confirm through.
-    fn start_research_matching(state: &GameState, kind_pred: impl Fn(&ResearchKind) -> bool) -> GameState {
+    fn start_research_matching(state: &AppState, kind_pred: impl Fn(&ResearchKind) -> bool) -> AppState {
         // Ensure panel is closed first, then open fresh
         let mut s = if state.ui.open_panel == crate::state::Panel::Research {
             apply_action(state, &Action::ClosePanel)
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn research_identify_increases_knowledge() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Start identify project on disease 0 (first item in flat list)
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn research_develop_medicine_unlocks() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0; // Fully identified
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn research_clinical_trial_marks_tested() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.medicines[0].unlocked = true; // Pre-unlock for testing
 
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn research_insufficient_personnel_blocks_start() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.personnel = 0; // No personnel
 
         state = apply_action(&state, &Action::OpenResearch);
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn more_personnel_means_faster_progress() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Create a project with base 5 personnel, assign 10 (2x base)
         // With diminishing returns: speed = 1 + (2-1)*(3-2)/2 = 1.5x
@@ -445,7 +445,7 @@ mod tests {
 
     #[test]
     fn diminishing_returns_beyond_double() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Assign 3x base personnel — should be back to 1.0x speed
         state.active_research = vec![ResearchProject {
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn concurrent_field_and_applied_research() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 1000.0; // enough for both projects
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn research_requires_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Identify costs $350; set funding to $100 so it fails
         state.resources.funding = 100.0;
 
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn develop_medicine_unlocks() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
 
         state.active_research.push(ResearchProject {
@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn clinical_trial_adds_target_and_tested() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.medicines[0].unlocked = true;
 
         state.active_research = vec![ResearchProject {
@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn clinical_trial_enables_deploy() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.medicines[0].unlocked = true;
 
         state.active_research = vec![ResearchProject {
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn narrow_medicine_cheaper_to_develop_than_broad() {
-        let mut state = GameState::new_default(1);
+        let mut state = AppState::new_default(1);
         let disease2 = crate::state::Disease::generate(
             &mut state.rng_emergence.clone(), crate::state::PathogenType::Bacterium, &[], true,
         );
@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn manufacture_doses_restores_supply() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
@@ -613,7 +613,7 @@ mod tests {
 
     #[test]
     fn genomic_sequencing_reduces_mutation_rate() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         let original_rate = state.diseases[0].pathogen_type.mutation_rate();
 
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn train_personnel_increases_count() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let initial_personnel = state.resources.personnel;
 
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
@@ -647,7 +647,7 @@ mod tests {
 
     #[test]
     fn basic_research_unlocks_tech() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Prereq for TargetedDrugDesign: identify any pathogen
         state.diseases[0].knowledge = 0.5;
         state.resources.funding = 1000.0;
@@ -670,7 +670,7 @@ mod tests {
 
     #[test]
     fn three_concurrent_research_projects() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 2000.0;
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
@@ -699,7 +699,7 @@ mod tests {
 
     #[test]
     fn no_research_after_game_over() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.outcome = GameOutcome::Lost;
         // Try to start research
         state = apply_action(&state, &Action::OpenResearch);
@@ -710,7 +710,7 @@ mod tests {
 
     #[test]
     fn parallel_field_research_runs_and_completes_independently() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.medicines[0].unlocked = true;
         state.resources.funding = 3000.0;
@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn research_only_gated_by_personnel_and_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.personnel = 50;
         state.resources.funding = 5000.0;
 
@@ -787,7 +787,7 @@ mod tests {
 
     #[test]
     fn rapid_sequencing_unlocks_after_sequencing() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // No sequencing done yet — RapidSequencing should not be available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
@@ -804,7 +804,7 @@ mod tests {
 
     #[test]
     fn rapid_sequencing_halves_genomic_sequencing_duration() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let kind = ResearchKind::GenomicSequencing { disease_idx: 0 };
 
         let (_, base_dur, _) = state.effective_costs(&kind);
@@ -817,7 +817,7 @@ mod tests {
 
     #[test]
     fn vaccine_platform_prereqs() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // No advanced drug tech → not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
@@ -834,7 +834,7 @@ mod tests {
 
     #[test]
     fn vaccine_platform_unlocks_vaccination() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         assert!(!state.can_vaccinate(), "vaccination should be locked without VaccinePlatform");
         assert_eq!(state.vaccination_multiplier(), 1.0);
 
@@ -854,7 +854,7 @@ mod tests {
 
     #[test]
     fn combination_therapy_prereqs() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // No deployed medicines → not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
@@ -878,7 +878,7 @@ mod tests {
 
     #[test]
     fn combination_therapy_halves_resistance() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         assert_eq!(state.resistance_multiplier(), 1.0);
 
         state.unlocked_techs.push(crate::state::BasicTech::CombinationTherapy);
@@ -890,7 +890,7 @@ mod tests {
     fn genomic_sequencing_unavailable_after_effective_rate_drops() {
         use crate::state::PathogenType;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.diseases[0].pathogen_type = PathogenType::RnaVirus; // base rate 0.0002
         // Ensure disease has infected population so sequencing can be considered
@@ -922,7 +922,7 @@ mod tests {
 
     #[test]
     fn human_trials_halves_clinical_trial_duration() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
         state.resources.funding = 10_000.0;
@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn pathogen_suppression_prereqs() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // No prereqs — not available
         let basic = state.available_basic_projects();
@@ -983,7 +983,7 @@ mod tests {
     #[test]
     fn suppress_pathogen_reduces_within_region_spread_20_percent() {
         use crate::state::KNOWLEDGE_FULL;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = KNOWLEDGE_FULL;
         state.resources.funding = 5000.0;
         state.resources.personnel = 20;
@@ -1017,7 +1017,7 @@ mod tests {
 
     #[test]
     fn directed_attenuation_prereqs() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Without CompetitiveDisplacement — not available
         let basic = state.available_basic_projects();
@@ -1035,7 +1035,7 @@ mod tests {
 
     #[test]
     fn genomic_interdiction_prereqs() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Without DirectedAttenuation — not available
         state.unlocked_techs.push(crate::state::BasicTech::CompetitiveDisplacement);
@@ -1055,7 +1055,7 @@ mod tests {
     #[test]
     fn attenuate_pathogen_reduces_lethality_30_percent() {
         use crate::state::KNOWLEDGE_FULL;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = KNOWLEDGE_FULL;
         state.resources.funding = 5000.0;
         state.resources.personnel = 20;
@@ -1087,7 +1087,7 @@ mod tests {
     #[test]
     fn interdict_pathogen_eliminates_cross_region_spread() {
         use crate::state::KNOWLEDGE_FULL;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = KNOWLEDGE_FULL;
         state.resources.funding = 5000.0;
         state.resources.personnel = 20;
@@ -1119,7 +1119,7 @@ mod tests {
     fn lab_upgrade_increases_research_speed() {
         use crate::state::LAB_LEVEL_1_COST;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 1000.0;
         state.active_research = vec![ResearchProject {
             kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
@@ -1144,7 +1144,7 @@ mod tests {
         );
 
         // Verify upgrade_lab deducts cost and increments level
-        let mut s = GameState::new_default(42);
+        let mut s = AppState::new_default(42);
         s.resources.funding = 1000.0;
         let (ok, msg) = super::upgrade_lab(&mut s);
         assert!(ok);
@@ -1156,7 +1156,7 @@ mod tests {
     #[test]
     fn handoff_notification_after_identification() {
         use crate::state::GameEvent;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Reset broad-spectrum to locked so identification can trigger the handoff
         for med in &mut state.medicines {
             if med.therapy_type == crate::state::TherapyType::BroadSpectrum {
@@ -1190,7 +1190,7 @@ mod tests {
     #[test]
     fn handoff_notification_after_medicine_developed() {
         use crate::state::GameEvent;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
@@ -1218,7 +1218,7 @@ mod tests {
     #[test]
     fn manufacturing_yield_bonus_from_tech() {
         // StabilizedFormulation tech gives +25% manufacturing yield.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
@@ -1262,7 +1262,7 @@ mod tests {
     fn blocked_medicine_developments_shows_identified_but_unresearched() {
         use crate::state::BasicTech;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Nothing identified — blocked list should be empty
         assert!(
@@ -1311,7 +1311,7 @@ mod tests {
     fn blocked_medicine_developments_not_duplicated_when_already_available() {
         use crate::state::BasicTech;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Disease 0 fully identified with tech: targeted medicine should be in available, not blocked.
         state.diseases[0].knowledge = 1.0;

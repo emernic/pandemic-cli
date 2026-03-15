@@ -1,10 +1,5 @@
 # Target Architecture
 
-> **Note:** This document describes the current architecture — the single-`GameState`
-> model. A state-split refactor is in progress (see the `state-split` label on
-> GitHub issues). Do not treat the single-`GameState` model described here as a
-> reason to reject that work.
-
 Current state and ongoing discipline for the codebase structure.
 
 ## Layering
@@ -28,7 +23,7 @@ state.rs                  Domain model: data structures, derived computations,
 
 state.rs is a **domain model layer** — not just passive data. It contains three things:
 
-1. **Data structures** — the raw stored game state (`GameState`, `Region`, `Disease`, `Medicine`, `RegionPolicy`, etc.)
+1. **Data structures** — the raw stored game state (`AppState`, `Region`, `Disease`, `Medicine`, `RegionPolicy`, etc.)
 2. **Derived computations** — read-only methods that compute values both the engine and UI need: `approval_target()`, `funding_income_rate()`, `policy_unlocked()`, `decree_unlocked()`, `tech_pressure()`, `available_projects()`, `has_zero_agency()`, and many more
 3. **UI state machines** — `UiState` methods for panel navigation, wizard steps, and confirm handlers
 
@@ -58,14 +53,14 @@ keypress → action.rs: key_to_action() → Action
 
 `execute_command()` never touches `UiState`. It returns a result and the caller handles UI updates.
 
-**Confirm handling lives in lib.rs, not state.rs.** `handle_confirm()` and the four panel-specific wizard handlers (`handle_medicine_confirm`, `handle_research_confirm`, `handle_policy_confirm`, `handle_operations_confirm`) are free functions in lib.rs. They take `&mut UiState` and `&GameState`, advance wizard state machines, do UX pre-validation (e.g. funding checks), and synthesize `GameCommand`s. This is coordination logic — it belongs in the coordination layer. The boundary is:
+**Confirm handling lives in lib.rs, not state.rs.** `handle_confirm()` and the four panel-specific wizard handlers (`handle_medicine_confirm`, `handle_research_confirm`, `handle_policy_confirm`, `handle_operations_confirm`) are free functions in lib.rs. They take `&mut UiState` and `&AppState`, advance wizard state machines, do UX pre-validation (e.g. funding checks), and synthesize `GameCommand`s. This is coordination logic — it belongs in the coordination layer. The boundary is:
 
-**Validation contract:** The engine is always the authoritative validation layer — game commands validate their preconditions (funding, doses, personnel) and return an error message on failure. UI wizard handlers may add *best-effort preview checks* to fail early and prevent players from advancing multi-step wizards to dead ends. When a UI pre-check exists, it MUST use the same cost calculation as the engine to prevent drift. The canonical example is medicine deployment: `medicine_deploy_cost(medicine_idx, region_idx)` on `GameState` computes the full actual cost (base × disruption × discount) and is called by both the UI pre-check in `handle_medicine_confirm()` and the engine in `deploy_medicine()`. Never recompute these formulas inline — add a method to `GameState` and call it from both places.
+**Validation contract:** The engine is always the authoritative validation layer — game commands validate their preconditions (funding, doses, personnel) and return an error message on failure. UI wizard handlers may add *best-effort preview checks* to fail early and prevent players from advancing multi-step wizards to dead ends. When a UI pre-check exists, it MUST use the same cost calculation as the engine to prevent drift. The canonical example is medicine deployment: `medicine_deploy_cost(medicine_idx, region_idx)` on `AppState` computes the full actual cost (base × disruption × discount) and is called by both the UI pre-check in `handle_medicine_confirm()` and the engine in `deploy_medicine()`. Never recompute these formulas inline — add a method to `AppState` and call it from both places.
 
-- **state.rs `impl UiState`:** Navigation and panel state mutations (`toggle_panel`, `close_panel`, `select_*`, `panel_selection_max`, `sync_panel_region`). These only need `&mut self` plus scalar counts — they don't make decisions requiring full `GameState` context.
+- **state.rs `impl UiState`:** Navigation and panel state mutations (`toggle_panel`, `close_panel`, `select_*`, `panel_selection_max`, `sync_panel_region`). These only need `&mut self` plus scalar counts — they don't make decisions requiring full `AppState` context.
 - **lib.rs wizard handlers:** What happens when you press Enter. These read game state broadly (medicines, diseases, research slots) to decide how wizard steps advance and which command to synthesize.
 
-**UI pre-check contract:** Wizard handlers may add *best-effort preview checks* to fail early, before a multi-step wizard reaches a dead end. These must use the same cost calculation as the engine — never recompute formulas inline. Add a method to `GameState` and call it from both places. `GameState::medicine_deploy_cost(medicine_idx, region_idx)` is the canonical example: it encapsulates base × disruption × discount, and is called by both `handle_medicine_confirm()` (preview) and `deploy_medicine()` (authoritative check). Most game commands validate preconditions in the engine command handler; crisis resolution is an exception where callers check affordability before calling `resolve_crisis()`.
+**UI pre-check contract:** Wizard handlers may add *best-effort preview checks* to fail early, before a multi-step wizard reaches a dead end. These must use the same cost calculation as the engine — never recompute formulas inline. Add a method to `AppState` and call it from both places. `AppState::medicine_deploy_cost(medicine_idx, region_idx)` is the canonical example: it encapsulates base × disruption × discount, and is called by both `handle_medicine_confirm()` (preview) and `deploy_medicine()` (authoritative check). Most game commands validate preconditions in the engine command handler; crisis resolution is an exception where callers check affordability before calling `resolve_crisis()`.
 
 ### How simulation flows
 
@@ -121,7 +116,7 @@ Each subsystem module follows the same pattern:
 - **Two function types:**
   - **Tick helpers** (called from `tick()`) — advance ongoing processes. Named `tick_*()`. Examples: `tick_research()`, `tick_enforce_costs()`, `tick_spread_within()`
   - **Command handlers** (called from `execute_command()`) — handle player actions. Examples: `start_research()`, `deploy_medicine()`, `toggle_policy()`
-- **No cross-subsystem calls.** If research completion needs to modify medicines (e.g., unlocking one), it does so through `GameState` directly — not by calling into the medicine module. Subsystems share data through state, not through each other.
+- **No cross-subsystem calls.** If research completion needs to modify medicines (e.g., unlocking one), it does so through `AppState` directly — not by calling into the medicine module. Subsystems share data through state, not through each other.
 - **Tests live with the code they test.** Each subsystem module has its own `#[cfg(test)] mod tests`. Integration tests that exercise multiple subsystems through `tick()` or `apply_action()` stay in `engine/mod.rs`.
 
 ### Adding a new game system
@@ -188,18 +183,20 @@ The architecture is "one giant mutable state blob plus conventions." This sectio
 - `auto_resolve_crises` — crisis preference toggled inline in the crisis confirm path (reads crisis tag, manages a HashMap). This is the one remaining bypass; it could be moved to a `GameCommand` if it grows more complex.
 - All other persistent game state mutations go through `execute_command()`.
 
+**Enforced by the type system:**
+- Engine code cannot access `UiState` — engine functions receive `&mut WorldState`, which has no UI fields.
+
 **Enforced by convention only (can be violated without compiler errors):**
-- Engine code should not read or write `state.ui.*` fields. Nothing prevents it — `UiState` is a public field of `GameState`, which engine functions receive as `&mut GameState`.
-- UI code should not mutate game state (beyond `UiState`). Again, nothing prevents it — UI functions also receive `&mut GameState`.
-- Subsystems should not call each other. They share `&mut GameState`, so any subsystem could call any other subsystem's logic through state methods.
+- UI code should not mutate world state. UI render functions receive `&AppState` (immutable).
+- Subsystems should not call each other. They share `&mut WorldState`, so any subsystem could call any other subsystem's logic through state methods.
 - Command response strings are composed in the engine. Tick-time event strings are composed in the UI. No type prevents mixing these.
 
 **Why this is acceptable at current scale:** This is a single-binary game worked on by AI agents that read CLAUDE.md and architecture docs. The conventions are documented, the boundaries are visible in code review, and violations are caught by the agents' instruction-following. Type-level enforcement (splitting the state blob, wrapper types restricting access) would add significant complexity for a problem that isn't causing bugs. If the codebase grows to the point where convention violations become a recurring issue, revisit this decision.
 
 ## What NOT to Change
 
-- **Single `GameState` struct** — One serializable blob = trivial save/load.
-- **`UiState` inside `GameState`** — The UI state is part of the save. The issue isn't where it lives in the struct, it's which code touches it.
+- **Single `AppState` struct** — One serializable blob = trivial save/load.
+- **`UiState` inside `AppState`** — The UI state is part of the save. The issue isn't where it lives in the struct, it's which code touches it.
 - **Clone-and-mutate in `tick()`** — Fine at current scale. Don't optimize prematurely.
 - **Snapshot mode** — Keep this exactly as-is. It's one of the best things about the codebase.
 
@@ -208,6 +205,6 @@ The architecture is "one giant mutable state blob plus conventions." This sectio
 These are done. Listed for historical context only.
 
 1. **UI state machines extracted from engine** — `apply_action()` moved to `lib.rs`. Panel navigation and selection indices live in `UiState` methods. Wizard confirm handlers (what happens when you press Enter) are free functions in `lib.rs`. Engine only exports `tick()` and `execute_command()`.
-2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_applied_projects()` → `GameState` methods. UI no longer imports from engine.
+2. **Query functions moved to state.rs** — `project_costs()` → `ResearchKind::costs()`. `available_field_projects()`, `available_applied_projects()` → `AppState` methods. UI no longer imports from engine.
 3. **`CommandResult` type** — `execute_command()` returns `CommandResult { message, success }` instead of directly modifying UI state.
 4. **Engine god file broken up** — Research, medicine, policy, crisis, spread, disease emergence, and personnel logic extracted into 7 subsystem modules.

@@ -1142,7 +1142,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, GameState, WorldState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, ResearchUiState};
+    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, AppState, WorldState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, ResearchUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut WorldState) {
@@ -1169,7 +1169,7 @@ mod tests {
 
     #[test]
     fn tick_increases_infections() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let initial = state.total_infected();
         let (after, _) = tick(&state);
         assert!(
@@ -1182,7 +1182,7 @@ mod tests {
 
     #[test]
     fn tick_causes_deaths() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let mut s = state;
         for _ in 0..20 {
             s = s.with_world(tick(&s).0);
@@ -1192,7 +1192,7 @@ mod tests {
 
     #[test]
     fn tick_advances_state() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let (after, _) = tick(&state);
         assert_eq!(after.tick, state.tick + 1);
         assert!(after.total_infected() > state.total_infected());
@@ -1200,7 +1200,7 @@ mod tests {
 
     #[test]
     fn multi_tick_determinism() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let mut a = state.clone();
         let mut b = state;
         for _ in 0..50 {
@@ -1214,7 +1214,7 @@ mod tests {
 
     #[test]
     fn recovery_accumulates() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let mut s = state;
         for _ in 0..50 {
             s = s.with_world(tick(&s).0);
@@ -1228,7 +1228,7 @@ mod tests {
 
     #[test]
     fn population_conservation() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let mut s = state;
         for _ in 0..100 {
             s = s.with_world(tick(&s).0);
@@ -1259,7 +1259,7 @@ mod tests {
 
     #[test]
     fn cross_region_spread_eventually() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let mut s = state;
         // With smaller initial seed (500-2500), need more ticks for cross-region spread
         for _ in 0..1000 {
@@ -1280,7 +1280,7 @@ mod tests {
     #[test]
     fn toggle_pause() {
         use crate::state::SimState;
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         assert!(state.sim_state.is_running());
         let s = apply_action(&state, &Action::TogglePause);
         assert_eq!(s.sim_state, SimState::Paused);
@@ -1290,7 +1290,7 @@ mod tests {
 
     #[test]
     fn open_close_panels() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let s = apply_action(&state, &Action::OpenThreats);
         assert_eq!(s.ui.open_panel, Panel::Threats);
         let s = apply_action(&s, &Action::OpenThreats);
@@ -1303,7 +1303,7 @@ mod tests {
 
     #[test]
     fn panel_navigation() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let max_sel = state.diseases.len() - 1;
 
         let s = apply_action(&state, &Action::OpenThreats);
@@ -1324,7 +1324,7 @@ mod tests {
 
     #[test]
     fn immune_reduces_susceptible_pool() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Set 90% of the region's population as immune — drastically reduces susceptible pool
         let pop = state.regions[ri].population as f64;
@@ -1335,7 +1335,7 @@ mod tests {
         let inf_after = after.regions[ri].disease_state(0).unwrap();
         let growth = (inf_after.exposed + inf_after.infected) - before;
 
-        let state2 = GameState::new_default(42);
+        let state2 = AppState::new_default(42);
         let ri2 = primary_outbreak_region(&state2);
         let inf_before2 = state2.regions[ri2].disease_state(0).unwrap();
         let before2 = inf_before2.exposed + inf_before2.infected;
@@ -1354,7 +1354,7 @@ mod tests {
     #[test]
     fn dense_urban_increases_spread() {
         use crate::state::RegionTrait;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Ensure the outbreak region does NOT already have DenseUrban
         state.regions[ri].traits.retain(|t| *t != RegionTrait::DenseUrban);
@@ -1379,7 +1379,7 @@ mod tests {
     #[test]
     fn strong_public_health_reduces_lethality() {
         use crate::state::RegionTrait;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Ensure outbreak region has some infected to die
         let inf = state.regions[ri].disease_state(0).unwrap();
@@ -1401,7 +1401,7 @@ mod tests {
 
     #[test]
     fn disease_can_spread_into_vaccinated_region() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Find a region WITHOUT disease 0 and pre-vaccinate it
         let clean_region = (0..state.regions.len())
             .find(|&i| !state.regions[i].infections.iter().any(|inf| inf.disease_idx == 0))
@@ -1427,7 +1427,7 @@ mod tests {
     fn medicine_vaccination_deployment() {
         use crate::state::DeployTarget;
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         // Unlock VaccinePlatform so vaccination mode is available
         state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
@@ -1464,7 +1464,7 @@ mod tests {
     fn medicine_treatment_deployment() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         // Disable auto-deploy so it doesn't create cooldowns that interfere
         // with the manual deploy this test is exercising.
@@ -1510,7 +1510,7 @@ mod tests {
     fn medicine_empty_doses_blocks_deployment() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].doses = 0.0; // Empty
         for _ in 0..20 {
@@ -1534,7 +1534,7 @@ mod tests {
 
     #[test]
     fn medicine_esc_backstep() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state = apply_action(&state, &Action::OpenMedicines);
         assert!(matches!(
@@ -1550,7 +1550,7 @@ mod tests {
     fn medicine_zero_targets_refused() {
         use crate::state::DeployTarget;
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         // Clear region 0 infections so we can test treating with zero targets
         state.regions[0].infections.clear();
@@ -1577,7 +1577,7 @@ mod tests {
 
     #[test]
     fn open_medicines_resets_to_browse() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         // Open medicines, navigate away to another panel, then re-open
         state = apply_action(&state, &Action::OpenMedicines);
@@ -1601,7 +1601,7 @@ mod tests {
 
     #[test]
     fn toggle_deploy_enables_and_disables() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         let med_idx = 0;
 
@@ -1621,7 +1621,7 @@ mod tests {
 
     #[test]
     fn enter_on_browse_toggles_deploy() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state = apply_action(&state, &Action::OpenMedicines);
         assert!(matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines)));
@@ -1638,7 +1638,7 @@ mod tests {
     #[test]
     fn multi_target_medicine_deploys_via_engine_api() {
         use crate::state::DeployTarget;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Ensure infections exist (therapeutics need infected population)
         state.regions[0].get_or_create_infection(0).infected = 50_000.0;
         // Find any targeted medicine
@@ -1669,7 +1669,7 @@ mod tests {
     #[test]
     fn untested_medicine_deploy_succeeds_without_confirmation() {
         use crate::state::DeployTarget;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_untested(&mut state);
         // Ensure infections exist (therapeutics need infected population to deploy)
         state.regions[0].get_or_create_infection(0).infected = 50_000.0;
@@ -1694,7 +1694,7 @@ mod tests {
     fn tested_medicine_deploys_immediately() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state); // tested
         // Advance time so there are infections to treat
         for _ in 0..20 {
@@ -1714,7 +1714,7 @@ mod tests {
     #[test]
     fn map_navigation_right_left_wraps() {
         // Reading order: NA(0) → EU(2) → Asia(4) → SA(1) → Africa(3) → Oceania(5) → NA(0)
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         assert_eq!(state.ui.map_selection, 0); // NA
         let s = apply_action(&state, &Action::SelectRight);
         assert_eq!(s.ui.map_selection, 2); // EU
@@ -1740,7 +1740,7 @@ mod tests {
 
     #[test]
     fn map_navigation_up_down_no_panel() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         assert_eq!(state.ui.map_selection, 0); // NA (row 0)
         let s = apply_action(&state, &Action::SelectNext);
         assert_eq!(s.ui.map_selection, 1); // SA (row 1)
@@ -1756,7 +1756,7 @@ mod tests {
 
     #[test]
     fn map_navigation_with_panel_open() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Need at least 2 diseases so the panel has items to navigate
         {
             let mut rng = state.world.rng_emergence.clone();
@@ -1777,7 +1777,7 @@ mod tests {
 
     #[test]
     fn research_panel_navigation() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state = apply_action(&state, &Action::OpenResearch);
 
         // Flat panel: BrowseAll with all items in one list
@@ -1805,7 +1805,7 @@ mod tests {
 
     #[test]
     fn research_esc_backstep() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         detect_all_diseases(&mut state);
 
         state = apply_action(&state, &Action::OpenResearch);
@@ -1828,7 +1828,7 @@ mod tests {
     fn research_confirm_noop_on_active_project() {
         use crate::state::ResearchFlatItem;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Start a field research project first
         state = apply_action(&state, &Action::OpenResearch);
         state = apply_action(&state, &Action::Confirm); // Confirm first available
@@ -1853,7 +1853,7 @@ mod tests {
 
     #[test]
     fn diseases_start_unknown() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         for disease in &state.diseases {
             assert_eq!(disease.knowledge, 0.0);
         }
@@ -1861,7 +1861,7 @@ mod tests {
 
     #[test]
     fn lose_condition_triggers_when_all_regions_collapse() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Override to extreme parameters so all regions collapse quickly.
         // Normal game parameters (R0 3-5) cause loss via multiple diseases over 20 days.
         for disease in &mut state.diseases {
@@ -1921,7 +1921,7 @@ mod tests {
         let seeds: Vec<u64> = (0..50).collect();
         let mut loss_days = Vec::new();
         for seed in &seeds {
-            let mut state = GameState::new_default(*seed);
+            let mut state = AppState::new_default(*seed);
             corporations::generate_corporations(&mut state);
             board::generate_board_members(&mut state);
             let max_ticks = 120 * TICKS_PER_DAY as u64;
@@ -1970,7 +1970,7 @@ mod tests {
         use crate::state::{ResearchKind, DeployTarget};
 
         fn simulate_competent(seed: u64) -> f64 {
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             corporations::generate_corporations(&mut state);
             board::generate_board_members(&mut state);
             // Give the bot full authority so it can test policies & research,
@@ -2114,7 +2114,7 @@ mod tests {
         }
 
         fn simulate_passive(seed: u64) -> f64 {
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             corporations::generate_corporations(&mut state);
             board::generate_board_members(&mut state);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
@@ -2164,7 +2164,7 @@ mod tests {
         // minimum time for initial decisions. With aggressive disease
         // parameters, day 20 is too generous — some seeds collapse by day 16.
         for seed in [42, 123, 7, 99, 2024, 1, 999, 314, 55555, 8675309_u64] {
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             let max_ticks = 6 * TICKS_PER_DAY as u64;
             for t in 0..max_ticks {
                 state = state.with_world(tick(&state).0);
@@ -2184,7 +2184,7 @@ mod tests {
 
     #[test]
     fn no_victory_condition_exists() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Clear all infections, identify everything, test all medicines
         for region in &mut state.regions {
             region.infections.clear();
@@ -2208,7 +2208,7 @@ mod tests {
 
     #[test]
     fn no_deploy_after_game_over() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state.outcome = GameOutcome::Lost;
         let funding_before = state.resources.funding;
@@ -2221,7 +2221,7 @@ mod tests {
 
     #[test]
     fn no_unpause_after_game_over() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.outcome = GameOutcome::Lost;
         let s = apply_action(&state, &Action::TogglePause);
         assert!(s.is_blocked(), "game should remain blocked after game over");
@@ -2229,7 +2229,7 @@ mod tests {
 
     #[test]
     fn tick_does_not_advance_after_game_over() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.outcome = GameOutcome::Lost;
         let tick_before = state.tick;
         state = state.with_world(tick(&state).0);
@@ -2238,7 +2238,7 @@ mod tests {
 
     #[test]
     fn tiny_infected_snaps_to_zero() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Set up a region with sub-person infected count
         state.regions[ri].get_or_create_infection(0).infected = 0.7;
@@ -2252,7 +2252,7 @@ mod tests {
 
     #[test]
     fn multi_disease_dead_never_exceeds_population() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         let pop = state.regions[ri].population as f64;
         // Add a second disease with heavy infection in the same region
@@ -2285,7 +2285,7 @@ mod tests {
     fn coinfection_increases_deaths() {
         // With 2 diseases both above the co-infection threshold,
         // deaths should be higher than with a single disease.
-        let mut single = GameState::new_default(42);
+        let mut single = AppState::new_default(42);
         let ri = primary_outbreak_region(&single);
         single.regions[ri].get_or_create_infection(0).infected = 100_000.0;
 
@@ -2309,7 +2309,7 @@ mod tests {
 
     #[test]
     fn burn_out_spawns_scaled_disease() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Clear all infections to simulate burn-out
         for region in &mut state.regions {
             region.infections.clear();
@@ -2338,7 +2338,7 @@ mod tests {
     #[test]
     fn burn_out_recycles_slot_at_max_diseases() {
         use crate::state::MAX_DISEASES;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Fill up to MAX_DISEASES
         while state.diseases.len() < MAX_DISEASES {
             let mut rng = state.rng_emergence.clone();
@@ -2362,7 +2362,7 @@ mod tests {
 
     #[test]
     fn policy_travel_ban_reduces_spread() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Run without travel ban
         let mut no_ban = state.clone();
         for _ in 0..100 {
@@ -2396,7 +2396,7 @@ mod tests {
     fn travel_ban_does_not_block_medicine_shipments() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.push(0);
         // Infect region 0 so treatment makes sense
@@ -2427,7 +2427,7 @@ mod tests {
     #[test]
     fn personnel_upkeep_reduces_funding() {
         use crate::state::PERSONNEL_UPKEEP_COST;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         for r in &mut state.regions {
             r.infections.clear();
         }
@@ -2449,7 +2449,7 @@ mod tests {
 
     #[test]
     fn fire_personnel_reduces_roster() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.personnel = 25;
         let result = execute_command(&mut state, &GameCommand::FirePersonnel { count: 5 });
         assert!(result.success);
@@ -2458,7 +2458,7 @@ mod tests {
 
     #[test]
     fn fire_personnel_capped_by_available() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.personnel = 25;
         // Start a research project to tie up some personnel
         state.resources.authority = Authority::Maximum;
@@ -2472,7 +2472,7 @@ mod tests {
 
     #[test]
     fn fire_personnel_fails_when_none_available() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.personnel = 0;
         let result = execute_command(&mut state, &GameCommand::FirePersonnel { count: 5 });
         assert!(!result.success);
@@ -2480,7 +2480,7 @@ mod tests {
 
     #[test]
     fn policy_quarantine_reduces_infections() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Run without quarantine
         let mut no_q = state.clone();
@@ -2504,7 +2504,7 @@ mod tests {
 
     #[test]
     fn discourage_hospitalization_increases_deaths() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let ri = primary_outbreak_region(&state);
         // Run baseline (hospitals active by default)
         let mut baseline = state.clone();
@@ -2528,7 +2528,7 @@ mod tests {
 
     #[test]
     fn policy_costs_deducted_each_tick() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // First tick without policy to measure income
         let (no_policy, _) = tick(&state);
         let income_no_policy = no_policy.resources.funding - state.resources.funding;
@@ -2548,7 +2548,7 @@ mod tests {
 
     #[test]
     fn policy_funding_crisis_suspends_most_expensive_first() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 0.8; // Enough for quarantine ($0.6) but not both ($1.3)
         state.policies[0].travel_ban = true; // $0.7/tick — most expensive
         state.policies[0].quarantine = true; // $0.6/tick
@@ -2565,7 +2565,7 @@ mod tests {
 
     #[test]
     fn policy_gradual_suspension_across_ticks() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Set up 3 policies: $1.0 + $0.6 + $0.4 = $2.0/tick total
         state.policies[0].travel_ban = true;
         state.policies[0].quarantine = true;
@@ -2581,7 +2581,7 @@ mod tests {
 
     #[test]
     fn funding_warning_when_runway_low() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Enable expensive policies across ALL regions to create net burn.
         // Per region: travel ban ($1/tick) + quarantine ($0.6/tick) + discourage hosp ($0.4/tick) = $2/tick
         // Six regions = $12/tick policy cost. Plus upkeep: 20 × $0.06 = $1.2/tick. Total ~$13.2/tick.
@@ -2606,7 +2606,7 @@ mod tests {
 
     #[test]
     fn no_funding_warning_when_flush() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.policies[0].travel_ban = true; // $1/tick
         state.resources.funding = 1000.0; // Plenty of runway after deduction
         let tick_events;
@@ -2619,7 +2619,7 @@ mod tests {
 
     #[test]
     fn no_funding_warning_without_active_policies() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // No policies active — only personnel upkeep creates costs.
         // Even with zero funding, warning shouldn't fire because there's
         // nothing to suspend.
@@ -2634,7 +2634,7 @@ mod tests {
 
     #[test]
     fn policy_toggle_via_confirm() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum; // Full authority for testing
 
         // P key now opens directly to ManagePolicies for the current map region (0)
@@ -2664,7 +2664,7 @@ mod tests {
 
     #[test]
     fn simulation_is_deterministic() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         let mut a = state.clone();
         let mut b = state;
         for _ in 0..1000 {
@@ -2681,7 +2681,7 @@ mod tests {
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 20 * crate::state::TICKS_PER_DAY as u64; // day 20
 
         let initial_count = state.diseases.len();
@@ -2727,7 +2727,7 @@ mod tests {
     fn resistance_builds_from_treatment_pressure() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TherapyType;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Find first non-prion disease and unlock its targeted medicines
         let disease_idx = state.diseases.iter().position(|d| {
             d.pathogen_type != crate::state::PathogenType::Prion
@@ -2795,7 +2795,7 @@ mod tests {
     fn targeted_medicines_have_mechanism_of_action() {
         use crate::state::TherapyType;
 
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // Disease 0 is never a prion — should have one medicine per mechanism
         let targeted_meds: Vec<_> = state.medicines.iter()
             .filter(|m| m.target_diseases.contains(&0)
@@ -2839,7 +2839,7 @@ mod tests {
 
     #[test]
     fn new_disease_emerges_mid_game() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let initial_diseases = state.diseases.len();
         let initial_medicines = state.medicines.len();
 
@@ -2887,7 +2887,7 @@ mod tests {
 
     #[test]
     fn disease_cap_prevents_excess_emergence() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         use crate::state::MAX_DISEASES;
         while state.diseases.len() < MAX_DISEASES {
             use rand::SeedableRng;
@@ -2907,7 +2907,7 @@ mod tests {
         use crate::state::MAX_DISEASES;
         // Try many seeds — no seed should produce 3+ diseases of the same type
         for seed in 0..50u64 {
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             while state.diseases.len() < MAX_DISEASES {
                 let mut rng = state.rng_emergence.clone();
                 disease::spawn_disease(&mut state, &mut rng);
@@ -2944,7 +2944,7 @@ mod tests {
 
         for seed in 0..trials {
             // Early game (day 0)
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             state.tick = 0;
             let mut rng = state.rng_emergence.clone();
             // Remove existing disease so spawn works clean
@@ -2958,7 +2958,7 @@ mod tests {
             state.rng_emergence = rng;
 
             // Late game (day 60)
-            let mut state2 = GameState::new_default(seed + 1000);
+            let mut state2 = AppState::new_default(seed + 1000);
             state2.tick = (60.0 * TICKS_PER_DAY) as u64;
             state2.diseases.clear();
             let mut rng2 = state2.rng_emergence.clone();
@@ -2995,7 +2995,7 @@ mod tests {
 
         for seed in 0..trials {
             // Early game
-            let mut state = GameState::new_default(seed as u64 + 7000);
+            let mut state = AppState::new_default(seed as u64 + 7000);
             state.tick = 0;
             state.diseases.clear();
             for r in &mut state.regions { r.infections.clear(); }
@@ -3006,7 +3006,7 @@ mod tests {
             }
 
             // Late game
-            let mut state2 = GameState::new_default(seed as u64 + 8000);
+            let mut state2 = AppState::new_default(seed as u64 + 8000);
             state2.tick = (70.0 * TICKS_PER_DAY) as u64; // day 70: full optimization
             state2.diseases.clear();
             for r in &mut state2.regions { r.infections.clear(); }
@@ -3034,7 +3034,7 @@ mod tests {
         let mut undefended_hits = 0usize;
 
         for seed in 0..trials {
-            let mut state = GameState::new_default(seed as u64 + 5000);
+            let mut state = AppState::new_default(seed as u64 + 5000);
             state.tick = (16.0 * TICKS_PER_DAY) as u64; // day 16: vulnerability targeting active
             // Defend region 0 heavily
             state.policies[0].screening = ScreeningLevel::MassRapid;
@@ -3078,7 +3078,7 @@ mod tests {
         let mut invested_hits = 0usize;
 
         for seed in 0..trials {
-            let mut state = GameState::new_default(seed as u64 + 7000);
+            let mut state = AppState::new_default(seed as u64 + 7000);
             state.tick = (50.0 * TICKS_PER_DAY) as u64; // day 50: strategic targeting dominant
             // Invest heavily in region 0 (policies + infrastructure)
             state.policies[0].screening = ScreeningLevel::MassRapid;
@@ -3112,7 +3112,7 @@ mod tests {
     fn transmission_vector_affects_quarantine() {
         use crate::state::TransmissionVector;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
         // Set first disease to Contact transmission (quarantine factor = 0.30)
@@ -3150,7 +3150,7 @@ mod tests {
 
     #[test]
     fn discourage_hosp_reduces_within_region_spread() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
         state.diseases[0].within_region_spread = 0.02;
@@ -3185,7 +3185,7 @@ mod tests {
 
         // Run many trials to get statistical significance
         for seed in 0..200 {
-            let mut state = GameState::new_default(42);
+            let mut state = AppState::new_default(42);
             // Single disease, single region, force specific vector
             state.diseases.truncate(1);
             state.diseases[0].knowledge = 1.0;
@@ -3238,7 +3238,7 @@ mod tests {
         let mut no_policy_spreads = 0u32;
 
         for seed in 0..200 {
-            let mut state = GameState::new_default(42);
+            let mut state = AppState::new_default(42);
             state.diseases.truncate(1);
             state.diseases[0].transmission = TransmissionVector::Airborne;
             state.diseases[0].cross_region_spread = 0.01;
@@ -3275,7 +3275,7 @@ mod tests {
     #[test]
     fn water_sanitation_reduces_waterborne_within_region_spread() {
         use crate::state::TransmissionVector;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
 
         state.diseases[0].transmission = TransmissionVector::Waterborne;
@@ -3313,7 +3313,7 @@ mod tests {
 
     #[test]
     fn crisis_generates_after_min_tick() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Run past CRISIS_MIN_TICK — a crisis should eventually appear.
         // With CRISIS_INTERVAL=840, we need ~5000 ticks for P(no crisis) < 1%.
         let mut found_crisis = false;
@@ -3332,7 +3332,7 @@ mod tests {
     fn crisis_blocks_normal_actions() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PerformanceReview,
             title: "Test Crisis".into(),
@@ -3358,7 +3358,7 @@ mod tests {
     fn crisis_resolution_applies_effects() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let initial_personnel = state.resources.personnel;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
@@ -3397,7 +3397,7 @@ mod tests {
     fn crisis_unaffordable_option_blocked() {
         use crate::state::{CrisisCost, CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 0.0; // broke
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PerformanceReview,
@@ -3426,7 +3426,7 @@ mod tests {
     fn crisis_preserves_running_pacing_on_dismiss() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Game is running when crisis fires — pacing stays Running
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PerformanceReview,
@@ -3448,7 +3448,7 @@ mod tests {
     fn crisis_preserves_paused_pacing_on_dismiss() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Game was paused when crisis fired — pacing stays Paused
         state.sim_state = SimState::Paused;
         state.active_crisis = Some(CrisisEvent {
@@ -3474,7 +3474,7 @@ mod tests {
             FundingContract,
         };
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Crisis active — blocking derived from active_crisis
         // Add a contract with low satisfaction
         state.contracts.push(FundingContract {
@@ -3527,7 +3527,7 @@ mod tests {
     fn contract_demand_refuse_drops_satisfaction() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, FundingCondition, FundingContract};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Crisis active — blocking derived from active_crisis
         state.contracts.push(FundingContract {
             name: "Media Transparency Pledge".to_string(),
@@ -3576,7 +3576,7 @@ mod tests {
     fn spacebar_blocked_during_event_state() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Crisis active — blocking derived from active_crisis
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PerformanceReview,
@@ -3598,7 +3598,7 @@ mod tests {
     fn game_over_clears_active_crisis() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Set up a highly lethal disease to trigger game over (collapse all regions).
         // High cross_region_spread needed to reach refugia through sparser graph.
         for disease in &mut state.diseases {
@@ -3643,7 +3643,7 @@ mod tests {
 
     #[test]
     fn crisis_auto_resolves_with_saved_preference() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Set auto-resolve preference for personnel crises: always pick option A
         state.auto_resolve_crises.insert("personnel".to_string(), 0);
 
@@ -3684,7 +3684,7 @@ mod tests {
     // --- Crisis resolution effect tests ---
 
     /// Helper: create a crisis event and inject it into state with choice pre-selected.
-    fn setup_crisis(state: &mut GameState, kind: CrisisKind, choice: usize) {
+    fn setup_crisis(state: &mut AppState, kind: CrisisKind, choice: usize) {
         use crate::state::{CrisisEvent, CrisisOption};
         state.ui.crisis_selection = choice;
         state.active_crisis = Some(CrisisEvent {
@@ -3703,7 +3703,7 @@ mod tests {
     #[test]
     fn crisis_cost_deducts_funding() {
         use crate::state::{CrisisCost, CrisisEvent, CrisisOption};
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let funding_before = state.resources.funding;
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
@@ -3728,7 +3728,7 @@ mod tests {
     #[test]
     fn crisis_cost_deducts_personnel_permanently() {
         use crate::state::{CrisisCost, CrisisEvent, CrisisOption};
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let personnel_before = state.resources.personnel;
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
@@ -3752,7 +3752,7 @@ mod tests {
     #[test]
     fn crisis_cost_creates_operation_for_temporary_personnel() {
         use crate::state::{CrisisCost, CrisisEvent, CrisisOption, OperationSpec};
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let personnel_before = state.resources.personnel;
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
@@ -3783,7 +3783,7 @@ mod tests {
 
     #[test]
     fn crisis_cost_none_deducts_nothing() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
         setup_crisis(&mut state, CrisisKind::PerformanceReview, 0);
@@ -3797,7 +3797,7 @@ mod tests {
 
     #[test]
     fn personnel_crisis_option_a_loses_personnel() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let before = state.resources.personnel;
         setup_crisis(&mut state, CrisisKind::PersonnelCrisis { amount: 3 }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -3808,7 +3808,7 @@ mod tests {
 
     #[test]
     fn refugee_wave_option_a_transfers_population_and_infections() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Set up: region 0 collapsed with infections, region 1 as destination
         state.regions[0].collapsed = true;
         state.regions[0].dead = 200_000_000.0; // 200M dead of 500M
@@ -3835,7 +3835,7 @@ mod tests {
 
     #[test]
     fn refugee_wave_option_b_kills_refugees() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.regions[0].collapsed = true;
         let dead_before = state.regions[0].dead;
@@ -3850,7 +3850,7 @@ mod tests {
 
     #[test]
     fn collapse_triggers_refugee_crisis() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Push region 0 right to the edge of collapse
         let threshold = state.regions[0].collapse_threshold;
         let pop = state.regions[0].population as f64;
@@ -3872,7 +3872,7 @@ mod tests {
 
     #[test]
     fn refugee_wave_dropped_if_destination_collapsed() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 100;
         state.last_contract_offer_tick = state.tick;
         // Region 0 collapsed, region 1 is the queued destination but also collapsed.
@@ -3895,7 +3895,7 @@ mod tests {
 
     #[test]
     fn refugee_wave_dropped_if_all_neighbors_collapsed() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 100;
         state.last_contract_offer_tick = state.tick;
         // Region 0 connects to [1, 2]. Collapse all of them.
@@ -3917,7 +3917,7 @@ mod tests {
 
     #[test]
     fn ark_protocol_reroutes_if_target_collapsed() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 100;
         state.last_contract_offer_tick = state.tick;
         // Collapse the originally-chosen Ark target (region 0) plus one more
@@ -3942,7 +3942,7 @@ mod tests {
 
     #[test]
     fn ark_protocol_dropped_if_all_regions_collapsed() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 100;
         state.last_contract_offer_tick = state.tick;
         // Collapse all regions.
@@ -3962,7 +3962,7 @@ mod tests {
 
     #[test]
     fn collapse_queues_refugee_crisis_when_crisis_active() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Push region 0 right to the edge of collapse
         let threshold = state.regions[0].collapse_threshold;
         let pop = state.regions[0].population as f64;
@@ -3982,7 +3982,7 @@ mod tests {
 
     #[test]
     fn refugee_wave_auto_resolves_with_saved_preference() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Player has previously chosen to always close borders (option 1)
         state.auto_resolve_crises.insert("refugee".to_string(), 1);
         state.resources.authority = Authority::Maximum;
@@ -4008,7 +4008,7 @@ mod tests {
 
     #[test]
     fn crisis_option_a_resolves() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::PerformanceReview, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -4018,7 +4018,7 @@ mod tests {
     #[test]
     fn crisis_option_b_costs_funding() {
         use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 1000.0;
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
@@ -4038,7 +4038,7 @@ mod tests {
 
     #[test]
     fn trial_shortcut_option_a_resolves() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -4047,7 +4047,7 @@ mod tests {
 
     #[test]
     fn trial_shortcut_option_b_resolves() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
         let after = apply_action(&state, &Action::Confirm);
@@ -4057,7 +4057,7 @@ mod tests {
 
     #[test]
     fn corporate_seizure_option_a_loses_personnel() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let before_personnel = state.resources.personnel;
         setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 4, board_member_idx: 0, corp_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -4067,7 +4067,7 @@ mod tests {
 
     #[test]
     fn cult_blockade_option_a_resolves() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::CultBlockade { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -4078,7 +4078,7 @@ mod tests {
     fn crisis_temporary_operation_ties_up_personnel_and_returns_them() {
         use crate::state::{CrisisCost, CrisisEvent, CrisisKind, CrisisOption, OperationSpec, TICKS_PER_DAY};
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let before_personnel = state.resources.personnel;
 
         // Set up a crisis with a 2-day temporary operation cost
@@ -4136,7 +4136,7 @@ mod tests {
 
 #[test]
     fn vaccine_dispute_option_a_loses_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 1000.0;
         setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0, corp_a: "Seraph Genomics".to_string(), corp_b: "Caliber Bioscience".to_string() }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -4146,7 +4146,7 @@ mod tests {
 
     #[test]
     fn vaccine_dispute_option_b_gains_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 1000.0;
         state.resources.authority = Authority::Maximum;
         setup_crisis(&mut state, CrisisKind::VaccineDispute { neutral_loss: 200.0, credit_gain: 300.0, corp_a: "Seraph Genomics".to_string(), corp_b: "Caliber Bioscience".to_string() }, 1);
@@ -4157,7 +4157,7 @@ mod tests {
 
     #[test]
     fn trial_shortcut_fast_track_marks_tested_and_targeted() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 1);
@@ -4172,7 +4172,7 @@ mod tests {
 
     #[test]
     fn trial_shortcut_maintain_standards_no_medicine_change() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
         setup_crisis(&mut state, CrisisKind::TrialShortcut { disease_idx: 0, medicine_idx: 0 }, 0);
@@ -4187,7 +4187,7 @@ mod tests {
     fn trial_shortcut_generates_when_untested_exists() {
         use rand::SeedableRng;
         use rand_chacha::ChaCha8Rng;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         state.medicines[0].tested_against.clear();
         state.tick = 5000; // past CRISIS_MIN_TICK
@@ -4207,7 +4207,7 @@ mod tests {
 
     #[test]
     fn horizontal_gene_transfer_between_bacteria() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Disable auto-deploy: it builds broad-spectrum resistance on disease 0
         // which would inflate disease 0's resistance far above the manually set 0.5,
         // causing disease 1 to receive more HGT than the test expects.
@@ -4251,7 +4251,7 @@ mod tests {
 
     #[test]
     fn horizontal_gene_transfer_only_affects_bacteria() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Disease 0 is Bacterium with resistance, disease 1 is RnaVirus
         state.diseases[0].pathogen_type = PathogenType::Bacterium;
         state.diseases[0].add_resistance(None, 0.5);
@@ -4286,7 +4286,7 @@ mod tests {
 
     #[test]
     fn collapse_loses_personnel() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         corporations::generate_corporations(&mut state);
         board::generate_board_members(&mut state);
         detect_all_diseases(&mut state);
@@ -4312,7 +4312,7 @@ mod tests {
     #[test]
     fn deploy_cooldown_blocks_repeat_deployment() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Setup: unlock a medicine, seed infection, give funds
         let disease_idx = 0;
         let med_idx = 0;
@@ -4358,7 +4358,7 @@ mod tests {
 
     #[test]
     fn threat_escalation_fires_at_death_thresholds() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = true;
         // Set deaths above 1M threshold on the existing infection entry
         // (new_default already seeds disease 0 in some region)
@@ -4394,7 +4394,7 @@ mod tests {
 
     #[test]
     fn threat_escalation_skips_undetected_diseases() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.diseases[0].detected = false; // Not yet detected
         // Set deaths high but infected below detection threshold (10K)
         // so the disease stays undetected during the tick
@@ -4417,7 +4417,7 @@ mod tests {
 
     #[test]
     fn decree_enact_via_orders_panel_ui_flow() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.resources.funding = 10_000.0;
         // Unlock all decrees: collapse regions 3-5 + set 600K infected on region 0
@@ -4444,7 +4444,7 @@ mod tests {
 
     #[test]
     fn decree_sacrifice_region_ui_flow() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.resources.funding = 10_000.0;
         // Unlock all decrees: collapse regions 3-5 + set 600K infected on region 0
@@ -4482,7 +4482,7 @@ mod tests {
 
     #[test]
     fn corporate_cooperate_schedules_overreach_followup() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 1000;
         setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 3, board_member_idx: 0, corp_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
@@ -4492,7 +4492,7 @@ mod tests {
 
     #[test]
     fn pending_crisis_fires_when_due() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = 100; // Pending check runs before tick increment
         state.last_contract_offer_tick = state.tick; // prevent contract offer from adding a pending crisis
         state.pending_crises.push(CrisisKind::CorporateOverreach { corp_idx: 0, board_member_idx: 0 });
@@ -4505,7 +4505,7 @@ mod tests {
 
     #[test]
     fn collapse_rate_estimate_updates_after_one_day() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let region_idx = primary_outbreak_region(&state);
         // Run for 2+ days to ensure the rate sampler fires at least once
         let ticks = (2.5 * TICKS_PER_DAY) as usize;
@@ -4532,7 +4532,7 @@ mod tests {
 
     #[test]
     fn collapse_rate_not_shown_for_safe_regions() {
-        let state = GameState::new_default(42);
+        let state = AppState::new_default(42);
         // At tick 0, no deaths have occurred — rate should be 0
         for region in &state.regions {
             assert_eq!(region.cached_deaths_per_day, 0.0);
@@ -4542,7 +4542,7 @@ mod tests {
 
     #[test]
     fn auto_deploy_treats_worst_region() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 5000.0;
 
         // Give medicine 0 unlocked status, doses, and tested against disease 0
@@ -4582,7 +4582,7 @@ mod tests {
 
     #[test]
     fn auto_deploy_skips_untested_medicine() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 5000.0;
 
         state.medicines[0].unlocked = true;
@@ -4605,7 +4605,7 @@ mod tests {
 
     #[test]
     fn auto_deploy_respects_cooldown() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 5000.0;
 
         state.medicines[0].unlocked = true;
@@ -4634,7 +4634,7 @@ mod tests {
     fn degraded_infrastructure_reduces_delivery_effectiveness() {
         let mut events: Vec<GameEvent> = Vec::new();
         // When infrastructure is degraded, fewer doses take effect on delivery.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         // Advance to get some infected
         for _ in 0..20 {
@@ -4676,7 +4676,7 @@ mod tests {
     #[test]
     fn delivery_efficiency_shown_in_shipped_event() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         for _ in 0..20 {
             state = state.with_world(tick(&state).0);
@@ -4712,7 +4712,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::ScreeningLevel;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         for _ in 0..20 {
             state = state.with_world(tick(&state).0);
@@ -4771,7 +4771,7 @@ mod tests {
 
     #[test]
     fn ark_protocol_schedules_when_two_regions_collapse() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Collapse regions 0 and 1
         for idx in [0, 1] {
             let pop = state.regions[idx].population as f64;
@@ -4811,7 +4811,7 @@ mod tests {
 
     #[test]
     fn ark_protocol_accept_sets_state_and_clears_policies() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Enable some policies in region 1 and 2
         state.policies[1].quarantine = true;
         state.policies[2].travel_ban = true;
@@ -4839,7 +4839,7 @@ mod tests {
 
     #[test]
     fn ark_protocol_collapses_non_ark_regions() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         detect_all_diseases(&mut state);
         // Collapse two regions to trigger Ark Protocol conditions
@@ -4869,7 +4869,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::RegionDiseaseState;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
         state.resources.authority = Authority::Maximum;
 
@@ -4892,7 +4892,7 @@ mod tests {
     fn decree_unlock_emits_event() {
         use crate::state::RegionDiseaseState;
 
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Clear ALL infections and deaths so all decrees start locked
         for region in &mut state.regions {
             region.infections.clear();
@@ -4926,7 +4926,7 @@ mod tests {
 
     #[test]
     fn bargain_buffoon_gains_cooperation() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Buffoon;
         state.regions[0].governor.cooperation = 20.0;
         state.resources.authority = Authority::Maximum;
@@ -4940,7 +4940,7 @@ mod tests {
 
     #[test]
     fn bargain_blowhard_costs_funding_gains_big_cooperation() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Blowhard;
         state.regions[0].governor.cooperation = 20.0;
         let initial_funding = state.resources.funding;
@@ -4955,7 +4955,7 @@ mod tests {
 
     #[test]
     fn bargain_blowhard_fails_without_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Blowhard;
         state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 50.0; // less than BARGAIN_BLOWHARD_FUNDING_COST (100)
@@ -4966,7 +4966,7 @@ mod tests {
 
     #[test]
     fn bargain_recluse_costs_personnel() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Recluse;
         state.regions[0].governor.cooperation = 20.0;
         let initial_personnel = state.resources.personnel;
@@ -4981,7 +4981,7 @@ mod tests {
 
     #[test]
     fn bargain_recluse_fails_without_personnel() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Recluse;
         state.regions[0].governor.cooperation = 20.0;
         state.resources.personnel = 1; // less than BARGAIN_RECLUSE_PERSONNEL_COST (2)
@@ -4992,7 +4992,7 @@ mod tests {
 
     #[test]
     fn bargain_hardliner_costs_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
         state.regions[0].governor.cooperation = 20.0;
         let initial_funding = state.resources.funding;
@@ -5005,7 +5005,7 @@ mod tests {
 
     #[test]
     fn bargain_hardliner_fails_without_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
         state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 100.0; // less than BARGAIN_HARDLINER_FUNDING_COST (400)
@@ -5016,7 +5016,7 @@ mod tests {
 
     #[test]
     fn bargain_operative_adds_income_skim() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Operative;
         state.regions[0].governor.cooperation = 20.0;
         assert_eq!(state.regions[0].governor.income_skim, 0.0);
@@ -5042,7 +5042,7 @@ mod tests {
 
     #[test]
     fn bargain_mobster_escalates_cost() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Mobster;
         state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 10000.0;
@@ -5063,7 +5063,7 @@ mod tests {
 
     #[test]
     fn bargain_mobster_fails_without_funding() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.personality = GovernorPersonality::Mobster;
         state.regions[0].governor.cooperation = 20.0;
         state.resources.funding = 100.0; // less than BARGAIN_MOBSTER_BASE_COST (200)
@@ -5074,7 +5074,7 @@ mod tests {
 
     #[test]
     fn bargain_fails_when_not_hostile() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.regions[0].governor.cooperation = 60.0; // above hostility threshold
         let (_, ok) = policy::bargain_with_governor(&mut state, 0);
         assert!(!ok, "bargain should fail when governor isn't hostile");
@@ -5083,7 +5083,7 @@ mod tests {
     #[test]
     fn tech_pressure_increases_emergence_rate() {
         use crate::state::{BasicTech, EMERGENCE_CHANCE_PER_TICK};
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // No techs → zero pressure
         assert_eq!(state.tech_pressure(), 0.0);
@@ -5110,7 +5110,7 @@ mod tests {
         let mut non_virus_count = 0u32;
 
         for seed in 0..50 {
-            let mut state = GameState::new_default(42);
+            let mut state = AppState::new_default(42);
             state.tick = (60.0 * crate::state::TICKS_PER_DAY) as u64; // day 60 (full counter-weight)
             // Give the player deployed antivirals
             for med in &mut state.medicines {
@@ -5148,7 +5148,7 @@ mod tests {
         let mut region_hits = [0u32; 6];
 
         for seed in 0..100 {
-            let mut state = GameState::new_default(42);
+            let mut state = AppState::new_default(42);
             state.tick = (60.0 * crate::state::TICKS_PER_DAY) as u64;
             // Add some infrastructure to Asia (highest pop region)
             state.regions[2].hospital_level = 2; // Medical Center
@@ -5179,7 +5179,7 @@ mod tests {
         // At day 60 (fully ramped), with a disease that spawned 50 ticks ago,
         // emergence chance should be much higher than normal.
         // Wave clustering ramps from 2.0 at day 24 to 4.0 at day 50+.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (60.0 * TICKS_PER_DAY) as u64;
         state.diseases[0].spawned_at_tick = state.tick - 50;
 
@@ -5207,7 +5207,7 @@ mod tests {
 
         // At day 30, wave boost should be active but weaker than late-game.
         // Ramp: (30-24)/26 ≈ 0.23, so boost = 2.0 + 0.23*2.0 ≈ 2.46
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.tick = (30.0 * TICKS_PER_DAY) as u64;
         state.diseases[0].spawned_at_tick = state.tick - 50;
 
@@ -5234,7 +5234,7 @@ mod tests {
         // one produces two diseases sharing a sequence_group (wave correlation).
         let mut found_shared_group = false;
         for seed in 0..50u64 {
-            let mut state = GameState::new_default(seed);
+            let mut state = AppState::new_default(seed);
             // Advance to day 50 (well into wave clustering territory)
             for _ in 0..(50 * TICKS_PER_DAY as u64) {
                 state = state.with_world(tick(&state).0);
@@ -5264,7 +5264,7 @@ mod tests {
 
         // Early game (before day 24) diseases should not have a sequence_group,
         // since wave clustering is inactive before day 24.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Advance to day 20 (before wave clustering kicks in at day 24)
         for _ in 0..(20 * TICKS_PER_DAY as u64) {
             state = state.with_world(tick(&state).0);
@@ -5281,7 +5281,7 @@ mod tests {
 
     #[test]
     fn collapsed_regions_suffer_secondary_deaths() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Manually collapse region 0 with some deaths
         let pop = state.regions[0].population as f64;
         state.regions[0].dead = pop * 0.50; // 50% dead (past the 45% threshold)
@@ -5309,7 +5309,7 @@ mod tests {
 
     #[test]
     fn collapse_deaths_stop_at_subsistence_floor() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         let pop = state.regions[0].population as f64;
         let floor = pop * COLLAPSE_SUBSISTENCE_FLOOR;
 
@@ -5339,7 +5339,7 @@ mod tests {
     #[test]
     fn embezzlement_warning_fires_when_non_board_positions_exceed_threshold() {
         use crate::state::EMBEZZLEMENT_BUFFER;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         corporations::generate_corporations(&mut state);
         board::generate_board_members(&mut state);
         state.tick = 1000;
@@ -5375,7 +5375,7 @@ mod tests {
     #[test]
     fn embezzlement_warning_only_fires_once() {
         use crate::state::EMBEZZLEMENT_BUFFER;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         corporations::generate_corporations(&mut state);
         board::generate_board_members(&mut state);
         state.tick = 1000;
@@ -5402,7 +5402,7 @@ mod tests {
     #[test]
     fn embezzlement_penalty_reduces_funding_after_warning() {
         use crate::state::EMBEZZLEMENT_BUFFER;
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         initialize_game(&mut state);
         for r in &mut state.regions { r.infections.clear(); }
 
@@ -5426,7 +5426,7 @@ mod tests {
 
     #[test]
     fn emergency_sample_delivery_boosts_cooperation() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.medicines[0].unlocked = true;
         state.medicines[0].doses = 500.0;
         state.medicines[0].max_doses = 500.0;
@@ -5459,7 +5459,7 @@ mod tests {
 
     #[test]
     fn emergency_delivery_fails_without_doses() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.medicines[0].unlocked = true;
         state.medicines[0].doses = 0.0;
         state.resources.funding = 10_000.0;
@@ -5474,7 +5474,7 @@ mod tests {
 
     #[test]
     fn emergency_delivery_fails_for_locked_medicine() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         state.medicines[0].unlocked = false;
         state.medicines[0].doses = 500.0;
         state.resources.funding = 10_000.0;
@@ -5489,7 +5489,7 @@ mod tests {
 
     #[test]
     fn board_research_inquiry_fires_when_no_identification_started() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
         // Set tick to day 5, ensure no other crisis is active
         state.tick = (5.0 * TICKS_PER_DAY) as u64;
@@ -5524,7 +5524,7 @@ mod tests {
 
     #[test]
     fn board_research_inquiry_does_not_fire_when_identification_started() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         crate::engine::initialize_game(&mut state);
         state.tick = (5.0 * TICKS_PER_DAY) as u64;
         state.active_crisis = None;
@@ -5547,7 +5547,7 @@ mod tests {
 
     #[test]
     fn gdp_target_includes_trade_coupling() {
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
         // Clear crises so they don't interfere
         state.active_crisis = None;
 
@@ -5590,7 +5590,7 @@ mod tests {
         // Set up a state with an undetected disease and an Advanced Intel station.
         // When the disease reaches the intel detection threshold (1,000 infections),
         // it should be detected AND receive a knowledge boost to KNOWLEDGE_NAME.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         // Make the first disease undetected with 0 knowledge
         state.diseases[0].detected = false;
@@ -5636,7 +5636,7 @@ mod tests {
     fn normal_detection_does_not_grant_knowledge_boost() {
         // When a disease is detected via global threshold (not intel),
         // knowledge should remain at 0.
-        let mut state = GameState::new_default(42);
+        let mut state = AppState::new_default(42);
 
         state.diseases[0].detected = false;
         state.diseases[0].knowledge = 0.0;
