@@ -84,7 +84,7 @@ If the description says "civilians are abandoning health protocols," then health
 
 Events where the description describes consequences that the mechanics don't deliver include (from this codebase's history):
 - Communications Failure: "Reporting systems returning inconsistent data, noncompliance rising." Mechanics: approval changes. No reporting or compliance effects.
-- GovernorRecluse: "Policy enforcement has stalled." Mechanics: cooperation drops 5. No policy enforcement effects.
+
 
 **Rule: If you can't or won't implement the mechanical effect, don't describe it.** Write a description that matches what actually happens.
 

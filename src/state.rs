@@ -4448,8 +4448,6 @@ pub enum CrisisKind {
 
     /// Hardliner governor declares your directive illegitimate.
     GovernorHardliner { region_idx: usize },
-    /// Recluse governor stops responding — region drifts.
-    GovernorRecluse { region_idx: usize },
     /// Operative governor starts skimming openly.
     GovernorOperative { region_idx: usize },
     /// Mobster governor escalates demands.
@@ -4570,7 +4568,6 @@ impl CrisisKind {
             CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::ContractDemand { .. } => "contract_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
-            CrisisKind::GovernorRecluse { .. } => "gov_recluse",
             CrisisKind::GovernorOperative { .. } => "gov_operative",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
             CrisisKind::GovernorSick { .. } => "gov_sick",
