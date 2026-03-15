@@ -4450,8 +4450,6 @@ pub enum CrisisKind {
 
     /// Hardliner governor declares your directive illegitimate.
     GovernorHardliner { region_idx: usize },
-    /// Blowhard governor makes noise — mostly hollow threats.
-    GovernorBlowhard { region_idx: usize },
     /// Recluse governor stops responding — region drifts.
     GovernorRecluse { region_idx: usize },
     /// Operative governor starts skimming openly.
@@ -4577,7 +4575,6 @@ impl CrisisKind {
             CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::ContractDemand { .. } => "contract_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
-            CrisisKind::GovernorBlowhard { .. } => "gov_blowhard",
             CrisisKind::GovernorRecluse { .. } => "gov_recluse",
             CrisisKind::GovernorOperative { .. } => "gov_operative",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
