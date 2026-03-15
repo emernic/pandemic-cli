@@ -415,7 +415,8 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
 /// Deploy medicines to the worst-affected regions. Called once per tick.
 /// For each medicine with deployment enabled:
 /// - Must be unlocked, tested, and have doses
-/// - Always deploys as therapeutic (targets most infected region)
+/// - Deploys as therapeutic by default; with VaccinePlatform, uses vaccine
+///   mode when susceptible > 2x infected (protecting the healthy majority)
 /// - Respects per-medicine region filter (empty = all regions)
 /// - Cooldown must be clear for the chosen region
 pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent>) {
@@ -489,9 +490,30 @@ pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent
                 continue;
             }
 
+            // Choose mode: vaccinate lightly-infected regions when VaccinePlatform
+            // is unlocked and the region has more susceptible than infected.
+            // Vaccination protects the healthy; treatment heals the sick.
+            let mode = if state.can_vaccinate() {
+                let region = &state.regions[region_idx];
+                let pop = region.population as f64;
+                let existing = region.infections.iter()
+                    .find(|i| i.disease_idx == best_disease_idx);
+                let infected = existing.map(|i| i.infected).unwrap_or(0.0);
+                let exposed = existing.map(|i| i.exposed).unwrap_or(0.0);
+                let immune = existing.map(|i| i.immune).unwrap_or(0.0);
+                let susceptible = (pop - exposed - infected - region.dead - immune).max(0.0);
+                if susceptible > infected * 2.0 {
+                    MedicineMode::Vaccine
+                } else {
+                    MedicineMode::Therapeutic
+                }
+            } else {
+                MedicineMode::Therapeutic
+            };
+
             let target = DeployTarget {
                 disease_idx: best_disease_idx,
-                mode: MedicineMode::Therapeutic,
+                mode,
             };
 
             // deploy_medicine() fires MedicineShipped on success
