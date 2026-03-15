@@ -239,16 +239,16 @@ The `--do` flag chains steps in a single invocation. Use `d<N>` for days, anythi
 
 ```bash
 # Keys before a time advance — fine:
-cargo run -- --snapshot --do r --do enter --do d1 # open research, start something, then advance 1 day
+cargo run -- --snapshot --do l --do enter --do d1 # open lab, start something, then advance 1 day
 
 # Time advance alone — fine:
 cargo run -- --snapshot --do d2 # advance 2 days; read the output
 
 # Keys with no time advance — fine:
-cargo run -- --snapshot --do r --do enter --do enter # open research and navigate
+cargo run -- --snapshot --do l --do enter --do enter # open lab and navigate
 
 # Keys AFTER a time advance — ERROR:
-# cargo run -- --snapshot --do d1 --do r # rejected: can't issue keys without reading output first
+# cargo run -- --snapshot --do d1 --do l # rejected: can't issue keys without reading output first
 ```
 
 ### Snapshot mode event handling
@@ -277,11 +277,11 @@ To continue the same playthrough across multiple invocations, either reuse the a
 ```bash
 # Explicit save path:
 cargo run -- saves/manual-playtest.json --snapshot --days 1
-cargo run -- saves/manual-playtest.json --snapshot --key r --key enter
+cargo run -- saves/manual-playtest.json --snapshot --key l --key enter
 
 # Or use the auto-created file printed by the first run:
 cargo run -- --snapshot --days 1
-cargo run -- saves/playtest-12345-67890.json --snapshot --key r --key enter
+cargo run -- saves/playtest-12345-67890.json --snapshot --key l --key enter
 ```
 
 Do this quickly to get a peak at how the relevant features appear in game **every time** you start working on something. It takes seconds and prevents you from coding blind. You cannot write good UI or game logic if you haven't looked at the game. Keep in mind, you are **NOT** going to be able to make nuanced balanced judgement calls based on your first 5 seconds of gameplay (you should rely on reading issues and consistent playtest feedback for that), but it's extremely helpful to ground yourself in a small slice of the interface. DO NOT start making confident judgement calls like "the threat interface is underdeveloped and strategically flat currently, it just shows question marks" based on opening the game for the first time ever and taking one look at one screen.
