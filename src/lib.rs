@@ -296,13 +296,36 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
 /// Engine unit tests may call `engine::tick()` directly to test game logic
 /// in isolation without UI state updates.
 pub fn tick_and_process(state: &GameState) -> GameState {
-    // Capture the currently-selected research item before the tick so we can
-    // stabilize panel_selection afterward. When new research options appear
-    // (new disease identified, project completes, etc.) the flat list shifts
-    // and the index-based selection would jump to a different item.
-    let selected_research_item = if matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+    // Capture the identity of the currently-selected panel item before the tick
+    // so we can stabilize panel_selection afterward.  Index-based selections
+    // jump when the underlying list grows, shrinks, or is re-sorted.
+
+    // Research panel: capture the ResearchFlatItem identity.
+    // Must also check open_panel — sub-state isn't cleared when switching panels.
+    let selected_research_item = if state.ui.open_panel == Panel::Research
+        && matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll))
+    {
         let items = state.research_flat_items();
         items.get(state.ui.panel_selection).cloned()
+    } else {
+        None
+    };
+
+    // Threats panel: capture the disease_idx at the current display position.
+    let selected_disease_idx = if state.ui.open_panel == Panel::Threats {
+        let order = state.threats_display_order();
+        order.get(state.ui.panel_selection).copied()
+    } else {
+        None
+    };
+
+    // Medicines panel (BrowseMedicines): capture the medicine_idx.
+    // Must also check open_panel — sub-state isn't cleared when switching panels.
+    let selected_medicine_idx = if state.ui.open_panel == Panel::Medicines
+        && matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines))
+    {
+        let indices = state.unlocked_medicine_indices();
+        indices.get(state.ui.panel_selection).copied()
     } else {
         None
     };
@@ -312,7 +335,9 @@ pub fn tick_and_process(state: &GameState) -> GameState {
 
     // Stabilize research panel selection: find the same item in the new list.
     if let Some(ref old_item) = selected_research_item {
-        if matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+        if new.ui.open_panel == Panel::Research
+            && matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll))
+        {
             let new_items = new.research_flat_items();
             let old_kind = old_item.to_kind(state);
             let found = match old_item {
@@ -328,8 +353,39 @@ pub fn tick_and_process(state: &GameState) -> GameState {
             if let Some(pos) = found {
                 new.ui.panel_selection = pos;
             } else {
-                // Item no longer exists (e.g., project completed); clamp to valid range.
                 let max = new_items.len().saturating_sub(1);
+                if new.ui.panel_selection > max {
+                    new.ui.panel_selection = max;
+                }
+            }
+        }
+    }
+
+    // Stabilize threats panel selection: find the same disease in the new display order.
+    if let Some(old_disease_idx) = selected_disease_idx {
+        if new.ui.open_panel == Panel::Threats {
+            let new_order = new.threats_display_order();
+            if let Some(pos) = new_order.iter().position(|&idx| idx == old_disease_idx) {
+                new.ui.panel_selection = pos;
+            } else {
+                let max = new_order.len().saturating_sub(1);
+                if new.ui.panel_selection > max {
+                    new.ui.panel_selection = max;
+                }
+            }
+        }
+    }
+
+    // Stabilize medicines panel selection: find the same medicine in the new unlocked list.
+    if let Some(old_med_idx) = selected_medicine_idx {
+        if new.ui.open_panel == Panel::Medicines
+            && matches!(new.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines))
+        {
+            let new_indices = new.unlocked_medicine_indices();
+            if let Some(pos) = new_indices.iter().position(|&idx| idx == old_med_idx) {
+                new.ui.panel_selection = pos;
+            } else {
+                let max = new_indices.len().saturating_sub(1);
                 if new.ui.panel_selection > max {
                     new.ui.panel_selection = max;
                 }
@@ -1057,5 +1113,73 @@ mod tests {
             assert!(matches!(new_items.get(new_state.ui.panel_selection), Some(ResearchFlatItem::UpgradeLab)),
                 "UpgradeLab selection should be preserved");
         }
+    }
+
+    #[test]
+    fn threats_selection_stable_when_display_order_changes() {
+        use crate::state::Panel;
+
+        let mut state = GameState::new_default(42);
+        state.ui.open_panel = Panel::Threats;
+        state.sim_state = SimState::Paused;
+
+        // Add a second disease so we have two to reorder between
+        let mut disease2 = state.diseases[0].clone();
+        disease2.name = "Test Disease Two".into();
+        disease2.detected = true;
+        state.diseases.push(disease2);
+        let new_idx = state.diseases.len() - 1;
+        // Give it massive deaths so it sorts first in the display order
+        state.regions[0].get_or_create_infection(new_idx).dead = 999_999_999.0;
+
+        // Now the display order is [new_idx, 0] (high deaths first)
+        let order = state.threats_display_order();
+        assert_eq!(order[0], new_idx, "high-death disease should sort first");
+        assert_eq!(order[1], 0, "original disease should be second");
+
+        // Select the second item (disease 0 — the original, lower-death disease)
+        state.ui.panel_selection = 1;
+        let selected_disease = order[1]; // disease index 0
+
+        // tick_and_process should stabilize: panel_selection should still
+        // point to disease 0 regardless of any order changes
+        let new_state = tick_and_process(&state);
+        let new_order = new_state.threats_display_order();
+        let new_selected_disease = new_order.get(new_state.ui.panel_selection).copied();
+        assert_eq!(new_selected_disease, Some(selected_disease),
+            "threats selection should track the same disease after tick");
+    }
+
+    #[test]
+    fn medicines_selection_stable_when_new_medicine_unlocked() {
+        use crate::state::{MedicineUiState, Panel};
+
+        let mut state = GameState::new_default(42);
+        state.ui.open_panel = Panel::Medicines;
+        state.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
+        state.sim_state = SimState::Paused;
+
+        // Unlock two medicines: index 0 and the last one
+        let last_med = state.medicines.len() - 1;
+        assert!(last_med > 0, "need at least 2 medicines");
+        state.medicines[0].unlocked = true;
+        state.medicines[last_med].unlocked = true;
+
+        // unlocked_medicine_indices() = [0, last_med]
+        let indices = state.unlocked_medicine_indices();
+        assert_eq!(indices.len(), 2);
+        assert_eq!(indices[0], 0);
+        assert_eq!(indices[1], last_med);
+
+        // Select the second item (last_med)
+        state.ui.panel_selection = 1;
+        let selected_med = last_med;
+
+        // tick_and_process should preserve: panel_selection still maps to last_med
+        let new_state = tick_and_process(&state);
+        let new_indices = new_state.unlocked_medicine_indices();
+        let new_selected_med = new_indices.get(new_state.ui.panel_selection).copied();
+        assert_eq!(new_selected_med, Some(selected_med),
+            "medicines selection should track the same medicine after tick");
     }
 }
