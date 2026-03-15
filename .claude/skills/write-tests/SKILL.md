@@ -25,19 +25,20 @@ For each test you're about to write, ask: "Could this plausibly fail?" If you al
 
 **No padding.** A file with 3 tests that each catch a different real bug beats 15 tests that all pass trivially. Don't test simple field access, trivial constructors, or anything where the compiler does the work.
 
-**Use real state, not abstractions.** `AppState::new_default(seed)` and the real `tick()`/`apply_action()` functions, not mock objects. The whole engine is pure and deterministic — there's no reason to mock anything.
+**Use real state, not abstractions.** `engine::new_game(seed)` and the real `tick()`/`apply_action()` functions, not mock objects. The whole engine is pure and deterministic — there's no reason to mock anything.
 
 ## Use existing patterns
 
 Before writing new test infrastructure, check what already exists:
 
-- **`AppState::new_default(seed)`** — deterministic initial state with seeded ChaCha8Rng. Use seed `42` by convention.
+- **`engine::new_game(seed)`** — fully bootstrapped game state matching production startup (corporations, board, budget). Use seed `42` by convention. From engine submodule tests: `crate::engine::new_game(42)`. From integration tests: `pandemic_cli_lib::engine::new_game(42)`.
+- **`AppState::new_default(seed)`** — raw pre-bootstrap state (no corporations, board, or budget). Only for tests that intentionally need uninitialized state.
 - **`tick(&state) -> AppState`** and **`apply_action(&state, &Action) -> AppState`** — the two pure functions that drive everything. Clone-and-mutate, so you can chain them.
 - **`render_to_string(&state) -> String`** and **`run_snapshot(state, steps) -> SnapshotResult`** — for rendering and integration smoke tests. Use structural assertions (`assert!(output.contains("..."))`), NOT exact-match snapshot libraries.
 - **Inline `#[cfg(test)] mod tests`** in each source file for unit tests.
 - **`tests/snapshots.rs`** for integration snapshot tests.
 
-**Only build custom state when you need a specific configuration no default provides** — a region with specific immunity levels, a disease with particular stats, resources set to a specific amount. If you just need "a game state," use `AppState::new_default(42)`.
+**Only build custom state when you need a specific configuration no default provides** — a region with specific immunity levels, a disease with particular stats, resources set to a specific amount. If you just need "a game state," use `engine::new_game(42)`. Do not manually call `generate_corporations()` + `generate_board_members()` — use `new_game()` instead.
 
 **Don't define helper functions at the top of your test module** unless they're genuinely reused across multiple tests in that module. More than 2-3 bespoke helpers means you're over-specifying.
 

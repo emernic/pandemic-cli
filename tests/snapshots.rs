@@ -1,10 +1,11 @@
+use pandemic_cli_lib::engine;
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::{GameOutcome, AppState, GovernorPersonality, MANAGE_BARGAIN_POS};
+use pandemic_cli_lib::state::{GameOutcome, GovernorPersonality, MANAGE_BARGAIN_POS};
 
 /// Smoke test: initial screen renders without panicking and contains key UI elements.
 #[test]
 fn initial_screen() {
-    let state = AppState::new_default(42);
+    let state = engine::new_game(42);
     let output = render_to_string(&state);
     assert!(output.contains("Day:"), "missing day counter");
     assert!(output.contains("RUNNING"), "missing status");
@@ -16,7 +17,7 @@ fn initial_screen() {
 /// Smoke test: simulation advances and renders correctly after some ticks.
 #[test]
 fn after_ticks() {
-    let state = AppState::new_default(42);
+    let state = engine::new_game(42);
     let result = run_snapshot(state, &["t10".to_string()]).unwrap();
     assert_eq!(result.state.tick, 10);
     assert!(result.screen.contains("Day:"), "missing day counter");
@@ -26,7 +27,7 @@ fn after_ticks() {
 /// Smoke test: game over screen renders with defeat panel.
 #[test]
 fn game_over_defeat() {
-    let mut state = AppState::new_default(42);
+    let mut state = engine::new_game(42);
     state.outcome = GameOutcome::Lost;
     // Game is blocked via outcome != Playing — no need to change sim_state
     let output = render_to_string(&state);
@@ -38,7 +39,7 @@ fn game_over_defeat() {
 /// Smoke test: dashboard Authority section renders correctly.
 #[test]
 fn dashboard_pol_breakdown() {
-    let mut state = AppState::new_default(42);
+    let mut state = engine::new_game(42);
     state.ui.home_splash_done = true;
     let output = render_to_string(&state);
     assert!(output.contains("AUTHORITY"), "missing Authority section header");
@@ -49,7 +50,7 @@ fn dashboard_pol_breakdown() {
 /// Smoke test: bargain option appears when governor is hostile.
 #[test]
 fn bargain_shown_for_hostile_governor() {
-    let mut state = AppState::new_default(42);
+    let mut state = engine::new_game(42);
     // Force Hardliner governor to be hostile
     state.regions[0].governor.personality = GovernorPersonality::Hardliner;
     state.regions[0].governor.cooperation = 20.0;

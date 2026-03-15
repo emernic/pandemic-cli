@@ -4756,6 +4756,14 @@ impl Default for UiState {
 }
 
 impl AppState {
+    /// Create a raw, pre-bootstrap `AppState` with no corporations, board
+    /// members, or board budget.
+    ///
+    /// **Most tests should use [`engine::new_game(seed)`] instead**, which runs
+    /// the full production bootstrap (`initialize_game`). Use this constructor
+    /// only when you intentionally need a raw world state — e.g., to test
+    /// startup initialization itself or to set up a specific pre-bootstrap
+    /// scenario.
     pub fn new_default(seed: u64) -> Self {
         Self {
             world: WorldState::new_default(seed),

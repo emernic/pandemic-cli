@@ -739,17 +739,10 @@ mod tests {
         assert!((state.contracts[0].satisfaction - 1.0).abs() < 0.001);
     }
 
-    /// Set up board members for tests that need them (tick_offer_contracts requires board members)
-    fn setup_board(state: &mut WorldState) {
-        crate::engine::corporations::generate_corporations(state);
-        crate::engine::board::generate_board_members(state);
-    }
-
     #[test]
     fn offer_generated_at_first_offer_tick() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         // Set deaths so MaxDeaths templates are contextually relevant
         state.regions[0].dead = 3_000_000.0;
@@ -797,8 +790,7 @@ mod tests {
     #[test]
     fn no_duplicate_offer_while_pending() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
         // Set deaths so MaxDeaths templates are contextually relevant
@@ -875,8 +867,7 @@ mod tests {
     #[test]
     fn offer_queues_crisis_interrupt() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
         // Set deaths so MaxDeaths templates are contextually relevant
@@ -951,8 +942,7 @@ mod tests {
 
     #[test]
     fn accept_boosts_offerer_penalizes_others() {
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Create offer from board member 0
         let mut offer = make_test_contract(FundingCondition::NoCollapse);
@@ -979,8 +969,7 @@ mod tests {
 
     #[test]
     fn refuse_penalizes_offerer_only() {
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         let mut offer = make_test_contract(FundingCondition::NoCollapse);
         offer.board_member_idx = 1;
@@ -1053,8 +1042,7 @@ mod tests {
     #[test]
     fn type_exclusivity_blocks_same_condition_type() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
 
@@ -1093,8 +1081,7 @@ mod tests {
 
     #[test]
     fn cancel_contract_removes_and_penalizes() {
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Add a contract from board member 0
         state.contracts.push(FundingContract {
@@ -1123,8 +1110,7 @@ mod tests {
 
     #[test]
     fn cancel_contract_fails_without_contract() {
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         let (ok, msg) = cancel_contract(&mut state, 0);
         assert!(!ok);
@@ -1221,8 +1207,7 @@ mod tests {
     fn loyalty_raise_crisis_accept_increases_income() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         state.contracts.push(FundingContract {
             name: "Test".to_string(),
             board_member_idx: 0,
@@ -1257,8 +1242,7 @@ mod tests {
     fn loyalty_raise_crisis_decline_cancels_contract() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         state.contracts.push(FundingContract {
             name: "Test".to_string(),
             board_member_idx: 0,
@@ -1294,8 +1278,7 @@ mod tests {
     #[test]
     fn patron_bonus_requires_high_satisfaction() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(99);
 
         // Set board budget so funding bonus is meaningful.
@@ -1327,8 +1310,7 @@ mod tests {
     #[test]
     fn patron_bonus_fires_with_high_satisfaction() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
         state.board_budget_per_tick = 5.0;
@@ -1364,8 +1346,7 @@ mod tests {
     #[test]
     fn patron_bonus_respects_cooldown() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        setup_board(&mut state);
+        let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
         state.board_budget_per_tick = 5.0;

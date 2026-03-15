@@ -2952,9 +2952,7 @@ mod tests {
 
     #[test]
     fn chairman_mood_shifts_board_budget() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Find the chairman
         let chair_idx = state.board_members.iter().position(|m| m.is_chairman)
@@ -3045,9 +3043,7 @@ mod tests {
 
     #[test]
     fn chairman_text_appears_in_board_communique() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Make chairman content
         let chair_idx = state.board_members.iter().position(|m| m.is_chairman)
@@ -3070,9 +3066,7 @@ mod tests {
 
     #[test]
     fn vote_no_confidence_names_chairman_and_corp() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let state = crate::engine::new_game(42);
 
         let chair = state.board_members.iter().find(|m| m.is_chairman).unwrap();
         let chair_name = chair.name.clone();
@@ -3096,9 +3090,7 @@ mod tests {
     #[test]
     fn vote_no_confidence_concessions_boost_chairman() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
         state.resources.funding = 5000.0;
 
         let chair_idx = state.board_members.iter().position(|m| m.is_chairman).unwrap();
@@ -3149,9 +3141,7 @@ mod tests {
     fn vote_no_confidence_fires_after_3_days_hostile() {
         use crate::engine::tick;
 
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
         state.tick = (11.0 * crate::state::TICKS_PER_DAY) as u64; // past day 10 gate
         state.next_board_meeting_tick = u64::MAX; // prevent board meetings
         state.last_contract_offer_tick = state.tick; // prevent contract offers
@@ -3192,9 +3182,7 @@ mod tests {
 
     #[test]
     fn vote_no_confidence_respects_cooldown() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
         state.tick = (15.0 * crate::state::TICKS_PER_DAY) as u64;
         state.next_board_meeting_tick = u64::MAX;
         state.last_contract_offer_tick = state.tick;
@@ -3484,9 +3472,7 @@ mod tests {
     #[test]
     fn board_meeting_raises_authority_when_pressure_high() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Start at Minimal authority
         state.resources.authority = Authority::Minimal;
@@ -3529,9 +3515,7 @@ mod tests {
     #[test]
     fn board_meeting_lowers_authority_when_pressure_low() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Start at High authority with no crisis
         state.resources.authority = Authority::High;
@@ -3566,9 +3550,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PolicyId;
 
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Start at VeryLow — raising to Low should unlock DiscourageHosp (requires Low)
         state.resources.authority = Authority::VeryLow;

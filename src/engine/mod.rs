@@ -47,6 +47,26 @@ pub fn initialize_game(state: &mut WorldState) {
     }
 }
 
+/// Create a fully bootstrapped game state ready for play.
+///
+/// This is the canonical way to create a new game in tests and production.
+/// It constructs the raw world state and then runs `initialize_game()` to
+/// fill in corporations, board members, and board budget — the same path
+/// that `persistence::load_or_create()` uses for new saves.
+///
+/// Use this instead of `AppState::new_default()` for any test that is meant
+/// to represent a real day-0 game. Use `AppState::new_default()` only when
+/// you intentionally need a raw, pre-bootstrap world state.
+pub fn new_game(seed: u64) -> crate::state::AppState {
+    let mut world = WorldState::new_default(seed);
+    initialize_game(&mut world);
+    crate::state::AppState {
+        world,
+        ui: crate::state::UiState::default(),
+        session: crate::state::SessionState::default(),
+    }
+}
+
 /// External callers should use `lib::tick_and_process()` instead, which also
 /// calls `events::process_events()` to materialize events into UI state. This
 /// function is `pub(crate)` so engine unit tests can call it directly without
@@ -1902,9 +1922,7 @@ mod tests {
         let seeds: Vec<u64> = (0..50).collect();
         let mut loss_days = Vec::new();
         for seed in &seeds {
-            let mut state = AppState::new_default(*seed);
-            corporations::generate_corporations(&mut state);
-            board::generate_board_members(&mut state);
+            let mut state = new_game(*seed);
             let max_ticks = 120 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = state.with_world(tick(&state).0);
@@ -1951,9 +1969,7 @@ mod tests {
         use crate::state::{ResearchKind, DeployTarget};
 
         fn simulate_competent(seed: u64) -> f64 {
-            let mut state = AppState::new_default(seed);
-            corporations::generate_corporations(&mut state);
-            board::generate_board_members(&mut state);
+            let mut state = new_game(seed);
             // Give the bot full authority so it can test policies & research,
             // not the authority ramp mechanic.
             state.resources.authority = Authority::Maximum;
@@ -2095,9 +2111,7 @@ mod tests {
         }
 
         fn simulate_passive(seed: u64) -> f64 {
-            let mut state = AppState::new_default(seed);
-            corporations::generate_corporations(&mut state);
-            board::generate_board_members(&mut state);
+            let mut state = new_game(seed);
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             for _ in 0..max_ticks {
                 state = state.with_world(tick(&state).0);
@@ -4246,9 +4260,7 @@ mod tests {
 
     #[test]
     fn collapse_loses_personnel() {
-        let mut state = AppState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
+        let mut state = new_game(42);
         detect_all_diseases(&mut state);
         let initial_personnel = state.resources.personnel;
 
@@ -5299,9 +5311,7 @@ mod tests {
     #[test]
     fn embezzlement_warning_fires_when_non_board_positions_exceed_threshold() {
         use crate::state::EMBEZZLEMENT_BUFFER;
-        let mut state = AppState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
+        let mut state = new_game(42);
         state.tick = 1000;
         state.resources.funding = 5000.0;
         // Prevent other crises from firing first
@@ -5335,9 +5345,7 @@ mod tests {
     #[test]
     fn embezzlement_warning_only_fires_once() {
         use crate::state::EMBEZZLEMENT_BUFFER;
-        let mut state = AppState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
+        let mut state = new_game(42);
         state.tick = 1000;
         state.resources.funding = 5000.0;
         state.embezzlement_warned = true; // Already warned
