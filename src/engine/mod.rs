@@ -3332,7 +3332,7 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "Test Crisis".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "A".into(), cost: None },
@@ -3398,7 +3398,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.resources.funding = 0.0; // broke
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "Burnout".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "Accept".into(), description: "".into(), cost: None },
@@ -3427,7 +3427,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Game is running when crisis fires — pacing stays Running
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3450,7 +3450,7 @@ mod tests {
         // Game was paused when crisis fired — pacing stays Paused
         state.sim_state = SimState::Paused;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3577,7 +3577,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         // Crisis active — blocking derived from active_crisis
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3614,7 +3614,7 @@ mod tests {
 
         // Inject an active crisis
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "Test".into(),
             description: "Test".into(),
             options: vec![ CrisisOption { label: "A".into(), description: "".into(), cost: None },
@@ -3706,7 +3706,7 @@ mod tests {
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -3731,7 +3731,7 @@ mod tests {
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -3755,7 +3755,7 @@ mod tests {
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "T".into(),
             description: "T".into(),
             options: vec![
@@ -3784,7 +3784,7 @@ mod tests {
         let mut state = GameState::new_default(42);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
-        setup_crisis(&mut state, CrisisKind::MediaPanic, 0);
+        setup_crisis(&mut state, CrisisKind::PerformanceReview, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none());
         assert!((after.resources.funding - funding_before).abs() < 0.01,
@@ -3967,12 +3967,12 @@ mod tests {
         state.regions[0].dead = pop * (1.0 - threshold) + 1.0;
         state.regions[0].get_or_create_infection(0).dead = state.regions[0].dead;
         // Pre-load an active crisis
-        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::MediaPanic));
+        state.active_crisis = Some(crisis::build_crisis_event(&state, CrisisKind::PerformanceReview));
         assert!(state.active_crisis.is_some());
         // Tick should trigger collapse but NOT override — queue as pending instead
         let (after, _) = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Communications Failure",
+        assert_eq!(after.active_crisis.as_ref().unwrap().title, "Quarterly Performance Review",
             "existing crisis should NOT be overridden");
         assert!(after.pending_crises.iter().any(|k| matches!(k, CrisisKind::RefugeeWave { .. })),
             "refugee crisis should be queued as pending");
@@ -4022,23 +4022,23 @@ mod tests {
     }
 
     #[test]
-    fn media_panic_option_a_resolves() {
+    fn crisis_option_a_resolves() {
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
-        setup_crisis(&mut state, CrisisKind::MediaPanic, 0);
+        setup_crisis(&mut state, CrisisKind::PerformanceReview, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none(), "crisis should be resolved");
     }
 
     #[test]
-    fn media_panic_option_b_costs_funding() {
+    fn crisis_option_b_costs_funding() {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "T".into(), description: "T".into(),
             options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
              crate::state::CrisisOption { label: "B".into(), description: "".into(),
@@ -4220,7 +4220,7 @@ mod tests {
         // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
-            kind: CrisisKind::MediaPanic,
+            kind: CrisisKind::PerformanceReview,
             title: "T".into(),
             description: "T".into(),
             options: vec![CrisisOption {

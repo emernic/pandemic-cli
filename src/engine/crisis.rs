@@ -224,10 +224,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
     }
 
 
-    // Media panic: always available after day 6
-    if day > 6.0 {
-        candidates.push(CrisisKind::MediaPanic);
-    }
 
     // Trial shortcut: requires an unlocked medicine that targets a disease it hasn't
     // been trialled against yet. Fast-tracking marks the medicine as tested, promoting
@@ -566,33 +562,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         label: format!("Confiscate (¥{:.0})", cost),
                         description: "Seize the drugs. Governor cooperation improves.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                    }
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::MediaPanic => {
-            CrisisEvent {
-                title: "Communications Failure".into(),
-                description: "Regional reporting systems are returning inconsistent data. \
-                    Population-level noncompliance is rising.".into(),
-                options: vec![ CrisisOption {
-                    label: "Deprioritize".into(),
-                    description: "−8% chairman approval as institutional trust degrades".into(),
-                    cost: None,
-                },
-                 {
-                    let cost = scaled_cost(state, 0.15, 100.0, 600.0);
-                    CrisisOption {
-                        label: format!("Restore comms infrastructure (¥{:.0}, 1 personnel for 2d)", cost),
-                        description: "Stabilize reporting systems, gain +5% chairman approval. Tech team returns in 2 days.".into(),
-                        cost: Some(CrisisCost {
-                            funding: cost,
-                            personnel: 1,
-                            operation: Some(OperationSpec { days: 2.0, label: "Comms Team".into() }),
-                        }),
                     }
                 },
                 ],
@@ -2326,16 +2295,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut 
             format!("Black market drugs confiscated in {}. Governor cooperation improved.", region_name)
         }
 
-        (CrisisKind::MediaPanic, 0) => {
-            // Deprioritize — take the approval hit but save resources
-            chairman_satisfaction_hit(state, -0.08);
-            "Comms deprioritized. Reporting gaps persist but resources preserved.".into()
-        }
-        (CrisisKind::MediaPanic, _) => {
-            // Press conference — gain chairman satisfaction (costs already deducted)
-            chairman_satisfaction_hit(state, 0.05);
-            "Communications infrastructure restored. Reporting stabilized.".into()
-        }
 
         (CrisisKind::TrialShortcut { .. }, 0) => {
             // Maintain standards — chairman satisfaction hit
