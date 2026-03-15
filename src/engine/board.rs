@@ -528,9 +528,7 @@ mod tests {
 
     #[test]
     fn board_members_generated_from_corporations_and_governors() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let state = crate::engine::new_game(42);
 
         // Should have 4 corporate leaders + 2 governor members = 6
         assert!(!state.board_members.is_empty());
@@ -549,9 +547,7 @@ mod tests {
     fn board_satisfaction_matches_old_aggregate() {
         // After generation, corporate leaders should have satisfaction 1.0 minus
         // initial skepticism (0.30), so board_satisfaction() should return ~0.70
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
         // Run one tick to compute satisfaction with skepticism
         update_board_satisfaction(&mut state);
 
@@ -563,9 +559,7 @@ mod tests {
 
     #[test]
     fn bankrupt_corp_reduces_member_satisfaction() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Bankrupt the first board-seat corp
         let board_corp_idx = state.corporations.iter().position(|c| c.board_seat)
@@ -593,9 +587,7 @@ mod tests {
 
     #[test]
     fn governor_member_satisfaction_tracks_gdp() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Find a governor member
         let gov_idx = state.board_members.iter().position(|m| {
@@ -711,9 +703,7 @@ mod tests {
 
     #[test]
     fn board_meeting_scheduled_around_day_7() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let state = crate::engine::new_game(42);
 
         let ticks_per_day = crate::state::TICKS_PER_DAY as u64;
         let meeting_tick = state.next_board_meeting_tick;
@@ -726,9 +716,7 @@ mod tests {
     fn board_meeting_fires_on_schedule() {
         use crate::engine::tick;
 
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         let meeting_tick = state.next_board_meeting_tick;
         let original_next = state.next_board_meeting_tick;
@@ -759,9 +747,7 @@ mod tests {
 
     #[test]
     fn buying_own_corp_boosts_member_satisfaction() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Find a corporate leader and their corp_idx
         let (member_idx, corp_idx) = state.board_members.iter().enumerate()
@@ -780,9 +766,7 @@ mod tests {
 
     #[test]
     fn buying_rival_sector_penalizes_member() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Find a corporate leader
         let (member_idx, member_corp_idx) = state.board_members.iter().enumerate()
@@ -811,9 +795,7 @@ mod tests {
 
     #[test]
     fn selling_own_corp_penalizes_member() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         let (member_idx, corp_idx) = state.board_members.iter().enumerate()
             .find_map(|(i, m)| match m.role {
@@ -831,9 +813,7 @@ mod tests {
 
     #[test]
     fn buying_unrelated_sector_no_effect() {
-        let mut state = AppState::new_default(42);
-        crate::engine::corporations::generate_corporations(&mut state);
-        generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         // Find a corporate leader
         let (member_idx, member_corp_idx) = state.board_members.iter().enumerate()

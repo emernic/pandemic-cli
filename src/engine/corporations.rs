@@ -499,9 +499,7 @@ mod tests {
 
     #[test]
     fn bankrupt_corps_dont_affect_fixed_budget() {
-        let mut state = AppState::new_default(42);
-        generate_corporations(&mut state);
-        crate::engine::board::generate_board_members(&mut state);
+        let mut state = crate::engine::new_game(42);
 
         let income_before = state.funding_income_rate();
 
