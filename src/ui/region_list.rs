@@ -133,8 +133,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             let (ca, ra) = map_grid_pos(conn.a).unwrap();
             let (_cb, rb) = map_grid_pos(conn.b).unwrap();
 
-            let has_spread = state.regions[conn.a].screened_infected() > 0.0
-                || state.regions[conn.b].screened_infected() > 0.0;
+            let has_spread = state.regions[conn.a].visible_infected_estimate(&state.diseases) > 0.0
+                || state.regions[conn.b].visible_infected_estimate(&state.diseases) > 0.0;
             let strength = connection_strength(state, conn.a, conn.b);
             let color = if has_spread {
                 Color::Red
@@ -258,9 +258,9 @@ fn render_region_box(
         return;
     }
 
-    let infected = region.screened_infected();
-    let immune = if shows_immune { region.detected_immune(diseases) } else { 0.0 };
-    let dead = region.detected_dead(diseases);
+    let infected = region.visible_infected_estimate(diseases);
+    let immune = if shows_immune { region.visible_immune(diseases) } else { 0.0 };
+    let dead = region.visible_dead(diseases);
     let pop = region.population as f64;
     let is_nuked = nuclear_state.is_dropped();
 
@@ -482,11 +482,11 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
 
     let pop = region.population as f64;
     let visibility = state.screening_visibility(idx);
-    let infected = region.screened_infected();
+    let infected = region.visible_infected_estimate(&state.diseases);
     let shows_immune = state.screening_shows_immune(idx);
     let shows_exposed = state.screening_shows_exposed(idx);
-    let immune = if shows_immune { region.detected_immune(&state.diseases) } else { 0.0 };
-    let dead = region.detected_dead(&state.diseases);
+    let immune = if shows_immune { region.visible_immune(&state.diseases) } else { 0.0 };
+    let dead = region.visible_dead(&state.diseases);
     let alive = pop - dead; // alive based on detected deaths only
 
     let label = Style::default().fg(Color::DarkGray);
@@ -950,7 +950,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
                 break;
             }
             if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                if !disease.detected {
+                if !disease.detected || disease.hidden {
                     continue;
                 }
                 let dname = disease.display_name(inf.disease_idx);

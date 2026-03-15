@@ -409,8 +409,19 @@ fn handle_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
         Panel::Policy => handle_policy_confirm(ui, state),
         Panel::Operations => handle_operations_confirm(ui, state),
         Panel::Ledger => handle_ledger_confirm(ui, state),
+        Panel::Threats => handle_threats_confirm(ui, state),
         _ => None,
     }
+}
+
+fn handle_threats_confirm(ui: &mut UiState, state: &GameState) -> Option<GameCommand> {
+    let display_order = state.threats_display_order();
+    let disease_idx = display_order.get(ui.panel_selection).copied()?;
+    // Only allow toggling detected diseases
+    if !state.diseases.get(disease_idx).is_some_and(|d| d.detected) {
+        return None;
+    }
+    Some(GameCommand::ToggleThreatVisibility { disease_idx })
 }
 
 

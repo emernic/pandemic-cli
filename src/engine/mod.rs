@@ -947,6 +947,14 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             }
             CommandResult { message: None, success: true }
         }
+        GameCommand::ToggleThreatVisibility { disease_idx } => {
+            if let Some(d) = state.diseases.get_mut(*disease_idx) {
+                d.hidden = !d.hidden;
+                CommandResult { message: None, success: true }
+            } else {
+                CommandResult { message: None, success: false }
+            }
+        }
         GameCommand::UpgradeLab => {
             let (success, msg) = research::upgrade_lab(state);
             CommandResult { message: msg, success }

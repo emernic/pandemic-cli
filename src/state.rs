@@ -2406,6 +2406,42 @@ impl Region {
             .map(|inf| inf.immune)
             .sum()
     }
+
+    /// Total dead from detected, non-hidden diseases (for filtered UI display).
+    pub fn visible_dead(&self, diseases: &[Disease]) -> f64 {
+        self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected && !d.hidden))
+            .map(|inf| inf.dead)
+            .sum()
+    }
+
+    /// Total immune from detected, non-hidden diseases (for filtered UI display).
+    pub fn visible_immune(&self, diseases: &[Disease]) -> f64 {
+        self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected && !d.hidden))
+            .map(|inf| inf.immune)
+            .sum()
+    }
+
+    /// Screened infected estimate filtered to only non-hidden diseases.
+    /// Distributes `estimated_infected` proportionally among visible diseases.
+    pub fn visible_infected_estimate(&self, diseases: &[Disease]) -> f64 {
+        if self.estimated_infected <= 0.0 {
+            return 0.0;
+        }
+        let total_real: f64 = self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| inf.exposed + inf.infected)
+            .sum();
+        if total_real <= 0.0 {
+            return 0.0;
+        }
+        let visible_real: f64 = self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected && !d.hidden))
+            .map(|inf| inf.exposed + inf.infected)
+            .sum();
+        self.estimated_infected * (visible_real / total_real)
+    }
 }
 
 /// Per-disease state within a region: infection, deaths, and immunity.
@@ -2816,6 +2852,10 @@ pub struct Disease {
     /// Current accumulating observed infected estimate (snapshotted to prev at day boundary).
     #[serde(default)]
     pub current_day_observed_infected: f64,
+    /// Whether the player has hidden this threat from aggregate UI displays.
+    /// Purely a UI filter — engine mechanics are unaffected.
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 /// Resistance level for a specific mechanism of action against a disease.
@@ -2954,6 +2994,7 @@ impl Disease {
             detected_day: 0.0,
             prev_day_observed_infected: 0.0,
             current_day_observed_infected: 0.0,
+            hidden: false,
         }
     }
 }
@@ -4232,6 +4273,8 @@ pub enum GameCommand {
     ToggleAutoRebuild { region_idx: usize },
     /// Toggle auto-repeat for a specific repeatable research project.
     ToggleAutoRepeat { kind: ResearchKind },
+    /// Toggle threat visibility (hidden/shown) for aggregate UI displays.
+    ToggleThreatVisibility { disease_idx: usize },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
     /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
@@ -5658,6 +5701,31 @@ impl GameState {
             .map(|r| r.collapse_deaths)
             .sum();
         disease_dead + collapse_dead
+    }
+
+    /// Total screened infections filtered to non-hidden diseases.
+    pub fn total_visible_infected_screened(&self) -> f64 {
+        self.regions.iter()
+            .map(|r| r.visible_infected_estimate(&self.diseases))
+            .sum()
+    }
+
+    /// Total dead from non-hidden diseases plus collapse deaths.
+    pub fn total_visible_dead(&self) -> f64 {
+        let disease_dead: f64 = self.regions.iter()
+            .flat_map(|r| &r.infections)
+            .filter(|inf| self.diseases.get(inf.disease_idx).is_some_and(|d| d.detected && !d.hidden))
+            .map(|inf| inf.dead)
+            .sum();
+        let collapse_dead: f64 = self.regions.iter()
+            .map(|r| r.collapse_deaths)
+            .sum();
+        disease_dead + collapse_dead
+    }
+
+    /// Whether any disease is currently hidden.
+    pub fn has_hidden_threats(&self) -> bool {
+        self.diseases.iter().any(|d| d.hidden)
     }
 
     pub fn personnel_busy(&self) -> u32 {
