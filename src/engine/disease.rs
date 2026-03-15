@@ -312,7 +312,7 @@ pub(super) fn spawn_disease_scaled(state: &mut GameState, rng: &mut ChaCha8Rng) 
 }
 
 /// Check each original (non-variant) disease for variant spawning.
-/// Uses the same per-tick probability as the old mutation system.
+/// Each disease rolls against its effective_variant_rate() per tick.
 /// Only root diseases (variant_number == 0) can spawn variants.
 pub(super) fn tick_variant_spawning(state: &mut GameState, rng: &mut ChaCha8Rng) {
     // Collect spawn candidates: (parent_idx, effective_rate)
