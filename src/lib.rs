@@ -265,6 +265,11 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             new.ui.operations_ui = Some(OpsUiState::BrowseOps);
                             new.ui.panel_selection = 0;
                         }
+                        GameCommand::ToggleDeploy { med_idx } => {
+                            // Reset blocked notification so the player gets
+                            // re-notified if deploy is still blocked.
+                            new.session.deploy_blocked_notified.remove(med_idx);
+                        }
                         _ => {}
                     }
                     if new.session.status_message.is_none() {

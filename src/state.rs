@@ -41,6 +41,9 @@ pub struct SessionState {
     pub status_message: Option<String>,
     /// Whether the player dismissed the "terminal too small" warning overlay.
     pub size_warning_dismissed: bool,
+    /// Tracks which medicines have already fired a DeployBlocked event
+    /// this session, to avoid spamming the log every tick.
+    pub deploy_blocked_notified: std::collections::HashSet<usize>,
 }
 
 impl Default for SessionState {
@@ -49,6 +52,7 @@ impl Default for SessionState {
             speed_multiplier: 1,
             status_message: None,
             size_warning_dismissed: false,
+            deploy_blocked_notified: std::collections::HashSet::new(),
         }
     }
 }
@@ -224,11 +228,6 @@ pub struct WorldState {
     /// Whether the board has sent the formal embezzlement warning letter.
     #[serde(default)]
     pub embezzlement_warned: bool,
-    /// Tracks which medicines have already fired a DeployBlocked event
-    /// this session, to avoid spamming the log every tick.
-    /// Not persisted — resets on every load.
-    #[serde(skip)]
-    pub deploy_blocked_notified: std::collections::HashSet<usize>,
 }
 
 /// Runtime state combining world, UI, and session data.
@@ -5511,7 +5510,6 @@ impl WorldState {
             active_research: vec![],
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
-            deploy_blocked_notified: std::collections::HashSet::new(),
             event_log: VecDeque::new(),
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
