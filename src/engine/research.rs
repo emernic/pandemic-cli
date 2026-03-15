@@ -928,13 +928,13 @@ mod tests {
 
         let mut state = GameState::new_default(42);
         state.diseases[0].knowledge = 1.0;
-        state.diseases[0].pathogen_type = PathogenType::RnaVirus; // base rate 0.0004
+        state.diseases[0].pathogen_type = PathogenType::RnaVirus; // base rate 0.0002
         // Ensure disease has infected population so sequencing can be considered
         state.regions[0].get_or_create_infection(0).infected = 1000.0;
         state.active_research.clear();
 
-        // After 4 sequencings: 0.0004 * 0.5^4 = 0.000025 < 0.00005 threshold
-        state.diseases[0].sequencing_count = 4;
+        // After 6 sequencings: 0.0002 * 0.5^6 = 0.000003125 < 0.000005 threshold
+        state.diseases[0].sequencing_count = 6;
         let field_projects = state.available_field_projects();
         assert!(
             !field_projects.iter().any(|k| matches!(k,
@@ -944,7 +944,7 @@ mod tests {
             state.diseases[0].effective_mutation_rate()
         );
 
-        // After 2 sequencings: 0.0004 * 0.5^2 = 0.0001 > 0.00005 — still available
+        // After 2 sequencings: 0.0002 * 0.5^2 = 0.00005 > 0.000005 — still available
         state.diseases[0].sequencing_count = 2;
         let field_projects = state.available_field_projects();
         assert!(

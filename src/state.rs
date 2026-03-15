@@ -2524,17 +2524,16 @@ impl PathogenType {
     }
 
     /// Per-tick probability that this pathogen type mutates.
-    /// Rates tuned so medicines stay effective long enough to matter:
-    /// RNA viruses mutate ~1 time per 17 days, giving a deployed medicine
-    /// a meaningful window before drift degrades it. Slower types mutate
-    /// rarely, making sequencing research most valuable against RNA threats.
+    /// Rates tuned so medicines stay effective for a meaningful window after
+    /// deployment. Each mutation only costs 2% efficacy (see strain_efficacy),
+    /// so even RNA viruses need many mutations to seriously degrade a medicine.
     pub fn mutation_rate(&self) -> f64 {
         match self {
-            PathogenType::RnaVirus => 0.0004,    // ~1 mutation per 2500 ticks (~17 days)
-            PathogenType::DnaVirus => 0.0001,    // ~1 per 10000 ticks (~83 days)
-            PathogenType::Bacterium => 0.0002,   // ~1 per 5000 ticks (~42 days)
-            PathogenType::Fungus => 0.00005,     // ~1 per 20000 ticks (~167 days)
-            PathogenType::Prion => 0.00002,      // ~1 per 50000 ticks (~417 days)
+            PathogenType::RnaVirus => 0.0002,    // ~1 mutation per 5000 ticks (~83 days)
+            PathogenType::DnaVirus => 0.00005,   // ~1 per 20000 ticks (~333 days)
+            PathogenType::Bacterium => 0.0001,   // ~1 per 10000 ticks (~167 days)
+            PathogenType::Fungus => 0.000025,    // ~1 per 40000 ticks (~667 days)
+            PathogenType::Prion => 0.00001,      // ~1 per 100000 ticks (~1667 days)
         }
     }
 
@@ -2542,8 +2541,8 @@ impl PathogenType {
     /// Derived from mutation_rate() — kept colocated so changes stay in sync.
     pub fn mutation_risk_label(&self) -> &'static str {
         let rate = self.mutation_rate();
-        if rate >= 0.0003 { "High" }
-        else if rate >= 0.0001 { "Moderate" }
+        if rate >= 0.00015 { "High" }
+        else if rate >= 0.00005 { "Moderate" }
         else { "Low" }
     }
 
@@ -3459,7 +3458,7 @@ impl Medicine {
 
 
     /// Efficacy multiplier based on how many generations behind this medicine is
-    /// for a given disease. Each generation of drift reduces efficacy by 10%,
+    /// for a given disease. Each generation of drift reduces efficacy by 2%,
     /// with a floor at 10%. Returns 1.0 if the medicine hasn't been calibrated yet
     /// (strain_generations not populated — pre-mutation-system medicines).
     pub fn strain_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
@@ -3472,7 +3471,7 @@ impl Medicine {
                         let disease_gen = diseases.get(disease_idx)
                             .map_or(0, |d| d.strain_generation) as i32;
                         let behind = (disease_gen - mg).max(0);
-                        (1.0 - behind as f64 * 0.10).max(0.1)
+                        (1.0 - behind as f64 * 0.02).max(0.1)
                     }
                     // Not yet calibrated (developed before mutation system) — full efficacy
                     None => 1.0,
@@ -6477,7 +6476,7 @@ impl GameState {
         // Genomic Sequencing: fully identified diseases that still mutate and are active
         for (i, disease) in self.diseases.iter().enumerate() {
             if disease.knowledge >= KNOWLEDGE_FULL
-                && disease.effective_mutation_rate() > 0.00005
+                && disease.effective_mutation_rate() > 0.000005
                 && self.disease_has_infected(i)
             {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };

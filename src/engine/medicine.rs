@@ -285,7 +285,7 @@ fn apply_immune_and_deaths(
 fn build_resistance(state: &mut GameState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
     let med = &state.medicines[medicine_idx];
     let mechanism = med.mechanism;
-    let base = if is_treatment { 0.03 } else { 0.005 };
+    let base = if is_treatment { 0.006 } else { 0.001 };
     let type_mult = match med.therapy_type {
         crate::state::TherapyType::BroadSpectrum => 2.0,
         _ => 1.0,
@@ -378,10 +378,10 @@ pub(super) fn emergency_sample_delivery(
             cooperation_change = 10.0;
         }
 
-        // Set strain calibration 2 generations behind for untested diseases
+        // Set strain calibration 10 generations behind for untested diseases
         for &d_idx in &active_diseases {
             if !state.medicines[medicine_idx].tested_against.contains(&d_idx) {
-                state.medicines[medicine_idx].set_strain_calibration_behind(d_idx, &state.diseases, 2);
+                state.medicines[medicine_idx].set_strain_calibration_behind(d_idx, &state.diseases, 10);
             }
         }
     } else if has_tested_match {
