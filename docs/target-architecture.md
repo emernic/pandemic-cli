@@ -191,12 +191,12 @@ The architecture is "one giant mutable state blob plus conventions." This sectio
 - Subsystems should not call each other. They share `&mut WorldState`, so any subsystem could call any other subsystem's logic through state methods.
 - Command response strings are composed in the engine. Tick-time event strings are composed in the UI. No type prevents mixing these.
 
-**Why this is acceptable at current scale:** This is a single-binary game worked on by AI agents that read CLAUDE.md and architecture docs. The conventions are documented, the boundaries are visible in code review, and violations are caught by the agents' instruction-following. Type-level enforcement (splitting the state blob, wrapper types restricting access) would add significant complexity for a problem that isn't causing bugs. If the codebase grows to the point where convention violations become a recurring issue, revisit this decision.
+**Why the remaining conventions are acceptable at current scale:** The convention-only boundaries above are enforced by documentation and code review, not the compiler. This is fine for a single-binary game worked on by AI agents that read CLAUDE.md. If convention violations become a recurring issue, consider adding type-level enforcement for the remaining boundaries.
 
 ## What NOT to Change
 
-- **Single `AppState` struct** — One serializable blob = trivial save/load.
-- **`UiState` inside `AppState`** — The UI state is part of the save. The issue isn't where it lives in the struct, it's which code touches it.
+- **`AppState` structure** — `WorldState` + `UiState` + `SessionState`, with `Deref` to `WorldState` for convenience.
+- **`UiState` in saves** — UI state (panel, selection) is persisted via `SaveFile`.
 - **Clone-and-mutate in `tick()`** — Fine at current scale. Don't optimize prematurely.
 - **Snapshot mode** — Keep this exactly as-is. It's one of the best things about the codebase.
 
