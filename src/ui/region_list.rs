@@ -206,11 +206,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         let visibility = state.screening_visibility(idx);
         let shows_immune = state.screening_shows_immune(idx);
         let is_ark = state.ark_protocol == Some(idx);
-        let is_abandoned = state.is_abandoned(idx);
         let board_count = state.board_members.iter().filter(|bm| bm.region_idx == Some(idx) && !bm.dead).count();
         let martial_law = state.policies.get(idx).is_some_and(|p| p.martial_law);
         let nuclear_state = state.policies.get(idx).map(|p| p.nuclear_state).unwrap_or_default();
-        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, is_abandoned, board_count, martial_law, nuclear_state);
+        render_region_box(f, rect, region, selected, &state.diseases, visibility, shows_immune, is_ark, board_count, martial_law, nuclear_state);
     }
 
     // Detail panel below the grid for the selected region
@@ -231,7 +230,6 @@ fn render_region_box(
     visibility: f64,
     shows_immune: bool,
     is_ark: bool,
-    is_abandoned: bool,
     board_count: usize,
     martial_law: bool,
     nuclear_state: crate::state::NuclearState,
@@ -270,8 +268,6 @@ fn render_region_box(
         ("☢", Color::Red)
     } else if is_ark {
         ("HQ", Color::Cyan)
-    } else if is_abandoned {
-        ("GONE", Color::DarkGray)
     } else if region.collapsed {
         ("FELL", Color::Red)
     } else if infected > SEVERITY_CRIT_THRESHOLD {
@@ -286,8 +282,8 @@ fn render_region_box(
         ("OK", Color::DarkGray)
     };
 
-    // Information blackout: collapsed (non-HQ) or abandoned (GONE) regions
-    let info_blackout = is_abandoned || (region.collapsed && !is_ark);
+    // Information blackout: collapsed (non-HQ) regions
+    let info_blackout = region.collapsed && !is_ark;
 
     let name_style = if info_blackout {
         // Greyed out — collapsed regions are information blackouts
@@ -499,32 +495,6 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
 
     let is_ark = state.ark_protocol == Some(idx);
-    let is_abandoned = state.is_abandoned(idx);
-
-    // Abandoned region (Ark Protocol active, not HQ, not collapsed): minimal info
-    if is_abandoned {
-        lines.push(Line::from(Span::styled(
-            "  ██ ABANDONED ██",
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
-        )));
-        lines.push(Line::from(vec![
-            Span::styled("Pop ", label),
-            Span::styled(format_number(pop), Style::default().fg(Color::DarkGray)),
-            Span::styled("  Dead ", label),
-            Span::styled(format_number(dead), Style::default().fg(Color::DarkGray)),
-        ]));
-        let spec_label = specialization_label(region);
-        lines.push(Line::from(vec![
-            Span::styled("Specialization: ", label),
-            Span::styled(
-                format!("{} (ABANDONED)", spec_label),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]));
-        let paragraph = Paragraph::new(lines);
-        f.render_widget(paragraph, inner);
-        return;
-    }
 
     // Collapse banner (always shown for collapsed regions)
     if region.collapsed {

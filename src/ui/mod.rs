@@ -465,8 +465,8 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &GameState) {
         } else {
             "       ".to_string()
         };
-        let status_color = if region.abandoned { Color::Yellow } else if region.collapsed { Color::Red } else { Color::Green };
-        let status = if region.abandoned { "ABDN" } else if region.collapsed { "FELL" } else { "held" };
+        let status_color = if region.collapsed { Color::Red } else { Color::Green };
+        let status = if region.collapsed { "FELL" } else { "held" };
         lines.push(Line::from(vec![
             Span::styled(format!("  {timing}  "), stat_label),
             Span::styled(format!("{:<16}", region.name), stat_value),

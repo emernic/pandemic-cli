@@ -703,16 +703,6 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Ark Protocol enforcement: keep non-Ark regions stripped of policies.
-    // Policies can't be re-enabled (toggle_policy blocks it), but this
-    // catches any edge cases like crisis resolutions that toggle policies.
-    if let Some(ark_idx) = new.ark_protocol {
-        for (i, policy) in new.policies.iter_mut().enumerate() {
-            if i != ark_idx && !new.regions[i].collapsed {
-                policy.clear_all();
-            }
-        }
-    }
 
     // Check defeat condition (only while still playing).
     // There is no victory — you lose eventually. The question is when.
@@ -5191,40 +5181,40 @@ mod tests {
 
         // Ark Protocol should be active on region 2
         assert_eq!(after.ark_protocol, Some(2));
-        // Non-Ark, non-collapsed regions should have all policies cleared
-        assert!(!after.policies[1].quarantine, "non-Ark region policies should be cleared");
-        assert!(!after.policies[3].border_controls, "non-Ark region policies should be cleared");
+        // Non-Ark regions should be collapsed with policies cleared
+        assert!(after.regions[1].collapsed, "non-Ark region should be collapsed");
+        assert!(!after.policies[1].quarantine, "collapsed region policies should be cleared");
+        assert!(!after.policies[3].border_controls, "collapsed region policies should be cleared");
         // ArkProtocolActivated event should be emitted
         assert!(after.events.iter().any(|e|
             matches!(e, GameEvent::ArkProtocolActivated { region_idx: 2 })));
     }
 
     #[test]
-    fn ark_protocol_blocks_policy_and_medicine_in_abandoned_regions() {
+    fn ark_protocol_collapses_non_ark_regions() {
         let mut state = GameState::new_default(42);
         unlock_all_medicines(&mut state);
         detect_all_diseases(&mut state);
-        state.ark_protocol = Some(0); // North America is the Ark
+        // Collapse two regions to trigger Ark Protocol conditions
+        state.regions[0].collapsed = true;
+        state.regions[4].collapsed = true;
+        // Set up Ark Protocol crisis targeting region 2.
+        // Surviving regions are [1, 2, 3, 5], so region 2 is at index 1.
+        setup_crisis(&mut state, CrisisKind::ArkProtocol { region_idx: 2 }, 1);
+        let after = apply_action(&state, &Action::Confirm);
 
-        // Try toggling policy in region 1 (abandoned)
-        let (msg, success, _) = policy::toggle_policy(&mut state, 1, PolicyId::TravelBan);
-        assert!(!success, "should block policy toggle in abandoned region");
-        assert!(msg.unwrap().contains("abandoned"));
-
-        // Try deploying medicine to region 1 (abandoned)
-        let (success, msg) = medicine::deploy_medicine(
-            &mut state, 0, 1, DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
-        );
-        assert!(!success, "should block medicine deployment to abandoned region");
-        assert!(msg.unwrap().contains("abandoned"));
-
-        // Same actions should work on the Ark region (region 0)
-        let (msg, success, _) = policy::toggle_policy(&mut state, 0, PolicyId::TravelBan);
-        // May fail for other reasons (cost, etc.) but NOT because of abandonment
-        if !success {
-            assert!(!msg.unwrap().contains("abandoned"),
-                "Ark region should not be blocked by abandonment");
+        assert_eq!(after.ark_protocol, Some(2));
+        // All non-Ark regions should be collapsed
+        for (i, region) in after.regions.iter().enumerate() {
+            if i == 2 {
+                // Ark region should NOT be collapsed (unless it was already)
+                continue;
+            }
+            assert!(region.collapsed, "non-Ark region {} should be collapsed", i);
         }
+        // Policies in collapsed regions should be cleared
+        assert!(!after.policies[1].quarantine, "collapsed region policies should be cleared");
+        assert!(!after.policies[3].border_controls, "collapsed region policies should be cleared");
     }
 
     #[test]
