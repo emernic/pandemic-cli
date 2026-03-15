@@ -698,15 +698,17 @@ pub(super) fn tick_governor_cooperation(state: &mut WorldState, events: &mut Vec
         if new_cooperation < GOVERNOR_HOSTILITY_THRESHOLD && !state.regions[i].governor.hostility_crisis_fired {
             state.regions[i].governor.hostility_crisis_fired = true;
             let kind = match personality {
-                GovernorPersonality::Buffoon => CrisisKind::GovernorBuffoon { region_idx: i },
-                GovernorPersonality::Blowhard => CrisisKind::GovernorBlowhard { region_idx: i },
-                GovernorPersonality::Recluse => CrisisKind::GovernorRecluse { region_idx: i },
-                GovernorPersonality::Hardliner => CrisisKind::GovernorHardliner { region_idx: i },
-                GovernorPersonality::Operative => CrisisKind::GovernorOperative { region_idx: i },
-                GovernorPersonality::Mobster => CrisisKind::GovernorMobster { region_idx: i },
+                GovernorPersonality::Buffoon => None,
+                GovernorPersonality::Blowhard => Some(CrisisKind::GovernorBlowhard { region_idx: i }),
+                GovernorPersonality::Recluse => Some(CrisisKind::GovernorRecluse { region_idx: i }),
+                GovernorPersonality::Hardliner => Some(CrisisKind::GovernorHardliner { region_idx: i }),
+                GovernorPersonality::Operative => Some(CrisisKind::GovernorOperative { region_idx: i }),
+                GovernorPersonality::Mobster => Some(CrisisKind::GovernorMobster { region_idx: i }),
             };
             // Schedule for immediate activation (current tick)
-            state.pending_crises.push(kind);
+            if let Some(kind) = kind {
+                state.pending_crises.push(kind);
+            }
         }
 
         // Reset the flag when cooperation recovers above hostility threshold

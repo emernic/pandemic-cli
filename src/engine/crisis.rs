@@ -803,32 +803,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::GovernorBuffoon { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            let gov_name = state.regions.get(*region_idx)
-                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
-            let cost = scaled_cost(state, 0.10, 80.0, 400.0);
-            CrisisEvent {
-                title: format!("{}: False All-Clear", gov_name),
-                description: format!(
-                    "{gov_name} officially declared the pandemic over in {region_name}. \
-                     The announcement is incorrect. Civilians are abandoning health protocols."),
-                options: vec![ CrisisOption {
-                    label: "Damage control".into(),
-                    description: "Lose 1 day research progress correcting the record".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Emergency correction (¥{:.0})", cost),
-                    description: "Broadcast a formal correction. Limits behavioral relapse.".into(),
-                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::GovernorBlowhard { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -2345,19 +2319,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
         }
 
         // --- Governor archetype crisis resolutions ---
-
-        (CrisisKind::GovernorBuffoon { .. }, 0) => {
-            // Damage control — lose 1 day research progress cleaning up
-            let loss = TICKS_PER_DAY as f64;
-            if let Some(proj) = state.active_research.first_mut() {
-                proj.progress = (proj.progress - loss).max(0.0);
-            }
-            "Spent a day undoing the damage. Could have been worse.".into()
-        }
-        (CrisisKind::GovernorBuffoon { .. }, _) => {
-            // Emergency correction — costs already deducted
-            "Public correction issued. Damage contained.".into()
-        }
 
         (CrisisKind::GovernorBlowhard { region_idx }, 0) => {
             // Ignore it — small approval hit but governor appreciates restraint

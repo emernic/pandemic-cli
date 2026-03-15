@@ -4456,8 +4456,6 @@ pub enum CrisisKind {
     GovernorRecluse { region_idx: usize },
     /// Operative governor starts skimming openly.
     GovernorOperative { region_idx: usize },
-    /// Buffoon governor causes accidental damage.
-    GovernorBuffoon { region_idx: usize },
     /// Mobster governor escalates demands.
     GovernorMobster { region_idx: usize },
     /// Governor falls ill during high infection levels. Personality determines the crisis.
@@ -4582,7 +4580,6 @@ impl CrisisKind {
             CrisisKind::GovernorBlowhard { .. } => "gov_blowhard",
             CrisisKind::GovernorRecluse { .. } => "gov_recluse",
             CrisisKind::GovernorOperative { .. } => "gov_operative",
-            CrisisKind::GovernorBuffoon { .. } => "gov_buffoon",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
             CrisisKind::GovernorSick { .. } => "gov_sick",
             CrisisKind::GovernorDeath { .. } => "gov_death",
