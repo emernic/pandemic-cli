@@ -760,35 +760,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::GovernorRecluse { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            let gov_name = state.regions.get(*region_idx)
-                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: format!("{}: Non-Cooperation", gov_name),
-                description: format!(
-                    "{gov_name} has gone dark. Policy enforcement in {region_name} has stalled. \
-                     Field teams are operating without local authorization."),
-                options: vec![ CrisisOption {
-                    label: "Work around them".into(),
-                    description: format!("−5 cooperation in {}, but +3% chairman approval for operational efficiency.", region_name),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Send a delegation (2 personnel for 4d)".into(),
-                    description: format!("+10 cooperation in {}. Delegation returns in 4 days.", region_name),
-                    cost: Some(CrisisCost {
-                        funding: 0.0,
-                        personnel: 2,
-                        operation: Some(OperationSpec { days: 4.0, label: "Diplomatic Delegation".into() }),
-                    }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::ContractOffer { .. } => {
             let offer = state.contract_offer.as_ref();
             let member_idx = offer.map(|c| c.board_member_idx).unwrap_or(0);
@@ -2193,22 +2164,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
         }
 
         // --- Governor archetype crisis resolutions ---
-
-        (CrisisKind::GovernorRecluse { region_idx }, 0) => {
-            // Work around them — cooperation drops but board approves resourcefulness
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation - 5.0).max(0.0);
-            }
-            chairman_satisfaction_hit(state, 0.03);
-            "Operating without local support. Board noted your resourcefulness.".into()
-        }
-        (CrisisKind::GovernorRecluse { region_idx }, _) => {
-            // Send delegation — personnel cost already deducted, +10 cooperation
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
-            }
-            "Delegation sent. Governor engaged. Policy enforcement resuming.".into()
-        }
 
         // --- Contract offer resolutions ---
 

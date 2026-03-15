@@ -700,7 +700,7 @@ pub(super) fn tick_governor_cooperation(state: &mut WorldState, events: &mut Vec
             let kind = match personality {
                 GovernorPersonality::Buffoon => None,
                 GovernorPersonality::Blowhard => None,
-                GovernorPersonality::Recluse => Some(CrisisKind::GovernorRecluse { region_idx: i }),
+                GovernorPersonality::Recluse => None,
                 GovernorPersonality::Hardliner => Some(CrisisKind::GovernorHardliner { region_idx: i }),
                 GovernorPersonality::Operative => Some(CrisisKind::GovernorOperative { region_idx: i }),
                 GovernorPersonality::Mobster => Some(CrisisKind::GovernorMobster { region_idx: i }),
