@@ -505,22 +505,23 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
             let med_name = state.medicines.get(*medicine_idx)
                 .map(|m| m.name.as_str())
                 .unwrap_or("Unknown");
+            let fast_track_cost = 400.0;
             CrisisEvent {
                 title: "Pressure to Skip Trials".into(),
                 description: format!(
-                    "The board is demanding accelerated deployment of {} ({} treatment). \
-                     Trial protocols can be bypassed.",
-                    disease_name, med_name,
+                    "The board wants {} cleared for {} without full trials. \
+                     Expedited approval is possible but expensive.",
+                    med_name, disease_name,
                 ),
                 options: vec![ CrisisOption {
                     label: "Maintain standards".into(),
-                    description: "−5% chairman approval".into(),
+                    description: "−5% chairman approval. Trial continues normally.".into(),
                     cost: None,
                 },
                  CrisisOption {
-                    label: "Fast-track (+10% chairman approval)".into(),
-                    description: "Clear for use 10 strain generations behind current variant. ~20% efficacy penalty from drift.".into(),
-                    cost: None,
+                    label: format!("Fast-track (¥{:.0}, +10% chairman approval)", fast_track_cost),
+                    description: format!("Clear {} for immediate use against {}. Skips trial phase.", med_name, disease_name),
+                    cost: Some(CrisisCost { funding: fast_track_cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
