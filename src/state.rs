@@ -4580,7 +4580,7 @@ pub const DETECTION_THRESHOLD: f64 = 10_000.0;
 pub enum Panel {
     None,
     Threats,
-    Research,
+    Lab,
     Medicines,
     Policy,
     Operations,
@@ -4603,11 +4603,11 @@ pub enum PolicyUiState {
     ManagePolicies { region_idx: usize },
 }
 
-/// Research panel UI state machine.
-/// The research panel is a flat scrollable list with section headers (like the policy panel).
+/// Lab panel UI state machine.
+/// The lab panel is a flat scrollable list with section headers (like the policy panel).
 /// `BrowseAll` is the only browsing state — no intermediate category screen.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ResearchUiState {
+pub enum LabUiState {
     /// Flat list showing all research projects with section headers.
     BrowseAll,
     /// Confirming a project before starting it.
@@ -4695,12 +4695,12 @@ pub enum LedgerUiState {
 pub struct UiState {
     pub open_panel: Panel,
     /// Generic list cursor — index of the selected item in the current panel view.
-    /// Semantics depend on `open_panel` + the active sub-state (medicine_ui, research_ui, etc.):
+    /// Semantics depend on `open_panel` + the active sub-state (medicine_ui, lab_ui, etc.):
     ///
     /// - `Panel::Threats`                     → index into display_order (diseases sorted by deaths desc)
     /// - `Panel::Medicines / BrowseMedicines` → index into unlocked medicines
     /// - `Panel::Medicines / RegionFilter`    → index into grid_reading_order(regions)
-    /// - `Panel::Research / BrowseAll`         → index into `research_flat_items()` flat list
+    /// - `Panel::Lab / BrowseAll`         → index into `research_flat_items()` flat list
     /// - `Panel::Policy / ManagePolicies`     → display position (see MANAGE_* constants)
     /// - `Panel::Operations / BrowseOps`      → decrees, standing orders, loans
     ///
@@ -4714,7 +4714,7 @@ pub struct UiState {
     #[serde(default)]
     pub map_selection: usize,
     #[serde(default)]
-    pub research_ui: Option<ResearchUiState>,
+    pub lab_ui: Option<LabUiState>,
     #[serde(default)]
     pub policy_ui: Option<PolicyUiState>,
     /// Latest event notification shown in the top-right of the status bar.
@@ -4754,7 +4754,7 @@ impl Default for UiState {
             panel_selection: 0,
             medicine_ui: None,
             map_selection: 0,
-            research_ui: None,
+            lab_ui: None,
             policy_ui: None,
             event_notification: None,
             crisis_selection: 0,
@@ -4797,10 +4797,10 @@ impl AppState {
 }
 
 impl UiState {
-    /// Clear all panel sub-states (medicine_ui, research_ui, etc.) to `None`.
+    /// Clear all panel sub-states (medicine_ui, lab_ui, etc.) to `None`.
     fn clear_all_panel_substates(&mut self) {
         self.medicine_ui = None;
-        self.research_ui = None;
+        self.lab_ui = None;
         self.policy_ui = None;
         self.operations_ui = None;
         self.board_ui = None;
@@ -4815,7 +4815,7 @@ impl UiState {
             // Check if we're deeper than the top level — if so, reset to top
             let at_top = match panel {
                 Panel::Medicines => matches!(self.medicine_ui, Some(MedicineUiState::BrowseMedicines) | None),
-                Panel::Research => matches!(self.research_ui, Some(ResearchUiState::BrowseAll) | None),
+                Panel::Lab => matches!(self.lab_ui, Some(LabUiState::BrowseAll) | None),
                 Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::ManagePolicies { .. }) | None),
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
@@ -4831,7 +4831,7 @@ impl UiState {
                 self.panel_selection = 0;
                 match panel {
                     Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
-                    Panel::Research => self.research_ui = Some(ResearchUiState::BrowseAll),
+                    Panel::Lab => self.lab_ui = Some(LabUiState::BrowseAll),
                     Panel::Policy => {
                         self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: self.map_selection });
                     }
@@ -4851,7 +4851,7 @@ impl UiState {
             self.home_splash_done = true;
             match panel {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
-                Panel::Research => self.research_ui = Some(ResearchUiState::BrowseAll),
+                Panel::Lab => self.lab_ui = Some(LabUiState::BrowseAll),
                 Panel::Policy => {
                     // Go directly to the policies for the currently selected region.
                     // Left/right map navigation (sync_panel_region) keeps this in sync.
@@ -4893,17 +4893,17 @@ impl UiState {
                 self.panel_selection = 0;
                 self.policy_ui = None;
             }
-            Panel::Research => {
-                match &self.research_ui {
-                    Some(ResearchUiState::ConfirmProject { .. })
-                    | Some(ResearchUiState::ConfirmLabUpgrade) => {
-                        self.research_ui = Some(ResearchUiState::BrowseAll);
+            Panel::Lab => {
+                match &self.lab_ui {
+                    Some(LabUiState::ConfirmProject { .. })
+                    | Some(LabUiState::ConfirmLabUpgrade) => {
+                        self.lab_ui = Some(LabUiState::BrowseAll);
                         self.panel_selection = 0;
                     }
-                    Some(ResearchUiState::BrowseAll) | None => {
+                    Some(LabUiState::BrowseAll) | None => {
                         self.open_panel = Panel::None;
                         self.panel_selection = 0;
-                        self.research_ui = None;
+                        self.lab_ui = None;
                     }
                 }
             }
@@ -4952,7 +4952,7 @@ impl UiState {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
                 self.medicine_ui = None;
-                self.research_ui = None;
+                self.lab_ui = None;
                 self.policy_ui = None;
                 self.operations_ui = None;
                 self.board_ui = None;
@@ -4969,7 +4969,7 @@ impl UiState {
         self.open_panel = Panel::None;
         self.panel_selection = 0;
         self.medicine_ui = None;
-        self.research_ui = None;
+        self.lab_ui = None;
         self.policy_ui = None;
         self.operations_ui = None;
         self.board_ui = None;

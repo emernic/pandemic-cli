@@ -12,7 +12,7 @@ use state::{
     DecreeId, DECREE_COUNT, GameCommand, GameOutcome, AppState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
-    ResearchFlatItem, ResearchUiState, SimState,
+    ResearchFlatItem, LabUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -113,7 +113,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
             }
         }
         Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
-        Action::OpenResearch => new.ui.toggle_panel(Panel::Research),
+        Action::OpenLab => new.ui.toggle_panel(Panel::Lab),
         Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines),
         Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy),
         Action::OpenOperations => new.ui.toggle_panel(Panel::Operations),
@@ -184,10 +184,10 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 }
             }
             // Toggle "Assign 2x personnel" on research confirm screen (pure UI state)
-            else if new.ui.open_panel == Panel::Research {
-                if let Some(ResearchUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.research_ui {
+            else if new.ui.open_panel == Panel::Lab {
+                if let Some(LabUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.lab_ui {
                     *double_personnel = !*double_personnel;
-                } else if matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll)) {
+                } else if matches!(new.ui.lab_ui, Some(LabUiState::BrowseAll)) {
                     // Toggle auto-repeat for the selected repeatable project
                     let items = new.research_flat_items();
                     if let Some(item) = items.get(new.ui.panel_selection) {
@@ -249,11 +249,11 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
-                            new.ui.research_ui = Some(ResearchUiState::BrowseAll);
+                            new.ui.lab_ui = Some(LabUiState::BrowseAll);
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::UpgradeLab if result.success => {
-                            new.ui.research_ui = Some(ResearchUiState::BrowseAll);
+                            new.ui.lab_ui = Some(LabUiState::BrowseAll);
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::EnactDecree { .. } if result.success => {
@@ -298,8 +298,8 @@ pub fn tick_and_process(state: &AppState) -> AppState {
     // jump when the underlying list grows, shrinks, or is re-sorted.
 
     // Research panel: capture the ResearchFlatItem identity.
-    let selected_research_item = if state.ui.open_panel == Panel::Research
-        && matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll))
+    let selected_research_item = if state.ui.open_panel == Panel::Lab
+        && matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll))
     {
         let items = state.research_flat_items();
         items.get(state.ui.panel_selection).cloned()
@@ -335,8 +335,8 @@ pub fn tick_and_process(state: &AppState) -> AppState {
 
     // Stabilize research panel selection: find the same item in the new list.
     if let Some(ref old_item) = selected_research_item {
-        if new.ui.open_panel == Panel::Research
-            && matches!(new.ui.research_ui, Some(ResearchUiState::BrowseAll))
+        if new.ui.open_panel == Panel::Lab
+            && matches!(new.ui.lab_ui, Some(LabUiState::BrowseAll))
         {
             let new_items = new.research_flat_items();
             let old_kind = old_item.to_kind(state);
@@ -412,7 +412,7 @@ pub use state::format_number;
 fn handle_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.open_panel {
         Panel::Medicines => handle_medicine_confirm(ui, state),
-        Panel::Research => handle_research_confirm(ui, state),
+        Panel::Lab => handle_lab_confirm(ui, state),
         Panel::Policy => handle_policy_confirm(ui, state),
         Panel::Operations => handle_operations_confirm(ui, state),
         Panel::Ledger => handle_ledger_confirm(ui, state),
@@ -457,16 +457,16 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
     }
 }
 
-fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
-    match ui.research_ui.clone() {
-        Some(ResearchUiState::BrowseAll) => {
+fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
+    match ui.lab_ui.clone() {
+        Some(LabUiState::BrowseAll) => {
             let items = state.research_flat_items();
             let Some(item) = items.get(ui.panel_selection) else {
                 return None;
             };
             match item {
                 ResearchFlatItem::UpgradeLab => {
-                    ui.research_ui = Some(ResearchUiState::ConfirmLabUpgrade);
+                    ui.lab_ui = Some(LabUiState::ConfirmLabUpgrade);
                     ui.panel_selection = 0;
                     return None;
                 }
@@ -474,7 +474,7 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
                 ResearchFlatItem::Active(_) => {}
                 // Available projects: go to confirm screen
                 ResearchFlatItem::Available(project_idx) => {
-                    ui.research_ui = Some(ResearchUiState::ConfirmProject {
+                    ui.lab_ui = Some(LabUiState::ConfirmProject {
                         project_idx: *project_idx,
                         double_personnel: false,
                     });
@@ -485,10 +485,10 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
             }
             None
         }
-        Some(ResearchUiState::ConfirmProject { project_idx, double_personnel }) => {
+        Some(LabUiState::ConfirmProject { project_idx, double_personnel }) => {
             Some(GameCommand::StartResearch { project_idx, double_personnel })
         }
-        Some(ResearchUiState::ConfirmLabUpgrade) => {
+        Some(LabUiState::ConfirmLabUpgrade) => {
             Some(GameCommand::UpgradeLab)
         }
         None => None,
@@ -805,7 +805,7 @@ mod tests {
         assert_eq!(state.ui.panel_selection, 0, "JumpToItem ignored when no panel open");
 
         // Open research panel (flat list: items depend on game state)
-        let state = apply_action(&state, &Action::OpenResearch);
+        let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.panel_selection, 0);
         let max = state.research_flat_items().len().saturating_sub(1);
 
@@ -826,19 +826,19 @@ mod tests {
     fn panel_hotkey_resets_to_top_when_deep_in_wizard() {
         let state = AppState::new_default(42);
         // Open research → confirm first item → now at ConfirmProject
-        let state = apply_action(&state, &Action::OpenResearch);
-        assert_eq!(state.ui.open_panel, Panel::Research);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        let state = apply_action(&state, &Action::OpenLab);
+        assert_eq!(state.ui.open_panel, Panel::Lab);
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
         let state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::ConfirmProject { .. })));
 
         // Press R again — should reset to BrowseAll, NOT close the panel
-        let state = apply_action(&state, &Action::OpenResearch);
-        assert_eq!(state.ui.open_panel, Panel::Research);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        let state = apply_action(&state, &Action::OpenLab);
+        assert_eq!(state.ui.open_panel, Panel::Lab);
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
 
         // Press R again at top level — now it closes
-        let state = apply_action(&state, &Action::OpenResearch);
+        let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.open_panel, Panel::None);
     }
 
@@ -972,12 +972,12 @@ mod tests {
 
     #[test]
     fn research_selection_stable_when_new_items_appear() {
-        use crate::state::{ResearchProject, ResearchUiState, Panel};
+        use crate::state::{ResearchProject, LabUiState, Panel};
 
         let mut state = AppState::new_default(42);
         // Open the research panel in BrowseAll mode
-        state.ui.open_panel = Panel::Research;
-        state.ui.research_ui = Some(ResearchUiState::BrowseAll);
+        state.ui.open_panel = Panel::Lab;
+        state.ui.lab_ui = Some(LabUiState::BrowseAll);
         // Pause so tick doesn't advance simulation (we want controlled changes)
         state.sim_state = SimState::Paused;
 

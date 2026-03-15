@@ -1139,7 +1139,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, AppState, WorldState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, ResearchUiState};
+    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, AppState, WorldState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, LabUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut WorldState) {
@@ -1775,10 +1775,10 @@ mod tests {
     #[test]
     fn research_panel_navigation() {
         let mut state = AppState::new_default(42);
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
 
         // Flat panel: BrowseAll with all items in one list
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
         assert_eq!(state.ui.panel_selection, 0);
 
         let items = state.research_flat_items();
@@ -1805,16 +1805,16 @@ mod tests {
         let mut state = AppState::new_default(42);
         detect_all_diseases(&mut state);
 
-        state = apply_action(&state, &Action::OpenResearch);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        state = apply_action(&state, &Action::OpenLab);
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
 
         // Confirm first available project → goes to ConfirmProject
         state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::ConfirmProject { .. })));
 
         // Esc back to flat list
         state = apply_action(&state, &Action::ClosePanel);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
 
         // Esc again closes panel
         state = apply_action(&state, &Action::ClosePanel);
@@ -1827,16 +1827,16 @@ mod tests {
 
         let mut state = AppState::new_default(42);
         // Start a field research project first
-        state = apply_action(&state, &Action::OpenResearch);
+        state = apply_action(&state, &Action::OpenLab);
         state = apply_action(&state, &Action::Confirm); // Confirm first available
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::ConfirmProject { .. })));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::ConfirmProject { .. })));
         state = apply_action(&state, &Action::Confirm); // Start it
         // After starting, UI returns to BrowseAll on the Research panel
 
         // Close the panel first, then re-open to get a fresh BrowseAll
         state = apply_action(&state, &Action::ClosePanel);
-        state = apply_action(&state, &Action::OpenResearch);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        state = apply_action(&state, &Action::OpenLab);
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
         let items = state.research_flat_items();
         // Find the active item's position in the unified list
         let active_pos = items.iter().position(|i| matches!(i, ResearchFlatItem::Active(_))).unwrap();
@@ -1845,7 +1845,7 @@ mod tests {
         // Navigate to the active project and press Enter — should be a no-op
         state.ui.panel_selection = active_pos;
         state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
     }
 
     #[test]

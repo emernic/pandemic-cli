@@ -11,7 +11,7 @@ use crate::state::{GameOutcome, AppState, Panel};
 pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let hotkeys = vec![
         ("T", "Threats", Panel::Threats),
-        ("R", "Research", Panel::Research),
+        ("L", "Lab", Panel::Lab),
         ("M", "Medicines", Panel::Medicines),
         ("P", "Policy", Panel::Policy),
         ("O", "Orders", Panel::Operations),
