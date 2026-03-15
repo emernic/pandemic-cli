@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, TICKS_PER_DAY, AUTO_DEPLOY_MIN_EFFICACY};
+use crate::state::{GameState, Medicine, MedicineUiState, ResearchKind, grid_reading_order, TICKS_PER_DAY, DEPLOY_MIN_EFFICACY};
 use crate::format_number;
 
 /// Maximum selection index for the medicines panel in its current sub-state.
@@ -94,7 +94,7 @@ fn render_browse(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize
                     .filter(|d_idx| med.tested_against.contains(d_idx))
                     .collect();
                 !tested.is_empty() && tested.iter().all(|&d_idx| {
-                    med.effective_efficacy(d_idx, &state.diseases) < AUTO_DEPLOY_MIN_EFFICACY
+                    med.effective_efficacy(d_idx, &state.diseases) < DEPLOY_MIN_EFFICACY
                 })
             };
 

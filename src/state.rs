@@ -2976,9 +2976,9 @@ pub const TICKS_PER_DAY: f64 = 60.0;
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
 /// Auto-repeat manufacturing only triggers when doses drop to this fraction of max.
 pub const AUTO_MANUFACTURE_THRESHOLD: f64 = 0.25;
-/// Minimum effective efficacy for auto-deploy to fire. Below this threshold,
+/// Minimum effective efficacy for deployment to fire. Below this threshold,
 /// deploying wastes doses on a near-useless medicine.
-pub const AUTO_DEPLOY_MIN_EFFICACY: f64 = 0.04;
+pub const DEPLOY_MIN_EFFICACY: f64 = 0.04;
 /// Deploy cooldown per medicine per region in ticks (half a day).
 /// Per-medicine cooldown means deploying medicine A doesn't block medicine B.
 pub const DEPLOY_COOLDOWN_TICKS: u64 = (TICKS_PER_DAY / 2.0) as u64;
@@ -5027,8 +5027,6 @@ impl UiState {
         if let Some(PolicyUiState::ManagePolicies { region_idx }) = &mut self.policy_ui {
             *region_idx = self.map_selection;
         }
-        // No medicine sub-states need map-sync anymore (RegionFilter uses
-        // its own region list, not map_selection).
     }
 
 }
