@@ -803,32 +803,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::GovernorBlowhard { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            let gov_name = state.regions.get(*region_idx)
-                .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
-            let cost = scaled_cost(state, 0.10, 80.0, 400.0);
-            CrisisEvent {
-                title: format!("{}: Baseless Accusations", gov_name),
-                description: format!(
-                    "{gov_name} publicly accused your agency of incompetence in {region_name}. \
-                     The charges are unsubstantiated."),
-                options: vec![ CrisisOption {
-                    label: "Ignore it".into(),
-                    description: format!("−3% chairman approval, but {} appreciates the restraint (+5 cooperation).", gov_name),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Counter-broadcast (¥{cost:.0})"),
-                    description: format!("+3% chairman approval, but public confrontation damages cooperation with {} (−5).", gov_name),
-                    cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::GovernorRecluse { region_idx } => {
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -2319,23 +2293,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
         }
 
         // --- Governor archetype crisis resolutions ---
-
-        (CrisisKind::GovernorBlowhard { region_idx }, 0) => {
-            // Ignore it — small approval hit but governor appreciates restraint
-            chairman_satisfaction_hit(state, -0.03);
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
-            }
-            "Ignored the broadcast. The accusations faded. Governor cooperation improved.".into()
-        }
-        (CrisisKind::GovernorBlowhard { region_idx }, _) => {
-            // Counter-broadcast — gain approval but antagonize governor
-            chairman_satisfaction_hit(state, 0.03);
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                region.governor.cooperation = (region.governor.cooperation - 5.0).max(0.0);
-            }
-            "Counter-broadcast aired. Board satisfied but governor relations strained.".into()
-        }
 
         (CrisisKind::GovernorRecluse { region_idx }, 0) => {
             // Work around them — cooperation drops but board approves resourcefulness
