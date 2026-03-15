@@ -317,10 +317,8 @@ pub(super) fn update_board_satisfaction(state: &mut WorldState) {
                         });
                         let region_survival = region
                             .map(|r| {
-                                let dead: f64 = r.infections.iter().map(|inf| inf.dead).sum::<f64>()
-                                    + r.collapse_deaths;
-                                let initial = r.population as f64;
-                                if initial > 0.0 { ((initial - dead) / initial).clamp(0.0, 1.0) } else { 0.0 }
+                                let pop = r.population as f64;
+                                if pop > 0.0 { (r.alive() / pop).clamp(0.0, 1.0) } else { 0.0 }
                             })
                             .unwrap_or(0.0);
                         // 0% alive = -0.20, 100% alive = +0.20
