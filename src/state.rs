@@ -4427,8 +4427,6 @@ pub enum CrisisKind {
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
     /// Corrupt official siphoning funds — amount locked at generation time.
     CorruptOfficial { stolen: f64 },
-    /// Powerful nation wants your research data — share or refuse.
-    ResourceDiversion { disease_idx: usize, share_reward: f64, refuse_cost: f64 },
     /// Hospital workers collapsing — reduce shifts or push through.
     ExhaustionEpidemic { region_idx: usize, personnel_loss: u32 },
     /// Board member's corporation deploys private security, demands operational control.
@@ -4576,7 +4574,6 @@ impl CrisisKind {
             CrisisKind::BlackMarketMedicine { .. } => "blackmarket",
             CrisisKind::TrialShortcut { .. } => "trial",
             CrisisKind::CorruptOfficial { .. } => "corrupt",
-            CrisisKind::ResourceDiversion { .. } => "diversion",
             CrisisKind::ExhaustionEpidemic { .. } => "exhaustion",
             CrisisKind::CorporateSeizure { .. } => "corporate_seizure",
             CrisisKind::CultBlockade { .. } => "cult",

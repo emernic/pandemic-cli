@@ -247,18 +247,6 @@ pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<
         candidates.push(CrisisKind::CorruptOfficial { stolen });
     }
 
-    // Resource diversion: requires identified disease
-    let identified: Vec<usize> = state.diseases.iter().enumerate()
-        .filter(|(_, d)| d.detected && d.knowledge > 0.3)
-        .map(|(i, _)| i)
-        .collect();
-    if !identified.is_empty() {
-        let idx = identified[rng.r#gen::<usize>() % identified.len()];
-        let share_reward = scaled_cost(state, 0.25, 150.0, 800.0);
-        let refuse_cost = scaled_cost(state, 0.15, 100.0, 600.0);
-        candidates.push(CrisisKind::ResourceDiversion { disease_idx: idx, share_reward, refuse_cost });
-    }
-
     // Exhaustion epidemic: fires when hospitals are overwhelmed by patient volume.
     // Requires: hospitals running (not discouraged) AND significant infection load.
     // Discourage Hospitalization prevents this — fewer patients means no staff burnout.
@@ -609,31 +597,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         personnel: 2,
                         operation: Some(OperationSpec { days: 3.0, label: "Audit Team".into() }),
                     }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::ResourceDiversion { disease_idx, share_reward, refuse_cost } => {
-            let disease_name = state.diseases.get(*disease_idx)
-                .map(|d| d.display_name(*disease_idx))
-                .unwrap_or_else(|| format!("Unknown Pathogen #{}", disease_idx + 1));
-            CrisisEvent {
-                title: "Research Data Request".into(),
-                description: format!(
-                    "A regional governor is demanding access to your sequencing data on {}.",
-                    disease_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: format!("Share data (+¥{:.0}, −2 personnel for 2 days)", share_reward),
-                    description: format!("Transfer sequencing data. Receive ¥{:.0}. Staff diverted to package and verify data.", share_reward),
-                    cost: None, // Personnel operation applied in resolve
-                },
-                 CrisisOption {
-                    label: format!("Refuse (−¥{:.0}, +3% approval)", refuse_cost),
-                    description: "Keep your data. Foreign aid reduced, but the board respects your independence.".into(),
-                    cost: Some(CrisisCost { funding: *refuse_cost, personnel: 0, ..Default::default() }),
                 },
                 ],
                 kind,
@@ -2285,22 +2248,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
         (CrisisKind::CorruptOfficial { .. }, _) => {
             // Investigate — recover money (personnel cost already deducted)
             "Investigation successful. Funds recovered, official removed.".into()
-        }
-
-        (CrisisKind::ResourceDiversion { share_reward, .. }, 0) => {
-            state.resources.funding += share_reward;
-            // Temporary personnel operation: 2 staff for 2 days to package data
-            state.crisis_operations.push(CrisisOperation {
-                label: "Data Transfer Team".to_string(),
-                personnel: 2,
-                ticks_remaining: 2.0 * TICKS_PER_DAY,
-            });
-            format!("Research data shared. Received ¥{:.0}. 2 personnel diverted for 2 days.", share_reward)
-        }
-        (CrisisKind::ResourceDiversion { .. }, _) => {
-            // Refuse — funding cost already deducted, grant chairman satisfaction boost
-            chairman_satisfaction_hit(state, 0.03);
-            "Refused to share research. Foreign aid reduced. Board approves your independence.".into()
         }
 
         (CrisisKind::ExhaustionEpidemic { region_idx, .. }, 0) => {
