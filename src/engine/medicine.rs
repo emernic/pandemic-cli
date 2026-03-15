@@ -472,7 +472,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 }
                 // Skip diseases where resistance has made the medicine too weak.
                 if state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases)
-                    < crate::state::AUTO_DEPLOY_MIN_EFFICACY
+                    < crate::state::DEPLOY_MIN_EFFICACY
                 {
                     continue;
                 }
@@ -505,7 +505,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             // threshold and notify the player once.
             if !state.deploy_blocked_notified.contains(&med_idx) {
                 let all_blocked = tested.iter().all(|&d_idx| {
-                    state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::AUTO_DEPLOY_MIN_EFFICACY
+                    state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::DEPLOY_MIN_EFFICACY
                 });
                 if all_blocked {
                     state.deploy_blocked_notified.insert(med_idx);

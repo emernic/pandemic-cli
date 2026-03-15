@@ -235,13 +235,6 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                     new.ui.panel_selection = 0;
                 }
             }
-            // Toggle region in region filter sub-menu
-            else if new.ui.open_panel == Panel::Medicines {
-                if let Some(MedicineUiState::RegionFilter { medicine_idx }) = new.ui.medicine_ui.clone() {
-                    // X does nothing in region filter (Enter toggles regions)
-                    let _ = medicine_idx;
-                }
-            }
         }
         Action::Confirm => {
             // If the typewriter animation is still playing, skip to fully revealed.
