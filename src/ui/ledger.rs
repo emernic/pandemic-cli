@@ -246,13 +246,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
         .border_style(Style::default().fg(Color::Green));
 
     let inner_height = area.height.saturating_sub(2);
-    let scroll_offset = selected_line.map(|line| {
-        if line as u16 >= inner_height {
-            (line as u16).saturating_sub(inner_height * 2 / 3)
-        } else {
-            0
-        }
-    }).unwrap_or(0);
+    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
 
     let widget = Paragraph::new(lines)
         .block(block)
