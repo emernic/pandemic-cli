@@ -275,9 +275,10 @@ pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng) {
                 }
             }
             Some(BoardPersonality::Humanitarian) => {
-                // Personnel boost: +1 permanent personnel.
-                state.resources.personnel += 1;
-                "Personnel seconded: +1 staff".to_string()
+                // Emergency relief funding.
+                let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
+                state.resources.funding += bonus;
+                format!("Relief funds: +¥{:.0}", bonus)
             }
             Some(BoardPersonality::Dealmaker) => {
                 // Supply priority: dose boost on a random medicine with doses.
