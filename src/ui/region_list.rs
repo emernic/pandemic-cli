@@ -959,7 +959,10 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
                 let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
                 let screened_inf = region.estimated_infected * proportion;
                 let shown_immune = if shows_immune { inf.immune } else { 0.0 };
-                let susceptible = pop - screened_inf - dead - shown_immune;
+                // Always subtract actual immune from susceptible calculation,
+                // even when immune isn't displayed — otherwise recovered people
+                // appear to move from infected back to susceptible.
+                let susceptible = pop - screened_inf - dead - inf.immune;
                 let mut spans = vec![
                     Span::styled(
                         format!("  {:<20}", dname),
