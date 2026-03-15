@@ -5718,11 +5718,6 @@ impl GameState {
         disease_dead + collapse_dead
     }
 
-    /// Whether any disease is currently hidden.
-    pub fn has_hidden_threats(&self) -> bool {
-        self.diseases.iter().any(|d| d.hidden)
-    }
-
     pub fn personnel_busy(&self) -> u32 {
         let research: u32 = self.active_research.iter().map(|p| p.personnel_assigned).sum();
         let policy: u32 = self.policies.iter().enumerate()

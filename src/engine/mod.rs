@@ -953,9 +953,9 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
         GameCommand::ToggleThreatVisibility { disease_idx } => {
             if let Some(d) = state.diseases.get_mut(*disease_idx) {
                 d.hidden = !d.hidden;
-                CommandResult { message: None, success: true }
+                CommandResult { message: None, success: true, events: Vec::new() }
             } else {
-                CommandResult { message: None, success: false }
+                CommandResult { message: None, success: false, events: Vec::new() }
             }
         }
         GameCommand::UpgradeLab => {
