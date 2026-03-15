@@ -22,18 +22,17 @@ const EVENT_LOG_MAX: usize = 50;
 /// - crisis popup selection and checkbox reset on `CrisisStarted`
 /// - event prioritization and suppression rules
 ///
-/// The transient `GameState.events` field is left in place and is NOT
-/// cleared here — the engine clears it at the start of each tick.
-pub(crate) fn process_events(state: &mut GameState) {
-    if state.events.is_empty() {
+/// Events are passed explicitly from the caller (tick or command result).
+pub(crate) fn process_events(state: &mut GameState, events: &[GameEvent]) {
+    if events.is_empty() {
         return;
     }
 
     // UI responses to game events
-    if state.events.iter().any(|e| matches!(e, GameEvent::GameOver)) {
+    if events.iter().any(|e| matches!(e, GameEvent::GameOver)) {
         state.ui.open_panel = Panel::None;
     }
-    if state.events.iter().any(|e| matches!(e, GameEvent::CrisisStarted)) {
+    if events.iter().any(|e| matches!(e, GameEvent::CrisisStarted)) {
         state.ui.crisis_selection = 0;
         state.ui.crisis_auto_resolve = false;
     }
@@ -47,7 +46,7 @@ pub(crate) fn process_events(state: &mut GameState) {
     // Lower priority number = more important.
     let mut best_notification: Option<(u8, String)> = None; // (priority, notification_msg)
 
-    for event in &state.events {
+    for event in events {
         let (priority, msg, notification) = match event {
             GameEvent::RegionCollapsed { region_idx, personnel_lost } => {
                 let region = state.regions.get(*region_idx);

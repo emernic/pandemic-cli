@@ -2167,7 +2167,7 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
 /// Activate a crisis: check for a saved auto-resolve preference and either
 /// resolve immediately or pause the game for player input.
 /// Called from tick() for both scheduled and randomly generated crises.
-pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) -> CrisisPostAction {
+pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent, events: &mut Vec<GameEvent>) -> CrisisPostAction {
     let auto_choice = state.auto_resolve_crises.get(crisis.kind.tag()).copied();
     let can_auto = match auto_choice {
         Some(choice) => {
@@ -2178,26 +2178,26 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent) -> Cri
     };
     state.active_crisis = Some(crisis);
     if can_auto {
-        let (message, post_action) = resolve_crisis(state, auto_choice.unwrap());
-        state.events.push(GameEvent::CrisisAutoResolved { message });
+        let (message, post_action) = resolve_crisis(state, auto_choice.unwrap(), events);
+        events.push(GameEvent::CrisisAutoResolved { message });
         post_action
     } else {
         state.sim_state = SimState::Event {
             was_running: state.sim_state.is_running(),
         };
-        state.events.push(GameEvent::CrisisStarted);
+        events.push(GameEvent::CrisisStarted);
         CrisisPostAction::None
     }
 }
 
 /// Tick all active crisis operations. Complete ones that expire and return their personnel.
-pub(super) fn tick_crisis_operations(state: &mut GameState) {
+pub(super) fn tick_crisis_operations(state: &mut GameState, events: &mut Vec<GameEvent>) {
     let mut i = 0;
     while i < state.crisis_operations.len() {
         state.crisis_operations[i].ticks_remaining -= 1.0;
         if state.crisis_operations[i].ticks_remaining <= 0.0 {
             let op = state.crisis_operations.remove(i);
-            state.events.push(GameEvent::CrisisTeamReturned {
+            events.push(GameEvent::CrisisTeamReturned {
                 label: op.label,
                 personnel: op.personnel,
             });
@@ -2209,7 +2209,7 @@ pub(super) fn tick_crisis_operations(state: &mut GameState) {
 
 /// Apply the chosen crisis resolution. Returns a status message and any
 /// cross-subsystem post-action for mod.rs to dispatch.
-pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, CrisisPostAction) {
+pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut Vec<GameEvent>) -> (String, CrisisPostAction) {
     let crisis = match state.active_crisis.take() {
         Some(c) => c,
         None => return ("No active crisis".into(), CrisisPostAction::None),
@@ -2868,7 +2868,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 let old_name = region.governor.name.clone();
                 region.governor.dead = true;
                 region.governor.succession_tick = Some(state.tick + (7.0 * TICKS_PER_DAY) as u64);
-                state.events.push(GameEvent::GovernorDied {
+                events.push(GameEvent::GovernorDied {
                     region_idx: *region_idx,
                     name: old_name,
                 });
@@ -2882,7 +2882,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 let old_name = region.governor.name.clone();
                 region.governor.dead = true;
                 region.governor.succession_tick = Some(state.tick + (GOVERNOR_SUCCESSION_DAYS * TICKS_PER_DAY) as u64);
-                state.events.push(GameEvent::GovernorDied {
+                events.push(GameEvent::GovernorDied {
                     region_idx: *region_idx,
                     name: old_name,
                 });
@@ -3041,9 +3041,9 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                     }
                     let lost = 1u32.min(state.resources.personnel);
                     state.resources.personnel = state.resources.personnel.saturating_sub(lost);
-                    state.events.push(GameEvent::RegionCollapsed { region_idx: i, personnel_lost: lost });
+                    events.push(GameEvent::RegionCollapsed { region_idx: i, personnel_lost: lost });
                 }
-                state.events.push(GameEvent::ArkProtocolActivated {
+                events.push(GameEvent::ArkProtocolActivated {
                     region_idx: target_idx,
                 });
                 format!("Consolidation complete. All operations moved to {}.", region_name)
@@ -3222,7 +3222,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 for &policy in &PolicyId::ALL {
                     if let Some(req) = policy.authority_requirement() {
                         if old_authority < req && new_authority >= req {
-                            state.events.push(GameEvent::PolicyAuthorized { policy });
+                            events.push(GameEvent::PolicyAuthorized { policy });
                         }
                     }
                 }
@@ -3485,6 +3485,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn field_team_detained_pay_schedules_followup() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (20.0 * TICKS_PER_DAY) as u64;
@@ -3509,7 +3510,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
         let pending_before = state.pending_crises.len();
-        let (msg, _) = resolve_crisis(&mut state, 0); // Pay
+        let (msg, _) = resolve_crisis(&mut state, 0, &mut events); // Pay
         assert!(state.pending_crises.len() > pending_before, "paying should schedule follow-up");
         assert!(state.pending_crises.iter().any(|k| matches!(k, CrisisKind::FieldTeamDetainedAgain { .. })),
             "follow-up should be FieldTeamDetainedAgain");
@@ -3518,6 +3519,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn field_team_detained_write_off_loses_personnel() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = (20.0 * TICKS_PER_DAY) as u64;
@@ -3539,7 +3541,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
         let personnel_before = state.resources.personnel;
-        resolve_crisis(&mut state, 2); // Write them off
+        resolve_crisis(&mut state, 2, &mut events); // Write them off
         assert_eq!(state.resources.personnel, personnel_before - 3, "write-off should lose team_size personnel");
     }
 
@@ -3566,6 +3568,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn new_pathogen_detected_begin_identification_starts_research() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
@@ -3579,7 +3582,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
         let funding_before = state.resources.funding;
         assert!(state.active_research.iter().all(|p| !p.kind.is_field_work()), "no research before resolution");
-        let (msg, _) = resolve_crisis(&mut state, 0); // Begin identification
+        let (msg, _) = resolve_crisis(&mut state, 0, &mut events); // Begin identification
         assert!(!state.active_research.iter().all(|p| !p.kind.is_field_work()),
             "identification research should start after choosing option A");
         assert!(matches!(
@@ -3607,7 +3610,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // Tick until a NewPathogenDetected crisis fires (or give up after many ticks)
         let mut crisis_fired = false;
         for _ in 0..500 {
-            state = tick(&state);
+            (state, _) = tick(&state);
             if state.active_crisis.as_ref().is_some_and(|c|
                 matches!(c.kind, CrisisKind::NewPathogenDetected { .. })) {
                 crisis_fired = true;
@@ -3649,6 +3652,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn new_pathogen_detected_refunds_funding_if_insufficient_personnel() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
@@ -3661,7 +3665,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
         let funding_before = state.resources.funding;
-        let (msg, _) = resolve_crisis(&mut state, 0); // Begin identification
+        let (msg, _) = resolve_crisis(&mut state, 0, &mut events); // Begin identification
         assert!(state.active_research.iter().all(|p| !p.kind.is_field_work()),
             "no research should start without enough personnel");
         assert_eq!(state.resources.funding, funding_before,
@@ -3671,6 +3675,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn new_pathogen_detected_dismiss_does_nothing() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.diseases[0].detected = true;
         state.diseases[0].knowledge = 0.0;
@@ -3683,7 +3688,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.sim_state = crate::state::SimState::Event { was_running: false };
 
         let funding_before = state.resources.funding;
-        resolve_crisis(&mut state, 1); // Acknowledge
+        resolve_crisis(&mut state, 1, &mut events); // Acknowledge
         assert!(state.active_research.iter().all(|p| !p.kind.is_field_work()), "no research should start on dismiss");
         assert_eq!(state.resources.funding, funding_before, "no funding should be deducted on dismiss");
     }
@@ -3854,6 +3859,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn vote_no_confidence_concessions_boost_chairman() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
@@ -3870,7 +3876,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let cost = crisis_event.options[0].cost.as_ref().unwrap().funding;
         state.active_crisis = Some(crisis_event);
         state.resources.funding -= cost;
-        resolve_crisis(&mut state, 0);
+        resolve_crisis(&mut state, 0, &mut events);
 
         let chair = &state.board_members[chair_idx];
         let crisis_total = chair.modifier_total(&ModifierSource::CrisisEffect);
@@ -3882,6 +3888,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn vote_no_confidence_stand_firm_cuts_budget() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::initialize_game(&mut state);
         state.resources.funding = 5000.0;
@@ -3891,7 +3898,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let kind = CrisisKind::VoteOfNoConfidence;
         let crisis_event = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis_event);
-        resolve_crisis(&mut state, 1);
+        resolve_crisis(&mut state, 1, &mut events);
 
         // Standing firm applies a -0.15 chairman satisfaction hit
         let chairman = state.board_members.iter().find(|m| m.is_chairman).unwrap();
@@ -3933,7 +3940,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let max_ticks = 20;
         let mut current = state;
         for _ in 0..max_ticks {
-            current = tick(&current);
+            (current, _) = tick(&current);
             if let Some(ref crisis) = current.active_crisis {
                 if crisis.kind.tag() == "vote_no_confidence" {
                     found = true;
@@ -3973,7 +3980,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // Tick a few times — should NOT fire due to cooldown
         let mut current = state;
         for _ in 0..10 {
-            current = crate::engine::tick(&current);
+            (current, _) = crate::engine::tick(&current);
             if let Some(ref crisis) = current.active_crisis {
                 assert_ne!(crisis.kind.tag(), "vote_no_confidence",
                     "should not fire while on cooldown");
@@ -3984,6 +3991,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn governor_sick_worst_case_queues_death() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
 
@@ -4009,7 +4017,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             s.active_crisis = Some(crisis);
             s.sim_state = SimState::Event { was_running: false };
 
-            let (_msg, _) = resolve_crisis(&mut s, worst_choice);
+            let (_msg, _) = resolve_crisis(&mut s, worst_choice, &mut events);
 
             let has_death = s.pending_crises.iter()
                 .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
@@ -4020,6 +4028,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn buffoon_sick_stabilize_governor_hits_supply_lines_not_death() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
         state.regions[0].governor.personality = GovernorPersonality::Buffoon;
@@ -4032,7 +4041,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let (_msg, _) = resolve_crisis(&mut state, 0); // Stabilize governor
+        let (_msg, _) = resolve_crisis(&mut state, 0, &mut events); // Stabilize governor
 
         // Should NOT queue governor death
         let has_death = state.pending_crises.iter()
@@ -4050,6 +4059,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn governor_sick_worst_case_skips_if_already_dead() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
         state.regions[0].governor.personality = GovernorPersonality::Hardliner;
@@ -4060,7 +4070,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let (_msg, _) = resolve_crisis(&mut state, 2); // Refuse (worst-case)
+        let (_msg, _) = resolve_crisis(&mut state, 2, &mut events); // Refuse (worst-case)
 
         let has_death = state.pending_crises.iter()
             .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
@@ -4069,6 +4079,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn governor_sick_worst_case_skips_if_death_already_pending() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
         state.regions[0].governor.personality = GovernorPersonality::Operative;
@@ -4082,7 +4093,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let (_msg, _) = resolve_crisis(&mut state, 1); // Refuse (worst-case)
+        let (_msg, _) = resolve_crisis(&mut state, 1, &mut events); // Refuse (worst-case)
 
         let death_count = state.pending_crises.iter()
             .filter(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0))
@@ -4168,6 +4179,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn corporate_demand_refuse_damages_infrastructure() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         state.tick = 1000;
@@ -4186,7 +4198,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.active_crisis = Some(crisis);
         state.sim_state = SimState::Event { was_running: false };
 
-        let (msg, _) = resolve_crisis(&mut state, 1); // Refuse
+        let (msg, _) = resolve_crisis(&mut state, 1, &mut events); // Refuse
 
         assert!(state.regions[region_idx].supply_lines < supply_before,
             "supply lines should decrease on refusal");
@@ -4234,6 +4246,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn board_meeting_raises_authority_when_pressure_high() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
@@ -4270,7 +4283,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // Resolve a board meeting
         let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
         state.active_crisis = Some(crisis);
-        resolve_crisis(&mut state, 0);
+        resolve_crisis(&mut state, 0, &mut events);
 
         assert_eq!(state.resources.authority, Authority::VeryLow,
             "board meeting should raise authority by exactly one level from Minimal");
@@ -4278,6 +4291,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn board_meeting_lowers_authority_when_pressure_low() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         crate::engine::corporations::generate_corporations(&mut state);
         crate::engine::board::generate_board_members(&mut state);
@@ -4304,7 +4318,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // Resolve a board meeting
         let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
         state.active_crisis = Some(crisis);
-        resolve_crisis(&mut state, 0);
+        resolve_crisis(&mut state, 0, &mut events);
 
         assert_eq!(state.resources.authority, Authority::Medium,
             "board meeting should lower authority by exactly one level from High");
@@ -4312,6 +4326,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
     #[test]
     fn board_meeting_emits_policy_authorized_on_raise() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::PolicyId;
 
         let mut state = GameState::new_default(42);
@@ -4345,16 +4360,16 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             "setup should produce suggested > VeryLow, got {:?}", suggested);
 
         // Clear events, then resolve board meeting
-        state.events.clear();
+        events.clear();
         let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
         state.active_crisis = Some(crisis);
-        resolve_crisis(&mut state, 0);
+        resolve_crisis(&mut state, 0, &mut events);
 
         assert_eq!(state.resources.authority, Authority::Low,
             "authority should have been raised to Low");
 
         // DiscourageHosp requires Authority::Low — should be in the emitted events
-        let policy_events: Vec<_> = state.events.iter().filter_map(|e| {
+        let policy_events: Vec<_> = events.iter().filter_map(|e| {
             if let GameEvent::PolicyAuthorized { policy } = e {
                 Some(*policy)
             } else {

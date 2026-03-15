@@ -697,7 +697,7 @@ mod tests {
         let max_tick = meeting_tick + 100; // small buffer
         let mut found_meeting = false;
         while state.tick <= max_tick {
-            state = tick(&state);
+            (state, _) = tick(&state);
             if let Some(ref crisis) = state.active_crisis {
                 if crisis.kind.tag() == "board_meeting" {
                     found_meeting = true;

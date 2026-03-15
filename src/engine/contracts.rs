@@ -223,7 +223,7 @@ const PATRON_BONUS_DOSE_FRACTION: f64 = 0.20;
 /// Check satisfied contracts for patron bonus eligibility and grant bonuses.
 /// Bonuses are modest one-time perks: funding, personnel, research speed, or dose refill.
 /// The bonus type is determined by the offering board member's personality.
-pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng) {
+pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
     let min_held_ticks = (PATRON_BONUS_MIN_HELD_DAYS * TICKS_PER_DAY) as u64;
     let cooldown_ticks = (PATRON_BONUS_COOLDOWN_DAYS * TICKS_PER_DAY) as u64;
 
@@ -298,7 +298,7 @@ pub(super) fn tick_patron_bonuses(state: &mut GameState, rng: &mut ChaCha8Rng) {
         };
 
         state.contracts[contract_idx].last_bonus_tick = state.tick;
-        state.events.push(GameEvent::PatronBonus {
+        events.push(GameEvent::PatronBonus {
             member_name,
             description,
         });
@@ -328,7 +328,7 @@ fn pick_random_medicine(state: &GameState, rng: &mut ChaCha8Rng) -> Option<usize
 }
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
-pub(super) fn tick_check_contracts(state: &mut GameState) {
+pub(super) fn tick_check_contracts(state: &mut GameState, events: &mut Vec<GameEvent>) {
     // First pass: compute satisfaction changes (need immutable borrow for is_met)
     let updates: Vec<(usize, bool)> = state.contracts.iter().enumerate()
         .map(|(i, c)| (i, c.condition.is_met(state)))
@@ -354,7 +354,7 @@ pub(super) fn tick_check_contracts(state: &mut GameState) {
                 let member_name = state.board_members.get(c.board_member_idx)
                     .map(|m| m.name.clone())
                     .unwrap_or_else(|| "Board member".to_string());
-                state.events.push(GameEvent::ContractWarning {
+                events.push(GameEvent::ContractWarning {
                     member_name,
                     reason: c.condition.description(),
                 });
@@ -388,7 +388,7 @@ pub(super) fn tick_check_contracts(state: &mut GameState) {
         let member_name = state.board_members.get(*member_idx)
             .map(|m| m.name.as_str())
             .unwrap_or("Board member");
-        state.events.push(GameEvent::ContractRevoked {
+        events.push(GameEvent::ContractRevoked {
             name: format!("{} pulled out: {}", member_name, name),
             reason: reason.clone(),
         });
@@ -398,7 +398,7 @@ pub(super) fn tick_check_contracts(state: &mut GameState) {
 /// Generate a new contract offer if enough time has passed and slots are available.
 /// The offering board member is chosen randomly from members who don't already have
 /// an active contract.
-pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) {
+pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
     // Don't offer if already have a pending offer
     if state.contract_offer.is_some() {
         return;
@@ -454,7 +454,7 @@ pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) 
     let contract = build_contract(pick, member_idx, state, rng);
 
     let template_id = contract.template_id;
-    state.events.push(GameEvent::ContractOffered {
+    events.push(GameEvent::ContractOffered {
         name: contract.name.clone(),
     });
     state.contract_offer = Some(contract);
@@ -647,6 +647,7 @@ mod tests {
 
     #[test]
     fn satisfaction_degrades_when_condition_violated() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = 1.0;
@@ -657,7 +658,7 @@ mod tests {
 
         // Run several ticks — satisfaction should degrade but not instant-revoke
         for _ in 0..100 {
-            tick_check_contracts(&mut state);
+            tick_check_contracts(&mut state, &mut events);
         }
         assert_eq!(state.contracts.len(), 1, "Should not be revoked after only 100 ticks");
         assert!(state.contracts[0].satisfaction < 1.0, "Satisfaction should have dropped");
@@ -667,6 +668,7 @@ mod tests {
 
     #[test]
     fn satisfaction_recovers_when_condition_restored() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let mut c = make_test_contract(FundingCondition::NoCollapse);
         c.satisfaction = 0.5; // Start at warning level
@@ -674,13 +676,14 @@ mod tests {
 
         // Condition is met (no collapses) — satisfaction should recover
         for _ in 0..600 {
-            tick_check_contracts(&mut state);
+            tick_check_contracts(&mut state, &mut events);
         }
         assert!(state.contracts[0].satisfaction > 0.5, "Satisfaction should recover");
     }
 
     #[test]
     fn warning_fires_at_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = CONTRACT_CONDITION_WARN + CONTRACT_DEGRADE_RATE * 0.5; // Just above warning
@@ -688,16 +691,17 @@ mod tests {
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         // One tick should push below warning threshold
-        tick_check_contracts(&mut state);
+        tick_check_contracts(&mut state, &mut events);
 
         assert!(state.contracts[0].warned);
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::ContractWarning { .. })
         ));
     }
 
     #[test]
     fn revocation_at_low_satisfaction() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
         c.satisfaction = CONTRACT_CONDITION_REVOKE + 0.0001; // Just above revocation
@@ -705,14 +709,15 @@ mod tests {
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
-        tick_check_contracts(&mut state);
+        tick_check_contracts(&mut state, &mut events);
 
         assert!(state.contracts.is_empty(), "Contract should be revoked");
-        assert!(state.events.iter().any(|e| matches!(e, GameEvent::ContractRevoked { .. })));
+        assert!(events.iter().any(|e| matches!(e, GameEvent::ContractRevoked { .. })));
     }
 
     #[test]
     fn satisfied_contract_survives_check() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.contracts.push(FundingContract {
             name: "Stable Deal".to_string(),
@@ -727,7 +732,7 @@ mod tests {
             loyalty_raise_offered: false,
             last_bonus_tick: 0,
         });
-        tick_check_contracts(&mut state);
+        tick_check_contracts(&mut state, &mut events);
         assert_eq!(state.contracts.len(), 1);
         // Satisfaction should stay at 1.0 (capped)
         assert!((state.contracts[0].satisfaction - 1.0).abs() < 0.001);
@@ -741,6 +746,7 @@ mod tests {
 
     #[test]
     fn offer_generated_at_first_offer_tick() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -748,11 +754,11 @@ mod tests {
         state.regions[0].dead = 3_000_000.0;
 
         state.tick = CONTRACT_FIRST_OFFER_TICK - 1;
-        tick_offer_contracts(&mut state, &mut rng);
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
         assert!(state.contract_offer.is_none());
 
         state.tick = CONTRACT_FIRST_OFFER_TICK;
-        tick_offer_contracts(&mut state, &mut rng);
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
         assert!(state.contract_offer.is_some());
         // Verify offer is linked to a valid board member
         let offer = state.contract_offer.as_ref().unwrap();
@@ -762,6 +768,7 @@ mod tests {
 
     #[test]
     fn no_offer_when_at_max_contracts() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         state.tick = CONTRACT_FIRST_OFFER_TICK;
@@ -782,12 +789,13 @@ mod tests {
             });
         }
 
-        tick_offer_contracts(&mut state, &mut rng);
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
         assert!(state.contract_offer.is_none());
     }
 
     #[test]
     fn no_duplicate_offer_while_pending() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -795,16 +803,17 @@ mod tests {
         // Set deaths so MaxDeaths templates are contextually relevant
         state.regions[0].dead = 3_000_000.0;
 
-        tick_offer_contracts(&mut state, &mut rng);
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
         let first_offer = state.contract_offer.as_ref().unwrap().name.clone();
 
         state.tick += CONTRACT_OFFER_INTERVAL;
-        tick_offer_contracts(&mut state, &mut rng);
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
         assert_eq!(state.contract_offer.as_ref().unwrap().name, first_offer);
     }
 
     #[test]
     fn warning_queues_contract_demand_crisis() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = 500;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
@@ -813,7 +822,7 @@ mod tests {
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
         assert!(state.pending_crises.is_empty());
-        tick_check_contracts(&mut state);
+        tick_check_contracts(&mut state, &mut events);
 
         // Warning should fire AND a contract demand crisis should be queued
         assert!(state.contracts[0].warned);
@@ -827,6 +836,7 @@ mod tests {
 
     #[test]
     fn contract_demand_cooldown_prevents_repeat() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = 1000;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
@@ -836,7 +846,7 @@ mod tests {
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
-        tick_check_contracts(&mut state);
+        tick_check_contracts(&mut state, &mut events);
 
         // Warning fires, but no demand crisis due to cooldown
         assert!(state.contracts[0].warned);
@@ -846,6 +856,7 @@ mod tests {
 
     #[test]
     fn contract_demand_fires_after_cooldown_expires() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.tick = 1000;
         let mut c = make_test_contract(FundingCondition::MaxDeaths { threshold: 50_000_000.0 });
@@ -854,7 +865,7 @@ mod tests {
         state.contracts.push(c);
         state.regions[0].dead = 60_000_000.0; // exceed 50M death threshold
 
-        tick_check_contracts(&mut state);
+        tick_check_contracts(&mut state, &mut events);
 
         assert_eq!(state.pending_crises.len(), 1);
         assert_eq!(state.contracts[0].last_demand_tick, 1000);
@@ -862,6 +873,7 @@ mod tests {
 
     #[test]
     fn offer_queues_crisis_interrupt() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -870,7 +882,7 @@ mod tests {
         state.regions[0].dead = 3_000_000.0;
 
         assert!(state.pending_crises.is_empty());
-        tick_offer_contracts(&mut state, &mut rng);
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
 
         assert!(state.contract_offer.is_some(), "offer should be stored");
         assert_eq!(state.pending_crises.len(), 1, "should queue a crisis");
@@ -882,6 +894,7 @@ mod tests {
 
     #[test]
     fn contract_crisis_accept_adds_to_contracts() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
         let mut state = GameState::new_default(42);
         make_offer(&mut state);
@@ -895,7 +908,7 @@ mod tests {
         state.active_crisis = Some(crisis_event);
 
         // Resolve with option 0 (accept) — dispatch post-action as mod.rs would
-        let (mut msg, post_action) = crisis::resolve_crisis(&mut state, 0);
+        let (mut msg, post_action) = crisis::resolve_crisis(&mut state, 0, &mut events);
         match post_action {
             crisis::CrisisPostAction::AcceptContract => {
                 let (_, m) = accept_contract(&mut state);
@@ -911,6 +924,7 @@ mod tests {
 
     #[test]
     fn contract_crisis_decline_clears_offer() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
         let mut state = GameState::new_default(42);
         make_offer(&mut state);
@@ -921,7 +935,7 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        let (mut msg, post_action) = crisis::resolve_crisis(&mut state, 1);
+        let (mut msg, post_action) = crisis::resolve_crisis(&mut state, 1, &mut events);
         match post_action {
             crisis::CrisisPostAction::RejectContract => {
                 let (_, m) = reject_contract(&mut state);
@@ -1037,6 +1051,7 @@ mod tests {
 
     #[test]
     fn type_exclusivity_blocks_same_condition_type() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -1065,7 +1080,7 @@ mod tests {
         for _ in 0..50 {
             state.contract_offer = None;
             state.last_contract_offer_tick = 0;
-            tick_offer_contracts(&mut state, &mut rng);
+            tick_offer_contracts(&mut state, &mut rng, &mut events);
             if let Some(ref offer) = state.contract_offer {
                 let offer_category = TEMPLATES[offer.template_id as usize].condition.category();
                 assert_ne!(offer_category, crate::state::ConditionCategory::ForbidPolicy,
@@ -1203,6 +1218,7 @@ mod tests {
 
     #[test]
     fn loyalty_raise_crisis_accept_increases_income() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
@@ -1228,7 +1244,7 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        let (msg, _) = crisis::resolve_crisis(&mut state, 0);
+        let (msg, _) = crisis::resolve_crisis(&mut state, 0, &mut events);
         assert!(msg.contains("raises") || msg.contains("increased"), "msg: {msg}");
         let expected = income_before * (1.0 + LOYALTY_RAISE_FRACTION);
         assert!((state.contracts[0].income - expected).abs() < 0.01,
@@ -1238,6 +1254,7 @@ mod tests {
 
     #[test]
     fn loyalty_raise_crisis_decline_cancels_contract() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::engine::crisis;
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
@@ -1261,7 +1278,7 @@ mod tests {
         );
         state.active_crisis = Some(crisis_event);
 
-        let (msg, post_action) = crisis::resolve_crisis(&mut state, 1);
+        let (msg, post_action) = crisis::resolve_crisis(&mut state, 1, &mut events);
         match post_action {
             crisis::CrisisPostAction::CancelContract { board_member_idx } => {
                 cancel_contract(&mut state, board_member_idx);
@@ -1275,6 +1292,7 @@ mod tests {
 
     #[test]
     fn patron_bonus_requires_high_satisfaction() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(99);
@@ -1299,14 +1317,15 @@ mod tests {
         state.tick = 10000; // Well past min held time.
 
         for _ in 0..1000 {
-            tick_patron_bonuses(&mut state, &mut rng);
+            tick_patron_bonuses(&mut state, &mut rng, &mut events);
         }
-        assert!(state.events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
+        assert!(events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
             "Low satisfaction contract should not receive patron bonus");
     }
 
     #[test]
     fn patron_bonus_fires_with_high_satisfaction() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -1330,9 +1349,9 @@ mod tests {
 
         // Run enough ticks that a bonus should fire (1% chance per tick).
         for _ in 0..500 {
-            tick_patron_bonuses(&mut state, &mut rng);
+            tick_patron_bonuses(&mut state, &mut rng, &mut events);
         }
-        let bonus_events: Vec<_> = state.events.iter()
+        let bonus_events: Vec<_> = events.iter()
             .filter(|e| matches!(e, GameEvent::PatronBonus { .. }))
             .collect();
         assert!(!bonus_events.is_empty(),
@@ -1343,6 +1362,7 @@ mod tests {
 
     #[test]
     fn patron_bonus_respects_cooldown() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         setup_board(&mut state);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -1365,11 +1385,11 @@ mod tests {
         state.tick = 9600; // Only 100 ticks since last bonus — within cooldown.
 
         for _ in 0..200 {
-            tick_patron_bonuses(&mut state, &mut rng);
+            tick_patron_bonuses(&mut state, &mut rng, &mut events);
             state.tick += 1;
         }
         // Tick only advanced to ~9800, cooldown is 600 ticks, so no bonus should fire.
-        assert!(state.events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
+        assert!(events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
             "Should not get bonus during cooldown period");
     }
 }

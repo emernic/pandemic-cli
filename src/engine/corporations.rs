@@ -227,7 +227,7 @@ fn warm_up_price_history(state: &mut GameState) {
 /// Revenue flows from GDP: sector_pool × (company_capacity / total_capacity).
 /// Each corp's capacity = base_revenue × region.gdp_fraction ^ sector.crisis_exposure.
 /// When a competitor's region tanks, surviving peers capture more of the pool.
-pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
+pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
     // Handle collapsed regions first — bankrupt all corps in collapsed regions.
     for c_idx in 0..state.corporations.len() {
         if state.corporations[c_idx].bankrupt {
@@ -239,7 +239,7 @@ pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chach
             state.corporations[c_idx].bankrupt_at_tick = Some(state.tick);
             state.corporations[c_idx].revenue = 0.0;
             state.corporations[c_idx].reserves = 0.0;
-            state.events.push(GameEvent::CorporationBankrupt {
+            events.push(GameEvent::CorporationBankrupt {
                 corp_idx: c_idx,
                 region_idx: r_idx,
             });
@@ -345,7 +345,7 @@ pub(super) fn tick_corporations(state: &mut GameState, rng_misc: &mut rand_chach
             state.corporations[c_idx].bankrupt_at_tick = Some(state.tick);
             state.corporations[c_idx].revenue = 0.0;
             let r_idx = state.corporations[c_idx].region_idx;
-            state.events.push(GameEvent::CorporationBankrupt {
+            events.push(GameEvent::CorporationBankrupt {
                 corp_idx: c_idx,
                 region_idx: r_idx,
             });
@@ -465,7 +465,7 @@ mod tests {
 
         // Run for 20 days to let disease spread
         for _ in 0..(20 * TICKS_PER_DAY as u64) {
-            state = tick(&state);
+            (state, _) = tick(&state);
         }
 
         let later_revenue: f64 = state.corporations.iter()
@@ -480,13 +480,14 @@ mod tests {
 
     #[test]
     fn collapsed_region_bankrupts_all_corps() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         generate_corporations(&mut state);
 
         // Manually collapse North America
         state.regions[0].collapsed = true;
         let mut rng = state.rng_misc.clone();
-        tick_corporations(&mut state, &mut rng);
+        tick_corporations(&mut state, &mut rng, &mut events);
 
         let na_corps: Vec<&Corporation> = state.corporations.iter()
             .filter(|c| c.region_idx == 0)
@@ -643,7 +644,7 @@ mod tests {
             personnel_assigned: 5,
         });
 
-        state = tick(&state);
+        (state, _) = tick(&state);
 
         assert!(state.medicines[med_idx].unlocked, "medicine should be unlocked");
         assert!(

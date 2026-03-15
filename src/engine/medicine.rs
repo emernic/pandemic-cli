@@ -19,6 +19,7 @@ pub(super) fn deploy_medicine(
     medicine_idx: usize,
     region_idx: usize,
     target: DeployTarget,
+    events: &mut Vec<GameEvent>,
 ) -> (bool, Option<String>) {
     // Block after game over
     if state.outcome != GameOutcome::Playing {
@@ -109,7 +110,7 @@ pub(super) fn deploy_medicine(
         doses: doses_to_ship,
         arrive_tick,
     });
-    state.events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
+    events.push(GameEvent::MedicineShipped { medicine_idx, region_idx, doses: doses_to_ship });
 
     let doses_str = crate::format_number(doses_to_ship);
     let days = (SHIPPING_TICKS as f64 * supply_mult * logistics_mult * pharma_mult) / crate::state::TICKS_PER_DAY;
@@ -128,7 +129,7 @@ pub(super) fn deploy_medicine(
 /// Process arriving shipments. Called each tick. Delivers doses that have
 /// arrived and discards shipments to collapsed regions. Travel bans restrict
 /// civilian movement but do not block medical supply shipments.
-pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng) {
+pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
     let mut i = 0;
     while i < state.pending_shipments.len() {
         let reg_idx = state.pending_shipments[i].region_idx;
@@ -149,7 +150,7 @@ pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::
 
         // Deliver the shipment
         let shipment = state.pending_shipments.remove(i);
-        deliver_shipment(state, &shipment, rng_misc);
+        deliver_shipment(state, &shipment, rng_misc, events);
         // don't increment i — the vec shifted
     }
 }
@@ -161,7 +162,7 @@ pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::
 /// how many can be administered, and collapsed neighbors reduce throughput
 /// further. These multiply, so degraded regions receive far fewer effective
 /// doses. Wasted doses are lost permanently.
-fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut rand_chacha::ChaCha8Rng) {
+fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut rand_chacha::ChaCha8Rng, events: &mut Vec<GameEvent>) {
     let med_idx = shipment.medicine_idx;
     let reg_idx = shipment.region_idx;
 
@@ -228,7 +229,7 @@ fn deliver_shipment(state: &mut GameState, shipment: &Shipment, rng_misc: &mut r
         }
     };
 
-    state.events.push(GameEvent::ShipmentDelivered {
+    events.push(GameEvent::ShipmentDelivered {
         medicine_idx: med_idx,
         region_idx: reg_idx,
         doses: shipment.doses,
@@ -306,6 +307,7 @@ pub(super) fn emergency_sample_delivery(
     medicine_idx: usize,
     region_idx: usize,
     rng: &mut impl Rng,
+    events: &mut Vec<GameEvent>,
 ) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
@@ -384,7 +386,7 @@ pub(super) fn emergency_sample_delivery(
     state.regions[region_idx].governor.cooperation =
         (state.regions[region_idx].governor.cooperation + cooperation_change).clamp(0.0, 100.0);
 
-    state.events.push(GameEvent::EmergencySampleDelivered {
+    events.push(GameEvent::EmergencySampleDelivered {
         medicine_idx,
         region_idx,
         cooperation_change,
@@ -416,7 +418,7 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
 /// - Always deploys as therapeutic (targets most infected region)
 /// - Respects per-medicine region filter (empty = all regions)
 /// - Cooldown must be clear for the chosen region
-pub(super) fn try_auto_deploy(state: &mut GameState) {
+pub(super) fn try_auto_deploy(state: &mut GameState, events: &mut Vec<GameEvent>) {
     // Grow deploy vecs if new medicines were created
     while state.deploy_enabled.len() < state.medicines.len() {
         state.deploy_enabled.push(false);
@@ -493,7 +495,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             };
 
             // deploy_medicine() fires MedicineShipped on success
-            deploy_medicine(state, med_idx, region_idx, target);
+            deploy_medicine(state, med_idx, region_idx, target, events);
         } else {
             // No valid target found — check if ALL tested diseases are below efficacy
             // threshold and notify the player once.
@@ -503,7 +505,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
                 });
                 if all_blocked {
                     state.deploy_blocked_notified.insert(med_idx);
-                    state.events.push(crate::state::GameEvent::DeployBlocked { medicine_idx: med_idx });
+                    events.push(crate::state::GameEvent::DeployBlocked { medicine_idx: med_idx });
                 }
             }
         }

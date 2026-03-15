@@ -1,0 +1,774 @@
+{
+  "tick": 0,
+  "sim_state": "Running",
+  "rng": {
+    "seed": [
+      164,
+      143,
+      161,
+      123,
+      88,
+      50,
+      61,
+      10,
+      234,
+      184,
+      161,
+      204,
+      105,
+      1,
+      20,
+      184,
+      43,
+      140,
+      200,
+      117,
+      24,
+      180,
+      247,
+      84,
+      141,
+      68,
+      110,
+      161,
+      228,
+      223,
+      32,
+      242
+    ],
+    "stream": 0,
+    "word_pos": 54
+  },
+  "resources": {
+    "funding": 500.0,
+    "personnel": 20,
+    "political_power": 0.2,
+    "personnel_accum": 0.0,
+    "attrition_accum": 0.0,
+    "last_funding_warning_tick": 0
+  },
+  "regions": [
+    {
+      "name": "North America",
+      "population": 500000000,
+      "connections": [
+        1,
+        2
+      ],
+      "infections": [
+        {
+          "disease_idx": 0,
+          "infected": 2542.497561605714,
+          "dead": 25.42497561605714,
+          "immune": 0.0
+        }
+      ],
+      "governor": {
+        "name": "Gov. Torres",
+        "personality": "Hardliner",
+        "loyalty": 65.0,
+        "defiance_crisis_fired": false,
+        "last_action_tick": 0,
+        "bargain_count": 0,
+        "income_skim": 0.0
+      },
+      "traits": [
+        "TradeDependent",
+        "StrongPublicHealth"
+      ],
+      "collapse_threshold": 0.55,
+      "dead": 25.42497561605714,
+      "collapsed": false,
+      "collapsed_at_tick": null,
+      "collapse_deaths": 0.0,
+      "hospital_level": 0,
+      "intel_level": 0,
+      "income_modifier": 1.8,
+      "healthcare_modifier": 0.85,
+      "last_deploy_tick": {},
+      "healthcare_capacity": 1.0,
+      "supply_lines": 1.0,
+      "civil_order": 1.0,
+      "deploy_priority": "Normal",
+      "supply_resilience": 0.0,
+      "civil_resilience": 0.0,
+      "emergency_response_until": null,
+      "disrupted_until": null,
+      "estimated_infected": 381.3746342408571
+    },
+    {
+      "name": "South America",
+      "population": 430000000,
+      "connections": [
+        0,
+        3
+      ],
+      "infections": [],
+      "governor": {
+        "name": "Gov. Vasquez",
+        "personality": "Blowhard",
+        "loyalty": 70.0,
+        "defiance_crisis_fired": false,
+        "last_action_tick": 0,
+        "bargain_count": 0,
+        "income_skim": 0.0
+      },
+      "traits": [
+        "LowInfrastructure",
+        "ResilientPopulation"
+      ],
+      "collapse_threshold": 0.55,
+      "dead": 0.0,
+      "collapsed": false,
+      "collapsed_at_tick": null,
+      "collapse_deaths": 0.0,
+      "hospital_level": 0,
+      "intel_level": 0,
+      "income_modifier": 1.0,
+      "healthcare_modifier": 0.95,
+      "last_deploy_tick": {},
+      "healthcare_capacity": 1.0,
+      "supply_lines": 1.0,
+      "civil_order": 1.0,
+      "deploy_priority": "Normal",
+      "supply_resilience": 0.0,
+      "civil_resilience": 0.0,
+      "emergency_response_until": null,
+      "disrupted_until": null,
+      "estimated_infected": 0.0
+    },
+    {
+      "name": "Europe",
+      "population": 750000000,
+      "connections": [
+        0,
+        3,
+        4
+      ],
+      "infections": [],
+      "governor": {
+        "name": "Gov. Lindqvist",
+        "personality": "Operative",
+        "loyalty": 75.0,
+        "defiance_crisis_fired": false,
+        "last_action_tick": 0,
+        "bargain_count": 0,
+        "income_skim": 0.0
+      },
+      "traits": [
+        "TradeDependent",
+        "DenseUrban"
+      ],
+      "collapse_threshold": 0.5,
+      "dead": 0.0,
+      "collapsed": false,
+      "collapsed_at_tick": null,
+      "collapse_deaths": 0.0,
+      "hospital_level": 0,
+      "intel_level": 0,
+      "income_modifier": 1.5,
+      "healthcare_modifier": 0.8,
+      "last_deploy_tick": {},
+      "healthcare_capacity": 1.0,
+      "supply_lines": 1.0,
+      "civil_order": 1.0,
+      "deploy_priority": "Normal",
+      "supply_resilience": 0.0,
+      "civil_resilience": 0.0,
+      "emergency_response_until": null,
+      "disrupted_until": null,
+      "estimated_infected": 0.0
+    },
+    {
+      "name": "Africa",
+      "population": 1400000000,
+      "connections": [
+        1,
+        2,
+        4
+      ],
+      "infections": [],
+      "governor": {
+        "name": "Gov. Okonkwo",
+        "personality": "Buffoon",
+        "loyalty": 60.0,
+        "defiance_crisis_fired": false,
+        "last_action_tick": 0,
+        "bargain_count": 0,
+        "income_skim": 0.0
+      },
+      "traits": [
+        "LowInfrastructure",
+        "DenseUrban"
+      ],
+      "collapse_threshold": 0.5,
+      "dead": 0.0,
+      "collapsed": false,
+      "collapsed_at_tick": null,
+      "collapse_deaths": 0.0,
+      "hospital_level": 0,
+      "intel_level": 0,
+      "income_modifier": 0.6,
+      "healthcare_modifier": 1.1,
+      "last_deploy_tick": {},
+      "healthcare_capacity": 1.0,
+      "supply_lines": 1.0,
+      "civil_order": 1.0,
+      "deploy_priority": "Normal",
+      "supply_resilience": 0.0,
+      "civil_resilience": 0.0,
+      "emergency_response_until": null,
+      "disrupted_until": null,
+      "estimated_infected": 0.0
+    },
+    {
+      "name": "Asia",
+      "population": 4700000000,
+      "connections": [
+        2,
+        3,
+        5
+      ],
+      "infections": [],
+      "governor": {
+        "name": "Gov. Chen",
+        "personality": "Recluse",
+        "loyalty": 70.0,
+        "defiance_crisis_fired": false,
+        "last_action_tick": 0,
+        "bargain_count": 0,
+        "income_skim": 0.0
+      },
+      "traits": [
+        "DenseUrban",
+        "ResilientPopulation"
+      ],
+      "collapse_threshold": 0.5,
+      "dead": 0.0,
+      "collapsed": false,
+      "collapsed_at_tick": null,
+      "collapse_deaths": 0.0,
+      "hospital_level": 0,
+      "intel_level": 0,
+      "income_modifier": 0.9,
+      "healthcare_modifier": 1.0,
+      "last_deploy_tick": {},
+      "healthcare_capacity": 1.0,
+      "supply_lines": 1.0,
+      "civil_order": 1.0,
+      "deploy_priority": "Normal",
+      "supply_resilience": 0.0,
+      "civil_resilience": 0.0,
+      "emergency_response_until": null,
+      "disrupted_until": null,
+      "estimated_infected": 0.0
+    },
+    {
+      "name": "Oceania",
+      "population": 45000000,
+      "connections": [
+        4
+      ],
+      "infections": [],
+      "governor": {
+        "name": "Gov. Whitfield",
+        "personality": "Mobster",
+        "loyalty": 75.0,
+        "defiance_crisis_fired": false,
+        "last_action_tick": 0,
+        "bargain_count": 0,
+        "income_skim": 0.0
+      },
+      "traits": [
+        "IslandGeography",
+        "StrongPublicHealth"
+      ],
+      "collapse_threshold": 0.5,
+      "dead": 0.0,
+      "collapsed": false,
+      "collapsed_at_tick": null,
+      "collapse_deaths": 0.0,
+      "hospital_level": 0,
+      "intel_level": 0,
+      "income_modifier": 2.5,
+      "healthcare_modifier": 0.75,
+      "last_deploy_tick": {},
+      "healthcare_capacity": 1.0,
+      "supply_lines": 1.0,
+      "civil_order": 1.0,
+      "deploy_priority": "Normal",
+      "supply_resilience": 0.0,
+      "civil_resilience": 0.0,
+      "emergency_response_until": null,
+      "disrupted_until": null,
+      "estimated_infected": 0.0
+    }
+  ],
+  "diseases": [
+    {
+      "name": "Ehrlichia-Delta",
+      "pathogen_type": "Bacterium",
+      "transmission": "Contact",
+      "infectivity": 0.004254721042394681,
+      "lethality": 0.00042214846978529564,
+      "cross_region_spread": 0.003449876610870975,
+      "recovery_rate": 0.00013080405595979096,
+      "knowledge": 0.0,
+      "strain_generation": 0,
+      "sequencing_count": 0,
+      "detected": true,
+      "spawned_at_tick": 0,
+      "mechanism_resistance": [],
+      "containment_adaptation": 0.0
+    }
+  ],
+  "medicines": [
+    {
+      "name": "CellWall-A",
+      "therapy_type": "Antibiotic",
+      "mechanism": "CellWallInhibitor",
+      "target_diseases": [
+        0
+      ],
+      "cost": 65.0,
+      "doses": 0.0,
+      "max_doses": 600000000.0,
+      "unlocked": false,
+      "tested_against": [],
+      "strain_generations": [],
+      "deployed_count": 0
+    },
+    {
+      "name": "Ribosome-A",
+      "therapy_type": "Antibiotic",
+      "mechanism": "RibosomeInhibitor",
+      "target_diseases": [
+        0
+      ],
+      "cost": 55.0,
+      "doses": 0.0,
+      "max_doses": 866666667.0,
+      "unlocked": false,
+      "tested_against": [],
+      "strain_generations": [],
+      "deployed_count": 0
+    },
+    {
+      "name": "Gyrase-A",
+      "therapy_type": "Antibiotic",
+      "mechanism": "DnaGyraseInhibitor",
+      "target_diseases": [
+        0
+      ],
+      "cost": 45.0,
+      "doses": 0.0,
+      "max_doses": 1133333333.0,
+      "unlocked": false,
+      "tested_against": [],
+      "strain_generations": [],
+      "deployed_count": 0
+    },
+    {
+      "name": "Metabolic-A",
+      "therapy_type": "Antibiotic",
+      "mechanism": "MetabolicInhibitor",
+      "target_diseases": [
+        0
+      ],
+      "cost": 35.0,
+      "doses": 0.0,
+      "max_doses": 1400000000.0,
+      "unlocked": false,
+      "tested_against": [],
+      "strain_generations": [],
+      "deployed_count": 0
+    },
+    {
+      "name": "Broad-Spectrum",
+      "therapy_type": "BroadSpectrum",
+      "mechanism": null,
+      "target_diseases": [
+        0
+      ],
+      "cost": 10.0,
+      "doses": 25000000.0,
+      "max_doses": 25000000.0,
+      "unlocked": true,
+      "tested_against": [
+        0
+      ],
+      "strain_generations": [],
+      "deployed_count": 0
+    }
+  ],
+  "field_research": [],
+  "applied_research": null,
+  "basic_research": null,
+  "unlocked_techs": [],
+  "policies": [
+    {
+      "travel_ban": false,
+      "quarantine": false,
+      "hospital_surge": false,
+      "border_controls": false,
+      "water_sanitation": false,
+      "screening": "None",
+      "screening_progress": 0.0,
+      "martial_law": false,
+      "nuclear_annihilation": false
+    },
+    {
+      "travel_ban": false,
+      "quarantine": false,
+      "hospital_surge": false,
+      "border_controls": false,
+      "water_sanitation": false,
+      "screening": "None",
+      "screening_progress": 0.0,
+      "martial_law": false,
+      "nuclear_annihilation": false
+    },
+    {
+      "travel_ban": false,
+      "quarantine": false,
+      "hospital_surge": false,
+      "border_controls": false,
+      "water_sanitation": false,
+      "screening": "None",
+      "screening_progress": 0.0,
+      "martial_law": false,
+      "nuclear_annihilation": false
+    },
+    {
+      "travel_ban": false,
+      "quarantine": false,
+      "hospital_surge": false,
+      "border_controls": false,
+      "water_sanitation": false,
+      "screening": "None",
+      "screening_progress": 0.0,
+      "martial_law": false,
+      "nuclear_annihilation": false
+    },
+    {
+      "travel_ban": false,
+      "quarantine": false,
+      "hospital_surge": false,
+      "border_controls": false,
+      "water_sanitation": false,
+      "screening": "None",
+      "screening_progress": 0.0,
+      "martial_law": false,
+      "nuclear_annihilation": false
+    },
+    {
+      "travel_ban": false,
+      "quarantine": false,
+      "hospital_surge": false,
+      "border_controls": false,
+      "water_sanitation": false,
+      "screening": "None",
+      "screening_progress": 0.0,
+      "martial_law": false,
+      "nuclear_annihilation": false
+    }
+  ],
+  "enacted_decrees": {
+    "conscript_researchers": false,
+    "authorize_human_trials": false,
+    "sacrificed_region": null,
+    "suspend_regional_authority": false,
+    "fortified_region": null,
+    "emergency_countermeasure": false
+  },
+  "outcome": "Playing",
+  "event_log": [],
+  "active_crisis": null,
+  "crisis_cooldowns": {},
+  "pending_crises": [],
+  "last_crisis_resolved_tick": 0,
+  "auto_resolve_crises": {},
+  "auto_research": [
+    false,
+    false,
+    false
+  ],
+  "auto_deploy": [],
+  "standing_orders": {
+    "auto_quarantine_at_high": false,
+    "auto_travel_ban_at_crit": false
+  },
+  "pending_shipments": [],
+  "history": [],
+  "zero_agency_ticks": 0,
+  "mercy_rule": false,
+  "death_milestone_tier": [
+    0
+  ],
+  "intel_pre_detection_briefed": [
+    false
+  ],
+  "ark_protocol": null,
+  "total_doses_deployed": 0.0,
+  "field_operations": [],
+  "crisis_operations": [],
+  "pathogens_suppressed": 0,
+  "pathogens_attenuated": 0,
+  "pathogens_interdicted": 0,
+  "lab_level": 0,
+  "contracts": [],
+  "contract_offer": null,
+  "last_contract_offer_tick": 0,
+  "corporations": [
+    {
+      "name": "Helion Power",
+      "sector": "Energy",
+      "region_idx": 0,
+      "base_revenue": 94.17824668582567,
+      "revenue": 94.17824668582567,
+      "operating_costs": 61.21586034578669,
+      "reserves": 1836.4758103736006,
+      "max_reserves": 1836.4758103736006,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": true
+    },
+    {
+      "name": "Seraph Genomics",
+      "sector": "Biotech",
+      "region_idx": 0,
+      "base_revenue": 87.07149440458485,
+      "revenue": 87.07149440458485,
+      "operating_costs": 56.596471362980154,
+      "reserves": 1697.8941408894045,
+      "max_reserves": 1697.8941408894045,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Lattice Systems",
+      "sector": "DataInfra",
+      "region_idx": 0,
+      "base_revenue": 67.09971480167933,
+      "revenue": 67.09971480167933,
+      "operating_costs": 43.61481462109156,
+      "reserves": 1308.4444386327468,
+      "max_reserves": 1308.4444386327468,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Crucible Materials",
+      "sector": "Mining",
+      "region_idx": 1,
+      "base_revenue": 51.81804535994186,
+      "revenue": 51.81804535994186,
+      "operating_costs": 33.681729483962215,
+      "reserves": 1010.4518845188664,
+      "max_reserves": 1010.4518845188664,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": true
+    },
+    {
+      "name": "Volant Industries",
+      "sector": "Automation",
+      "region_idx": 1,
+      "base_revenue": 42.31630603555361,
+      "revenue": 42.31630603555361,
+      "operating_costs": 27.505598923109847,
+      "reserves": 825.1679676932954,
+      "max_reserves": 825.1679676932954,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Arc Meridian",
+      "sector": "Energy",
+      "region_idx": 1,
+      "base_revenue": 31.032000218926015,
+      "revenue": 31.032000218926015,
+      "operating_costs": 20.17080014230191,
+      "reserves": 605.1240042690573,
+      "max_reserves": 605.1240042690573,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Corridor Group",
+      "sector": "Logistics",
+      "region_idx": 2,
+      "base_revenue": 116.24589366910696,
+      "revenue": 116.24589366910696,
+      "operating_costs": 75.55983088491953,
+      "reserves": 2266.794926547586,
+      "max_reserves": 2266.794926547586,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": true
+    },
+    {
+      "name": "Caliber Bioscience",
+      "sector": "Biotech",
+      "region_idx": 2,
+      "base_revenue": 110.32899351268759,
+      "revenue": 110.32899351268759,
+      "operating_costs": 71.71384578324694,
+      "reserves": 2151.415373497408,
+      "max_reserves": 2151.415373497408,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Forge Collective",
+      "sector": "Automation",
+      "region_idx": 2,
+      "base_revenue": 72.53918445296179,
+      "revenue": 72.53918445296179,
+      "operating_costs": 47.150469894425164,
+      "reserves": 1414.5140968327548,
+      "max_reserves": 1414.5140968327548,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Obsidian Extractive",
+      "sector": "Mining",
+      "region_idx": 3,
+      "base_revenue": 91.71106511417887,
+      "revenue": 91.71106511417887,
+      "operating_costs": 59.61219232421627,
+      "reserves": 1788.365769726488,
+      "max_reserves": 1788.365769726488,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": true
+    },
+    {
+      "name": "Kestrel Freight",
+      "sector": "Logistics",
+      "region_idx": 3,
+      "base_revenue": 74.27965094533972,
+      "revenue": 74.27965094533972,
+      "operating_costs": 48.28177311447082,
+      "reserves": 1448.4531934341246,
+      "max_reserves": 1448.4531934341246,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Parallax Data",
+      "sector": "DataInfra",
+      "region_idx": 3,
+      "base_revenue": 53.963135090644485,
+      "revenue": 53.963135090644485,
+      "operating_costs": 35.07603780891892,
+      "reserves": 1052.2811342675675,
+      "max_reserves": 1052.2811342675675,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Atlas Dynamics",
+      "sector": "Automation",
+      "region_idx": 4,
+      "base_revenue": 450.28306021276506,
+      "revenue": 450.28306021276506,
+      "operating_costs": 292.6839891382973,
+      "reserves": 8780.51967414892,
+      "max_reserves": 8780.51967414892,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": true
+    },
+    {
+      "name": "Volta Systems",
+      "sector": "Energy",
+      "region_idx": 4,
+      "base_revenue": 424.9962485587931,
+      "revenue": 424.9962485587931,
+      "operating_costs": 276.2475615632155,
+      "reserves": 8287.426846896466,
+      "max_reserves": 8287.426846896466,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Pangaea Mining",
+      "sector": "Mining",
+      "region_idx": 4,
+      "base_revenue": 267.296966574095,
+      "revenue": 267.296966574095,
+      "operating_costs": 173.74302827316174,
+      "reserves": 5212.2908481948525,
+      "max_reserves": 5212.2908481948525,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Optera",
+      "sector": "Biotech",
+      "region_idx": 5,
+      "base_revenue": 11.275085985032478,
+      "revenue": 11.275085985032478,
+      "operating_costs": 7.328805890271111,
+      "reserves": 219.86417670813333,
+      "max_reserves": 219.86417670813333,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": true
+    },
+    {
+      "name": "Nexus Core",
+      "sector": "DataInfra",
+      "region_idx": 5,
+      "base_revenue": 10.351256814370696,
+      "revenue": 10.351256814370696,
+      "operating_costs": 6.728316929340953,
+      "reserves": 201.8495078802286,
+      "max_reserves": 201.8495078802286,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    },
+    {
+      "name": "Deep Vein Corp",
+      "sector": "Mining",
+      "region_idx": 5,
+      "base_revenue": 8.291153650393944,
+      "revenue": 8.291153650393944,
+      "operating_costs": 5.389249872756064,
+      "reserves": 161.67749618268192,
+      "max_reserves": 161.67749618268192,
+      "bankrupt": false,
+      "bankrupt_at_tick": null,
+      "board_seat": false
+    }
+  ],
+  "last_board_demand_tick": 0,
+  "ui": {
+    "open_panel": "None",
+    "panel_selection": 0,
+    "medicine_ui": null,
+    "map_selection": 0,
+    "research_ui": null,
+    "policy_ui": null,
+    "status_message": null,
+    "event_notification": null,
+    "crisis_selection": 0,
+    "crisis_auto_resolve": false,
+    "operations_ui": null,
+    "home_splash_done": false,
+    "speed_multiplier": 1
+  }
+}

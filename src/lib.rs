@@ -70,7 +70,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 }
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
-                events::process_events(&mut new);
+                events::process_events(&mut new, &result.events);
                 new.ui.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
@@ -246,7 +246,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let state_snapshot = new.clone();
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
-                    events::process_events(&mut new);
+                    events::process_events(&mut new, &result.events);
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
@@ -323,8 +323,8 @@ pub fn tick_and_process(state: &GameState) -> GameState {
         None
     };
 
-    let mut new = engine::tick(state);
-    events::process_events(&mut new);
+    let (mut new, tick_events) = engine::tick(state);
+    events::process_events(&mut new, &tick_events);
 
     // Stabilize research panel selection: find the same item in the new list.
     if let Some(ref old_item) = selected_research_item {

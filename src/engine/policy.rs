@@ -46,7 +46,7 @@ fn conflicting_contract_names(state: &GameState, policy: PolicyId) -> Vec<String
 /// Enforce policy costs: suspend most expensive policies one at a time
 /// until affordable, then deduct the total cost. Returns the total
 /// policy cost (needed by the caller for funding warning calculations).
-pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
+pub(super) fn tick_enforce_costs(state: &mut GameState, events: &mut Vec<GameEvent>) -> f64 {
     let mut policy_cost = state.total_policy_funding_cost();
     while policy_cost > 0.0 && state.resources.funding < policy_cost {
         // Find the most expensive active individual policy across all regions.
@@ -91,7 +91,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
                 state.policies[region_idx].set_bool(policy, false);
                 policy.display_name().to_string()
             };
-            state.events.push(GameEvent::PolicySuspended {
+            events.push(GameEvent::PolicySuspended {
                 region_idx,
                 policy_name: name,
             });
@@ -108,7 +108,7 @@ pub(super) fn tick_enforce_costs(state: &mut GameState) -> f64 {
 
 /// Tick nuclear state transitions. When a nuke in transit reaches its hit_tick,
 /// transition to Dropped: kill 99% of the population and any board members in the region.
-pub(super) fn tick_nuclear(state: &mut GameState) {
+pub(super) fn tick_nuclear(state: &mut GameState, events: &mut Vec<GameEvent>) {
     let tick = state.tick;
     for region_idx in 0..state.policies.len() {
         if let crate::state::NuclearState::Dropping { hit_tick } = state.policies[region_idx].nuclear_state {
@@ -144,7 +144,7 @@ pub(super) fn tick_nuclear(state: &mut GameState) {
                     }
                 }
 
-                state.events.push(crate::state::GameEvent::NuclearImpact {
+                events.push(crate::state::GameEvent::NuclearImpact {
                     region_idx,
                     killed,
                 });
@@ -579,7 +579,7 @@ pub(super) fn bargain_with_governor(state: &mut GameState, region_idx: usize) ->
 /// restrictive policies, and personality. Governors react to the engine's
 /// infection pressure thresholds (INFECTION_PRESSURE_CRIT/HIGH/MOD), which
 /// are lower than the UI severity labels the player sees.
-pub(super) fn tick_governor_cooperation(state: &mut GameState) {
+pub(super) fn tick_governor_cooperation(state: &mut GameState, events: &mut Vec<GameEvent>) {
     let num_regions = state.regions.len();
     for i in 0..num_regions {
         if state.regions[i].collapsed {
@@ -590,7 +590,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         if state.regions[i].governor.dead {
             if let Some(succ_tick) = state.regions[i].governor.succession_tick {
                 if state.tick >= succ_tick {
-                    tick_governor_succession(state, i);
+                    tick_governor_succession(state, i, events);
                 }
             }
             // Dead governors don't drift, don't fire crises, don't do anything
@@ -747,7 +747,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
 }
 
 /// Handle governor succession: replace the dead governor with a new one.
-fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
+fn tick_governor_succession(state: &mut GameState, region_idx: usize, events: &mut Vec<GameEvent>) {
     use crate::state::{GovernorPersonality, SUCCESSOR_COOPERATION};
 
     // Pick a random personality (different from the deceased)
@@ -807,7 +807,7 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
         }
     }
 
-    state.events.push(GameEvent::GovernorSucceeded {
+    events.push(GameEvent::GovernorSucceeded {
         region_idx,
         name: new_name,
     });
@@ -815,7 +815,7 @@ fn tick_governor_succession(state: &mut GameState, region_idx: usize) {
 
 /// Tick autonomous governor actions. Hostile governors periodically act against
 /// the player based on personality. Called from tick().
-pub(super) fn tick_governor_actions(state: &mut GameState) {
+pub(super) fn tick_governor_actions(state: &mut GameState, events: &mut Vec<GameEvent>) {
     let tick = state.tick;
     let num_regions = state.regions.len();
 
@@ -951,7 +951,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 
         if let Some(desc) = action_desc {
             state.regions[i].governor.last_action_tick = tick;
-            state.events.push(GameEvent::GovernorAction {
+            events.push(GameEvent::GovernorAction {
                 region_idx: i,
                 description: desc,
             });
@@ -961,7 +961,7 @@ pub(super) fn tick_governor_actions(state: &mut GameState) {
 
 /// Enact an emergency decree. Permanent, irreversible.
 /// Returns (message, success).
-pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: Option<usize>) -> (Option<String>, bool) {
+pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: Option<usize>, events: &mut Vec<GameEvent>) -> (Option<String>, bool) {
     use crate::state::{
         CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
         SACRIFICE_INCOME_BONUS, DecreeId,
@@ -1023,7 +1023,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
                 p.clear_all();
             }
             // Notify the UI
-            state.events.push(GameEvent::RegionCollapsed { region_idx: r_idx, personnel_lost: 0 });
+            events.push(GameEvent::RegionCollapsed { region_idx: r_idx, personnel_lost: 0 });
             // Apply network disruption to connected non-collapsed regions (same as natural collapse)
             let disruption_end = state.tick + COLLAPSE_DISRUPTION_TICKS;
             let connected: Vec<usize> = state.regions[r_idx].connections.clone();
@@ -1032,7 +1032,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
                     state.regions[c].disrupted_until = Some(
                         state.regions[c].disrupted_until.map_or(disruption_end, |t| t.max(disruption_end))
                     );
-                    state.events.push(GameEvent::NetworkDisruption {
+                    events.push(GameEvent::NetworkDisruption {
                         disrupted_region_idx: c,
                         collapsed_region_idx: r_idx,
                     });
@@ -1144,7 +1144,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
 /// provided the policy isn't already active and the player has the
 /// required chairman approval and personnel.
 /// Returns region indices where GDP-hurting policies were enacted (for board notification).
-pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
+pub(super) fn tick_standing_orders(state: &mut GameState, events: &mut Vec<GameEvent>) -> Vec<usize> {
     // Affordability guard: don't try to auto-enable policies when the player can't
     // sustain the current cost load. Prevents oscillation where cost enforcement
     // suspends a policy and this function immediately re-enables it.
@@ -1173,7 +1173,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
                 } else {
                     format!(" (violates {})", conflicts.join(", "))
                 };
-                state.events.push(GameEvent::PolicyAutoActivated {
+                events.push(GameEvent::PolicyAutoActivated {
                     region_idx,
                     policy_name: format!("Quarantine in {region_name}{suffix}"),
                 });
@@ -1196,7 +1196,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
                 } else {
                     format!(" (violates {})", conflicts.join(", "))
                 };
-                state.events.push(GameEvent::PolicyAutoActivated {
+                events.push(GameEvent::PolicyAutoActivated {
                     region_idx,
                     policy_name: format!("Travel Ban in {region_name}{suffix}"),
                 });
@@ -1208,7 +1208,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
 
 /// Auto-rebuild infrastructure for regions with auto_rebuild_infra enabled.
 /// Fires once per day (every TICKS_PER_DAY ticks) when any infra stat drops below threshold.
-pub(super) fn tick_auto_rebuild(state: &mut GameState) {
+pub(super) fn tick_auto_rebuild(state: &mut GameState, events: &mut Vec<GameEvent>) {
     // Only fire once per day to avoid draining funds every tick
     if state.tick % (TICKS_PER_DAY as u64) != 0 {
         return;
@@ -1229,7 +1229,7 @@ pub(super) fn tick_auto_rebuild(state: &mut GameState) {
             let (msg, ok) = rebuild_infrastructure(state, region_idx);
             if ok {
                 if let Some(m) = msg {
-                    state.events.push(GameEvent::PolicyAutoActivated {
+                    events.push(GameEvent::PolicyAutoActivated {
                         region_idx,
                         policy_name: format!("Auto-rebuild: {}", m),
                     });
@@ -1417,10 +1417,11 @@ mod tests {
         // Clear infections so tick doesn't muddy funding math
         for r in &mut state.regions { r.infections.clear(); }
 
-        state = tick(&state);
+        let tick_events;
+        (state, tick_events) = tick(&state);
         assert_eq!(state.policies[0].screening, ScreeningLevel::None,
             "High screening should be suspended when unaffordable");
-        assert!(state.events.iter().any(|e|
+        assert!(tick_events.iter().any(|e|
             matches!(e, GameEvent::PolicySuspended { policy_name, .. } if policy_name.contains("Screening"))
         ), "should emit PolicySuspended event for screening");
     }
@@ -1435,7 +1436,7 @@ mod tests {
         state.resources.funding = 0.8;
         for r in &mut state.regions { r.infections.clear(); }
 
-        state = tick(&state);
+        (state, _) = tick(&state);
         // Both cost ¥0.6; one should be suspended. The enforcement loop finds
         // whichever it encounters first at the max cost — just verify one survived.
         let screening_alive = state.policies[0].screening != ScreeningLevel::None;
@@ -1458,14 +1459,14 @@ mod tests {
         // Clear other regions so total is just 2,500
         for r in &mut state.regions[1..] { r.infections.clear(); }
 
-        let after = tick(&state);
+        let (after, _) = tick(&state);
         assert!(after.diseases[0].detected,
             "disease should be detected at 2,500 infected with High screening (threshold 2,000)");
 
         // Without screening, same infection level should NOT trigger detection
         let mut state2 = state.clone();
         state2.policies[0].screening = ScreeningLevel::None;
-        let after2 = tick(&state2);
+        let (after2, _) = tick(&state2);
         assert!(!after2.diseases[0].detected,
             "disease should NOT be detected at 2,500 infected without screening (threshold 10,000)");
     }
@@ -1549,12 +1550,12 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = 100_000.0;
         state.diseases[0].lethality = 0.01;
 
-        let without = tick(&state);
+        let (without, _) = tick(&state);
         let deaths_without = without.regions[0].dead;
 
         // Level 1: Field Hospital — 25% lethality reduction
         state.regions[0].hospital_level = 1;
-        let with_l1 = tick(&state);
+        let (with_l1, _) = tick(&state);
         let deaths_l1 = with_l1.regions[0].dead;
         let ratio_l1 = deaths_l1 / deaths_without;
         assert!(ratio_l1 > 0.60 && ratio_l1 < 0.90,
@@ -1562,7 +1563,7 @@ mod tests {
 
         // Level 2: Medical Center — 40% lethality reduction
         state.regions[0].hospital_level = 2;
-        let with_l2 = tick(&state);
+        let (with_l2, _) = tick(&state);
         let deaths_l2 = with_l2.regions[0].dead;
         let ratio_l2 = deaths_l2 / deaths_without;
         assert!(ratio_l2 > 0.45 && ratio_l2 < 0.75,
@@ -1609,11 +1610,12 @@ mod tests {
 
     #[test]
     fn conscript_researchers_grants_personnel_and_penalizes_income() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         let personnel_before = state.resources.personnel;
         let income_before = state.funding_income_rate();
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::ConscriptResearchers, None);
+        let (msg, ok) = enact_decree(&mut state, DecreeId::ConscriptResearchers, None, &mut events);
         assert!(ok, "should succeed with sufficient POL");
         assert!(msg.unwrap().contains("Conscript"));
         assert!(state.enacted_decrees.conscript_researchers);
@@ -1626,18 +1628,19 @@ mod tests {
             "income should drop by {expected_penalty:.3}/tick: before={income_before:.3}, after={income_after:.3}");
 
         // Cannot enact again
-        let (_, ok) = enact_decree(&mut state, DecreeId::ConscriptResearchers, None);
+        let (_, ok) = enact_decree(&mut state, DecreeId::ConscriptResearchers, None, &mut events);
         assert!(!ok, "should not enact twice");
     }
 
     #[test]
     fn decree_blocked_by_insufficient_severity() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
         // Fresh game: no deaths, no collapses — all decrees should be locked
 
         for decree in DecreeId::ALL {
-            let (msg, ok) = enact_decree(&mut state, decree, None);
+            let (msg, ok) = enact_decree(&mut state, decree, None, &mut events);
             assert!(!ok, "decree {decree:?} should be blocked when severity is low");
             assert!(msg.unwrap().contains("more severe crisis"), "error message should mention severity");
         }
@@ -1645,11 +1648,12 @@ mod tests {
 
     #[test]
     fn sacrifice_region_collapses_and_boosts_income() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         let income_before = state.funding_income_rate();
         assert!(!state.regions[0].collapsed);
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, Some(0));
+        let (msg, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, Some(0), &mut events);
         assert!(ok, "should succeed");
         assert!(msg.unwrap().contains("sacrifice zone"));
         assert!(state.regions[0].collapsed);
@@ -1659,7 +1663,7 @@ mod tests {
         assert!(state.pending_crises.iter().any(|k| matches!(k, crate::state::CrisisKind::RefugeeWave { from_region: 0, .. })),
             "refugee wave should be scheduled from sacrificed region");
         // RegionCollapsed event should be fired
-        assert!(state.events.iter().any(|e| matches!(e, crate::state::GameEvent::RegionCollapsed { region_idx: 0, .. })),
+        assert!(events.iter().any(|e| matches!(e, crate::state::GameEvent::RegionCollapsed { region_idx: 0, .. })),
             "RegionCollapsed event should be fired");
 
         // Income should reflect the sacrifice: the collapsed region's contribution
@@ -1673,25 +1677,27 @@ mod tests {
             "income should change after sacrifice: before={income_before:.3}, after={income_after:.3}");
 
         // Cannot sacrifice again
-        let (_, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, Some(1));
+        let (_, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, Some(1), &mut events);
         assert!(!ok, "should not sacrifice twice");
     }
 
     #[test]
     fn sacrifice_region_requires_region_idx() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, None);
+        let (msg, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, None, &mut events);
         assert!(!ok, "should require region selection");
         assert!(msg.unwrap().contains("Select"));
     }
 
     #[test]
     fn sacrifice_region_rejects_already_collapsed() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].collapsed = true;
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, Some(0));
+        let (msg, ok) = enact_decree(&mut state, DecreeId::SacrificeRegion, Some(0), &mut events);
         assert!(!ok, "should not sacrifice already collapsed region");
         assert!(msg.unwrap().contains("collapsed"));
     }
@@ -1741,6 +1747,7 @@ mod tests {
 
     #[test]
     fn governor_cooperation_drifts_with_restrictive_policies() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].governor.cooperation = 60.0;
         state.policies[0].travel_ban = true;
@@ -1750,7 +1757,7 @@ mod tests {
         let before = state.regions[0].governor.cooperation;
         // Tick cooperation for ~1 day (120 ticks)
         for _ in 0..120 {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         assert!(state.regions[0].governor.cooperation < before,
             "cooperation should decrease with restrictive policies: was {before}, now {}",
@@ -1759,6 +1766,7 @@ mod tests {
 
     #[test]
     fn governor_cooperation_drops_fast_in_crit_region() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].governor.cooperation = 70.0;
         // Put >100K infected so severity = CRIT
@@ -1766,7 +1774,7 @@ mod tests {
 
         // Tick for 20 days
         for _ in 0..(120 * 20) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         assert!(state.regions[0].governor.cooperation < 45.0,
             "CRIT region should drive cooperation well below 45 in 20 days, got {}",
@@ -1775,6 +1783,7 @@ mod tests {
 
     #[test]
     fn hardliner_governor_drops_faster_than_operative() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 200_000.0;
 
@@ -1782,7 +1791,7 @@ mod tests {
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Hardliner;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 15) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let hardliner_cooperation = state.regions[0].governor.cooperation;
 
@@ -1790,7 +1799,7 @@ mod tests {
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 15) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let operative_cooperation = state.regions[0].governor.cooperation;
 
@@ -1833,6 +1842,7 @@ mod tests {
 
     #[test]
     fn blowhard_governor_hates_restrictions() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 200_000.0; // CRIT
         state.policies[0].quarantine = true;
@@ -1842,7 +1852,7 @@ mod tests {
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Blowhard;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 10) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let blowhard_cooperation = state.regions[0].governor.cooperation;
 
@@ -1850,7 +1860,7 @@ mod tests {
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 10) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let operative_cooperation = state.regions[0].governor.cooperation;
 
@@ -1860,6 +1870,7 @@ mod tests {
 
     #[test]
     fn blowhard_governor_happy_without_restrictions() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         // Low infections, no restrictions — blowhard's calm bonus kicks in
         state.regions[0].get_or_create_infection(0).infected = 100.0;
@@ -1867,7 +1878,7 @@ mod tests {
         state.regions[0].governor.cooperation = 50.0;
 
         for _ in 0..(120 * 5) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         assert!(state.regions[0].governor.cooperation > 50.0,
             "Blowhard should gain cooperation with no restrictions and low infections, got {}",
@@ -1876,6 +1887,7 @@ mod tests {
 
     #[test]
     fn mobster_cooperation_decays_faster_with_bargains() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Mobster;
 
@@ -1883,7 +1895,7 @@ mod tests {
         state.regions[0].governor.cooperation = 70.0;
         state.regions[0].governor.bargain_count = 0;
         for _ in 0..(120 * 10) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let no_bargain_cooperation = state.regions[0].governor.cooperation;
 
@@ -1891,7 +1903,7 @@ mod tests {
         state.regions[0].governor.cooperation = 70.0;
         state.regions[0].governor.bargain_count = 3;
         for _ in 0..(120 * 10) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let many_bargain_cooperation = state.regions[0].governor.cooperation;
 
@@ -1901,6 +1913,7 @@ mod tests {
 
     #[test]
     fn operative_gains_cooperation_when_skimming() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 100.0; // low infections
         state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
@@ -1909,7 +1922,7 @@ mod tests {
         state.regions[0].governor.income_skim = 0.0;
         state.regions[0].governor.cooperation = 50.0;
         for _ in 0..(120 * 10) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let no_skim_cooperation = state.regions[0].governor.cooperation;
 
@@ -1917,7 +1930,7 @@ mod tests {
         state.regions[0].governor.income_skim = 0.10;
         state.regions[0].governor.cooperation = 50.0;
         for _ in 0..(120 * 10) {
-            tick_governor_cooperation(&mut state);
+            tick_governor_cooperation(&mut state, &mut events);
         }
         let skim_cooperation = state.regions[0].governor.cooperation;
 
@@ -1938,91 +1951,97 @@ mod tests {
 
     #[test]
     fn buffoon_governor_breaks_policy() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Buffoon);
         state.policies[0].border_controls = true;
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         // Buffoon should accidentally disable the active policy
         assert!(!state.policies[0].border_controls,
             "Buffoon governor should accidentally cancel a policy");
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("accidentally cancelled"))
         ));
     }
 
     #[test]
     fn blowhard_governor_drains_funding() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Blowhard);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         assert!(state.resources.funding < before,
             "Blowhard governor should drain funding for PR");
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("emergency PR"))
         ));
     }
 
     #[test]
     fn recluse_governor_no_direct_resource_impact() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Recluse);
         let funding_before = state.resources.funding;
         let personnel_before = state.resources.personnel;
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         // Recluse doesn't directly drain resources — consequence is through
         // policy_effectiveness (0.4x for Recluse vs 0.7x standard)
         assert_eq!(state.resources.funding, funding_before);
         assert_eq!(state.resources.personnel, personnel_before);
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("unreachable"))
         ));
     }
 
     #[test]
     fn hardliner_governor_imposes_policy() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         assert!(!state.policies[0].quarantine);
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         assert!(state.policies[0].quarantine,
             "Hardliner governor should unilaterally impose a restrictive policy");
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("imposed"))
         ));
     }
 
     #[test]
     fn operative_governor_siphons_funding() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Operative);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         assert!(state.resources.funding < before,
             "Operative governor should siphon funding");
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("siphoned"))
         ));
     }
 
     #[test]
     fn mobster_governor_extorts_funding() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Mobster);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         assert!(state.resources.funding < before,
             "Mobster governor should extort funding");
-        assert!(state.events.iter().any(|e|
+        assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("extorted"))
         ));
     }
@@ -2044,29 +2063,32 @@ mod tests {
 
     #[test]
     fn governor_actions_respect_cooldown() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.last_action_tick = state.tick; // just acted
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
         // Should not act when on cooldown
-        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
+        assert!(!events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
             "Governor should not act when still on cooldown");
     }
 
     #[test]
     fn governor_actions_only_fire_when_hostile() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.cooperation = 50.0; // above threshold
 
-        tick_governor_actions(&mut state);
+        tick_governor_actions(&mut state, &mut events);
 
-        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
+        assert!(!events.iter().any(|e| matches!(e, GameEvent::GovernorAction { .. })),
             "Governor above hostility threshold should not act");
     }
 
     #[test]
     fn standing_order_auto_quarantine_fires_at_high() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
@@ -2075,15 +2097,16 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
         assert!(!state.policies[0].quarantine, "Quarantine should not be active yet");
 
-        tick_standing_orders(&mut state);
+        tick_standing_orders(&mut state, &mut events);
 
         assert!(state.policies[0].quarantine, "Standing order should have enabled quarantine");
-        assert!(state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+        assert!(events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
             "PolicyAutoActivated event should have fired");
     }
 
     #[test]
     fn standing_order_auto_quarantine_does_not_fire_below_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
@@ -2091,29 +2114,31 @@ mod tests {
         // Below HIGH severity
         state.regions[0].get_or_create_infection(0).infected = 100.0;
 
-        tick_standing_orders(&mut state);
+        tick_standing_orders(&mut state, &mut events);
 
         assert!(!state.policies[0].quarantine, "Quarantine should not fire below HIGH threshold");
     }
 
     #[test]
     fn standing_order_auto_quarantine_skips_already_active() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
         state.policies[0].quarantine = true; // already active
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
 
-        tick_standing_orders(&mut state);
+        tick_standing_orders(&mut state, &mut events);
 
         // Should not have toggled (would disable it — we only auto-enable)
         assert!(state.policies[0].quarantine, "Should not disable already-active quarantine");
-        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+        assert!(!events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
             "Should not fire event for already-active policy");
     }
 
     #[test]
     fn standing_order_auto_travel_ban_fires_at_crit() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_travel_ban_at_crit = true;
@@ -2121,25 +2146,26 @@ mod tests {
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
         assert!(!state.policies[0].travel_ban);
 
-        tick_standing_orders(&mut state);
+        tick_standing_orders(&mut state, &mut events);
 
         assert!(state.policies[0].travel_ban, "Standing order should have enabled travel ban");
-        assert!(state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+        assert!(events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
             "PolicyAutoActivated event should have fired");
     }
 
     #[test]
     fn standing_order_disabled_does_not_fire() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         // Both standing orders OFF (default)
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_CRIT + 1.0;
 
-        tick_standing_orders(&mut state);
+        tick_standing_orders(&mut state, &mut events);
 
         assert!(!state.policies[0].quarantine);
         assert!(!state.policies[0].travel_ban);
-        assert!(!state.events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })));
+        assert!(!events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })));
     }
 
     #[test]
@@ -2170,6 +2196,7 @@ mod tests {
 
     #[test]
     fn standing_order_auto_activation_warns_about_contract_conflict() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
@@ -2188,10 +2215,10 @@ mod tests {
         });
         state.regions[0].get_or_create_infection(0).infected = INFECTION_PRESSURE_HIGH + 1.0;
 
-        tick_standing_orders(&mut state);
+        tick_standing_orders(&mut state, &mut events);
 
         assert!(state.policies[0].quarantine);
-        let event = state.events.iter().find(|e| matches!(e, GameEvent::PolicyAutoActivated { .. }));
+        let event = events.iter().find(|e| matches!(e, GameEvent::PolicyAutoActivated { .. }));
         assert!(event.is_some(), "PolicyAutoActivated event should have fired");
         if let GameEvent::PolicyAutoActivated { policy_name, .. } = event.unwrap() {
             assert!(policy_name.contains("Hospitality Protection Fund"),
@@ -2201,6 +2228,7 @@ mod tests {
 
     #[test]
     fn fortify_region_restores_target_penalizes_others() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         // Set low infra on target region
         state.regions[0].healthcare_capacity = 0.3;
@@ -2213,7 +2241,7 @@ mod tests {
             state.regions[i].civil_order = 1.0;
         }
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::FortifyRegion, Some(0));
+        let (msg, ok) = enact_decree(&mut state, DecreeId::FortifyRegion, Some(0), &mut events);
         assert!(ok, "should succeed");
         assert!(msg.unwrap().contains("fortified"));
         assert_eq!(state.enacted_decrees.fortified_region, Some(0));
@@ -2233,21 +2261,23 @@ mod tests {
         }
 
         // Cannot fortify again
-        let (_, ok) = enact_decree(&mut state, DecreeId::FortifyRegion, Some(1));
+        let (_, ok) = enact_decree(&mut state, DecreeId::FortifyRegion, Some(1), &mut events);
         assert!(!ok, "should not fortify twice");
     }
 
     #[test]
     fn fortify_region_requires_region_idx() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::FortifyRegion, None);
+        let (msg, ok) = enact_decree(&mut state, DecreeId::FortifyRegion, None, &mut events);
         assert!(!ok, "should require region selection");
         assert!(msg.unwrap().contains("Select"));
     }
 
     #[test]
     fn emergency_countermeasure_reduces_disease_params_and_kills_population() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         // Set up disease parameters
         state.diseases[0].within_region_spread = 1.0;
@@ -2264,7 +2294,7 @@ mod tests {
             .map(|r| r.population as f64 - r.dead)
             .sum();
 
-        let (msg, ok) = enact_decree(&mut state, DecreeId::EmergencyCountermeasure, None);
+        let (msg, ok) = enact_decree(&mut state, DecreeId::EmergencyCountermeasure, None, &mut events);
         assert!(ok, "should succeed");
         assert!(msg.unwrap().contains("countermeasure"));
         assert!(state.enacted_decrees.emergency_countermeasure);
@@ -2286,7 +2316,7 @@ mod tests {
             "should kill {:.0} people, got {:.0}", expected_dead, total_dead);
 
         // Cannot enact again
-        let (_, ok) = enact_decree(&mut state, DecreeId::EmergencyCountermeasure, None);
+        let (_, ok) = enact_decree(&mut state, DecreeId::EmergencyCountermeasure, None, &mut events);
         assert!(!ok, "should not enact twice");
     }
 
@@ -2317,30 +2347,30 @@ mod tests {
 
     #[test]
     fn dead_governor_no_autonomous_actions() {
+        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = hostile_governor_state(GovernorPersonality::Hardliner);
         state.regions[0].governor.dead = true;
-        let events_before = state.events.len();
+        tick_governor_actions(&mut state, &mut events);
 
-        tick_governor_actions(&mut state);
-
-        assert_eq!(state.events.len(), events_before,
+        assert!(events.is_empty(),
             "Dead governor should not take autonomous actions");
     }
 
     #[test]
     fn governor_succession_replaces_dead_governor() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::SUCCESSOR_COOPERATION;
         let mut state = GameState::new_default(42);
         state.regions[0].governor.dead = true;
         state.regions[0].governor.succession_tick = Some(100);
         state.tick = 100;
 
-        tick_governor_cooperation(&mut state);
+        tick_governor_cooperation(&mut state, &mut events);
 
         assert!(!state.regions[0].governor.is_dead(),
             "Governor should be replaced after succession tick");
         assert!((state.regions[0].governor.cooperation - SUCCESSOR_COOPERATION).abs() < 0.001);
-        assert!(state.events.iter().any(|e| matches!(e, GameEvent::GovernorSucceeded { .. })),
+        assert!(events.iter().any(|e| matches!(e, GameEvent::GovernorSucceeded { .. })),
             "Should fire GovernorSucceeded event");
     }
 
@@ -2435,6 +2465,7 @@ mod tests {
 
     #[test]
     fn auto_rebuild_fires_when_infra_below_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -2443,7 +2474,7 @@ mod tests {
 
         // Set tick to a day boundary so auto-rebuild fires
         state.tick = TICKS_PER_DAY as u64;
-        tick_auto_rebuild(&mut state);
+        tick_auto_rebuild(&mut state, &mut events);
 
         assert!(state.regions[0].healthcare_capacity > 0.85,
             "HC should have been repaired: {}", state.regions[0].healthcare_capacity);
@@ -2451,6 +2482,7 @@ mod tests {
 
     #[test]
     fn auto_rebuild_skips_when_infra_above_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
         let mut state = GameState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -2462,7 +2494,7 @@ mod tests {
         let funding_before = state.resources.funding;
 
         state.tick = TICKS_PER_DAY as u64;
-        tick_auto_rebuild(&mut state);
+        tick_auto_rebuild(&mut state, &mut events);
 
         assert!((state.resources.funding - funding_before).abs() < 0.01,
             "should not spend funds when all infra above threshold");

@@ -216,6 +216,7 @@ pub(super) fn tick_spread_cross_region(
     new: &mut GameState,
     diseases: &[Disease],
     rng: &mut impl Rng,
+    events: &mut Vec<GameEvent>,
 ) {
     let regions_snapshot: Vec<_> = new.regions.clone();
     for (i, region) in new.regions.iter_mut().enumerate() {
@@ -311,7 +312,7 @@ pub(super) fn tick_spread_cross_region(
                     inf_entry.exposed = seed_total * 0.6;
                     // Only notify the player about detected diseases spreading
                     if new.diseases[d_idx].detected {
-                        new.events.push(GameEvent::DiseaseSpreadToRegion {
+                        events.push(GameEvent::DiseaseSpreadToRegion {
                             disease_idx: d_idx,
                             region_idx: i,
                         });
@@ -332,7 +333,7 @@ pub(super) fn tick_spread_cross_region(
 /// within a typical game's timeframe.
 /// Only fires when both diseases have active infections in at least one
 /// shared region (conjugation requires physical proximity).
-pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
+pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState, events: &mut Vec<GameEvent>) {
     // Collect indices of all Bacterium diseases
     let bacteria: Vec<usize> = new.diseases.iter().enumerate()
         .filter(|(_, d)| d.pathogen_type == PathogenType::Bacterium)
@@ -380,7 +381,7 @@ pub(super) fn tick_horizontal_gene_transfer(new: &mut GameState) {
         // Emit event when resistance crosses 0.05 threshold (first noticeable)
         let new_level = new.diseases[to].get_resistance(None);
         if new_level >= 0.05 && new_level - amount < 0.05 {
-            new.events.push(GameEvent::ResistanceTransferred {
+            events.push(GameEvent::ResistanceTransferred {
                 from_disease_idx: from,
                 to_disease_idx: to,
             });
