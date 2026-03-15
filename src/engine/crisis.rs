@@ -53,10 +53,8 @@ fn scaled_cost(state: &WorldState, fraction: f64, min: f64, max: f64) -> f64 {
 /// Find the connected non-collapsed region with the lowest total infection.
 /// Returns None if no suitable destination exists.
 fn find_safest_connected_region(state: &WorldState, from_region: usize) -> Option<usize> {
-    let connections = state.regions.get(from_region)
-        .map(|r| r.connections.clone())
-        .unwrap_or_default();
-    connections.iter()
+    let region = state.regions.get(from_region)?;
+    region.connections.iter()
         .copied()
         .filter(|&ri| !state.regions.get(ri).map_or(true, |r| r.collapsed))
         .min_by(|&a, &b| {

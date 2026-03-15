@@ -157,10 +157,15 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                 BoardRole::RegionGovernor { region_idx } => Some(*region_idx),
             };
             if member.region_idx != default_location {
-                let loc_name = member.region_idx
-                    .and_then(|ri| state.regions.get(ri).map(|r| r.name.as_str()))
-                    .unwrap_or("unknown");
-                connections.push(format!("[In: {}]", loc_name));
+                match member.region_idx {
+                    Some(ri) => {
+                        let loc_name = state.regions.get(ri)
+                            .map(|r| r.name.as_str())
+                            .unwrap_or("unknown");
+                        connections.push(format!("[In: {}]", loc_name));
+                    }
+                    None => connections.push("[Evacuated]".into()),
+                }
             }
 
             if !connections.is_empty() {
