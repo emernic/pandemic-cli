@@ -736,8 +736,8 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         // Governor death: rare event in critically infected regions with significant deaths.
         // Per-tick probability when infected > CRIT threshold AND death_frac > 5%.
         // ~0.0002/tick = ~1.2% per day at CRIT. Only fires once (governor dies).
-        // Guard: don't fire if there's already a pending GovernorDeath for this region.
-        if infected > INFECTION_PRESSURE_CRIT && death_frac > 0.05 {
+        // Guard: skip dead governors and don't fire if there's already a pending GovernorDeath.
+        if !state.regions[i].governor.dead && infected > INFECTION_PRESSURE_CRIT && death_frac > 0.05 {
             let already_pending = state.pending_crises.iter()
                 .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == i));
             let already_active = state.active_crisis.as_ref()
