@@ -338,10 +338,9 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
                 let has_members = state.board_members.iter()
                     .any(|m| m.region_idx == Some(region_idx) && !m.dead);
                 if has_members {
-                    state.pending_crises.push((
-                        state.tick,
+                    state.pending_crises.push(
                         CrisisKind::NuclearEvacuation { region_idx },
-                    ));
+                    );
                 }
 
                 (Some(format!("☢ Nuclear payload inbound to {region_name}. Impact in 12 hours.",
@@ -707,7 +706,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
                 GovernorPersonality::Mobster => CrisisKind::GovernorMobster { region_idx: i },
             };
             // Schedule for immediate activation (current tick)
-            state.pending_crises.push((state.tick, kind));
+            state.pending_crises.push(kind);
         }
 
         // Reset the flag when cooperation recovers above hostility threshold
@@ -724,7 +723,7 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
                 .map_or(true, |t| state.tick.saturating_sub(t) >= sick_cooldown);
             if region_infected > INFECTION_PRESSURE_HIGH && cooldown_ok {
                 state.regions[i].governor.last_sick_tick = Some(state.tick);
-                state.pending_crises.push((state.tick, CrisisKind::GovernorSick { region_idx: i }));
+                state.pending_crises.push(CrisisKind::GovernorSick { region_idx: i });
             }
         }
 
@@ -734,13 +733,13 @@ pub(super) fn tick_governor_cooperation(state: &mut GameState) {
         // Guard: skip dead governors and don't fire if there's already a pending GovernorDeath.
         if !state.regions[i].governor.dead && infected > INFECTION_PRESSURE_CRIT && death_frac > 0.05 {
             let already_pending = state.pending_crises.iter()
-                .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == i));
+                .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == i));
             let already_active = state.active_crisis.as_ref()
                 .map_or(false, |c| matches!(c.kind, CrisisKind::GovernorDeath { region_idx: ri } if ri == i));
             if !already_pending && !already_active {
                 let roll: f64 = state.rng_misc.r#gen();
                 if roll < 0.0002 {
-                    state.pending_crises.push((state.tick, CrisisKind::GovernorDeath { region_idx: i }));
+                    state.pending_crises.push(CrisisKind::GovernorDeath { region_idx: i });
                 }
             }
         }
@@ -1046,11 +1045,11 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
                 .collect();
             if let Some(&to) = neighbors.first() {
                 let wave = state.regions.iter().filter(|r| r.collapsed).count() as u8;
-                state.pending_crises.push((state.tick, CrisisKind::RefugeeWave {
+                state.pending_crises.push(CrisisKind::RefugeeWave {
                     from_region: r_idx,
                     to_region: to,
                     wave,
-                }));
+                });
             }
             let bonus_pct = (SACRIFICE_INCOME_BONUS - 1.0) * 100.0;
             (Some(format!(
@@ -1657,7 +1656,7 @@ mod tests {
         assert!(state.regions[0].collapsed, "sacrificed region should be collapsed");
         assert_eq!(state.enacted_decrees.sacrificed_region, Some(0));
         // Refugee wave should be scheduled
-        assert!(state.pending_crises.iter().any(|(_, k)| matches!(k, crate::state::CrisisKind::RefugeeWave { from_region: 0, .. })),
+        assert!(state.pending_crises.iter().any(|k| matches!(k, crate::state::CrisisKind::RefugeeWave { from_region: 0, .. })),
             "refugee wave should be scheduled from sacrificed region");
         // RegionCollapsed event should be fired
         assert!(state.events.iter().any(|e| matches!(e, crate::state::GameEvent::RegionCollapsed { region_idx: 0, .. })),

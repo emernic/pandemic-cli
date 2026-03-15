@@ -712,7 +712,6 @@ mod tests {
                 }
                 // Auto-resolve non-meeting crises to keep advancing
                 state.active_crisis = None;
-                state.last_crisis_resolved_tick = state.tick;
             }
         }
         assert!(found_meeting, "board meeting should have fired by tick {max_tick}");

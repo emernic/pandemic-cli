@@ -198,10 +198,9 @@ pub(super) fn tick_loyalty_raises(state: &mut GameState, rng: &mut ChaCha8Rng) {
         }
         if rng.r#gen::<f64>() < LOYALTY_RAISE_CHANCE {
             contract.loyalty_raise_offered = true;
-            state.pending_crises.push((
-                state.tick,
+            state.pending_crises.push(
                 CrisisKind::LoyaltyRaise { template_id: contract.template_id },
-            ));
+            );
         }
     }
 }
@@ -365,10 +364,9 @@ pub(super) fn tick_check_contracts(state: &mut GameState) {
                     || state.tick.saturating_sub(c.last_demand_tick) >= CONTRACT_DEMAND_COOLDOWN;
                 if cooldown_ok {
                     c.last_demand_tick = state.tick;
-                    state.pending_crises.push((
-                        state.tick,
+                    state.pending_crises.push(
                         CrisisKind::ContractDemand { template_id: c.template_id },
-                    ));
+                    );
                 }
             }
 
@@ -464,7 +462,7 @@ pub(super) fn tick_offer_contracts(state: &mut GameState, rng: &mut ChaCha8Rng) 
 
     // Queue a crisis-style interrupt so the player must respond to the offer.
     // Fires on the same tick (pending_crises check runs after this function).
-    state.pending_crises.push((state.tick, CrisisKind::ContractOffer { template_id }));
+    state.pending_crises.push(CrisisKind::ContractOffer { template_id });
 }
 
 /// Accept the current contract offer. Returns (success, message).
@@ -821,7 +819,7 @@ mod tests {
         assert!(state.contracts[0].warned);
         assert_eq!(state.pending_crises.len(), 1);
         assert!(matches!(
-            state.pending_crises[0].1,
+            state.pending_crises[0],
             CrisisKind::ContractDemand { template_id: 4 }
         ));
         assert_eq!(state.contracts[0].last_demand_tick, 500);
@@ -877,7 +875,7 @@ mod tests {
         assert!(state.contract_offer.is_some(), "offer should be stored");
         assert_eq!(state.pending_crises.len(), 1, "should queue a crisis");
         assert!(matches!(
-            state.pending_crises[0].1,
+            state.pending_crises[0],
             CrisisKind::ContractOffer { .. }
         ));
     }
@@ -1172,7 +1170,7 @@ mod tests {
         }
         assert!(state.contracts[0].loyalty_raise_offered,
             "Loyalty raise should have been offered after enough ticks past eligibility");
-        assert!(state.pending_crises.iter().any(|(_, k)|
+        assert!(state.pending_crises.iter().any(|k|
             matches!(k, CrisisKind::LoyaltyRaise { template_id: 0 })
         ));
     }

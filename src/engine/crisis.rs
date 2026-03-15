@@ -33,14 +33,13 @@ fn queue_governor_death_followup(state: &mut GameState, region_idx: usize) {
         return;
     }
     let already_pending = state.pending_crises.iter()
-        .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
+        .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
     let already_active = state.active_crisis.as_ref()
         .map_or(false, |c| matches!(c.kind, CrisisKind::GovernorDeath { region_idx: ri } if ri == region_idx));
     if already_pending || already_active {
         return;
     }
-    let delay = (4.0 * TICKS_PER_DAY) as u64;
-    state.pending_crises.push((state.tick + delay, CrisisKind::GovernorDeath { region_idx }));
+    state.pending_crises.push(CrisisKind::GovernorDeath { region_idx });
 }
 
 /// Scale a dollar amount relative to current funding.
@@ -2218,8 +2217,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
 
     // Record cooldown for this crisis type
     state.crisis_cooldowns.insert(crisis.kind.tag().to_string(), state.tick);
-    // Record resolution tick for minimum gap enforcement
-    state.last_crisis_resolved_tick = state.tick;
+
 
     // Deduct costs generically from the chosen option. Affordability is always
     // checked before calling resolve_crisis: apply_action() for manual resolution,
@@ -2362,9 +2360,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 }
                 region.dead += total_harmed;
             }
-            // Schedule follow-up: counterfeit epidemic in 5 days
-            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::CounterfeitEpidemic { region_idx: *region_idx }));
+            state.pending_crises.push(CrisisKind::CounterfeitEpidemic { region_idx: *region_idx });
             format!("Black market drugs allowed in {}. Some treated, some suffered adverse reactions.", region_name)
         }
         (CrisisKind::BlackMarketMedicine { region_idx }, _) => {
@@ -2452,8 +2448,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 }
             }
             if governor_rebels {
-                let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
-                state.pending_crises.push((followup_tick, CrisisKind::GovernorHardliner { region_idx: *region_idx }));
+                state.pending_crises.push(CrisisKind::GovernorHardliner { region_idx: *region_idx });
                 "Compliance enforced. Governor threatening to block operations.".into()
             } else {
                 "Compliance enforced. Effective but deeply resented.".into()
@@ -2484,10 +2479,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
         (CrisisKind::CorruptOfficial { stolen }, 0) => {
             // Ignore — lose the stolen money (amount locked at generation time)
             state.resources.funding = (state.resources.funding - stolen).max(0.0);
-            // Schedule follow-up: embezzlement ring in 4 days
             let daily_drain = (state.resources.funding * 0.05).clamp(20.0, 200.0);
-            let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::EmbezzlementRing { stolen_per_day: daily_drain }));
+            state.pending_crises.push(CrisisKind::EmbezzlementRing { stolen_per_day: daily_drain });
             format!("Corruption ignored. ¥{:.0} lost.", stolen)
         }
         (CrisisKind::CorruptOfficial { .. }, _) => {
@@ -2537,9 +2530,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             // Cooperate — lose personnel, gain chairman satisfaction
             state.resources.personnel = state.resources.personnel.saturating_sub(*cooperate_loss);
             chairman_satisfaction_hit(state, 0.15);
-            // Schedule follow-up: corporate overreach in 4 days
-            let followup_tick = state.tick + (4.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::CorporateOverreach));
+            state.pending_crises.push(CrisisKind::CorporateOverreach);
             format!("Transferred {} staff to corporate oversight. Agency retains nominal control.", cooperate_loss)
         }
         (CrisisKind::CorporateSeizure { .. }, 1) => {
@@ -2550,9 +2541,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             // Stall — buy time, they may return
             chairman_satisfaction_hit(state, -0.05);
             if state.rng_crisis.r#gen::<bool>() {
-                let followup_tick = state.tick + (3.0 * TICKS_PER_DAY) as u64;
                 let cooperate_loss = ((state.resources.personnel as f64 * 0.25).round() as u32).clamp(2, 8);
-                state.pending_crises.push((followup_tick, CrisisKind::CorporateSeizure { cooperate_loss }));
+                state.pending_crises.push(CrisisKind::CorporateSeizure { cooperate_loss });
                 "Negotiations stalled. They'll be back.".into()
             } else {
                 "Stalling worked. Corporate security withdrew.".into()
@@ -2591,8 +2581,7 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             state.resources.funding += credit_gain;
             chairman_satisfaction_hit(state, -0.15);
             let sanctions_loss = scaled_cost(state, 0.20, 200.0, 800.0);
-            let followup_tick = state.tick + (5.0 * TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator.clone() }));
+            state.pending_crises.push(CrisisKind::SanctionsThreat { funding_loss: sanctions_loss, corp_name: retaliator.clone() });
             format!("Backed {}. ¥{:.0} deposited. {} is furious.", backed, credit_gain, retaliator)
         }
 
@@ -3282,13 +3271,12 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
             let region_name = state.regions.get(*region_idx)
                 .map(|r| r.name.clone()).unwrap_or_else(|| "the region".into());
             let followup_fee = fee * 1.6;
-            let followup_tick = state.tick + (10.0 * crate::engine::TICKS_PER_DAY) as u64;
-            state.pending_crises.push((followup_tick, CrisisKind::FieldTeamDetainedAgain {
+            state.pending_crises.push(CrisisKind::FieldTeamDetainedAgain {
                 region_idx: *region_idx,
                 corp_idx: *corp_idx,
                 fee: followup_fee,
                 team_size: *team_size,
-            }));
+            });
             format!("¥{fee:.0} paid. Team released. {corp_name} now knows what you'll pay in {region_name}.")
         }
         (CrisisKind::FieldTeamDetained { team_size, .. }, 1) => {
@@ -3523,7 +3511,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let pending_before = state.pending_crises.len();
         let (msg, _) = resolve_crisis(&mut state, 0); // Pay
         assert!(state.pending_crises.len() > pending_before, "paying should schedule follow-up");
-        assert!(state.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::FieldTeamDetainedAgain { .. })),
+        assert!(state.pending_crises.iter().any(|k| matches!(k, CrisisKind::FieldTeamDetainedAgain { .. })),
             "follow-up should be FieldTeamDetainedAgain");
         assert!(msg.contains("paid"), "resolution message should mention payment");
     }
@@ -3954,7 +3942,6 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
                 }
                 // Auto-resolve other crises
                 current.active_crisis = None;
-                current.last_crisis_resolved_tick = current.tick;
             }
         }
         assert!(found, "Vote of No Confidence should fire after 3 days of chairman hostility");
@@ -3991,7 +3978,6 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
                 assert_ne!(crisis.kind.tag(), "vote_no_confidence",
                     "should not fire while on cooldown");
                 current.active_crisis = None;
-                current.last_crisis_resolved_tick = current.tick;
             }
         }
     }
@@ -4026,7 +4012,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             let (_msg, _) = resolve_crisis(&mut s, worst_choice);
 
             let has_death = s.pending_crises.iter()
-                .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
+                .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
             assert!(has_death,
                 "{:?} worst-case (choice {}) should queue GovernorDeath", personality, worst_choice);
         }
@@ -4050,7 +4036,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
 
         // Should NOT queue governor death
         let has_death = state.pending_crises.iter()
-            .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
+            .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
         assert!(!has_death, "Stabilize governor should not queue GovernorDeath");
 
         // Should hit supply lines
@@ -4077,7 +4063,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let (_msg, _) = resolve_crisis(&mut state, 2); // Refuse (worst-case)
 
         let has_death = state.pending_crises.iter()
-            .any(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
+            .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0));
         assert!(!has_death, "should not queue GovernorDeath for already-dead governor");
     }
 
@@ -4089,7 +4075,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         state.regions[0].governor.dead = false;
 
         // Pre-existing pending GovernorDeath
-        state.pending_crises.push((state.tick + 100, CrisisKind::GovernorDeath { region_idx: 0 }));
+        state.pending_crises.push(CrisisKind::GovernorDeath { region_idx: 0 });
 
         let kind = CrisisKind::GovernorSick { region_idx: 0 };
         let crisis = build_crisis_event(&state, kind);
@@ -4099,7 +4085,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let (_msg, _) = resolve_crisis(&mut state, 1); // Refuse (worst-case)
 
         let death_count = state.pending_crises.iter()
-            .filter(|(_, k)| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0))
+            .filter(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == 0))
             .count();
         assert_eq!(death_count, 1, "should not duplicate GovernorDeath");
     }

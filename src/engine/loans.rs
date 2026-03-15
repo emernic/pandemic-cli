@@ -26,7 +26,7 @@ pub(super) fn tick_loans(state: &mut GameState) {
             continue;
         }
         // Only queue if no LoanCallIn is already pending for this lender
-        let already_pending = state.pending_crises.iter().any(|(_, k)| {
+        let already_pending = state.pending_crises.iter().any(|k| {
             matches!(k, CrisisKind::LoanCallIn { lender, .. } if *lender == state.loans[i].lender)
         });
         if !already_pending {
@@ -35,7 +35,7 @@ pub(super) fn tick_loans(state: &mut GameState) {
                 lender: state.loans[i].lender.clone(),
                 outstanding: state.loans[i].outstanding,
             };
-            state.pending_crises.push((state.tick, kind));
+            state.pending_crises.push(kind);
             state.loans[i].hostile_queued = true;
         }
     }
@@ -71,7 +71,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
         return;
     }
     // Don't offer if already have a pending loan offer
-    let already_pending = state.pending_crises.iter().any(|(_, k)| {
+    let already_pending = state.pending_crises.iter().any(|k| {
         matches!(k, CrisisKind::LoanOffer { .. })
     });
     if already_pending {
@@ -134,7 +134,7 @@ pub(super) fn maybe_queue_loan_offer(state: &mut GameState) {
         daily_interest_rate: interest_rate,
     };
 
-    state.pending_crises.push((state.tick, kind));
+    state.pending_crises.push(kind);
     state.resources.last_loan_offer_tick = state.tick;
 }
 
@@ -183,7 +183,7 @@ mod tests {
         tick_loans(&mut state);
 
         assert!(state.loans[0].hostile_queued, "should mark hostile as queued");
-        let has_call_in = state.pending_crises.iter().any(|(_, k)| {
+        let has_call_in = state.pending_crises.iter().any(|k| {
             matches!(k, CrisisKind::LoanCallIn { .. })
         });
         assert!(has_call_in, "should queue LoanCallIn crisis");
@@ -203,7 +203,7 @@ mod tests {
 
         maybe_queue_loan_offer(&mut state);
 
-        let has_offer = state.pending_crises.iter().any(|(_, k)| {
+        let has_offer = state.pending_crises.iter().any(|k| {
             matches!(k, CrisisKind::LoanOffer { .. })
         });
         assert!(has_offer, "should queue LoanOffer crisis when lender is available");

@@ -16,7 +16,7 @@ use crate::state::{
     CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind, SimState,
     StandingOrderKind,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
-    CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
+    CRISIS_INTERVAL, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
     MAX_DISEASES, PERSONNEL_UPKEEP_COST, TICKS_PER_DAY,
     WAVE_CLUSTER_WINDOW_TICKS,
@@ -323,7 +323,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                     let post = crisis::activate_crisis(&mut new, alert);
                     dispatch_crisis_post_action(&mut new, post);
                 } else {
-                    new.pending_crises.push((new.tick, kind));
+                    new.pending_crises.push(kind);
                 }
             }
         }
@@ -401,79 +401,57 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         }
     }
 
-    // Enforce minimum gap between consecutive crises to prevent spam.
-    // Gap check is skipped if no crisis has ever been resolved (tick 0 = no prior crisis).
-    let crisis_gap_ok = new.last_crisis_resolved_tick == 0
-        || new.tick.saturating_sub(new.last_crisis_resolved_tick) >= CRISIS_MIN_GAP;
-
-    // Fire urgent crises immediately — these bypass the normal crisis gap.
-    // Pathogen detections: player needs to know about new threats ASAP.
-    // Governor crises: governor already acted unilaterally, player needs to respond.
-    if new.active_crisis.is_none() {
-        if let Some(idx) = new.pending_crises.iter().position(|(tick, kind)|
-            *tick <= new.tick && kind.bypasses_crisis_gap())
-        {
-            let (_, kind) = new.pending_crises.remove(idx);
-            let crisis = crisis::build_crisis_event(&new, kind);
-            let post = crisis::activate_crisis(&mut new, crisis);
-            dispatch_crisis_post_action(&mut new, post);
-        }
-    }
-
-    // Fire scheduled follow-up crises (from previous crisis choices).
-    // These take priority over random crisis generation.
-    if new.active_crisis.is_none() && crisis_gap_ok {
-        if let Some(idx) = new.pending_crises.iter().position(|&(tick, _)| tick <= new.tick) {
-            let (_, mut kind) = new.pending_crises.remove(idx);
-            // Validate refugee destination: if to_region collapsed since queuing,
-            // re-route to another non-collapsed neighbor or drop the crisis entirely.
-            if let CrisisKind::RefugeeWave { from_region, ref mut to_region, .. } = kind {
-                if new.regions[*to_region].collapsed {
-                    let alt: Vec<usize> = new.regions[from_region].connections.iter()
-                        .filter(|&&c| !new.regions[c].collapsed)
-                        .copied()
-                        .collect();
-                    if let Some(&dest) = alt.first() {
-                        *to_region = dest;
-                    }
+    // Fire pending crises immediately — no delay, no spacing.
+    if new.active_crisis.is_none() && !new.pending_crises.is_empty() {
+        let mut kind = new.pending_crises.remove(0);
+        // Validate refugee destination: if to_region collapsed since queuing,
+        // re-route to another non-collapsed neighbor or drop the crisis entirely.
+        if let CrisisKind::RefugeeWave { from_region, ref mut to_region, .. } = kind {
+            if new.regions[*to_region].collapsed {
+                let alt: Vec<usize> = new.regions[from_region].connections.iter()
+                    .filter(|&&c| !new.regions[c].collapsed)
+                    .copied()
+                    .collect();
+                if let Some(&dest) = alt.first() {
+                    *to_region = dest;
                 }
-                // Only fire if destination is still valid (uncollapsed).
-                if !new.regions[*to_region].collapsed {
-                    let crisis = crisis::build_crisis_event(&new, kind);
-                    let post = crisis::activate_crisis(&mut new, crisis);
-                    dispatch_crisis_post_action(&mut new, post);
-                }
-            } else if let CrisisKind::ArkProtocol { ref mut region_idx } = kind {
-                // Validate Ark target: if region collapsed since queuing, re-pick
-                // the best surviving region by survival fraction.
-                if new.regions[*region_idx].collapsed {
-                    let best = new.regions.iter().enumerate()
-                        .filter(|(_, r)| !r.collapsed)
-                        .max_by(|(_, a), (_, b)| {
-                            let frac = |r: &crate::state::Region| r.alive() / (r.population as f64).max(1.0);
-                            frac(a).partial_cmp(&frac(b)).unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        .map(|(i, _)| i);
-                    if let Some(new_idx) = best {
-                        *region_idx = new_idx;
-                    }
-                }
-                // Only fire if target is valid (uncollapsed).
-                if !new.regions[*region_idx].collapsed {
-                    let crisis = crisis::build_crisis_event(&new, kind);
-                    let post = crisis::activate_crisis(&mut new, crisis);
-                    dispatch_crisis_post_action(&mut new, post);
-                }
-            } else if matches!(kind,
-                CrisisKind::LoyaltyRaise { template_id } | CrisisKind::ContractDemand { template_id }
-                    if !new.contracts.iter().any(|c| c.template_id == template_id))
-            {
-                // Contract was revoked/cancelled since this crisis was queued — drop it.
-            } else {
+            }
+            // Only fire if destination is still valid (uncollapsed).
+            if !new.regions[*to_region].collapsed {
                 let crisis = crisis::build_crisis_event(&new, kind);
                 let post = crisis::activate_crisis(&mut new, crisis);
                 dispatch_crisis_post_action(&mut new, post);
             }
+        } else if let CrisisKind::ArkProtocol { ref mut region_idx } = kind {
+            // Validate Ark target: if region collapsed since queuing, re-pick
+            // the best surviving region by survival fraction.
+            if new.regions[*region_idx].collapsed {
+                let best = new.regions.iter().enumerate()
+                    .filter(|(_, r)| !r.collapsed)
+                    .max_by(|(_, a), (_, b)| {
+                        let frac = |r: &crate::state::Region| r.alive() / (r.population as f64).max(1.0);
+                        frac(a).partial_cmp(&frac(b)).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(i, _)| i);
+                if let Some(new_idx) = best {
+                    *region_idx = new_idx;
+                }
+            }
+            // Only fire if target is valid (uncollapsed).
+            if !new.regions[*region_idx].collapsed {
+                let crisis = crisis::build_crisis_event(&new, kind);
+                let post = crisis::activate_crisis(&mut new, crisis);
+                dispatch_crisis_post_action(&mut new, post);
+            }
+        } else if matches!(kind,
+            CrisisKind::LoyaltyRaise { template_id } | CrisisKind::ContractDemand { template_id }
+                if !new.contracts.iter().any(|c| c.template_id == template_id))
+        {
+            // Contract was revoked/cancelled since this crisis was queued — drop it.
+        } else {
+            let crisis = crisis::build_crisis_event(&new, kind);
+            let post = crisis::activate_crisis(&mut new, crisis);
+            dispatch_crisis_post_action(&mut new, post);
         }
     }
 
@@ -510,7 +488,6 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         let day = new.tick as f64 / TICKS_PER_DAY;
         let already_fired = new.crisis_cooldowns.contains_key("board_research_inquiry");
         if new.active_crisis.is_none()
-            && crisis_gap_ok
             && day >= 5.0
             && !already_fired
         {
@@ -559,7 +536,6 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         (base * 0.5_f64.powf(day / 30.0)).max(3.0 * TICKS_PER_DAY)
     };
     if new.active_crisis.is_none()
-        && crisis_gap_ok
         && new.tick >= CRISIS_MIN_TICK
         && rng_crisis.r#gen::<f64>() < 1.0 / crisis_interval
     {
@@ -633,8 +609,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             if let Some(to) = to {
                 let wave = new.regions.iter().filter(|r| r.collapsed).count() as u8;
                 let kind = CrisisKind::RefugeeWave { from_region: i, to_region: to, wave };
-                // Schedule immediately (fires when gap allows).
-                new.pending_crises.push((new.tick, kind));
+                new.pending_crises.push(kind);
             } else {
                 // No uncollapsed neighbors — no refugee destination.
                 // Game is nearly over; notification area will show the collapse.
@@ -679,7 +654,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
             .map(|(i, _)| i)
             .collect();
         let already_pending = new.pending_crises.iter()
-            .any(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
+            .any(|k| matches!(k, CrisisKind::ArkProtocol { .. }));
         let already_cooldown = new.crisis_cooldowns.contains_key("ark_protocol");
         let already_active = new.active_crisis.as_ref()
             .is_some_and(|c| matches!(c.kind, CrisisKind::ArkProtocol { .. }));
@@ -698,8 +673,7 @@ pub(crate) fn tick(state: &GameState) -> GameState {
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .unwrap_or(surviving[0]);
-            // Schedule 10 ticks from now so RefugeeWave fires first
-            new.pending_crises.push((new.tick + 10, CrisisKind::ArkProtocol { region_idx: best }));
+            new.pending_crises.push(CrisisKind::ArkProtocol { region_idx: best });
         }
     }
 
@@ -968,7 +942,7 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             loans::repay_loan(state, *loan_idx);
             // Clear any pending LoanCallIn for this lender — prevents double-payment
             // if the crisis was queued but hadn't fired yet when the player paid early.
-            state.pending_crises.retain(|(_, k)| {
+            state.pending_crises.retain(|k| {
                 !matches!(k, CrisisKind::LoanCallIn { lender: l, .. } if *l == lender)
             });
             CommandResult {
@@ -3945,7 +3919,7 @@ mod tests {
         // First tick triggers collapse and queues refugee crisis as pending
         let after = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
+        assert!(after.pending_crises.iter().any(|k| matches!(k, CrisisKind::RefugeeWave { .. })),
             "refugee crisis should be queued as pending");
         // Second tick fires the pending refugee crisis
         let after2 = tick(&after);
@@ -3963,7 +3937,7 @@ mod tests {
         state.regions[1].collapsed = true;
         // Region 0 connects to [1, 2] — region 2 is still alive.
         // Queue a refugee wave targeting the now-collapsed region 1.
-        state.pending_crises.push((100, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }));
+        state.pending_crises.push(CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 });
         let after = tick(&state);
         // Should re-route to region 2 (the only non-collapsed neighbor of region 0).
         assert!(after.active_crisis.is_some(), "refugee crisis should fire re-routed to region 2");
@@ -3985,7 +3959,7 @@ mod tests {
         state.regions[0].collapsed = true;
         state.regions[1].collapsed = true;
         state.regions[2].collapsed = true;
-        state.pending_crises.push((100, CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 }));
+        state.pending_crises.push(CrisisKind::RefugeeWave { from_region: 0, to_region: 1, wave: 1 });
         let after = tick(&state);
         // The RefugeeWave should have been consumed and NOT fired.
         let refugee_active = after.active_crisis.as_ref()
@@ -3993,7 +3967,7 @@ mod tests {
         assert!(!refugee_active,
             "refugee crisis should be dropped when all neighbors collapsed");
         let refugee_pending = after.pending_crises.iter()
-            .any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. }));
+            .any(|k| matches!(k, CrisisKind::RefugeeWave { .. }));
         assert!(!refugee_pending,
             "refugee crisis should be consumed from pending even when dropped");
     }
@@ -4008,7 +3982,7 @@ mod tests {
         state.regions[0].collapsed = true;
         state.regions[1].collapsed = true;
         // Queue ArkProtocol targeting the now-collapsed region 0.
-        state.pending_crises.push((100, CrisisKind::ArkProtocol { region_idx: 0 }));
+        state.pending_crises.push(CrisisKind::ArkProtocol { region_idx: 0 });
         let after = tick(&state);
         // Should fire with a re-picked surviving region.
         assert!(after.active_crisis.is_some(),
@@ -4032,14 +4006,14 @@ mod tests {
         for r in state.regions.iter_mut() {
             r.collapsed = true;
         }
-        state.pending_crises.push((100, CrisisKind::ArkProtocol { region_idx: 0 }));
+        state.pending_crises.push(CrisisKind::ArkProtocol { region_idx: 0 });
         let after = tick(&state);
         // Should be consumed but not fired.
         let ark_active = after.active_crisis.as_ref()
             .is_some_and(|c| matches!(c.kind, CrisisKind::ArkProtocol { .. }));
         assert!(!ark_active, "ArkProtocol should not fire when all regions collapsed");
         let ark_pending = after.pending_crises.iter()
-            .any(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
+            .any(|k| matches!(k, CrisisKind::ArkProtocol { .. }));
         assert!(!ark_pending, "ArkProtocol should be consumed from pending");
     }
 
@@ -4059,7 +4033,7 @@ mod tests {
         assert!(after.regions[0].collapsed, "region should collapse");
         assert_eq!(after.active_crisis.as_ref().unwrap().title, "Communications Failure",
             "existing crisis should NOT be overridden");
-        assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
+        assert!(after.pending_crises.iter().any(|k| matches!(k, CrisisKind::RefugeeWave { .. })),
             "refugee crisis should be queued as pending");
     }
 
@@ -4077,7 +4051,7 @@ mod tests {
         // First tick: collapse queues refugee crisis as pending
         let after = tick(&state);
         assert!(after.regions[0].collapsed, "region should collapse");
-        assert!(after.pending_crises.iter().any(|(_, k)| matches!(k, CrisisKind::RefugeeWave { .. })),
+        assert!(after.pending_crises.iter().any(|k| matches!(k, CrisisKind::RefugeeWave { .. })),
             "refugee crisis should be pending after collapse");
         // Second tick: pending crisis fires and auto-resolves
         let after2 = tick(&after);
@@ -4762,11 +4736,8 @@ mod tests {
         setup_crisis(&mut state, CrisisKind::BlackMarketMedicine { region_idx: 0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.pending_crises.len(), 1, "should schedule one follow-up");
-        let (fire_tick, ref kind) = after.pending_crises[0];
-        assert!(matches!(kind, CrisisKind::CounterfeitEpidemic { region_idx: 0 }),
+        assert!(matches!(after.pending_crises[0], CrisisKind::CounterfeitEpidemic { region_idx: 0 }),
             "follow-up should be CounterfeitEpidemic for region 0");
-        let expected_tick = 1000 + (5.0 * TICKS_PER_DAY) as u64;
-        assert_eq!(fire_tick, expected_tick, "should fire 5 days later");
     }
 
     #[test]
@@ -4786,7 +4757,7 @@ mod tests {
         setup_crisis(&mut state, CrisisKind::CorruptOfficial { stolen: 200.0 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.pending_crises.len(), 1);
-        assert!(matches!(after.pending_crises[0].1, CrisisKind::EmbezzlementRing { .. }));
+        assert!(matches!(after.pending_crises[0], CrisisKind::EmbezzlementRing { .. }));
     }
 
 
@@ -4798,7 +4769,7 @@ mod tests {
         setup_crisis(&mut state, CrisisKind::CorporateSeizure { cooperate_loss: 3 }, 0);
         let after = apply_action(&state, &Action::Confirm);
         assert_eq!(after.pending_crises.len(), 1);
-        assert!(matches!(after.pending_crises[0].1, CrisisKind::CorporateOverreach));
+        assert!(matches!(after.pending_crises[0], CrisisKind::CorporateOverreach));
     }
 
     #[test]
@@ -4806,59 +4777,13 @@ mod tests {
         let mut state = GameState::new_default(42);
         state.tick = 100; // Pending check runs before tick increment
         state.last_contract_offer_tick = state.tick; // prevent contract offer from adding a pending crisis
-        state.pending_crises.push((100, CrisisKind::CorporateOverreach));
+        state.pending_crises.push(CrisisKind::CorporateOverreach);
         let after = tick(&state);
         assert!(after.active_crisis.is_some(), "pending crisis should fire");
         assert!(after.pending_crises.is_empty(), "fired crisis should be removed from pending");
     }
 
-    #[test]
-    fn pending_crisis_waits_if_not_due() {
-        let mut state = GameState::new_default(42);
-        state.tick = 50;
-        state.pending_crises.push((200, CrisisKind::CorporateOverreach));
-        let after = tick(&state);
-        assert!(after.active_crisis.is_none(), "should not fire yet");
-        assert_eq!(after.pending_crises.len(), 1, "should still be pending");
-    }
 
-    #[test]
-    fn crisis_min_gap_prevents_rapid_succession() {
-        use crate::state::CRISIS_MIN_GAP;
-        let mut state = GameState::new_default(42);
-        state.tick = 500;
-        // Prevent contract offer from generating during this test
-        state.last_contract_offer_tick = state.tick;
-        // Simulate a recently resolved crisis
-        state.last_crisis_resolved_tick = state.tick - 10; // Only 10 ticks ago
-        state.pending_crises.push((state.tick, CrisisKind::CorporateOverreach));
-        let after = tick(&state);
-        // Should NOT fire — gap not met
-        assert!(after.active_crisis.is_none(),
-            "pending crisis should not fire within CRISIS_MIN_GAP of last resolution");
-        assert_eq!(after.pending_crises.len(), 1, "should still be pending");
-
-        // Now advance past the gap
-        let mut state2 = after;
-        state2.tick = state2.last_crisis_resolved_tick + CRISIS_MIN_GAP;
-        let after2 = tick(&state2);
-        assert!(after2.active_crisis.is_some(),
-            "pending crisis should fire after gap is met");
-    }
-
-    #[test]
-    fn governor_crises_bypass_crisis_min_gap() {
-        let mut state = GameState::new_default(42);
-        state.tick = 500;
-        state.last_contract_offer_tick = state.tick;
-        // Recently resolved crisis — gap NOT met
-        state.last_crisis_resolved_tick = state.tick - 10;
-        state.pending_crises.push((state.tick, CrisisKind::GovernorHardliner { region_idx: 0 }));
-        let after = tick(&state);
-        // Governor crisis should fire despite gap not being met
-        assert!(after.active_crisis.is_some(),
-            "governor crisis should bypass CRISIS_MIN_GAP");
-    }
 
     #[test]
     fn collapse_rate_estimate_updates_after_one_day() {
@@ -5143,12 +5068,12 @@ mod tests {
 
         // Should have scheduled an ArkProtocol pending crisis
         let ark_pending = after.pending_crises.iter()
-            .find(|(_, k)| matches!(k, CrisisKind::ArkProtocol { .. }));
+            .find(|k| matches!(k, CrisisKind::ArkProtocol { .. }));
         assert!(ark_pending.is_some(), "should schedule Ark Protocol when 2+ regions collapse");
 
         // Should pick the surviving region with highest survival fraction (alive / population),
         // not raw alive count — devastated regions should not be recommended as the Ark.
-        if let Some((_, CrisisKind::ArkProtocol { region_idx })) = ark_pending {
+        if let Some(CrisisKind::ArkProtocol { region_idx }) = ark_pending {
             assert!(!after.regions[*region_idx].collapsed,
                 "Ark target should be a surviving region");
             // Verify it picked the best surviving region (highest survival fraction)
@@ -5847,7 +5772,6 @@ mod tests {
         state.tick = (5.0 * TICKS_PER_DAY) as u64;
         state.active_crisis = None;
         state.pending_crises.clear();
-        state.last_crisis_resolved_tick = 0; // no gap issue
         state.next_board_meeting_tick = u64::MAX; // prevent board meetings
         state.last_contract_offer_tick = state.tick; // prevent contract offers
         // Ensure no identification has started: knowledge should be 0
@@ -5870,7 +5794,6 @@ mod tests {
                 }
                 // Auto-resolve other crises
                 current.active_crisis = None;
-                current.last_crisis_resolved_tick = current.tick;
             }
         }
         assert!(found, "Board Research Inquiry should fire after day 5 with no identification started");
@@ -5883,7 +5806,6 @@ mod tests {
         state.tick = (5.0 * TICKS_PER_DAY) as u64;
         state.active_crisis = None;
         state.pending_crises.clear();
-        state.last_crisis_resolved_tick = 0;
         state.next_board_meeting_tick = u64::MAX;
         state.last_contract_offer_tick = state.tick;
         // Give the first disease some knowledge (identification started)
@@ -5896,7 +5818,6 @@ mod tests {
                 assert_ne!(crisis.kind.tag(), "board_research_inquiry",
                     "Board Research Inquiry should NOT fire when identification has been started");
                 current.active_crisis = None;
-                current.last_crisis_resolved_tick = current.tick;
             }
         }
     }
