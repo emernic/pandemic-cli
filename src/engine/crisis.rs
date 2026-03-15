@@ -232,12 +232,6 @@ pub(super) fn generate_crisis(state: &WorldState, rng: &mut impl Rng) -> Option<
         candidates.push(CrisisKind::TrialShortcut { disease_idx: d_idx, medicine_idx: m_idx });
     }
 
-    // Corrupt official: requires funding > 500
-    if state.resources.funding > 500.0 {
-        let stolen = (state.resources.funding * 0.15).min(500.0).round();
-        candidates.push(CrisisKind::CorruptOfficial { stolen });
-    }
-
     // Corporate seizure: requires low authority and day > 16, and a board member with a non-bankrupt corp
     if state.resources.authority <= Authority::Low && day > 16.0 {
         // Pick the most dissatisfied board member who has a non-bankrupt corporation
@@ -533,34 +527,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::CorruptOfficial { stolen } => {
-            let stolen = *stolen;
-            CrisisEvent {
-                title: "Corruption Scandal".into(),
-                description: format!(
-                    "Internal audit flagged ¥{:.0} in unauthorized disbursements. \
-                     Investigation will recover the funds but requires diverting staff.",
-                    stolen,
-                ),
-                options: vec![ CrisisOption {
-                    label: format!("Ignore it (lose ¥{:.0})", stolen),
-                    description: "Write off the loss".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Investigate (2 personnel for 3d)".into(),
-                    description: format!("Recover ¥{:.0}, divert 2 staff to audit. Auditors return in 3 days.", stolen),
-                    cost: Some(CrisisCost {
-                        funding: 0.0,
-                        personnel: 2,
-                        operation: Some(OperationSpec { days: 3.0, label: "Audit Team".into() }),
-                    }),
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::CorporateSeizure { cooperate_loss, board_member_idx, corp_idx } => {
             let member_name = state.board_members.get(*board_member_idx)
                 .map(|m| m.name.as_str()).unwrap_or("A board member");
@@ -696,37 +662,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
         }
         // --- Follow-up crisis types ---
 
-        CrisisKind::EmbezzlementRing { stolen_per_day } => {
-            let total_stolen = stolen_per_day * 4.0;
-            let purge_cost = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(3, 6);
-            let buyoff = scaled_cost(state, 0.25, 200.0, 1000.0);
-            CrisisEvent {
-                title: "Embezzlement Ring Uncovered".into(),
-                description: format!(
-                    "The corrupt official you ignored has recruited allies. A full embezzlement ring \
-                     has been draining ¥{:.0}/day from the pandemic fund. Total losses: ¥{:.0}.",
-                    stolen_per_day, total_stolen,
-                ),
-                options: vec![ CrisisOption {
-                    label: format!("Purge the department (−{} personnel)", purge_cost),
-                    description: "Fire everyone involved. Stops the bleeding.".into(),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: format!("Buy them off (¥{:.0})", buyoff),
-                    description: "They keep what they stole".into(),
-                    cost: Some(CrisisCost { funding: buyoff, personnel: 0, ..Default::default() }),
-                },
-                CrisisOption {
-                    label: "Tolerate the drain".into(),
-                    description: "Focus on the pandemic. Embezzlement continues.".into(),
-                    cost: None,
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
         CrisisKind::CorporateOverreach { corp_idx, board_member_idx } => {
             let corp_name = state.corporations.get(*corp_idx)
                 .map(|c| c.name.as_str()).unwrap_or("The corporation");
@@ -2033,18 +1968,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
         }
 
 
-        (CrisisKind::CorruptOfficial { stolen }, 0) => {
-            // Ignore — lose the stolen money (amount locked at generation time)
-            state.resources.funding = (state.resources.funding - stolen).max(0.0);
-            let daily_drain = (state.resources.funding * 0.05).clamp(20.0, 200.0);
-            state.pending_crises.push(CrisisKind::EmbezzlementRing { stolen_per_day: daily_drain });
-            format!("Corruption ignored. ¥{:.0} lost.", stolen)
-        }
-        (CrisisKind::CorruptOfficial { .. }, _) => {
-            // Investigate — recover money (personnel cost already deducted)
-            "Investigation successful. Funds recovered, official removed.".into()
-        }
-
 
 
         (CrisisKind::CorporateSeizure { cooperate_loss, board_member_idx, corp_idx }, 0) => {
@@ -2127,23 +2050,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 
         // --- Follow-up crisis resolutions ---
 
-
-        (CrisisKind::EmbezzlementRing { .. }, 0) => {
-            // Purge department — lose personnel
-            let purge = ((state.resources.personnel as f64 * 0.20).round() as u32).clamp(3, 6);
-            state.resources.personnel = state.resources.personnel.saturating_sub(purge);
-            format!("Department purged. {} staff fired, embezzlement ring broken.", purge)
-        }
-        (CrisisKind::EmbezzlementRing { .. }, 1) => {
-            // Buy them off — costs already deducted
-            "Paid off the embezzlers. They'll stop. For now.".into()
-        }
-        (CrisisKind::EmbezzlementRing { stolen_per_day, .. }, _) => {
-            // Tolerate the drain — ongoing funding loss
-            let loss = stolen_per_day * 3.0;
-            state.resources.funding = (state.resources.funding - loss).max(0.0);
-            format!("Embezzlement tolerated. ¥{:.0} lost. They're still at it.", loss)
-        }
 
         (CrisisKind::CorporateOverreach { .. }, 0) => {
             // Override restriction — chairman satisfaction hit, data restored to research teams
