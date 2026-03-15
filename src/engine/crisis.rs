@@ -3038,11 +3038,21 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize) -> (String, C
                 // Player chose a region to consolidate into
                 let region_name = state.regions[target_idx].name.clone();
                 state.ark_protocol = Some(target_idx);
-                // Deactivate all policies in non-Ark regions
-                for (i, policy) in state.policies.iter_mut().enumerate() {
-                    if i != target_idx {
+                // Collapse all non-Ark, non-collapsed regions immediately
+                for i in 0..state.regions.len() {
+                    if i == target_idx || state.regions[i].collapsed {
+                        continue;
+                    }
+                    state.regions[i].collapsed = true;
+                    state.regions[i].collapsed_at_tick = Some(state.tick);
+                    state.regions[i].hospital_level = 0;
+                    state.regions[i].intel_level = 0;
+                    if let Some(policy) = state.policies.get_mut(i) {
                         policy.clear_all();
                     }
+                    let lost = 1u32.min(state.resources.personnel);
+                    state.resources.personnel = state.resources.personnel.saturating_sub(lost);
+                    state.events.push(GameEvent::RegionCollapsed { region_idx: i, personnel_lost: lost });
                 }
                 state.events.push(GameEvent::ArkProtocolActivated {
                     region_idx: target_idx,

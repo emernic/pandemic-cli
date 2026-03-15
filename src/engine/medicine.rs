@@ -29,11 +29,6 @@ pub(super) fn deploy_medicine(
         let region_name = &state.regions[region_idx].name;
         return (false, Some(format!("{region_name} has collapsed. Deployment impossible.")));
     }
-    // Block deployment to abandoned regions (Ark Protocol)
-    if state.is_abandoned(region_idx) {
-        let region_name = &state.regions[region_idx].name;
-        return (false, Some(format!("{region_name} abandoned. Deploy to the Ark instead.")));
-    }
     // Block deployment when supply lines have completely failed
     if state.regions[region_idx].supply_lines <= 0.0 {
         let region_name = &state.regions[region_idx].name;
@@ -138,11 +133,10 @@ pub(super) fn tick_shipments(state: &mut GameState, rng_misc: &mut rand_chacha::
     while i < state.pending_shipments.len() {
         let reg_idx = state.pending_shipments[i].region_idx;
 
-        // Discard if region collapsed or abandoned
+        // Discard if region collapsed
         let region_gone = state.regions.get(reg_idx)
             .map(|r| r.collapsed)
-            .unwrap_or(true)
-            || state.is_abandoned(reg_idx);
+            .unwrap_or(true);
         if region_gone {
             state.pending_shipments.remove(i);
             continue;

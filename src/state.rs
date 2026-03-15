@@ -2096,10 +2096,6 @@ pub struct Region {
     /// block medicine deployment, and have reduced cross-region spread (0.3x).
     #[serde(default)]
     pub collapsed: bool,
-    /// Whether this region was voluntarily abandoned via the Sacrifice Region decree.
-    /// Distinct from natural collapse (disease-driven). Shown as ABANDONED on defeat screen.
-    #[serde(default)]
-    pub abandoned: bool,
     /// Tick when this region collapsed (None if still standing).
     #[serde(default)]
     pub collapsed_at_tick: Option<u64>,
@@ -4081,10 +4077,6 @@ pub enum GameEvent {
         /// Number of personnel lost due to the collapse (0 if none were available).
         personnel_lost: u32,
     },
-    /// A region was voluntarily abandoned via the Sacrifice Region decree.
-    RegionAbandoned {
-        region_idx: usize,
-    },
     /// Post-collapse secondary deaths (starvation, violence, infrastructure breakdown).
     /// Fires once per day per collapsed region so the event log isn't spammed.
     CollapseSecondaryDeaths {
@@ -5258,7 +5250,6 @@ impl GameState {
                 collapse_threshold: 0.55, // Fragile — collapses at 45% dead
                 dead: 0.0,
                 collapsed: false,
-                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -5301,7 +5292,6 @@ impl GameState {
                 collapse_threshold: 0.55, // Moderate — collapses at 45% dead
                 dead: 0.0,
                 collapsed: false,
-                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -5344,7 +5334,6 @@ impl GameState {
                 collapse_threshold: 0.50, // Developed infrastructure — 50% dead
                 dead: 0.0,
                 collapsed: false,
-                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -5387,7 +5376,6 @@ impl GameState {
                 collapse_threshold: 0.50, // Resilient — 50% dead
                 dead: 0.0,
                 collapsed: false,
-                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -5430,7 +5418,6 @@ impl GameState {
                 collapse_threshold: 0.50, // Huge population — 50% dead
                 dead: 0.0,
                 collapsed: false,
-                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -5473,7 +5460,6 @@ impl GameState {
                 collapse_threshold: 0.50, // Small but developed — 50% dead
                 dead: 0.0,
                 collapsed: false,
-                abandoned: false,
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
@@ -6278,13 +6264,6 @@ impl GameState {
         })
     }
 
-    /// Check if the player has zero agency — no meaningful actions available.
-    /// Returns true if the Ark Protocol is active and this region is not the Ark
-    /// and not already collapsed. These regions have been abandoned.
-    pub fn is_abandoned(&self, region_idx: usize) -> bool {
-        self.ark_protocol.is_some_and(|ark| ark != region_idx)
-            && !self.regions.get(region_idx).is_some_and(|r| r.collapsed)
-    }
 
     /// Generate debrief-style tips referencing what actually happened in this run.
     /// Returns up to 2 tips, most impactful first.

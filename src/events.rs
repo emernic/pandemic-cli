@@ -65,13 +65,6 @@ pub(crate) fn process_events(state: &mut GameState) {
                 };
                 (0u8, msg, notification)
             }
-            GameEvent::RegionAbandoned { region_idx } => {
-                let region_name = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                let remaining = state.regions.iter().filter(|r| !r.collapsed).count();
-                let msg = format!("ABANDONED: {} withdrawn from operations. {} regions remain", region_name, remaining);
-                (0u8, msg.clone(), msg)
-            }
             GameEvent::CollapseSecondaryDeaths { region_idx, deaths } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");

@@ -184,11 +184,6 @@ fn toggle_policy_inner(state: &mut GameState, region_idx: usize, policy: PolicyI
             return (Some(format!("{region_name} has collapsed. Policies unavailable.")), false);
         }
     }
-    // Abandoned regions (Ark Protocol active, not the Ark)
-    if state.is_abandoned(region_idx) {
-        let region_name = state.regions[region_idx].name.as_str();
-        return (Some(format!("{region_name} abandoned. Resources consolidated in the Ark.")), false);
-    }
     let region_name = state.regions.get(region_idx)
         .map(|r| r.name.clone())
         .unwrap_or_else(|| "Unknown".to_string());
@@ -1019,8 +1014,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
             }
             let region_name = state.regions[r_idx].name.clone();
             state.enacted_decrees.sacrificed_region = Some(r_idx);
-            // Mark as abandoned (player-chosen) and collapse
-            state.regions[r_idx].abandoned = true;
+            // Collapse the sacrificed region
             state.regions[r_idx].collapsed = true;
             state.regions[r_idx].collapsed_at_tick = Some(state.tick);
             state.regions[r_idx].hospital_level = 0;
@@ -1030,7 +1024,7 @@ pub(super) fn enact_decree(state: &mut GameState, decree: DecreeId, region_idx: 
                 p.clear_all();
             }
             // Notify the UI
-            state.events.push(GameEvent::RegionAbandoned { region_idx: r_idx });
+            state.events.push(GameEvent::RegionCollapsed { region_idx: r_idx, personnel_lost: 0 });
             // Apply network disruption to connected non-collapsed regions (same as natural collapse)
             let disruption_end = state.tick + COLLAPSE_DISRUPTION_TICKS;
             let connected: Vec<usize> = state.regions[r_idx].connections.clone();
@@ -1159,7 +1153,7 @@ pub(super) fn tick_standing_orders(state: &mut GameState) -> Vec<usize> {
     let current_cost = state.total_policy_funding_cost();
     let num_regions = state.regions.len();
     for region_idx in 0..num_regions {
-        if state.regions[region_idx].collapsed || state.is_abandoned(region_idx) {
+        if state.regions[region_idx].collapsed {
             continue;
         }
         let infected: f64 = state.regions[region_idx].total_infected();
@@ -1225,7 +1219,7 @@ pub(super) fn tick_auto_rebuild(state: &mut GameState) {
         if !state.policies[region_idx].auto_rebuild_infra {
             continue;
         }
-        if state.regions[region_idx].collapsed || state.is_abandoned(region_idx) {
+        if state.regions[region_idx].collapsed {
             continue;
         }
         let region = &state.regions[region_idx];
@@ -1660,14 +1654,14 @@ mod tests {
         assert!(ok, "should succeed");
         assert!(msg.unwrap().contains("sacrifice zone"));
         assert!(state.regions[0].collapsed);
-        assert!(state.regions[0].abandoned, "sacrificed region should be marked abandoned");
+        assert!(state.regions[0].collapsed, "sacrificed region should be collapsed");
         assert_eq!(state.enacted_decrees.sacrificed_region, Some(0));
         // Refugee wave should be scheduled
         assert!(state.pending_crises.iter().any(|(_, k)| matches!(k, crate::state::CrisisKind::RefugeeWave { from_region: 0, .. })),
             "refugee wave should be scheduled from sacrificed region");
-        // RegionAbandoned event should be fired
-        assert!(state.events.iter().any(|e| matches!(e, crate::state::GameEvent::RegionAbandoned { region_idx: 0 })),
-            "RegionAbandoned event should be fired");
+        // RegionCollapsed event should be fired
+        assert!(state.events.iter().any(|e| matches!(e, crate::state::GameEvent::RegionCollapsed { region_idx: 0, .. })),
+            "RegionCollapsed event should be fired");
 
         // Income should reflect the sacrifice: the collapsed region's contribution
         // is lost, but remaining regions get a +20% bonus.
