@@ -162,7 +162,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
 
     match tag {
         // --- Early-game: bureaucratic/organizational (fade after day 30-50) ---
-        "political" | "personnel" | "dataleak" | "corrupt" |
+        "political" | "personnel" | "dataleak" |
         "media" | "whistleblower" | "hesitancy" | "aid" | "trial"
             => fade_out(30.0, 50.0),
 
@@ -2761,9 +2761,6 @@ mod tests {
         // Early-game bureaucratic crises should dominate early, fade late
         assert!(phase_weight("political", 3.0) > phase_weight("political", 60.0),
             "political pressure should be more likely early than late");
-        assert!(phase_weight("corrupt", 5.0) > phase_weight("corrupt", 60.0),
-            "corrupt official should be more likely early than late");
-
         // Late-game survival crises should be absent early, present late
         assert!(phase_weight("corporate_seizure", 5.0) < phase_weight("corporate_seizure", 50.0),
             "corporate seizure should be more likely late than early");
