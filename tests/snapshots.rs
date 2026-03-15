@@ -1,5 +1,5 @@
 use pandemic_cli_lib::snapshot::{render_to_string, run_snapshot};
-use pandemic_cli_lib::state::{GameOutcome, GameState, GovernorPersonality, MANAGE_BARGAIN_POS, SimState};
+use pandemic_cli_lib::state::{GameOutcome, GameState, GovernorPersonality, MANAGE_BARGAIN_POS};
 
 /// Smoke test: initial screen renders without panicking and contains key UI elements.
 #[test]
@@ -28,7 +28,7 @@ fn after_ticks() {
 fn game_over_defeat() {
     let mut state = GameState::new_default(42);
     state.outcome = GameOutcome::Lost;
-    state.sim_state = SimState::Paused;
+    // Game is blocked via outcome != Playing — no need to change sim_state
     let output = render_to_string(&state);
     assert!(output.contains("DEFEAT"), "missing defeat indicator");
     assert!(output.contains("collapsed") || output.contains("resources"), "missing defeat message");

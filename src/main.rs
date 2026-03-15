@@ -170,8 +170,8 @@ fn game_loop(
             ui::render(f, &state);
         })?;
 
-        let effective_tick = tick_duration / state.ui.speed_multiplier.max(1) as u32;
-        let timeout = if !state.sim_state.is_running() {
+        let effective_tick = tick_duration / state.session.speed_multiplier.max(1) as u32;
+        let timeout = if !state.is_effectively_running() {
             Duration::from_millis(100)
         } else {
             effective_tick
@@ -188,7 +188,7 @@ fn game_loop(
                     if ui::is_size_warning_active(&state, term_size.width, term_size.height) {
                         match key_event.code {
                             KeyCode::Char('x') | KeyCode::Char('X') | KeyCode::Esc => {
-                                state.ui.size_warning_dismissed = true;
+                                state.session.size_warning_dismissed = true;
                             }
                             KeyCode::Char('q') | KeyCode::Char('Q') => {
                                 return Ok(state);
@@ -210,10 +210,10 @@ fn game_loop(
                                 }
                             }
                         }
-                        let was_stopped = !state.sim_state.is_running();
+                        let was_stopped = !state.is_effectively_running();
                         state = apply_action(&state, &action);
                         // Reset tick timer on unpause to avoid burst of catch-up ticks
-                        if was_stopped && state.sim_state.is_running() {
+                        if was_stopped && state.is_effectively_running() {
                             last_tick = Instant::now();
                         }
                     }
@@ -221,8 +221,8 @@ fn game_loop(
             }
         }
 
-        // Auto-tick when unpaused
-        if state.sim_state.is_running() && last_tick.elapsed() >= effective_tick {
+        // Auto-tick when effectively running (not paused, no crisis, not game over)
+        if state.is_effectively_running() && last_tick.elapsed() >= effective_tick {
             let had_crisis = state.active_crisis.is_some();
             state = tick_and_process(&state);
             last_tick += effective_tick;

@@ -27,7 +27,7 @@ pub const MIN_ROWS: u16 = 24;
 
 /// Returns true when the size warning overlay is being displayed.
 pub fn is_size_warning_active(state: &GameState, cols: u16, rows: u16) -> bool {
-    !state.ui.size_warning_dismissed && (cols < MIN_COLS || rows < MIN_ROWS)
+    !state.session.size_warning_dismissed && (cols < MIN_COLS || rows < MIN_ROWS)
 }
 
 /// Maximum selection index for the current panel and UI sub-state.
@@ -113,7 +113,7 @@ pub fn render(f: &mut Frame, state: &GameState) {
     }
 
     let header_height = resources::height(state);
-    let has_extra_line = state.ui.status_message.is_some() || state.outcome != GameOutcome::Playing;
+    let has_extra_line = state.session.status_message.is_some() || state.outcome != GameOutcome::Playing;
     let hotkey_height = if has_extra_line { 3 } else { 2 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)

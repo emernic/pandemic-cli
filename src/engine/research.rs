@@ -494,7 +494,7 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should not start without funding");
-        assert!(state.ui.status_message.as_ref().unwrap().contains("Insufficient funds"));
+        assert!(state.session.status_message.as_ref().unwrap().contains("Insufficient funds"));
 
         // Give enough funding, should succeed (still on ConfirmProject screen)
         state.resources.funding = 500.0;

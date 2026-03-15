@@ -5,13 +5,15 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
+/// Player's pacing preference: Running or Paused.
+///
+/// This captures the player's *intent* — whether they want the simulation to advance.
+/// Actual tick advancement depends on this AND whether the game is blocked (crisis, game over).
+/// Use `GameState::is_effectively_running()` to check if ticks should advance.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SimState {
     Running,
     Paused,
-    /// Game is paused for an event. `was_running` tracks pre-event state
-    /// so we can restore it on dismissal.
-    Event { was_running: bool },
 }
 
 impl Default for SimState {
@@ -23,6 +25,35 @@ impl Default for SimState {
 impl SimState {
     pub fn is_running(&self) -> bool {
         matches!(self, SimState::Running)
+    }
+}
+
+/// Session-only runtime state that does not survive save/load.
+///
+/// Groups transient state belonging to the current terminal session:
+/// pacing speed, command feedback, UI dismissals, and notification de-dupe caches.
+#[derive(Clone, Debug)]
+pub struct SessionState {
+    /// Game speed multiplier (1, 2, 4, 6). Affects real-time tick rate only.
+    pub speed_multiplier: u8,
+    /// Temporary status message shown above the hotkey bar (cleared on next action).
+    /// Only set by command responses (deploy, research, etc.) — NOT by game events.
+    pub status_message: Option<String>,
+    /// Whether the player dismissed the "terminal too small" warning overlay.
+    pub size_warning_dismissed: bool,
+    /// Tracks which medicines have already fired a DeployBlocked event
+    /// this session, to avoid spamming the log every tick.
+    pub deploy_blocked_notified: std::collections::HashSet<usize>,
+}
+
+impl Default for SessionState {
+    fn default() -> Self {
+        Self {
+            speed_multiplier: 1,
+            status_message: None,
+            size_warning_dismissed: false,
+            deploy_blocked_notified: std::collections::HashSet::new(),
+        }
     }
 }
 
@@ -62,10 +93,9 @@ pub struct GameState {
     pub enacted_decrees: EnactedDecrees,
     #[serde(default)]
     pub outcome: GameOutcome,
-    /// Tracks which medicines have already fired a DeployBlocked event
-    /// this session, to avoid spamming the log every tick.
+    /// Session-only runtime state. Not serialized — resets on every load.
     #[serde(skip)]
-    pub deploy_blocked_notified: std::collections::HashSet<usize>,
+    pub session: SessionState,
     /// Persistent log of notable events with timestamps (day number, message).
     /// Populated by `events::process_events()`. Capped at 50 entries.
     #[serde(default)]
@@ -4708,11 +4738,6 @@ pub struct UiState {
     pub research_ui: Option<ResearchUiState>,
     #[serde(default)]
     pub policy_ui: Option<PolicyUiState>,
-    /// Temporary status message shown above the hotkey bar (cleared on next action).
-    /// Only set by command responses (deploy, research, etc.) — NOT by game events.
-    /// Transient — not meaningful across sessions.
-    #[serde(skip)]
-    pub status_message: Option<String>,
     /// Latest event notification shown in the top-right of the status bar.
     /// Set by process_events() when a game event fires; persists until replaced.
     /// Distinct from status_message — events go here, command feedback goes there.
@@ -4741,18 +4766,6 @@ pub struct UiState {
     /// First Enter press sets this; second Enter press sets `home_splash_done`.
     #[serde(default)]
     pub home_splash_revealed: bool,
-    /// Game speed multiplier (1, 2, 4, 6). Affects real-time tick rate only.
-    /// Transient — resets to 1× each session.
-    #[serde(skip, default = "default_speed")]
-    pub speed_multiplier: u8,
-    /// Whether the player dismissed the "terminal too small" warning overlay.
-    /// Transient — resets each session so the warning re-appears if still too small.
-    #[serde(skip)]
-    pub size_warning_dismissed: bool,
-}
-
-fn default_speed() -> u8 {
-    1
 }
 
 impl UiState {
@@ -5078,6 +5091,16 @@ pub enum MapDirection {
 }
 
 impl GameState {
+    /// Whether the game is blocked from advancing: active crisis or game over.
+    pub fn is_blocked(&self) -> bool {
+        self.active_crisis.is_some() || self.outcome != GameOutcome::Playing
+    }
+
+    /// Whether ticks should actually advance: player wants running AND game is not blocked.
+    pub fn is_effectively_running(&self) -> bool {
+        self.sim_state.is_running() && !self.is_blocked()
+    }
+
     pub fn new_default(seed: u64) -> Self {
 
         // Per-subsystem RNG streams. Emergence uses the raw seed so the
@@ -5474,7 +5497,7 @@ impl GameState {
             active_research: vec![],
             unlocked_techs: vec![],
             outcome: GameOutcome::Playing,
-            deploy_blocked_notified: std::collections::HashSet::new(),
+            session: SessionState::default(),
             event_log: VecDeque::new(),
             active_crisis: None,
             crisis_cooldowns: HashMap::new(),
@@ -5518,7 +5541,6 @@ impl GameState {
                 map_selection: 0,
                 research_ui: None,
                 policy_ui: None,
-                status_message: None,
                 event_notification: None,
                 crisis_selection: 0,
                 crisis_auto_resolve: false,
@@ -5527,8 +5549,6 @@ impl GameState {
                 ledger_ui: None,
                 home_splash_done: false,
                 home_splash_revealed: false,
-                speed_multiplier: 1,
-                size_warning_dismissed: false,
             },
         }
     }

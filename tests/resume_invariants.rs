@@ -12,7 +12,7 @@
 use pandemic_cli_lib::snapshot::run_snapshot;
 use pandemic_cli_lib::state::{
     CrisisCost, CrisisEvent, CrisisKind, CrisisOption, GameState, MedicineUiState, Panel,
-    ResearchUiState, SimState,
+    ResearchUiState,
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -115,7 +115,6 @@ fn resume_preserves_map_selection() {
 fn resume_preserves_active_crisis_with_selection_state() {
     let mut state = GameState::new_default(42);
     state.active_crisis = Some(fake_crisis());
-    state.sim_state = SimState::Event { was_running: true };
     // Player had scrolled to option B and toggled auto-resolve
     state.ui.crisis_selection = 1;
     state.ui.crisis_auto_resolve = true;
@@ -139,10 +138,10 @@ fn resume_preserves_active_crisis_with_selection_state() {
         restored.ui.crisis_auto_resolve,
         "crisis auto-resolve toggle lost on resume"
     );
-    assert_eq!(
-        restored.sim_state,
-        SimState::Event { was_running: true },
-        "sim state around crisis lost on resume"
+    // Game should be blocked due to active crisis
+    assert!(
+        restored.is_blocked(),
+        "game should be blocked with active crisis on resume"
     );
 }
 
@@ -243,12 +242,12 @@ fn resume_snapshot_continues_same_playthrough() {
 #[test]
 fn session_reset_status_message_not_persisted() {
     let mut state = GameState::new_default(42);
-    state.ui.status_message = Some("Medicine deployed!".into());
+    state.session.status_message = Some("Medicine deployed!".into());
 
     let restored = round_trip(&state);
 
     assert!(
-        restored.ui.status_message.is_none(),
+        restored.session.status_message.is_none(),
         "status_message is transient command feedback — must not persist across sessions"
     );
 }
@@ -256,12 +255,12 @@ fn session_reset_status_message_not_persisted() {
 #[test]
 fn session_reset_speed_multiplier_resets() {
     let mut state = GameState::new_default(42);
-    state.ui.speed_multiplier = 4;
+    state.session.speed_multiplier = 4;
 
     let restored = round_trip(&state);
 
     assert_eq!(
-        restored.ui.speed_multiplier, 1,
+        restored.session.speed_multiplier, 1,
         "speed_multiplier is a runtime preference — must reset to 1× on reload"
     );
 }
@@ -269,12 +268,12 @@ fn session_reset_speed_multiplier_resets() {
 #[test]
 fn session_reset_size_warning_dismissed() {
     let mut state = GameState::new_default(42);
-    state.ui.size_warning_dismissed = true;
+    state.session.size_warning_dismissed = true;
 
     let restored = round_trip(&state);
 
     assert!(
-        !restored.ui.size_warning_dismissed,
+        !restored.session.size_warning_dismissed,
         "size_warning_dismissed must not persist — the warning should re-appear each session"
     );
 }
@@ -283,34 +282,27 @@ fn session_reset_size_warning_dismissed() {
 // through tick/command return values. No save/load invariant to test.
 
 #[test]
-fn session_reset_crisis_dismissal_restores_fresh_default() {
-    // When a crisis fires, sim_state becomes Event { was_running }.
-    // After the player dismisses the crisis, the game should resume in
-    // whatever state makes sense for the fresh session — not blindly
-    // replay a serialized was_running token from before the save.
-    //
-    // This test verifies the contract: if we save during a crisis and
-    // reload, the crisis is still there with its Event state. When the
-    // player then dismisses it, the game goes to a valid running/paused
-    // state (not stuck in Event).
+fn session_reset_crisis_dismissal_unblocks_game() {
+    // When a crisis is active, the game is blocked (is_blocked() == true).
+    // After the player dismisses the crisis, the game should no longer be blocked.
+    // Pacing (Running/Paused) is independent of crises — it stays whatever
+    // it was before the crisis fired. Blocking is derived from active_crisis.
     let mut state = GameState::new_default(42);
     state.active_crisis = Some(fake_crisis());
-    state.sim_state = SimState::Event { was_running: true };
 
     let restored = round_trip(&state);
 
     // Crisis should still be present after load
     assert!(restored.active_crisis.is_some());
-    assert_eq!(restored.sim_state, SimState::Event { was_running: true });
+    assert!(restored.is_blocked(), "game should be blocked with active crisis");
 
     // Dismiss the crisis by pressing enter (selects option A)
     let after_dismiss = run_snapshot(restored, &["enter".to_string()]).unwrap();
 
-    // After dismissal, game should be in a non-Event state
+    // After dismissal, game should no longer be blocked
     assert!(
-        !matches!(after_dismiss.state.sim_state, SimState::Event { .. }),
-        "sim_state should exit Event after crisis dismissal, got {:?}",
-        after_dismiss.state.sim_state
+        !after_dismiss.state.is_blocked(),
+        "game should not be blocked after crisis dismissal"
     );
     assert!(
         after_dismiss.state.active_crisis.is_none(),

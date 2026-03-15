@@ -13,7 +13,7 @@ mod spread;
 use rand::Rng;
 
 use crate::state::{
-    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind, SimState,
+    CrisisKind, DecreeId, GameCommand, GameEvent, GameOutcome, GameState, ResearchKind,
     StandingOrderKind,
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_TICK,
@@ -685,7 +685,7 @@ pub(crate) fn tick(state: &GameState) -> (GameState, Vec<GameEvent>) {
         if all_collapsed {
             new.outcome = GameOutcome::Lost;
             new.active_crisis = None;
-            new.sim_state = SimState::Paused;
+            // No need to set sim_state — is_blocked() derives from outcome != Playing
             events.push(GameEvent::GameOver);
         }
     }
@@ -916,7 +916,7 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
             state.deploy_enabled[*med_idx] = !was_enabled;
             // When first enabling, ensure deploy_regions is empty (= all regions)
             // Reset blocked notification so the player gets re-notified if still blocked
-            state.deploy_blocked_notified.remove(med_idx);
+            state.session.deploy_blocked_notified.remove(med_idx);
             CommandResult { message: None, success: true, events: Vec::new() }
         }
         GameCommand::ToggleDeployRegion { med_idx, region_idx } => {
@@ -1882,7 +1882,7 @@ mod tests {
             }
         }
         assert_eq!(state.outcome, GameOutcome::Lost);
-        assert_eq!(state.sim_state, crate::state::SimState::Paused);
+        assert!(state.is_blocked(), "game should be blocked after game over");
         // All regions should be collapsed with timestamps
         assert!(state.regions.iter().all(|r| r.collapsed));
         assert!(state.regions.iter().all(|r| r.collapsed_at_tick.is_some()),
@@ -1926,9 +1926,7 @@ mod tests {
             for _ in 0..max_ticks {
                 (state, _) = tick(&state);
                 if state.active_crisis.is_some() {
-                    use crate::state::SimState;
                     state.active_crisis = None;
-                    state.sim_state = SimState::Running;
                 }
                 if state.outcome != GameOutcome::Playing {
                     break;
@@ -1983,9 +1981,7 @@ mod tests {
             for _ in 0..max_ticks {
                 (state, _) = tick(&state);
                 if state.active_crisis.is_some() {
-                    use crate::state::SimState;
                     state.active_crisis = None;
-                    state.sim_state = SimState::Running;
                 }
                 if state.outcome != GameOutcome::Playing { break; }
 
@@ -2123,9 +2119,7 @@ mod tests {
             for _ in 0..max_ticks {
                 (state, _) = tick(&state);
                 if state.active_crisis.is_some() {
-                    use crate::state::SimState;
                     state.active_crisis = None;
-                    state.sim_state = SimState::Running;
                 }
                 if state.outcome != GameOutcome::Playing { break; }
             }
@@ -2173,9 +2167,7 @@ mod tests {
             for t in 0..max_ticks {
                 (state, _) = tick(&state);
                 if state.active_crisis.is_some() {
-                    use crate::state::SimState;
                     state.active_crisis = None;
-                    state.sim_state = SimState::Running;
                 }
                 let collapsed = state.regions.iter().find(|r| r.collapsed);
                 assert!(
@@ -2229,9 +2221,8 @@ mod tests {
     fn no_unpause_after_game_over() {
         let mut state = GameState::new_default(42);
         state.outcome = GameOutcome::Lost;
-        state.sim_state = crate::state::SimState::Paused;
         let s = apply_action(&state, &Action::TogglePause);
-        assert_eq!(s.sim_state, crate::state::SimState::Paused, "should not be able to unpause after game over");
+        assert!(s.is_blocked(), "game should remain blocked after game over");
     }
 
     #[test]
@@ -2272,7 +2263,6 @@ mod tests {
             (state, _) = tick(&state);
             if state.active_crisis.is_some() {
                 state.active_crisis = None;
-                state.sim_state = crate::state::SimState::Running;
             }
             if state.outcome != GameOutcome::Playing {
                 break;
@@ -3422,7 +3412,7 @@ mod tests {
         let after = apply_action(&state, &Action::SelectNext);
         let after = apply_action(&after, &Action::Confirm);
         assert!(after.active_crisis.is_some(), "crisis should still be active");
-        assert!(after.ui.status_message.as_ref().unwrap().contains("Not enough"),
+        assert!(after.session.status_message.as_ref().unwrap().contains("Not enough"),
             "should show affordability message");
 
         // Free option (A) should still work
@@ -3431,12 +3421,11 @@ mod tests {
     }
 
     #[test]
-    fn crisis_restores_running_state_on_dismiss() {
+    fn crisis_preserves_running_pacing_on_dismiss() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
         let mut state = GameState::new_default(42);
-        // Game is running, crisis fires
-        state.sim_state = SimState::Event { was_running: true };
+        // Game is running when crisis fires — pacing stays Running
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
             title: "Test".into(),
@@ -3454,12 +3443,12 @@ mod tests {
     }
 
     #[test]
-    fn crisis_restores_paused_state_on_dismiss() {
+    fn crisis_preserves_paused_pacing_on_dismiss() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
         let mut state = GameState::new_default(42);
-        // Game was paused when crisis fired
-        state.sim_state = SimState::Event { was_running: false };
+        // Game was paused when crisis fired — pacing stays Paused
+        state.sim_state = SimState::Paused;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
             title: "Test".into(),
@@ -3473,18 +3462,18 @@ mod tests {
         let after = apply_action(&state, &Action::Confirm);
         assert!(after.active_crisis.is_none());
         assert_eq!(after.sim_state, SimState::Paused,
-            "should restore Paused state after crisis when game was paused");
+            "pacing should remain Paused after crisis dismissal");
     }
 
     #[test]
     fn contract_demand_placate_boosts_satisfaction() {
         use crate::state::{
             CrisisCost, CrisisEvent, CrisisKind, CrisisOption, FundingCondition,
-            FundingContract, SimState,
+            FundingContract,
         };
 
         let mut state = GameState::new_default(42);
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         // Add a contract with low satisfaction
         state.contracts.push(FundingContract {
             name: "Media Transparency Pledge".to_string(),
@@ -3534,10 +3523,10 @@ mod tests {
 
     #[test]
     fn contract_demand_refuse_drops_satisfaction() {
-        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, FundingCondition, FundingContract, SimState};
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, FundingCondition, FundingContract};
 
         let mut state = GameState::new_default(42);
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.contracts.push(FundingContract {
             name: "Media Transparency Pledge".to_string(),
             board_member_idx: 0,
@@ -3586,7 +3575,7 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 
         let mut state = GameState::new_default(42);
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
             title: "Test".into(),
@@ -3598,14 +3587,14 @@ mod tests {
         });
 
         let after = apply_action(&state, &Action::TogglePause);
-        assert_eq!(after.sim_state, SimState::Event { was_running: true },
-            "spacebar should not change state during crisis");
+        assert_eq!(after.sim_state, SimState::Running,
+            "spacebar should not change pacing during crisis");
         assert!(after.active_crisis.is_some(), "crisis should still be active");
     }
 
     #[test]
     fn game_over_clears_active_crisis() {
-        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         let mut state = GameState::new_default(42);
         // Set up a highly lethal disease to trigger game over (collapse all regions).
@@ -3633,7 +3622,7 @@ mod tests {
             ],
             tick_created: 0,
         });
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
 
         // Run until game over (collapse requires all regions to fall)
         for _ in 0..20000 {
@@ -3646,8 +3635,8 @@ mod tests {
         assert_eq!(state.outcome, GameOutcome::Lost);
         assert!(state.active_crisis.is_none(),
             "active crisis should be cleared on game over");
-        assert_eq!(state.sim_state, SimState::Paused,
-            "sim state should be Paused, not Event");
+        assert!(state.is_blocked(),
+            "game should be blocked after game over");
     }
 
     #[test]
@@ -3657,7 +3646,6 @@ mod tests {
         state.auto_resolve_crises.insert("personnel".to_string(), 0);
 
         // Run until a crisis would generate
-        state.sim_state = SimState::Running;
         let mut auto_resolved = false;
         for _ in 0..5000 {
             let tick_events;
@@ -3668,8 +3656,8 @@ mod tests {
                 auto_resolved = true;
                 assert!(state.active_crisis.is_none(),
                     "crisis should be resolved immediately");
-                assert!(!matches!(state.sim_state, SimState::Event { .. }),
-                    "sim_state should not be Event after auto-resolve, got {:?}", state.sim_state);
+                assert!(!state.is_blocked() || state.outcome != GameOutcome::Playing,
+                    "game should not be blocked after auto-resolve (unless game over)");
                 break;
             }
             // If a non-personnel crisis fires, it should pause normally
@@ -3695,8 +3683,7 @@ mod tests {
 
     /// Helper: create a crisis event and inject it into state with choice pre-selected.
     fn setup_crisis(state: &mut GameState, kind: CrisisKind, choice: usize) {
-        use crate::state::{CrisisEvent, CrisisOption, SimState};
-        state.sim_state = SimState::Event { was_running: true };
+        use crate::state::{CrisisEvent, CrisisOption};
         state.ui.crisis_selection = choice;
         state.active_crisis = Some(CrisisEvent {
             kind,
@@ -3713,10 +3700,10 @@ mod tests {
 
     #[test]
     fn crisis_cost_deducts_funding() {
-        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, SimState};
+        use crate::state::{CrisisCost, CrisisEvent, CrisisOption};
         let mut state = GameState::new_default(42);
         let funding_before = state.resources.funding;
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
@@ -3738,10 +3725,10 @@ mod tests {
 
     #[test]
     fn crisis_cost_deducts_personnel_permanently() {
-        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, SimState};
+        use crate::state::{CrisisCost, CrisisEvent, CrisisOption};
         let mut state = GameState::new_default(42);
         let personnel_before = state.resources.personnel;
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
@@ -3762,10 +3749,10 @@ mod tests {
 
     #[test]
     fn crisis_cost_creates_operation_for_temporary_personnel() {
-        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, OperationSpec, SimState};
+        use crate::state::{CrisisCost, CrisisEvent, CrisisOption, OperationSpec};
         let mut state = GameState::new_default(42);
         let personnel_before = state.resources.personnel;
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
@@ -4048,7 +4035,7 @@ mod tests {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        state.sim_state = crate::state::SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::MediaPanic,
@@ -4096,7 +4083,7 @@ mod tests {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 1000.0;
-        state.sim_state = crate::state::SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::VaccineHesitancy { region_idx: 0 },
@@ -4128,7 +4115,7 @@ mod tests {
         use crate::state::CrisisCost;
         let mut state = GameState::new_default(42);
         state.resources.funding = 2000.0;
-        state.sim_state = crate::state::SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 1;
         state.active_crisis = Some(crate::state::CrisisEvent {
             kind: CrisisKind::CorruptOfficial { stolen: 300.0 },
@@ -4230,7 +4217,7 @@ mod tests {
         let before_personnel = state.resources.personnel;
 
         // Set up a crisis with a 2-day temporary operation cost
-        state.sim_state = crate::state::SimState::Event { was_running: true };
+        // Crisis active — blocking derived from active_crisis
         state.ui.crisis_selection = 0;
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::MediaPanic,
@@ -4587,7 +4574,7 @@ mod tests {
         state = apply_action(&state, &Action::Confirm);
         assert!(state.enacted_decrees.conscript_researchers);
         assert_eq!(state.resources.personnel, personnel_before + crate::state::CONSCRIPT_PERSONNEL_GAIN);
-        assert!(state.ui.status_message.as_ref().unwrap().contains("Conscript"));
+        assert!(state.session.status_message.as_ref().unwrap().contains("Conscript"));
     }
 
     #[test]
@@ -4963,7 +4950,6 @@ mod tests {
         state.active_crisis = None;
         state.pending_crises.clear();
         state.crisis_cooldowns.clear();
-        state.sim_state = SimState::Running;
 
         let (after, _) = tick(&state);
 

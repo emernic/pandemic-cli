@@ -61,6 +61,8 @@ fn advance_ticks(state: &mut GameState, n: u64) -> StopReason {
     if state.active_crisis.is_some() {
         return StopReason::CrisisStarted; // Don't advance even one tick with a pending crisis
     }
+    // Ensure pacing is Running for snapshot tick advancement.
+    // Snapshot mode always forces running — pause state is an interactive-only concept.
     state.sim_state = SimState::Running;
     for _ in 0..n {
         *state = tick_and_process(state);
