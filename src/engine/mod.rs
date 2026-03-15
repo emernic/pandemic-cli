@@ -914,8 +914,6 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
             let was_enabled = state.deploy_enabled[*med_idx];
             state.deploy_enabled[*med_idx] = !was_enabled;
             // When first enabling, ensure deploy_regions is empty (= all regions)
-            // Reset blocked notification so the player gets re-notified if still blocked
-            state.deploy_blocked_notified.remove(med_idx);
             CommandResult { message: None, success: true, events: Vec::new() }
         }
         GameCommand::ToggleDeployRegion { med_idx, region_idx } => {

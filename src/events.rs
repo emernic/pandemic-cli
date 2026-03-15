@@ -398,6 +398,11 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 (8, msg.clone(), msg)
             }
             GameEvent::DeployBlocked { medicine_idx } => {
+                // Dedup: only notify once per medicine per session.
+                // Engine emits this every tick; we suppress repeats here.
+                if !state.session.deploy_blocked_notified.insert(*medicine_idx) {
+                    continue;
+                }
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let msg = format!("{} deployment halted — resistance too high", med_name);
