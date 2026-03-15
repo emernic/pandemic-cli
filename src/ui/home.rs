@@ -58,6 +58,8 @@ fn build_splash_content(state: &GameState) -> Vec<(String, Style)> {
     segments.push(("\n".to_string(), dim));
     segments.push(("  → Press [R] to open Research and begin\n".to_string(), yellow));
     segments.push(("    identification.\n".to_string(), yellow));
+    segments.push(("  → Press [M] to open Medicines and deploy\n".to_string(), yellow));
+    segments.push(("    broad-spectrum treatment against the outbreak.\n".to_string(), yellow));
     segments.push(("\n".to_string(), dim));
     segments.push(("  [T] Threats   [R] Research   [M] Medicines\n".to_string(), dim));
     segments.push(("  [P] Policy    [?] Help       [Space] Pause\n".to_string(), dim));

@@ -537,12 +537,20 @@ fn handle_operations_confirm(ui: &mut UiState, state: &GameState) -> Option<Game
         Some(OpsUiState::BrowseOps) => {
             let so_base = DECREE_COUNT;
             let field_ops_base = so_base + STANDING_ORDER_COUNT;
-            let loan_base = field_ops_base + 1; // 1 = Emergency Sample Delivery
+            let fire_personnel_pos = field_ops_base + 1; // after Emergency Sample Delivery
+            let loan_base = field_ops_base + 2; // 2 field ops total
 
             if ui.panel_selection >= loan_base {
                 // Loan selected — repay in full
                 let loan_idx = ui.panel_selection - loan_base;
                 Some(GameCommand::RepayLoan { loan_idx })
+            } else if ui.panel_selection == fire_personnel_pos {
+                // Fire Personnel — immediately fire 5 unassigned
+                if state.personnel_available() > 0 {
+                    Some(GameCommand::FirePersonnel { count: 5 })
+                } else {
+                    None
+                }
             } else if ui.panel_selection >= field_ops_base {
                 // Emergency Sample Delivery
                 let eligible = crate::ui::operations::emergency_delivery_medicines(state);

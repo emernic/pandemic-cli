@@ -18,7 +18,7 @@ use crate::state::{
     COLLAPSE_DEATH_RATE, COLLAPSE_DISRUPTION_TICKS, COLLAPSE_SUBSISTENCE_FLOOR,
     CRISIS_INTERVAL, CRISIS_MIN_GAP, CRISIS_MIN_TICK,
     EMERGENCE_CHANCE_PER_TICK, EMERGENCE_MIN_TICK,
-    MAX_DISEASES, TICKS_PER_DAY,
+    MAX_DISEASES, PERSONNEL_UPKEEP_COST, TICKS_PER_DAY,
     WAVE_CLUSTER_WINDOW_TICKS,
 };
 
@@ -171,16 +171,6 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         new.resources.attrition_accum = 0.0;
     }
 
-    // Authority-based personnel trickle. Rate depends on current authority level.
-    {
-        let rate = new.resources.authority.personnel_per_day() / TICKS_PER_DAY;
-        new.resources.personnel_accum += rate;
-        if new.resources.personnel_accum >= 1.0 {
-            let gained = new.resources.personnel_accum as u32;
-            new.resources.personnel += gained;
-            new.resources.personnel_accum -= gained as f64;
-        }
-    }
 
     // Low funding warning: warn when net burn rate will exhaust funds within half a day.
     // At 1x speed (500ms/tick), half a day gives ~15 seconds of real-time warning.
@@ -1112,6 +1102,25 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 success: true,
             }
         }
+        GameCommand::FirePersonnel { count } => {
+            let available = state.personnel_available();
+            if available == 0 {
+                return CommandResult {
+                    message: Some("No unassigned personnel to fire.".to_string()),
+                    success: false,
+                };
+            }
+            let actual = (*count).min(available);
+            state.resources.personnel -= actual;
+            CommandResult {
+                message: Some(format!(
+                    "Fired {} personnel. Roster: {} (upkeep ¥{:.1}/day)",
+                    actual, state.resources.personnel,
+                    state.resources.personnel as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY
+                )),
+                success: true,
+            }
+        }
     }
 }
 
@@ -2010,6 +2019,8 @@ mod tests {
             // Give the bot full authority so it can test policies & research,
             // not the authority ramp mechanic.
             state.resources.authority = Authority::Maximum;
+            // Extra starting personnel — a competent player trains personnel.
+            state.resources.personnel += 25;
             let max_ticks = 200 * TICKS_PER_DAY as u64;
             let mut total_deploys = 0u32;
             for _ in 0..max_ticks {
@@ -2024,13 +2035,16 @@ mod tests {
                 // --- RESEARCH: start projects by priority until out of resources ---
                 loop {
                     let projects = state.all_available_projects();
+                    // Train personnel when running low (< 10 available)
+                    let need_personnel = state.personnel_available() < 10;
                     let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
-                        ResearchKind::DevelopMedicine { .. } => 0,
-                        ResearchKind::ManufactureDoses { .. } => 0,
-                        ResearchKind::IdentifyThreat { .. } => 1,
-                        ResearchKind::ClinicalTrial { .. } => 2,
-                        ResearchKind::GenomicSequencing { .. } => 3,
-                        _ => 4,
+                        ResearchKind::TrainPersonnel if need_personnel => 0,
+                        ResearchKind::DevelopMedicine { .. } => 1,
+                        ResearchKind::ManufactureDoses { .. } => 1,
+                        ResearchKind::IdentifyThreat { .. } => 2,
+                        ResearchKind::ClinicalTrial { .. } => 3,
+                        ResearchKind::GenomicSequencing { .. } => 4,
+                        _ => 5,
                     });
                     if let Some((idx, kind)) = best {
                         let (personnel, _, cost_funding) = kind.costs(&state.medicines);
@@ -2078,8 +2092,12 @@ mod tests {
                             region_idx: r_idx, policy: PolicyId::Quarantine,
                         });
                     }
-                    // Hospitals are baseline — no need to activate hospital surge.
-                    // Discourage Hospitalization (policy 2) is NOT auto-activated.
+                    let has_travel_ban = state.policies[r_idx].travel_ban;
+                    if !has_travel_ban && total_infected > 100_000.0 {
+                        execute_command(&mut state, &GameCommand::TogglePolicy {
+                            region_idx: r_idx, policy: PolicyId::TravelBan,
+                        });
+                    }
                 }
 
                 // --- MEDICINE: treat aggressively, vaccinate only with targeted meds ---
@@ -2479,56 +2497,34 @@ mod tests {
     }
 
     #[test]
-    fn authority_based_personnel_accumulation() {
+    fn fire_personnel_reduces_roster() {
         let mut state = GameState::new_default(42);
-        // Pre-load the accumulator so even a modest rate pushes it over 1.0.
-        // This tests the mechanism (authority → accum → personnel) without
-        // needing thousands of ticks.
-        state.resources.personnel_accum = 0.99;
-        state.resources.authority = Authority::Maximum;
-        let initial_personnel = state.resources.personnel;
-
-        // At Maximum authority, personnel_per_day() is high enough that
-        // starting at 0.99 accum should cross 1.0 within a few ticks.
-        let mut s = state;
-        for _ in 0..20 {
-            s = tick(&s);
-        }
-
-        let gained = s.resources.personnel - initial_personnel;
-        assert!(
-            gained >= 1,
-            "accumulator should convert to personnel: was {initial_personnel}, \
-             now {}, accum {:.3}",
-            s.resources.personnel, s.resources.personnel_accum
-        );
+        state.resources.personnel = 25;
+        let result = execute_command(&mut state, &GameCommand::FirePersonnel { count: 5 });
+        assert!(result.success);
+        assert_eq!(state.resources.personnel, 20);
     }
 
     #[test]
-    fn authority_minimal_no_personnel_gain() {
+    fn fire_personnel_capped_by_available() {
         let mut state = GameState::new_default(42);
-        corporations::generate_corporations(&mut state);
-        board::generate_board_members(&mut state);
-        // Clear infections
-        for r in &mut state.regions {
-            r.infections.clear();
-        }
-        state.resources.authority = Authority::Minimal;
-        state.resources.personnel_accum = 0.0;
-        let initial_personnel = state.resources.personnel;
+        state.resources.personnel = 25;
+        // Start a research project to tie up some personnel
+        state.resources.authority = Authority::Maximum;
+        let _ = research::start_research(&mut state, 0, false);
+        let available = state.personnel_available();
+        assert!(available < 25, "some personnel should be busy");
+        let result = execute_command(&mut state, &GameCommand::FirePersonnel { count: 100 });
+        assert!(result.success);
+        assert_eq!(state.resources.personnel, 25 - available);
+    }
 
-        let mut s = state;
-        for _ in 0..500 {
-            s = tick(&s);
-        }
-
-        // With Minimal authority, personnel_per_day() is 0.
-        // Personnel gain should be zero.
-        let gained = s.resources.personnel.saturating_sub(initial_personnel);
-        assert!(
-            gained == 0,
-            "with Minimal authority, personnel should not increase, gained {gained}"
-        );
+    #[test]
+    fn fire_personnel_fails_when_none_available() {
+        let mut state = GameState::new_default(42);
+        state.resources.personnel = 0;
+        let result = execute_command(&mut state, &GameCommand::FirePersonnel { count: 5 });
+        assert!(!result.success);
     }
 
     #[test]
