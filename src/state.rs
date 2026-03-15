@@ -4581,6 +4581,7 @@ pub const DETECTION_THRESHOLD: f64 = 10_000.0;
 pub enum Panel {
     None,
     Threats,
+    Research,
     Lab,
     Medicines,
     Policy,
@@ -4821,7 +4822,7 @@ impl UiState {
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
                 Panel::Ledger => matches!(self.ledger_ui, Some(LedgerUiState::BrowseStocks) | None),
-                Panel::None | Panel::Threats | Panel::Help => true,
+                Panel::None | Panel::Threats | Panel::Research | Panel::Help => true,
             };
             if at_top {
                 self.open_panel = Panel::None;
@@ -4839,7 +4840,7 @@ impl UiState {
                     Panel::Operations => self.operations_ui = Some(OpsUiState::BrowseOps),
                     Panel::Board => self.board_ui = Some(BoardUiState::BrowseMembers),
                     Panel::Ledger => self.ledger_ui = Some(LedgerUiState::BrowseStocks),
-                    Panel::None | Panel::Threats | Panel::Help => {}
+                    Panel::None | Panel::Threats | Panel::Research | Panel::Help => {}
                 }
             }
         } else {
@@ -4867,7 +4868,7 @@ impl UiState {
                 Panel::Ledger => {
                     self.ledger_ui = Some(LedgerUiState::BrowseStocks);
                 }
-                Panel::None | Panel::Threats | Panel::Help => {}
+                Panel::None | Panel::Threats | Panel::Research | Panel::Help => {}
             }
         }
     }
@@ -4949,7 +4950,7 @@ impl UiState {
                     }
                 }
             }
-            Panel::None | Panel::Threats | Panel::Help => {
+            Panel::None | Panel::Threats | Panel::Research | Panel::Help => {
                 self.open_panel = Panel::None;
                 self.panel_selection = 0;
                 self.medicine_ui = None;
@@ -6411,18 +6412,23 @@ impl WorldState {
         all
     }
 
-    /// Build the flat list of selectable items for the research panel.
-    /// Used by both the renderer and the input handler.
+    /// Build the flat list of selectable items for the Lab panel.
+    /// BasicResearch projects are excluded — they appear in the Research (tech tree) panel instead.
     pub fn research_flat_items(&self) -> Vec<ResearchFlatItem> {
         let available = self.all_available_projects();
         let mut items = Vec::new();
 
         // Active projects first, then available projects — completely flat.
-        for (ai, _) in self.active_research.iter().enumerate() {
-            items.push(ResearchFlatItem::Active(ai));
+        // Exclude BasicResearch (shown in tech tree panel).
+        for (ai, project) in self.active_research.iter().enumerate() {
+            if !matches!(project.kind, ResearchKind::BasicResearch { .. }) {
+                items.push(ResearchFlatItem::Active(ai));
+            }
         }
-        for (avail_idx, _) in available.iter().enumerate() {
-            items.push(ResearchFlatItem::Available(avail_idx));
+        for (avail_idx, kind) in available.iter().enumerate() {
+            if !matches!(kind, ResearchKind::BasicResearch { .. }) {
+                items.push(ResearchFlatItem::Available(avail_idx));
+            }
         }
 
         // Full-stockpile manufacturing: visible for auto-toggle but not startable

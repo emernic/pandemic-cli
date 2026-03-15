@@ -325,7 +325,8 @@ mod tests {
         GameOutcome, AppState, ResearchFlatItem, ResearchKind, ResearchProject,
     };
 
-    /// Helper: open research panel, navigate to first available item matching `kind_pred`, and confirm through.
+    /// Helper: open Lab panel, navigate to first available item matching `kind_pred`, and confirm through.
+    /// For BasicResearch, use `start_basic_research` instead (those are in the Research panel now).
     fn start_research_matching(state: &AppState, kind_pred: impl Fn(&ResearchKind) -> bool) -> AppState {
         // Ensure panel is closed first, then open fresh
         let mut s = if state.ui.open_panel == crate::state::Panel::Lab {
@@ -346,6 +347,23 @@ mod tests {
         s.ui.panel_selection = idx;
         s = apply_action(&s, &Action::Confirm); // ConfirmProject
         s = apply_action(&s, &Action::Confirm); // Start
+        s
+    }
+
+    /// Helper: open Research (tech tree) panel, find first available BasicResearch, and confirm.
+    fn start_basic_research(state: &AppState) -> AppState {
+        let mut s = apply_action(state, &Action::ClosePanel);
+        s = apply_action(&s, &Action::OpenResearch);
+        let techs = crate::ui::tech_tree::layout_techs();
+        let idx = techs.iter().position(|tech| {
+            !s.unlocked_techs.contains(tech)
+                && tech.prerequisites_met(&s.world)
+                && !s.active_research.iter().any(|r| {
+                    matches!(r.kind, ResearchKind::BasicResearch { tech: t } if t == *tech)
+                })
+        }).expect("expected available BasicResearch in tech tree");
+        s.ui.panel_selection = idx;
+        s = apply_action(&s, &Action::Confirm);
         s
     }
 
@@ -653,8 +671,8 @@ mod tests {
         state.resources.funding = 1000.0;
         assert!(state.unlocked_techs.is_empty());
 
-        // Navigate: Research → find Basic → Confirm → Confirm
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::BasicResearch { .. }));
+        // Navigate: Research panel → find first available BasicResearch → Confirm
+        state = start_basic_research(&state);
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().first().is_some(), "basic research should have started");
 
         // Advance to completion (240 ticks at 1x speed)
@@ -687,8 +705,8 @@ mod tests {
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
-        // Start basic research
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::BasicResearch { .. }));
+        // Start basic research (via Research/tech tree panel)
+        state = start_basic_research(&state);
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().first().is_some());
 
         // All three running simultaneously

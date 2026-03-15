@@ -12,7 +12,7 @@ use state::{
     DecreeId, DECREE_COUNT, GameCommand, GameOutcome, AppState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
-    ResearchFlatItem, LabUiState, SimState,
+    ResearchFlatItem, ResearchKind, LabUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -113,6 +113,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
             }
         }
         Action::OpenThreats => new.ui.toggle_panel(Panel::Threats),
+        Action::OpenResearch => new.ui.toggle_panel(Panel::Research),
         Action::OpenLab => new.ui.toggle_panel(Panel::Lab),
         Action::OpenMedicines => new.ui.toggle_panel(Panel::Medicines),
         Action::OpenPolicy => new.ui.toggle_panel(Panel::Policy),
@@ -249,8 +250,12 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     // Map engine result to UI navigation (coordination logic)
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
-                            new.ui.lab_ui = Some(LabUiState::BrowseAll);
-                            new.ui.panel_selection = 0;
+                            if new.ui.open_panel == Panel::Lab {
+                                new.ui.lab_ui = Some(LabUiState::BrowseAll);
+                                new.ui.panel_selection = 0;
+                            }
+                            // Research panel: keep selection in place so player
+                            // can see the tech now shows "Researching" state.
                         }
                         GameCommand::UpgradeLab if result.success => {
                             new.ui.lab_ui = Some(LabUiState::BrowseAll);
@@ -412,6 +417,7 @@ pub use state::format_number;
 fn handle_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.open_panel {
         Panel::Medicines => handle_medicine_confirm(ui, state),
+        Panel::Research => handle_research_confirm(ui, state),
         Panel::Lab => handle_lab_confirm(ui, state),
         Panel::Policy => handle_policy_confirm(ui, state),
         Panel::Operations => handle_operations_confirm(ui, state),
@@ -431,6 +437,34 @@ fn handle_threats_confirm(ui: &mut UiState, state: &AppState) -> Option<GameComm
     Some(GameCommand::ToggleThreatVisibility { disease_idx })
 }
 
+
+fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
+    use crate::state::BasicTech;
+    // The selected index maps to the tech tree layout order
+    let layout_techs: Vec<BasicTech> = ui::tech_tree::layout_techs();
+    let tech = *layout_techs.get(ui.panel_selection)?;
+
+    // Only allow starting if tech is available (prereqs met, not already unlocked/researching)
+    if state.unlocked_techs.contains(&tech) {
+        return None;
+    }
+    if !tech.prerequisites_met(&state.world) {
+        return None;
+    }
+    let already_researching = state.active_research.iter().any(|r| {
+        matches!(r.kind, ResearchKind::BasicResearch { tech: t } if t == tech)
+    });
+    if already_researching {
+        return None;
+    }
+
+    // Find the project_idx in all_available_projects()
+    let all = state.all_available_projects();
+    let target_kind = ResearchKind::BasicResearch { tech };
+    let project_idx = all.iter().position(|k| *k == target_kind)?;
+
+    Some(GameCommand::StartResearch { project_idx, double_personnel: false })
+}
 
 fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.medicine_ui.clone() {
