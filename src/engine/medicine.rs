@@ -499,12 +499,12 @@ pub(super) fn try_auto_deploy(state: &mut GameState, events: &mut Vec<GameEvent>
         } else {
             // No valid target found — check if ALL tested diseases are below efficacy
             // threshold and notify the player once.
-            if !state.deploy_blocked_notified.contains(&med_idx) {
+            if !state.session.deploy_blocked_notified.contains(&med_idx) {
                 let all_blocked = tested.iter().all(|&d_idx| {
                     state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::DEPLOY_MIN_EFFICACY
                 });
                 if all_blocked {
-                    state.deploy_blocked_notified.insert(med_idx);
+                    state.session.deploy_blocked_notified.insert(med_idx);
                     events.push(crate::state::GameEvent::DeployBlocked { medicine_idx: med_idx });
                 }
             }

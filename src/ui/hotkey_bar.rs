@@ -84,7 +84,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             )));
         }
         GameOutcome::Playing => {
-            if let Some(msg) = &state.ui.status_message {
+            if let Some(msg) = &state.session.status_message {
                 lines.push(Line::from(Span::styled(
                     msg.as_str(),
                     Style::default().fg(Color::Yellow),

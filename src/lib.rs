@@ -29,9 +29,9 @@ use state::{
 /// complementing the post-command UI navigation done inline after execute_command.
 pub fn apply_action(state: &GameState, action: &Action) -> GameState {
     let mut new = state.clone();
-    new.ui.status_message = None;
+    new.session.status_message = None;
 
-    // When a crisis is active (Event state), only allow selecting options and confirming
+    // When a crisis is active, only allow selecting options and confirming
     if new.active_crisis.is_some() {
         match action {
             Action::SelectNext | Action::SelectRight => {
@@ -56,7 +56,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let option = &new.active_crisis.as_ref().unwrap().options[choice];
                 if let Some(cost) = &option.cost {
                     if !cost.affordable(&new) {
-                        new.ui.status_message = Some("Not enough resources".into());
+                        new.session.status_message = Some("Not enough resources".into());
                         return new;
                     }
                 }
@@ -71,7 +71,7 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let cmd = GameCommand::ResolveCrisis { choice };
                 let result = execute_command(&mut new, &cmd);
                 events::process_events(&mut new, &result.events);
-                new.ui.status_message = result.message;
+                new.session.status_message = result.message;
                 new.ui.crisis_selection = 0;
                 new.ui.crisis_auto_resolve = false;
                 // Restore the player to whatever panel/wizard state they were in
@@ -81,8 +81,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 if new.ui.panel_selection > max {
                     new.ui.panel_selection = max;
                 }
-                // sim_state restoration (Event → Running/Paused) happens inside
-                // crisis::resolve_crisis() — no post-processing needed here.
+                // Pacing (Running/Paused) is unchanged by crises — blocking is
+                // derived from active_crisis, which resolve_crisis() clears.
             }
             Action::Quit => {} // Still allow quit
             _ => {} // Block all other actions during crisis (including TogglePause)
@@ -96,16 +96,15 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 match new.sim_state {
                     SimState::Running => {
                         new.sim_state = SimState::Paused;
-                        new.ui.speed_multiplier = 1;
+                        new.session.speed_multiplier = 1;
                     }
                     SimState::Paused => new.sim_state = SimState::Running,
-                    SimState::Event { .. } => {} // blocked during events
                 }
             }
         }
         Action::SpeedUp => {
-            if new.outcome == GameOutcome::Playing && new.sim_state.is_running() {
-                new.ui.speed_multiplier = match new.ui.speed_multiplier {
+            if new.is_effectively_running() {
+                new.session.speed_multiplier = match new.session.speed_multiplier {
                     1 => 2,
                     2 => 4,
                     4 => 6,
@@ -179,8 +178,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                 let board_member_idx = new.ui.panel_selection;
                 if new.contracts.iter().any(|c| c.board_member_idx == board_member_idx) {
                     let result = execute_command(&mut new, &GameCommand::CancelContract { board_member_idx });
-                    if new.ui.status_message.is_none() {
-                        new.ui.status_message = result.message;
+                    if new.session.status_message.is_none() {
+                        new.session.status_message = result.message;
                     }
                 }
             }
@@ -268,8 +267,8 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                         }
                         _ => {}
                     }
-                    if new.ui.status_message.is_none() {
-                        new.ui.status_message = result.message;
+                    if new.session.status_message.is_none() {
+                        new.session.status_message = result.message;
                     }
                 }
             }
@@ -655,30 +654,30 @@ mod tests {
     #[test]
     fn speed_cycles_through_multipliers() {
         let state = GameState::new_default(42);
-        assert_eq!(state.ui.speed_multiplier, 1);
+        assert_eq!(state.session.speed_multiplier, 1);
 
         let state = apply_action(&state, &Action::SpeedUp);
-        assert_eq!(state.ui.speed_multiplier, 2);
+        assert_eq!(state.session.speed_multiplier, 2);
 
         let state = apply_action(&state, &Action::SpeedUp);
-        assert_eq!(state.ui.speed_multiplier, 4);
+        assert_eq!(state.session.speed_multiplier, 4);
 
         let state = apply_action(&state, &Action::SpeedUp);
-        assert_eq!(state.ui.speed_multiplier, 6);
+        assert_eq!(state.session.speed_multiplier, 6);
 
         let state = apply_action(&state, &Action::SpeedUp);
-        assert_eq!(state.ui.speed_multiplier, 1);
+        assert_eq!(state.session.speed_multiplier, 1);
     }
 
     #[test]
     fn pause_resets_speed() {
         let state = GameState::new_default(42);
         let state = apply_action(&state, &Action::SpeedUp);
-        assert_eq!(state.ui.speed_multiplier, 2);
+        assert_eq!(state.session.speed_multiplier, 2);
 
         // Pause should reset to 1x
         let state = apply_action(&state, &Action::TogglePause);
-        assert_eq!(state.ui.speed_multiplier, 1);
+        assert_eq!(state.session.speed_multiplier, 1);
         assert!(!state.sim_state.is_running());
     }
 
@@ -687,7 +686,7 @@ mod tests {
         let state = GameState::new_default(42);
         let state = apply_action(&state, &Action::TogglePause); // pause
         let state = apply_action(&state, &Action::SpeedUp);
-        assert_eq!(state.ui.speed_multiplier, 1); // unchanged
+        assert_eq!(state.session.speed_multiplier, 1); // unchanged
     }
 
 
@@ -696,7 +695,7 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         let mut state = GameState::new_default(42);
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
@@ -721,7 +720,7 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         let mut state = GameState::new_default(42);
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
@@ -748,7 +747,7 @@ mod tests {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption};
 
         let mut state = GameState::new_default(42);
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
@@ -772,7 +771,7 @@ mod tests {
         // Pre-existing preference for aid crises
         state.auto_resolve_crises.insert("personnel".to_string(), 0);
 
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
@@ -846,7 +845,7 @@ mod tests {
         state.ui.panel_selection = 2;
 
         // Fire a crisis while in this state.
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),
@@ -883,7 +882,7 @@ mod tests {
         state.ui.panel_selection = 0;
 
         // Fire a crisis while in this state.
-        state.sim_state = SimState::Event { was_running: true };
+        // Crisis active — game is blocked via is_blocked()
         state.active_crisis = Some(CrisisEvent {
             kind: CrisisKind::PersonnelCrisis { amount: 3 },
             title: "Aid Offer".into(),

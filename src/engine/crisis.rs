@@ -4,7 +4,7 @@ use crate::state::{
     ActiveLoan, Authority, BoardPersonality, BoardRole, CorporationSector, CrisisCost,
     CrisisEvent, CrisisKind, CrisisOption, CrisisOperation, GameEvent, GameState,
     GovernorPersonality, LoanLender, ModifierSource, OperationSpec, ResearchKind,
-    SimState, CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
+    CRISIS_TYPE_COOLDOWN, LOAN_DUE_DAYS,
     LOYALTY_RAISE_FRACTION, TICKS_PER_DAY,
 };
 
@@ -2138,9 +2138,6 @@ pub(super) fn activate_crisis(state: &mut GameState, crisis: CrisisEvent, events
         events.push(GameEvent::CrisisAutoResolved { message });
         post_action
     } else {
-        state.sim_state = SimState::Event {
-            was_running: state.sim_state.is_running(),
-        };
         events.push(GameEvent::CrisisStarted);
         CrisisPostAction::None
     }
@@ -3317,13 +3314,8 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut 
         }
     };
     // Authority is an enum — no clamping needed.
-    // Restore sim state from Event mode. When the player manually resolves a crisis,
-    // sim_state is Event { was_running }. We restore Running or Paused here so callers
-    // don't need to know about this hidden rule. In the auto-resolve path (called from
-    // activate_crisis() before sim_state is set to Event), this is a no-op.
-    if let SimState::Event { was_running } = state.sim_state {
-        state.sim_state = if was_running { SimState::Running } else { SimState::Paused };
-    }
+    // Crisis dismissal no longer touches sim_state — the player's pacing preference
+    // (Running/Paused) is unchanged by crises. Blocking is derived from active_crisis.
     (msg, post_action)
 }
 
@@ -3433,7 +3425,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = crate::state::SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let pending_before = state.pending_crises.len();
         let (msg, _) = resolve_crisis(&mut state, 0, &mut events); // Pay
@@ -3464,7 +3456,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = crate::state::SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let personnel_before = state.resources.personnel;
         resolve_crisis(&mut state, 2, &mut events); // Write them off
@@ -3504,7 +3496,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = crate::state::SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let funding_before = state.resources.funding;
         assert!(state.active_research.iter().all(|p| !p.kind.is_field_work()), "no research before resolution");
@@ -3588,7 +3580,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let kind = CrisisKind::NewPathogenDetected { disease_idx: 0 };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = crate::state::SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let funding_before = state.resources.funding;
         let (msg, _) = resolve_crisis(&mut state, 0, &mut events); // Begin identification
@@ -3611,7 +3603,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let crisis = build_crisis_event(&state, kind);
         // Dismiss is option index 1 (when identification is available)
         state.active_crisis = Some(crisis);
-        state.sim_state = crate::state::SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let funding_before = state.resources.funding;
         resolve_crisis(&mut state, 1, &mut events); // Acknowledge
@@ -3941,7 +3933,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             let kind = CrisisKind::GovernorSick { region_idx };
             let crisis = build_crisis_event(&s, kind);
             s.active_crisis = Some(crisis);
-            s.sim_state = SimState::Event { was_running: false };
+            // Crisis is active — game is blocked via is_blocked()
 
             let (_msg, _) = resolve_crisis(&mut s, worst_choice, &mut events);
 
@@ -3965,7 +3957,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let kind = CrisisKind::GovernorSick { region_idx: 0 };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let (_msg, _) = resolve_crisis(&mut state, 0, &mut events); // Stabilize governor
 
@@ -3994,7 +3986,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let kind = CrisisKind::GovernorSick { region_idx: 0 };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let (_msg, _) = resolve_crisis(&mut state, 2, &mut events); // Refuse (worst-case)
 
@@ -4017,7 +4009,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         let kind = CrisisKind::GovernorSick { region_idx: 0 };
         let crisis = build_crisis_event(&state, kind);
         state.active_crisis = Some(crisis);
-        state.sim_state = SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let (_msg, _) = resolve_crisis(&mut state, 1, &mut events); // Refuse (worst-case)
 
@@ -4122,7 +4114,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // Build and activate the crisis
         let crisis = build_crisis_event(&state, CrisisKind::CorporateDemand { corp_idx });
         state.active_crisis = Some(crisis);
-        state.sim_state = SimState::Event { was_running: false };
+        // Crisis is active — game is blocked via is_blocked()
 
         let (msg, _) = resolve_crisis(&mut state, 1, &mut events); // Refuse
 
