@@ -50,6 +50,51 @@ fn scaled_cost(state: &WorldState, fraction: f64, min: f64, max: f64) -> f64 {
     (raw / 10.0).round() * 10.0
 }
 
+/// Find the connected non-collapsed region with the lowest total infection.
+/// Returns None if no suitable destination exists.
+fn find_safest_connected_region(state: &WorldState, from_region: usize) -> Option<usize> {
+    let connections = state.regions.get(from_region)
+        .map(|r| r.connections.clone())
+        .unwrap_or_default();
+    connections.iter()
+        .copied()
+        .filter(|&ri| !state.regions.get(ri).map_or(true, |r| r.collapsed))
+        .min_by(|&a, &b| {
+            let inf_a: f64 = state.regions[a].infections.iter().map(|i| i.infected).sum();
+            let inf_b: f64 = state.regions[b].infections.iter().map(|i| i.infected).sum();
+            inf_a.partial_cmp(&inf_b).unwrap_or(std::cmp::Ordering::Equal)
+        })
+}
+
+/// Relocate the largest non-bankrupt corporation in a region to the safest connected region.
+/// Also moves the corp director (board member) if co-located with the corp.
+/// Returns a message describing what happened.
+fn relocate_region_corp(state: &mut WorldState, from_region: usize) -> String {
+    let corp_idx = state.corporations.iter()
+        .enumerate()
+        .filter(|(_, c)| c.region_idx == from_region && !c.bankrupt)
+        .max_by(|(_, a), (_, b)| a.base_revenue.partial_cmp(&b.base_revenue).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(i, _)| i);
+    let Some(corp_idx) = corp_idx else {
+        return "No corporation to relocate.".into();
+    };
+    let dest = find_safest_connected_region(state, from_region);
+    let Some(dest_idx) = dest else {
+        return "No safe region for relocation.".into();
+    };
+    let old_region = state.corporations[corp_idx].region_idx;
+    state.corporations[corp_idx].region_idx = dest_idx;
+    let corp_name = state.corporations[corp_idx].name.clone();
+    let dest_name = state.regions.get(dest_idx).map(|r| r.name.as_str()).unwrap_or("Unknown");
+    // Move the corp director if they were co-located with the corp
+    for member in &mut state.board_members {
+        if member.corp_idx == Some(corp_idx) && member.region_idx == Some(old_region) {
+            member.region_idx = Some(dest_idx);
+        }
+    }
+    format!("{corp_name} relocated to {dest_name}.")
+}
+
 /// Satisfaction-based budget multiplier.
 /// sat 1.0 => 1.2x (generous), sat 0.5 => 1.0x (neutral), sat 0.0 => 0.5x (slashed).
 fn board_budget_satisfaction_mult(board_sat: f64) -> f64 {
@@ -858,14 +903,14 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         options: vec![ CrisisOption {
                             label: "Stabilize the governor".into(),
                             description: format!(
-                                "Medical team treats {gov_name}. {corp_name} pulls out anyway. \
+                                "Medical team treats {gov_name}. {corp_name} relocates to a safer region. \
                                  Supply lines -20%, cooperation -10, chairman disapproves."),
                             cost: None,
                         },
                         CrisisOption {
                             label: format!("Secure {corp_name} operations"),
                             description: format!(
-                                "Keep {corp_name} running. {gov_name} gets no treatment. \
+                                "Keep {corp_name} running. {gov_name} evacuates and governs remotely. \
                                  Cooperation -20. Governor may not survive."),
                             cost: None,
                         },
@@ -2151,22 +2196,38 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                 .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Operative);
             match (personality, choice) {
                 (GovernorPersonality::Buffoon, 0) => {
-                    // Stabilize the governor: governor survives, corp pulls logistics
+                    // Stabilize the governor: governor survives, corp pulls logistics and relocates
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.supply_lines = (region.supply_lines - 0.20).max(0.0);
                         region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                     }
                     chairman_satisfaction_hit(state, -0.05);
-                    "Medical team sent. Governor stabilized. Logistics operations suspended.".into()
+                    // Relocate the largest corp in this region to a connected non-collapsed region
+                    let corp_reloc_msg = relocate_region_corp(state, *region_idx);
+                    format!("Medical team sent. Governor stabilized. {corp_reloc_msg}")
                 }
                 (GovernorPersonality::Buffoon, _) => {
-                    // Secure corporation: corp stays, governor unmonitored
+                    // Secure corporation: corp stays, governor evacuates to safety
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
                     }
+                    // Governor evacuates to a connected safe region
+                    let gov_dest = find_safest_connected_region(state, *region_idx);
+                    if let Some(dest) = gov_dest {
+                        state.regions[*region_idx].governor.physical_region_idx = Some(dest);
+                        // Update board member location too
+                        for member in &mut state.board_members {
+                            if matches!(member.role, BoardRole::RegionGovernor { region_idx: ri } if ri == *region_idx) {
+                                member.region_idx = Some(dest);
+                            }
+                        }
+                    }
                     chairman_satisfaction_hit(state, 0.03);
                     queue_governor_death_followup(state, *region_idx);
-                    "Operations secured. Governor's condition is deteriorating.".into()
+                    let dest_name = gov_dest
+                        .and_then(|d| state.regions.get(d).map(|r| r.name.clone()))
+                        .unwrap_or_else(|| "parts unknown".into());
+                    format!("Operations secured. Governor fled to {dest_name}. Condition deteriorating.")
                 }
                 (GovernorPersonality::Blowhard, 0) => {
                     // Send samples: lose 2 days research progress

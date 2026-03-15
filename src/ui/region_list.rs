@@ -828,6 +828,18 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
                     }
                 },
             ]));
+            // Show governor's physical location if they've relocated
+            if let Some(phys_idx) = gov.physical_region_idx {
+                if phys_idx != idx {
+                    let dest_name = state.regions.get(phys_idx)
+                        .map(|r| r.name.as_str())
+                        .unwrap_or("unknown");
+                    lines.push(Line::from(Span::styled(
+                        format!("  ↳ Physically in {dest_name} (governing remotely)"),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+            }
         }
     }
 

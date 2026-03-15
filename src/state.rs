@@ -1977,6 +1977,12 @@ pub struct Governor {
     /// Tick when a successor governor will arrive (None if governor is alive or no succession scheduled).
     #[serde(default)]
     pub succession_tick: Option<u64>,
+    /// Physical location of the governor. `None` means they are in their governed
+    /// region (the default). `Some(idx)` means they have relocated to a different
+    /// region (e.g., via crisis evacuation). They still govern their original region
+    /// remotely — this only affects survival checks (disease, nukes).
+    #[serde(default)]
+    pub physical_region_idx: Option<usize>,
 }
 
 
@@ -2124,6 +2130,13 @@ impl Governor {
             1.0
         }
     }
+
+    /// Returns the region index where this governor physically is.
+    /// If `physical_region_idx` is set, they've relocated; otherwise they're
+    /// in their governed region (passed as `governed_region_idx`).
+    pub fn physical_location(&self, governed_region_idx: usize) -> usize {
+        self.physical_region_idx.unwrap_or(governed_region_idx)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -2255,6 +2268,7 @@ fn default_governor() -> Governor {
         last_sick_tick: None,
         dead: false,
         succession_tick: None,
+        physical_region_idx: None,
     }
 }
 
@@ -5154,6 +5168,7 @@ impl WorldState {
                     last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
+                    physical_region_idx: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::StrongPublicHealth],
@@ -5195,6 +5210,7 @@ impl WorldState {
                     last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
+                    physical_region_idx: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::ResilientPopulation],
@@ -5236,6 +5252,7 @@ impl WorldState {
                     last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
+                    physical_region_idx: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::TradeDependent, RegionTrait::DenseUrban],
@@ -5277,6 +5294,7 @@ impl WorldState {
                     last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
+                    physical_region_idx: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::LowInfrastructure, RegionTrait::DenseUrban],
@@ -5318,6 +5336,7 @@ impl WorldState {
                     last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
+                    physical_region_idx: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::DenseUrban, RegionTrait::ResilientPopulation],
@@ -5359,6 +5378,7 @@ impl WorldState {
                     last_sick_tick: None,
                     dead: false,
                     succession_tick: None,
+                    physical_region_idx: None,
                 },
                 infections: vec![],
                 traits: vec![RegionTrait::IslandGeography, RegionTrait::StrongPublicHealth],
