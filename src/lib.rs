@@ -10,8 +10,8 @@ use engine::execute_command;
 use state::{
     DecreeId, DeployTarget, DECREE_COUNT, GameCommand, GameOutcome, GameState, KNOWLEDGE_NAME,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
-    MedicineMode, MedicineUiState, OpsUiState, Panel, PolicyUiState, ResearchFlatItem,
-    ResearchUiState, SimState,
+    MedicineMode, MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
+    ResearchFlatItem, ResearchUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -207,6 +207,20 @@ pub fn apply_action(state: &GameState, action: &Action) -> GameState {
                                 execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
                             }
                         }
+                    }
+                }
+            }
+            // Toggle auto-rebuild infra when X pressed on RebuildInfra policy
+            else if new.ui.open_panel == Panel::Policy {
+                let region_idx = match &new.ui.policy_ui {
+                    Some(PolicyUiState::ManagePolicies { region_idx }) => *region_idx,
+                    None => new.ui.map_selection,
+                };
+                let display_pos = new.ui.panel_selection;
+                if display_pos < POLICY_COUNT {
+                    let policy = policy_display_order()[display_pos];
+                    if policy == PolicyId::RebuildInfra {
+                        execute_command(&mut new, &GameCommand::ToggleAutoRebuild { region_idx });
                     }
                 }
             }

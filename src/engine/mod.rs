@@ -121,6 +121,9 @@ pub(crate) fn tick(state: &GameState) -> GameState {
         board::on_gdp_policy_enacted(&mut new, r_idx);
     }
 
+    // Auto-rebuild infrastructure for regions with the toggle enabled.
+    policy::tick_auto_rebuild(&mut new);
+
     // Screening infrastructure — update progress ramp-up and estimated infection counts.
     // Must run after spread (so real values are current) and after policy costs
     // (so suspended screening is reflected).
@@ -930,6 +933,20 @@ pub fn execute_command(state: &mut GameState, cmd: &GameCommand) -> CommandResul
                 StandingOrderKind::AutoTravelBanAtCrit => state.standing_orders.auto_travel_ban_at_crit = !state.standing_orders.auto_travel_ban_at_crit,
             }
             CommandResult { message: None, success: true }
+        }
+        GameCommand::ToggleAutoRebuild { region_idx } => {
+            if let Some(p) = state.policies.get_mut(*region_idx) {
+                p.auto_rebuild_infra = !p.auto_rebuild_infra;
+                let status = if p.auto_rebuild_infra { "enabled" } else { "disabled" };
+                let name = state.regions.get(*region_idx)
+                    .map(|r| r.name.as_str()).unwrap_or("?");
+                CommandResult {
+                    message: Some(format!("Auto-rebuild {} for {}", status, name)),
+                    success: true,
+                }
+            } else {
+                CommandResult { message: None, success: false }
+            }
         }
         GameCommand::ToggleAutoDeploy { med_idx } => {
             while state.auto_deploy.len() <= *med_idx {

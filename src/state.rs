@@ -505,10 +505,11 @@ pub enum PolicyId {
     NuclearOption,
     FieldHospital,
     IntelStation,
+    RebuildInfra,
 }
 
 impl PolicyId {
-    /// All policies in index order (matching the historical 0–11 mapping).
+    /// All policies in index order.
     pub const ALL: [PolicyId; POLICY_COUNT] = [
         PolicyId::TravelBan,
         PolicyId::Quarantine,
@@ -522,6 +523,7 @@ impl PolicyId {
         PolicyId::NuclearOption,
         PolicyId::FieldHospital,
         PolicyId::IntelStation,
+        PolicyId::RebuildInfra,
     ];
 
     /// Display order — grouped by function for the policy panel UI.
@@ -536,6 +538,7 @@ impl PolicyId {
         PolicyId::Quarantine,
         PolicyId::IntelStation,
         PolicyId::FieldHospital,
+        PolicyId::RebuildInfra,
         PolicyId::NuclearOption,
         PolicyId::MartialLaw,
     ];
@@ -555,6 +558,7 @@ impl PolicyId {
             Self::NuclearOption => "Nuclear Option",
             Self::FieldHospital => "Field Hospital",
             Self::IntelStation => "Intel Station",
+            Self::RebuildInfra => "Rebuild Infrastructure",
         }
     }
 
@@ -574,6 +578,7 @@ impl PolicyId {
             Self::NuclearOption => Some(Authority::High),
             Self::FieldHospital => Some(Authority::Medium),
             Self::IntelStation => None,
+            Self::RebuildInfra => None,
         }
     }
 
@@ -913,16 +918,19 @@ pub struct RegionPolicy {
     /// Nuclear option state: Inactive → Dropping (in transit) → Dropped (annihilated).
     #[serde(default)]
     pub nuclear_state: NuclearState,
+    /// Auto-rebuild infrastructure: automatically repairs when any infra stat drops below 90%.
+    #[serde(default)]
+    pub auto_rebuild_infra: bool,
 }
 
 /// Total number of policy types available per region.
 ///
 /// **Policy index mapping** (used across state.rs, engine/policy.rs, ui/policy.rs):
-///   0 = Travel Ban        5 = Basic Screening     8 = Martial Law
-///   1 = Quarantine         6 = Antigen Screening   9 = Nuclear Annihilation
-///   2 = Discourage Hosp.   7 = Mass Rapid Screen  10 = Field Hospital
+///   0 = Travel Ban        5 = Basic Screening      8 = Martial Law
+///   1 = Quarantine         6 = Antigen Screening    9 = Nuclear Annihilation
+///   2 = Discourage Hosp.   7 = Mass Rapid Screen   10 = Field Hospital
 ///   3 = Border Controls   11 = Intel Station
-///   4 = Water Sanitation
+///   4 = Water Sanitation  12 = Rebuild Infrastructure
 ///
 /// Display position is determined by `PolicyId::DISPLAY_ORDER` (grouped by function).
 /// If you add a new policy, you must update:
@@ -930,7 +938,7 @@ pub struct RegionPolicy {
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
-pub const POLICY_COUNT: usize = 12;
+pub const POLICY_COUNT: usize = 13;
 
 /// Panel selection positions for the ManagePolicies subpanel.
 ///
@@ -1041,7 +1049,7 @@ impl RegionPolicy {
             PolicyId::BasicScreening => self.screening >= ScreeningLevel::Basic,
             PolicyId::AntigenScreening => self.screening >= ScreeningLevel::Antigen,
             PolicyId::MassRapidScreen => self.screening >= ScreeningLevel::MassRapid,
-            PolicyId::FieldHospital | PolicyId::IntelStation => false,
+            PolicyId::FieldHospital | PolicyId::IntelStation | PolicyId::RebuildInfra => false,
         }
     }
 
@@ -1053,6 +1061,7 @@ impl RegionPolicy {
         self.water_sanitation = false;
         self.screening = ScreeningLevel::None;
         self.martial_law = false;
+        self.auto_rebuild_infra = false;
         // nuclear_state is NOT cleared — it's permanent and post-collapse
     }
 
@@ -2008,8 +2017,12 @@ pub const INFRA_STRESSED: f64 = 0.50;
 /// Infrastructure breakpoint: critical. Severe effects.
 pub const INFRA_CRITICAL: f64 = 0.25;
 
-/// How much infrastructure a completed field operations project restores (0.30 = 30%).
-pub const FIELD_OPS_RESTORE: f64 = 0.30;
+/// Max infrastructure repair per activation of the Rebuild Infrastructure policy (0.10 = 10%).
+pub const REBUILD_INFRA_MAX_REPAIR: f64 = 0.10;
+/// Cost per 1.0 of infrastructure repaired (e.g., repairing 0.10 of one system = ¥100).
+pub const REBUILD_INFRA_COST_PER_POINT: f64 = 1000.0;
+/// Auto-rebuild threshold: auto-fires when any infrastructure stat drops below this.
+pub const REBUILD_INFRA_AUTO_THRESHOLD: f64 = 0.90;
 
 /// Healthcare: lethality multiplier when stressed (below 50%).
 pub const HEALTHCARE_STRESSED_LETHALITY: f64 = 2.0;
@@ -3542,8 +3555,7 @@ impl ResearchProject {
             ResearchKind::DevelopMedicine { .. }
             | ResearchKind::ManufactureDoses { .. }
             | ResearchKind::TrainPersonnel
-            | ResearchKind::BasicResearch { .. }
-            | ResearchKind::FieldOperations { .. } => false,
+            | ResearchKind::BasicResearch { .. } => false,
         }
     }
 }
@@ -3571,11 +3583,6 @@ pub enum ResearchKind {
     /// Disrupts pathogen transmission mechanisms at the genomic level.
     /// Requires the GeneDriveContainment basic tech to be unlocked.
     InterdictPathogen { disease_idx: usize },
-    /// Field operations — send a team to stabilize degraded infrastructure in a region.
-    /// Appears when any infrastructure system drops below INFRA_STRESSED (50%).
-    /// Creates a mid-game phase shift: field research slots compete between disease
-    /// work and keeping regions operational.
-    FieldOperations { region_idx: usize, system: InfraSystem },
 }
 
 impl ResearchKind {
@@ -3588,7 +3595,6 @@ impl ResearchKind {
             | Self::SuppressPathogen { .. }
             | Self::AttenuatePathogen { .. }
             | Self::InterdictPathogen { .. }
-            | Self::FieldOperations { .. }
         )
     }
 
@@ -3653,11 +3659,6 @@ impl ResearchKind {
                     .unwrap_or_else(|| "Unknown".to_string());
                 format!("Interdict {}", name)
             }
-            Self::FieldOperations { region_idx, system } => {
-                let region = state.regions.get(*region_idx)
-                    .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                format!("Field Ops {} {}", system.label(), region)
-            }
         }
     }
 }
@@ -3679,7 +3680,7 @@ pub enum BasicTech {
     /// Halves genomic sequencing duration and reveals mutation stat details.
     /// Prereq: completed at least one genomic sequencing project.
     RapidSequencing,
-    /// All field research (IdentifyThreat, ClinicalTrial, FieldOperations) completes 25% faster.
+    /// All field research (IdentifyThreat, ClinicalTrial) completes 25% faster.
     /// Prereq: RapidSequencing (sequencing data guides field teams to high-value targets).
     MetagenomicSurveillance,
     /// Unlocks vaccination deployment mode for all medicines. Vaccinates 15% of
@@ -3931,7 +3932,6 @@ impl ResearchKind {
                 BasicTech::ResilientGrids => (3, 240.0, 550.0),
                 BasicTech::EpidemiologicalForecasting => (2, 160.0, 300.0),
             },
-            ResearchKind::FieldOperations { .. } => (3, 240.0, 300.0),
             ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
             ResearchKind::AttenuatePathogen { .. } => (8, 600.0, 800.0),
             ResearchKind::InterdictPathogen { .. } => (10, 800.0, 1200.0),
@@ -3939,7 +3939,7 @@ impl ResearchKind {
     }
 
     /// Short display label for a research project (used in the research panel).
-    pub fn display_label(&self, diseases: &[Disease], medicines: &[Medicine], regions: &[Region]) -> String {
+    pub fn display_label(&self, diseases: &[Disease], medicines: &[Medicine]) -> String {
         match self {
             ResearchKind::IdentifyThreat { disease_idx } => {
                 let disease = diseases.get(*disease_idx);
@@ -4003,12 +4003,6 @@ impl ResearchKind {
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "Unknown".to_string());
                 format!("Interdict: {}", name)
-            }
-            ResearchKind::FieldOperations { region_idx, system } => {
-                let region_name = regions.get(*region_idx)
-                    .map(|r| r.name.as_str())
-                    .unwrap_or("Unknown");
-                format!("Stabilize {}: {}", system.label(), region_name)
             }
         }
     }
@@ -4328,6 +4322,8 @@ pub enum GameCommand {
     ToggleStandingOrder { kind: StandingOrderKind },
     /// Toggle auto-deploy for a specific medicine.
     ToggleAutoDeploy { med_idx: usize },
+    /// Toggle auto-rebuild infrastructure for a region.
+    ToggleAutoRebuild { region_idx: usize },
     /// Toggle auto-repeat for a specific repeatable research project.
     ToggleAutoRepeat { kind: ResearchKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
@@ -6474,25 +6470,6 @@ impl GameState {
                 }
             }
         }
-        // Field Operations: send teams to stabilize degraded infrastructure.
-        // Appears when any infrastructure system drops below INFRA_STRESSED.
-        // Only one field ops per region+system pair at a time.
-        for (r_idx, region) in self.regions.iter().enumerate() {
-            if region.collapsed || self.is_abandoned(r_idx) { continue; }
-            for system in [InfraSystem::Healthcare, InfraSystem::SupplyLines, InfraSystem::CivilOrder] {
-                let level = match system {
-                    InfraSystem::Healthcare => region.healthcare_capacity,
-                    InfraSystem::SupplyLines => region.supply_lines,
-                    InfraSystem::CivilOrder => region.civil_order,
-                };
-                if level < INFRA_STRESSED {
-                    let kind = ResearchKind::FieldOperations { region_idx: r_idx, system };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
-                }
-            }
-        }
         // Clinical Trial: unlocked medicines not yet tested, OR tested but strain-outdated
         for (i, med) in self.medicines.iter().enumerate() {
             if !med.unlocked {
@@ -6584,7 +6561,7 @@ impl GameState {
 
     /// Project costs adjusted for unlocked technologies.
     /// - RapidSequencing halves GenomicSequencing duration.
-    /// - MetagenomicSurveillance cuts IdentifyThreat, ClinicalTrial, and FieldOperations by 25%.
+    /// - MetagenomicSurveillance cuts IdentifyThreat and ClinicalTrial by 25%.
     ///   (Does not affect GenomicSequencing — already covered by RapidSequencing.)
     ///   Corp health modifier (25% → 35%) tracked in #1381.
     /// - AutomatedSynthesis cuts ManufactureDoses duration by 35%.
@@ -6599,7 +6576,6 @@ impl GameState {
             kind,
             ResearchKind::IdentifyThreat { .. }
                 | ResearchKind::ClinicalTrial { .. }
-                | ResearchKind::FieldOperations { .. }
         ) && self.unlocked_techs.contains(&BasicTech::MetagenomicSurveillance)
         {
             duration *= 0.75;
@@ -7331,20 +7307,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn metagenomic_surveillance_reduces_field_operations_duration() {
-        let mut state = GameState::new_default(42);
-        let kind = ResearchKind::FieldOperations { region_idx: 0, system: InfraSystem::Healthcare };
-        let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
-        let (_, fast_duration, _) = state.effective_costs(&kind);
-        assert!(
-            (fast_duration - base_duration * 0.75).abs() < 0.01,
-            "FieldOperations should be 25% faster: expected {}, got {}",
-            base_duration * 0.75,
-            fast_duration
-        );
-    }
 
     #[test]
     fn metagenomic_surveillance_does_not_affect_genomic_sequencing() {

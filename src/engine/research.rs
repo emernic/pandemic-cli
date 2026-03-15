@@ -1,5 +1,5 @@
 use crate::state::{
-    AUTO_MANUFACTURE_THRESHOLD, FIELD_OPS_RESTORE, GameEvent, GameOutcome, GameState, InfraSystem,
+    AUTO_MANUFACTURE_THRESHOLD, GameEvent, GameOutcome, GameState,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -185,24 +185,6 @@ pub(super) fn tick_research(state: &mut GameState, rng: &mut impl rand::Rng) -> 
                     disease.cross_region_spread = 0.0;
                     state.pathogens_interdicted += 1;
                     state.events.push(GameEvent::PathogenInterdicted { disease_idx: d_idx });
-                }
-            }
-            ResearchKind::FieldOperations { region_idx, system } => {
-                let r_idx = *region_idx;
-                let sys = *system;
-                if let Some(region) = state.regions.get_mut(r_idx) {
-                    if !region.collapsed {
-                        let target = match sys {
-                            InfraSystem::Healthcare => &mut region.healthcare_capacity,
-                            InfraSystem::SupplyLines => &mut region.supply_lines,
-                            InfraSystem::CivilOrder => &mut region.civil_order,
-                        };
-                        *target = (*target + FIELD_OPS_RESTORE).min(1.0);
-                        state.events.push(GameEvent::InfrastructureStabilized {
-                            region_idx: r_idx,
-                            system: sys,
-                        });
-                    }
                 }
             }
             ResearchKind::DevelopMedicine { medicine_idx } => {

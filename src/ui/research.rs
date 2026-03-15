@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{FIELD_OPS_RESTORE, GameState, InfraSystem, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{GameState, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, ResearchUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the research panel in its current sub-state.
@@ -81,7 +81,7 @@ fn render_flat(state: &GameState) -> (String, Vec<Line<'static>>, Option<usize>)
                 let marker = if selected { "▶ " } else { "  " };
                 let auto_tag = if state.auto_repeat_research.contains(kind) { " AUTO" } else { "" };
                 lines.push(Line::from(Span::styled(
-                    format!("{}{}{} [FULL]", marker, kind.display_label(&state.diseases, &state.medicines, &state.regions), auto_tag),
+                    format!("{}{}{} [FULL]", marker, kind.display_label(&state.diseases, &state.medicines), auto_tag),
                     Style::default().fg(Color::DarkGray),
                 )));
                 lines.push(Line::from(""));
@@ -156,7 +156,7 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
     let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
     let auto_tag = if state.auto_repeat_research.contains(&project.kind) { " AUTO" } else { "" };
     lines.push(Line::from(Span::styled(
-        format!("{}[ACTIVE]{} {}", marker, auto_tag, project.kind.display_label(&state.diseases, &state.medicines, &state.regions)),
+        format!("{}[ACTIVE]{} {}", marker, auto_tag, project.kind.display_label(&state.diseases, &state.medicines)),
         style,
     )));
     if let Some(detail) = format_detail(&project.kind, state) {
@@ -191,7 +191,7 @@ fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind,
     };
     let auto_tag = if state.auto_repeat_research.contains(kind) { " AUTO" } else { "" };
     lines.push(Line::from(Span::styled(
-        format!("{}{}{}", marker, kind.display_label(&state.diseases, &state.medicines, &state.regions), auto_tag),
+        format!("{}{}{}", marker, kind.display_label(&state.diseases, &state.medicines), auto_tag),
         style,
     )));
     if let Some(detail) = format_detail(kind, state) {
@@ -230,7 +230,7 @@ fn render_confirm(state: &GameState, project_idx: usize, double_personnel: bool)
         lines.push(Line::from(""));
 
         lines.push(Line::from(Span::styled(
-            format!("  Start: {}", kind.display_label(&state.diseases, &state.medicines, &state.regions)),
+            format!("  Start: {}", kind.display_label(&state.diseases, &state.medicines)),
             Style::default().fg(Color::Cyan),
         )));
         if let Some(detail) = format_detail(kind, state) {
@@ -491,16 +491,6 @@ fn format_detail(kind: &ResearchKind, state: &GameState) -> Option<String> {
             } else {
                 Some("First trial — tests efficacy and enables deployment".to_string())
             }
-        }
-        ResearchKind::FieldOperations { region_idx, system } => {
-            let region = state.regions.get(*region_idx)?;
-            let current = match system {
-                InfraSystem::Healthcare => region.healthcare_capacity,
-                InfraSystem::SupplyLines => region.supply_lines,
-                InfraSystem::CivilOrder => region.civil_order,
-            };
-            let after = (current + FIELD_OPS_RESTORE).min(1.0);
-            Some(format!("{}: {:.0}% → {:.0}%", system.label(), current * 100.0, after * 100.0))
         }
     }
 }
