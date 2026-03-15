@@ -201,12 +201,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
 
     // --- Original crisis types ---
 
-    // Quarantine-related crises need the list of quarantined regions
-    let quarantined: Vec<usize> = state.policies.iter().enumerate()
-        .filter(|(_, p)| p.quarantine)
-        .map(|(i, _)| i)
-        .collect();
-
     // Personnel crisis: requires at least 5 personnel
     if state.resources.personnel >= 5 {
         let amount = 3.max(state.resources.personnel / 5);
@@ -229,11 +223,6 @@ pub(super) fn generate_crisis(state: &GameState, rng: &mut impl Rng) -> Option<C
         candidates.push(CrisisKind::BlackMarketMedicine { region_idx: idx });
     }
 
-    // Quarantine riot: requires quarantine active somewhere
-    if !quarantined.is_empty() && day > 10.0 {
-        let idx = quarantined[rng.r#gen::<usize>() % quarantined.len()];
-        candidates.push(CrisisKind::QuarantineRiot { region_idx: idx });
-    }
 
     // Media panic: always available after day 6
     if day > 6.0 {
@@ -578,39 +567,6 @@ pub(super) fn build_crisis_event(state: &GameState, kind: CrisisKind) -> CrisisE
                         description: "Seize the drugs. Governor cooperation improves.".into(),
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     }
-                },
-                ],
-                kind,
-                tick_created: tick,
-            }
-        }
-        CrisisKind::QuarantineRiot { region_idx } => {
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.as_str()).unwrap_or("Unknown");
-            CrisisEvent {
-                title: "Quarantine Riots".into(),
-                description: format!(
-                    "Containment perimeter in {} has been breached.",
-                    region_name,
-                ),
-                options: vec![ CrisisOption {
-                    label: "Negotiate".into(),
-                    description: format!("Lift quarantine in {}, avoid violence", region_name),
-                    cost: None,
-                },
-                 CrisisOption {
-                    label: "Hire private security (−15% chairman approval, 2 personnel for 2d)".into(),
-                    description: "Maintain quarantine by force. Security team returns in 2 days.".into(),
-                    cost: Some(CrisisCost {
-                        funding: 0.0,
-                        personnel: 2,
-                        operation: Some(OperationSpec { days: 2.0, label: "Security Detail".into() }),
-                    }),
-                },
-                CrisisOption {
-                    label: "Wait it out".into(),
-                    description: "Containment breached temporarily. Riot subsides on its own.".into(),
-                    cost: None,
                 },
                 ],
                 kind,
@@ -2371,36 +2327,6 @@ pub(super) fn resolve_crisis(state: &mut GameState, choice: usize, events: &mut 
                 region.governor.cooperation = (region.governor.cooperation + 5.0).min(100.0);
             }
             format!("Black market drugs confiscated in {}. Governor cooperation improved.", region_name)
-        }
-
-        (CrisisKind::QuarantineRiot { region_idx }, 0) => {
-            // Negotiate — lift quarantine
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            if let Some(policy) = state.policies.get_mut(*region_idx) {
-                policy.quarantine = false;
-            }
-            format!("Quarantine lifted in {} after unrest", region_name)
-        }
-        (CrisisKind::QuarantineRiot { .. }, 1) => {
-            // Hire private security — chairman satisfaction hit (personnel already deducted)
-            chairman_satisfaction_hit(state, -0.15);
-            "Private security deployed. Quarantine maintained by force.".into()
-        }
-        (CrisisKind::QuarantineRiot { region_idx }, _) => {
-            // Wait it out — quarantine temporarily breached, small POL loss
-            let region_name = state.regions.get(*region_idx)
-                .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-            chairman_satisfaction_hit(state, -0.03);
-            // Temporary quarantine breach — some infection increase
-            if let Some(region) = state.regions.get_mut(*region_idx) {
-                for inf in &mut region.infections {
-                    if inf.infected > 100.0 {
-                        inf.infected *= 1.05;
-                    }
-                }
-            }
-            format!("Riot in {} subsided. Quarantine temporarily breached.", region_name)
         }
 
         (CrisisKind::MediaPanic, 0) => {
