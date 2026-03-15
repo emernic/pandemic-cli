@@ -287,8 +287,50 @@ pub(super) fn update_board_satisfaction(state: &mut WorldState) {
                             value: (reserve_ratio / 10.0 * 0.50 - 0.25).clamp(-0.25, 0.25),
                         });
                     }
+                    Some(GovernorPersonality::Buffoon) => {
+                        // Buffoon: impressed by visible busyness. Wants to see
+                        // personnel deployed, not sitting idle. Creates tension:
+                        // player wants reserve capacity, Buffoon wants everyone working.
+                        // 60% GDP + 40% personnel deployment rate.
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: 0.6 * gdp - 0.30,
+                        });
+                        let total = state.resources.personnel as f64;
+                        let busy = state.personnel_busy() as f64;
+                        let deploy_rate = if total > 0.0 { (busy / total).clamp(0.0, 1.0) } else { 0.5 };
+                        // 0% deployed = -0.20, 100% deployed = +0.20
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::PersonnelDeployment,
+                            value: 0.4 * deploy_rate - 0.20,
+                        });
+                    }
+                    Some(GovernorPersonality::Recluse) => {
+                        // Recluse: cares only about their own region's survival.
+                        // Doesn't care about the broader mission — just wants their
+                        // people alive. Creates tension: player may prioritize other
+                        // regions, but the Recluse board member only watches their own.
+                        // 60% GDP + 40% own region survival rate.
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalGdp,
+                            value: 0.6 * gdp - 0.30,
+                        });
+                        let region_survival = region
+                            .map(|r| {
+                                let dead: f64 = r.infections.iter().map(|inf| inf.dead).sum::<f64>()
+                                    + r.collapse_deaths;
+                                let initial = r.population as f64;
+                                if initial > 0.0 { ((initial - dead) / initial).clamp(0.0, 1.0) } else { 0.0 }
+                            })
+                            .unwrap_or(0.0);
+                        // 0% alive = -0.20, 100% alive = +0.20
+                        continuous.push(SatisfactionModifier {
+                            source: ModifierSource::RegionalSurvival,
+                            value: 0.4 * region_survival - 0.20,
+                        });
+                    }
                     _ => {
-                        // Buffoon, Recluse, or unknown: pure GDP driver
+                        // Unknown personality: pure GDP driver (fallback)
                         continuous.push(SatisfactionModifier {
                             source: ModifierSource::RegionalGdp,
                             value: gdp - 0.50,
