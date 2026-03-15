@@ -293,7 +293,6 @@ pub fn tick_and_process(state: &AppState) -> AppState {
     // jump when the underlying list grows, shrinks, or is re-sorted.
 
     // Research panel: capture the ResearchFlatItem identity.
-    // Must also check open_panel — sub-state isn't cleared when switching panels.
     let selected_research_item = if state.ui.open_panel == Panel::Research
         && matches!(state.ui.research_ui, Some(ResearchUiState::BrowseAll))
     {
@@ -312,7 +311,6 @@ pub fn tick_and_process(state: &AppState) -> AppState {
     };
 
     // Medicines panel (BrowseMedicines): capture the medicine_idx.
-    // Must also check open_panel — sub-state isn't cleared when switching panels.
     let selected_medicine_idx = if state.ui.open_panel == Panel::Medicines
         && matches!(state.ui.medicine_ui, Some(MedicineUiState::BrowseMedicines))
     {
