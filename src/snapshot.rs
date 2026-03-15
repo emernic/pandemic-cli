@@ -380,7 +380,7 @@ mod tests {
     fn policy_panel_shows_negotiate() {
         let state = GameState::new_default(42);
         // Open policy panel (goes directly to region management), navigate down to Negotiate.
-        // Negotiate is at position MANAGE_NEGOTIATE_POS = POLICY_COUNT + 1 = 13.
+        // Negotiate is at position MANAGE_NEGOTIATE_POS = POLICY_COUNT = 12.
         let steps: Vec<String> = std::iter::once("p")
             .chain(std::iter::repeat("down").take(crate::state::MANAGE_NEGOTIATE_POS))
             .map(|s| s.to_string())

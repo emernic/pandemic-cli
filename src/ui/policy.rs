@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    GameState, PolicyUiState, RegionPriority, RegionSpecialization, RegionTrait,
+    GameState, PolicyUiState, RegionSpecialization, RegionTrait,
     ScreeningLevel, TRADE_DEPENDENT_TRAVEL_BAN_MULT, TransmissionVector, TICKS_PER_DAY,
     REGULATORY_APPARATUS_COST_MULT, KNOWLEDGE_PARTIAL_STATS,
     INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
@@ -27,7 +27,7 @@ use crate::state::{
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_SPREAD_WITHIN_MULT, COUNTERMEASURE_SPREAD_MULT,
-    MANAGE_PRIORITY_POS, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
+    MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     policy_display_order, NEGOTIATE_COST, NEGOTIATE_COOPERATION_GAIN,
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
@@ -394,42 +394,7 @@ fn render_manage(state: &GameState, region_idx: usize) -> (String, Vec<Line<'sta
         lines.push(Line::from(""));
     }
 
-    // Deployment Priority toggle (MANAGE_PRIORITY_POS)
-    if !region.collapsed {
-        let selected = state.ui.panel_selection == MANAGE_PRIORITY_POS;
-        if selected { selected_line = Some(lines.len()); }
-        let marker = if selected { "▶ " } else { "  " };
-        let name_style = if selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        let priority = region.deploy_priority;
-        let priority_color = match priority {
-            RegionPriority::High => Color::Green,
-            RegionPriority::Normal => Color::White,
-            RegionPriority::Low => Color::DarkGray,
-            RegionPriority::CutOff => Color::Red,
-        };
-        lines.push(Line::from(vec![
-            Span::styled(marker.to_string(), name_style),
-            Span::styled("Deploy Priority: ", name_style),
-            Span::styled(
-                format!("[{}]", priority.label()),
-                Style::default().fg(priority_color).add_modifier(Modifier::BOLD),
-            ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::raw("      "),
-            Span::styled(
-                priority.hint(),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]));
-        lines.push(Line::from(""));
-    }
-
-    // Negotiate with Governor action (after repair actions)
+    // Negotiate with Governor action
     if !region.collapsed {
         let negotiate_pos = MANAGE_NEGOTIATE_POS;
         let selected = state.ui.panel_selection == negotiate_pos;

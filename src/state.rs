@@ -935,14 +935,12 @@ pub const POLICY_COUNT: usize = 12;
 /// Panel selection positions for the ManagePolicies subpanel.
 ///
 /// Layout: [0..POLICY_COUNT) = policy toggles in display order,
-///         MANAGE_PRIORITY_POS = Deployment Priority cycle,
 ///         MANAGE_NEGOTIATE_POS = Negotiate with Governor,
 ///         MANAGE_BARGAIN_POS = Bargain (only when governor is hostile).
 ///
 /// Both `ui/policy.rs` (render_manage) and `state.rs` (handle_policy_confirm) use
 /// these constants so the two sites stay in sync automatically.
-pub const MANAGE_PRIORITY_POS: usize = POLICY_COUNT;
-pub const MANAGE_NEGOTIATE_POS: usize = MANAGE_PRIORITY_POS + 1;
+pub const MANAGE_NEGOTIATE_POS: usize = POLICY_COUNT;
 pub const MANAGE_BARGAIN_POS: usize = MANAGE_NEGOTIATE_POS + 1; // only shown when hostile
 
 
@@ -1761,62 +1759,6 @@ pub struct Resources {
 }
 
 
-/// Deployment priority for a region. Controls auto-deploy targeting order
-/// and is visible in the policy panel for strategic allocation decisions.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RegionPriority {
-    /// Auto-deploy serves this region before Normal/Low regions.
-    High,
-    /// Default priority.
-    #[default]
-    Normal,
-    /// Auto-deploy serves this region after High/Normal regions.
-    Low,
-    /// Auto-deploy skips this region entirely. Manual deploy still works.
-    CutOff,
-}
-
-impl RegionPriority {
-    /// Numeric rank for sorting (lower = higher priority).
-    pub fn rank(self) -> u8 {
-        match self {
-            Self::High => 0,
-            Self::Normal => 1,
-            Self::Low => 2,
-            Self::CutOff => 3,
-        }
-    }
-
-    /// Short label for UI display.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::High => "HIGH",
-            Self::Normal => "NORMAL",
-            Self::Low => "LOW",
-            Self::CutOff => "CUT OFF",
-        }
-    }
-
-    /// Description of what this priority level does, for the policy panel.
-    pub fn hint(self) -> &'static str {
-        match self {
-            Self::High => "Auto-deploy serves this region first",
-            Self::Normal => "Default auto-deploy order",
-            Self::Low => "Auto-deploy serves this region last",
-            Self::CutOff => "Auto-deploy skips; manual deploy only",
-        }
-    }
-
-    /// Cycle to next priority level.
-    pub fn next(self) -> Self {
-        match self {
-            Self::High => Self::Normal,
-            Self::Normal => Self::Low,
-            Self::Low => Self::CutOff,
-            Self::CutOff => Self::High,
-        }
-    }
-}
 
 /// Regional traits that make each region play differently.
 /// Each region has 1-2 traits that modify policy costs, spread rates, or collapse thresholds.
@@ -2205,10 +2147,6 @@ pub struct Region {
     /// At 0: spread rate +50% (anarchy). Also factors into GDP via infrastructure health.
     #[serde(default = "default_one")]
     pub civil_order: f64,
-    /// Deployment priority for auto-deploy targeting. High regions are served
-    /// first, CutOff regions are skipped entirely.
-    #[serde(default)]
-    pub deploy_priority: RegionPriority,
     /// Tick until which this region suffers network disruption from a neighboring collapse.
     /// Multiple collapses extend the duration (last-collapse-wins on end tick).
     #[serde(default)]
@@ -4394,8 +4332,6 @@ pub enum GameCommand {
     ToggleAutoRepeat { kind: ResearchKind },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
-    /// Cycle a region's deployment priority (High → Normal → Low → CutOff → High).
-    CycleDeployPriority { region_idx: usize },
     /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
     RepayLoan { loan_idx: usize },
     /// Buy shares in a corporation. Cost = share_price × quantity.
@@ -5352,7 +5288,6 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
@@ -5396,7 +5331,6 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
@@ -5440,7 +5374,6 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
@@ -5484,7 +5417,6 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
@@ -5528,7 +5460,6 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
@@ -5572,7 +5503,6 @@ impl GameState {
                 healthcare_capacity: 1.0,
                 supply_lines: 1.0,
                 civil_order: 1.0,
-                deploy_priority: RegionPriority::Normal,
                 disrupted_until: None,
                 collapse_supply_penalty: 1.0,
                 estimated_infected: 0.0,
