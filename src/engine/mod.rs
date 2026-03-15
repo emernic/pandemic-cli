@@ -4035,39 +4035,6 @@ mod tests {
     }
 
     #[test]
-    fn quarantine_riot_option_a_lifts_quarantine() {
-        let mut state = GameState::new_default(42);
-        state.policies[0].quarantine = true;
-        setup_crisis(&mut state, CrisisKind::QuarantineRiot { region_idx: 0 }, 0);
-        let after = apply_action(&state, &Action::Confirm);
-        assert!(!after.policies[0].quarantine,
-            "option A should lift quarantine");
-    }
-
-    #[test]
-    fn quarantine_riot_option_b_costs_personnel() {
-        use crate::state::CrisisCost;
-        let mut state = GameState::new_default(42);
-        state.policies[0].quarantine = true;
-        state.resources.authority = Authority::Maximum;
-        let before_personnel = state.resources.personnel;
-        state.sim_state = crate::state::SimState::Event { was_running: true };
-        state.ui.crisis_selection = 1;
-        state.active_crisis = Some(crate::state::CrisisEvent {
-            kind: CrisisKind::QuarantineRiot { region_idx: 0 },
-            title: "T".into(), description: "T".into(),
-            options: vec![ crate::state::CrisisOption { label: "A".into(), description: "".into(), cost: None },
-             crate::state::CrisisOption { label: "B".into(), description: "".into(),
-                cost: Some(CrisisCost { funding: 0.0, personnel: 2, ..Default::default() }) },
-            ],
-            tick_created: 0,
-        });
-        let after = apply_action(&state, &Action::Confirm);
-        assert_eq!(after.resources.personnel, before_personnel - 2,
-            "option B should cost 2 personnel");
-    }
-
-    #[test]
     fn media_panic_option_a_resolves() {
         let mut state = GameState::new_default(42);
         state.resources.authority = Authority::Maximum;
