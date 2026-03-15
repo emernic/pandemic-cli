@@ -416,19 +416,23 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
     format!("Insufficient funds! Need ¥{cost:.0}, have ¥{have:.0}")
 }
 
-/// Auto-deploy medicines to the worst-affected regions. Called once per tick.
-/// For each medicine with auto_deploy enabled:
+/// Deploy medicines to the worst-affected regions. Called once per tick.
+/// For each medicine with deployment enabled:
 /// - Must be unlocked, tested, and have doses
 /// - Always deploys as therapeutic (targets most infected region)
+/// - Respects per-medicine region filter (empty = all regions)
 /// - Cooldown must be clear for the chosen region
 pub(super) fn try_auto_deploy(state: &mut GameState) {
-    // Grow auto_deploy vec if new medicines were created
-    while state.auto_deploy.len() < state.medicines.len() {
-        state.auto_deploy.push(false);
+    // Grow deploy vecs if new medicines were created
+    while state.deploy_enabled.len() < state.medicines.len() {
+        state.deploy_enabled.push(false);
+    }
+    while state.deploy_regions.len() < state.medicines.len() {
+        state.deploy_regions.push(std::collections::BTreeSet::new());
     }
 
     for med_idx in 0..state.medicines.len() {
-        if !state.auto_deploy.get(med_idx).copied().unwrap_or(false) {
+        if !state.deploy_enabled.get(med_idx).copied().unwrap_or(false) {
             continue;
         }
         let med = &state.medicines[med_idx];
@@ -436,7 +440,7 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             continue;
         }
 
-        // Only auto-deploy against tested diseases (avoid adverse reactions)
+        // Only deploy against tested diseases (avoid adverse reactions)
         let deployable = med.deployable_diseases(&state.diseases);
         let tested: Vec<usize> = deployable.iter()
             .copied()
@@ -446,14 +450,20 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
             continue;
         }
 
+        let region_filter = &state.deploy_regions[med_idx];
+
         // Find the best region to deploy to — targets the region with the
-        // most infected population.
+        // most infected population, filtered by the player's region selection.
         let mut best_region: Option<usize> = None;
         let mut best_score: f64 = 0.0;
         let mut best_disease_idx: usize = 0;
 
         for (r_idx, region) in state.regions.iter().enumerate() {
             if region.collapsed {
+                continue;
+            }
+            // Empty filter = all regions; non-empty = only listed regions
+            if !region_filter.is_empty() && !region_filter.contains(&r_idx) {
                 continue;
             }
             for &d_idx in &tested {
@@ -493,13 +503,13 @@ pub(super) fn try_auto_deploy(state: &mut GameState) {
         } else {
             // No valid target found — check if ALL tested diseases are below efficacy
             // threshold and notify the player once.
-            if !state.auto_deploy_blocked_notified.contains(&med_idx) {
+            if !state.deploy_blocked_notified.contains(&med_idx) {
                 let all_blocked = tested.iter().all(|&d_idx| {
                     state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::AUTO_DEPLOY_MIN_EFFICACY
                 });
                 if all_blocked {
-                    state.auto_deploy_blocked_notified.insert(med_idx);
-                    state.events.push(crate::state::GameEvent::AutoDeployBlocked { medicine_idx: med_idx });
+                    state.deploy_blocked_notified.insert(med_idx);
+                    state.events.push(crate::state::GameEvent::DeployBlocked { medicine_idx: med_idx });
                 }
             }
         }

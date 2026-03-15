@@ -426,10 +426,10 @@ pub(crate) fn process_events(state: &mut GameState) {
                 let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines));
                 (8, msg.clone(), msg)
             }
-            GameEvent::AutoDeployBlocked { medicine_idx } => {
+            GameEvent::DeployBlocked { medicine_idx } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
-                let msg = format!("{} auto-deploy halted — resistance too high", med_name);
+                let msg = format!("{} deployment halted — resistance too high", med_name);
                 (3, msg.clone(), msg)
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
