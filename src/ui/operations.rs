@@ -81,6 +81,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     let mut lines: Vec<Line> = Vec::new();
     let selected = state.ui.panel_selection;
     let mut row = 0;
+    let mut selected_line: Option<usize> = None;
 
     // Crisis operations (temporary personnel commitments)
     if !state.crisis_operations.is_empty() {
@@ -111,6 +112,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     // COUPLING CHECK: loop count must equal DECREE_COUNT
     for &decree in &DecreeId::ALL {
         let is_selected = row == selected;
+        if is_selected { selected_line = Some(lines.len()); }
         let marker = if is_selected { "▶ " } else { "  " };
         let name = decree.display_name();
         let enacted = state.enacted_decrees.is_enacted(decree);
@@ -181,6 +183,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
 
     for (name, desc, enabled) in &standing_orders {
         let is_selected = row == selected;
+        if is_selected { selected_line = Some(lines.len()); }
         let marker = if is_selected { "▶ " } else { "  " };
         let name_color = if is_selected { Color::Yellow } else { Color::White };
         let status = if *enabled { "[ON] " } else { "[OFF]" };
@@ -206,9 +209,10 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
     )));
 
-    // COUPLING CHECK: must equal FIELD_OPS_COUNT (= 1)
+    // COUPLING CHECK: must equal FIELD_OPS_COUNT (= 2)
     {
         let is_selected = row == selected;
+        if is_selected { selected_line = Some(lines.len()); }
         let marker = if is_selected { "▶ " } else { "  " };
         let has_medicine = !emergency_delivery_medicines(state).is_empty();
         let name_color = if !has_medicine {
@@ -247,6 +251,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
     // Fire Personnel
     {
         let is_selected = row == selected;
+        if is_selected { selected_line = Some(lines.len()); }
         let marker = if is_selected { "▶ " } else { "  " };
         let available = state.personnel_available();
         let name_color = if available == 0 {
@@ -291,6 +296,7 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
 
         for loan in &state.loans {
             let is_selected = row == selected;
+            if is_selected { selected_line = Some(lines.len()); }
             let marker = if is_selected { "▶ " } else { "  " };
             let highlight = if is_selected { Color::Yellow } else { Color::White };
             let interest_per_day = loan.interest_per_tick() * TICKS_PER_DAY;
@@ -318,7 +324,10 @@ fn render_browse(f: &mut Frame, area: Rect, state: &GameState) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
-    let widget = Paragraph::new(lines).block(block);
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
+
+    let widget = Paragraph::new(lines).block(block).scroll((scroll_offset, 0));
     f.render_widget(widget, area);
 }
 
