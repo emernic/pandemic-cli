@@ -6443,6 +6443,30 @@ impl GameState {
         projects
     }
 
+    /// Returns disease indices sorted in the same order the threats panel uses:
+    /// detected diseases first (sorted by total deaths descending), undetected last.
+    ///
+    /// `panel_selection` in the threats panel indexes into this list.
+    pub fn threats_display_order(&self) -> Vec<usize> {
+        let disease_deaths: Vec<f64> = (0..self.diseases.len())
+            .map(|i| self.regions.iter()
+                .filter_map(|r| r.disease_state(i))
+                .map(|inf| inf.dead)
+                .sum())
+            .collect();
+        let mut order: Vec<usize> = (0..self.diseases.len()).collect();
+        order.sort_by(|&a, &b| {
+            let a_detected = self.diseases[a].detected;
+            let b_detected = self.diseases[b].detected;
+            match (a_detected, b_detected) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => disease_deaths[b].partial_cmp(&disease_deaths[a]).unwrap_or(std::cmp::Ordering::Equal),
+            }
+        });
+        order
+    }
+
     /// Returns the indices of unlocked medicines in `self.medicines`, in iteration order.
     ///
     /// Used by both the medicines UI renderer and the confirm handler so both

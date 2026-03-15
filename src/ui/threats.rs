@@ -24,7 +24,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             Style::default().fg(Color::Green),
         )));
     } else {
-        // Pre-calculate per-disease total deaths for ranking
         let disease_deaths: Vec<f64> = (0..state.diseases.len())
             .map(|i| state.regions.iter()
                 .filter_map(|r| r.disease_state(i))
@@ -33,17 +32,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &GameState) {
             .collect();
         let grand_total_deaths: f64 = disease_deaths.iter().sum();
 
-        // Sort display order: detected diseases by deaths desc, undetected last
-        let mut display_order: Vec<usize> = (0..state.diseases.len()).collect();
-        display_order.sort_by(|&a, &b| {
-            let a_detected = state.diseases[a].detected;
-            let b_detected = state.diseases[b].detected;
-            match (a_detected, b_detected) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => disease_deaths[b].partial_cmp(&disease_deaths[a]).unwrap_or(std::cmp::Ordering::Equal),
-            }
-        });
+        let display_order = state.threats_display_order();
 
         for (display_pos, &i) in display_order.iter().enumerate() {
             let disease = &state.diseases[i];
