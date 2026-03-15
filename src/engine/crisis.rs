@@ -142,10 +142,9 @@ fn refugee_pol_cost(wave: u8) -> f64 {
 /// Phase weight for crisis selection. Determines how likely a crisis type is
 /// to be selected at a given game day. Returns a weight (higher = more likely).
 ///
-/// Three phases with overlapping transitions:
-/// - Early (day 0-30): bureaucratic, political, organizational problems (fade 30-50)
-/// - Mid (day 10-70): infrastructure, resource, and escalating pressure (peak 24-50)
-/// - Late (day 24+): survival, power struggles, dark comedy (ramp 24-40)
+/// Two main phases:
+/// - Early (day 0-50): bureaucratic/organizational (personnel, trial shortcuts) — fades out
+/// - Late (day 24+): survival and power struggles (corporate seizure, cult, vaccine dispute)
 fn phase_weight(tag: &str, day: f64) -> f64 {
     // Smooth ramp: 0 at `start`, 1 at `peak`, stays 1 after peak
     let ramp_up = |start: f64, peak: f64| -> f64 {
@@ -162,28 +161,19 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
 
     match tag {
         // --- Early-game: bureaucratic/organizational (fade after day 30-50) ---
-        "political" | "personnel" | "dataleak" |
-        "media" | "whistleblower" | "hesitancy" | "aid" | "trial"
+        "personnel" | "trial"
             => fade_out(30.0, 50.0),
 
-        // --- Mid-game: escalating pressure (ramp up day 10-24, fade after 50-70) ---
-        "blackmarket" | "riot" | "mutation" |
-        "diversion" | "exhaustion"
-            => ramp_up(10.0, 24.0) * fade_out(50.0, 70.0),
-
         // --- Late-game: survival and power struggles (ramp up day 24-40) ---
-        "corporate_seizure" | "cult" | "who_evac" | "vaccine_dispute"
+        "corporate_seizure" | "cult" | "vaccine_dispute"
             => ramp_up(24.0, 40.0),
 
         // Corporate detention: requires a collapsed region, so can't appear before ~day 10,
         // peak late as collapses accumulate. Follow-up has no phase bias (fires on demand).
         "field_team_detained" => ramp_up(15.0, 30.0),
 
-        // --- Dark comedy: ramp in mid-to-late game ---
         // Performance review is funniest when things are falling apart
         "performance_review" => ramp_up(20.0, 36.0),
-        // Billionaire can show up mid-to-late
-        "billionaire" => ramp_up(16.0, 30.0),
 
         // Corporate demands: mid-game when policies are in full effect
         "corp_demand" => ramp_up(8.0, 20.0),
@@ -2760,16 +2750,16 @@ mod tests {
     #[test]
     fn phase_weights_shift_with_game_day() {
         // Early-game bureaucratic crises should dominate early, fade late
-        assert!(phase_weight("political", 3.0) > phase_weight("political", 60.0),
-            "political pressure should be more likely early than late");
+        assert!(phase_weight("personnel", 3.0) > phase_weight("personnel", 60.0),
+            "personnel crises should be more likely early than late");
         // Late-game survival crises should be absent early, present late
         assert!(phase_weight("corporate_seizure", 5.0) < phase_weight("corporate_seizure", 50.0),
             "corporate seizure should be more likely late than early");
-assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
+        assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
             "cult blockade should be more likely late than early");
 
         // No crisis type should ever have zero weight (anachronistic = rare but possible)
-        assert!(phase_weight("political", 60.0) > 0.0,
+        assert!(phase_weight("personnel", 60.0) > 0.0,
             "even late-game, bureaucratic crises should have non-zero weight");
     }
 
@@ -2794,7 +2784,7 @@ assert!(phase_weight("cult", 3.0) < phase_weight("cult", 50.0),
         // At day 5, late-game crises (corporate_seizure, cult, etc.) should
         // be absent or extremely rare since they have near-zero weight
         let late_count = tags.iter()
-            .filter(|&&t| matches!(t, "corporate_seizure" | "cult" | "vaccine_dispute" | "who_evac"))
+            .filter(|&&t| matches!(t, "corporate_seizure" | "cult" | "vaccine_dispute"))
             .count();
         assert!(late_count <= 2,
             "at day 5, late-game crises should be rare, got {}/{}",
