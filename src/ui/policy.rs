@@ -205,7 +205,7 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
                  "No repairs needed".to_string()
              }
          },
-         "Repairs up to 10% of each degraded infra stat. X: toggle auto (fires at <90%)",
+         "Repairs up to 10% of each degraded infra stat",
          None, 0.0),
     ];
 
@@ -407,6 +407,18 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
                 Style::default().fg(Color::Yellow),
             ),
         ]));
+        // Dedicated auto-rebuild hint line (matches auto-negotiate hint style)
+        if *policy_id == PolicyId::RebuildInfra {
+            let auto_hint = if policy.auto_rebuild_infra {
+                "[X] Auto: ON (rebuilds when infra < 90%)"
+            } else {
+                "[X] Auto: OFF"
+            };
+            lines.push(Line::from(vec![
+                Span::raw("      "),
+                Span::styled(auto_hint, Style::default().fg(if policy.auto_rebuild_infra { Color::Green } else { Color::DarkGray })),
+            ]));
+        }
         lines.push(Line::from(""));
     }
 
