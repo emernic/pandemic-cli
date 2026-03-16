@@ -34,23 +34,25 @@ fn short_name(tech: BasicTech) -> &'static str {
 }
 
 /// Layout: every edge connects row N to row N+1 only. No skipping rows.
+/// Uses exhaustive match so the compiler forces updates when BasicTech changes.
 fn tree_layout() -> Vec<TechNode> {
-    use BasicTech::*;
-    vec![
-        TechNode { tech: TargetedDrugDesign,         row: 0, col: 0 },
-        TechNode { tech: RapidSequencing,             row: 0, col: 2 },
-
-        TechNode { tech: MonoclonalAntibodies,        row: 1, col: 0 },
-        TechNode { tech: PhageTherapy,                row: 1, col: 1 },
-        TechNode { tech: ResistanceSurveillance,      row: 1, col: 2 },
-
-        TechNode { tech: MetagenomicSurveillance,     row: 2, col: 2 },
-
-        TechNode { tech: EpidemiologicalForecasting,  row: 3, col: 2 },
-
-        TechNode { tech: ResilientGrids,              row: 4, col: 1 },
-        TechNode { tech: CombinationTherapy,          row: 4, col: 2 },
-    ]
+    BasicTech::all()
+        .iter()
+        .map(|&tech| {
+            let (row, col) = match tech {
+                BasicTech::TargetedDrugDesign         => (0, 0),
+                BasicTech::RapidSequencing             => (0, 2),
+                BasicTech::MonoclonalAntibodies        => (1, 0),
+                BasicTech::PhageTherapy                => (1, 1),
+                BasicTech::ResistanceSurveillance      => (1, 2),
+                BasicTech::MetagenomicSurveillance     => (2, 2),
+                BasicTech::EpidemiologicalForecasting  => (3, 2),
+                BasicTech::ResilientGrids              => (4, 1),
+                BasicTech::CombinationTherapy          => (4, 2),
+            };
+            TechNode { tech, row, col }
+        })
+        .collect()
 }
 
 /// Visual edges derived from `BasicTech::tech_prereqs()` — single source of truth.
@@ -654,4 +656,42 @@ pub enum TreeDirection {
     Down,
     Left,
     Right,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tree_layout_covers_all_basic_techs() {
+        let layout = tree_layout();
+        for &tech in BasicTech::all() {
+            assert!(
+                layout.iter().any(|n| n.tech == tech),
+                "tree_layout() is missing BasicTech variant: {:?}",
+                tech,
+            );
+        }
+        assert_eq!(
+            layout.len(),
+            BasicTech::all().len(),
+            "tree_layout() has {} nodes but BasicTech::all() has {} variants",
+            layout.len(),
+            BasicTech::all().len(),
+        );
+    }
+
+    #[test]
+    fn tree_layout_no_duplicate_positions() {
+        let layout = tree_layout();
+        for (i, a) in layout.iter().enumerate() {
+            for b in layout.iter().skip(i + 1) {
+                assert!(
+                    a.row != b.row || a.col != b.col,
+                    "Duplicate position ({}, {}) for {:?} and {:?}",
+                    a.row, a.col, a.tech, b.tech,
+                );
+            }
+        }
+    }
 }
