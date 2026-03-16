@@ -317,7 +317,7 @@ fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize,
         } else if is_researching {
             (Color::Yellow, Color::Yellow)
         } else if is_cued {
-            (Color::Magenta, Color::Magenta)
+            (Color::Rgb(210, 180, 140), Color::Rgb(210, 180, 140))
         } else if is_available {
             (Color::White, Color::White)
         } else {
@@ -345,10 +345,11 @@ fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize,
                 buf_set(f, x + box_w - 1, by, "┊", border_style, tree_clip);
             }
             if is_selected {
-                buf_set(f, x, y, "╔", border_style, tree_clip);
-                buf_set(f, x + box_w - 1, y, "╗", border_style, tree_clip);
-                buf_set(f, x, y + box_h - 1, "╚", border_style, tree_clip);
-                buf_set(f, x + box_w - 1, y + box_h - 1, "╝", border_style, tree_clip);
+                let corner_style = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
+                buf_set(f, x, y, "╔", corner_style, tree_clip);
+                buf_set(f, x + box_w - 1, y, "╗", corner_style, tree_clip);
+                buf_set(f, x, y + box_h - 1, "╚", corner_style, tree_clip);
+                buf_set(f, x + box_w - 1, y + box_h - 1, "╝", corner_style, tree_clip);
             } else {
                 buf_set(f, x, y, "┌", border_style, tree_clip);
                 buf_set(f, x + box_w - 1, y, "┐", border_style, tree_clip);
@@ -357,10 +358,11 @@ fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize,
             }
         } else {
             let border_type = if is_selected { BorderType::Double } else { BorderType::Plain };
+            let sel_border_color = if is_selected { Color::White } else { border_color };
             let box_block = Block::default()
                 .borders(Borders::ALL)
                 .border_type(border_type)
-                .border_style(Style::default().fg(border_color).add_modifier(border_mod));
+                .border_style(Style::default().fg(sel_border_color).add_modifier(border_mod));
             f.render_widget(box_block, rect);
         }
 
@@ -461,7 +463,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicT
     } else if active_research.is_some() {
         ("RESEARCHING", Color::Yellow)
     } else if is_cued {
-        ("CUED", Color::Magenta)
+        ("CUED", Color::Rgb(210, 180, 140))
     } else if is_available {
         ("AVAILABLE", Color::Cyan)
     } else {
