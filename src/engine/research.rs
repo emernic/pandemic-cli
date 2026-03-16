@@ -1,6 +1,6 @@
 use rand::Rng;
 use crate::state::{
-    AUTO_MANUFACTURE_THRESHOLD, AUTO_SPENDING_BUFFER, BasicTech, GameEvent, GameOutcome, WorldState,
+    AUTO_SPENDING_BUFFER, BasicTech, GameEvent, GameOutcome, WorldState,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -424,12 +424,9 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     disease.sequencing_count += 1;
                 }
             }
-            ResearchKind::ManufactureDoses { medicine_idx } => {
-                let m_idx = *medicine_idx;
-                let batch_output = state.reactor_batch_output(m_idx);
-                if let Some(medicine) = state.medicines.get_mut(m_idx) {
-                    medicine.doses = (medicine.doses + batch_output).min(medicine.max_doses);
-                }
+            ResearchKind::ManufactureDoses { .. } => {
+                // Manufacturing is handled by reactors, not the research pipeline.
+                // This arm should be unreachable but is kept for exhaustiveness.
             }
             ResearchKind::TrainPersonnel => {
                 state.resources.personnel += TRAIN_PERSONNEL_BATCH;
@@ -463,14 +460,9 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
     // Auto-repeat completed repeatable projects
     for project in &completed {
         if state.auto_repeat_research.contains(&project.kind) {
-            // Manufacturing only auto-repeats when doses drop to threshold
-            if let ResearchKind::ManufactureDoses { medicine_idx } = &project.kind {
-                let dose_frac = state.medicines.get(*medicine_idx)
-                    .map(|m| if m.max_doses > 0.0 { m.doses / m.max_doses } else { 1.0 })
-                    .unwrap_or(1.0);
-                if dose_frac > AUTO_MANUFACTURE_THRESHOLD {
-                    continue;
-                }
+            // ManufactureDoses auto-repeat is handled by reactors, skip here.
+            if matches!(&project.kind, ResearchKind::ManufactureDoses { .. }) {
+                continue;
             }
             let (_, _, cost) = state.effective_costs(&project.kind);
             if state.resources.funding < cost + AUTO_SPENDING_BUFFER {
@@ -488,14 +480,9 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
 fn try_auto_repeat(state: &mut WorldState) {
     let kinds_to_repeat: Vec<ResearchKind> = state.auto_repeat_research.clone();
     for kind in &kinds_to_repeat {
-        // Manufacturing only auto-repeats when doses drop to threshold
-        if let ResearchKind::ManufactureDoses { medicine_idx } = kind {
-            let dose_frac = state.medicines.get(*medicine_idx)
-                .map(|m| if m.max_doses > 0.0 { m.doses / m.max_doses } else { 1.0 })
-                .unwrap_or(1.0);
-            if dose_frac > AUTO_MANUFACTURE_THRESHOLD {
-                continue;
-            }
+        // ManufactureDoses auto-repeat is handled by reactors, skip here.
+        if matches!(kind, ResearchKind::ManufactureDoses { .. }) {
+            continue;
         }
         let (_, _, cost) = state.effective_costs(kind);
         if state.resources.funding < cost + AUTO_SPENDING_BUFFER {

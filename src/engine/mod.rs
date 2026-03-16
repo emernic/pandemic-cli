@@ -1964,11 +1964,10 @@ mod tests {
                     let need_personnel = state.personnel_available() < 10;
                     let best = projects.iter().min_by_key(|k| match k {
                         ResearchKind::TrainPersonnel if need_personnel => 0,
-                        ResearchKind::ManufactureDoses { .. } => 1,
-                        ResearchKind::IdentifyThreat { .. } => 2,
-                        ResearchKind::ClinicalTrial { .. } => 3,
-                        ResearchKind::GenomicSequencing { .. } => 4,
-                        _ => 5,
+                        ResearchKind::IdentifyThreat { .. } => 1,
+                        ResearchKind::ClinicalTrial { .. } => 2,
+                        ResearchKind::GenomicSequencing { .. } => 3,
+                        _ => 4,
                     });
                     if let Some(kind) = best {
                         let (personnel, _, cost_funding) = kind.costs(&state.medicines);

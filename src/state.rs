@@ -3834,10 +3834,10 @@ impl ResearchKind {
     }
 
     /// Whether this research kind supports auto-repeat.
-    /// Repeatable: TrainPersonnel, ManufactureDoses.
-    /// Non-repeatable: everything else (one-shot projects).
+    /// Only TrainPersonnel is repeatable in the research pipeline.
+    /// ManufactureDoses repeat is handled by the reactor system.
     pub fn is_repeatable(&self) -> bool {
-        matches!(self, Self::TrainPersonnel | Self::ManufactureDoses { .. })
+        matches!(self, Self::TrainPersonnel)
     }
 
     /// Human-readable label for this research kind, respecting disease knowledge level.
@@ -7011,27 +7011,14 @@ impl WorldState {
     }
 
     /// Available applied research projects (excludes currently active).
-    /// DevelopMedicine is gone — medicines are now created from screening hits via trials.
+    /// Manufacturing is handled by reactors, not the research pipeline.
     pub(crate) fn available_applied_projects(&self) -> Vec<ResearchKind> {
-        let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel))
-            .map(|p| &p.kind).collect();
         let mut projects = Vec::new();
-        for (i, med) in self.medicines.iter().enumerate() {
-            if med.unlocked {
-                // Unlocked medicines can be manufactured if doses are depleted
-                if med.doses < med.max_doses {
-                    let kind = ResearchKind::ManufactureDoses { medicine_idx: i };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
-                }
-            }
-        }
-        // Train Personnel: always available
-        let kind = ResearchKind::TrainPersonnel;
-        if !active_kinds.contains(&&kind) {
-            projects.push(kind);
+        // Train Personnel: always available (unless already active)
+        let already_training = self.active_research.iter()
+            .any(|p| matches!(p.kind, ResearchKind::TrainPersonnel));
+        if !already_training {
+            projects.push(ResearchKind::TrainPersonnel);
         }
         projects
     }
