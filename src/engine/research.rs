@@ -137,7 +137,6 @@ pub(super) fn start_trial(state: &mut WorldState, hit_index: usize, rigor: Trial
         tested_against: vec![],
         deployed_count: 0,
         total_treated: 0.0,
-        total_protected: 0.0,
         manufacturer_corp_idx: None,
         trial_efficacy: Some(efficacy),
         side_effect_rate,
@@ -1028,55 +1027,6 @@ mod tests {
     }
 
     #[test]
-    fn vaccine_platform_prereqs() {
-        use crate::state::BasicTech;
-        let mut state = AppState::new_default(42);
-        // No chain prereqs → not available
-        let basic = state.available_basic_projects();
-        assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should not be available without prereqs");
-
-        // Unlock column 0 chain up to PhageTherapy only → still not available
-        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
-        state.unlocked_techs.push(BasicTech::MonoclonalAntibodies);
-        state.unlocked_techs.push(BasicTech::PhageTherapy);
-        let basic = state.available_basic_projects();
-        assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should not be available with only PhageTherapy");
-
-        // Also unlock column 1 chain up to MetagenomicSurveillance → now available
-        state.unlocked_techs.push(BasicTech::RapidSequencing);
-        state.unlocked_techs.push(BasicTech::ResistanceSurveillance);
-        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
-        let basic = state.available_basic_projects();
-        assert!(basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should be available after PhageTherapy + MetagenomicSurveillance");
-    }
-
-    #[test]
-    fn vaccine_platform_unlocks_vaccination() {
-        let mut state = AppState::new_default(42);
-        assert!(!state.can_vaccinate(), "vaccination should be locked without VaccinePlatform");
-        assert_eq!(state.vaccination_multiplier(), 1.0);
-
-        state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
-        assert!(state.can_vaccinate(), "vaccination should be unlocked with VaccinePlatform");
-        assert_eq!(state.vaccination_multiplier(), 3.0);
-
-        // Verify estimate_vaccination uses the multiplier
-        let med = &state.medicines[0];
-        let base = med.estimate_vaccination(1_000_000.0, 1.0, 1.0);
-        let boosted = med.estimate_vaccination(1_000_000.0, 1.0, 3.0);
-        assert!(
-            (boosted - base * 3.0).abs() < 1.0,
-            "VaccinePlatform 3x multiplier: base={base}, boosted={boosted}"
-        );
-    }
-
-    #[test]
     fn combination_therapy_prereqs() {
         use crate::state::{BasicTech, Medicine, TherapyType, MechanismOfAction};
         let mut state = AppState::new_default(42);
@@ -1111,8 +1061,7 @@ mod tests {
             tested_against: vec![0],
             deployed_count: 1,
             total_treated: 0.0,
-            total_protected: 0.0,
-            manufacturer_corp_idx: None,
+                manufacturer_corp_idx: None,
             trial_efficacy: None,
             side_effect_rate: 0.0,
             resistance_rate: 0.0,

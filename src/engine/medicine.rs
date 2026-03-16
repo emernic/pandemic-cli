@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::state::{
-    CrisisOperation, DeployTarget, GameEvent, GameOutcome, WorldState, MedicineMode,
+    CrisisOperation, DeployTarget, GameEvent, GameOutcome, WorldState,
     RegionDiseaseState, Shipment, SHIPPING_TICKS, TICKS_PER_DAY,
 };
 
@@ -44,7 +44,6 @@ pub(super) fn deploy_medicine(
     }
 
     let disease_idx = target.disease_idx;
-    let deploy_mode = target.mode;
 
     // Block deployment during per-medicine cooldown
     let cooldown = state.regions[region_idx].deploy_cooldown_remaining(state.tick, medicine_idx);
@@ -55,30 +54,14 @@ pub(super) fn deploy_medicine(
 
     // Estimate how many doses to dispatch based on current population
     let efficacy = state.medicines[medicine_idx].effective_efficacy(disease_idx, &state.diseases);
-    let vax_mult = state.vaccination_multiplier();
     let region = &state.regions[region_idx];
-    let pop = region.population as f64;
     let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
-    let exposed = existing.map(|i| i.exposed).unwrap_or(0.0);
     let infected = existing.map(|i| i.infected).unwrap_or(0.0);
-    let dead = region.dead;
-    let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
-    let doses_to_ship = match deploy_mode {
-        MedicineMode::Vaccine => {
-            let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
-            state.medicines[medicine_idx].estimate_vaccination(susceptible, efficacy, vax_mult)
-        }
-        MedicineMode::Therapeutic => {
-            state.medicines[medicine_idx].estimate_treatment(infected, efficacy)
-        }
-    };
+    let doses_to_ship = state.medicines[medicine_idx].estimate_treatment(infected, efficacy);
 
     if doses_to_ship < 1.0 {
-        return match deploy_mode {
-            MedicineMode::Vaccine => (false, Some(format!("No susceptible population in {region_name}"))),
-            MedicineMode::Therapeutic => (false, Some(format!("No infected population in {region_name}"))),
-        };
+        return (false, Some(format!("No infected population in {region_name}")));
     }
 
     // Deduct doses
@@ -155,7 +138,7 @@ pub(super) fn tick_shipments(state: &mut WorldState, rng_misc: &mut rand_chacha:
     }
 }
 
-/// Apply a shipment's effects to the game state (treatment or vaccination).
+/// Apply a shipment's effects to the game state (treatment).
 ///
 /// Delivery efficiency is based on regional infrastructure: supply lines
 /// determine how many doses physically arrive, healthcare capacity determines
@@ -183,51 +166,24 @@ fn deliver_shipment(state: &mut WorldState, shipment: &Shipment, rng_misc: &mut 
     if state.regions[reg_idx].hospital_level >= 2 {
         efficacy = (efficacy * (1.0 + crate::state::MEDICAL_CENTER_EFFICACY_BONUS)).min(1.0);
     }
-    let vax_mult = state.vaccination_multiplier();
-    let region = &state.regions[reg_idx];
-    let pop = region.population as f64;
-    let existing = region.infections.iter().find(|i| i.disease_idx == disease_idx);
-    let exposed = existing.map(|i| i.exposed).unwrap_or(0.0);
+    let existing = state.regions[reg_idx].infections.iter().find(|i| i.disease_idx == disease_idx);
     let infected = existing.map(|i| i.infected).unwrap_or(0.0);
-    let dead = region.dead;
-    let immune = existing.map(|i| i.immune).unwrap_or(0.0);
 
     let is_tested = state.medicines[med_idx].tested_against.contains(&disease_idx);
 
-    let deploy_mode = shipment.target.mode;
-    let (adverse, people_treated, people_protected) = match deploy_mode {
-        MedicineMode::Vaccine => {
-            let susceptible = (pop - exposed - infected - dead - immune).max(0.0);
-            // Cap at effective doses (after infrastructure losses)
-            let actual = state.medicines[med_idx]
-                .estimate_vaccination(susceptible, efficacy, vax_mult)
-                .min(effective_doses);
-            if actual <= 0.0 { return; }
-            let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, susceptible);
-            let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
-            apply_immune_and_deaths(inf, actual, adverse_deaths);
-            state.regions[reg_idx].dead += adverse_deaths;
-            build_resistance(state, med_idx, disease_idx, false);
-            let net_protected = (actual - adverse_deaths).max(0.0);
-            state.medicines[med_idx].total_protected += net_protected;
-            (adverse, 0.0, net_protected)
-        }
-        MedicineMode::Therapeutic => {
-            let actual = state.medicines[med_idx]
-                .estimate_treatment(infected, efficacy)
-                .min(effective_doses);
-            if actual <= 0.0 { return; }
-            let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, infected);
-            let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
-            inf.infected -= actual;
-            apply_immune_and_deaths(inf, actual, adverse_deaths);
-            state.regions[reg_idx].dead += adverse_deaths;
-            build_resistance(state, med_idx, disease_idx, true);
-            let net_treated = (actual - adverse_deaths).max(0.0);
-            state.medicines[med_idx].total_treated += net_treated;
-            (adverse, net_treated, 0.0)
-        }
-    };
+    let actual = state.medicines[med_idx]
+        .estimate_treatment(infected, efficacy)
+        .min(effective_doses);
+    if actual <= 0.0 { return; }
+    let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, infected);
+    let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
+    inf.infected -= actual;
+    apply_immune_and_deaths(inf, actual, adverse_deaths);
+    state.regions[reg_idx].dead += adverse_deaths;
+    build_resistance(state, med_idx, disease_idx, true);
+    let net_treated = (actual - adverse_deaths).max(0.0);
+    state.medicines[med_idx].total_treated += net_treated;
+    let people_treated = net_treated;
 
     events.push(GameEvent::ShipmentDelivered {
         medicine_idx: med_idx,
@@ -237,7 +193,6 @@ fn deliver_shipment(state: &mut WorldState, shipment: &Shipment, rng_misc: &mut 
         efficiency,
         doses_wasted,
         people_treated,
-        people_protected,
     });
 }
 
@@ -271,8 +226,7 @@ fn apply_immune_and_deaths(
 }
 
 
-/// Build resistance from deployment pressure. Treatment creates much more
-/// selection pressure than vaccination. Broad-spectrum drugs build resistance
+/// Build resistance from deployment pressure. Broad-spectrum drugs build resistance
 /// faster (2x) because broad selection pressure accelerates adaptation.
 /// Mechanism-specific multipliers further modify: cheap/fast mechanisms
 /// have high resistance rates, expensive/durable ones have low rates.
@@ -415,8 +369,7 @@ pub(super) fn insufficient_funds_message(cost: f64, have: f64) -> String {
 /// Deploy medicines to the worst-affected regions. Called once per tick.
 /// For each medicine with deployment enabled:
 /// - Must be unlocked, tested, and have doses
-/// - Deploys as therapeutic by default; with VaccinePlatform, uses vaccine
-///   mode when susceptible > 2x infected (protecting the healthy majority)
+/// - Deploys as therapeutic to the region with the most infected
 /// - Respects per-medicine region filter (empty = all regions)
 /// - Cooldown must be clear for the chosen region
 pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent>) {
@@ -490,30 +443,8 @@ pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent
                 continue;
             }
 
-            // Choose mode: vaccinate lightly-infected regions when VaccinePlatform
-            // is unlocked and the region has more susceptible than infected.
-            // Vaccination protects the healthy; treatment heals the sick.
-            let mode = if state.can_vaccinate() {
-                let region = &state.regions[region_idx];
-                let pop = region.population as f64;
-                let existing = region.infections.iter()
-                    .find(|i| i.disease_idx == best_disease_idx);
-                let infected = existing.map(|i| i.infected).unwrap_or(0.0);
-                let exposed = existing.map(|i| i.exposed).unwrap_or(0.0);
-                let immune = existing.map(|i| i.immune).unwrap_or(0.0);
-                let susceptible = (pop - exposed - infected - region.dead - immune).max(0.0);
-                if susceptible > infected * 2.0 {
-                    MedicineMode::Vaccine
-                } else {
-                    MedicineMode::Therapeutic
-                }
-            } else {
-                MedicineMode::Therapeutic
-            };
-
             let target = DeployTarget {
                 disease_idx: best_disease_idx,
-                mode,
             };
 
             // deploy_medicine() fires MedicineShipped on success

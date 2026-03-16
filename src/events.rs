@@ -256,7 +256,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 };
                 (9, msg.clone(), msg)
             }
-            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency, doses_wasted, people_treated, people_protected } => {
+            GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency, doses_wasted, people_treated } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let region_name = state.regions.get(*region_idx)
@@ -264,8 +264,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let dose_str = format_number(*doses);
                 let outcome = if *people_treated > 0.0 {
                     format!(", {} treated", format_number(*people_treated))
-                } else if *people_protected > 0.0 {
-                    format!(", {} protected", format_number(*people_protected))
                 } else {
                     String::new()
                 };

@@ -26,7 +26,6 @@ fn short_name(tech: BasicTech) -> &'static str {
         PhageTherapy => "Phage Therapy",
         RapidSequencing => "Rapid Sequencing",
         MetagenomicSurveillance => "Metagenomic Surv.",
-        VaccinePlatform => "Vaccine Platform",
         ResistanceSurveillance => "Resistance Surv.",
         CombinationTherapy => "Combination Therapy",
         AutomatedSynthesis => "Automated Synthesis",
@@ -51,10 +50,9 @@ fn tree_layout() -> Vec<TechNode> {
         TechNode { tech: PhageTherapy,                row: 2, col: 0 },
         TechNode { tech: MetagenomicSurveillance,     row: 2, col: 1 },
 
-        TechNode { tech: VaccinePlatform,             row: 3, col: 0 },
+        TechNode { tech: ResilientGrids,              row: 3, col: 0 },
         TechNode { tech: EpidemiologicalForecasting,  row: 3, col: 1 },
 
-        TechNode { tech: ResilientGrids,              row: 4, col: 0 },
         TechNode { tech: CombinationTherapy,          row: 4, col: 1 },
 
     ]
