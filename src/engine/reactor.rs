@@ -49,6 +49,14 @@ pub(super) fn configure_reactor(
             return (false, Some("Invalid or locked medicine.".to_string()));
         }
     }
+    if medicine_idx.is_some() {
+        // Default to deploying when finished — the common case
+        reactor.auto_deploy = true;
+    } else {
+        // Clearing the medicine resets toggles
+        reactor.auto_deploy = false;
+        reactor.repeat = false;
+    }
     reactor.medicine_idx = medicine_idx;
     (true, None)
 }
