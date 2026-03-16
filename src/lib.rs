@@ -35,7 +35,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
     // When a crisis is active, only allow selecting options and confirming
     if new.active_crisis.is_some() {
         match action {
-            Action::SelectNext | Action::SelectRight => {
+            Action::SelectNext => {
                 let max = new.active_crisis.as_ref()
                     .map(|c| c.options.len().saturating_sub(1))
                     .unwrap_or(0);
@@ -43,10 +43,16 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     new.ui.crisis_selection += 1;
                 }
             }
-            Action::SelectPrev | Action::SelectLeft => {
+            Action::SelectPrev => {
                 if new.ui.crisis_selection > 0 {
                     new.ui.crisis_selection -= 1;
                 }
+            }
+            Action::SelectLeft => {
+                new.ui.select_left(new.regions.len());
+            }
+            Action::SelectRight => {
+                new.ui.select_right(new.regions.len());
             }
             Action::ToggleExtra => {
                 new.ui.crisis_auto_resolve = !new.ui.crisis_auto_resolve;
