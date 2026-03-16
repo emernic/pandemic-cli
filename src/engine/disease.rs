@@ -108,8 +108,7 @@ pub(super) fn spawn_disease(state: &mut WorldState, rng: &mut ChaCha8Rng) -> Opt
             m.therapy_type == TherapyType::BroadSpectrum
                 || !(m.target_diseases.len() == 1 && m.target_diseases[0] == idx)
         });
-        // Add new medicines for the replacement disease.
-        state.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
+        // Targeted medicines are created from screening hits via trials, not pre-generated.
 
         idx
     } else {
@@ -119,7 +118,7 @@ pub(super) fn spawn_disease(state: &mut WorldState, rng: &mut ChaCha8Rng) -> Opt
         disease.detected = false;
         disease.spawned_at_tick = state.tick;
         state.diseases.push(disease);
-        state.medicines.extend(Medicine::targeted_medicines(idx, pathogen_type));
+        // Targeted medicines are created from screening hits via trials, not pre-generated.
 
         // Update broad-spectrum medicine to also target new disease.
         // BS medicines work against any pathogen type without per-disease
@@ -447,9 +446,7 @@ fn spawn_variant(
         immune: 0.0,
     });
 
-    // Generate targeted medicines for the variant (same as new disease emergence)
-    let new_meds = Medicine::targeted_medicines(disease_idx, state.diseases[disease_idx].pathogen_type);
-    state.medicines.extend(new_meds);
+    // Targeted medicines are created from screening hits via trials, not pre-generated.
 
     // Update broad-spectrum medicine to also target variant.
     // BS medicines work against any pathogen type without per-disease

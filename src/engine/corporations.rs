@@ -622,17 +622,34 @@ mod tests {
     }
 
     #[test]
-    fn new_disease_medicines_get_manufacturers() {
+    fn new_medicines_get_manufacturers() {
         let mut state = AppState::new_default(42);
         generate_corporations(&mut state);
 
         let initial_med_count = state.medicines.len();
 
-        // Simulate disease emergence by adding new medicines
-        let new_meds = crate::state::Medicine::targeted_medicines(
-            state.diseases.len(), crate::state::PathogenType::Bacterium
-        );
-        state.medicines.extend(new_meds);
+        // Simulate a medicine created from a clinical trial
+        state.medicines.push(crate::state::Medicine {
+            name: "Test-Drug".into(),
+            therapy_type: crate::state::TherapyType::Antiviral,
+            mechanism: Some(crate::state::MechanismOfAction::PolymeraseInhibitor),
+            target_diseases: vec![0],
+            doses: 0.0,
+            max_doses: 500_000.0,
+            unlocked: false,
+            tested_against: vec![],
+            deployed_count: 0,
+            total_treated: 0.0,
+            total_protected: 0.0,
+            manufacturer_corp_idx: None,
+            trial_efficacy: Some(0.7),
+            side_effect_rate: 0.05,
+            resistance_rate: 0.3,
+            trial_rigor: Some(crate::state::TrialRigor::Full),
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        });
 
         // Assign manufacturers to the new medicines
         assign_manufacturers(&mut state);

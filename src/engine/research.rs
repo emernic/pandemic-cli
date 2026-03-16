@@ -153,11 +153,15 @@ pub(super) fn start_trial(state: &mut WorldState, hit_index: usize, rigor: Trial
 
     // Deduct costs and start the trial project
     state.resources.funding -= funding_cost;
-    let effective_duration = if state.enacted_decrees.authorize_human_trials {
-        duration * crate::state::HUMAN_TRIALS_SPEED
-    } else {
-        duration
-    };
+    let mut effective_duration = duration;
+    // MetagenomicSurveillance: clinical trials 25% faster
+    if state.unlocked_techs.contains(&BasicTech::MetagenomicSurveillance) {
+        effective_duration *= 0.75;
+    }
+    // Human Trials decree: halve trial duration
+    if state.enacted_decrees.authorize_human_trials {
+        effective_duration *= crate::state::HUMAN_TRIALS_SPEED;
+    }
     state.active_research.push(ResearchProject {
         kind: ResearchKind::ClinicalTrial {
             medicine_idx,

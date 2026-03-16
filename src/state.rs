@@ -3501,53 +3501,6 @@ pub struct DeployTarget {
 }
 
 impl Medicine {
-    /// Generate targeted medicines for a disease. For non-prion pathogens, produces
-    /// one medicine per mechanism of action (3-4 options depending on pathogen type).
-    /// Each mechanism has distinct tradeoffs: fast/cheap mechanisms are potent but
-    /// resistance-prone; expensive/slow ones are less potent but nearly resistance-proof.
-    /// Prions are completely untreatable — returns empty vec.
-    pub fn targeted_medicines(disease_idx: usize, pathogen_type: PathogenType) -> Vec<Medicine> {
-        let letter = (b'A' + disease_idx as u8) as char;
-
-        let mechs: &[MechanismOfAction] = match pathogen_type {
-            PathogenType::Bacterium => MechanismOfAction::bacterial_mechanisms(),
-            PathogenType::Fungus => MechanismOfAction::fungal_mechanisms(),
-            PathogenType::RnaVirus | PathogenType::DnaVirus => MechanismOfAction::viral_mechanisms(),
-            PathogenType::Prion => {
-                // Prions are completely untreatable — no medicines generated
-                return vec![];
-            }
-        };
-        // Safe to unwrap: prions return early above, all other types have a matched therapy.
-        let therapy = pathogen_type.matched_therapy().unwrap();
-
-        mechs.iter().map(|&mech| {
-            let doses = mech.base_doses();
-            Medicine {
-                name: format!("{}-{}", mech.short_label(), letter),
-                therapy_type: therapy,
-                mechanism: Some(mech),
-                target_diseases: vec![disease_idx],
-                doses: 0.0,
-                max_doses: doses,
-                unlocked: false,
-                tested_against: vec![],
-                deployed_count: 0,
-                total_treated: 0.0,
-                total_protected: 0.0,
-                manufacturer_corp_idx: None,
-                trial_efficacy: None,
-                side_effect_rate: 0.0,
-                resistance_rate: 0.0,
-                trial_rigor: None,
-                reported_efficacy: None,
-                reported_side_effects: None,
-                reported_resistance: None,
-            }
-        }).collect()
-    }
-
-
     /// Efficacy multiplier from mechanism resistance (0.2–1.0). Reads resistance
     /// from the disease based on this medicine's mechanism of action.
     pub fn resistance_factor(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
@@ -4373,10 +4326,6 @@ pub enum GameEvent {
     /// A pathogen was identified through field research — name and type revealed.
     PathogenIdentified {
         disease_idx: usize,
-    },
-    /// A medicine was developed through applied research — ready for trials.
-    MedicineDeveloped {
-        medicine_idx: usize,
     },
     /// A clinical trial completed — medicine tested against a disease.
     TrialCompleted {
