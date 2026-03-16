@@ -246,26 +246,24 @@ pub(super) fn update_board_satisfaction(state: &mut WorldState) {
                             value: standing,
                         });
                     }
-                    Some(GovernorPersonality::Operative) => {
-                        // Operative: thrives in dysfunction. Penalized when governors
-                        // are cooperative (proper channels leave no room for backroom
-                        // deals). Creates tension: player wants high cooperation for
-                        // effective policies, but Operative wants chaos.
-                        // 60% GDP + 40% governor dysfunction.
+                    Some(GovernorPersonality::Pragmatist) => {
+                        // Pragmatist: demands infrastructure stays above 80%.
+                        // 50% GDP + 50% infrastructure health.
                         continuous.push(SatisfactionModifier {
                             source: ModifierSource::RegionalGdp,
-                            value: 0.6 * gdp - 0.30,
+                            value: 0.5 * gdp - 0.25,
                         });
-                        let (sum, count) = state.regions.iter()
-                            .filter(|r| !r.governor.dead)
-                            .fold((0.0, 0usize), |(s, c), r| (s + r.governor.cooperation, c + 1));
-                        let avg_coop = if count == 0 { 60.0 } else { sum / count as f64 };
-                        // avg_coop ~40 (hostile) = +0.20, ~60 (neutral) = 0.0,
-                        // ~80 (cooperative) = -0.20
-                        let dysfunction = ((60.0 - avg_coop) / 100.0).clamp(-0.20, 0.20);
+                        // Average infrastructure across all non-collapsed regions
+                        let (infra_sum, infra_count) = state.regions.iter()
+                            .filter(|r| !r.collapsed)
+                            .map(|r| (r.healthcare_capacity + r.supply_lines + r.civil_order) / 3.0)
+                            .fold((0.0, 0usize), |(s, c), v| (s + v, c + 1));
+                        let avg_infra = if infra_count == 0 { 0.5 } else { infra_sum / infra_count as f64 };
+                        // infra 1.0 = +0.25, infra 0.8 = 0.0, infra 0.5 = -0.30
+                        let infra_mod = ((avg_infra - 0.80) * 1.0).clamp(-0.30, 0.25);
                         continuous.push(SatisfactionModifier {
-                            source: ModifierSource::GovernorDysfunction,
-                            value: dysfunction,
+                            source: ModifierSource::InfrastructureHealth,
+                            value: infra_mod,
                         });
                     }
                     Some(GovernorPersonality::Mobster) => {

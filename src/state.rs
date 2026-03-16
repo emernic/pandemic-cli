@@ -1660,8 +1660,8 @@ pub enum ModifierSource {
     RegionalStanding,
     /// Restrictive policy count in governor's region (Blowhard governor personality).
     RestrictivePolicies,
-    /// Average governor cooperation level (Operative governor personality — prefers dysfunction).
-    GovernorDysfunction,
+    /// Regional infrastructure health (Pragmatist governor personality — demands infra above 80%).
+    InfrastructureHealth,
     /// Funding reserves relative to daily income (Mobster governor personality).
     FundingReserves,
     /// Personnel deployment rate (Buffoon governor personality — impressed by visible busyness).
@@ -1692,7 +1692,7 @@ impl ModifierSource {
             Self::ContractLoyalty => "Contract loyalty",
             Self::RegionalStanding => "Regional standing",
             Self::RestrictivePolicies => "Policy restrictions",
-            Self::GovernorDysfunction => "Governor dysfunction",
+            Self::InfrastructureHealth => "Infrastructure health",
             Self::FundingReserves => "Funding reserves",
             Self::PersonnelDeployment => "Personnel deployment",
             Self::RegionalSurvival => "Regional survival",
@@ -1705,7 +1705,7 @@ impl ModifierSource {
             Self::Base | Self::StockPerformance | Self::RegionalGdp |
             Self::ResearchUtilization | Self::GlobalSurvival | Self::PlayerInvestment |
             Self::RegionalStanding | Self::RestrictivePolicies |
-            Self::GovernorDysfunction | Self::FundingReserves |
+            Self::InfrastructureHealth | Self::FundingReserves |
             Self::PersonnelDeployment | Self::RegionalSurvival
         )
     }
@@ -1913,10 +1913,10 @@ pub enum GovernorPersonality {
     /// didn't set, costing unbudgeted personnel and funding. Pleased when competing
     /// regions suffer. Bargain: give them authority (high cost).
     Hardliner,
-    /// Competent and helpful, always skimming. When cooperative, policies more effective.
+    /// Competent and pragmatic. Demands infrastructure stays above 80%.
     /// When hostile, continuous funding drain that grows over time.
     /// Bargain: permanent cut of regional income.
-    Operative,
+    Pragmatist,
     /// Everything escalates. When hostile: periodic lump-sum demands that increase each time.
     /// Bargain: pure money, most expensive, gets worse over time.
     Mobster,
@@ -1929,7 +1929,7 @@ impl GovernorPersonality {
             GovernorPersonality::Blowhard => "Blowhard",
             GovernorPersonality::Recluse => "Recluse",
             GovernorPersonality::Hardliner => "Hardliner",
-            GovernorPersonality::Operative => "Operative",
+            GovernorPersonality::Pragmatist => "Pragmatist",
             GovernorPersonality::Mobster => "Mobster",
         }
     }
@@ -1954,7 +1954,7 @@ pub struct Governor {
     /// Mobster: how many times the player has bargained (escalates cost).
     #[serde(default)]
     pub bargain_count: u32,
-    /// Operative: fraction of regional income being skimmed (accumulates with bargains).
+    /// Pragmatist: fraction of regional income being skimmed (accumulates with bargains).
     #[serde(default)]
     pub income_skim: f64,
     /// Tick when the governor last had a sick crisis (cooldown tracking).
@@ -2027,10 +2027,10 @@ pub const BARGAIN_BLOWHARD_FUNDING_COST: f64 = 100.0;
 pub const BARGAIN_RECLUSE_PERSONNEL_COST: u32 = 2;
 /// Hardliner bargain cost: high funding (give them authority).
 pub const BARGAIN_HARDLINER_FUNDING_COST: f64 = 400.0;
-/// Operative bargain cost: fraction of regional income permanently skimmed.
-pub const BARGAIN_OPERATIVE_INCOME_CUT: f64 = 0.10;
-/// Maximum income skim an Operative governor can accumulate through bargains.
-pub const MAX_OPERATIVE_INCOME_SKIM: f64 = 0.50;
+/// Pragmatist bargain cost: fraction of regional income permanently skimmed.
+pub const BARGAIN_PRAGMATIST_INCOME_CUT: f64 = 0.10;
+/// Maximum income skim a Pragmatist governor can accumulate through bargains.
+pub const MAX_PRAGMATIST_INCOME_SKIM: f64 = 0.50;
 /// Mobster bargain base cost: pure funding, escalates each time.
 pub const BARGAIN_MOBSTER_BASE_COST: f64 = 200.0;
 
@@ -2245,7 +2245,7 @@ pub struct Region {
 fn default_governor() -> Governor {
     Governor {
         name: "Unknown".into(),
-        personality: GovernorPersonality::Operative,
+        personality: GovernorPersonality::Pragmatist,
         cooperation: 70.0,
         hostility_crisis_fired: false,
         last_action_tick: 0,
@@ -4527,8 +4527,8 @@ pub enum CrisisKind {
 
     /// Hardliner governor declares your directive illegitimate.
     GovernorHardliner { region_idx: usize },
-    /// Operative governor starts skimming openly.
-    GovernorOperative { region_idx: usize },
+    /// Pragmatist governor starts skimming openly.
+    GovernorPragmatist { region_idx: usize },
     /// Mobster governor escalates demands.
     GovernorMobster { region_idx: usize },
     /// Governor falls ill during high infection levels. Personality determines the crisis.
@@ -4640,7 +4640,7 @@ impl CrisisKind {
             CrisisKind::ContractOffer { .. } => "contract_offer",
             CrisisKind::ContractDemand { .. } => "contract_demand",
             CrisisKind::GovernorHardliner { .. } => "gov_hardliner",
-            CrisisKind::GovernorOperative { .. } => "gov_operative",
+            CrisisKind::GovernorPragmatist { .. } => "gov_pragmatist",
             CrisisKind::GovernorMobster { .. } => "gov_mobster",
             CrisisKind::GovernorSick { .. } => "gov_sick",
             CrisisKind::GovernorDeath { .. } => "gov_death",
@@ -5515,7 +5515,7 @@ impl WorldState {
                 connections: vec![0, 3, 4],
                 governor: Governor {
                     name: "Gov. Lindqvist".into(),
-                    personality: GovernorPersonality::Operative,
+                    personality: GovernorPersonality::Pragmatist,
                     cooperation: 75.0,
                     hostility_crisis_fired: false,
                     last_action_tick: 0,

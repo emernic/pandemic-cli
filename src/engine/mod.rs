@@ -4866,9 +4866,9 @@ mod tests {
     }
 
     #[test]
-    fn bargain_operative_adds_income_skim() {
+    fn bargain_pragmatist_adds_income_skim() {
         let mut state = AppState::new_default(42);
-        state.regions[0].governor.personality = GovernorPersonality::Operative;
+        state.regions[0].governor.personality = GovernorPersonality::Pragmatist;
         state.regions[0].governor.cooperation = 20.0;
         assert_eq!(state.regions[0].governor.income_skim, 0.0);
 
@@ -4882,7 +4882,7 @@ mod tests {
         assert!(ok2);
         assert!((state.regions[0].governor.income_skim - 0.20).abs() < 0.001);
 
-        // Skim is capped at MAX_OPERATIVE_INCOME_SKIM (0.50)
+        // Skim is capped at MAX_PRAGMATIST_INCOME_SKIM (0.50)
         state.regions[0].governor.income_skim = 0.45;
         state.regions[0].governor.cooperation = 20.0;
         let (_, ok3) = policy::bargain_with_governor(&mut state, 0);

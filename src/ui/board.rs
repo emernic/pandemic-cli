@@ -398,7 +398,7 @@ fn worst_modifier_demand(state: &AppState, member_idx: usize) -> Option<String> 
                 .unwrap_or("region");
             format!("{} falling behind other regions", region_name)
         }
-        ModifierSource::GovernorDysfunction => "Governors too cooperative".to_string(),
+        ModifierSource::InfrastructureHealth => "Infrastructure below 80%".to_string(),
         ModifierSource::FundingReserves => "Funding reserves too low".to_string(),
         ModifierSource::PersonnelDeployment => "Not enough personnel deployed".to_string(),
         ModifierSource::RegionalSurvival => {
