@@ -982,7 +982,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
     for (i, reactor) in state.reactors.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
         if selected { selected_line = Some(lines.len()); }
-        render_reactor_vessel(&mut lines, i, reactor, selected, state);
+        render_reactor_vessel(&mut lines, reactor, selected, state);
     }
 
     // Buy reactor button (at index == reactor_count)
@@ -1024,7 +1024,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Render a single reactor vessel as ASCII art.
-fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, _idx: usize, reactor: &crate::state::Reactor, selected: bool, state: &AppState) {
+fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state::Reactor, selected: bool, state: &AppState) {
     let marker = if selected { "▶ " } else { "  " };
 
     let (med_name, fill_pct, status_line) = if let Some(med_idx) = reactor.medicine_idx {
@@ -1147,8 +1147,8 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, _idx: usize, reactor: &
 
     // Auto-deploy and repeat toggles
     if reactor.medicine_idx.is_some() {
-        let auto_tag = if reactor.auto_deploy { "[A] auto-deploy" } else { "[ ] auto-deploy" };
-        let repeat_tag = if reactor.repeat { "[R] repeat" } else { "[ ] repeat" };
+        let auto_tag = if reactor.auto_deploy { "[✓] auto-deploy" } else { "[ ] auto-deploy" };
+        let repeat_tag = if reactor.repeat { "[✓] repeat" } else { "[ ] repeat" };
         lines.push(Line::from(vec![
             Span::raw("     "),
             Span::styled(auto_tag, Style::default().fg(
