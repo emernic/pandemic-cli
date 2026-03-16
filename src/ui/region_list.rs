@@ -949,68 +949,74 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
         }
     }
 
-    // Per-disease breakdown (detected diseases only)
-    if !region.infections.is_empty() {
-        for inf in &region.infections {
-            if lines.len() >= inner.height as usize {
-                break;
-            }
-            if let Some(disease) = state.diseases.get(inf.disease_idx) {
-                if !disease.detected || disease.hidden {
-                    continue;
-                }
-                let dname = disease.display_name(inf.disease_idx);
-                // Distribute region's total estimate proportionally across diseases.
-                // Without antigen screening, exposed (incubating) people are invisible.
-                let total_real = if shows_exposed {
-                    region.detected_infected(&state.diseases)
-                } else {
-                    region.detected_symptomatic(&state.diseases)
-                };
-                let this_disease_total = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
-                let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
-                let screened_inf = region.estimated_infected * proportion;
-                let shown_immune = if shows_immune { inf.immune } else { 0.0 };
-                // Always subtract actual immune from susceptible calculation,
-                // even when immune isn't displayed — otherwise recovered people
-                // appear to move from infected back to susceptible.
-                let susceptible = pop - screened_inf - dead - inf.immune;
-                let mut spans = vec![
-                    Span::styled(
-                        format!("  {:<20}", dname),
-                        Style::default().fg(Color::Yellow),
-                    ),
-                    Span::styled("Inf ", label),
-                    Span::styled(
-                        format!("{:<10}", format_number(screened_inf)),
-                        Style::default().fg(Color::Red),
-                    ),
-                ];
-                if shows_immune {
-                    spans.push(Span::styled("Immune ", label));
-                    spans.push(Span::styled(
-                        format!("{:<10}", format_number(shown_immune)),
-                        Style::default().fg(Color::Cyan),
-                    ));
-                }
-                spans.extend([
-                    Span::styled("Dead ", label),
-                    Span::styled(
-                        format!("{:<10}", format_number(inf.dead)),
-                        Style::default().fg(if inf.dead > 0.0 { Color::Red } else { Color::DarkGray }),
-                    ),
-                ]);
-                if susceptible > 0.0 {
-                    spans.push(Span::styled("Susceptible ", label));
-                    spans.push(Span::styled(
-                        format_number(susceptible.max(0.0)),
-                        Style::default().fg(Color::Cyan),
-                    ));
-                }
-                lines.push(Line::from(spans));
-            }
+    // Per-disease breakdown: only show diseases with screened presence in this region.
+    // A disease row with "Inf 0" would leak the information that the disease has
+    // spread here, which should require screening investment to discover.
+    let pre_disease_len = lines.len();
+    for inf in &region.infections {
+        if lines.len() >= inner.height as usize {
+            break;
         }
-    } else {
+        if let Some(disease) = state.diseases.get(inf.disease_idx) {
+            if !disease.detected || disease.hidden {
+                continue;
+            }
+            // Distribute region's total estimate proportionally across diseases.
+            // Without antigen screening, exposed (incubating) people are invisible.
+            let total_real = if shows_exposed {
+                region.detected_infected(&state.diseases)
+            } else {
+                region.detected_symptomatic(&state.diseases)
+            };
+            let this_disease_total = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
+            let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
+            let screened_inf = region.estimated_infected * proportion;
+            // Hide diseases whose screened presence is below display threshold.
+            if screened_inf < 1.0 && inf.dead < 1.0 {
+                continue;
+            }
+            let dname = disease.display_name(inf.disease_idx);
+            let shown_immune = if shows_immune { inf.immune } else { 0.0 };
+            // Always subtract actual immune from susceptible calculation,
+            // even when immune isn't displayed — otherwise recovered people
+            // appear to move from infected back to susceptible.
+            let susceptible = pop - screened_inf - dead - inf.immune;
+            let mut spans = vec![
+                Span::styled(
+                    format!("  {:<20}", dname),
+                    Style::default().fg(Color::Yellow),
+                ),
+                Span::styled("Inf ", label),
+                Span::styled(
+                    format!("{:<10}", format_number(screened_inf)),
+                    Style::default().fg(Color::Red),
+                ),
+            ];
+            if shows_immune {
+                spans.push(Span::styled("Immune ", label));
+                spans.push(Span::styled(
+                    format!("{:<10}", format_number(shown_immune)),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+            spans.extend([
+                Span::styled("Dead ", label),
+                Span::styled(
+                    format!("{:<10}", format_number(inf.dead)),
+                    Style::default().fg(if inf.dead > 0.0 { Color::Red } else { Color::DarkGray }),
+                ),
+            ]);
+            if susceptible > 0.0 {
+                spans.push(Span::styled("Susceptible ", label));
+                spans.push(Span::styled(
+                    format_number(susceptible.max(0.0)),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+            lines.push(Line::from(spans));
+        }
+    }
+    if lines.len() == pre_disease_len {
         lines.push(Line::from(Span::styled(
             "  No infections",
             Style::default().fg(Color::Green),
