@@ -33,7 +33,7 @@ use crate::state::{
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
     BARGAIN_RECLUSE_PERSONNEL_COST, BARGAIN_HARDLINER_FUNDING_COST,
-    BARGAIN_OPERATIVE_INCOME_CUT, BARGAIN_MOBSTER_BASE_COST,
+    BARGAIN_PRAGMATIST_INCOME_CUT, BARGAIN_MOBSTER_BASE_COST,
     GovernorPersonality,
 };
 use crate::ui::hint_line;
@@ -603,9 +603,9 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
                     format!("-¥{:.0}", BARGAIN_HARDLINER_FUNDING_COST),
                     BARGAIN_COOPERATION_GAIN,
                 ),
-                GovernorPersonality::Operative => (
+                GovernorPersonality::Pragmatist => (
                     "Income Cut",
-                    format!("-{:.0}% of regional income", BARGAIN_OPERATIVE_INCOME_CUT * 100.0),
+                    format!("-{:.0}% of regional income", BARGAIN_PRAGMATIST_INCOME_CUT * 100.0),
                     BARGAIN_COOPERATION_GAIN,
                 ),
                 GovernorPersonality::Mobster => {

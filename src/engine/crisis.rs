@@ -831,7 +831,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 tick_created: tick,
             }
         }
-        CrisisKind::GovernorOperative { region_idx } => {
+        CrisisKind::GovernorPragmatist { region_idx } => {
             let gov_name = state.regions.get(*region_idx)
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let cost = scaled_cost(state, 0.15, 100.0, 600.0);
@@ -886,7 +886,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
             let gov_name = state.regions.get(*region_idx)
                 .map(|r| r.governor.name.as_str()).unwrap_or("Unknown");
             let personality = state.regions.get(*region_idx)
-                .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Operative);
+                .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Pragmatist);
 
             match personality {
                 GovernorPersonality::Buffoon => {
@@ -1005,7 +1005,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         tick_created: tick,
                     }
                 }
-                GovernorPersonality::Operative => {
+                GovernorPersonality::Pragmatist => {
                     let cost = scaled_cost(state, 0.18, 150.0, 700.0);
                     CrisisEvent {
                         title: format!("{}: Medical Expenses", gov_name),
@@ -2124,12 +2124,12 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             format!("{} imposed quarantine and border controls without authorization.", gov_name)
         }
 
-        (CrisisKind::GovernorOperative { .. }, 0) => {
+        (CrisisKind::GovernorPragmatist { .. }, 0) => {
             // Look the other way, chairman satisfaction hit
             chairman_satisfaction_hit(state, -0.15);
             "Turned a blind eye. Your team noticed.".into()
         }
-        (CrisisKind::GovernorOperative { region_idx }, _) => {
+        (CrisisKind::GovernorPragmatist { region_idx }, _) => {
             // Formal audit — costs already deducted, reduce skim
             if let Some(region) = state.regions.get_mut(*region_idx) {
                 region.governor.income_skim = (region.governor.income_skim - 0.05).max(0.0);
@@ -2184,7 +2184,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 
         (CrisisKind::GovernorSick { region_idx }, choice) => {
             let personality = state.regions.get(*region_idx)
-                .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Operative);
+                .map(|r| r.governor.personality).unwrap_or(GovernorPersonality::Pragmatist);
             match (personality, choice) {
                 (GovernorPersonality::Buffoon, 0) => {
                     // Stabilize the governor: governor survives, corp pulls logistics and relocates
@@ -2278,7 +2278,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                     queue_governor_death_followup(state, *region_idx);
                     "Refused. Governor threatening to take matters into their own hands.".into()
                 }
-                (GovernorPersonality::Operative, 0) => {
+                (GovernorPersonality::Pragmatist, 0) => {
                     // Pay: governor recovers, cooperation boost, but skim increases
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
@@ -2286,7 +2286,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                     }
                     "Expenses paid. Governor recovering. The next invoice will be larger.".into()
                 }
-                (GovernorPersonality::Operative, _) => {
+                (GovernorPersonality::Pragmatist, _) => {
                     // Refuse: cooperation drop, skim increase, governor may die
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
@@ -3249,7 +3249,7 @@ mod tests {
             (GovernorPersonality::Blowhard, 1),   // Refuse
             (GovernorPersonality::Recluse, 0),    // Leave them alone
             (GovernorPersonality::Hardliner, 2),  // Refuse
-            (GovernorPersonality::Operative, 1),  // Refuse
+            (GovernorPersonality::Pragmatist, 1),  // Refuse
             (GovernorPersonality::Mobster, 2),     // Refuse
         ];
 
@@ -3344,7 +3344,7 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.tick = (15.0 * TICKS_PER_DAY) as u64;
-        state.regions[0].governor.personality = GovernorPersonality::Operative;
+        state.regions[0].governor.personality = GovernorPersonality::Pragmatist;
         state.regions[0].governor.dead = false;
 
         // Pre-existing pending GovernorDeath

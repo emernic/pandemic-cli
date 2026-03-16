@@ -16,7 +16,7 @@ use crate::state::{
     BARGAIN_HARDLINER_FUNDING_COST,
     BARGAIN_COOPERATION_GAIN,
     BARGAIN_MOBSTER_BASE_COST,
-    BARGAIN_OPERATIVE_INCOME_CUT, MAX_OPERATIVE_INCOME_SKIM,
+    BARGAIN_PRAGMATIST_INCOME_CUT, MAX_PRAGMATIST_INCOME_SKIM,
     BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
     REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD,
@@ -557,10 +557,10 @@ pub(super) fn bargain_with_governor(state: &mut WorldState, region_idx: usize) -
             let cooperation = gov.cooperation;
             (Some(format!("{gov_name}: granted expanded authority. Co-Op {cooperation:.0}.")), true)
         }
-        GovernorPersonality::Operative => {
+        GovernorPersonality::Pragmatist => {
             // Income Cut: permanent skim on regional income
             let gov = &mut state.regions[region_idx].governor;
-            gov.income_skim = (gov.income_skim + BARGAIN_OPERATIVE_INCOME_CUT).min(MAX_OPERATIVE_INCOME_SKIM);
+            gov.income_skim = (gov.income_skim + BARGAIN_PRAGMATIST_INCOME_CUT).min(MAX_PRAGMATIST_INCOME_SKIM);
             gov.cooperation = (gov.cooperation + BARGAIN_COOPERATION_GAIN).min(100.0);
             let cooperation = gov.cooperation;
             let total_skim = gov.income_skim * 100.0;
@@ -686,7 +686,7 @@ pub(super) fn tick_governor_cooperation(state: &mut WorldState, events: &mut Vec
                 };
                 baseline_stubbornness + relative_standing
             }
-            GovernorPersonality::Operative => {
+            GovernorPersonality::Pragmatist => {
                 // Passive cooperation gain when being paid (income_skim > 0).
                 // Otherwise neutral.
                 let skim = state.regions[i].governor.income_skim;
@@ -712,7 +712,7 @@ pub(super) fn tick_governor_cooperation(state: &mut WorldState, events: &mut Vec
                 GovernorPersonality::Blowhard => None,
                 GovernorPersonality::Recluse => None,
                 GovernorPersonality::Hardliner => Some(CrisisKind::GovernorHardliner { region_idx: i }),
-                GovernorPersonality::Operative => Some(CrisisKind::GovernorOperative { region_idx: i }),
+                GovernorPersonality::Pragmatist => Some(CrisisKind::GovernorPragmatist { region_idx: i }),
                 GovernorPersonality::Mobster => Some(CrisisKind::GovernorMobster { region_idx: i }),
             };
             // Schedule for immediate activation (current tick)
@@ -782,7 +782,7 @@ fn tick_governor_succession(state: &mut WorldState, region_idx: usize, events: &
         GovernorPersonality::Blowhard,
         GovernorPersonality::Recluse,
         GovernorPersonality::Hardliner,
-        GovernorPersonality::Operative,
+        GovernorPersonality::Pragmatist,
         GovernorPersonality::Mobster,
     ];
     let candidates: Vec<_> = personalities.iter()
@@ -948,7 +948,7 @@ pub(super) fn tick_governor_actions(state: &mut WorldState, events: &mut Vec<Gam
                     None // All restrictive policies already active
                 }
             }
-            GovernorPersonality::Operative => {
+            GovernorPersonality::Pragmatist => {
                 // Continuous funding drain that grows over time
                 let skim = state.regions[i].governor.income_skim;
                 let drain = (state.resources.funding * (0.05 + skim)).min(300.0);
@@ -1791,7 +1791,7 @@ mod tests {
     }
 
     #[test]
-    fn hardliner_governor_drops_faster_than_operative() {
+    fn hardliner_governor_drops_faster_than_pragmatist() {
         let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 200_000.0;
@@ -1804,16 +1804,16 @@ mod tests {
         }
         let hardliner_cooperation = state.regions[0].governor.cooperation;
 
-        // Test Operative — neutral when no income skim
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
+        // Test Pragmatist — neutral when no income skim
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Pragmatist;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 15) {
             tick_governor_cooperation(&mut state, &mut events);
         }
-        let operative_cooperation = state.regions[0].governor.cooperation;
+        let pragmatist_cooperation = state.regions[0].governor.cooperation;
 
-        assert!(hardliner_cooperation < operative_cooperation,
-            "Hardliner ({hardliner_cooperation:.1}) should lose cooperation faster than Operative ({operative_cooperation:.1}) in a CRIT region");
+        assert!(hardliner_cooperation < pragmatist_cooperation,
+            "Hardliner ({hardliner_cooperation:.1}) should lose cooperation faster than Pragmatist ({pragmatist_cooperation:.1}) in a CRIT region");
     }
 
     #[test]
@@ -1865,16 +1865,16 @@ mod tests {
         }
         let blowhard_cooperation = state.regions[0].governor.cooperation;
 
-        // Operative with same restrictions (baseline — neutral personality mod)
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
+        // Pragmatist with same restrictions (baseline — neutral personality mod)
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Pragmatist;
         state.regions[0].governor.cooperation = 70.0;
         for _ in 0..(120 * 10) {
             tick_governor_cooperation(&mut state, &mut events);
         }
-        let operative_cooperation = state.regions[0].governor.cooperation;
+        let pragmatist_cooperation = state.regions[0].governor.cooperation;
 
-        assert!(blowhard_cooperation < operative_cooperation,
-            "Blowhard ({blowhard_cooperation:.1}) should lose cooperation faster than Operative ({operative_cooperation:.1}) with restrictions");
+        assert!(blowhard_cooperation < pragmatist_cooperation,
+            "Blowhard ({blowhard_cooperation:.1}) should lose cooperation faster than Pragmatist ({pragmatist_cooperation:.1}) with restrictions");
     }
 
     #[test]
@@ -1921,11 +1921,11 @@ mod tests {
     }
 
     #[test]
-    fn operative_gains_cooperation_when_skimming() {
+    fn pragmatist_gains_cooperation_when_skimming() {
         let mut events: Vec<GameEvent> = Vec::new();
         let mut state = screening_test_state();
         state.regions[0].get_or_create_infection(0).infected = 100.0; // low infections
-        state.regions[0].governor.personality = crate::state::GovernorPersonality::Operative;
+        state.regions[0].governor.personality = crate::state::GovernorPersonality::Pragmatist;
 
         // Without income skim — neutral
         state.regions[0].governor.income_skim = 0.0;
@@ -1944,7 +1944,7 @@ mod tests {
         let skim_cooperation = state.regions[0].governor.cooperation;
 
         assert!(skim_cooperation > no_skim_cooperation,
-            "Operative with income skim ({skim_cooperation:.1}) should have higher cooperation than without ({no_skim_cooperation:.1})");
+            "Pragmatist with income skim ({skim_cooperation:.1}) should have higher cooperation than without ({no_skim_cooperation:.1})");
     }
 
     // --- Governor autonomous action tests ---
@@ -2024,16 +2024,16 @@ mod tests {
     }
 
     #[test]
-    fn operative_governor_siphons_funding() {
+    fn pragmatist_governor_siphons_funding() {
         let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = hostile_governor_state(GovernorPersonality::Operative);
+        let mut state = hostile_governor_state(GovernorPersonality::Pragmatist);
         state.resources.funding = 1000.0;
         let before = state.resources.funding;
 
         tick_governor_actions(&mut state, &mut events);
 
         assert!(state.resources.funding < before,
-            "Operative governor should siphon funding");
+            "Pragmatist governor should siphon funding");
         assert!(events.iter().any(|e|
             matches!(e, GameEvent::GovernorAction { description, .. } if description.contains("siphoned"))
         ));
