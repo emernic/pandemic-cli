@@ -1,5 +1,5 @@
 use crate::state::{
-    AUTO_MANUFACTURE_THRESHOLD, GameEvent, GameOutcome, WorldState,
+    AUTO_MANUFACTURE_THRESHOLD, BasicTech, GameEvent, GameOutcome, WorldState,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -62,6 +62,8 @@ pub(super) fn start_research(state: &mut WorldState, project_idx: usize, double_
 pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, events: &mut Vec<GameEvent>) -> u32 {
     // Proactively auto-repeat on idle categories
     try_auto_repeat(state, events);
+    // Auto-start cued techs when prerequisites and resources become available
+    try_cued_starts(state, events);
 
     let mut board_notify_count: u32 = 0;
 
@@ -291,6 +293,42 @@ fn try_auto_repeat(state: &mut WorldState, events: &mut Vec<GameEvent>) {
             let (ok, _) = start_research(state, idx, false);
             if ok {
                 events.push(GameEvent::ResearchAutoRestarted { kind: kind.clone() });
+            }
+        }
+    }
+}
+
+/// Try to auto-start cued techs whose prerequisites and resources are now available.
+/// Removes techs from the cue once started (or if already unlocked/researching).
+fn try_cued_starts(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+    let cued: Vec<BasicTech> = state.cued_techs.clone();
+    for tech in &cued {
+        // Already unlocked or researching — silently remove from cue
+        if state.unlocked_techs.contains(tech) {
+            state.cued_techs.retain(|t| t != tech);
+            continue;
+        }
+        let already_researching = state.active_research.iter().any(|r| {
+            matches!(r.kind, ResearchKind::BasicResearch { tech: t } if t == *tech)
+        });
+        if already_researching {
+            state.cued_techs.retain(|t| t != tech);
+            continue;
+        }
+
+        // Check prerequisites
+        if !tech.prerequisites_met(state) {
+            continue;
+        }
+
+        // Try to start
+        let projects = state.all_available_projects();
+        let target_kind = ResearchKind::BasicResearch { tech: *tech };
+        if let Some(idx) = projects.iter().position(|k| *k == target_kind) {
+            let (ok, _) = start_research(state, idx, false);
+            if ok {
+                state.cued_techs.retain(|t| t != tech);
+                events.push(GameEvent::CuedResearchStarted { tech: *tech });
             }
         }
     }
