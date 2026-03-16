@@ -664,8 +664,8 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                      Your researchers can no longer access their own findings."
                 ),
                 options: vec![ CrisisOption {
-                    label: "Release the data (−10% chairman approval)".into(),
-                    description: format!("Override {}'s IP claim. Board members with corporate ties won't appreciate it.", corp_name),
+                    label: "Override the claim (−10% chairman approval)".into(),
+                    description: format!("Void {}'s IP reclassification and restore data access. {} will take it personally.", corp_name, member_name),
                     cost: None,
                 },
                  CrisisOption {
@@ -674,8 +674,8 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                     cost: Some(CrisisCost { funding: resist_cost, personnel: 0, ..Default::default() }),
                 },
                 CrisisOption {
-                    label: "Accept it".into(),
-                    description: format!("Lose access to data {} claimed. No cost.", corp_name),
+                    label: "Concede the data".into(),
+                    description: "Your teams rebuild from what they can reconstruct. Lose ~1 day of research progress.".into(),
                     cost: None,
                 },
                 ],
@@ -1988,21 +1988,21 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 
 
         (CrisisKind::CorporateOverreach { .. }, 0) => {
-            // Override restriction — chairman satisfaction hit, data restored to research teams
+            // Override IP claim — chairman satisfaction hit, data restored to research teams
             chairman_satisfaction_hit(state, -0.10);
-            "Restriction overridden. Data restored to research teams.".into()
+            "IP claim voided. Research data restored.".into()
         }
         (CrisisKind::CorporateOverreach { .. }, 1) => {
             // Legal challenge — costs already deducted
             "Legal challenge successful. Research independence restored.".into()
         }
         (CrisisKind::CorporateOverreach { .. }, _) => {
-            // Accept IP claim — lose research progress
+            // Concede data — lose research progress
             let loss = TICKS_PER_DAY as f64;
             if let Some(proj) = state.active_research.first_mut() {
                 proj.progress = (proj.progress - loss).max(0.0);
             }
-            "IP claim accepted. Research data access restricted.".into()
+            "Data conceded. Research teams rebuilding from incomplete records.".into()
         }
 
         // --- Governor archetype crisis resolutions ---
