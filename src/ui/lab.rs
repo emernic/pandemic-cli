@@ -1117,7 +1117,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
 fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state::Reactor, selected: bool, state: &AppState) {
     let marker = if selected { "▶ " } else { "  " };
 
-    let (med_name, fill_pct, status_line) = if let Some(med_idx) = reactor.medicine_idx {
+    let (med_name, batch_progress_pct, status_line) = if let Some(med_idx) = reactor.medicine_idx {
         let med = state.medicines.get(med_idx);
         let name = med.map(|m| m.name.as_str()).unwrap_or("Unknown");
 
@@ -1137,26 +1137,26 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
             let yield_bonus = state.manufacturing_yield_bonus();
             let target = med.map(|m| m.max_doses * yield_bonus).unwrap_or(0.0);
-            (name.to_string(), pct / 100.0,
+            (name.to_string(), Some(pct / 100.0),
              format!("batch {:.0}%  ▣ {} doses  {}", pct, crate::format_number(target),
                  format_days(effective_remaining)))
         } else {
-            // Idle — show stockpile status
+            // Idle — reactor is empty, show stockpile info in status text only
             let current = med.map(|m| m.doses).unwrap_or(0.0);
             let max = med.map(|m| m.max_doses * state.manufacturing_yield_bonus()).unwrap_or(1.0);
-            let fill = if max > 0.0 { (current / max).min(1.0) } else { 0.0 };
             let status = if current >= max { "FULL" } else { "idle" };
             let hint = if current >= max { "[Enter] reassign" } else { "[Enter] start batch" };
-            (name.to_string(), fill,
+            (name.to_string(), None,
              format!("{} doses ({})  {}", crate::format_number(current), status, hint))
         }
     } else {
-        ("empty".to_string(), 0.0, "[Enter] assign medicine".to_string())
+        ("empty".to_string(), None, "[Enter] assign medicine".to_string())
     };
 
     // ASCII art reactor vessel (5 rows tall, 11 chars wide)
+    // Top ~1/3 is always headspace; material fills the bottom ~2/3
     let vessel_height = 5;
-    let filled_rows = (fill_pct * vessel_height as f64).round() as usize;
+    let max_fill_rows = (vessel_height * 2 + 2) / 3; // 4 out of 5 rows max (headspace = 1 row)
 
     let is_active = reactor.active;
     let (top_border, bottom_border, side_l, side_r) = if is_active {
@@ -1175,25 +1175,35 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
     };
 
     lines.push(Line::from(vec![
-        Span::raw(format!("{}  ", marker)),
+        Span::raw(format!("{}   ", marker)),
         Span::styled(top_border.to_string(), top_style),
     ]));
 
     // Vessel body rows (bottom-up fill)
-    let fill_chars = ['░', '▒', '▓'];
+    // Active batch: raw material (░/▒) fills bottom 2/3, solid (▓/█) replaces from bottom as batch progresses
+    // Idle/empty: vessel is empty
     for row in 0..vessel_height {
         let row_from_bottom = vessel_height - 1 - row;
-        let fill_char = if row_from_bottom < filled_rows {
-            // Gradient: bottom rows more solid
-            let gradient_idx = if filled_rows > 0 {
-                (row_from_bottom * 2 / filled_rows.max(1)).min(2)
-            } else { 0 };
-            fill_chars[gradient_idx]
+        let (fill_char, fill_color) = if let Some(progress) = batch_progress_pct {
+            // Active batch: material rows fill the bottom max_fill_rows
+            if row_from_bottom < max_fill_rows {
+                // How many rows are "reacted" (solid) — progress converts fuzzy to solid from bottom
+                let solid_rows = (progress * max_fill_rows as f64).round() as usize;
+                if row_from_bottom < solid_rows {
+                    // Solid fill (reacted product)
+                    ('█', Color::Green)
+                } else {
+                    // Fuzzy fill (raw material)
+                    ('░', Color::Yellow)
+                }
+            } else {
+                (' ', Color::DarkGray)
+            }
         } else {
-            ' '
+            // Idle or no medicine — empty vessel
+            (' ', Color::DarkGray)
         };
         let fill_str: String = std::iter::repeat(fill_char).take(9).collect();
-        let fill_color = if is_active { Color::Green } else { Color::DarkGray };
         lines.push(Line::from(vec![
             Span::raw("     "),
             Span::styled(side_l.to_string(), top_style),
@@ -1237,8 +1247,8 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
 
     // Auto-deploy and repeat toggles
     if reactor.medicine_idx.is_some() {
-        let auto_tag = if reactor.auto_deploy { "[✓] auto-deploy" } else { "[ ] auto-deploy" };
-        let repeat_tag = if reactor.repeat { "[✓] repeat" } else { "[ ] repeat" };
+        let auto_tag = if reactor.auto_deploy { "[X] auto-deploy" } else { "[ ] auto-deploy" };
+        let repeat_tag = if reactor.repeat { "[X] repeat" } else { "[ ] repeat" };
         lines.push(Line::from(vec![
             Span::raw("     "),
             Span::styled(auto_tag, Style::default().fg(

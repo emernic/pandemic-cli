@@ -301,7 +301,7 @@ fn render_region_filter(state: &AppState, medicine_idx: usize) -> (String, Vec<L
             region_filter.map(|s| s.contains(&region_idx)).unwrap_or(true)
         };
 
-        let toggle = if region_enabled { "[✓]" } else { "[ ]" };
+        let toggle = if region_enabled { "[X]" } else { "[ ]" };
         let marker = if selected { "▶ " } else { "  " };
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
