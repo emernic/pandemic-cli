@@ -3885,7 +3885,7 @@ pub enum BasicTech {
     /// Prereq: TargetedDrugDesign.
     MonoclonalAntibodies,
     /// Unlocks phage therapy development for bacteria.
-    /// Prereq: MonoclonalAntibodies.
+    /// Prereq: TargetedDrugDesign.
     PhageTherapy,
     /// Unlocks RNA therapeutic screening modality (mRNA, siRNA, ASO).
     /// Prereq: MonoclonalAntibodies.
@@ -3895,7 +3895,7 @@ pub enum BasicTech {
     HighThroughputScreening,
     /// Disease-caused infrastructure degradation (HC/SL/CO) is 20% slower globally.
     /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
-    /// Prereq: PhageTherapy.
+    /// Prereq: EpidemiologicalForecasting.
     ResilientGrids,
 
     // ── Column 1: Sequencing → surveillance ──────────────────────
