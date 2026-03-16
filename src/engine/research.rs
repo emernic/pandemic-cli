@@ -1289,4 +1289,47 @@ mod tests {
 
     // blocked_medicine_developments_not_duplicated_when_already_available — removed:
     // blocked_medicine_developments() method no longer exists.
+
+    #[test]
+    fn medicine_names_are_diverse() {
+        use crate::state::MechanismOfAction;
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+        use std::collections::HashSet;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut names = HashSet::new();
+
+        let mechanisms = [
+            Some(MechanismOfAction::CellWallInhibitor),
+            Some(MechanismOfAction::RibosomeInhibitor),
+            Some(MechanismOfAction::PolymeraseInhibitor),
+            Some(MechanismOfAction::ProteaseInhibitor),
+            Some(MechanismOfAction::EntryInhibitor),
+            None,
+        ];
+
+        // Generate 30 names (5 per mechanism) — all should be unique
+        for mech in &mechanisms {
+            for _ in 0..5 {
+                let name = super::generate_medicine_name("TestDisease", *mech, &mut rng);
+                assert!(!name.is_empty());
+                // First letter should be uppercase
+                assert!(name.chars().next().unwrap().is_uppercase(),
+                    "Name should start uppercase: {}", name);
+                names.insert(name);
+            }
+        }
+
+        // With 30 generated names, we should have at least 25 unique (high diversity)
+        assert!(names.len() >= 25,
+            "Expected at least 25 unique names from 30 generated, got {}: {:?}",
+            names.len(), names);
+
+        // Same disease name should NOT produce identical names
+        let mut rng2 = ChaCha8Rng::seed_from_u64(99);
+        let a = super::generate_medicine_name("Machupo-Sigma", Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
+        let b = super::generate_medicine_name("Machupo-Sigma", Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
+        assert_ne!(a, b, "Two medicines for the same disease should get different names");
+    }
 }
