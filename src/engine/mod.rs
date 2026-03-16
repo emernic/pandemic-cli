@@ -3432,6 +3432,58 @@ mod tests {
     }
 
     #[test]
+    fn contract_demand_cancel_removes_contract() {
+        use crate::state::{CrisisEvent, CrisisKind, CrisisOption, FundingCondition, FundingContract};
+
+        let mut state = AppState::new_default(42);
+        state.contracts.push(FundingContract {
+            name: "Media Transparency Pledge".to_string(),
+            board_member_idx: 0,
+            income: 1.8,
+            condition: FundingCondition::MaxDeaths { threshold: 50_000_000.0 },
+            template_id: 4,
+            satisfaction: 0.4,
+            warned: true,
+            last_demand_tick: 0,
+            accepted_tick: 0,
+            loyalty_raise_offered: false,
+            last_bonus_tick: 0,
+        });
+
+        state.active_crisis = Some(CrisisEvent {
+            kind: CrisisKind::ContractDemand { template_id: 4 },
+            title: "Kowalski: Demands".into(),
+            description: "Test".into(),
+            options: vec![
+                CrisisOption {
+                    label: "Placate".into(),
+                    description: "".into(),
+                    cost: None,
+                },
+                CrisisOption {
+                    label: "Refuse".into(),
+                    description: "".into(),
+                    cost: None,
+                },
+                CrisisOption {
+                    label: "Cancel contract".into(),
+                    description: "".into(),
+                    cost: None,
+                },
+            ],
+            tick_created: 0,
+        });
+
+        // Select option 2 (cancel contract) and confirm
+        let after = apply_action(&state, &Action::SelectNext);
+        let after = apply_action(&after, &Action::SelectNext);
+        let after = apply_action(&after, &Action::Confirm);
+        assert!(after.active_crisis.is_none());
+        assert!(after.contracts.is_empty(),
+            "Contract should be removed after cancel option");
+    }
+
+    #[test]
     fn spacebar_blocked_during_event_state() {
         use crate::state::{CrisisEvent, CrisisKind, CrisisOption, SimState};
 

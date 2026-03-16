@@ -750,6 +750,11 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         description: format!("{} loses patience. Contract satisfaction −15%.", member_name),
                         cost: None,
                     },
+                    CrisisOption {
+                        label: "Cancel contract".into(),
+                        description: format!("Walk away from the deal. {} won't forget it.", member_name),
+                        cost: None,
+                    },
                 ],
                 kind,
                 tick_created: tick,
@@ -2038,7 +2043,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             }
             format!("{} placated. Contract stable.", member_name)
         }
-        (CrisisKind::ContractDemand { template_id }, _) => {
+        (CrisisKind::ContractDemand { template_id }, 1) => {
             // Refuse: contract condition satisfaction drops sharply
             let member_idx = state.contracts.iter()
                 .find(|c| c.template_id == *template_id)
@@ -2053,6 +2058,20 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                 c.satisfaction = (c.satisfaction - 0.15).max(0.0);
             }
             format!("{} rebuffed. Contract satisfaction dropped.", member_name)
+        }
+        (CrisisKind::ContractDemand { template_id }, _) => {
+            // Cancel contract: walk away from the deal entirely
+            let member_idx = state.contracts.iter()
+                .find(|c| c.template_id == *template_id)
+                .map(|c| c.board_member_idx);
+            let member_name = member_idx
+                .and_then(|idx| state.board_members.get(idx))
+                .map(|m| m.name.clone())
+                .unwrap_or_else(|| "Board member".to_string());
+            if let Some(idx) = member_idx {
+                post_action = CrisisPostAction::CancelContract { board_member_idx: idx };
+            }
+            format!("{} contract terminated.", member_name)
         }
 
         // --- Loyalty raise resolutions ---
