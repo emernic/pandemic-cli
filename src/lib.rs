@@ -370,19 +370,17 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
             }
         }
         Action::Discard => {
-            // Reactors tab: D toggles "Deploy medicine when finished" for selected reactor
             if new.ui.open_panel == Panel::Lab {
                 if let Some(lab_ui) = &new.ui.lab_ui {
                     if lab_ui.is_browsing() && lab_ui.tab() == LabTab::Reactors {
+                        // Reactors tab: D toggles "Deploy when finished" for selected reactor
                         let sel = new.ui.panel_selection;
                         if sel < new.reactors.len() && new.reactors[sel].medicine_idx.is_some() {
                             execute_command(&mut new, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: sel });
                         }
                     }
                 }
-            }
-            // Discard screening hit in the trial wizard
-            if new.ui.open_panel == Panel::Lab {
+                // Discard screening hit in the trial wizard
                 if let Some(LabUiState::TrialSelectHit) = &new.ui.lab_ui {
                     let hit_index = new.ui.panel_selection;
                     let cmd = GameCommand::DiscardHit { hit_index };
