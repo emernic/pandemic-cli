@@ -848,7 +848,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
         let corps = state.region_corporations(idx);
         if !corps.is_empty() && lines.len() + 2 < inner.height as usize {
             lines.push(Line::from(Span::styled(
-                "─── Local Market ───",
+                "--- Local Market ---",
                 Style::default().fg(Color::DarkGray),
             )));
             for corp in &corps {
@@ -880,7 +880,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
                 } else if change < -0.5 {
                     format!(" ▼{:>+5.1}%", change)
                 } else {
-                    format!(" {:<9}", "──")
+                    format!(" {:<9}", "--")
                 };
                 lines.push(Line::from(vec![
                     Span::styled(
