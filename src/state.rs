@@ -243,6 +243,15 @@ pub struct AppState {
     pub session: SessionState,
 }
 
+// GUARDRAIL: These Deref impls exist so that code holding an AppState can
+// access world fields directly (e.g. `state.diseases` instead of
+// `state.world.diseases`).  This is a deliberate ergonomic shortcut, NOT an
+// invitation to treat AppState and WorldState as interchangeable.
+//
+// In boundary-sensitive code (engine entry points, serialization, lib.rs
+// action routing) prefer explicit `state.world` access so the app/world seam
+// stays visible.  Do not add new Deref-style coercions between AppState and
+// UiState or SessionState — the world shortcut is the sole exception.
 impl std::ops::Deref for AppState {
     type Target = WorldState;
     fn deref(&self) -> &WorldState {
@@ -4996,7 +5005,14 @@ impl AppState {
     }
 
     /// Replace the world state, keeping UI and session state.
-    /// Used after `engine::tick()` returns a new `WorldState`.
+    ///
+    /// GUARDRAIL: This helper exists mainly for **engine unit tests** that call
+    /// `tick()` directly and need to splice the resulting WorldState back into
+    /// an AppState.  Production (non-test) simulation advancement should go
+    /// through `tick_and_process()` in lib.rs, which constructs the new
+    /// AppState explicitly and also runs event processing and selection
+    /// stabilization.  Prefer that path over manual `with_world()` calls in
+    /// any new non-test code.
     pub fn with_world(&self, world: WorldState) -> Self {
         Self {
             world,

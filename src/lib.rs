@@ -288,7 +288,13 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
                     events::process_events(&mut new, &result.events);
-                    // Map engine result to UI navigation (coordination logic)
+                    // GUARDRAIL: The block below is coordination logic that
+                    // maps engine results to UI/session state updates.  This
+                    // is the ONE place where command outcomes legitimately
+                    // cross the world→UI boundary.  Keep this pattern contained
+                    // here in lib.rs — engine/ must never import or modify
+                    // UiState, and UI modules must never call execute_command
+                    // directly.
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
                             if new.ui.open_panel == Panel::Lab {
