@@ -3573,9 +3573,9 @@ impl ScreeningModality {
 
     pub fn description(self) -> &'static str {
         match self {
-            Self::SmallMolecule => "standard compound library",
-            Self::MonoclonalAntibody => "high specificity, slow",
-            Self::RnaTherapeutic => "programmable, moderate",
+            Self::SmallMolecule => "easy to manufacture, resistance-prone",
+            Self::MonoclonalAntibody => "high efficacy, low yield",
+            Self::RnaTherapeutic => "resistance-resistant, balanced",
         }
     }
 
@@ -3593,6 +3593,46 @@ impl ScreeningModality {
         match self.required_tech() {
             None => true,
             Some(tech) => unlocked_techs.contains(&tech),
+        }
+    }
+
+    /// Multiplier applied to base efficacy from Kd binding affinity.
+    /// mAbs are highly specific; small molecules are less targeted.
+    pub fn efficacy_multiplier(self) -> f64 {
+        match self {
+            Self::SmallMolecule => 0.90,
+            Self::MonoclonalAntibody => 1.15,
+            Self::RnaTherapeutic => 1.05,
+        }
+    }
+
+    /// Multiplier applied to the base resistance rate.
+    /// Small molecules provoke resistance fastest; RNA therapeutics are adaptable.
+    pub fn resistance_multiplier(self) -> f64 {
+        match self {
+            Self::SmallMolecule => 1.20,
+            Self::MonoclonalAntibody => 0.80,
+            Self::RnaTherapeutic => 0.65,
+        }
+    }
+
+    /// Multiplier applied to max_doses (manufacturing scalability).
+    /// Small molecules are cheap to mass-produce; mAbs require specialized facilities.
+    pub fn dose_multiplier(self) -> f64 {
+        match self {
+            Self::SmallMolecule => 1.30,
+            Self::MonoclonalAntibody => 0.60,
+            Self::RnaTherapeutic => 0.85,
+        }
+    }
+
+    /// Multiplier applied to side-effect rate.
+    /// mAbs are precise (fewer off-target effects); small molecules are blunter.
+    pub fn side_effect_multiplier(self) -> f64 {
+        match self {
+            Self::SmallMolecule => 1.25,
+            Self::MonoclonalAntibody => 0.60,
+            Self::RnaTherapeutic => 0.85,
         }
     }
 }
