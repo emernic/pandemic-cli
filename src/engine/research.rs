@@ -187,46 +187,44 @@ pub(super) fn discard_hit(state: &mut WorldState, hit_index: usize) -> (bool, Op
 }
 
 /// Generate reported stats for a medicine based on trial rigor.
-/// Full trials get accurate numbers. Charade trials get potentially misleading info.
-fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, rng: &mut impl rand::Rng) {
+/// All rigor levels report percentage ranges. Higher rigor = tighter ranges.
+/// Charade gives no useful information (all "???").
+fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, _rng: &mut impl rand::Rng) {
     let real_eff = medicine.trial_efficacy.unwrap_or(0.5);
     let real_se = medicine.side_effect_rate;
     let real_res = medicine.resistance_rate;
 
+    /// Format a stat as a percentage range, clamped to 0–100%.
+    fn pct_range(real: f64, half_width: f64) -> String {
+        let lo = ((real - half_width) * 100.0).max(0.0);
+        let hi = ((real + half_width) * 100.0).min(100.0);
+        format!("{:.0}-{:.0}%", lo, hi)
+    }
+
     match rigor {
         TrialRigor::Full => {
+            // Precise: exact percentage
             medicine.reported_efficacy = Some(format!("{:.0}%", real_eff * 100.0));
             medicine.reported_side_effects = Some(format!("{:.0}%", real_se * 100.0));
-            medicine.reported_resistance = Some(if real_res < 0.3 { "Low" } else if real_res < 0.7 { "Moderate" } else { "High" }.into());
+            medicine.reported_resistance = Some(format!("{:.0}%", real_res * 100.0));
         }
         TrialRigor::Abbreviated => {
-            // Show with uncertainty ranges (±10-15%)
-            let eff_lo = ((real_eff - 0.10) * 100.0).max(0.0);
-            let eff_hi = ((real_eff + 0.10) * 100.0).min(100.0);
-            medicine.reported_efficacy = Some(format!("{:.0}-{:.0}%", eff_lo, eff_hi));
-            let se_lo = ((real_se - 0.05) * 100.0).max(0.0);
-            let se_hi = ((real_se + 0.05) * 100.0).min(100.0);
-            medicine.reported_side_effects = Some(format!("{:.0}-{:.0}%", se_lo, se_hi));
-            medicine.reported_resistance = Some(if real_res < 0.3 { "Low" } else if real_res < 0.7 { "Moderate" } else { "High" }.into());
+            // Moderate uncertainty: ±10% efficacy, ±5% side effects, ±15% resistance
+            medicine.reported_efficacy = Some(pct_range(real_eff, 0.10));
+            medicine.reported_side_effects = Some(pct_range(real_se, 0.05));
+            medicine.reported_resistance = Some(pct_range(real_res, 0.15));
         }
         TrialRigor::Compassionate => {
-            // Qualitative only
-            medicine.reported_efficacy = Some(if real_eff > 0.7 { "High" } else if real_eff > 0.4 { "Medium" } else { "Low" }.into());
-            // Side effects might be hidden
-            medicine.reported_side_effects = if real_se > 0.15 {
-                Some("Possible".into())
-            } else {
-                Some("Unknown".into())
-            };
-            medicine.reported_resistance = Some("Unknown".into());
+            // Very wide ranges: ±25% efficacy, ±20% side effects, ±30% resistance
+            medicine.reported_efficacy = Some(pct_range(real_eff, 0.25));
+            medicine.reported_side_effects = Some(pct_range(real_se, 0.20));
+            medicine.reported_resistance = Some(pct_range(real_res, 0.30));
         }
         TrialRigor::Charade => {
-            // Stats could be wildly inaccurate — the reported values might be lies
-            let fake_eff = (rng.r#gen::<f64>() * 0.5 + 0.4).clamp(0.0, 1.0);
-            medicine.reported_efficacy = Some(if fake_eff > 0.7 { "High" } else if fake_eff > 0.4 { "Medium" } else { "Low" }.into());
-            // Always says side effects are minimal (even if they're not)
-            medicine.reported_side_effects = Some("Minimal".into());
-            medicine.reported_resistance = Some(if rng.r#gen::<bool>() { "Low" } else { "Moderate" }.into());
+            // No useful data — you get nothing for skipping a real trial
+            medicine.reported_efficacy = Some("???".into());
+            medicine.reported_side_effects = Some("???".into());
+            medicine.reported_resistance = Some("???".into());
         }
     }
 }
