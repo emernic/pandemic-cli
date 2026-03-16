@@ -1252,6 +1252,39 @@ pub(super) fn tick_auto_rebuild(state: &mut WorldState, events: &mut Vec<GameEve
     }
 }
 
+/// Auto-negotiate with governors when cooperation drops below threshold.
+/// Fires once per day (every TICKS_PER_DAY ticks).
+pub(super) fn tick_auto_negotiate(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+    use crate::state::{TICKS_PER_DAY, AUTO_NEGOTIATE_THRESHOLD};
+
+    if state.tick % (TICKS_PER_DAY as u64) != 0 {
+        return;
+    }
+    let num_regions = state.regions.len();
+    for region_idx in 0..num_regions {
+        if !state.policies[region_idx].auto_negotiate {
+            continue;
+        }
+        if state.regions[region_idx].collapsed {
+            continue;
+        }
+        if state.regions[region_idx].governor.is_dead() {
+            continue;
+        }
+        if state.regions[region_idx].governor.cooperation < AUTO_NEGOTIATE_THRESHOLD {
+            let (msg, ok) = negotiate_governor(state, region_idx);
+            if ok {
+                if let Some(m) = msg {
+                    events.push(GameEvent::PolicyAutoActivated {
+                        region_idx,
+                        policy_name: format!("Auto-negotiate: {}", m),
+                    });
+                }
+            }
+        }
+    }
+}
+
 /// Update screening infrastructure progress and estimated infection counts.
 ///
 /// Each tick:
@@ -2512,5 +2545,62 @@ mod tests {
 
         assert!((state.resources.funding - funding_before).abs() < 0.01,
             "should not spend funds when all infra above threshold");
+    }
+
+    #[test]
+    fn auto_negotiate_fires_when_cooperation_below_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
+        use crate::state::{TICKS_PER_DAY, AUTO_NEGOTIATE_THRESHOLD, NEGOTIATE_COST};
+        let mut state = AppState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.policies[0].auto_negotiate = true;
+        state.regions[0].governor.cooperation = AUTO_NEGOTIATE_THRESHOLD - 1.0;
+
+        state.tick = TICKS_PER_DAY as u64;
+        let coop_before = state.regions[0].governor.cooperation;
+        let funding_before = state.resources.funding;
+        tick_auto_negotiate(&mut state, &mut events);
+
+        assert!(state.regions[0].governor.cooperation > coop_before,
+            "cooperation should increase: was {coop_before}, now {}", state.regions[0].governor.cooperation);
+        assert!((state.resources.funding - (funding_before - NEGOTIATE_COST)).abs() < 0.01,
+            "should spend negotiate cost");
+        assert!(events.iter().any(|e| matches!(e, GameEvent::PolicyAutoActivated { .. })),
+            "should emit PolicyAutoActivated event");
+    }
+
+    #[test]
+    fn auto_negotiate_skips_when_cooperation_above_threshold() {
+        let mut events: Vec<GameEvent> = Vec::new();
+        use crate::state::{TICKS_PER_DAY, AUTO_NEGOTIATE_THRESHOLD};
+        let mut state = AppState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.policies[0].auto_negotiate = true;
+        state.regions[0].governor.cooperation = AUTO_NEGOTIATE_THRESHOLD + 10.0;
+        let funding_before = state.resources.funding;
+
+        state.tick = TICKS_PER_DAY as u64;
+        tick_auto_negotiate(&mut state, &mut events);
+
+        assert!((state.resources.funding - funding_before).abs() < 0.01,
+            "should not spend funds when cooperation above threshold");
+    }
+
+    #[test]
+    fn auto_negotiate_skips_dead_governor() {
+        let mut events: Vec<GameEvent> = Vec::new();
+        use crate::state::TICKS_PER_DAY;
+        let mut state = AppState::new_default(42);
+        state.resources.funding = 10_000.0;
+        state.policies[0].auto_negotiate = true;
+        state.regions[0].governor.dead = true;
+        state.regions[0].governor.cooperation = 20.0;
+        let funding_before = state.resources.funding;
+
+        state.tick = TICKS_PER_DAY as u64;
+        tick_auto_negotiate(&mut state, &mut events);
+
+        assert!((state.resources.funding - funding_before).abs() < 0.01,
+            "should not spend funds for dead governor");
     }
 }
