@@ -1786,11 +1786,12 @@ mod tests {
         let mut state = AppState::new_default(42);
         state = apply_action(&state, &Action::OpenLab);
 
-        // Flat panel: BrowseAll with all items in one list
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
+        // Opens to Sequencing tab by default
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
         assert_eq!(state.ui.panel_selection, 0);
 
-        let items = state.research_flat_items();
+        let tab = state.ui.lab_ui.as_ref().unwrap().tab();
+        let items = state.lab_tab_items(tab);
         let max = items.len().saturating_sub(1);
         assert!(max > 0, "should have at least one selectable item");
 
@@ -1815,7 +1816,7 @@ mod tests {
         detect_all_diseases(&mut state);
 
         state = apply_action(&state, &Action::OpenLab);
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
 
         // Confirm first available project → goes to ConfirmProject
         state = apply_action(&state, &Action::Confirm);
@@ -1823,7 +1824,7 @@ mod tests {
 
         // Esc back to flat list
         state = apply_action(&state, &Action::ClosePanel);
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
 
         // Esc again closes panel
         state = apply_action(&state, &Action::ClosePanel);
@@ -1842,19 +1843,20 @@ mod tests {
         state = apply_action(&state, &Action::Confirm); // Start it
         // After starting, UI returns to BrowseAll on the Research panel
 
-        // Close the panel first, then re-open to get a fresh BrowseAll
+        // Close the panel first, then re-open to get a fresh Browse
         state = apply_action(&state, &Action::ClosePanel);
         state = apply_action(&state, &Action::OpenLab);
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
-        let items = state.research_flat_items();
-        // Find the active item's position in the unified list
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
+        let tab = state.ui.lab_ui.as_ref().unwrap().tab();
+        let items = state.lab_tab_items(tab);
+        // Find the active item's position in the tab's item list
         let active_pos = items.iter().position(|i| matches!(i, ResearchFlatItem::Active(_))).unwrap();
         assert!(matches!(items[active_pos], ResearchFlatItem::Active(0)));
 
         // Navigate to the active project and press Enter — should be a no-op
         state.ui.panel_selection = active_pos;
         state = apply_action(&state, &Action::Confirm);
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
     }
 
     #[test]

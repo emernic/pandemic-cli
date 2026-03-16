@@ -342,6 +342,7 @@ mod tests {
     /// Helper: open Lab panel, navigate to first available item matching `kind_pred`, and confirm through.
     /// For BasicResearch, use `start_basic_research` instead (those are in the Research panel now).
     fn start_research_matching(state: &AppState, kind_pred: impl Fn(&ResearchKind) -> bool) -> AppState {
+        use crate::state::LabTab;
         // Ensure panel is closed first, then open fresh
         let mut s = if state.ui.open_panel == crate::state::Panel::Lab {
             apply_action(state, &Action::ClosePanel)
@@ -349,15 +350,25 @@ mod tests {
             state.clone()
         };
         s = apply_action(&s, &Action::OpenLab);
-        let items = s.research_flat_items();
         let available = s.all_available_projects();
-        let idx = items.iter().position(|item| {
-            if let ResearchFlatItem::Available(proj_idx) = item {
-                available.get(*proj_idx).map_or(false, &kind_pred)
-            } else {
-                false
+        // Find which tab contains the matching item and its index within that tab
+        let mut found = None;
+        for tab in LabTab::ALL {
+            let items = s.lab_tab_items(tab);
+            if let Some(idx) = items.iter().position(|item| {
+                if let ResearchFlatItem::Available(proj_idx) = item {
+                    available.get(*proj_idx).map_or(false, &kind_pred)
+                } else {
+                    false
+                }
+            }) {
+                found = Some((tab, idx));
+                break;
             }
-        }).expect("expected matching research item in flat list");
+        }
+        let (tab, idx) = found.expect("expected matching research item in some tab");
+        // Navigate to the correct tab
+        s.ui.lab_ui = Some(crate::state::LabUiState::Browse { tab });
         s.ui.panel_selection = idx;
         s = apply_action(&s, &Action::Confirm); // ConfirmProject
         s = apply_action(&s, &Action::Confirm); // Start

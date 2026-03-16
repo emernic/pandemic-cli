@@ -12,7 +12,7 @@ use state::{
     DecreeId, DECREE_COUNT, GameCommand, GameOutcome, AppState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
-    ResearchFlatItem, ResearchKind, LabUiState, SimState,
+    ResearchFlatItem, ResearchKind, LabTab, LabUiState, SimState,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -148,6 +148,14 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 new.ui.panel_selection = ui::tech_tree::navigate(
                     new.ui.panel_selection, ui::tech_tree::TreeDirection::Left,
                 );
+            } else if new.ui.open_panel == Panel::Lab {
+                if let Some(lab_ui) = &new.ui.lab_ui {
+                    if lab_ui.is_browsing() {
+                        let tab = lab_ui.tab().prev();
+                        new.ui.lab_ui = Some(LabUiState::Browse { tab });
+                        new.ui.panel_selection = 0;
+                    }
+                }
             } else {
                 new.ui.select_left(new.regions.len());
             }
@@ -157,6 +165,14 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 new.ui.panel_selection = ui::tech_tree::navigate(
                     new.ui.panel_selection, ui::tech_tree::TreeDirection::Right,
                 );
+            } else if new.ui.open_panel == Panel::Lab {
+                if let Some(lab_ui) = &new.ui.lab_ui {
+                    if lab_ui.is_browsing() {
+                        let tab = lab_ui.tab().next();
+                        new.ui.lab_ui = Some(LabUiState::Browse { tab });
+                        new.ui.panel_selection = 0;
+                    }
+                }
             } else {
                 new.ui.select_right(new.regions.len());
             }
@@ -212,24 +228,25 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
             else if new.ui.open_panel == Panel::Lab {
                 if let Some(LabUiState::ConfirmProject { double_personnel, .. }) = &mut new.ui.lab_ui {
                     *double_personnel = !*double_personnel;
-                } else if matches!(new.ui.lab_ui, Some(LabUiState::BrowseAll)) {
-                    // Toggle auto-repeat for the selected repeatable project
-                    let items = new.research_flat_items();
-                    if let Some(item) = items.get(new.ui.panel_selection) {
-                        // For available items, get the kind from the available list
-                        let kind = match item {
-                            ResearchFlatItem::Available(idx) => {
-                                new.all_available_projects().get(*idx).cloned()
-                            }
-                            ResearchFlatItem::Active(idx) => {
-                                new.active_research.get(*idx).map(|p| p.kind.clone())
-                            }
-                            ResearchFlatItem::FullStockpile(k) => Some(k.clone()),
-                            _ => None,
-                        };
-                        if let Some(kind) = kind {
-                            if kind.is_repeatable() {
-                                execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
+                } else if let Some(lab_ui) = &new.ui.lab_ui {
+                    if lab_ui.is_browsing() {
+                        // Toggle auto-repeat for the selected repeatable project
+                        let items = new.lab_tab_items(lab_ui.tab());
+                        if let Some(item) = items.get(new.ui.panel_selection) {
+                            let kind = match item {
+                                ResearchFlatItem::Available(idx) => {
+                                    new.all_available_projects().get(*idx).cloned()
+                                }
+                                ResearchFlatItem::Active(idx) => {
+                                    new.active_research.get(*idx).map(|p| p.kind.clone())
+                                }
+                                ResearchFlatItem::FullStockpile(k) => Some(k.clone()),
+                                _ => None,
+                            };
+                            if let Some(kind) = kind {
+                                if kind.is_repeatable() {
+                                    execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
+                                }
                             }
                         }
                     }
@@ -275,14 +292,16 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
                             if new.ui.open_panel == Panel::Lab {
-                                new.ui.lab_ui = Some(LabUiState::BrowseAll);
+                                let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                                new.ui.lab_ui = Some(LabUiState::Browse { tab });
                                 new.ui.panel_selection = 0;
                             }
                             // Research panel: keep selection in place so player
                             // can see the tech now shows "Researching" state.
                         }
                         GameCommand::UpgradeLab if result.success => {
-                            new.ui.lab_ui = Some(LabUiState::BrowseAll);
+                            let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                            new.ui.lab_ui = Some(LabUiState::Browse { tab });
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::EnactDecree { .. } if result.success => {
@@ -328,9 +347,10 @@ pub fn tick_and_process(state: &AppState) -> AppState {
 
     // Research panel: capture the ResearchFlatItem identity.
     let selected_research_item = if state.ui.open_panel == Panel::Lab
-        && matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll))
+        && matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. }))
     {
-        let items = state.research_flat_items();
+        let tab = state.ui.lab_ui.as_ref().unwrap().tab();
+        let items = state.lab_tab_items(tab);
         items.get(state.ui.panel_selection).cloned()
     } else {
         None
@@ -365,9 +385,10 @@ pub fn tick_and_process(state: &AppState) -> AppState {
     // Stabilize research panel selection: find the same item in the new list.
     if let Some(ref old_item) = selected_research_item {
         if new.ui.open_panel == Panel::Lab
-            && matches!(new.ui.lab_ui, Some(LabUiState::BrowseAll))
+            && matches!(new.ui.lab_ui, Some(LabUiState::Browse { .. }))
         {
-            let new_items = new.research_flat_items();
+            let tab = new.ui.lab_ui.as_ref().unwrap().tab();
+            let new_items = new.lab_tab_items(tab);
             let old_kind = old_item.to_kind(state);
             let found = match old_item {
                 ResearchFlatItem::UpgradeLab => {
@@ -524,14 +545,14 @@ fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
 
 fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     match ui.lab_ui.clone() {
-        Some(LabUiState::BrowseAll) => {
-            let items = state.research_flat_items();
+        Some(LabUiState::Browse { tab }) => {
+            let items = state.lab_tab_items(tab);
             let Some(item) = items.get(ui.panel_selection) else {
                 return None;
             };
             match item {
                 ResearchFlatItem::UpgradeLab => {
-                    ui.lab_ui = Some(LabUiState::ConfirmLabUpgrade);
+                    ui.lab_ui = Some(LabUiState::ConfirmLabUpgrade { tab });
                     ui.panel_selection = 0;
                     return None;
                 }
@@ -540,6 +561,7 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 // Available projects: go to confirm screen
                 ResearchFlatItem::Available(project_idx) => {
                     ui.lab_ui = Some(LabUiState::ConfirmProject {
+                        tab,
                         project_idx: *project_idx,
                         double_personnel: false,
                     });
@@ -550,10 +572,10 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             }
             None
         }
-        Some(LabUiState::ConfirmProject { project_idx, double_personnel }) => {
+        Some(LabUiState::ConfirmProject { project_idx, double_personnel, .. }) => {
             Some(GameCommand::StartResearch { project_idx, double_personnel })
         }
-        Some(LabUiState::ConfirmLabUpgrade) => {
+        Some(LabUiState::ConfirmLabUpgrade { .. }) => {
             Some(GameCommand::UpgradeLab)
         }
         None => None,
@@ -872,7 +894,8 @@ mod tests {
         // Open research panel (flat list: items depend on game state)
         let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.panel_selection, 0);
-        let max = state.research_flat_items().len().saturating_sub(1);
+        let tab = state.ui.lab_ui.as_ref().unwrap().tab();
+        let max = state.lab_tab_items(tab).len().saturating_sub(1);
 
         // Key '3' → index 2 → should select item at index 2 (or clamp)
         let state = apply_action(&state, &Action::JumpToItem { index: 2 });
@@ -922,14 +945,14 @@ mod tests {
         // Open research → confirm first item → now at ConfirmProject
         let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.open_panel, Panel::Lab);
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
         let state = apply_action(&state, &Action::Confirm);
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::ConfirmProject { .. })));
 
         // Press R again — should reset to BrowseAll, NOT close the panel
         let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.open_panel, Panel::Lab);
-        assert!(matches!(state.ui.lab_ui, Some(LabUiState::BrowseAll)));
+        assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
 
         // Press R again at top level — now it closes
         let state = apply_action(&state, &Action::OpenLab);
@@ -1066,16 +1089,16 @@ mod tests {
 
     #[test]
     fn research_selection_stable_when_new_items_appear() {
-        use crate::state::{ResearchProject, LabUiState, Panel};
+        use crate::state::{ResearchProject, LabUiState, LabTab, Panel};
 
         let mut state = AppState::new_default(42);
         // Open the research panel in BrowseAll mode
         state.ui.open_panel = Panel::Lab;
-        state.ui.lab_ui = Some(LabUiState::BrowseAll);
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
         // Pause so tick doesn't advance simulation (we want controlled changes)
         state.sim_state = SimState::Paused;
 
-        let items_before = state.research_flat_items();
+        let items_before = state.lab_tab_items(LabTab::Sequencing);
         assert!(items_before.len() >= 2, "need at least 2 items to test selection stability");
 
         // Select the second item and record its identity
@@ -1083,7 +1106,7 @@ mod tests {
         let selected_kind = items_before[1].to_kind(&state);
 
         // Add a new active research project, which will push all Available items
-        // down by one position in the flat list
+        // down by one position in the tab's list
         let first_available = items_before.iter()
             .find_map(|item| item.available_kind(&state))
             .expect("should have at least one available project");
@@ -1095,8 +1118,8 @@ mod tests {
             personnel_assigned: personnel,
         });
 
-        // The flat list has changed — the old index 1 now points to a different item
-        let items_shifted = state.research_flat_items();
+        // The item list has changed — the old index 1 now points to a different item
+        let items_shifted = state.lab_tab_items(LabTab::Sequencing);
         let _naive_kind = items_shifted.get(1).and_then(|item| item.to_kind(&state));
         // The shift should have changed what index 1 points to (unless item 1 was the
         // newly-added active project, which is unlikely but possible)
@@ -1106,7 +1129,7 @@ mod tests {
 
         if let Some(ref kind) = selected_kind {
             // The selection should now point to the same ResearchKind
-            let new_items = new_state.research_flat_items();
+            let new_items = new_state.lab_tab_items(LabTab::Sequencing);
             let new_selected = new_items.get(new_state.ui.panel_selection)
                 .and_then(|item| item.to_kind(&new_state));
             assert_eq!(new_selected.as_ref(), Some(kind),
@@ -1114,7 +1137,7 @@ mod tests {
         }
         // If selected_kind was None (UpgradeLab), the UpgradeLab item should still be selected
         if matches!(items_before[1], ResearchFlatItem::UpgradeLab) {
-            let new_items = new_state.research_flat_items();
+            let new_items = new_state.lab_tab_items(LabTab::Sequencing);
             assert!(matches!(new_items.get(new_state.ui.panel_selection), Some(ResearchFlatItem::UpgradeLab)),
                 "UpgradeLab selection should be preserved");
         }
