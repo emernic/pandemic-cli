@@ -69,7 +69,7 @@ pub(super) fn start_batch(state: &mut WorldState, reactor_idx: usize) -> (bool, 
 
     // Check if stockpile is already full
     if let Some(med) = state.medicines.get(medicine_idx) {
-        if med.doses >= med.max_doses * state.manufacturing_yield_bonus() {
+        if med.doses >= med.max_doses {
             return (false, Some("Stockpile is full.".to_string()));
         }
     }
@@ -104,7 +104,6 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
         .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
         .fold(0.0_f64, f64::max);
     let biotech_mult = 1.0 + crate::state::CorporationSector::Biotech.max_bonus_pct() / 100.0 * biotech_bonus;
-    let mfg_bonus = state.manufacturing_yield_bonus();
     let infra_mult = state.research_infra_multiplier();
 
     let reactor_count = state.reactors.len();
@@ -114,7 +113,7 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
             if state.reactors[i].repeat {
                 if let Some(med_idx) = state.reactors[i].medicine_idx {
                     let dose_frac = state.medicines.get(med_idx)
-                        .map(|m| if m.max_doses > 0.0 { m.doses / (m.max_doses * mfg_bonus) } else { 1.0 })
+                        .map(|m| if m.max_doses > 0.0 { m.doses / m.max_doses } else { 1.0 })
                         .unwrap_or(1.0);
                     if dose_frac < 1.0 {
                         let (ok, _) = start_batch(state, i);
@@ -151,7 +150,7 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
             if let Some(med_idx) = reactor.medicine_idx {
                 // Complete manufacturing — restore doses
                 if let Some(medicine) = state.medicines.get_mut(med_idx) {
-                    medicine.doses = medicine.max_doses * mfg_bonus;
+                    medicine.doses = medicine.max_doses;
                 }
 
                 // Manufacturer satisfaction boost (same as old ManufactureDoses completion)

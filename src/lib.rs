@@ -803,8 +803,7 @@ fn handle_reactor_confirm(ui: &mut UiState, state: &AppState) -> Option<GameComm
 
     // Configured idle reactor — check if stockpile is full
     if let Some(med) = state.medicines.get(reactor.medicine_idx.unwrap()) {
-        let target = med.max_doses * state.manufacturing_yield_bonus();
-        if med.doses >= target {
+        if med.doses >= med.max_doses {
             // Full stockpile — allow reassignment instead
             ui.lab_ui = Some(LabUiState::ReactorSelectMedicine { reactor_idx: sel });
             ui.panel_selection = 0;

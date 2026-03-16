@@ -393,9 +393,8 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
                 let m_idx = *medicine_idx;
-                let mfg_bonus = state.manufacturing_yield_bonus();
                 if let Some(medicine) = state.medicines.get_mut(m_idx) {
-                    medicine.doses = medicine.max_doses * mfg_bonus;
+                    medicine.doses = medicine.max_doses;
                 }
             }
             ResearchKind::TrainPersonnel => {
@@ -814,10 +813,9 @@ mod tests {
         state = state.with_world(tick(&state).0);
 
         assert!(!state.reactors[0].active, "reactor batch should be complete");
-        let expected_doses = state.medicines[0].max_doses * state.manufacturing_yield_bonus();
         assert_eq!(
-            state.medicines[0].doses, expected_doses,
-            "doses should be restored to max * manufacturing bonus"
+            state.medicines[0].doses, state.medicines[0].max_doses,
+            "doses should be restored to max_doses"
         );
     }
 
@@ -1238,48 +1236,6 @@ mod tests {
     // handoff_notification_after_medicine_developed — removed: DevelopMedicine no longer exists.
     // Medicines are created from screening hits via clinical trials.
 
-    #[test]
-    fn manufacturing_yield_bonus_from_tech() {
-        // StabilizedFormulation tech gives +25% manufacturing yield.
-        let mut state = AppState::new_default(42);
-        for med in &mut state.medicines {
-            med.unlocked = true;
-            med.tested_against = med.target_diseases.clone();
-        }
-        let max_doses = state.medicines[0].max_doses;
-        state.medicines[0].doses = 0.0;
-
-        // Without tech: get exactly max_doses
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
-            progress: 14.0,
-            required_ticks: 15.0,
-            personnel_assigned: 3,
-        });
-        let (after, _) = tick(&state);
-        assert_eq!(
-            after.medicines[0].doses,
-            max_doses,
-            "without tech, doses should equal max_doses"
-        );
-
-        // With StabilizedFormulation: get 125% of max_doses
-        state.unlocked_techs.push(crate::state::BasicTech::StabilizedFormulation);
-        state.medicines[0].doses = 0.0;
-        state.active_research.retain(|p| !matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel));
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
-            progress: 14.0,
-            required_ticks: 15.0,
-            personnel_assigned: 3,
-        });
-        let (after_tech, _) = tick(&state);
-        assert_eq!(
-            after_tech.medicines[0].doses,
-            max_doses * 1.25,
-            "StabilizedFormulation should give 125% of max doses"
-        );
-    }
 
     // blocked_medicine_developments_shows_identified_but_unresearched — removed:
     // blocked_medicine_developments() method no longer exists.
