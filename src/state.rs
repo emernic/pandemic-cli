@@ -756,11 +756,15 @@ impl DecreeUnlockCondition {
         if let Some(v) = self.min_crit_regions {
             if v == 1 {
                 parts.push(format!(
-                    "any region at CRITICAL ({}+ infected)",
+                    "any region with {}+ infected",
                     Self::format_threshold(INFECTION_PRESSURE_CRIT)
                 ));
             } else {
-                parts.push(format!("{}+ regions at CRITICAL", v));
+                parts.push(format!(
+                    "{}+ regions with {}+ infected",
+                    v,
+                    Self::format_threshold(INFECTION_PRESSURE_CRIT)
+                ));
             }
         }
         if let Some(v) = self.min_collapsed_regions {

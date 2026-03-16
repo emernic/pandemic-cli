@@ -511,9 +511,9 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
 
                 let mut pressures: Vec<&str> = Vec::new();
                 if infected > INFECTION_PRESSURE_CRIT {
-                    pressures.push("infections (CRIT)");
+                    pressures.push("infections (severe)");
                 } else if infected > INFECTION_PRESSURE_HIGH {
-                    pressures.push("infections (HIGH)");
+                    pressures.push("infections (rising)");
                 } else if infected > INFECTION_PRESSURE_MOD {
                     pressures.push("infections");
                 }

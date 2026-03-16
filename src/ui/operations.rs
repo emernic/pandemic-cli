@@ -170,13 +170,13 @@ fn render_browse(f: &mut Frame, area: Rect, state: &AppState) {
     // COUPLING CHECK: must equal STANDING_ORDER_COUNT (= 2)
     let standing_orders = [
         (
-            "Auto-Quarantine at HIGH",
-            "Automatically enable Quarantine when infections exceed HIGH threshold (10K).",
+            "Auto-Quarantine",
+            "Automatically enable Quarantine when a region's infections spike (10K+).",
             state.standing_orders.auto_quarantine_at_high,
         ),
         (
-            "Auto-Travel Ban at CRIT",
-            "Automatically enable Travel Ban when infections exceed CRIT threshold (100K).",
+            "Auto-Travel Ban",
+            "Automatically enable Travel Ban when a region's infections surge (100K+).",
             state.standing_orders.auto_travel_ban_at_crit,
         ),
     ];
