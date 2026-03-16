@@ -112,7 +112,6 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
         .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
         .fold(0.0_f64, f64::max);
     let biotech_mult = 1.0 + crate::state::CorporationSector::Biotech.max_bonus_pct() / 100.0 * biotech_bonus;
-    let infra_mult = state.research_infra_multiplier();
 
     let reactor_count = state.reactors.len();
     for i in 0..reactor_count {
@@ -145,7 +144,7 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
             p
         };
         let speed = personnel_speed(state.reactors[i].personnel_assigned, base_personnel)
-            * infra_mult * lab_mult * biotech_mult;
+            * lab_mult * biotech_mult;
         state.reactors[i].batch_progress += speed;
 
         // Check completion
