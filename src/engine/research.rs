@@ -625,28 +625,31 @@ mod tests {
 
     #[test]
     fn manufacture_doses_restores_supply() {
+        use crate::engine::execute_command;
+        use crate::state::GameCommand;
+
         let mut state = AppState::new_default(42);
         for med in &mut state.medicines {
             med.unlocked = true;
             med.tested_against = med.target_diseases.clone();
         }
         state.medicines[0].doses = 0.0;
+        state.resources.funding = 10000.0;
 
-        let applied = state.available_applied_projects();
-        assert!(
-            applied.iter().any(|k| matches!(k, ResearchKind::ManufactureDoses { medicine_idx: 0 })),
-            "manufacture should be available for depleted medicine"
-        );
+        // Configure reactor to produce medicine 0
+        execute_command(&mut state, &GameCommand::ConfigureReactor { reactor_idx: 0, medicine_idx: Some(0) });
+        assert_eq!(state.reactors[0].medicine_idx, Some(0));
 
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
-            progress: 14.0,
-            required_ticks: 15.0,
-            personnel_assigned: 3,
-        });
+        // Start a batch
+        execute_command(&mut state, &GameCommand::StartReactorBatch { reactor_idx: 0 });
+        assert!(state.reactors[0].active, "reactor should be running");
+
+        // Fast-forward batch to near completion
+        state.reactors[0].batch_progress = state.reactors[0].batch_required - 1.0;
+
         state = state.with_world(tick(&state).0);
 
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty(), "project should be complete");
+        assert!(!state.reactors[0].active, "reactor batch should be complete");
         let expected_doses = state.medicines[0].max_doses * state.manufacturing_yield_bonus();
         assert_eq!(
             state.medicines[0].doses, expected_doses,
@@ -679,12 +682,12 @@ mod tests {
         let initial_personnel = state.resources.personnel;
 
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         for _ in 0..160 {
             state = state.with_world(tick(&state).0);
         }
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
     }
 

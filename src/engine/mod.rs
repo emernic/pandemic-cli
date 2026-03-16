@@ -7,6 +7,7 @@ mod infrastructure;
 mod loans;
 mod medicine;
 mod policy;
+mod reactor;
 mod research;
 mod screening;
 mod spread;
@@ -108,6 +109,9 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     }
     // Drug screening progress
     screening::tick_screening(&mut new, &mut events);
+
+    // Reactor manufacturing progress
+    reactor::tick_reactors(&mut new, &mut events);
 
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new, &mut events);
@@ -1147,6 +1151,34 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
                 success: true,
                 events: Vec::new(),
             }
+        }
+        GameCommand::BuyReactor => {
+            let (ok, msg) = reactor::buy_reactor(state);
+            CommandResult { message: msg, success: ok, events: Vec::new() }
+        }
+        GameCommand::ConfigureReactor { reactor_idx, medicine_idx } => {
+            let (ok, msg) = reactor::configure_reactor(state, *reactor_idx, *medicine_idx);
+            CommandResult { message: msg, success: ok, events: Vec::new() }
+        }
+        GameCommand::ToggleReactorAutoDeploy { reactor_idx } => {
+            if let Some(r) = state.reactors.get_mut(*reactor_idx) {
+                r.auto_deploy = !r.auto_deploy;
+                CommandResult { message: None, success: true, events: Vec::new() }
+            } else {
+                CommandResult { message: Some("Invalid reactor".to_string()), success: false, events: Vec::new() }
+            }
+        }
+        GameCommand::ToggleReactorRepeat { reactor_idx } => {
+            if let Some(r) = state.reactors.get_mut(*reactor_idx) {
+                r.repeat = !r.repeat;
+                CommandResult { message: None, success: true, events: Vec::new() }
+            } else {
+                CommandResult { message: Some("Invalid reactor".to_string()), success: false, events: Vec::new() }
+            }
+        }
+        GameCommand::StartReactorBatch { reactor_idx } => {
+            let (ok, msg) = reactor::start_batch(state, *reactor_idx);
+            CommandResult { message: msg, success: ok, events: Vec::new() }
         }
     };
     result.events = events;

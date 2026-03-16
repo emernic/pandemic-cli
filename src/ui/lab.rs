@@ -13,7 +13,13 @@ use crate::ui::hint_line;
 pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
     match ui_state {
         LabUiState::Browse { tab } => {
-            state.lab_tab_items(*tab).len().saturating_sub(1)
+            if *tab == LabTab::Reactors {
+                // Reactors tab: one item per reactor + buy button (if under max)
+                let buy_slot = if state.reactors.len() < crate::state::MAX_REACTORS { 1 } else { 0 };
+                (state.reactors.len() + buy_slot).saturating_sub(1)
+            } else {
+                state.lab_tab_items(*tab).len().saturating_sub(1)
+            }
         }
         LabUiState::ConfirmProject { .. } | LabUiState::ConfirmLabUpgrade { .. } => 0,
         LabUiState::ScreeningSelectDisease => {
@@ -30,6 +36,9 @@ pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
                 .filter(|s| s.is_unlocked())
                 .count()
                 .saturating_sub(1)
+        }
+        LabUiState::ReactorSelectMedicine { .. } => {
+            state.reactor_eligible_medicines().len().saturating_sub(1)
         }
     }
 }
@@ -55,7 +64,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
 
     match &lab_ui {
         LabUiState::Browse { tab } => {
-            render_tab_content(f, chunks[1], state, *tab);
+            if *tab == LabTab::Reactors {
+                render_reactors_tab(f, chunks[1], state);
+            } else {
+                render_tab_content(f, chunks[1], state, *tab);
+            }
         }
         LabUiState::ConfirmProject { project_idx, double_personnel, .. } => {
             render_confirm(f, chunks[1], state, *project_idx, *double_personnel);
@@ -67,6 +80,9 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         | LabUiState::ScreeningSelectModality { .. }
         | LabUiState::ScreeningSelectSize { .. } => {
             render_screening_wizard(f, chunks[1], state, &lab_ui);
+        }
+        LabUiState::ReactorSelectMedicine { reactor_idx } => {
+            render_reactor_select_medicine(f, chunks[1], state, *reactor_idx);
         }
     }
 }
@@ -935,4 +951,271 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
             }
         }
     }
+}
+
+/// Render the Reactors tab with ASCII art reactor vessels.
+fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
+    let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
+
+    let reactor_count = state.reactors.len();
+    let can_buy = reactor_count < crate::state::MAX_REACTORS;
+
+    // Header line
+    let header_text = format!("  {} production reactor{}", reactor_count,
+        if reactor_count == 1 { "" } else { "s" });
+    let mut header_spans: Vec<Span> = vec![
+        Span::styled(header_text, Style::default().fg(Color::White)),
+    ];
+    if can_buy {
+        let can_afford = state.resources.funding >= crate::state::REACTOR_COST;
+        header_spans.push(Span::raw("    "));
+        header_spans.push(Span::styled(
+            format!("Buy reactor (¥{:.0})", crate::state::REACTOR_COST),
+            Style::default().fg(if can_afford { Color::Green } else { Color::DarkGray }),
+        ));
+    }
+    lines.push(Line::from(header_spans));
+    lines.push(Line::from(""));
+
+    // Render each reactor as ASCII art
+    for (i, reactor) in state.reactors.iter().enumerate() {
+        let selected = state.ui.panel_selection == i;
+        if selected { selected_line = Some(lines.len()); }
+        render_reactor_vessel(&mut lines, i, reactor, selected, state);
+    }
+
+    // Buy reactor button (at index == reactor_count)
+    if can_buy {
+        let buy_selected = state.ui.panel_selection == reactor_count;
+        if buy_selected { selected_line = Some(lines.len()); }
+        let marker = if buy_selected { "▶ " } else { "  " };
+        let can_afford = state.resources.funding >= crate::state::REACTOR_COST;
+        let style = if buy_selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else if can_afford {
+            Style::default().fg(Color::Green)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        lines.push(Line::from(Span::styled(
+            format!("{}[+] Buy Reactor (¥{:.0})", marker, crate::state::REACTOR_COST),
+            style,
+        )));
+        lines.push(Line::from(""));
+    }
+
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Select  [Enter] Configure/Start  [X] Cycle Auto  [Esc] Close",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
+    f.render_widget(widget, area);
+}
+
+/// Render a single reactor vessel as ASCII art.
+fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, _idx: usize, reactor: &crate::state::Reactor, selected: bool, state: &AppState) {
+    let marker = if selected { "▶ " } else { "  " };
+
+    let (med_name, fill_pct, status_line) = if let Some(med_idx) = reactor.medicine_idx {
+        let med = state.medicines.get(med_idx);
+        let name = med.map(|m| m.name.as_str()).unwrap_or("Unknown");
+
+        if reactor.active {
+            // Active batch — show progress
+            let pct = if reactor.batch_required > 0.0 {
+                (reactor.batch_progress / reactor.batch_required * 100.0).min(100.0)
+            } else { 0.0 };
+            let remaining = (reactor.batch_required - reactor.batch_progress).max(0.0);
+            let base_personnel = {
+                let kind = ResearchKind::ManufactureDoses { medicine_idx: med_idx };
+                let (p, _, _) = kind.costs(&state.medicines);
+                p
+            };
+            let speed = personnel_speed(reactor.personnel_assigned, base_personnel)
+                * state.research_infra_multiplier();
+            let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
+            let yield_bonus = state.manufacturing_yield_bonus();
+            let target = med.map(|m| m.max_doses * yield_bonus).unwrap_or(0.0);
+            (name.to_string(), pct / 100.0,
+             format!("batch {:.0}%  ▣ {} doses  {}", pct, crate::format_number(target),
+                 format_days(effective_remaining)))
+        } else {
+            // Idle — show stockpile status
+            let current = med.map(|m| m.doses).unwrap_or(0.0);
+            let max = med.map(|m| m.max_doses * state.manufacturing_yield_bonus()).unwrap_or(1.0);
+            let fill = if max > 0.0 { (current / max).min(1.0) } else { 0.0 };
+            let status = if current >= max { "FULL" } else { "idle" };
+            let hint = if current >= max { "[Enter] reassign" } else { "[Enter] start batch" };
+            (name.to_string(), fill,
+             format!("{} doses ({})  {}", crate::format_number(current), status, hint))
+        }
+    } else {
+        ("empty".to_string(), 0.0, "[Enter] assign medicine".to_string())
+    };
+
+    // ASCII art reactor vessel (5 rows tall, 11 chars wide)
+    let vessel_height = 5;
+    let filled_rows = (fill_pct * vessel_height as f64).round() as usize;
+
+    let is_active = reactor.active;
+    let (top_border, bottom_border, side_l, side_r) = if is_active {
+        ("┏━━━━━━━━━┓", "┗━━━━┯━━━━┛", "┃", "┃")
+    } else {
+        ("┌─────────┐", "└─────────┘", "│", "│")
+    };
+
+    // Vessel top
+    let top_style = if selected {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else if is_active {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    lines.push(Line::from(vec![
+        Span::raw(format!("{}  ", marker)),
+        Span::styled(top_border.to_string(), top_style),
+    ]));
+
+    // Vessel body rows (bottom-up fill)
+    let fill_chars = ['░', '▒', '▓'];
+    for row in 0..vessel_height {
+        let row_from_bottom = vessel_height - 1 - row;
+        let fill_char = if row_from_bottom < filled_rows {
+            // Gradient: bottom rows more solid
+            let gradient_idx = if filled_rows > 0 {
+                (row_from_bottom * 2 / filled_rows.max(1)).min(2)
+            } else { 0 };
+            fill_chars[gradient_idx]
+        } else {
+            ' '
+        };
+        let fill_str: String = std::iter::repeat(fill_char).take(9).collect();
+        let fill_color = if is_active { Color::Green } else { Color::DarkGray };
+        lines.push(Line::from(vec![
+            Span::raw("     "),
+            Span::styled(side_l.to_string(), top_style),
+            Span::styled(fill_str, Style::default().fg(fill_color)),
+            Span::styled(side_r.to_string(), top_style),
+        ]));
+    }
+
+    // Vessel bottom
+    lines.push(Line::from(vec![
+        Span::raw("     "),
+        Span::styled(bottom_border.to_string(), top_style),
+    ]));
+
+    // Pipe connector for active
+    if is_active {
+        lines.push(Line::from(vec![
+            Span::raw("          "),
+            Span::styled("│", top_style),
+        ]));
+    }
+
+    // Medicine name
+    let name_style = if selected {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else if reactor.medicine_idx.is_some() {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    lines.push(Line::from(Span::styled(
+        format!("     {}", med_name),
+        name_style,
+    )));
+
+    // Status line
+    lines.push(Line::from(Span::styled(
+        format!("     {}", status_line),
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // Auto-deploy and repeat toggles
+    if reactor.medicine_idx.is_some() {
+        let auto_tag = if reactor.auto_deploy { "[A] auto-deploy" } else { "[ ] auto-deploy" };
+        let repeat_tag = if reactor.repeat { "[R] repeat" } else { "[ ] repeat" };
+        lines.push(Line::from(vec![
+            Span::raw("     "),
+            Span::styled(auto_tag, Style::default().fg(
+                if reactor.auto_deploy { Color::Green } else { Color::DarkGray }
+            )),
+            Span::raw("  "),
+            Span::styled(repeat_tag, Style::default().fg(
+                if reactor.repeat { Color::Green } else { Color::DarkGray }
+            )),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+}
+
+/// Render the medicine selection wizard for reactor configuration.
+fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, _reactor_idx: usize) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    lines.push(Line::from(Span::styled(
+        "  Configure Reactor > Select Medicine",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+
+    let eligible = state.reactor_eligible_medicines();
+    if eligible.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  No medicines available. Develop a medicine first.",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    for (i, &med_idx) in eligible.iter().enumerate() {
+        let selected = state.ui.panel_selection == i;
+        let marker = if selected { "▶ " } else { "  " };
+        let med = &state.medicines[med_idx];
+        let yield_bonus = state.manufacturing_yield_bonus();
+        let target_doses = med.max_doses * yield_bonus;
+        let current = crate::format_number(med.doses);
+        let target = crate::format_number(target_doses);
+        let full = med.doses >= target_doses;
+
+        let style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("  {}{}", marker, med.name), style),
+            Span::styled(
+                format!("  ({}/{} doses{})", current, target, if full { " FULL" } else { "" }),
+                Style::default().fg(if full { Color::DarkGray } else { Color::Cyan }),
+            ),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  [Enter] Select  [Esc] Cancel",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
 }
