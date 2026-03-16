@@ -4775,7 +4775,7 @@ impl LabTab {
 }
 
 /// Lab panel UI state machine.
-/// Full-screen tabbed view with Sequencing / Screening / Trials / Reactors tabs.
+/// Full-screen tabbed view with Sequencing / Screening / Trials / Reactors / Infra tabs.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LabUiState {
     /// Browsing items within the active tab.
