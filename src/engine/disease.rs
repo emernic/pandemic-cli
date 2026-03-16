@@ -4,7 +4,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{
-    Disease, GameEvent, WorldState, MAX_DISEASES, Medicine,
+    Disease, GameEvent, WorldState, MAX_DISEASES,
     PathogenType, RegionDiseaseState, ScreeningLevel, TherapyType, TransmissionVector, TICKS_PER_DAY,
 };
 
