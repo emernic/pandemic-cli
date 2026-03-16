@@ -999,7 +999,8 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
             let med = state.medicines.get(*medicine_idx)?;
             let eff_label = med.reported_efficacy.as_deref().unwrap_or("???");
             let se_label = med.reported_side_effects.as_deref().unwrap_or("???");
-            Some(format!("{} | Eff: {}  Side Fx: {}", rigor.label(), eff_label, se_label))
+            let res_label = med.reported_resistance.as_deref().unwrap_or("???");
+            Some(format!("{} | Eff: {}  Side Fx: {}  Res: {}", rigor.label(), eff_label, se_label, res_label))
         }
     }
 }
@@ -1471,9 +1472,10 @@ fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, r
         };
         let eff_label = med.reported_efficacy.as_deref().unwrap_or("???");
         let se_label = med.reported_side_effects.as_deref().unwrap_or("—");
+        let res_label = med.reported_resistance.as_deref().unwrap_or("—");
         let detail_style = Style::default().fg(Color::DarkGray);
         lines.push(Line::from(Span::styled(
-            format!("      {} | {} | Eff: {} | Side Fx: {}", therapy_label, targets, eff_label, se_label),
+            format!("      {} | {} | Eff: {} | Side Fx: {} | Res: {}", therapy_label, targets, eff_label, se_label, res_label),
             detail_style,
         )));
     }
