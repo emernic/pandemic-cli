@@ -90,11 +90,6 @@ pub(super) fn spawn_disease(state: &mut WorldState, rng: &mut ChaCha8Rng) -> Opt
         disease.spawned_at_tick = state.tick;
         state.diseases[idx] = disease;
 
-        // Reset intel briefing flag so the new disease can trigger pre-detection briefings.
-        if idx < state.intel_pre_detection_briefed.len() {
-            state.intel_pre_detection_briefed[idx] = false;
-        }
-
         // Remove all infection entries for the old disease in all regions.
         for region in &mut state.regions {
             region.infections.retain(|inf| inf.disease_idx != idx);
@@ -417,9 +412,6 @@ fn spawn_variant(
     let disease_idx = if let Some(idx) = recycle_idx {
         // Recycle burned-out slot — same cleanup as spawn_disease
         state.diseases[idx] = variant;
-        if idx < state.intel_pre_detection_briefed.len() {
-            state.intel_pre_detection_briefed[idx] = false;
-        }
         for region in &mut state.regions {
             region.infections.retain(|inf| inf.disease_idx != idx);
         }
