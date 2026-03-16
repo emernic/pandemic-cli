@@ -2,16 +2,18 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
 
 use crate::state::{GameOutcome, AppState, SimState, TICKS_PER_DAY, ticks_to_days};
 use crate::format_number;
 
-/// Returns the height this bar needs: 2 rows (stats + border).
-pub fn height(_state: &AppState) -> u16 {
-    2
+/// Returns the height this bar needs.
+/// 3 rows when a notification is active (stats + wrapped notification + border),
+/// 2 rows otherwise (stats + border).
+pub fn height(state: &AppState) -> u16 {
+    if state.ui.event_notification.is_some() { 3 } else { 2 }
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
@@ -135,14 +137,12 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         let left_widget = Paragraph::new(lines).block(Block::default().borders(Borders::BOTTOM));
         f.render_widget(left_widget, layout[0]);
 
-        let notif_lines = vec![
-            Line::from(Span::styled(
-                format!("⚠ {}", notif),
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-            )),
-            Line::from(""),
-        ];
-        let notif_widget = Paragraph::new(notif_lines)
+        let notif_text = Line::from(Span::styled(
+            format!("⚠ {}", notif),
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        ));
+        let notif_widget = Paragraph::new(notif_text)
+            .wrap(Wrap { trim: false })
             .block(Block::default().borders(Borders::LEFT | Borders::BOTTOM));
         f.render_widget(notif_widget, layout[1]);
     } else {
