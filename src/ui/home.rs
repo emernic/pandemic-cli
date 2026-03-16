@@ -306,7 +306,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
         lines.push(Line::from(vec![
             Span::styled("  Board:    ", dim),
             Span::styled(format!("+¥{:.0}/day", board_budget), green),
-            Span::styled("  (set at board meetings)", dim),
         ]));
 
         // Contract income — list each contract individually with conditions
@@ -314,12 +313,8 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
             lines.push(Line::from(vec![
                 Span::styled("  Contracts:", dim),
                 Span::styled(format!("+¥{:.0}/day", contract_income), green),
-                Span::styled(format!("  ({} active)", state.contracts.len()), dim),
             ]));
             for contract in &state.contracts {
-                let member_name = state.board_members.get(contract.board_member_idx)
-                    .map(|m| m.name.as_str())
-                    .unwrap_or(&contract.name);
                 let income_day = contract.income * TICKS_PER_DAY;
                 let sat_color = if contract.satisfaction > 0.7 {
                     Color::Green
@@ -331,7 +326,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
                 lines.push(Line::from(vec![
                     Span::styled(format!("    {} ", contract.name), Style::default().fg(sat_color)),
                     Span::styled(format!("+¥{:.0}/day", income_day), green),
-                    Span::styled(format!("  ({})", member_name), dim),
                 ]));
                 lines.push(Line::from(vec![
                     Span::styled(format!("      {}", contract.condition.description()), dim),
@@ -350,13 +344,9 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
 
         // Policy line
         if policy > 0.0 {
-            let active_count: usize = state.policies.iter()
-                .filter(|p| p.any_active())
-                .count();
             lines.push(Line::from(vec![
                 Span::styled("  Policies: ", dim),
                 Span::styled(format!("-¥{:.0}/day", policy), red_style),
-                Span::styled(format!("  (in {} region{})", active_count, if active_count == 1 { "" } else { "s" }), dim),
             ]));
         }
 
@@ -447,13 +437,6 @@ fn render_dashboard(f: &mut Frame, area: Rect, state: &AppState) {
             ]));
         }
 
-        // Next unlock hint
-        if let Some((name, required)) = state.next_authority_unlock() {
-            lines.push(Line::from(vec![
-                Span::styled("  Next:     ", dim),
-                Span::styled(format!("{} @ {}", name, required.label()), Style::default().fg(Color::DarkGray)),
-            ]));
-        }
     }
 
     // ── Active diseases ──
