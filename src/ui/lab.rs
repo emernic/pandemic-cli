@@ -278,6 +278,32 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
         }
     }
 
+    // Persistent breadcrumbs pointing to the next pipeline step
+    if tab == LabTab::Screening && !state.screening_hits.is_empty() {
+        let n = state.screening_hits.len();
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  → {} hit{} ready for clinical trial — see Trials tab",
+                n, if n == 1 { "" } else { "s" }),
+            Style::default().fg(Color::Green),
+        )));
+    }
+    if tab == LabTab::Trials {
+        // Medicines that exist but have no reactor producing them
+        let unmanufactured: usize = state.medicines.iter().enumerate()
+            .filter(|(i, m)| m.unlocked && m.doses <= 0.0
+                && !state.reactors.iter().any(|r| r.medicine_idx == Some(*i)))
+            .count();
+        if unmanufactured > 0 {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                format!("  → {} medicine{} awaiting manufacture — see Reactors tab",
+                    unmanufactured, if unmanufactured == 1 { "" } else { "s" }),
+                Style::default().fg(Color::Green),
+            )));
+        }
+    }
+
     lines.push(Line::from(""));
     let hint = if tab == LabTab::Trials {
         "  [↑/↓] Select  [Enter] Start Trial  [D] Discard  [←/→] Tab  [Esc] Close"
