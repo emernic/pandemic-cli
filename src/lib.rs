@@ -12,7 +12,8 @@ use state::{
     DecreeId, DECREE_COUNT, GameCommand, GameOutcome, AppState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
-    ResearchFlatItem, ResearchKind, LabTab, LabUiState, SimState, ScreeningModality, ScreeningRunSize,
+    ResearchFlatItem, ResearchKind, LabTab, LabUiState, SimState, ScreeningFormItem,
+    ScreeningModality, ScreeningRunSize,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -132,6 +133,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.select_next(new.regions.len(), max);
             }
+            sync_screening_form_selection(&mut new);
         }
         Action::SelectPrev => {
             if new.ui.open_panel == Panel::Research {
@@ -142,6 +144,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.select_prev(new.regions.len(), max);
             }
+            sync_screening_form_selection(&mut new);
         }
         Action::SelectLeft => {
             if new.ui.open_panel == Panel::Research {
@@ -669,9 +672,13 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 ResearchFlatItem::FullStockpile(_) => {}
                 // Active screening runs: Enter is a no-op
                 ResearchFlatItem::ActiveScreening(_) => {}
-                // Start New Screening Run → open wizard
+                // Start New Screening Run → open config form
                 ResearchFlatItem::StartNewScreening => {
-                    ui.lab_ui = Some(LabUiState::ScreeningSelectDisease);
+                    ui.lab_ui = Some(LabUiState::ScreeningConfigForm {
+                        disease_sel: 0,
+                        modality_sel: 0,
+                        run_size_sel: 0,
+                    });
                     ui.panel_selection = 0;
                     return None;
                 }
@@ -690,44 +697,34 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
         Some(LabUiState::ConfirmLabUpgrade { .. }) => {
             Some(GameCommand::UpgradeLab)
         }
-        // Screening wizard: select disease → advance to modality
-        Some(LabUiState::ScreeningSelectDisease) => {
-            let eligible = state.screening_eligible_diseases();
-            if let Some(&disease_idx) = eligible.get(ui.panel_selection) {
-                ui.lab_ui = Some(LabUiState::ScreeningSelectModality {
-                    disease_idx,
-                });
-                ui.panel_selection = 0;
-            }
-            None
-        }
-        // Screening wizard: select modality → advance to run size
-        Some(LabUiState::ScreeningSelectModality { disease_idx }) => {
-            let unlocked: Vec<_> = ScreeningModality::ALL.iter()
-                .filter(|m| m.is_unlocked(&state.unlocked_techs))
-                .copied()
-                .collect();
-            if let Some(&modality) = unlocked.get(ui.panel_selection) {
-                ui.lab_ui = Some(LabUiState::ScreeningSelectSize {
-                    disease_idx,
-                    modality,
-                });
-                ui.panel_selection = 0;
-            }
-            None
-        }
-        // Screening wizard: select run size → start screening
-        Some(LabUiState::ScreeningSelectSize { disease_idx, modality }) => {
-            let unlocked: Vec<_> = ScreeningRunSize::ALL.iter()
-                .filter(|s| s.is_unlocked())
-                .copied()
-                .collect();
-            if let Some(&run_size) = unlocked.get(ui.panel_selection) {
-                return Some(GameCommand::StartScreening {
-                    disease_idx,
-                    modality,
-                    run_size,
-                });
+        // Screening config form: Enter on Confirm starts the run
+        Some(LabUiState::ScreeningConfigForm { disease_sel, modality_sel, run_size_sel }) => {
+            let items = state.screening_form_items();
+            match items.get(ui.panel_selection) {
+                Some(ScreeningFormItem::Confirm) => {
+                    let eligible = state.screening_eligible_diseases();
+                    let unlocked_mods: Vec<_> = ScreeningModality::ALL.iter()
+                        .filter(|m| m.is_unlocked(&state.unlocked_techs))
+                        .copied()
+                        .collect();
+                    let unlocked_sizes: Vec<_> = ScreeningRunSize::ALL.iter()
+                        .filter(|s| s.is_unlocked())
+                        .copied()
+                        .collect();
+                    if let (Some(&disease_idx), Some(&modality), Some(&run_size)) = (
+                        eligible.get(disease_sel),
+                        unlocked_mods.get(modality_sel),
+                        unlocked_sizes.get(run_size_sel),
+                    ) {
+                        return Some(GameCommand::StartScreening {
+                            disease_idx,
+                            modality,
+                            run_size,
+                        });
+                    }
+                }
+                // Enter on non-confirm items is a no-op (up/down to navigate)
+                _ => {}
             }
             None
         }
@@ -980,6 +977,52 @@ fn handle_ledger_confirm(ui: &mut UiState, state: &AppState) -> Option<GameComma
             Some(GameCommand::BailoutCorporation { corp_idx })
         }
         None => None,
+    }
+}
+
+/// When panel_selection moves while in ScreeningConfigForm, update the
+/// per-section selection so each section remembers the player's choice.
+fn sync_screening_form_selection(state: &mut AppState) {
+    // First, compute the new selections without borrowing lab_ui mutably
+    let update = if let Some(LabUiState::ScreeningConfigForm { .. }) = &state.ui.lab_ui {
+        let items = state.screening_form_items();
+        items.get(state.ui.panel_selection).and_then(|item| {
+            match item {
+                ScreeningFormItem::Disease(d_idx) => {
+                    let eligible = state.screening_eligible_diseases();
+                    eligible.iter().position(|&d| d == *d_idx)
+                        .map(|pos| (Some(pos), None, None))
+                }
+                ScreeningFormItem::Modality(m) => {
+                    let unlocked: Vec<_> = ScreeningModality::ALL.iter()
+                        .filter(|mod_| mod_.is_unlocked(&state.unlocked_techs))
+                        .copied()
+                        .collect();
+                    unlocked.iter().position(|u| u == m)
+                        .map(|pos| (None, Some(pos), None))
+                }
+                ScreeningFormItem::RunSize(s) => {
+                    let unlocked: Vec<_> = ScreeningRunSize::ALL.iter()
+                        .filter(|sz| sz.is_unlocked())
+                        .copied()
+                        .collect();
+                    unlocked.iter().position(|u| u == s)
+                        .map(|pos| (None, None, Some(pos)))
+                }
+                ScreeningFormItem::Confirm => None,
+            }
+        })
+    } else {
+        None
+    };
+
+    // Now apply the update
+    if let (Some(upd), Some(LabUiState::ScreeningConfigForm {
+        disease_sel, modality_sel, run_size_sel
+    })) = (update, &mut state.ui.lab_ui) {
+        if let Some(d) = upd.0 { *disease_sel = d; }
+        if let Some(m) = upd.1 { *modality_sel = m; }
+        if let Some(s) = upd.2 { *run_size_sel = s; }
     }
 }
 
