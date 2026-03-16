@@ -20,7 +20,7 @@ pub(super) enum CrisisPostAction {
 /// Apply a satisfaction modifier to the chairman board member.
 /// Positive values boost satisfaction, negative values penalize it.
 fn chairman_satisfaction_hit(state: &mut WorldState, amount: f64) {
-    if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+    if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman && !m.dead) {
         chairman.add_modifier(ModifierSource::CrisisEffect, amount);
     }
 }
@@ -137,7 +137,7 @@ fn crisis_urgency_boost(state: &WorldState) -> f64 {
 /// Content chairman (>0.7 satisfaction) steers meetings favorably; hostile pushes for cuts.
 /// Profiteer chairman amplifies swings: ±0.15 instead of the default ±0.10.
 fn chairman_funding_shift(state: &WorldState) -> f64 {
-    let chairman = match state.board_members.iter().find(|m| m.is_chairman) {
+    let chairman = match state.board_members.iter().find(|m| m.is_chairman && !m.dead) {
         Some(c) => c,
         None => return 0.0,
     };
@@ -1305,7 +1305,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
             // Chairman influence on funding outcome
             let chair_shift = chairman_funding_shift(state);
             if chair_shift != 0.0 {
-                if let Some(chairman) = state.board_members.iter().find(|m| m.is_chairman) {
+                if let Some(chairman) = state.board_members.iter().find(|m| m.is_chairman && !m.dead) {
                     if chair_shift > 0.0 {
                         memo_lines.push(format!(
                             "{} steered discussion toward a generous allocation.",
@@ -1323,7 +1323,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
             // Note unhappy members and their concerns
             let mut concerns: Vec<String> = Vec::new();
             for member in &state.board_members {
-                if member.satisfaction >= 0.5 { continue; }
+                if member.dead || member.satisfaction >= 0.5 { continue; }
                 match &member.role {
                     BoardRole::CorporateLeader { corp_idx } => {
                         let corp_name = state.corporations.get(*corp_idx)
@@ -1356,7 +1356,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
 
             // Positive note if things are going well
             let content_count = state.board_members.iter()
-                .filter(|m| m.satisfaction > 0.7).count();
+                .filter(|m| !m.dead && m.satisfaction > 0.7).count();
             if content_count > 0 && concerns.is_empty() {
                 memo_lines.push(
                     "The Board has expressed general confidence in your current approach.".into()
@@ -1422,11 +1422,11 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
         }
         CrisisKind::VoteOfNoConfidence => {
             let chairman_name = state.board_members.iter()
-                .find(|m| m.is_chairman)
+                .find(|m| m.is_chairman && !m.dead)
                 .map(|m| m.name.as_str())
                 .unwrap_or("The Chairman");
             let corp_name = state.board_members.iter()
-                .find(|m| m.is_chairman)
+                .find(|m| m.is_chairman && !m.dead)
                 .and_then(|m| m.corp_idx)
                 .and_then(|idx| state.corporations.get(idx))
                 .map(|c| c.name.as_str())
@@ -1461,7 +1461,7 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
         }
         CrisisKind::BoardResearchInquiry => {
             let chairman_name = state.board_members.iter()
-                .find(|m| m.is_chairman)
+                .find(|m| m.is_chairman && !m.dead)
                 .map(|m| m.name.as_str())
                 .unwrap_or("The Chairman");
             CrisisEvent {
@@ -2517,7 +2517,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
 
         (CrisisKind::VoteOfNoConfidence, 0) => {
             // Make concessions: cost already deducted. Boost chairman satisfaction.
-            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman && !m.dead) {
                 chairman.add_modifier(ModifierSource::CrisisEffect, 0.30);
             }
             // Reset hostility timer since we placated them
@@ -2650,7 +2650,7 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                 .collect();
             let names = members.join(", ");
             // Severe chairman satisfaction penalty for letting board members die
-            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman && !m.dead) {
                 chairman.add_modifier(
                     crate::state::ModifierSource::CrisisEffect,
                     -0.15,
@@ -3641,5 +3641,39 @@ mod tests {
             "TravelBan requires Medium, should not be emitted at Low");
         assert!(!policy_events.contains(&PolicyId::Quarantine),
             "Quarantine requires Medium, should not be emitted at Low");
+    }
+
+    #[test]
+    fn dead_board_members_excluded_from_meeting_logic() {
+        let mut state = crate::engine::new_game(42);
+
+        // Find the chairman and kill them
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman)
+            .expect("should have a chairman");
+        state.board_members[chair_idx].dead = true;
+        state.board_members[chair_idx].satisfaction = 0.0;
+
+        // Dead chairman should not produce a funding shift
+        assert_eq!(chairman_funding_shift(&state), 0.0,
+            "dead chairman should not influence funding");
+
+        // Dead chairman should not count in board_satisfaction
+        let sat = state.board_satisfaction();
+        // With the chairman dead (satisfaction 0.0) excluded, the average should
+        // be based on living members only (who start at ~1.0 minus skepticism).
+        assert!(sat > 0.3,
+            "board_satisfaction should exclude dead chairman, got {:.2}", sat);
+
+        // Board meeting event should not mention dead members' concerns
+        // Kill another member and set their satisfaction low
+        if state.board_members.len() > 2 {
+            state.board_members[1].dead = true;
+            state.board_members[1].satisfaction = 0.1;
+        }
+        let crisis = build_crisis_event(&state, CrisisKind::BoardMeeting);
+        // The dead member with low satisfaction should not generate concern text
+        let dead_name = &state.board_members[1].name;
+        assert!(!crisis.description.contains(dead_name.as_str()),
+            "dead member '{}' should not appear in board meeting description", dead_name);
     }
 }
