@@ -437,14 +437,14 @@ mod tests {
     }
 
     #[test]
-    fn resilient_grids_prereq_requires_phage_therapy() {
+    fn resilient_grids_prereq_requires_epi_forecasting() {
         use crate::state::BasicTech;
         let state = AppState::new_default(42);
-        // Without PhageTherapy, prereq not met
+        // Without EpidemiologicalForecasting, prereq not met
         assert!(!BasicTech::ResilientGrids.prerequisites_met(&state));
 
         let mut state2 = AppState::new_default(42);
-        state2.unlocked_techs.push(BasicTech::PhageTherapy);
+        state2.unlocked_techs.push(BasicTech::EpidemiologicalForecasting);
         assert!(BasicTech::ResilientGrids.prerequisites_met(&state2));
     }
 

@@ -38,19 +38,18 @@ fn tree_layout() -> Vec<TechNode> {
     use BasicTech::*;
     vec![
         TechNode { tech: TargetedDrugDesign,         row: 0, col: 0 },
-        TechNode { tech: RapidSequencing,             row: 0, col: 1 },
+        TechNode { tech: RapidSequencing,             row: 0, col: 2 },
 
         TechNode { tech: MonoclonalAntibodies,        row: 1, col: 0 },
-        TechNode { tech: ResistanceSurveillance,      row: 1, col: 1 },
+        TechNode { tech: PhageTherapy,                row: 1, col: 1 },
+        TechNode { tech: ResistanceSurveillance,      row: 1, col: 2 },
 
-        TechNode { tech: PhageTherapy,                row: 2, col: 0 },
-        TechNode { tech: MetagenomicSurveillance,     row: 2, col: 1 },
+        TechNode { tech: MetagenomicSurveillance,     row: 2, col: 2 },
 
-        TechNode { tech: ResilientGrids,              row: 3, col: 0 },
-        TechNode { tech: EpidemiologicalForecasting,  row: 3, col: 1 },
+        TechNode { tech: EpidemiologicalForecasting,  row: 3, col: 2 },
 
-        TechNode { tech: CombinationTherapy,          row: 4, col: 1 },
-
+        TechNode { tech: ResilientGrids,              row: 4, col: 1 },
+        TechNode { tech: CombinationTherapy,          row: 4, col: 2 },
     ]
 }
 
