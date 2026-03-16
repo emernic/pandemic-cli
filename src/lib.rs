@@ -703,34 +703,27 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
         Some(LabUiState::ConfirmLabUpgrade { .. }) => {
             Some(GameCommand::UpgradeLab)
         }
-        // Screening config form: Enter on Confirm starts the run
+        // Screening config form: Enter submits from any position
         Some(LabUiState::ScreeningConfigForm { disease_sel, modality_sel, run_size_sel }) => {
-            let items = state.screening_form_items();
-            match items.get(ui.panel_selection) {
-                Some(ScreeningFormItem::Confirm) => {
-                    let eligible = state.screening_eligible_diseases();
-                    let unlocked_mods: Vec<_> = ScreeningModality::ALL.iter()
-                        .filter(|m| m.is_unlocked(&state.unlocked_techs))
-                        .copied()
-                        .collect();
-                    let unlocked_sizes: Vec<_> = ScreeningRunSize::ALL.iter()
-                        .filter(|s| s.is_unlocked())
-                        .copied()
-                        .collect();
-                    if let (Some(&disease_idx), Some(&modality), Some(&run_size)) = (
-                        eligible.get(disease_sel),
-                        unlocked_mods.get(modality_sel),
-                        unlocked_sizes.get(run_size_sel),
-                    ) {
-                        return Some(GameCommand::StartScreening {
-                            disease_idx,
-                            modality,
-                            run_size,
-                        });
-                    }
-                }
-                // Enter on non-confirm items is a no-op (up/down to navigate)
-                _ => {}
+            let eligible = state.screening_eligible_diseases();
+            let unlocked_mods: Vec<_> = ScreeningModality::ALL.iter()
+                .filter(|m| m.is_unlocked(&state.unlocked_techs))
+                .copied()
+                .collect();
+            let unlocked_sizes: Vec<_> = ScreeningRunSize::ALL.iter()
+                .filter(|s| s.is_unlocked())
+                .copied()
+                .collect();
+            if let (Some(&disease_idx), Some(&modality), Some(&run_size)) = (
+                eligible.get(disease_sel),
+                unlocked_mods.get(modality_sel),
+                unlocked_sizes.get(run_size_sel),
+            ) {
+                return Some(GameCommand::StartScreening {
+                    disease_idx,
+                    modality,
+                    run_size,
+                });
             }
             None
         }
