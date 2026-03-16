@@ -3954,11 +3954,11 @@ impl BasicTech {
             // Root techs (non-tech prerequisites only)
             BasicTech::TargetedDrugDesign => &[],
             BasicTech::RapidSequencing => &[],
-            // Column 0 chain
+            // Column 0: TargetedDrugDesign forks into MonoclonalAntibodies and PhageTherapy
             BasicTech::MonoclonalAntibodies => &[BasicTech::TargetedDrugDesign],
-            BasicTech::PhageTherapy => &[BasicTech::MonoclonalAntibodies],
-            // Cross-chain merge: requires both Phage Therapy (col 0) and Metagenomic Surveillance (col 1)
-            BasicTech::ResilientGrids => &[BasicTech::PhageTherapy],
+            BasicTech::PhageTherapy => &[BasicTech::TargetedDrugDesign],
+            // Column 1: ResilientGrids depends on EpidemiologicalForecasting (cross-column)
+            BasicTech::ResilientGrids => &[BasicTech::EpidemiologicalForecasting],
 
             // Column 1 chain
             BasicTech::ResistanceSurveillance => &[BasicTech::RapidSequencing],
@@ -4003,8 +4003,8 @@ impl BasicTech {
         match self {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design",
-            BasicTech::PhageTherapy => "Monoclonal Antibodies",
-            BasicTech::ResilientGrids => "Phage Therapy",
+            BasicTech::PhageTherapy => "Targeted Drug Design",
+            BasicTech::ResilientGrids => "Epidemiological Forecasting",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::MetagenomicSurveillance => "Resistance Surveillance",
@@ -4016,12 +4016,13 @@ impl BasicTech {
     /// All techs in display order (column 0, then column 1, then column 2).
     pub fn all() -> &'static [BasicTech] {
         &[
-            // Column 0: Drug design → interventions
+            // Column 0: Drug design
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
+            // Column 1: Fork + infrastructure
             BasicTech::PhageTherapy,
             BasicTech::ResilientGrids,
-            // Column 1: Sequencing → surveillance
+            // Column 2: Sequencing → surveillance
             BasicTech::RapidSequencing,
             BasicTech::ResistanceSurveillance,
             BasicTech::MetagenomicSurveillance,
