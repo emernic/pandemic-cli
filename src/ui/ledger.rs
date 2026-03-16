@@ -79,9 +79,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         ),
     ]));
 
-    // Corporation listing
+    // Corporation listing — sort by region so relocated corps group correctly
+    let mut corp_indices: Vec<usize> = (0..state.corporations.len()).collect();
+    corp_indices.sort_by_key(|&i| state.corporations[i].region_idx);
+
     let mut last_region_idx: Option<usize> = None;
-    for (c_idx, corp) in state.corporations.iter().enumerate() {
+    for c_idx in corp_indices {
+        let corp = &state.corporations[c_idx];
         let region_idx = corp.region_idx;
 
         // Region separator
