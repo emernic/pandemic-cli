@@ -198,7 +198,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     let block = Block::default()
-        .title(" Board ")
+        .title(" ★ Board ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
 
