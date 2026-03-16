@@ -158,15 +158,6 @@ pub struct WorldState {
     /// Personnel are returned automatically when the operation completes.
     #[serde(default)]
     pub crisis_operations: Vec<CrisisOperation>,
-    /// Count of pathogen suppression operations completed (field research).
-    #[serde(default)]
-    pub pathogens_suppressed: u32,
-    /// Count of pathogen attenuation operations completed (field research).
-    #[serde(default)]
-    pub pathogens_attenuated: u32,
-    /// Count of pathogen interdiction operations completed (field research).
-    #[serde(default)]
-    pub pathogens_interdicted: u32,
     /// Global research lab level (0=Standard, 1=Enhanced Sequencing, 2=Advanced Genomics).
     /// Built via the Research panel. Each level multiplies all research progress rates.
     #[serde(default)]
@@ -3562,9 +3553,6 @@ impl ResearchProject {
             ResearchKind::IdentifyThreat { disease_idx: d } => *d == disease_idx,
             ResearchKind::GenomicSequencing { disease_idx: d } => *d == disease_idx,
             ResearchKind::ClinicalTrial { disease_idx: d, .. } => *d == disease_idx,
-            ResearchKind::SuppressPathogen { disease_idx: d } => *d == disease_idx,
-            ResearchKind::AttenuatePathogen { disease_idx: d } => *d == disease_idx,
-            ResearchKind::InterdictPathogen { disease_idx: d } => *d == disease_idx,
             ResearchKind::DevelopMedicine { .. }
             | ResearchKind::ManufactureDoses { .. }
             | ResearchKind::TrainPersonnel
@@ -3585,17 +3573,6 @@ pub enum ResearchKind {
     TrainPersonnel,
     /// Basic research — unlocks a technology in the tech tree.
     BasicResearch { tech: BasicTech },
-    /// Pathogen suppression — permanently reduces a disease's within-region spread by ~20%.
-    /// Requires the CompetitiveDisplacement basic tech to be unlocked.
-    SuppressPathogen { disease_idx: usize },
-    /// Directed attenuation — permanently reduces a disease's lethality by ~30%.
-    /// In-situ modification of pathogen virulence factors.
-    /// Requires the DirectedAttenuation basic tech to be unlocked.
-    AttenuatePathogen { disease_idx: usize },
-    /// Genomic interdiction — permanently eliminates a disease's cross-region spread.
-    /// Disrupts pathogen transmission mechanisms at the genomic level.
-    /// Requires the GeneDriveContainment basic tech to be unlocked.
-    InterdictPathogen { disease_idx: usize },
 }
 
 impl ResearchKind {
@@ -3605,9 +3582,6 @@ impl ResearchKind {
             Self::IdentifyThreat { .. }
             | Self::ClinicalTrial { .. }
             | Self::GenomicSequencing { .. }
-            | Self::SuppressPathogen { .. }
-            | Self::AttenuatePathogen { .. }
-            | Self::InterdictPathogen { .. }
         )
     }
 
@@ -3654,24 +3628,6 @@ impl ResearchKind {
             }
             Self::TrainPersonnel => "Train Personnel".to_string(),
             Self::BasicResearch { tech } => format!("Research {}", tech.name()),
-            Self::SuppressPathogen { disease_idx } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "Unknown".to_string());
-                format!("Suppress {}", name)
-            }
-            Self::AttenuatePathogen { disease_idx } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "Unknown".to_string());
-                format!("Attenuate {}", name)
-            }
-            Self::InterdictPathogen { disease_idx } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "Unknown".to_string());
-                format!("Interdict {}", name)
-            }
         }
     }
 }
@@ -3700,18 +3656,6 @@ pub enum BasicTech {
     /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
     /// Prereq: VaccinePlatform.
     ResilientGrids,
-    /// Unlocks competitive displacement field research: release attenuated
-    /// strains that outcompete virulent wild-type, reducing within-region spread.
-    /// Prereq: ResilientGrids + CombinationTherapy (cross-chain merge).
-    CompetitiveDisplacement,
-    /// Unlocks directed attenuation field research: permanently reduce
-    /// a disease's lethality by modifying its virulence factors in situ.
-    /// Prereq: CompetitiveDisplacement.
-    DirectedAttenuation,
-    /// Unlocks gene drive containment field research: self-propagating
-    /// genetic modifications prevent pathogen establishment in new regions.
-    /// Prereq: DirectedAttenuation.
-    GeneDriveContainment,
 
     // ── Column 1: Sequencing → surveillance ──────────────────────
     /// Halves genomic sequencing duration and reveals mutation stat details.
@@ -3757,9 +3701,6 @@ impl BasicTech {
             BasicTech::VaccinePlatform => "Vaccine Platform",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
-            BasicTech::CompetitiveDisplacement => "Competitive Displacement",
-            BasicTech::DirectedAttenuation => "Directed Attenuation",
-            BasicTech::GeneDriveContainment => "Gene Drive Containment",
             BasicTech::AutomatedSynthesis => "Automated Synthesis",
             BasicTech::StabilizedFormulation => "Stabilized Formulation",
             BasicTech::ResilientGrids => "Resilient Grids",
@@ -3778,9 +3719,6 @@ impl BasicTech {
             BasicTech::VaccinePlatform => "Unlocks vaccination deployment mode. Medicines can protect susceptible populations prophylactically.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
-            BasicTech::CompetitiveDisplacement => "Release attenuated strains that outcompete virulent wild-type. Each project reduces within-region spread 20%.",
-            BasicTech::DirectedAttenuation => "In-situ modification of pathogen virulence factors. Each project permanently reduces target lethality 30%.",
-            BasicTech::GeneDriveContainment => "Self-propagating genetic modifications prevent pathogen establishment in new regions. Eliminates cross-region spread.",
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
             BasicTech::StabilizedFormulation => "Thermostable formulations reduce cold-chain waste. Each manufacturing run yields 25% more usable doses.",
             BasicTech::ResilientGrids => "Hardened regional infrastructure protocols. Disease-caused infrastructure degradation 20% slower.",
@@ -3807,17 +3745,6 @@ impl BasicTech {
             }
             BasicTech::ResilientGrids => {
                 state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
-            }
-            BasicTech::CompetitiveDisplacement => {
-                // Cross-chain merge: column 0 + column 1
-                state.unlocked_techs.contains(&BasicTech::ResilientGrids)
-                    && state.unlocked_techs.contains(&BasicTech::CombinationTherapy)
-            }
-            BasicTech::DirectedAttenuation => {
-                state.unlocked_techs.contains(&BasicTech::CompetitiveDisplacement)
-            }
-            BasicTech::GeneDriveContainment => {
-                state.unlocked_techs.contains(&BasicTech::DirectedAttenuation)
             }
 
             // ── Column 1: Sequencing → surveillance ────────────────
@@ -3861,9 +3788,6 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Monoclonal Antibodies",
             BasicTech::VaccinePlatform => "Phage Therapy",
             BasicTech::ResilientGrids => "Vaccine Platform",
-            BasicTech::CompetitiveDisplacement => "Resilient Grids + Combination Therapy",
-            BasicTech::DirectedAttenuation => "Competitive Displacement",
-            BasicTech::GeneDriveContainment => "Directed Attenuation",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::MetagenomicSurveillance => "Resistance Surveillance",
@@ -3883,9 +3807,6 @@ impl BasicTech {
             BasicTech::PhageTherapy,
             BasicTech::VaccinePlatform,
             BasicTech::ResilientGrids,
-            BasicTech::CompetitiveDisplacement,
-            BasicTech::DirectedAttenuation,
-            BasicTech::GeneDriveContainment,
             // Column 1: Sequencing → surveillance
             BasicTech::RapidSequencing,
             BasicTech::ResistanceSurveillance,
@@ -3938,17 +3859,11 @@ impl ResearchKind {
                 BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
-                BasicTech::CompetitiveDisplacement => (8, 480.0, 1200.0),
-                BasicTech::DirectedAttenuation => (10, 600.0, 1500.0),
-                BasicTech::GeneDriveContainment => (12, 720.0, 2000.0),
                 BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
                 BasicTech::StabilizedFormulation => (5, 280.0, 700.0),
                 BasicTech::ResilientGrids => (3, 240.0, 550.0),
                 BasicTech::EpidemiologicalForecasting => (2, 160.0, 300.0),
             },
-            ResearchKind::SuppressPathogen { .. } => (8, 600.0, 500.0),
-            ResearchKind::AttenuatePathogen { .. } => (8, 600.0, 800.0),
-            ResearchKind::InterdictPathogen { .. } => (10, 800.0, 1200.0),
         }
     }
 
@@ -4000,24 +3915,6 @@ impl ResearchKind {
             }
             ResearchKind::TrainPersonnel => format!("Train Personnel (+{})", TRAIN_PERSONNEL_BATCH),
             ResearchKind::BasicResearch { tech } => tech.name().to_string(),
-            ResearchKind::SuppressPathogen { disease_idx } => {
-                let name = diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "Unknown".to_string());
-                format!("Suppress: {}", name)
-            }
-            ResearchKind::AttenuatePathogen { disease_idx } => {
-                let name = diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "Unknown".to_string());
-                format!("Attenuate: {}", name)
-            }
-            ResearchKind::InterdictPathogen { disease_idx } => {
-                let name = diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "Unknown".to_string());
-                format!("Interdict: {}", name)
-            }
         }
     }
 }
@@ -4179,18 +4076,6 @@ pub enum GameEvent {
     /// An emergency decree became available due to escalating crisis severity.
     DecreeUnlocked {
         decree: DecreeId,
-    },
-    /// Suppression research complete — pathogen within-region spread permanently reduced.
-    PathogenSuppressed {
-        disease_idx: usize,
-    },
-    /// Attenuation research complete — pathogen lethality permanently reduced.
-    PathogenAttenuated {
-        disease_idx: usize,
-    },
-    /// Interdiction research complete — cross-region transmission eliminated.
-    PathogenInterdicted {
-        disease_idx: usize,
     },
     /// A medicine shipment was dispatched and is in transit.
     MedicineShipped {
@@ -5563,9 +5448,6 @@ impl WorldState {
             intel_pre_detection_briefed: vec![false; num_diseases],
             ark_protocol: None,
             total_doses_deployed: 0.0,
-            pathogens_suppressed: 0,
-            pathogens_attenuated: 0,
-            pathogens_interdicted: 0,
             lab_level: 0,
             contracts: Vec::new(),
             contract_offer: None,
@@ -6315,42 +6197,6 @@ impl WorldState {
                 let kind = ResearchKind::GenomicSequencing { disease_idx: i };
                 if !active_kinds.contains(&&kind) {
                     projects.push(kind);
-                }
-            }
-        }
-        // Competitive Displacement: fully known diseases, when tech is unlocked
-        if self.unlocked_techs.contains(&BasicTech::CompetitiveDisplacement) {
-            for (i, disease) in self.diseases.iter().enumerate() {
-                if disease.knowledge >= KNOWLEDGE_FULL && self.disease_has_infected(i) {
-                    let kind = ResearchKind::SuppressPathogen { disease_idx: i };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
-                }
-            }
-        }
-        // Directed Attenuation: fully known diseases, when tech is unlocked
-        if self.unlocked_techs.contains(&BasicTech::DirectedAttenuation) {
-            for (i, disease) in self.diseases.iter().enumerate() {
-                if disease.knowledge >= KNOWLEDGE_FULL && self.disease_has_infected(i) {
-                    let kind = ResearchKind::AttenuatePathogen { disease_idx: i };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
-                }
-            }
-        }
-        // Gene Drive Containment: fully known diseases with cross-region spread, when tech is unlocked
-        if self.unlocked_techs.contains(&BasicTech::GeneDriveContainment) {
-            for (i, disease) in self.diseases.iter().enumerate() {
-                if disease.knowledge >= KNOWLEDGE_FULL
-                    && self.disease_has_infected(i)
-                    && disease.cross_region_spread > 0.0
-                {
-                    let kind = ResearchKind::InterdictPathogen { disease_idx: i };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
                 }
             }
         }

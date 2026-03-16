@@ -29,9 +29,6 @@ fn short_name(tech: BasicTech) -> &'static str {
         VaccinePlatform => "Vaccine Platform",
         ResistanceSurveillance => "Resistance Surv.",
         CombinationTherapy => "Combination Therapy",
-        CompetitiveDisplacement => "Competitive Displ.",
-        DirectedAttenuation => "Directed Attenuation",
-        GeneDriveContainment => "Gene Drive Contain.",
         AutomatedSynthesis => "Automated Synthesis",
         StabilizedFormulation => "Stabilized Formula.",
         ResilientGrids => "Resilient Grids",
@@ -60,9 +57,6 @@ fn tree_layout() -> Vec<TechNode> {
         TechNode { tech: ResilientGrids,              row: 4, col: 0 },
         TechNode { tech: CombinationTherapy,          row: 4, col: 1 },
 
-        TechNode { tech: CompetitiveDisplacement,     row: 5, col: 0 },
-        TechNode { tech: DirectedAttenuation,         row: 6, col: 0 },
-        TechNode { tech: GeneDriveContainment,        row: 7, col: 0 },
     ]
 }
 
@@ -75,9 +69,6 @@ fn tree_edges() -> Vec<TechEdge> {
         TechEdge { from: MonoclonalAntibodies,     to: PhageTherapy },
         TechEdge { from: PhageTherapy,             to: VaccinePlatform },
         TechEdge { from: VaccinePlatform,          to: ResilientGrids },
-        TechEdge { from: ResilientGrids,           to: CompetitiveDisplacement },
-        TechEdge { from: CompetitiveDisplacement,  to: DirectedAttenuation },
-        TechEdge { from: DirectedAttenuation,      to: GeneDriveContainment },
 
         // Col 1 chain
         TechEdge { from: RapidSequencing,          to: ResistanceSurveillance },
@@ -88,8 +79,6 @@ fn tree_edges() -> Vec<TechEdge> {
         // Col 2 chain
         TechEdge { from: AutomatedSynthesis,       to: StabilizedFormulation },
 
-        // Cross-column (adjacent cols, row N to row N+1)
-        TechEdge { from: CombinationTherapy,       to: CompetitiveDisplacement },
     ]
 }
 

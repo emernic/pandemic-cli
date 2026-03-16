@@ -589,8 +589,7 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &AppState) {
 
     // Biological footprint — what the player actually did
     let total_deployments: u32 = state.medicines.iter().map(|m| m.deployed_count).sum();
-    let interventions = state.pathogens_suppressed + state.pathogens_attenuated + state.pathogens_interdicted;
-    if total_deployments > 0 || interventions > 0 {
+    if total_deployments > 0 {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "  ── Mission Report ──",
@@ -618,24 +617,6 @@ fn render_game_over(f: &mut Frame, area: Rect, state: &AppState) {
             ),
         ]));
 
-        if state.pathogens_suppressed > 0 {
-            lines.push(Line::from(vec![
-                Span::styled("  Suppressed:     ", stat_label),
-                Span::styled(format!("{} pathogens", state.pathogens_suppressed), stat_value),
-            ]));
-        }
-        if state.pathogens_attenuated > 0 {
-            lines.push(Line::from(vec![
-                Span::styled("  Attenuated:     ", stat_label),
-                Span::styled(format!("{} pathogens", state.pathogens_attenuated), stat_value),
-            ]));
-        }
-        if state.pathogens_interdicted > 0 {
-            lines.push(Line::from(vec![
-                Span::styled("  Interdicted:    ", stat_label),
-                Span::styled(format!("{} pathogens", state.pathogens_interdicted), stat_value),
-            ]));
-        }
     }
 
     // Strategic tips

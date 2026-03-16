@@ -468,18 +468,6 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
         ResearchKind::BasicResearch { tech } => {
             Some(tech.description().to_string())
         }
-        ResearchKind::SuppressPathogen { disease_idx } => {
-            let disease = state.diseases.get(*disease_idx)?;
-            Some(format!("Within-region spread: {:.4} → {:.4}", disease.within_region_spread, disease.within_region_spread * 0.80))
-        }
-        ResearchKind::AttenuatePathogen { disease_idx } => {
-            let disease = state.diseases.get(*disease_idx)?;
-            Some(format!("Current lethality: {:.4} → {:.4}", disease.lethality, disease.lethality * 0.70))
-        }
-        ResearchKind::InterdictPathogen { disease_idx } => {
-            let disease = state.diseases.get(*disease_idx)?;
-            Some(format!("Cross-region spread: {:.4} → 0.0000", disease.cross_region_spread))
-        }
         ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
             let is_retrial = med.tested_against.contains(disease_idx);
