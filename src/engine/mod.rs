@@ -2034,7 +2034,7 @@ mod tests {
                     let projects = state.all_available_projects();
                     // Train personnel when running low (< 10 available)
                     let need_personnel = state.personnel_available() < 10;
-                    let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
+                    let best = projects.iter().min_by_key(|k| match k {
                         ResearchKind::TrainPersonnel if need_personnel => 0,
                         ResearchKind::ManufactureDoses { .. } => 1,
                         ResearchKind::IdentifyThreat { .. } => 2,
@@ -2042,7 +2042,7 @@ mod tests {
                         ResearchKind::GenomicSequencing { .. } => 4,
                         _ => 5,
                     });
-                    if let Some((_idx, kind)) = best {
+                    if let Some(kind) = best {
                         let (personnel, _, cost_funding) = kind.costs(&state.medicines);
                         if state.resources.funding >= cost_funding + 200.0
                             && state.personnel_available() >= personnel
