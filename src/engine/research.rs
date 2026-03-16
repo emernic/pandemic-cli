@@ -1352,7 +1352,7 @@ mod tests {
                 disease_idx: 0,
                 modality,
                 kd_nm: 10.0, // same Kd for fair comparison
-                compound_id: format!("TEST-001"),
+                compound_id: "TEST-001".into(),
                 well_index: 0,
             });
             world
