@@ -234,20 +234,10 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 } else if let Some(lab_ui) = &new.ui.lab_ui {
                     if lab_ui.is_browsing() {
                         if lab_ui.tab() == LabTab::Reactors {
-                            // Reactors tab: X cycles auto options for selected reactor
-                            // nothing → auto-deploy → auto-deploy+repeat → nothing
+                            // Reactors tab: X toggles "Repeat when low" for selected reactor
                             let sel = new.ui.panel_selection;
                             if sel < new.reactors.len() && new.reactors[sel].medicine_idx.is_some() {
-                                let r = &new.reactors[sel];
-                                if !r.auto_deploy && !r.repeat {
-                                    execute_command(&mut new, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: sel });
-                                } else if r.auto_deploy && !r.repeat {
-                                    execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
-                                } else {
-                                    // Both on → turn both off
-                                    execute_command(&mut new, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: sel });
-                                    execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
-                                }
+                                execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
                             }
                         } else {
                             // Toggle auto-repeat for the selected repeatable project
@@ -379,6 +369,17 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
             }
         }
         Action::Discard => {
+            // Reactors tab: D toggles "Deploy medicine when finished" for selected reactor
+            if new.ui.open_panel == Panel::Lab {
+                if let Some(lab_ui) = &new.ui.lab_ui {
+                    if lab_ui.is_browsing() && lab_ui.tab() == LabTab::Reactors {
+                        let sel = new.ui.panel_selection;
+                        if sel < new.reactors.len() && new.reactors[sel].medicine_idx.is_some() {
+                            execute_command(&mut new, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: sel });
+                        }
+                    }
+                }
+            }
             // Discard screening hit in the trial wizard
             if new.ui.open_panel == Panel::Lab {
                 if let Some(LabUiState::TrialSelectHit) = &new.ui.lab_ui {

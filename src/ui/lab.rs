@@ -314,6 +314,8 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
     lines.push(Line::from(""));
     let hint = if tab == LabTab::Trials {
         "  [↑/↓] Select  [Enter] Start Trial  [D] Discard  [←/→] Tab  [Esc] Close"
+    } else if tab == LabTab::Reactors {
+        "  [↑/↓] Select  [Enter] Confirm  [D] Deploy  [X] Repeat  [C] Assign  [←/→] Tab  [Esc] Close"
     } else {
         "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [X] Auto  [Esc] Close"
     };
@@ -1234,19 +1236,23 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
         Style::default().fg(Color::DarkGray),
     )));
 
-    // Auto-deploy and repeat toggles
+    // Deploy and repeat toggles (each on its own line with keybind hint)
     if reactor.medicine_idx.is_some() {
-        let auto_tag = if reactor.auto_deploy { "[X] auto-deploy" } else { "[ ] auto-deploy" };
-        let repeat_tag = if reactor.repeat { "[X] repeat" } else { "[ ] repeat" };
+        let deploy_tag = if reactor.auto_deploy { "[X] Deploy when finished" } else { "[ ] Deploy when finished" };
+        let repeat_tag = if reactor.repeat { "[X] Repeat when low" } else { "[ ] Repeat when low" };
         lines.push(Line::from(vec![
             Span::raw("     "),
-            Span::styled(auto_tag, Style::default().fg(
+            Span::styled(deploy_tag, Style::default().fg(
                 if reactor.auto_deploy { Color::Green } else { Color::DarkGray }
             )),
-            Span::raw("  "),
+            Span::styled("  [D]", Style::default().fg(Color::DarkGray)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("     "),
             Span::styled(repeat_tag, Style::default().fg(
                 if reactor.repeat { Color::Green } else { Color::DarkGray }
             )),
+            Span::styled("  [X]", Style::default().fg(Color::DarkGray)),
         ]));
     }
 

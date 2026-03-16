@@ -802,6 +802,9 @@ mod tests {
         // Configure reactor to produce medicine 0
         execute_command(&mut state, &GameCommand::ConfigureReactor { reactor_idx: 0, medicine_idx: Some(0) });
         assert_eq!(state.reactors[0].medicine_idx, Some(0));
+        // Disable auto-deploy so doses accumulate in stockpile for this test
+        execute_command(&mut state, &GameCommand::ToggleReactorAutoDeploy { reactor_idx: 0 });
+        assert!(!state.reactors[0].auto_deploy);
 
         // Start a batch
         execute_command(&mut state, &GameCommand::StartReactorBatch { reactor_idx: 0 });
