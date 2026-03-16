@@ -727,6 +727,7 @@ fn snapshot_disease_observations(state: &mut WorldState) {
         // Compute this disease's screened infected total across all regions
         let observed: f64 = state.regions.iter().enumerate()
             .filter_map(|(region_idx, region)| {
+                if region.collapsed { return None; }
                 let inf = region.disease_state(disease_idx)?;
                 if inf.infected + inf.exposed <= 0.0 { return None; }
                 let shows_exposed = state.screening_shows_exposed(region_idx);

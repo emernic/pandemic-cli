@@ -469,6 +469,32 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &AppState, disease_idx: u
             if screened < 1.0 && inf.dead < 1.0 && inf.immune <= 0.0 {
                 continue;
             }
+            // Collapsed regions: only count dead toward totals (infected/immune
+            // are no longer actionable). Show a dimmed row with just the dead count.
+            if region.collapsed {
+                total_dead += inf.dead;
+                let label = format!("{} [X]", region.name);
+                let name = format!("{:<16}", &label[..label.len().min(16)]);
+                let mut row = vec![
+                    Span::raw("    "),
+                    Span::styled(name, Style::default().fg(Color::DarkGray)),
+                    Span::raw("  "),
+                    Span::styled(format!("{:>8}", "—"), Style::default().fg(Color::DarkGray)),
+                    Span::raw("  "),
+                    Span::styled(format!("{:>8}", "—"), Style::default().fg(Color::DarkGray)),
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("{:>8}", format_number(inf.dead)),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ];
+                if has_forecast {
+                    row.push(Span::raw("  "));
+                    row.push(Span::styled(format!("{:>8}", "—"), Style::default().fg(Color::DarkGray)));
+                }
+                lines.push(Line::from(row));
+                continue;
+            }
             let shows_immune = state.policies.get(region_idx)
                 .map(|p| p.screening.shows_immune())
                 .unwrap_or(false);
