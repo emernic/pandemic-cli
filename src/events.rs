@@ -37,9 +37,11 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
         state.ui.crisis_auto_resolve = false;
     }
     // Build log messages for each event, then pick the best for the status bar.
-    // Each event produces a (priority, log_msg, notification_msg) triple.
+    // Each event produces a (priority, log_msg, notification_msg, log_it) tuple.
     // notification_msg may include contextual action hints not shown in the log.
     // lower priority number = more important (shown in status bar over higher numbers).
+    // log_it = false means the event updates the notification bar but does NOT
+    // appear in the persistent event log (noise reduction for non-actionable events).
     let day = ticks_to_days(state.tick as f64);
     let mut log_entries: Vec<String> = Vec::new();
     // Tracks the highest-priority notification for the top-right status area.
@@ -47,7 +49,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
     let mut best_notification: Option<(u8, String)> = None; // (priority, notification_msg)
 
     for event in events {
-        let (priority, msg, notification) = match event {
+        let (priority, msg, notification, log_it) = match event {
             GameEvent::RegionCollapsed { region_idx, personnel_lost } => {
                 let region = state.regions.get(*region_idx);
                 let region_name = region.map(|r| r.name.as_str()).unwrap_or("Unknown");
@@ -74,14 +76,14 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 } else {
                     msg.clone()
                 };
-                (0u8, msg, notification)
+                (0u8, msg, notification, true)
             }
             GameEvent::CollapseSecondaryDeaths { region_idx, deaths } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let deaths_str = format_number(*deaths);
                 let msg = format!("{}: ~{}/day dying from secondary causes", region_name, deaths_str);
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, false)
             }
             GameEvent::DiseaseDetected { disease_idx, silent_days } => {
                 let affected: Vec<&str> = state.regions.iter()
@@ -98,13 +100,13 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     format!("NEW THREAT detected in {}", location)
                 };
                 let notification = format!("{}! Use [R] Research to identify it.", msg.trim_end_matches('.'));
-                (1, msg, notification)
+                (1, msg, notification, true)
             }
             GameEvent::IntelBriefing { message } => {
-                (3, message.clone(), message.clone())
+                (3, message.clone(), message.clone(), false)
             }
             GameEvent::IntelAnalysis { message, .. } => {
-                (2, message.clone(), message.clone())
+                (2, message.clone(), message.clone(), true)
             }
             GameEvent::ThreatEscalation { disease_idx, deaths, has_medicine } => {
                 let name = state.diseases.get(*disease_idx)
@@ -116,14 +118,14 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 } else {
                     format!("{name}: {deaths_str} dead. No medicine available.")
                 };
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::HumanTrialAdverseEvent { disease_idx, deaths } => {
                 let name = state.diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "?".to_string());
                 let msg = format!("ADVERSE EVENT: {} trial killed {:.0} patients", name, deaths);
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, true)
             }
             GameEvent::PathogenIdentified { disease_idx } => {
                 let d = state.diseases.get(*disease_idx);
@@ -134,9 +136,9 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let base = format!("IDENTIFIED: {} [{} / {} transmission]", name, ptype, transmission);
                 if is_prion {
                     let msg = format!("{} — NO TREATMENT POSSIBLE, containment only", base);
-                    (3, msg.clone(), msg)
+                    (3, msg.clone(), msg, true)
                 } else {
-                    (1, base.clone(), base)
+                    (1, base.clone(), base, true)
                 }
             }
             GameEvent::TrialCompleted { medicine_idx, disease_idx } => {
@@ -154,42 +156,42 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     "auto-deploy on, pending doses"
                 };
                 let msg = format!("TRIAL SUCCESS: {} effective against {} ({:.0}%), {}", med_name, disease_name, efficacy, deploy_status);
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::TechUnlocked { tech } => {
                 let msg = format!("TECH UNLOCKED: {} [{}]", tech.name(), tech.description());
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, true)
             }
             GameEvent::DecreeUnlocked { decree } => {
                 let name = decree.display_name();
                 let msg = format!("DECREE AVAILABLE: {}", name);
                 let notification = format!("{}. Open Orders [O] to enact.", msg);
-                (2, msg, notification)
+                (2, msg, notification, true)
             }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("Funding crisis: suspended {} in {}", policy_name, region);
-                (4, msg.clone(), msg)
+                (4, msg.clone(), msg, true)
             }
             GameEvent::FundingWarning => {
                 let msg = "LOW FUNDS: Policies at risk of suspension".to_string();
-                (5, msg.clone(), msg)
+                (5, msg.clone(), msg, true)
             }
             GameEvent::PersonnelAttrition { count } => {
                 let msg = format!("{} personnel resigned, no funding", count);
-                (6, msg.clone(), msg)
+                (6, msg.clone(), msg, true)
             }
             GameEvent::VariantEmerged { disease_idx, parent_name } => {
                 let name = state.diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| format!("Pathogen #{}", disease_idx + 1));
                 let msg = format!("NEW VARIANT: {} emerged from {}", name, parent_name);
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::CrisisAutoResolved { message } => {
                 let msg = format!("Auto-resolved: {}", message);
-                (5, msg.clone(), msg)
+                (5, msg.clone(), msg, false)
             }
             GameEvent::ResistanceTransferred { from_disease_idx, to_disease_idx } => {
                 let from_name = state.diseases.get(*from_disease_idx)
@@ -199,7 +201,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     .map(|d| d.display_name(*to_disease_idx))
                     .unwrap_or_else(|| "?".to_string());
                 let msg = format!("Gene transfer: {} → {}", from_name, to_name);
-                (9, msg.clone(), msg)
+                (9, msg.clone(), msg, false)
             }
             GameEvent::DiseaseSpreadToRegion { region_idx, .. } => {
                 let region_name = state.regions.get(*region_idx)
@@ -210,35 +212,35 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 } else {
                     msg.clone()
                 };
-                (10, msg, notification)
+                (10, msg, notification, false)
             }
             GameEvent::ArkProtocolActivated { region_idx } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("⚠ Emergency consolidation: all operations moved to {}", region_name);
-                (1, msg.clone(), msg)
+                (1, msg.clone(), msg, true)
             }
             GameEvent::GovernorAction { description, .. } => {
-                (4, description.clone(), description.clone())
+                (4, description.clone(), description.clone(), true)
             }
             GameEvent::GovernorDied { region_idx, name } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("{} of {} has died. Region is leaderless.", name, region_name);
-                (1, msg.clone(), msg)
+                (1, msg.clone(), msg, true)
             }
             GameEvent::GovernorSucceeded { region_idx, name } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("New governor in {}: {}", region_name, name);
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, false)
             }
             GameEvent::NuclearImpact { region_idx, killed } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("☢ {} annihilated. {:.1}M dead. Disease eradicated.",
                     region_name, killed / 1_000_000.0);
-                (0, msg.clone(), msg)
+                (0, msg.clone(), msg, true)
             }
             GameEvent::MedicineShipped { medicine_idx, region_idx, doses } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -254,7 +256,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 } else {
                     format!("{dose_str} doses of {med_name} en route to {region_name}")
                 };
-                (9, msg.clone(), msg)
+                (9, msg.clone(), msg, false)
             }
             GameEvent::ShipmentDelivered { medicine_idx, region_idx, doses, adverse, efficiency, doses_wasted, people_treated } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -285,7 +287,10 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     format!("{med_name} delivered to {region_name}{outcome}")
                 };
                 let priority = if *adverse { 3 } else if *efficiency < 0.90 || *doses_wasted > 100.0 { 6 } else { 9 };
-                (priority, msg.clone(), msg)
+                // Only log deliveries that need player attention (adverse reactions,
+                // low infra efficiency, or wasted doses). Routine deliveries are noise.
+                let log_it = *adverse || *efficiency < 0.90 || *doses_wasted > 100.0;
+                (priority, msg.clone(), msg, log_it)
             }
             GameEvent::InfrastructureBreakpoint { region_idx, system, threshold } => {
                 let region_name = state.regions.get(*region_idx)
@@ -298,30 +303,30 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     "STRESSED"
                 };
                 let msg = format!("⚠ {region_name}: {} {severity}", system.label());
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::PolicyAutoActivated { policy_name, .. } => {
                 let msg = format!("Standing order: {policy_name} auto-activated");
-                (8, msg.clone(), msg)
+                (8, msg.clone(), msg, false)
             }
             GameEvent::ResearchHandoff { message } => {
-                (2, message.clone(), message.clone())
+                (2, message.clone(), message.clone(), true)
             }
             GameEvent::ContractOffered { name } => {
                 let msg = format!("TERMS RECEIVED: {}. Respond via crisis popup", name);
-                (5, msg.clone(), msg)
+                (5, msg.clone(), msg, true)
             }
             GameEvent::ContractWarning { member_name, reason } => {
                 let msg = format!("NOTICE: {}: {}", member_name, reason);
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::ContractRevoked { name, reason } => {
                 let msg = format!("FUNDING CUT: {}: {}", name, reason);
-                (2, msg.clone(), msg)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::PatronBonus { member_name, description } => {
                 let msg = format!("BONUS: {} — {}", member_name, description);
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, false)
             }
             GameEvent::CorporationBankrupt { corp_idx, region_idx } => {
                 let corp_name = state.corporations.get(*corp_idx)
@@ -329,11 +334,11 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("BANKRUPT: {} ({}) has failed", corp_name, region_name);
-                (1, msg.clone(), msg)
+                (1, msg.clone(), msg, true)
             }
             GameEvent::CrisisTeamReturned { label, personnel } => {
                 let msg = format!("{} returned ({} personnel freed)", label, personnel);
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, false)
             }
             GameEvent::EmergencySampleDelivered { medicine_idx, region_idx, cooperation_change, adverse } => {
                 let med_name = state.medicines.get(*medicine_idx)
@@ -346,27 +351,28 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     format!("Delivered {} samples to {}. Cooperation +{:.0}", med_name, gov_name, cooperation_change)
                 };
                 let priority = if *adverse { 1 } else { 2 };
-                (priority, msg.clone(), msg)
+                // Only log adverse reactions — routine sample deliveries are noise.
+                (priority, msg.clone(), msg, *adverse)
             }
             GameEvent::PolicyAuthorized { policy } => {
                 let name = policy.display_name();
                 let msg = format!("Board authorized policy: {}", name);
                 let notification = format!("{}. Open [P] Policy to deploy.", msg);
-                (3, msg, notification)
+                (3, msg, notification, true)
             }
             GameEvent::ReactorBatchComplete { medicine_idx } => {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("Reactor batch complete: {}", med_name);
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, false)
             }
             GameEvent::ResearchAutoRestarted { kind } => {
                 let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines));
-                (8, msg.clone(), msg)
+                (8, msg.clone(), msg, false)
             }
             GameEvent::QueuedResearchStarted { tech } => {
                 let msg = format!("Queued research started: {}", tech.name());
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, false)
             }
             GameEvent::DeployBlocked { medicine_idx } => {
                 // GUARDRAIL: `DeployBlocked` is intentionally deduped here, in
@@ -383,7 +389,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let med_name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str()).unwrap_or("?");
                 let msg = format!("{} deployment halted — resistance too high", med_name);
-                (3, msg.clone(), msg)
+                (3, msg.clone(), msg, true)
             }
             GameEvent::ScreeningComplete { disease_idx, hit_count } => {
                 let disease_name = state.diseases.get(*disease_idx)
@@ -391,16 +397,18 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     .unwrap_or_else(|| "?".to_string());
                 if *hit_count > 0 {
                     let msg = format!("SCREENING: {} hit{} found against {}", hit_count, if *hit_count == 1 { "" } else { "s" }, disease_name);
-                    (1, msg.clone(), msg)
+                    (1, msg.clone(), msg, true)
                 } else {
                     let msg = format!("SCREENING: no hits found against {}", disease_name);
-                    (2, msg.clone(), msg)
+                    (2, msg.clone(), msg, true)
                 }
             }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
-        log_entries.push(msg);
+        if log_it {
+            log_entries.push(msg);
+        }
 
         // Track highest-priority notification for the status bar
         if best_notification.as_ref().is_none_or(|(p, _)| priority < *p) {
