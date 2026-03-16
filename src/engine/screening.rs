@@ -127,9 +127,6 @@ pub(super) fn tick_screening(state: &mut WorldState, events: &mut Vec<GameEvent>
     // Process completions: move hits to the global hits pool
     for run in completed {
         let hit_count = run.hits.len();
-        let disease_name = state.diseases.get(run.disease_idx)
-            .map(|d| d.display_name(run.disease_idx))
-            .unwrap_or_else(|| format!("Disease #{}", run.disease_idx));
 
         for hit in run.hits {
             state.screening_hits.push(hit);
@@ -139,26 +136,6 @@ pub(super) fn tick_screening(state: &mut WorldState, events: &mut Vec<GameEvent>
             disease_idx: run.disease_idx,
             hit_count,
         });
-
-        let msg = if hit_count > 0 {
-            format!(
-                "Screening complete: {} {} hit{} found against {}",
-                hit_count,
-                run.modality.label(),
-                if hit_count == 1 { "" } else { "s" },
-                disease_name,
-            )
-        } else {
-            format!(
-                "Screening complete: no hits found against {} ({})",
-                disease_name,
-                run.modality.label(),
-            )
-        };
-        state.event_log.push_front((state.tick as f64 / crate::state::TICKS_PER_DAY, msg));
-        while state.event_log.len() > 50 {
-            state.event_log.pop_back();
-        }
     }
 }
 
