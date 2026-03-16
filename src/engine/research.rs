@@ -1,8 +1,10 @@
+use rand::Rng;
 use crate::state::{
     AUTO_MANUFACTURE_THRESHOLD, BasicTech, GameEvent, GameOutcome, WorldState,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
+    TrialRigor, Medicine, MechanismOfAction, TherapyType,
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
@@ -54,11 +56,219 @@ pub(super) fn start_research(state: &mut WorldState, project_idx: usize, double_
 }
 
 
+/// Start a clinical trial from a screening hit.
+/// Removes the hit from the pool, creates a new Medicine with randomized stats,
+/// and starts a ClinicalTrial research project.
+pub(super) fn start_trial(state: &mut WorldState, hit_index: usize, rigor: TrialRigor) -> (bool, Option<String>) {
+    if state.outcome != GameOutcome::Playing {
+        return (false, None);
+    }
+    if hit_index >= state.screening_hits.len() {
+        return (false, Some("Invalid hit index".into()));
+    }
+
+    let (personnel, duration, funding_cost) = rigor.costs();
+    if state.resources.funding < funding_cost {
+        return (false, Some(super::medicine::insufficient_funds_message(funding_cost, state.resources.funding)));
+    }
+    if state.personnel_available() < personnel {
+        return (false, Some(format!(
+            "Need {} personnel, only {} available",
+            personnel, state.personnel_available(),
+        )));
+    }
+
+    // Remove hit from pool
+    let hit = state.screening_hits.remove(hit_index);
+
+    // Determine therapy type from disease's pathogen type
+    let pathogen_type = state.diseases.get(hit.disease_idx)
+        .map(|d| d.pathogen_type)
+        .unwrap_or(crate::state::PathogenType::RnaVirus);
+    let therapy_type = pathogen_type.matched_therapy().unwrap_or(TherapyType::BroadSpectrum);
+
+    // Pick a random mechanism of action for this pathogen type
+    let mechs: &[MechanismOfAction] = match pathogen_type {
+        crate::state::PathogenType::Bacterium => MechanismOfAction::bacterial_mechanisms(),
+        crate::state::PathogenType::Fungus => MechanismOfAction::fungal_mechanisms(),
+        crate::state::PathogenType::RnaVirus | crate::state::PathogenType::DnaVirus => MechanismOfAction::viral_mechanisms(),
+        crate::state::PathogenType::Prion => &[],
+    };
+    let mechanism = if mechs.is_empty() {
+        None
+    } else {
+        let idx = (state.rng_spread.r#gen::<u64>() as usize) % mechs.len();
+        Some(mechs[idx])
+    };
+
+    // Randomize stats from the hit's Kd:
+    // Lower Kd = better binding = higher efficacy
+    // Kd range is roughly 0.1-500 nM. We map to efficacy 0.3-0.95.
+    let kd_factor = (hit.kd_nm.ln() - 0.1_f64.ln()) / (500.0_f64.ln() - 0.1_f64.ln());
+    let base_efficacy = 0.95 - (kd_factor.clamp(0.0, 1.0) * 0.65);
+    // Add some randomness (±15%)
+    let noise: f64 = (state.rng_spread.r#gen::<f64>() - 0.5) * 0.30;
+    let efficacy = (base_efficacy + noise).clamp(0.15, 0.98);
+
+    // Side effect rate: 0-25%, inversely correlated with rigor (charade hides bad drugs)
+    let side_effect_rate = state.rng_spread.r#gen::<f64>() * 0.25;
+
+    // Resistance rate: how quickly resistance builds (0.0-1.0 scale, lower is better)
+    let resistance_rate: f64 = if let Some(mech) = mechanism {
+        // Fast/cheap mechanisms build resistance faster
+        let base: f64 = mech.dev_cost_multiplier();
+        let mapped: f64 = (1.5 - base) / 0.7; // 1.0 for cheapest, 0.0 for most expensive
+        (mapped * 0.6 + state.rng_spread.r#gen::<f64>() * 0.4).clamp(0.0, 1.0)
+    } else {
+        0.5
+    };
+
+    let max_doses = mechanism.map_or(500_000.0, |m| m.base_doses());
+
+    // Create the medicine — uses compound_id as temporary name until trial completes
+    let medicine = Medicine {
+        name: hit.compound_id.clone(),
+        therapy_type,
+        mechanism,
+        target_diseases: vec![hit.disease_idx],
+        doses: 0.0,
+        max_doses,
+        unlocked: false,
+        tested_against: vec![],
+        deployed_count: 0,
+        total_treated: 0.0,
+        total_protected: 0.0,
+        manufacturer_corp_idx: None,
+        trial_efficacy: Some(efficacy),
+        side_effect_rate,
+        resistance_rate,
+        trial_rigor: Some(rigor),
+        reported_efficacy: None,
+        reported_side_effects: None,
+        reported_resistance: None,
+    };
+
+    let medicine_idx = state.medicines.len();
+    state.medicines.push(medicine);
+
+    // Deduct costs and start the trial project
+    state.resources.funding -= funding_cost;
+    let effective_duration = if state.enacted_decrees.authorize_human_trials {
+        duration * crate::state::HUMAN_TRIALS_SPEED
+    } else {
+        duration
+    };
+    state.active_research.push(ResearchProject {
+        kind: ResearchKind::ClinicalTrial {
+            medicine_idx,
+            disease_idx: hit.disease_idx,
+            rigor,
+        },
+        progress: 0.0,
+        required_ticks: effective_duration,
+        personnel_assigned: personnel,
+    });
+
+    (true, Some(format!("Trial started: {} ({})", hit.compound_id, rigor.label())))
+}
+
+/// Discard a screening hit the player doesn't want to trial.
+pub(super) fn discard_hit(state: &mut WorldState, hit_index: usize) -> (bool, Option<String>) {
+    if hit_index >= state.screening_hits.len() {
+        return (false, Some("Invalid hit index".into()));
+    }
+    let hit = state.screening_hits.remove(hit_index);
+    (true, Some(format!("Discarded {}", hit.compound_id)))
+}
+
+/// Generate reported stats for a medicine based on trial rigor.
+/// Full trials get accurate numbers. Charade trials get potentially misleading info.
+fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, rng: &mut impl rand::Rng) {
+    let real_eff = medicine.trial_efficacy.unwrap_or(0.5);
+    let real_se = medicine.side_effect_rate;
+    let real_res = medicine.resistance_rate;
+
+    match rigor {
+        TrialRigor::Full => {
+            medicine.reported_efficacy = Some(format!("{:.0}%", real_eff * 100.0));
+            medicine.reported_side_effects = Some(format!("{:.0}%", real_se * 100.0));
+            medicine.reported_resistance = Some(if real_res < 0.3 { "Low" } else if real_res < 0.7 { "Moderate" } else { "High" }.into());
+        }
+        TrialRigor::Abbreviated => {
+            // Show with uncertainty ranges (±10-15%)
+            let eff_lo = ((real_eff - 0.10) * 100.0).max(0.0);
+            let eff_hi = ((real_eff + 0.10) * 100.0).min(100.0);
+            medicine.reported_efficacy = Some(format!("{:.0}-{:.0}%", eff_lo, eff_hi));
+            let se_lo = ((real_se - 0.05) * 100.0).max(0.0);
+            let se_hi = ((real_se + 0.05) * 100.0).min(100.0);
+            medicine.reported_side_effects = Some(format!("{:.0}-{:.0}%", se_lo, se_hi));
+            medicine.reported_resistance = Some(if real_res < 0.3 { "Low" } else if real_res < 0.7 { "Moderate" } else { "High" }.into());
+        }
+        TrialRigor::Compassionate => {
+            // Qualitative only
+            medicine.reported_efficacy = Some(if real_eff > 0.7 { "High" } else if real_eff > 0.4 { "Medium" } else { "Low" }.into());
+            // Side effects might be hidden
+            medicine.reported_side_effects = if real_se > 0.15 {
+                Some("Possible".into())
+            } else {
+                Some("Unknown".into())
+            };
+            medicine.reported_resistance = Some("Unknown".into());
+        }
+        TrialRigor::Charade => {
+            // Stats could be wildly inaccurate — the reported values might be lies
+            let fake_eff = (rng.r#gen::<f64>() * 0.5 + 0.4).clamp(0.0, 1.0);
+            medicine.reported_efficacy = Some(if fake_eff > 0.7 { "High" } else if fake_eff > 0.4 { "Medium" } else { "Low" }.into());
+            // Always says side effects are minimal (even if they're not)
+            medicine.reported_side_effects = Some("Minimal".into());
+            medicine.reported_resistance = Some(if rng.r#gen::<bool>() { "Low" } else { "Moderate" }.into());
+        }
+    }
+}
+
+/// Generate a medicine name from disease name and mechanism.
+fn generate_medicine_name(disease_name: &str, mechanism: Option<MechanismOfAction>, rng: &mut impl rand::Rng) -> String {
+    // Use a drug-name suffix based on mechanism
+    let suffix = match mechanism {
+        Some(MechanismOfAction::CellWallInhibitor) => "cillin",
+        Some(MechanismOfAction::RibosomeInhibitor) => "mycin",
+        Some(MechanismOfAction::DnaGyraseInhibitor) => "floxacin",
+        Some(MechanismOfAction::MetabolicInhibitor) => "trimol",
+        Some(MechanismOfAction::PolymeraseInhibitor) => "vir",
+        Some(MechanismOfAction::ProteaseInhibitor) => "navir",
+        Some(MechanismOfAction::EntryInhibitor) => "mab",
+        Some(MechanismOfAction::ErgosterolInhibitor) => "azole",
+        Some(MechanismOfAction::MembraneDisruptor) => "fungin",
+        Some(MechanismOfAction::GlucanSynthaseInhibitor) => "candin",
+        None => "plex",
+    };
+
+    // Generate a short prefix from disease name (first 3-4 chars, lowercased)
+    let prefix_len = 3 + (rng.r#gen::<usize>() % 2);
+    let prefix: String = disease_name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .take(prefix_len)
+        .collect::<String>()
+        .to_lowercase();
+
+    // Capitalize first letter
+    let mut name = String::new();
+    for (i, c) in prefix.chars().enumerate() {
+        if i == 0 {
+            name.extend(c.to_uppercase());
+        } else {
+            name.push(c);
+        }
+    }
+    name.push_str(suffix);
+    name
+}
+
 /// Advance research projects by one tick and handle completions.
 /// Progress scales with diminishing returns: 2x personnel = 1.5x speed (peak),
 /// beyond 2x personnel = negative returns (too many cooks).
 /// Returns the number of research completions that should trigger board notifications
-/// (DevelopMedicine and BasicResearch completions boost Technocrat satisfaction).
+/// (ClinicalTrial and BasicResearch completions boost Technocrat satisfaction).
 pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, events: &mut Vec<GameEvent>) -> u32 {
     // Proactively auto-repeat on idle categories
     try_auto_repeat(state, events);
@@ -108,21 +318,31 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     events.push(GameEvent::PathogenIdentified { disease_idx: d_idx });
                 }
             }
-            ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
+            ResearchKind::ClinicalTrial { medicine_idx, disease_idx, rigor } => {
                 let m_idx = *medicine_idx;
                 let d_idx = *disease_idx;
+                let rigor = *rigor;
                 if let Some(medicine) = state.medicines.get_mut(m_idx) {
+                    medicine.unlocked = true;
                     if !medicine.tested_against.contains(&d_idx) {
                         medicine.tested_against.push(d_idx);
                     }
                     if !medicine.target_diseases.contains(&d_idx) {
                         medicine.target_diseases.push(d_idx);
                     }
+                    // Generate reported stats based on rigor level
+                    generate_reported_stats(medicine, rigor, rng);
+                    // Give the medicine a random name on completion
+                    let disease_name = state.diseases.get(d_idx)
+                        .map(|d| d.display_name(d_idx))
+                        .unwrap_or_else(|| format!("P{}", d_idx + 1));
+                    medicine.name = generate_medicine_name(&disease_name, medicine.mechanism, rng);
                 }
                 events.push(GameEvent::TrialCompleted {
                     medicine_idx: m_idx,
                     disease_idx: d_idx,
                 });
+                board_notify_count += 1;
                 while state.deploy_enabled.len() <= m_idx {
                     state.deploy_enabled.push(false);
                 }
@@ -151,21 +371,8 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                         }
                     }
                 }
-            }
-            ResearchKind::GenomicSequencing { disease_idx } => {
-                let d_idx = *disease_idx;
-                if let Some(disease) = state.diseases.get_mut(d_idx) {
-                    disease.sequencing_count += 1;
-                }
-            }
-            ResearchKind::DevelopMedicine { medicine_idx } => {
-                let m_idx = *medicine_idx;
-                if let Some(medicine) = state.medicines.get_mut(m_idx) {
-                    medicine.unlocked = true;
-                }
-                events.push(GameEvent::MedicineDeveloped { medicine_idx: m_idx });
-                board_notify_count += 1;
 
+                // Boost manufacturer corporation if applicable
                 if let Some(corp_idx) = state.medicines.get(m_idx).and_then(|m| m.manufacturer_corp_idx) {
                     if let Some(corp) = state.corporations.get_mut(corp_idx) {
                         if corp.board_seat && !corp.bankrupt {
@@ -174,15 +381,11 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                         }
                     }
                 }
-
-                let has_trial_available = state.all_available_projects().iter()
-                    .any(|p| matches!(p, ResearchKind::ClinicalTrial { medicine_idx: mi, .. } if *mi == m_idx));
-                if has_trial_available {
-                    let name = state.medicines.get(m_idx)
-                        .map(|m| m.name.as_str()).unwrap_or("medicine");
-                    events.push(GameEvent::ResearchHandoff {
-                        message: format!("{} needs clinical trial — open Field Research [R]", name),
-                    });
+            }
+            ResearchKind::GenomicSequencing { disease_idx } => {
+                let d_idx = *disease_idx;
+                if let Some(disease) = state.diseases.get_mut(d_idx) {
+                    disease.sequencing_count += 1;
                 }
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
@@ -206,16 +409,16 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
         }
     }
 
-    // Notify player if field completions unlocked Applied research options
+    // Notify player if field completions enabled screening
     if had_field_completion {
-        if let Some(kind) = state.all_available_projects().iter()
-            .find(|p| matches!(p, ResearchKind::DevelopMedicine { .. }))
-        {
-            if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
-                let name = state.medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str()).unwrap_or("medicine");
+        // After identification completes, prompt player to start screening
+        for project in &completed {
+            if let ResearchKind::IdentifyThreat { disease_idx } = &project.kind {
+                let name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "pathogen".to_string());
                 events.push(GameEvent::ResearchHandoff {
-                    message: format!("{} development available — open Applied Research [R]", name),
+                    message: format!("{} identified — start screening in Lab [L]", name),
                 });
             }
         }
@@ -410,43 +613,33 @@ mod tests {
         assert!((state.diseases[0].knowledge - 0.50).abs() < 0.01);
     }
 
-    #[test]
-    fn research_develop_medicine_unlocks() {
-        let mut state = AppState::new_default(42);
-        state.diseases[0].knowledge = 1.0; // Fully identified
-        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
-
-        assert!(!state.medicines[0].unlocked);
-
-        // Start applied research: Develop Antiviral-A
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
-
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
-
-        for _ in 0..200 {
-            state = state.with_world(tick(&state).0);
-        }
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
-        assert!(state.medicines[0].unlocked);
-    }
+    // research_develop_medicine_unlocks — removed: DevelopMedicine no longer exists.
+    // Medicines are created from screening hits via clinical trials.
 
     #[test]
     fn research_clinical_trial_marks_tested() {
         let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
-        state.medicines[0].unlocked = true; // Pre-unlock for testing
+        state.medicines[0].unlocked = true;
+        state.medicines[0].tested_against.clear(); // Clear so we can test the trial adds it
 
         assert!(state.medicines[0].tested_against.is_empty());
 
-        // Start field research: Clinical Trial
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::ClinicalTrial { .. }));
+        // Directly add a clinical trial research project (trials are now started via wizard, not flat list)
+        state.active_research.push(ResearchProject {
+            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0, rigor: crate::state::TrialRigor::Full },
+            progress: 0.0,
+            required_ticks: 120.0,
+            personnel_assigned: 4,
+        });
 
-        assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
+        assert!(!state.active_research.is_empty(), "clinical trial should be active");
 
         for _ in 0..160 {
             state = state.with_world(tick(&state).0);
         }
-        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ClinicalTrial { .. })).collect::<Vec<_>>().is_empty(),
+            "clinical trial should have completed");
         assert!(state.medicines[0].tested_against.contains(&0));
     }
 
@@ -512,19 +705,18 @@ mod tests {
         let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.resources.funding = 1000.0; // enough for both projects
-        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
 
         // Start field research (first item in flat list)
         state = start_research_matching(&state, |k| k.is_field_work());
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
-        // Start applied research
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        // Start applied research (TrainPersonnel is always available)
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         // Both running simultaneously
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
     }
 
     #[test]
@@ -546,21 +738,7 @@ mod tests {
         assert!(state.resources.funding < 500.0, "funding should be deducted");
     }
 
-    #[test]
-    fn develop_medicine_unlocks() {
-        let mut state = AppState::new_default(42);
-        state.diseases[0].knowledge = 1.0;
-
-        state.active_research.push(ResearchProject {
-            kind: ResearchKind::DevelopMedicine { medicine_idx: 0 },
-            progress: 24.0,
-            required_ticks: 25.0,
-            personnel_assigned: 5,
-        });
-
-        state = state.with_world(tick(&state).0);
-        assert!(state.medicines[0].unlocked);
-    }
+    // develop_medicine_unlocks — removed: DevelopMedicine no longer exists.
 
     #[test]
     fn clinical_trial_adds_target_and_tested() {
@@ -568,7 +746,7 @@ mod tests {
         state.medicines[0].unlocked = true;
 
         state.active_research = vec![ResearchProject {
-            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
+            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0, rigor: crate::state::TrialRigor::Full },
             progress: 24.0,
             required_ticks: 25.0,
             personnel_assigned: 5,
@@ -585,7 +763,7 @@ mod tests {
         state.medicines[0].unlocked = true;
 
         state.active_research = vec![ResearchProject {
-            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
+            kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0, rigor: crate::state::TrialRigor::Full },
             progress: 24.0,
             required_ticks: 25.0,
             personnel_assigned: 5,
@@ -603,24 +781,7 @@ mod tests {
             "deploy should be enabled automatically after trial completes");
     }
 
-    #[test]
-    fn narrow_medicine_cheaper_to_develop_than_broad() {
-        let mut state = AppState::new_default(1);
-        let disease2 = crate::state::Disease::generate(
-            &mut state.rng_emergence.clone(), crate::state::PathogenType::Bacterium, &[], true,
-        );
-        state.diseases.push(disease2);
-        let broad_idx = state.medicines.len() - 1;
-        state.medicines[broad_idx].target_diseases.push(1);
-
-        let narrow = ResearchKind::DevelopMedicine { medicine_idx: 0 };
-        let broad = ResearchKind::DevelopMedicine { medicine_idx: broad_idx };
-        let (narrow_pers, narrow_ticks, narrow_funding) = narrow.costs(&state.medicines);
-        let (broad_pers, broad_ticks, broad_funding) = broad.costs(&state.medicines);
-        assert!(narrow_pers <= broad_pers, "narrow should need fewer personnel");
-        assert!(narrow_ticks < broad_ticks, "narrow should be faster");
-        assert!(narrow_funding < broad_funding, "narrow should cost less funding");
-    }
+    // narrow_medicine_cheaper_to_develop_than_broad — removed: DevelopMedicine no longer exists.
 
 
     #[test]
@@ -682,12 +843,12 @@ mod tests {
         let initial_personnel = state.resources.personnel;
 
         state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         for _ in 0..160 {
             state = state.with_world(tick(&state).0);
         }
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().is_empty());
         assert_eq!(state.resources.personnel, initial_personnel + 5);
     }
 
@@ -729,9 +890,9 @@ mod tests {
         state = start_research_matching(&state, |k| k.is_field_work());
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
 
-        // Start applied research
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        // Start applied research (TrainPersonnel is always available)
+        state = start_research_matching(&state, |k| matches!(k, ResearchKind::TrainPersonnel));
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
 
         // Start basic research (via Research/tech tree panel)
         state = start_basic_research(&state);
@@ -739,7 +900,7 @@ mod tests {
 
         // All three running simultaneously
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
+        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some());
         assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::BasicResearch { .. })).collect::<Vec<_>>().first().is_some());
     }
 
@@ -755,14 +916,15 @@ mod tests {
     }
 
     #[test]
-    fn parallel_field_research_runs_and_completes_independently() {
+    fn parallel_research_runs_and_completes_independently() {
         let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
         state.medicines[0].unlocked = true;
+        state.medicines[0].tested_against.clear();
         state.resources.funding = 3000.0;
         state.resources.personnel = 30;
 
-        // Start first field project (Identify will target an unknown disease)
+        // Start two projects in parallel: IdentifyThreat (field work) + ClinicalTrial (trial)
         state.active_research = vec![
             ResearchProject {
                 kind: ResearchKind::IdentifyThreat { disease_idx: 0 },
@@ -771,29 +933,29 @@ mod tests {
                 personnel_assigned: 5,
             },
             ResearchProject {
-                kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 },
+                kind: ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0, rigor: crate::state::TrialRigor::Full },
                 progress: 0.0,
                 required_ticks: 100.0,
                 personnel_assigned: 5,
             },
         ];
 
-        assert_eq!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().len(), 2, "should have 2 parallel field projects");
+        assert_eq!(state.active_research.len(), 2, "should have 2 parallel projects");
         assert_eq!(state.personnel_busy(), 10, "10 personnel busy across 2 projects");
 
         // Advance until first project completes but second hasn't
         for _ in 0..55 {
             state = state.with_world(tick(&state).0);
         }
-        assert_eq!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().len(), 1, "first project should have completed");
-        assert!(matches!(&state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>()[0].kind, ResearchKind::ClinicalTrial { .. }),
+        assert_eq!(state.active_research.len(), 1, "first project should have completed");
+        assert!(matches!(&state.active_research[0].kind, ResearchKind::ClinicalTrial { .. }),
             "remaining project should be the clinical trial");
 
         // Advance until second completes
         for _ in 0..50 {
             state = state.with_world(tick(&state).0);
         }
-        assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "both projects should have completed");
+        assert!(state.active_research.is_empty(), "both projects should have completed");
     }
 
     #[test]
@@ -912,7 +1074,7 @@ mod tests {
 
     #[test]
     fn combination_therapy_prereqs() {
-        use crate::state::BasicTech;
+        use crate::state::{BasicTech, Medicine, TherapyType, MechanismOfAction};
         let mut state = AppState::new_default(42);
         // No chain prereqs or deployed medicines → not available
         let basic = state.available_basic_projects();
@@ -933,8 +1095,28 @@ mod tests {
             ResearchKind::BasicResearch { tech: BasicTech::CombinationTherapy }
         )), "CombinationTherapy should not be available with only 1 deployed medicine");
 
-        // Deploy a second medicine → available
-        state.medicines[1].deployed_count = 1;
+        // Add a second medicine and deploy it → available
+        state.medicines.push(Medicine {
+            name: "Test Antibiotic".into(),
+            therapy_type: TherapyType::Antibiotic,
+            mechanism: Some(MechanismOfAction::CellWallInhibitor),
+            target_diseases: vec![0],
+            doses: 500_000.0,
+            max_doses: 500_000.0,
+            unlocked: true,
+            tested_against: vec![0],
+            deployed_count: 1,
+            total_treated: 0.0,
+            total_protected: 0.0,
+            manufacturer_corp_idx: None,
+            trial_efficacy: None,
+            side_effect_rate: 0.0,
+            resistance_rate: 0.0,
+            trial_rigor: None,
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        });
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
             ResearchKind::BasicResearch { tech: BasicTech::CombinationTherapy }
@@ -987,31 +1169,38 @@ mod tests {
 
     #[test]
     fn human_trials_halves_clinical_trial_duration() {
+        use crate::state::{ScreeningHit, ScreeningModality, TrialRigor};
         let mut state = AppState::new_default(42);
         state.diseases[0].knowledge = 1.0;
-        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
         state.resources.funding = 10_000.0;
-        state.resources.authority = crate::state::Authority::Maximum;
-        // Develop a medicine first
-        state.medicines[0].unlocked = true;
-        state.medicines[0].tested_against = vec![];
+        state.resources.personnel = 20;
 
-        // Start a clinical trial WITHOUT human trials decree
-        let projects = state.all_available_projects();
-        let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
-        assert!(trial_idx.is_some(), "clinical trial should be available");
-        let (ok, _) = super::start_research(&mut state, trial_idx.unwrap(), false);
-        assert!(ok);
-        let normal_duration = state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().last().unwrap().required_ticks;
-        state.active_research.retain(|p| !p.kind.is_field_work());
+        // Create a screening hit so we can start a trial via start_trial
+        state.screening_hits.push(ScreeningHit {
+            compound_id: "TEST-001".into(),
+            disease_idx: 0,
+            modality: ScreeningModality::SmallMolecule,
+            kd_nm: 5.0,
+        });
 
-        // Now enact human trials and start the same trial
+        // Start trial WITHOUT human trials decree
+        let (ok, _) = super::start_trial(&mut state, 0, TrialRigor::Full);
+        assert!(ok, "trial should start");
+        let normal_duration = state.active_research.last().unwrap().required_ticks;
+        state.active_research.clear();
+        // Reset: re-add the screening hit (start_trial consumed it)
+        state.screening_hits.push(ScreeningHit {
+            compound_id: "TEST-002".into(),
+            disease_idx: 0,
+            modality: ScreeningModality::SmallMolecule,
+            kd_nm: 5.0,
+        });
+
+        // Enact human trials and start the same trial
         state.enacted_decrees.authorize_human_trials = true;
-        let projects = state.all_available_projects();
-        let trial_idx = projects.iter().position(|k| matches!(k, ResearchKind::ClinicalTrial { .. }));
-        let (ok, _) = super::start_research(&mut state, trial_idx.unwrap(), false);
-        assert!(ok);
-        let fast_duration = state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().last().unwrap().required_ticks;
+        let (ok, _) = super::start_trial(&mut state, 0, TrialRigor::Full);
+        assert!(ok, "trial should start with human trials");
+        let fast_duration = state.active_research.last().unwrap().required_ticks;
 
         // Duration should be halved
         assert!(
@@ -1084,42 +1273,17 @@ mod tests {
             state = state.with_world(tick_result.0);
             let tick_events = tick_result.1;
             if tick_events.iter().any(|e|
-                matches!(e, GameEvent::ResearchHandoff { message } if message.contains("development available"))
+                matches!(e, GameEvent::ResearchHandoff { message } if message.contains("screening"))
             ) {
                 found_handoff = true;
             }
         }
         assert!(state.diseases[0].knowledge >= 0.5, "Disease should be identified");
-        assert!(found_handoff, "Should notify about medicine development after identification");
+        assert!(found_handoff, "Should notify about screening after identification");
     }
 
-    #[test]
-    fn handoff_notification_after_medicine_developed() {
-        use crate::state::GameEvent;
-        let mut state = AppState::new_default(42);
-        state.diseases[0].knowledge = 1.0;
-        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
-
-        // Start develop medicine (applied research)
-        state = start_research_matching(&state, |k| matches!(k, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. }));
-        assert!(state.active_research.iter().filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel)).collect::<Vec<_>>().first().is_some(),
-            "Applied research should start. UI state: {:?}", state.ui.lab_ui);
-
-        // Advance to completion, checking events each tick
-        let mut found_handoff = false;
-        for _ in 0..600 {
-            let tick_result = tick(&state);
-            state = state.with_world(tick_result.0);
-            let tick_events = tick_result.1;
-            if tick_events.iter().any(|e|
-                matches!(e, GameEvent::ResearchHandoff { message } if message.contains("clinical trial"))
-            ) {
-                found_handoff = true;
-            }
-        }
-        assert!(state.medicines.iter().any(|m| m.unlocked), "Medicine should be developed");
-        assert!(found_handoff, "Should notify about clinical trial after medicine development");
-    }
+    // handoff_notification_after_medicine_developed — removed: DevelopMedicine no longer exists.
+    // Medicines are created from screening hits via clinical trials.
 
     #[test]
     fn manufacturing_yield_bonus_from_tech() {
@@ -1149,7 +1313,7 @@ mod tests {
         // With StabilizedFormulation: get 125% of max_doses
         state.unlocked_techs.push(crate::state::BasicTech::StabilizedFormulation);
         state.medicines[0].doses = 0.0;
-        state.active_research.retain(|p| !matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel));
+        state.active_research.retain(|p| !matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel));
         state.active_research.push(ResearchProject {
             kind: ResearchKind::ManufactureDoses { medicine_idx: 0 },
             progress: 14.0,
@@ -1164,80 +1328,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn blocked_medicine_developments_shows_identified_but_unresearched() {
-        use crate::state::BasicTech;
+    // blocked_medicine_developments_shows_identified_but_unresearched — removed:
+    // blocked_medicine_developments() method no longer exists.
 
-        let mut state = AppState::new_default(42);
-
-        // Nothing identified — blocked list should be empty
-        assert!(
-            state.blocked_medicine_developments().is_empty(),
-            "no blocked entries before identification"
-        );
-
-        // Partially identify disease 0 (knowledge > 0 but < 1.0, no TargetedDrugDesign)
-        state.diseases[0].knowledge = 0.6;
-        let blocked = state.blocked_medicine_developments();
-        assert!(
-            !blocked.is_empty(),
-            "should show blocked entries once a disease is partially identified"
-        );
-        assert!(
-            blocked.iter().all(|(d_idx, _)| *d_idx == 0),
-            "blocked entry should reference disease 0"
-        );
-        assert!(
-            blocked.iter().any(|(_, reason)| reason.contains("Targeted Drug Design")),
-            "reason should mention Targeted Drug Design when tech is not unlocked"
-        );
-
-        // Unlock TargetedDrugDesign but disease still only 60% studied
-        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
-        let blocked_with_tech = state.blocked_medicine_developments();
-        assert!(
-            !blocked_with_tech.is_empty(),
-            "should still show blocked when knowledge < 1.0"
-        );
-        assert!(
-            blocked_with_tech.iter().any(|(_, reason)| reason.contains("Field Research")),
-            "reason should reference Field Research when study is incomplete"
-        );
-
-        // Fully identify disease 0 (knowledge 1.0) — now it should be available, not blocked
-        state.diseases[0].knowledge = 1.0;
-        let blocked_full = state.blocked_medicine_developments();
-        assert!(
-            blocked_full.iter().all(|(d_idx, _)| *d_idx != 0),
-            "disease 0 should not be blocked once fully identified with tech"
-        );
-    }
-
-    #[test]
-    fn blocked_medicine_developments_not_duplicated_when_already_available() {
-        use crate::state::BasicTech;
-
-        let mut state = AppState::new_default(42);
-
-        // Disease 0 fully identified with tech: targeted medicine should be in available, not blocked.
-        state.diseases[0].knowledge = 1.0;
-        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
-
-        let available = state.available_applied_projects();
-        let disease0_available = available.iter().any(|k| {
-            if let crate::state::ResearchKind::DevelopMedicine { medicine_idx } = k {
-                state.medicines[*medicine_idx].target_diseases.contains(&0)
-                    && state.medicines[*medicine_idx].therapy_type != crate::state::TherapyType::BroadSpectrum
-            } else {
-                false
-            }
-        });
-        assert!(disease0_available, "disease 0 targeted medicine should be available");
-
-        let blocked = state.blocked_medicine_developments();
-        assert!(
-            blocked.iter().all(|(d_idx, _)| *d_idx != 0),
-            "disease 0 should not appear in blocked when already available"
-        );
-    }
+    // blocked_medicine_developments_not_duplicated_when_already_available — removed:
+    // blocked_medicine_developments() method no longer exists.
 }

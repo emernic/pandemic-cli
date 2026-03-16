@@ -27,6 +27,8 @@ pub enum Action {
     /// Close all panels and return to the main dashboard in one keypress.
     /// Unlike ClosePanel (Esc), which goes back one step, GoHome goes all the way.
     GoHome,
+    /// Discard the currently selected item (e.g., screening hit in trial wizard).
+    Discard,
 }
 
 /// Map a crossterm KeyCode to an Action.
@@ -54,6 +56,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char(c @ '1'..='9') => Some(Action::JumpToItem { index: (c as usize) - ('1' as usize) }),
         KeyCode::Char('0') => Some(Action::JumpToItem { index: 9 }),
         KeyCode::Home => Some(Action::GoHome),
+        KeyCode::Char('d') | KeyCode::Char('D') => Some(Action::Discard),
         _ => None,
     }
 }
@@ -79,6 +82,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "left" => Some(Action::SelectLeft),
         "right" => Some(Action::SelectRight),
         "enter" => Some(Action::Confirm),
+        "d" => Some(Action::Discard),
         "x" => Some(Action::ToggleExtra),
         "z" => Some(Action::SpeedUp),
         "q" => Some(Action::Quit),

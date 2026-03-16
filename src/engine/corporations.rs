@@ -542,28 +542,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn manufacturers_assigned_to_locked_medicines() {
-        let mut state = AppState::new_default(42);
-        generate_corporations(&mut state);
-
-        // Every locked (not-yet-developed) medicine should have a manufacturer
-        for (i, med) in state.medicines.iter().enumerate() {
-            if !med.unlocked {
-                assert!(
-                    med.manufacturer_corp_idx.is_some(),
-                    "locked medicine {} ({}) should have a manufacturer",
-                    i, med.name
-                );
-                let corp_idx = med.manufacturer_corp_idx.unwrap();
-                assert!(
-                    corp_idx < state.corporations.len(),
-                    "manufacturer index {} out of bounds for medicine {}",
-                    corp_idx, med.name
-                );
-            }
-        }
-    }
+    // manufacturers_assigned_to_locked_medicines — removed: targeted medicines no longer
+    // exist at game start. They are created from screening hits via clinical trials.
+    // Manufacturer assignment happens when medicines are created dynamically.
 
     #[test]
     fn broad_spectrum_has_no_manufacturer() {
@@ -578,66 +559,52 @@ mod tests {
         );
     }
 
-    #[test]
-    fn some_manufacturers_have_board_seats() {
-        // With random board seat assignment, check across multiple seeds
-        // that both board-connected and non-board manufacturers exist
-        let mut found_board = false;
-        let mut found_non_board = false;
-        for seed in 0..10 {
-            let mut state = AppState::new_default(seed);
-            generate_corporations(&mut state);
-
-            for med in &state.medicines {
-                if !med.unlocked {
-                    if let Some(ci) = med.manufacturer_corp_idx {
-                        if state.corporations[ci].board_seat {
-                            found_board = true;
-                        } else {
-                            found_non_board = true;
-                        }
-                    }
-                }
-            }
-            if found_board && found_non_board { break; }
-        }
-        assert!(found_board, "across seeds, at least one medicine should have a board-connected manufacturer");
-        assert!(found_non_board, "across seeds, at least one medicine should have a non-board manufacturer");
-    }
+    // some_manufacturers_have_board_seats — removed: targeted medicines no longer
+    // exist at game start. Manufacturer assignment happens dynamically.
 
     #[test]
-    fn develop_medicine_boosts_board_corp_reserves() {
-        use crate::state::{ResearchKind, ResearchProject};
+    fn clinical_trial_boosts_board_corp_reserves() {
+        use crate::state::{ResearchKind, ResearchProject, Medicine, TherapyType, TrialRigor};
 
-        // Try multiple seeds to find one where a locked medicine has a board-seat manufacturer
-        let mut state = AppState::new_default(0);
-        let mut med_idx = 0;
-        let mut found = false;
-        for seed in 0..20 {
-            state = AppState::new_default(seed);
-            generate_corporations(&mut state);
-            state.diseases[0].knowledge = 1.0;
-            if let Some((i, _)) = state.medicines.iter().enumerate().find(|(_, m)| {
-                !m.unlocked && m.manufacturer_corp_idx.map_or(false, |ci| {
-                    state.corporations.get(ci).map_or(false, |c| c.board_seat)
-                })
-            }) {
-                med_idx = i;
-                found = true;
-                break;
-            }
-        }
-        assert!(found, "should find a seed with a board-seat manufacturer medicine");
+        let mut state = AppState::new_default(42);
+        generate_corporations(&mut state);
+        state.diseases[0].knowledge = 1.0;
 
-        let corp_idx = state.medicines[med_idx].manufacturer_corp_idx.unwrap();
+        // Find a corporation with a board seat
+        let corp_idx = state.corporations.iter().position(|c| c.board_seat)
+            .expect("should have a board-seat corporation");
+
+        // Manually add a targeted medicine assigned to that corporation
+        let med_idx = state.medicines.len();
+        state.medicines.push(Medicine {
+            name: "Test Antibiotic".into(),
+            therapy_type: TherapyType::Antibiotic,
+            mechanism: Some(crate::state::MechanismOfAction::CellWallInhibitor),
+            target_diseases: vec![0],
+            doses: 0.0,
+            max_doses: 500_000.0,
+            unlocked: false,
+            tested_against: vec![],
+            deployed_count: 0,
+            total_treated: 0.0,
+            total_protected: 0.0,
+            manufacturer_corp_idx: Some(corp_idx),
+            trial_efficacy: None,
+            side_effect_rate: 0.0,
+            resistance_rate: 0.0,
+            trial_rigor: None,
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        });
 
         // Drain reserves to 50% to make the boost visible
         state.corporations[corp_idx].reserves = state.corporations[corp_idx].max_reserves * 0.50;
         let reserves_before = state.corporations[corp_idx].reserves;
 
-        // Complete a DevelopMedicine project
+        // Complete a ClinicalTrial project
         state.active_research.push(ResearchProject {
-            kind: ResearchKind::DevelopMedicine { medicine_idx: med_idx },
+            kind: ResearchKind::ClinicalTrial { medicine_idx: med_idx, disease_idx: 0, rigor: TrialRigor::Full },
             progress: 199.0,
             required_ticks: 200.0,
             personnel_assigned: 5,
@@ -645,7 +612,8 @@ mod tests {
 
         state = state.with_world(tick(&state).0);
 
-        assert!(state.medicines[med_idx].unlocked, "medicine should be unlocked");
+        assert!(state.medicines[med_idx].tested_against.contains(&0),
+            "medicine should be tested after trial");
         assert!(
             state.corporations[corp_idx].reserves > reserves_before,
             "board-seat manufacturer reserves should increase: before={}, after={}",
