@@ -2601,46 +2601,45 @@ impl PathogenType {
     fn stat_ranges(&self) -> DiseaseStatRanges {
         match self {
             // RNA viruses: very short incubation (0.5–1.5 days), fast spreader.
-            // Within-region spread ~80% and cross-region ~2x vs pre-SEIR to compensate
-            // for exposed compartment pipeline delay (SEIR reduces effective
-            // growth rate at small population fractions).
+            // High within-region spread so uncontained regions collapse fast;
+            // low cross-region spread so regional containment is viable.
             PathogenType::RnaVirus => DiseaseStatRanges {
-                within_region_spread: (0.011, 0.015),
+                within_region_spread: (0.0165, 0.0225),
                 lethality: (0.00040, 0.00070),
                 recovery: (0.00006, 0.00015),
-                cross_region: (0.004, 0.006),
+                cross_region: (0.002, 0.003),
                 incubation_days: (0.5, 1.5),
             },
             // DNA viruses: short incubation (1–2 days).
             PathogenType::DnaVirus => DiseaseStatRanges {
-                within_region_spread: (0.008, 0.013),
+                within_region_spread: (0.012, 0.0195),
                 lethality: (0.00035, 0.00065),
                 recovery: (0.00004, 0.00010),
-                cross_region: (0.003, 0.005),
+                cross_region: (0.0015, 0.0025),
                 incubation_days: (1.0, 2.0),
             },
             // Bacteria: very short incubation (0.25–1.0 days).
             PathogenType::Bacterium => DiseaseStatRanges {
-                within_region_spread: (0.008, 0.011),
+                within_region_spread: (0.012, 0.0165),
                 lethality: (0.00035, 0.00060),
                 recovery: (0.00010, 0.00020),
-                cross_region: (0.003, 0.004),
+                cross_region: (0.0015, 0.002),
                 incubation_days: (0.25, 1.0),
             },
             // Fungi: moderate incubation (1–3 days).
             PathogenType::Fungus => DiseaseStatRanges {
-                within_region_spread: (0.007, 0.010),
+                within_region_spread: (0.0105, 0.015),
                 lethality: (0.00030, 0.00055),
                 recovery: (0.00005, 0.00015),
-                cross_region: (0.002, 0.004),
+                cross_region: (0.001, 0.002),
                 incubation_days: (1.0, 3.0),
             },
             // Prions: long incubation (3–7 days) — silent spread before symptoms.
             PathogenType::Prion => DiseaseStatRanges {
-                within_region_spread: (0.007, 0.011),
+                within_region_spread: (0.0105, 0.0165),
                 lethality: (0.00045, 0.00090),
                 recovery: (0.00003, 0.00006),
-                cross_region: (0.002, 0.003),
+                cross_region: (0.001, 0.0015),
                 incubation_days: (3.0, 7.0),
             },
         }
