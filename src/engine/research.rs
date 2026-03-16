@@ -229,40 +229,69 @@ fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, rng: &mut
     }
 }
 
-/// Generate a medicine name from disease name and mechanism.
-fn generate_medicine_name(disease_name: &str, mechanism: Option<MechanismOfAction>, rng: &mut impl rand::Rng) -> String {
-    // Use a drug-name suffix based on mechanism
-    let suffix = match mechanism {
-        Some(MechanismOfAction::CellWallInhibitor) => "cillin",
-        Some(MechanismOfAction::RibosomeInhibitor) => "mycin",
-        Some(MechanismOfAction::DnaGyraseInhibitor) => "floxacin",
-        Some(MechanismOfAction::MetabolicInhibitor) => "trimol",
-        Some(MechanismOfAction::PolymeraseInhibitor) => "vir",
-        Some(MechanismOfAction::ProteaseInhibitor) => "navir",
-        Some(MechanismOfAction::EntryInhibitor) => "mab",
-        Some(MechanismOfAction::ErgosterolInhibitor) => "azole",
-        Some(MechanismOfAction::MembraneDisruptor) => "fungin",
-        Some(MechanismOfAction::GlucanSynthaseInhibitor) => "candin",
-        None => "plex",
+/// Generate a medicine name from mechanism of action.
+///
+/// Builds pharmaceutical-sounding names from random syllable components plus
+/// a mechanism-based suffix (following real INN stem conventions). The prefix
+/// is fully randomized — no dependency on the disease name — so multiple
+/// medicines for the same disease get distinct names.
+fn generate_medicine_name(_disease_name: &str, mechanism: Option<MechanismOfAction>, rng: &mut impl rand::Rng) -> String {
+    // INN-style suffixes by mechanism (these are real pharmaceutical stems)
+    let suffixes: &[&str] = match mechanism {
+        Some(MechanismOfAction::CellWallInhibitor) => &["cillin", "penem", "cef"],
+        Some(MechanismOfAction::RibosomeInhibitor) => &["mycin", "cycline", "thrin"],
+        Some(MechanismOfAction::DnaGyraseInhibitor) => &["floxacin", "oxacin"],
+        Some(MechanismOfAction::MetabolicInhibitor) => &["trimol", "zolid", "prim"],
+        Some(MechanismOfAction::PolymeraseInhibitor) => &["vir", "buvir", "asvir"],
+        Some(MechanismOfAction::ProteaseInhibitor) => &["navir", "previr", "gravir"],
+        Some(MechanismOfAction::EntryInhibitor) => &["mab", "viroc", "lukast"],
+        Some(MechanismOfAction::ErgosterolInhibitor) => &["azole", "conazole"],
+        Some(MechanismOfAction::MembraneDisruptor) => &["fungin", "micin"],
+        Some(MechanismOfAction::GlucanSynthaseInhibitor) => &["candin", "fundin"],
+        None => &["plex", "mide", "drex"],
     };
 
-    // Generate a short prefix from disease name (first 3-4 chars, lowercased)
-    let prefix_len = 3 + (rng.r#gen::<usize>() % 2);
-    let prefix: String = disease_name.chars()
-        .filter(|c| c.is_alphanumeric())
-        .take(prefix_len)
-        .collect::<String>()
-        .to_lowercase();
+    // Syllable components for building pharmaceutical-sounding prefixes.
+    // These are modeled on common patterns in real drug names.
+    const ONSETS: &[&str] = &[
+        "ab", "al", "am", "ar", "at", "bal", "bel", "bir", "bor", "bri",
+        "car", "cel", "cef", "cip", "cor", "dal", "dar", "del", "dex", "dol",
+        "ef", "el", "em", "er", "et", "fal", "fen", "fil", "flu", "for",
+        "gal", "gem", "gil", "glu", "gor", "hal", "hep", "hex", "ib", "im",
+        "in", "ir", "kan", "kel", "kor", "lan", "lem", "lin", "lor", "lum",
+        "mal", "mel", "met", "mil", "mol", "nal", "neb", "nif", "nor", "nul",
+        "ol", "or", "ox", "pal", "par", "pen", "pir", "pol", "pra", "ral",
+        "rem", "rib", "rof", "rul", "sal", "sel", "sim", "sol", "sul", "tal",
+        "tel", "ten", "til", "tor", "tol", "val", "vel", "vin", "vol", "vor",
+        "xal", "xel", "xim", "zan", "zel", "zil", "zor",
+    ];
 
-    // Capitalize first letter
-    let mut name = String::new();
-    for (i, c) in prefix.chars().enumerate() {
-        if i == 0 {
-            name.extend(c.to_uppercase());
-        } else {
-            name.push(c);
-        }
+    const MIDS: &[&str] = &[
+        "a", "e", "i", "o", "u",
+        "ab", "ac", "ad", "af", "ag", "ak", "an", "ap", "as", "at",
+        "eb", "ec", "ed", "ef", "el", "en", "ep", "es", "et",
+        "ib", "ic", "id", "if", "ig", "il", "im", "in", "ip", "is", "it",
+        "ob", "oc", "od", "of", "ol", "on", "op", "os", "ot",
+        "ub", "uc", "ud", "uf", "ul", "un", "up", "us", "ut",
+    ];
+
+    let suffix = suffixes[rng.r#gen::<usize>() % suffixes.len()];
+
+    // Build prefix: 1-2 syllable components
+    let onset = ONSETS[rng.r#gen::<usize>() % ONSETS.len()];
+    let use_mid = rng.r#gen::<bool>();
+    let mut prefix = String::from(onset);
+    if use_mid {
+        prefix.push_str(MIDS[rng.r#gen::<usize>() % MIDS.len()]);
     }
+
+    // Capitalize first letter, append suffix
+    let mut name = String::new();
+    let mut chars = prefix.chars();
+    if let Some(first) = chars.next() {
+        name.extend(first.to_uppercase());
+    }
+    name.extend(chars);
     name.push_str(suffix);
     name
 }
