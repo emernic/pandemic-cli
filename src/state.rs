@@ -3727,39 +3727,40 @@ impl BasicTech {
     }
 
     /// Tech-to-tech prerequisite. Returns the BasicTech that must be unlocked
-    /// before this one. Returns None for root techs (which have non-tech
-    /// prerequisites like "identify any pathogen").
+    /// before this one. Returns an empty slice for root techs (which have
+    /// non-tech prerequisites like "identify any pathogen").
     /// This is the single source of truth for the tech dependency graph —
     /// both `prerequisites_met()` and the UI's visual edges derive from it.
-    pub fn tech_prereq(&self) -> Option<BasicTech> {
+    pub fn tech_prereqs(&self) -> &'static [BasicTech] {
         match self {
             // Root techs (non-tech prerequisites only)
-            BasicTech::TargetedDrugDesign => None,
-            BasicTech::RapidSequencing => None,
-            BasicTech::AutomatedSynthesis => None,
+            BasicTech::TargetedDrugDesign => &[],
+            BasicTech::RapidSequencing => &[],
+            BasicTech::AutomatedSynthesis => &[],
 
             // Column 0 chain
-            BasicTech::MonoclonalAntibodies => Some(BasicTech::TargetedDrugDesign),
-            BasicTech::PhageTherapy => Some(BasicTech::MonoclonalAntibodies),
-            BasicTech::VaccinePlatform => Some(BasicTech::PhageTherapy),
-            BasicTech::ResilientGrids => Some(BasicTech::VaccinePlatform),
+            BasicTech::MonoclonalAntibodies => &[BasicTech::TargetedDrugDesign],
+            BasicTech::PhageTherapy => &[BasicTech::MonoclonalAntibodies],
+            // Cross-chain merge: requires both Phage Therapy (col 0) and Metagenomic Surveillance (col 1)
+            BasicTech::VaccinePlatform => &[BasicTech::PhageTherapy, BasicTech::MetagenomicSurveillance],
+            BasicTech::ResilientGrids => &[BasicTech::VaccinePlatform],
 
             // Column 1 chain
-            BasicTech::ResistanceSurveillance => Some(BasicTech::RapidSequencing),
-            BasicTech::MetagenomicSurveillance => Some(BasicTech::ResistanceSurveillance),
-            BasicTech::EpidemiologicalForecasting => Some(BasicTech::MetagenomicSurveillance),
-            BasicTech::CombinationTherapy => Some(BasicTech::EpidemiologicalForecasting),
+            BasicTech::ResistanceSurveillance => &[BasicTech::RapidSequencing],
+            BasicTech::MetagenomicSurveillance => &[BasicTech::ResistanceSurveillance],
+            BasicTech::EpidemiologicalForecasting => &[BasicTech::MetagenomicSurveillance],
+            BasicTech::CombinationTherapy => &[BasicTech::EpidemiologicalForecasting],
 
             // Column 2 chain
-            BasicTech::StabilizedFormulation => Some(BasicTech::AutomatedSynthesis),
+            BasicTech::StabilizedFormulation => &[BasicTech::AutomatedSynthesis],
         }
     }
 
     /// Whether all prerequisites for this tech are satisfied.
     pub fn prerequisites_met(&self, state: &WorldState) -> bool {
-        // Check tech-to-tech prerequisite
-        if let Some(prereq) = self.tech_prereq() {
-            if !state.unlocked_techs.contains(&prereq) {
+        // Check tech-to-tech prerequisites (all must be unlocked)
+        for prereq in self.tech_prereqs() {
+            if !state.unlocked_techs.contains(prereq) {
                 return false;
             }
         }
@@ -3794,7 +3795,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design",
             BasicTech::PhageTherapy => "Monoclonal Antibodies",
-            BasicTech::VaccinePlatform => "Phage Therapy",
+            BasicTech::VaccinePlatform => "Phage Therapy + Metagenomic Surveillance",
             BasicTech::ResilientGrids => "Vaccine Platform",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",

@@ -60,12 +60,12 @@ fn tree_layout() -> Vec<TechNode> {
     ]
 }
 
-/// Visual edges derived from `BasicTech::tech_prereq()` — single source of truth.
+/// Visual edges derived from `BasicTech::tech_prereqs()` — single source of truth.
 fn tree_edges() -> Vec<TechEdge> {
     let layout = tree_layout();
     let mut edges = Vec::new();
     for node in &layout {
-        if let Some(prereq) = node.tech.tech_prereq() {
+        for &prereq in node.tech.tech_prereqs() {
             edges.push(TechEdge { from: prereq, to: node.tech });
         }
     }

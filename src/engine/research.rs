@@ -849,21 +849,31 @@ mod tests {
 
     #[test]
     fn vaccine_platform_prereqs() {
+        use crate::state::BasicTech;
         let mut state = AppState::new_default(42);
         // No chain prereqs → not available
         let basic = state.available_basic_projects();
         assert!(!basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should not be available without PhageTherapy");
+            ResearchKind::BasicResearch { tech: BasicTech::VaccinePlatform }
+        )), "VaccinePlatform should not be available without prereqs");
 
-        // Unlock full column 0 chain up to PhageTherapy → available
-        state.unlocked_techs.push(crate::state::BasicTech::TargetedDrugDesign);
-        state.unlocked_techs.push(crate::state::BasicTech::MonoclonalAntibodies);
-        state.unlocked_techs.push(crate::state::BasicTech::PhageTherapy);
+        // Unlock column 0 chain up to PhageTherapy only → still not available
+        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+        state.unlocked_techs.push(BasicTech::MonoclonalAntibodies);
+        state.unlocked_techs.push(BasicTech::PhageTherapy);
+        let basic = state.available_basic_projects();
+        assert!(!basic.iter().any(|k| matches!(k,
+            ResearchKind::BasicResearch { tech: BasicTech::VaccinePlatform }
+        )), "VaccinePlatform should not be available with only PhageTherapy");
+
+        // Also unlock column 1 chain up to MetagenomicSurveillance → now available
+        state.unlocked_techs.push(BasicTech::RapidSequencing);
+        state.unlocked_techs.push(BasicTech::ResistanceSurveillance);
+        state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
         let basic = state.available_basic_projects();
         assert!(basic.iter().any(|k| matches!(k,
-            ResearchKind::BasicResearch { tech: crate::state::BasicTech::VaccinePlatform }
-        )), "VaccinePlatform should be available after PhageTherapy");
+            ResearchKind::BasicResearch { tech: BasicTech::VaccinePlatform }
+        )), "VaccinePlatform should be available after PhageTherapy + MetagenomicSurveillance");
     }
 
     #[test]
