@@ -468,13 +468,11 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
     let layout_techs: Vec<BasicTech> = ui::tech_tree::layout_techs();
     let tech = *layout_techs.get(ui.panel_selection)?;
 
-    // Only allow starting if tech is available (prereqs met, not already unlocked/researching)
+    // Already unlocked — nothing to do
     if state.unlocked_techs.contains(&tech) {
         return None;
     }
-    if !tech.prerequisites_met(&state.world) {
-        return None;
-    }
+
     let already_researching = state.active_research.iter().any(|r| {
         matches!(r.kind, ResearchKind::BasicResearch { tech: t } if t == tech)
     });
@@ -482,12 +480,21 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
         return None;
     }
 
-    // Find the project_idx in all_available_projects()
-    let all = state.all_available_projects();
-    let target_kind = ResearchKind::BasicResearch { tech };
-    let project_idx = all.iter().position(|k| *k == target_kind)?;
+    // If prerequisites met and project is available, start immediately
+    if tech.prerequisites_met(&state.world) {
+        let all = state.all_available_projects();
+        let target_kind = ResearchKind::BasicResearch { tech };
+        if let Some(project_idx) = all.iter().position(|k| *k == target_kind) {
+            // Check if we can actually afford it — if not, cue instead
+            let (personnel, _, funding) = state.effective_costs(&all[project_idx]);
+            if state.resources.funding >= funding && state.personnel_available() >= personnel {
+                return Some(GameCommand::StartResearch { project_idx, double_personnel: false });
+            }
+        }
+    }
 
-    Some(GameCommand::StartResearch { project_idx, double_personnel: false })
+    // Can't start yet (locked, insufficient funding/personnel) — toggle cue
+    Some(GameCommand::ToggleCueTech { tech })
 }
 
 fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {

@@ -947,6 +947,15 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
             }
             CommandResult { message: None, success: true, events: Vec::new() }
         }
+        GameCommand::ToggleCueTech { tech } => {
+            if let Some(pos) = state.cued_techs.iter().position(|t| t == tech) {
+                state.cued_techs.remove(pos);
+                CommandResult { message: Some(format!("Removed {} from cue", tech.name())), success: true, events: Vec::new() }
+            } else {
+                state.cued_techs.push(*tech);
+                CommandResult { message: Some(format!("Cued {} — will auto-start when ready", tech.name())), success: true, events: Vec::new() }
+            }
+        }
         GameCommand::ToggleThreatVisibility { disease_idx } => {
             if let Some(d) = state.diseases.get_mut(*disease_idx) {
                 d.hidden = !d.hidden;

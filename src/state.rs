@@ -85,6 +85,9 @@ pub struct WorldState {
     /// Technologies unlocked via basic research.
     #[serde(default)]
     pub unlocked_techs: Vec<BasicTech>,
+    /// Techs cued by the player — auto-start when prerequisites and resources are met.
+    #[serde(default)]
+    pub cued_techs: Vec<BasicTech>,
     /// Per-region active policies.
     #[serde(default)]
     pub policies: Vec<RegionPolicy>,
@@ -4128,6 +4131,8 @@ pub enum GameEvent {
     CrisisAutoResolved { message: String },
     /// A research project was auto-restarted because auto-repeat is on.
     ResearchAutoRestarted { kind: ResearchKind },
+    /// A cued tech auto-started because all requirements were met.
+    CuedResearchStarted { tech: BasicTech },
     /// A research completion in one category unlocked a project in another category.
     /// Notifies the player to start the next pipeline step manually.
     ResearchHandoff { message: String },
@@ -4320,6 +4325,8 @@ pub enum GameCommand {
     ToggleAutoRebuild { region_idx: usize },
     /// Toggle auto-repeat for a specific repeatable research project.
     ToggleAutoRepeat { kind: ResearchKind },
+    /// Toggle cue for a tech that can't start yet — auto-starts when ready.
+    ToggleCueTech { tech: BasicTech },
     /// Toggle threat visibility (hidden/shown) for aggregate UI displays.
     ToggleThreatVisibility { disease_idx: usize },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
@@ -5538,6 +5545,7 @@ impl WorldState {
             medicines,
             active_research: vec![],
             unlocked_techs: vec![],
+            cued_techs: vec![],
             outcome: GameOutcome::Playing,
             event_log: VecDeque::new(),
             active_crisis: None,
