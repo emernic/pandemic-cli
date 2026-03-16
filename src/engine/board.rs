@@ -537,11 +537,6 @@ pub(super) fn maybe_promote_chairman(state: &mut WorldState) -> Option<String> {
     };
 
     state.board_members[idx].is_chairman = true;
-    // Assign a personality if they don't have one (governor-members lack one, but
-    // corporate leaders always have one — this is just defensive)
-    if state.board_members[idx].personality.is_none() {
-        state.board_members[idx].personality = Some(BoardPersonality::Profiteer);
-    }
     // Update name/title to reflect chairman status
     if let BoardRole::CorporateLeader { corp_idx } = state.board_members[idx].role {
         if let Some(corp) = state.corporations.get(corp_idx) {
