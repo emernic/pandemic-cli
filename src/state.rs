@@ -6012,8 +6012,10 @@ impl WorldState {
     }
 
     /// Total screened infections filtered to non-hidden diseases.
+    /// Excludes collapsed regions — their infections are no longer actionable.
     pub fn total_visible_infected_screened(&self) -> f64 {
         self.regions.iter()
+            .filter(|r| !r.collapsed)
             .map(|r| r.visible_infected_estimate(&self.diseases))
             .sum()
     }
