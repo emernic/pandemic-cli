@@ -119,6 +119,8 @@ fn render_browse(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>
 
             let (status_tag, status_color) = if deploy_on && deploy_blocked {
                 (" [INEFFECTIVE]".to_string(), Color::Red)
+            } else if deploy_on && med.doses <= 0.0 {
+                (" [AWAITING DOSES]".to_string(), Color::Yellow)
             } else if deploy_on {
                 (format!(" [DEPLOYING]{}", filter_note), Color::Green)
             } else if has_shipments {
