@@ -3682,6 +3682,15 @@ impl ScreeningRunSize {
 
 pub const WELLS_PER_PLATE: u32 = 96;
 
+/// A selectable item in the screening configuration form.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScreeningFormItem {
+    Disease(usize),
+    Modality(ScreeningModality),
+    RunSize(ScreeningRunSize),
+    Confirm,
+}
+
 /// An active drug screening run.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScreeningRun {
@@ -4772,13 +4781,18 @@ pub enum LabUiState {
     ConfirmProject { tab: LabTab, project_idx: usize, double_personnel: bool },
     /// Confirming a lab upgrade before purchasing.
     ConfirmLabUpgrade { tab: LabTab },
-    /// Screening wizard: step 1 — select target disease.
-    /// Navigation uses `panel_selection`.
-    ScreeningSelectDisease,
-    /// Screening wizard: step 2 — select modality.
-    ScreeningSelectModality { disease_idx: usize },
-    /// Screening wizard: step 3 — select run size and confirm.
-    ScreeningSelectSize { disease_idx: usize, modality: ScreeningModality },
+    /// Screening configuration form: single page showing disease, modality,
+    /// and run size all at once. Each section remembers its selection
+    /// independently. `panel_selection` tracks the active field (0=disease,
+    /// 1=modality, 2=run size, 3=confirm).
+    ScreeningConfigForm {
+        /// Index into screening_eligible_diseases()
+        disease_sel: usize,
+        /// Index into unlocked modalities
+        modality_sel: usize,
+        /// Index into unlocked run sizes
+        run_size_sel: usize,
+    },
     /// Reactor configuration: select which medicine to assign to a reactor.
     ReactorSelectMedicine { reactor_idx: usize },
     /// Trial wizard: step 1 — select a screening hit to trial.
@@ -4794,9 +4808,7 @@ impl LabUiState {
             LabUiState::Browse { tab } => *tab,
             LabUiState::ConfirmProject { tab, .. } => *tab,
             LabUiState::ConfirmLabUpgrade { tab } => *tab,
-            LabUiState::ScreeningSelectDisease
-            | LabUiState::ScreeningSelectModality { .. }
-            | LabUiState::ScreeningSelectSize { .. } => LabTab::Screening,
+            LabUiState::ScreeningConfigForm { .. } => LabTab::Screening,
             LabUiState::ReactorSelectMedicine { .. } => LabTab::Reactors,
             LabUiState::TrialSelectHit
             | LabUiState::TrialSelectRigor { .. } => LabTab::Trials,
@@ -5132,19 +5144,9 @@ impl UiState {
                         self.lab_ui = Some(LabUiState::Browse { tab });
                         self.panel_selection = 0;
                     }
-                    // Screening wizard: Esc goes back one step
-                    Some(LabUiState::ScreeningSelectDisease) => {
+                    // Screening config form: Esc returns to browse
+                    Some(LabUiState::ScreeningConfigForm { .. }) => {
                         self.lab_ui = Some(LabUiState::Browse { tab: LabTab::Screening });
-                        self.panel_selection = 0;
-                    }
-                    Some(LabUiState::ScreeningSelectModality { .. }) => {
-                        self.lab_ui = Some(LabUiState::ScreeningSelectDisease);
-                        self.panel_selection = 0;
-                    }
-                    Some(LabUiState::ScreeningSelectSize { disease_idx, .. }) => {
-                        self.lab_ui = Some(LabUiState::ScreeningSelectModality {
-                            disease_idx: *disease_idx,
-                        });
                         self.panel_selection = 0;
                     }
                     Some(LabUiState::ReactorSelectMedicine { .. }) => {
@@ -7086,6 +7088,27 @@ impl WorldState {
             .filter(|(_, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME)
             .map(|(i, _)| i)
             .collect()
+    }
+
+    /// Build the flat list of selectable items for the screening config form.
+    /// Order: diseases, then unlocked modalities, then unlocked run sizes, then confirm.
+    pub fn screening_form_items(&self) -> Vec<ScreeningFormItem> {
+        let mut items = Vec::new();
+        for &d_idx in &self.screening_eligible_diseases() {
+            items.push(ScreeningFormItem::Disease(d_idx));
+        }
+        for &modality in ScreeningModality::ALL.iter() {
+            if modality.is_unlocked(&self.unlocked_techs) {
+                items.push(ScreeningFormItem::Modality(modality));
+            }
+        }
+        for &size in ScreeningRunSize::ALL.iter() {
+            if size.is_unlocked() {
+                items.push(ScreeningFormItem::RunSize(size));
+            }
+        }
+        items.push(ScreeningFormItem::Confirm);
+        items
     }
 
 }
