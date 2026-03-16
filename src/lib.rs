@@ -689,7 +689,7 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                         .copied()
                         .unwrap_or(ScreeningModality::ALL[0]);
                     let first_run_size = ScreeningRunSize::ALL.iter()
-                        .find(|s| s.is_unlocked())
+                        .find(|s| s.is_unlocked(&state.unlocked_techs))
                         .copied()
                         .unwrap_or(ScreeningRunSize::ALL[0]);
                     ui.lab_ui = Some(LabUiState::ScreeningConfigForm {
@@ -726,7 +726,7 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             let eligible = state.screening_eligible_diseases();
             if eligible.contains(&disease_idx)
                 && modality.is_unlocked(&state.unlocked_techs)
-                && run_size.is_unlocked()
+                && run_size.is_unlocked(&state.unlocked_techs)
             {
                 return Some(GameCommand::StartScreening {
                     disease_idx,

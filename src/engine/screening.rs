@@ -34,7 +34,7 @@ pub(super) fn start_screening(
     }
 
     // Validate run size is unlocked
-    if !run_size.is_unlocked() {
+    if !run_size.is_unlocked(&state.unlocked_techs) {
         return (false, Some(format!("{} run size is not yet unlocked.", run_size.label())));
     }
 

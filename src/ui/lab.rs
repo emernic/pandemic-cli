@@ -770,7 +770,7 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     lines.push(Line::from(""));
 
     for size in ScreeningRunSize::ALL.iter() {
-        if size.is_unlocked() {
+        if size.is_unlocked(&state.unlocked_techs) {
             let cursor_here = sel == flat_idx;
             let is_chosen = *size == chosen_run_size;
             let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };

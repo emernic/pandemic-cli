@@ -3584,17 +3584,15 @@ impl ScreeningModality {
         match self {
             Self::SmallMolecule => None,
             Self::MonoclonalAntibody => Some(BasicTech::MonoclonalAntibodies),
-            Self::RnaTherapeutic => None, // TODO: add RNA tech to tree
+            Self::RnaTherapeutic => Some(BasicTech::RnaTherapeutics),
         }
     }
 
     /// Whether this modality is currently available (always true if no tech needed).
-    /// RNA Therapeutic is not yet implemented — always locked.
     pub fn is_unlocked(self, unlocked_techs: &[BasicTech]) -> bool {
-        match self {
-            Self::SmallMolecule => true,
-            Self::MonoclonalAntibody => unlocked_techs.contains(&BasicTech::MonoclonalAntibodies),
-            Self::RnaTherapeutic => false, // locked until RNA tech exists
+        match self.required_tech() {
+            None => true,
+            Some(tech) => unlocked_techs.contains(&tech),
         }
     }
 }
@@ -3660,11 +3658,11 @@ impl ScreeningRunSize {
         }
     }
 
-    /// Whether this size is currently unlocked. Large requires HTS tech (not yet in tree).
-    pub fn is_unlocked(self) -> bool {
+    /// Whether this size is currently unlocked. Large requires HighThroughputScreening tech.
+    pub fn is_unlocked(self, unlocked_techs: &[BasicTech]) -> bool {
         match self {
             Self::Small | Self::Medium => true,
-            Self::Large => false, // locked until HTS tech exists
+            Self::Large => unlocked_techs.contains(&BasicTech::HighThroughputScreening),
         }
     }
 }
@@ -3889,6 +3887,12 @@ pub enum BasicTech {
     /// Unlocks phage therapy development for bacteria.
     /// Prereq: MonoclonalAntibodies.
     PhageTherapy,
+    /// Unlocks RNA therapeutic screening modality (mRNA, siRNA, ASO).
+    /// Prereq: MonoclonalAntibodies.
+    RnaTherapeutics,
+    /// Unlocks Large screening run size (10 plates, 960 wells).
+    /// Prereq: PhageTherapy.
+    HighThroughputScreening,
     /// Disease-caused infrastructure degradation (HC/SL/CO) is 20% slower globally.
     /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
     /// Prereq: PhageTherapy.
@@ -3928,6 +3932,8 @@ impl BasicTech {
             BasicTech::MetagenomicSurveillance => "Metagenomic Surveillance",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
+            BasicTech::RnaTherapeutics => "RNA Therapeutics",
+            BasicTech::HighThroughputScreening => "High-Throughput Screening",
             BasicTech::ResilientGrids => "Resilient Grids",
             BasicTech::EpidemiologicalForecasting => "Epidemiological Forecasting",
         }
@@ -3939,6 +3945,8 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Targeted antiviral and antibiotic development for identified pathogen classes.",
             BasicTech::MonoclonalAntibodies => "Engineered antibody therapies with high efficacy against identified viral strains.",
             BasicTech::PhageTherapy => "Bacteriophage-based treatment for bacterial pathogens. Low resistance development.",
+            BasicTech::RnaTherapeutics => "Nucleic acid therapies (mRNA, siRNA, ASO) for rapid-design antivirals. Unlocks RNA Therapeutic screening modality.",
+            BasicTech::HighThroughputScreening => "Robotic plate handling and automated readouts. Unlocks Large screening runs (10 plates, 960 wells).",
             BasicTech::RapidSequencing => "50% faster sequencing. Reveals mutation drift rate and history.",
             BasicTech::MetagenomicSurveillance => "Environmental sample sequencing identifies pathogens without culture. Field research and clinical trials 25% faster.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
@@ -3961,6 +3969,8 @@ impl BasicTech {
             // Column 0: TargetedDrugDesign forks into MonoclonalAntibodies and PhageTherapy
             BasicTech::MonoclonalAntibodies => &[BasicTech::TargetedDrugDesign],
             BasicTech::PhageTherapy => &[BasicTech::TargetedDrugDesign],
+            BasicTech::RnaTherapeutics => &[BasicTech::MonoclonalAntibodies],
+            BasicTech::HighThroughputScreening => &[BasicTech::PhageTherapy],
             // Column 1: ResilientGrids depends on EpidemiologicalForecasting (cross-column)
             BasicTech::ResilientGrids => &[BasicTech::EpidemiologicalForecasting],
 
@@ -4008,6 +4018,8 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design",
             BasicTech::PhageTherapy => "Targeted Drug Design",
+            BasicTech::RnaTherapeutics => "Monoclonal Antibodies",
+            BasicTech::HighThroughputScreening => "Phage Therapy",
             BasicTech::ResilientGrids => "Epidemiological Forecasting",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
@@ -4054,6 +4066,8 @@ impl BasicTech {
                 BasicTech::TargetedDrugDesign
                 | BasicTech::MonoclonalAntibodies
                 | BasicTech::PhageTherapy
+                | BasicTech::RnaTherapeutics
+                | BasicTech::HighThroughputScreening
                 | BasicTech::ResilientGrids
                 | BasicTech::RapidSequencing
                 | BasicTech::ResistanceSurveillance
@@ -4063,11 +4077,13 @@ impl BasicTech {
             }
         }
         &[
-            // Column 0: Drug design
+            // Column 0: Drug design → advanced modalities
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
-            // Column 1: Fork + infrastructure
+            BasicTech::RnaTherapeutics,
+            // Column 1: Fork + screening + infrastructure
             BasicTech::PhageTherapy,
+            BasicTech::HighThroughputScreening,
             BasicTech::ResilientGrids,
             // Column 2: Sequencing → surveillance
             BasicTech::RapidSequencing,
@@ -4096,6 +4112,8 @@ impl ResearchKind {
                 BasicTech::TargetedDrugDesign => (3, 240.0, 600.0),
                 BasicTech::MonoclonalAntibodies => (5, 360.0, 900.0),
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
+                BasicTech::RnaTherapeutics => (5, 400.0, 1000.0),
+                BasicTech::HighThroughputScreening => (4, 320.0, 750.0),
                 BasicTech::RapidSequencing => (4, 300.0, 350.0),
                 BasicTech::MetagenomicSurveillance => (4, 280.0, 650.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
@@ -7065,7 +7083,7 @@ impl WorldState {
             }
         }
         for &size in ScreeningRunSize::ALL.iter() {
-            if size.is_unlocked() {
+            if size.is_unlocked(&self.unlocked_techs) {
                 items.push(ScreeningFormItem::RunSize(size));
             }
         }
