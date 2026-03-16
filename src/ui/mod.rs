@@ -129,32 +129,43 @@ pub fn render(f: &mut Frame, state: &AppState) {
     resources::render(f, chunks[0], state);
     hotkey_bar::render(f, chunks[2], state);
 
-    // All views share the same 50/50 horizontal split: region list left, panel right.
-    let split = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(chunks[1]);
+    // Full-screen panels take over the entire middle area; others use 50/50 split.
+    let is_full_screen = state.active_crisis.is_none()
+        && state.ui.open_panel.is_full_screen();
 
-    region_list::render(f, split[0], state);
-
-    // Right panel: crisis overlay takes priority, then panel or default view.
-    if let Some(crisis) = &state.active_crisis {
-        render_crisis(f, split[1], crisis, state.ui.crisis_selection, state);
-    } else {
+    if is_full_screen {
+        // Full-screen panel: no region list, panel gets entire middle area.
         match &state.ui.open_panel {
-            Panel::None if state.outcome != GameOutcome::Playing => {
-                render_game_over(f, split[1], state);
+            Panel::Research => tech_tree::render(f, chunks[1], state, state.ui.panel_selection),
+            _ => {} // is_full_screen() guarantees we only reach panels handled above
+        }
+    } else {
+        let split = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(chunks[1]);
+
+        region_list::render(f, split[0], state);
+
+        // Right panel: crisis overlay takes priority, then panel or default view.
+        if let Some(crisis) = &state.active_crisis {
+            render_crisis(f, split[1], crisis, state.ui.crisis_selection, state);
+        } else {
+            match &state.ui.open_panel {
+                Panel::None if state.outcome != GameOutcome::Playing => {
+                    render_game_over(f, split[1], state);
+                }
+                Panel::None => home::render(f, split[1], state),
+                Panel::Threats => threats::render(f, split[1], state),
+                Panel::Research => tech_tree::render(f, split[1], state, state.ui.panel_selection),
+                Panel::Medicines => medicines::render(f, split[1], state),
+                Panel::Lab => lab::render(f, split[1], state),
+                Panel::Policy => policy::render(f, split[1], state),
+                Panel::Operations => operations::render(f, split[1], state),
+                Panel::Board => board::render(f, split[1], state),
+                Panel::Ledger => ledger::render(f, split[1], state),
+                panel => render_placeholder_panel(f, split[1], panel),
             }
-            Panel::None => home::render(f, split[1], state),
-            Panel::Threats => threats::render(f, split[1], state),
-            Panel::Research => tech_tree::render(f, split[1], state, state.ui.panel_selection),
-            Panel::Medicines => medicines::render(f, split[1], state),
-            Panel::Lab => lab::render(f, split[1], state),
-            Panel::Policy => policy::render(f, split[1], state),
-            Panel::Operations => operations::render(f, split[1], state),
-            Panel::Board => board::render(f, split[1], state),
-            Panel::Ledger => ledger::render(f, split[1], state),
-            panel => render_placeholder_panel(f, split[1], panel),
         }
     }
 }

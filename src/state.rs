@@ -4591,6 +4591,13 @@ pub enum Panel {
     Help,
 }
 
+impl Panel {
+    /// Full-screen panels take over the entire middle area (no region list visible).
+    pub fn is_full_screen(&self) -> bool {
+        matches!(self, Panel::Research)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MedicineUiState {
     BrowseMedicines,

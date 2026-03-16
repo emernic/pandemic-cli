@@ -1,11 +1,11 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, BorderType, Borders},
     Frame,
 };
 
-use crate::state::{AppState, BasicTech, ResearchKind};
+use crate::state::{AppState, BasicTech, ResearchKind, ticks_to_days};
 
 struct TechNode {
     tech: BasicTech,
@@ -121,8 +121,7 @@ impl EdgeIndex {
         }
 
         // Sort outgoing by target column, incoming by source column
-        for (li, outs) in outgoing.iter_mut().enumerate() {
-            let _ = li; // used implicitly via edges
+        for outs in outgoing.iter_mut() {
             outs.sort_by_key(|&ei| {
                 find_node(layout, edges[ei].to).map(|n| n.col).unwrap_or(0)
             });
@@ -175,17 +174,45 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
         return;
     }
 
+    // Full-screen: split into tree (left) and detail (right).
+    // Narrow panels (< 80 wide) keep the old bottom-detail layout.
+    let is_wide = inner.width >= 80;
+
+    let (tree_rect, detail_rect) = if is_wide {
+        // 60% tree, 40% detail
+        let split = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(inner);
+        (split[0], Some(split[1]))
+    } else {
+        (inner, None)
+    };
+
+    render_tree(f, tree_rect, state, selected_idx, !is_wide);
+
+    if let Some(detail_area) = detail_rect {
+        if let Some(node) = tree_layout().get(selected_idx) {
+            render_detail_panel(f, detail_area, state, node.tech);
+        }
+    }
+}
+
+/// Render the tech tree graph into the given area.
+/// If `show_bottom_detail` is true, reserves 5 lines at the bottom for a compact detail strip
+/// (used when the panel is narrow and there's no side detail panel).
+fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize, show_bottom_detail: bool) {
     let layout = tree_layout();
     let edges = tree_edges();
     let edge_idx = EdgeIndex::build(&layout, &edges);
 
     let gap_h: u16 = 2;  // horizontal gap between columns
     let gap_v: u16 = 3;  // vertical gap: departure row, highway row, arrival row
-    let box_w: u16 = ((inner.width.saturating_sub(2 * gap_h)) / 3).min(30);
+    let box_w: u16 = ((area.width.saturating_sub(2 * gap_h)) / 3).min(30);
     let box_h: u16 = 3;
 
-    let detail_h: u16 = 5;
-    let tree_area_h = inner.height.saturating_sub(detail_h);
+    let detail_h: u16 = if show_bottom_detail { 5 } else { 0 };
+    let tree_area_h = area.height.saturating_sub(detail_h);
 
     let selected_row = layout.get(selected_idx).map(|n| n.row).unwrap_or(0);
     let total_rows = layout.iter().map(|n| n.row).max().unwrap_or(0) + 1;
@@ -202,13 +229,16 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
         0
     };
 
-    let box_left = |col: u16| -> u16 { inner.x + col * (box_w + gap_h) };
-    let box_top_raw = |row: u16| -> u16 { inner.y + row * (box_h + gap_v) };
+    let box_left = |col: u16| -> u16 { area.x + col * (box_w + gap_h) };
+    let box_top_raw = |row: u16| -> u16 { area.y + row * (box_h + gap_v) };
     let scrolled = |raw_y: u16| -> Option<u16> { raw_y.checked_sub(scroll_y) };
 
     let spaced_x = |bx: u16, k: usize, n: usize| -> u16 {
         bx + (box_w * (k as u16 + 1)) / (n as u16 + 1)
     };
+
+    // Clip rect for the tree area (excludes bottom detail strip)
+    let tree_clip = Rect::new(area.x, area.y, area.width, tree_area_h);
 
     // --- Draw edges (connections rendered BEFORE boxes so boxes cover overlaps) ---
     for (i, edge) in edges.iter().enumerate() {
@@ -248,13 +278,13 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
             // Same column: straight vertical at entry_x
             for raw_y in dep_y_raw..target_top_raw {
                 if let Some(y) = scrolled(raw_y) {
-                    buf_set(f, entry_x, y, "│", style, inner);
+                    buf_set(f, entry_x, y, "│", style, tree_clip);
                 }
             }
         } else {
             // Cross-column: 3-layer routing
             if let Some(y) = scrolled(dep_y_raw) {
-                buf_set(f, exit_x, y, "│", style, inner);
+                buf_set(f, exit_x, y, "│", style, tree_clip);
             }
 
             if let Some(y) = scrolled(hw_y_raw) {
@@ -265,21 +295,21 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
                 };
 
                 if exit_x < entry_x {
-                    buf_set(f, exit_x, y, "╰", style, inner);
-                    buf_set(f, entry_x, y, "╮", style, inner);
+                    buf_set(f, exit_x, y, "╰", style, tree_clip);
+                    buf_set(f, entry_x, y, "╮", style, tree_clip);
                 } else {
-                    buf_set(f, exit_x, y, "╯", style, inner);
-                    buf_set(f, entry_x, y, "╭", style, inner);
+                    buf_set(f, exit_x, y, "╯", style, tree_clip);
+                    buf_set(f, entry_x, y, "╭", style, tree_clip);
                 }
 
                 for x in (left_x + 1)..right_x {
-                    buf_set(f, x, y, "─", style, inner);
+                    buf_set(f, x, y, "─", style, tree_clip);
                 }
             }
 
             for raw_y in arr_y_raw..target_top_raw {
                 if let Some(y) = scrolled(raw_y) {
-                    buf_set(f, entry_x, y, "│", style, inner);
+                    buf_set(f, entry_x, y, "│", style, tree_clip);
                 }
             }
         }
@@ -289,7 +319,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
     for (idx, node) in layout.iter().enumerate() {
         let x = box_left(node.col);
         let y = match scrolled(box_top_raw(node.row)) {
-            Some(y) if y + box_h <= inner.y + tree_area_h && y >= inner.y => y,
+            Some(y) if y + box_h <= area.y + tree_area_h && y >= area.y => y,
             _ => continue,
         };
 
@@ -319,28 +349,28 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
             // Clear interior (edges may pass through)
             for by in (y + 1)..(y + box_h - 1) {
                 for bx in (x + 1)..(x + box_w - 1) {
-                    buf_set(f, bx, by, " ", Style::default(), inner);
+                    buf_set(f, bx, by, " ", Style::default(), tree_clip);
                 }
             }
             // Dotted borders for locked techs
             for bx in (x + 1)..(x + box_w - 1) {
-                buf_set(f, bx, y, "┄", border_style, inner);
-                buf_set(f, bx, y + box_h - 1, "┄", border_style, inner);
+                buf_set(f, bx, y, "┄", border_style, tree_clip);
+                buf_set(f, bx, y + box_h - 1, "┄", border_style, tree_clip);
             }
             for by in (y + 1)..(y + box_h - 1) {
-                buf_set(f, x, by, "┊", border_style, inner);
-                buf_set(f, x + box_w - 1, by, "┊", border_style, inner);
+                buf_set(f, x, by, "┊", border_style, tree_clip);
+                buf_set(f, x + box_w - 1, by, "┊", border_style, tree_clip);
             }
             if is_selected {
-                buf_set(f, x, y, "╔", border_style, inner);
-                buf_set(f, x + box_w - 1, y, "╗", border_style, inner);
-                buf_set(f, x, y + box_h - 1, "╚", border_style, inner);
-                buf_set(f, x + box_w - 1, y + box_h - 1, "╝", border_style, inner);
+                buf_set(f, x, y, "╔", border_style, tree_clip);
+                buf_set(f, x + box_w - 1, y, "╗", border_style, tree_clip);
+                buf_set(f, x, y + box_h - 1, "╚", border_style, tree_clip);
+                buf_set(f, x + box_w - 1, y + box_h - 1, "╝", border_style, tree_clip);
             } else {
-                buf_set(f, x, y, "┌", border_style, inner);
-                buf_set(f, x + box_w - 1, y, "┐", border_style, inner);
-                buf_set(f, x, y + box_h - 1, "└", border_style, inner);
-                buf_set(f, x + box_w - 1, y + box_h - 1, "┘", border_style, inner);
+                buf_set(f, x, y, "┌", border_style, tree_clip);
+                buf_set(f, x + box_w - 1, y, "┐", border_style, tree_clip);
+                buf_set(f, x, y + box_h - 1, "└", border_style, tree_clip);
+                buf_set(f, x + box_w - 1, y + box_h - 1, "┘", border_style, tree_clip);
             }
         } else {
             let border_type = if is_selected { BorderType::Double } else { BorderType::Plain };
@@ -359,37 +389,214 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize) 
         buf_write(f, x + 1, y + 1, name, name_style, max_inner as u16);
     }
 
-    // --- Detail panel at bottom ---
-    if let Some(node) = layout.get(selected_idx) {
-        let detail_y = inner.y + tree_area_h;
-        if detail_y + 3 < inner.y + inner.height {
-            let max_w = inner.width.saturating_sub(2);
+    // --- Bottom detail strip (only when no side detail panel) ---
+    if show_bottom_detail {
+        if let Some(node) = layout.get(selected_idx) {
+            let detail_y = area.y + tree_area_h;
+            if detail_y + 3 < area.y + area.height {
+                let max_w = area.width.saturating_sub(2);
 
-            for sx in inner.x..inner.x + inner.width {
-                buf_set(f, sx, detail_y, "─", Style::default().fg(Color::DarkGray), inner);
+                for sx in area.x..area.x + area.width {
+                    buf_set(f, sx, detail_y, "─", Style::default().fg(Color::DarkGray), area);
+                }
+
+                buf_write(
+                    f, area.x + 1, detail_y + 1, node.tech.name(),
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    max_w,
+                );
+                buf_write(
+                    f, area.x + 1, detail_y + 2, node.tech.description(),
+                    Style::default().fg(Color::DarkGray),
+                    max_w,
+                );
+                let prereq = format!("Requires: {}", node.tech.prereq_description());
+                let tech_unlocked = state.unlocked_techs.contains(&node.tech);
+                let tech_available = node.tech.prerequisites_met(&state.world);
+                let prereq_color = if tech_unlocked || tech_available { Color::Green } else { Color::Yellow };
+                buf_write(
+                    f, area.x + 1, detail_y + 3, &prereq,
+                    Style::default().fg(prereq_color),
+                    max_w,
+                );
             }
-
-            buf_write(
-                f, inner.x + 1, detail_y + 1, node.tech.name(),
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-                max_w,
-            );
-            buf_write(
-                f, inner.x + 1, detail_y + 2, node.tech.description(),
-                Style::default().fg(Color::DarkGray),
-                max_w,
-            );
-            let prereq = format!("Requires: {}", node.tech.prereq_description());
-            let tech_unlocked = state.unlocked_techs.contains(&node.tech);
-            let tech_available = node.tech.prerequisites_met(&state.world);
-            let prereq_color = if tech_unlocked || tech_available { Color::Green } else { Color::Yellow };
-            buf_write(
-                f, inner.x + 1, detail_y + 3, &prereq,
-                Style::default().fg(prereq_color),
-                max_w,
-            );
         }
     }
+}
+
+/// Render the detail panel for the selected tech on the right side of the full-screen layout.
+fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicTech) {
+    // Draw a left-side vertical separator
+    for y in area.y..area.y + area.height {
+        buf_set(f, area.x, y, "│", Style::default().fg(Color::DarkGray), area);
+    }
+
+    // Content area (inset from separator)
+    let cx = area.x + 2;
+    let max_w = area.width.saturating_sub(4);
+    if max_w < 10 {
+        return;
+    }
+    let mut y = area.y + 1;
+    let y_max = area.y + area.height;
+
+    let bold = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
+    let dim = Style::default().fg(Color::DarkGray);
+    let normal = Style::default().fg(Color::White);
+
+    // --- Status ---
+    let is_unlocked = state.unlocked_techs.contains(&tech);
+    let is_available = tech.prerequisites_met(&state.world);
+    let active_research = state.active_research.iter().find(|r| {
+        matches!(r.kind, ResearchKind::BasicResearch { tech: t } if t == tech)
+    });
+
+    let (status_text, status_color) = if is_unlocked {
+        ("UNLOCKED", Color::Green)
+    } else if active_research.is_some() {
+        ("RESEARCHING", Color::Yellow)
+    } else if is_available {
+        ("AVAILABLE", Color::Cyan)
+    } else {
+        ("LOCKED", Color::DarkGray)
+    };
+
+    // --- Name ---
+    if y < y_max {
+        buf_write(f, cx, y, tech.name(), bold, max_w);
+        y += 1;
+    }
+
+    // Status tag
+    if y < y_max {
+        buf_write(f, cx, y, status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD), max_w);
+        y += 1;
+    }
+
+    y += 1; // blank line
+
+    // --- Description (word-wrapped) ---
+    if y < y_max {
+        let desc = tech.description();
+        let lines = word_wrap(desc, max_w as usize);
+        for line in &lines {
+            if y >= y_max { break; }
+            buf_write(f, cx, y, line, normal, max_w);
+            y += 1;
+        }
+    }
+
+    y += 1; // blank line
+
+    // --- Prerequisites ---
+    if y < y_max {
+        buf_write(f, cx, y, "Prerequisites", dim.add_modifier(Modifier::BOLD), max_w);
+        y += 1;
+    }
+    if y < y_max {
+        let prereq_met = is_unlocked || is_available;
+        let prereq_color = if prereq_met { Color::Green } else { Color::Yellow };
+        let check = if prereq_met { "+" } else { "-" };
+        let prereq_text = format!(" {} {}", check, tech.prereq_description());
+        buf_write(f, cx, y, &prereq_text, Style::default().fg(prereq_color), max_w);
+        y += 1;
+    }
+
+    y += 1; // blank line
+
+    // --- Costs ---
+    let research_kind = ResearchKind::BasicResearch { tech };
+    let (personnel, ticks, funding) = research_kind.costs(&state.world.medicines);
+    let (eff_personnel, eff_ticks, eff_funding) = state.effective_costs(&research_kind);
+
+    if y < y_max {
+        buf_write(f, cx, y, "Costs", dim.add_modifier(Modifier::BOLD), max_w);
+        y += 1;
+    }
+
+    let days = ticks_to_days(eff_ticks);
+    let cost_lines = [
+        format!("  Personnel:  {}", eff_personnel),
+        format!("  Duration:   {:.1} days", days),
+        format!("  Funding:    {} \u{00a5}", eff_funding as i64),
+    ];
+
+    // Show base vs effective if tech modifiers are active
+    let has_modifier = eff_personnel != personnel || (eff_ticks - ticks).abs() > 0.1 || (eff_funding - funding).abs() > 0.1;
+
+    for line in &cost_lines {
+        if y >= y_max { break; }
+        buf_write(f, cx, y, line, normal, max_w);
+        y += 1;
+    }
+
+    if has_modifier && y < y_max {
+        let base_days = ticks_to_days(ticks);
+        let base_text = format!("  (base: {} pers, {:.1}d, {}\u{00a5})", personnel, base_days, funding as i64);
+        buf_write(f, cx, y, &base_text, dim, max_w);
+        y += 1;
+    }
+
+    // --- Research progress (if actively researching) ---
+    if let Some(research) = active_research {
+        y += 1;
+        if y < y_max {
+            buf_write(f, cx, y, "Progress", dim.add_modifier(Modifier::BOLD), max_w);
+            y += 1;
+        }
+        if y < y_max {
+            let pct = (research.progress / research.required_ticks * 100.0).min(100.0);
+            let bar_w = (max_w as usize).saturating_sub(10).min(30);
+            let filled = ((pct / 100.0) * bar_w as f64).round() as usize;
+            let empty = bar_w.saturating_sub(filled);
+            let bar = format!("  [{}{}] {:.0}%", "█".repeat(filled), "░".repeat(empty), pct);
+            buf_write(f, cx, y, &bar, Style::default().fg(Color::Yellow), max_w);
+            y += 1;
+        }
+        if y < y_max {
+            let remaining_ticks = research.required_ticks - research.progress;
+            let remaining_days = ticks_to_days(remaining_ticks.max(0.0));
+            let eta = format!("  ~{:.1} days remaining", remaining_days);
+            buf_write(f, cx, y, &eta, dim, max_w);
+            y += 1;
+        }
+    }
+
+    // --- Hint line at bottom ---
+    let hint_y = area.y + area.height - 1;
+    if hint_y > y && hint_y < y_max {
+        let hint = if is_unlocked {
+            "[Esc] Close"
+        } else if active_research.is_some() {
+            "[Esc] Close"
+        } else if is_available {
+            "[Enter] Start Research  [Esc] Close"
+        } else {
+            "[Esc] Close"
+        };
+        buf_write(f, cx, hint_y, hint, dim, max_w);
+    }
+}
+
+/// Simple word-wrap: breaks text into lines no wider than `width`.
+fn word_wrap(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if current.is_empty() {
+            current = word.to_string();
+        } else if current.len() + 1 + word.len() <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(current);
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
 }
 
 pub fn node_count() -> usize {
