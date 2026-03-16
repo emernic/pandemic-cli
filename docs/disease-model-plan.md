@@ -177,7 +177,7 @@ Note: this is exponential decay, not a fixed duration. With `waning_rate: 0.02`,
 
 ### Gameplay
 
-Creates epidemic waves. Diseases with short immunity cycle through the population, motivating permanent solutions (vaccines, eradication) over waiting for burnout.
+Creates epidemic waves. Diseases with short immunity cycle through the population, motivating aggressive treatment and eradication over waiting for burnout.
 
 ### Tests
 

@@ -45,7 +45,7 @@ Medicines have a therapy type (Antiviral, Antibiotic, Antifungal, Broad Spectrum
 - Drug resistance (builds per mechanism with repeated deployment)
 - Whether the medicine has been clinically tested against this disease
 
-Deployment options: **Treat** (reduce infected population) or **Vaccinate** (build immunity in susceptible population). Doses are finite and must be manufactured.
+Deployment options: **Treat** (reduce infected population). Doses are finite and must be manufactured.
 
 ### Policies
 
