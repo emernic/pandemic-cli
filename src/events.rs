@@ -190,7 +190,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
             GameEvent::ArkProtocolActivated { region_idx } => {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
-                let msg = format!("⚠ Emergency consolidation: all operations moved to {}", region_name);
+                let msg = format!("Emergency consolidation: all operations moved to {}", region_name);
                 (1, msg.clone(), msg, true)
             }
             GameEvent::GovernorAction { description, .. } => {
@@ -232,7 +232,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     String::new()
                 };
                 let msg = if *adverse {
-                    format!("⚠ {med_name} delivered to {region_name}. ADVERSE REACTION — {dose_str} doses{outcome}")
+                    format!("{med_name} delivered to {region_name}. ADVERSE REACTION — {dose_str} doses{outcome}")
                 } else if *efficiency < 0.90 || *doses_wasted > 100.0 {
                     let eff_pct = (*efficiency * 100.0) as u32;
                     if *efficiency < 0.90 {
@@ -259,7 +259,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 } else {
                     "STRESSED"
                 };
-                let msg = format!("⚠ {region_name}: {} {severity}", system.label());
+                let msg = format!("{region_name}: {} {severity}", system.label());
                 (2, msg.clone(), msg, true)
             }
             GameEvent::ResearchHandoff { message } => {
