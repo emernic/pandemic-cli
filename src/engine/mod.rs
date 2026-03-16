@@ -1414,9 +1414,9 @@ mod tests {
     }
 
     #[test]
-    fn disease_can_spread_into_vaccinated_region() {
+    fn disease_can_spread_into_region_with_immune_pop() {
         let mut state = AppState::new_default(42);
-        // Find a region WITHOUT disease 0 and pre-vaccinate it
+        // Find a region WITHOUT disease 0 and give it some immune population
         let clean_region = (0..state.regions.len())
             .find(|&i| !state.regions[i].infections.iter().any(|inf| inf.disease_idx == 0))
             .expect("should have an uninfected region");
@@ -2013,7 +2013,7 @@ mod tests {
                     }
                 }
 
-                // --- MEDICINE: treat aggressively, vaccinate only with targeted meds ---
+                // --- MEDICINE: treat aggressively, use targeted meds when possible ---
                 // Treatment removes ~efficacy fraction of infected per deploy and
                 // costs proportional doses. BS (0.15 efficacy) slows disease but
                 // can't stop it — targeted medicines are needed to actually clear it.
