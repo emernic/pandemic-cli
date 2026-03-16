@@ -980,16 +980,9 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
     match kind {
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
-            let yield_bonus = state.manufacturing_yield_bonus();
-            let target_doses = med.max_doses * yield_bonus;
             let current = crate::format_number(med.doses);
-            let target = crate::format_number(target_doses);
-            let bonus_note = if (yield_bonus - 1.0).abs() > 0.01 {
-                format!(" (+{:.0}% mfg bonus)", (yield_bonus - 1.0) * 100.0)
-            } else {
-                String::new()
-            };
-            Some(format!("{} → {} doses{}", current, target, bonus_note))
+            let target = crate::format_number(med.max_doses);
+            Some(format!("{} → {} doses", current, target))
         }
         ResearchKind::GenomicSequencing { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
@@ -1141,15 +1134,14 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
             let speed = personnel_speed(reactor.personnel_assigned, base_personnel)
                 * state.research_infra_multiplier();
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
-            let yield_bonus = state.manufacturing_yield_bonus();
-            let target = med.map(|m| m.max_doses * yield_bonus).unwrap_or(0.0);
+            let target = med.map(|m| m.max_doses).unwrap_or(0.0);
             (name.to_string(), Some(pct / 100.0),
              format!("batch {:.0}%  ▣ {} doses  {}", pct, crate::format_number(target),
                  format_days(effective_remaining)))
         } else {
             // Idle — reactor is empty, show stockpile info in status text only
             let current = med.map(|m| m.doses).unwrap_or(0.0);
-            let max = med.map(|m| m.max_doses * state.manufacturing_yield_bonus()).unwrap_or(1.0);
+            let max = med.map(|m| m.max_doses).unwrap_or(1.0);
             let status = if current >= max { "FULL" } else { "idle" };
             let hint = if current >= max { "[C] change medicine" } else { "[Enter] start  [C] change" };
             (name.to_string(), None,
@@ -1292,11 +1284,9 @@ fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, r
         let selected = state.ui.panel_selection == i;
         let marker = if selected { "▶ " } else { "  " };
         let med = &state.medicines[med_idx];
-        let yield_bonus = state.manufacturing_yield_bonus();
-        let target_doses = med.max_doses * yield_bonus;
         let current = crate::format_number(med.doses);
-        let target = crate::format_number(target_doses);
-        let full = med.doses >= target_doses;
+        let target = crate::format_number(med.max_doses);
+        let full = med.doses >= med.max_doses;
 
         let style = if selected {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)

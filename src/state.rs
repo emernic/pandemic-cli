@@ -3911,15 +3911,6 @@ pub enum BasicTech {
     /// Prereq: EpidemiologicalForecasting + deploy 2+ different medicines.
     CombinationTherapy,
 
-    // ── Column 2: Manufacturing ──────────────────────────────────
-    /// Reduces ManufactureDoses applied research duration by 35%.
-    /// Prereq: at least one targeted medicine developed (mechanism.is_some() && unlocked).
-    /// Note: when a Biotech corp is healthy, bonus could be increased to 50% (#1381).
-    AutomatedSynthesis,
-    /// Each ManufactureDoses run produces 25% more doses (thermostable formulations
-    /// reduce cold-chain waste). Stacks multiplicatively with Europe's yield bonus.
-    /// Prereq: AutomatedSynthesis.
-    StabilizedFormulation,
 }
 
 impl BasicTech {
@@ -3933,8 +3924,6 @@ impl BasicTech {
             BasicTech::MetagenomicSurveillance => "Metagenomic Surveillance",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
-            BasicTech::AutomatedSynthesis => "Automated Synthesis",
-            BasicTech::StabilizedFormulation => "Stabilized Formulation",
             BasicTech::ResilientGrids => "Resilient Grids",
             BasicTech::EpidemiologicalForecasting => "Epidemiological Forecasting",
         }
@@ -3950,8 +3939,6 @@ impl BasicTech {
             BasicTech::MetagenomicSurveillance => "Environmental sample sequencing identifies pathogens without culture. Field research and clinical trials 25% faster.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
-            BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
-            BasicTech::StabilizedFormulation => "Thermostable formulations reduce cold-chain waste. Each manufacturing run yields 25% more usable doses.",
             BasicTech::ResilientGrids => "Hardened regional infrastructure protocols. Disease-caused infrastructure degradation 20% slower.",
             BasicTech::EpidemiologicalForecasting => "Predictive outbreak modeling. Threats panel shows projected deaths over 20 days for each active disease.",
         }
@@ -3967,8 +3954,6 @@ impl BasicTech {
             // Root techs (non-tech prerequisites only)
             BasicTech::TargetedDrugDesign => &[],
             BasicTech::RapidSequencing => &[],
-            BasicTech::AutomatedSynthesis => &[],
-
             // Column 0 chain
             BasicTech::MonoclonalAntibodies => &[BasicTech::TargetedDrugDesign],
             BasicTech::PhageTherapy => &[BasicTech::MonoclonalAntibodies],
@@ -3981,8 +3966,6 @@ impl BasicTech {
             BasicTech::EpidemiologicalForecasting => &[BasicTech::MetagenomicSurveillance],
             BasicTech::CombinationTherapy => &[BasicTech::EpidemiologicalForecasting],
 
-            // Column 2 chain
-            BasicTech::StabilizedFormulation => &[BasicTech::AutomatedSynthesis],
         }
     }
 
@@ -4004,10 +3987,6 @@ impl BasicTech {
             BasicTech::RapidSequencing => {
                 // Prereq: completed at least one genomic sequencing on any disease
                 state.diseases.iter().any(|d| d.sequencing_count > 0)
-            }
-            BasicTech::AutomatedSynthesis => {
-                // Prereq: at least one targeted medicine developed (not broad-spectrum)
-                state.medicines.iter().any(|m| m.mechanism.is_some() && m.unlocked)
             }
             BasicTech::CombinationTherapy => {
                 // Additional non-tech prereq: deploy 2+ different medicines
@@ -4031,8 +4010,6 @@ impl BasicTech {
             BasicTech::MetagenomicSurveillance => "Resistance Surveillance",
             BasicTech::EpidemiologicalForecasting => "Metagenomic Surveillance",
             BasicTech::CombinationTherapy => "Epidemiological Forecasting + deploy 2+ medicines",
-            BasicTech::AutomatedSynthesis => "Develop any targeted medicine",
-            BasicTech::StabilizedFormulation => "Automated Synthesis",
         }
     }
 
@@ -4050,9 +4027,6 @@ impl BasicTech {
             BasicTech::MetagenomicSurveillance,
             BasicTech::EpidemiologicalForecasting,
             BasicTech::CombinationTherapy,
-            // Column 2: Manufacturing
-            BasicTech::AutomatedSynthesis,
-            BasicTech::StabilizedFormulation,
         ]
     }
 }
@@ -4078,8 +4052,6 @@ impl ResearchKind {
                 BasicTech::MetagenomicSurveillance => (4, 280.0, 650.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
-                BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
-                BasicTech::StabilizedFormulation => (5, 280.0, 700.0),
                 BasicTech::ResilientGrids => (3, 240.0, 550.0),
                 BasicTech::EpidemiologicalForecasting => (2, 160.0, 300.0),
             },
@@ -6814,7 +6786,6 @@ impl WorldState {
     /// - MetagenomicSurveillance cuts IdentifyThreat and ClinicalTrial by 25%.
     ///   (Does not affect GenomicSequencing — already covered by RapidSequencing.)
     ///   Corp health modifier (25% → 35%) tracked in #1381.
-    /// - AutomatedSynthesis cuts ManufactureDoses duration by 35%.
     pub fn effective_costs(&self, kind: &ResearchKind) -> (u32, f64, f64) {
         let (personnel, mut duration, mut funding) = kind.costs(&self.medicines);
         if matches!(kind, ResearchKind::GenomicSequencing { .. })
@@ -6829,11 +6800,6 @@ impl WorldState {
         ) && self.unlocked_techs.contains(&BasicTech::MetagenomicSurveillance)
         {
             duration *= 0.75;
-        }
-        if matches!(kind, ResearchKind::ManufactureDoses { .. })
-            && self.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
-        {
-            duration *= 0.65; // 35% faster
         }
         // ManufactureDoses: scale cost and time by how depleted the stockpile is.
         // At 0 doses you pay full price; at 90% full you pay 10%.
@@ -6853,7 +6819,7 @@ impl WorldState {
     /// Used to scale ManufactureDoses cost and time proportionally.
     pub fn manufacture_depletion_fraction(&self, medicine_idx: usize) -> f64 {
         let target = self.medicines.get(medicine_idx)
-            .map(|m| m.max_doses * self.manufacturing_yield_bonus())
+            .map(|m| m.max_doses)
             .unwrap_or(1.0);
         let current = self.medicines.get(medicine_idx)
             .map(|m| m.doses)
@@ -6936,14 +6902,6 @@ impl WorldState {
         }
     }
 
-    /// Manufacturing yield bonus from StabilizedFormulation tech.
-    pub fn manufacturing_yield_bonus(&self) -> f64 {
-        if self.unlocked_techs.contains(&BasicTech::StabilizedFormulation) {
-            1.25
-        } else {
-            1.0
-        }
-    }
 
     /// Medicines eligible for reactor assignment (unlocked medicines).
     pub fn reactor_eligible_medicines(&self) -> Vec<usize> {
@@ -7384,87 +7342,6 @@ mod tests {
             ms_pos == rs_pos + 1,
             "MetagenomicSurveillance should appear immediately after ResistanceSurveillance in all()"
         );
-    }
-
-    #[test]
-    fn automated_synthesis_prereq_requires_developed_medicine() {
-        let mut state = AppState::new_default(42);
-        // No targeted medicines exist at startup (only Broad-Spectrum, which has no mechanism)
-        assert!(state.medicines.iter().all(|m| m.mechanism.is_none()));
-        assert!(!BasicTech::AutomatedSynthesis.prerequisites_met(&state));
-        // After a targeted medicine is created (e.g. from screening hit + trial), prereq is met
-        // Manually add a targeted medicine with a mechanism
-        state.medicines.push(Medicine {
-            name: "Test Antibiotic".into(),
-            therapy_type: TherapyType::Antibiotic,
-            mechanism: Some(MechanismOfAction::CellWallInhibitor),
-            target_diseases: vec![0],
-            doses: 0.0,
-            max_doses: 500_000.0,
-            unlocked: true,
-            tested_against: vec![0],
-            deployed_count: 0,
-            total_treated: 0.0,
-            manufacturer_corp_idx: None,
-            trial_efficacy: None,
-            side_effect_rate: 0.0,
-            resistance_rate: 0.0,
-            trial_rigor: None,
-            reported_efficacy: None,
-            reported_side_effects: None,
-            reported_resistance: None,
-        });
-        assert!(BasicTech::AutomatedSynthesis.prerequisites_met(&state));
-    }
-
-    #[test]
-    fn distributed_storage_prereq_requires_automated_synthesis() {
-        let mut state = AppState::new_default(42);
-        assert!(!BasicTech::StabilizedFormulation.prerequisites_met(&state));
-        state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
-        assert!(BasicTech::StabilizedFormulation.prerequisites_met(&state));
-    }
-
-    #[test]
-    fn automated_synthesis_reduces_manufacture_doses_duration() {
-        let mut state = AppState::new_default(42);
-        let kind = ResearchKind::ManufactureDoses { medicine_idx: 0 };
-        let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
-        let (_, fast_duration, _) = state.effective_costs(&kind);
-        assert!(
-            (fast_duration - base_duration * 0.65).abs() < 0.01,
-            "ManufactureDoses should be 35% faster with AutomatedSynthesis: expected {}, got {}",
-            base_duration * 0.65,
-            fast_duration
-        );
-    }
-
-    // automated_synthesis_does_not_affect_develop_medicine_duration — removed:
-    // DevelopMedicine no longer exists.
-
-    #[test]
-    fn stabilized_formulation_boosts_manufacturing_yield() {
-        let mut state = AppState::new_default(42);
-        let base = state.manufacturing_yield_bonus();
-        assert!((base - 1.0).abs() < 0.001, "base yield should be 1.0 without tech");
-        state.unlocked_techs.push(BasicTech::StabilizedFormulation);
-        let with_tech = state.manufacturing_yield_bonus();
-        assert!(
-            (with_tech - 1.25).abs() < 0.001,
-            "StabilizedFormulation should give 1.25x yield: expected 1.25, got {}",
-            with_tech
-        );
-    }
-
-    #[test]
-    fn automated_synthesis_and_distributed_storage_appear_in_all() {
-        let all = BasicTech::all();
-        assert!(all.contains(&BasicTech::AutomatedSynthesis), "AutomatedSynthesis must be in all()");
-        assert!(all.contains(&BasicTech::StabilizedFormulation), "StabilizedFormulation must be in all()");
-        let as_pos = all.iter().position(|t| *t == BasicTech::AutomatedSynthesis).unwrap();
-        let ds_pos = all.iter().position(|t| *t == BasicTech::StabilizedFormulation).unwrap();
-        assert!(ds_pos > as_pos, "StabilizedFormulation should appear after AutomatedSynthesis");
     }
 
     #[test]
