@@ -13,7 +13,7 @@ use state::{
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
     ResearchFlatItem, ResearchKind, LabTab, LabUiState, SimState, ScreeningFormItem,
-    ScreeningModality, ScreeningRunSize,
+    ScreeningModality, ScreeningRunSize, InfraItem,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -239,6 +239,13 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             let sel = new.ui.panel_selection;
                             if sel < new.reactors.len() && new.reactors[sel].medicine_idx.is_some() {
                                 execute_command(&mut new, &GameCommand::ToggleReactorRepeat { reactor_idx: sel });
+                            }
+                        } else if lab_ui.tab() == LabTab::Infra {
+                            // Infra tab: X toggles auto-repeat for TrainPersonnel
+                            let items = new.infra_tab_items();
+                            if let Some(InfraItem::TrainPersonnel) = items.get(new.ui.panel_selection) {
+                                let kind = ResearchKind::TrainPersonnel;
+                                execute_command(&mut new, &GameCommand::ToggleAutoRepeat { kind });
                             }
                         } else {
                             // Toggle auto-repeat for the selected repeatable project
@@ -487,16 +494,9 @@ pub fn tick_and_process(state: &AppState) -> AppState {
             let tab = new.ui.lab_ui.as_ref().unwrap().tab();
             let new_items = new.lab_tab_items(tab);
             let old_kind = old_item.to_kind(state);
-            let found = match old_item {
-                ResearchFlatItem::UpgradeLab => {
-                    new_items.iter().position(|item| matches!(item, ResearchFlatItem::UpgradeLab))
-                }
-                _ => {
-                    old_kind.as_ref().and_then(|kind| {
-                        new_items.iter().position(|item| item.to_kind(&new).as_ref() == Some(kind))
-                    })
-                }
-            };
+            let found = old_kind.as_ref().and_then(|kind| {
+                new_items.iter().position(|item| item.to_kind(&new).as_ref() == Some(kind))
+            });
             if let Some(pos) = found {
                 new.ui.panel_selection = pos;
             } else {
@@ -647,16 +647,15 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             if tab == LabTab::Reactors {
                 return handle_reactor_confirm(ui, state);
             }
+            // Infra tab: handled separately with its own item system
+            if tab == LabTab::Infra {
+                return handle_infra_confirm(ui, state);
+            }
             let items = state.lab_tab_items(tab);
             let Some(item) = items.get(ui.panel_selection) else {
                 return None;
             };
             match item {
-                ResearchFlatItem::UpgradeLab => {
-                    ui.lab_ui = Some(LabUiState::ConfirmLabUpgrade { tab });
-                    ui.panel_selection = 0;
-                    return None;
-                }
                 // Active projects: Enter is a no-op (info already visible)
                 ResearchFlatItem::Active(_) => {}
                 // Available projects: go to confirm screen
@@ -779,15 +778,47 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
     }
 }
 
+/// Handle Enter key in the Infra tab.
+fn handle_infra_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
+    let items = state.infra_tab_items();
+    let Some(item) = items.get(ui.panel_selection) else {
+        return None;
+    };
+    match item {
+        InfraItem::UpgradeLab => {
+            ui.lab_ui = Some(LabUiState::ConfirmLabUpgrade { tab: LabTab::Infra });
+            ui.panel_selection = 0;
+            None
+        }
+        InfraItem::TrainPersonnel => {
+            // Find the index in all_available_projects for TrainPersonnel
+            let available = state.all_available_projects();
+            if let Some(idx) = available.iter().position(|k| matches!(k, ResearchKind::TrainPersonnel)) {
+                ui.lab_ui = Some(LabUiState::ConfirmProject {
+                    tab: LabTab::Infra,
+                    project_idx: idx,
+                    double_personnel: false,
+                });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        InfraItem::FirePersonnel => {
+            if state.personnel_available() > 0 {
+                Some(GameCommand::FirePersonnel { count: 5 })
+            } else {
+                None
+            }
+        }
+        InfraItem::BuyReactor => {
+            Some(GameCommand::BuyReactor)
+        }
+    }
+}
+
 /// Handle Enter key in the Reactors tab.
 fn handle_reactor_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
     let sel = ui.panel_selection;
-    let reactor_count = state.reactors.len();
-
-    // Buy reactor button
-    if sel == reactor_count {
-        return Some(GameCommand::BuyReactor);
-    }
 
     let reactor = match state.reactors.get(sel) {
         Some(r) => r,
@@ -1376,6 +1407,23 @@ mod tests {
         use crate::state::{ResearchProject, LabUiState, LabTab, Panel};
 
         let mut state = AppState::new_default(42);
+        // Add a second detected disease so the Sequencing tab has 2+ items
+        let mut disease2 = state.diseases[0].clone();
+        disease2.name = "Second Disease".into();
+        disease2.detected = true;
+        state.diseases.push(disease2);
+        // Also infect a region with the new disease so IdentifyThreat is available
+        let new_d_idx = state.diseases.len() - 1;
+        if let Some(region) = state.regions.first_mut() {
+            region.infections.push(crate::state::RegionDiseaseState {
+                disease_idx: new_d_idx,
+                exposed: 0.0,
+                infected: 100.0,
+                dead: 0.0,
+                immune: 0.0,
+            });
+        }
+
         // Open the research panel in BrowseAll mode
         state.ui.open_panel = Panel::Lab;
         state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
@@ -1418,12 +1466,6 @@ mod tests {
                 .and_then(|item| item.to_kind(&new_state));
             assert_eq!(new_selected.as_ref(), Some(kind),
                 "research selection should track the same item after list changes");
-        }
-        // If selected_kind was None (UpgradeLab), the UpgradeLab item should still be selected
-        if matches!(items_before[1], ResearchFlatItem::UpgradeLab) {
-            let new_items = new_state.lab_tab_items(LabTab::Sequencing);
-            assert!(matches!(new_items.get(new_state.ui.panel_selection), Some(ResearchFlatItem::UpgradeLab)),
-                "UpgradeLab selection should be preserved");
         }
     }
 

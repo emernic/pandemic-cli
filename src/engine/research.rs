@@ -547,7 +547,7 @@ mod tests {
     /// Helper: open Lab panel, navigate to first available item matching `kind_pred`, and confirm through.
     /// For BasicResearch, use `start_basic_research` instead (those are in the Research panel now).
     fn start_research_matching(state: &AppState, kind_pred: impl Fn(&ResearchKind) -> bool) -> AppState {
-        use crate::state::LabTab;
+        use crate::state::{LabTab, InfraItem};
         // Ensure panel is closed first, then open fresh
         let mut s = if state.ui.open_panel == crate::state::Panel::Lab {
             apply_action(state, &Action::ClosePanel)
@@ -556,6 +556,19 @@ mod tests {
         };
         s = apply_action(&s, &Action::OpenLab);
         let available = s.all_available_projects();
+
+        // Check Infra tab for TrainPersonnel (it uses InfraItem, not ResearchFlatItem)
+        if kind_pred(&ResearchKind::TrainPersonnel) {
+            let infra_items = s.infra_tab_items();
+            if let Some(idx) = infra_items.iter().position(|item| matches!(item, InfraItem::TrainPersonnel)) {
+                s.ui.lab_ui = Some(crate::state::LabUiState::Browse { tab: LabTab::Infra });
+                s.ui.panel_selection = idx;
+                s = apply_action(&s, &Action::Confirm); // ConfirmProject
+                s = apply_action(&s, &Action::Confirm); // Start
+                return s;
+            }
+        }
+
         // Find which tab contains the matching item and its index within that tab
         let mut found = None;
         for tab in LabTab::ALL {
