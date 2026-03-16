@@ -363,9 +363,6 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     // Generate reported stats based on rigor level
                     generate_reported_stats(medicine, rigor, rng);
                     // Give the medicine a random name on completion
-                    let disease_name = state.diseases.get(d_idx)
-                        .map(|d| d.display_name(d_idx))
-                        .unwrap_or_else(|| format!("P{}", d_idx + 1));
                     medicine.name = generate_medicine_name(medicine.mechanism, rng);
                 }
                 events.push(GameEvent::TrialCompleted {
