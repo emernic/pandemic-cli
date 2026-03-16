@@ -28,6 +28,8 @@ fn short_name(tech: BasicTech) -> &'static str {
         MetagenomicSurveillance => "Metagenomic Surv.",
         ResistanceSurveillance => "Resistance Surv.",
         CombinationTherapy => "Combination Therapy",
+        RnaTherapeutics => "RNA Therapeutics",
+        HighThroughputScreening => "HT Screening",
         ResilientGrids => "Resilient Grids",
         EpidemiologicalForecasting => "Epi. Forecasting",
     }
@@ -45,6 +47,8 @@ fn tree_layout() -> Vec<TechNode> {
                 BasicTech::MonoclonalAntibodies        => (1, 0),
                 BasicTech::PhageTherapy                => (1, 1),
                 BasicTech::ResistanceSurveillance      => (1, 2),
+                BasicTech::RnaTherapeutics             => (2, 0),
+                BasicTech::HighThroughputScreening     => (2, 1),
                 BasicTech::MetagenomicSurveillance     => (2, 2),
                 BasicTech::EpidemiologicalForecasting  => (3, 2),
                 BasicTech::ResilientGrids              => (4, 1),
