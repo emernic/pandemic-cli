@@ -141,12 +141,6 @@ pub struct WorldState {
     /// Prevents repeat alerts for the same threshold.
     #[serde(default)]
     pub death_milestone_tier: Vec<u8>,
-    /// Per-disease flag: whether the pre-detection intel briefing has fired for this disease.
-    /// Advanced Intel stations generate a warning before full detection when local infections
-    /// cross 500. This vec is grown alongside `diseases` to track which diseases have been
-    /// briefed already.
-    #[serde(default)]
-    pub intel_pre_detection_briefed: Vec<bool>,
     /// Emergency consolidation: when activated, all resources concentrate on one region.
     /// Contains the index of the consolidated HQ region, or None if not active.
     #[serde(default)]
@@ -363,16 +357,6 @@ pub const MEDICAL_CENTER_PERSONNEL: u32 = 2;
 /// Medicine deployment effectiveness bonus in regions with Medical Center.
 pub const MEDICAL_CENTER_EFFICACY_BONUS: f64 = 0.25;
 
-/// Intel Station (Level 1): one-time build cost per region.
-/// Detects new diseases at 3,000 local infections instead of 10,000. Requires 1 ongoing personnel.
-pub const INTEL_STATION_COST: f64 = 75.0;
-/// Intel Station ongoing personnel requirement (Level 1 and Level 2).
-pub const INTEL_STATION_PERSONNEL: u32 = 1;
-/// Advanced Intel (Level 2): upgrade cost on top of Level 1.
-/// Detects at 1,000 local infections. Generates intelligence briefings. Requires 2 ongoing personnel.
-pub const ADVANCED_INTEL_COST: f64 = 150.0;
-/// Advanced Intel ongoing personnel requirement (replaces Level 1 cost).
-pub const ADVANCED_INTEL_PERSONNEL: u32 = 2;
 /// Delivery throughput reduction per collapsed neighbor (multiplicative).
 /// Each collapsed neighbor reduces throughput by this fraction.
 /// E.g., 0.15 means one collapsed neighbor → 85% throughput, two → 72%.
@@ -552,7 +536,6 @@ pub enum PolicyId {
     MartialLaw,
     NuclearOption,
     FieldHospital,
-    IntelStation,
     RebuildInfra,
 }
 
@@ -570,7 +553,6 @@ impl PolicyId {
         PolicyId::MartialLaw,
         PolicyId::NuclearOption,
         PolicyId::FieldHospital,
-        PolicyId::IntelStation,
         PolicyId::RebuildInfra,
     ];
 
@@ -584,7 +566,6 @@ impl PolicyId {
         PolicyId::DiscourageHosp,
         PolicyId::TravelBan,
         PolicyId::Quarantine,
-        PolicyId::IntelStation,
         PolicyId::FieldHospital,
         PolicyId::RebuildInfra,
         PolicyId::NuclearOption,
@@ -605,7 +586,6 @@ impl PolicyId {
             Self::MartialLaw => "Martial Law",
             Self::NuclearOption => "Nuclear Option",
             Self::FieldHospital => "Field Hospital",
-            Self::IntelStation => "Intel Station",
             Self::RebuildInfra => "Rebuild Infrastructure",
         }
     }
@@ -625,7 +605,6 @@ impl PolicyId {
             Self::MartialLaw => Some(Authority::High),
             Self::NuclearOption => Some(Authority::High),
             Self::FieldHospital => Some(Authority::Medium),
-            Self::IntelStation => None,
             Self::RebuildInfra => None,
         }
     }
@@ -980,8 +959,8 @@ pub struct RegionPolicy {
 ///   0 = Travel Ban        5 = Basic Screening      8 = Martial Law
 ///   1 = Quarantine         6 = Antigen Screening    9 = Nuclear Annihilation
 ///   2 = Discourage Hosp.   7 = Mass Rapid Screen   10 = Field Hospital
-///   3 = Border Controls   11 = Intel Station
-///   4 = Water Sanitation  12 = Rebuild Infrastructure
+///   3 = Border Controls   11 = Rebuild Infrastructure
+///   4 = Water Sanitation
 ///
 /// Display position is determined by `PolicyId::DISPLAY_ORDER` (grouped by function).
 /// If you add a new policy, you must update:
@@ -989,7 +968,7 @@ pub struct RegionPolicy {
 ///   - get_bool/set_bool if it's a boolean policy (this file)
 ///   - toggle_policy and tick_enforce_costs (engine/policy.rs)
 ///   - render_manage policies vec (ui/policy.rs)
-pub const POLICY_COUNT: usize = 13;
+pub const POLICY_COUNT: usize = 12;
 
 /// Panel selection positions for the ManagePolicies subpanel.
 ///
@@ -1100,7 +1079,7 @@ impl RegionPolicy {
             PolicyId::BasicScreening => self.screening >= ScreeningLevel::Basic,
             PolicyId::AntigenScreening => self.screening >= ScreeningLevel::Antigen,
             PolicyId::MassRapidScreen => self.screening >= ScreeningLevel::MassRapid,
-            PolicyId::FieldHospital | PolicyId::IntelStation | PolicyId::RebuildInfra => false,
+            PolicyId::FieldHospital | PolicyId::RebuildInfra => false,
         }
     }
 
@@ -2194,11 +2173,6 @@ pub struct Region {
     /// Destroyed (reset to 0) when region collapses.
     #[serde(default)]
     pub hospital_level: u8,
-    /// Intelligence station level: 0 = none, 1 = Intel Station (detects at 3k local infections),
-    /// 2 = Advanced Intel (detects at 1k infections, generates briefings).
-    /// Destroyed (reset to 0) when region collapses.
-    #[serde(default)]
-    pub intel_level: u8,
     /// Per-capita income multiplier. Higher values mean this region
     /// contributes more funding per person. Default 1.0.
     #[serde(default = "default_one")]
@@ -5479,7 +5453,6 @@ impl WorldState {
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
-                intel_level: 0,
                 income_modifier: 1.8,     // Wealthy — major economic contributor
                 healthcare_modifier: 0.85, // Good healthcare infrastructure
                 last_deploy_tick: HashMap::new(),
@@ -5521,7 +5494,6 @@ impl WorldState {
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
-                intel_level: 0,
                 income_modifier: 1.0,     // Moderate economy
                 healthcare_modifier: 0.95, // Decent healthcare
                 last_deploy_tick: HashMap::new(),
@@ -5563,7 +5535,6 @@ impl WorldState {
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
-                intel_level: 0,
                 income_modifier: 1.5,     // Strong economy, hub region
                 healthcare_modifier: 0.80, // Excellent healthcare
                 last_deploy_tick: HashMap::new(),
@@ -5605,7 +5576,6 @@ impl WorldState {
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
-                intel_level: 0,
                 income_modifier: 0.6,     // Lower per-capita income
                 healthcare_modifier: 1.1,  // Strained healthcare — higher lethality
                 last_deploy_tick: HashMap::new(),
@@ -5647,7 +5617,6 @@ impl WorldState {
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
-                intel_level: 0,
                 income_modifier: 0.9,     // Large but moderate per-capita
                 healthcare_modifier: 1.0,  // Baseline healthcare
                 last_deploy_tick: HashMap::new(),
@@ -5689,7 +5658,6 @@ impl WorldState {
                 collapsed_at_tick: None,
                 collapse_deaths: 0.0,
                 hospital_level: 0,
-                intel_level: 0,
                 income_modifier: 2.5,     // Tiny but wealthy — high per-capita
                 healthcare_modifier: 0.75, // Best healthcare infrastructure
                 last_deploy_tick: HashMap::new(),
@@ -5846,7 +5814,6 @@ impl WorldState {
             crisis_operations: vec![],
             pending_shipments: vec![],
             death_milestone_tier: vec![0; num_diseases],
-            intel_pre_detection_briefed: vec![false; num_diseases],
             ark_protocol: None,
             total_doses_deployed: 0.0,
             lab_level: 0,
@@ -6059,15 +6026,10 @@ impl WorldState {
             1 => FIELD_HOSPITAL_PERSONNEL,
             _ => 0,
         }).sum();
-        let intel: u32 = self.regions.iter().map(|r| match r.intel_level {
-            2 => ADVANCED_INTEL_PERSONNEL,
-            1 => INTEL_STATION_PERSONNEL,
-            _ => 0,
-        }).sum();
         let crisis_ops: u32 = self.crisis_operations.iter().map(|op| op.personnel).sum();
         let screening: u32 = self.screening_runs.iter().map(|r| r.personnel_assigned).sum();
         let reactors: u32 = self.reactor_personnel();
-        research + policy + hospitals + intel + crisis_ops + screening + reactors
+        research + policy + hospitals + crisis_ops + screening + reactors
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -6873,17 +6835,6 @@ impl WorldState {
         self.unlocked_techs.contains(&BasicTech::EpidemiologicalForecasting)
     }
 
-    /// True if any non-collapsed region with Advanced Intel (level 2) has active
-    /// infections of the given disease. Used to show intel assessment data in the
-    /// threats panel before full research knowledge is available.
-    pub fn has_advanced_intel_on_disease(&self, disease_idx: usize) -> bool {
-        self.regions.iter().any(|r| {
-            !r.collapsed
-                && r.intel_level >= 2
-                && r.disease_state(disease_idx)
-                    .is_some_and(|inf| inf.infected > 0.0)
-        })
-    }
 
     /// Projected deaths over the next `days` for a specific disease across all regions.
     /// Uses current infected * lethality as an instantaneous death rate estimate.

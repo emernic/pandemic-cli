@@ -10,7 +10,6 @@ use crate::state::{
     INFECTION_PRESSURE_CRIT, INFECTION_PRESSURE_HIGH, INFECTION_PRESSURE_MOD,
     INFRA_STRESSED, SUPPLY_STRESSED_COST_MULT,
     REGULATORY_APPARATUS_COST_MULT, SURVEILLANCE_NETWORK_SCREENING_MULT,
-    ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     BARGAIN_BLOWHARD_FUNDING_COST, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST,
     BARGAIN_HARDLINER_FUNDING_COST,
@@ -23,7 +22,6 @@ use crate::state::{
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_HOSTILITY_THRESHOLD,
     DISCOURAGE_HOSP_PERSONNEL,
-    INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     MARTIAL_LAW_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
     NUCLEAR_ANNIHILATION_COST,
@@ -206,7 +204,6 @@ fn toggle_policy_inner(state: &mut WorldState, region_idx: usize, policy: Policy
         PolicyId::AntigenScreening => state.policies[region_idx].screening == ScreeningLevel::Antigen,
         PolicyId::MassRapidScreen => state.policies[region_idx].screening == ScreeningLevel::MassRapid,
         PolicyId::FieldHospital => state.regions[region_idx].hospital_level >= 2, // fully built = "active"
-        PolicyId::IntelStation => false,
         PolicyId::RebuildInfra => false, // action-based, never "active"
     };
     if !is_currently_active && !state.policy_unlocked(region_idx, policy) {
@@ -388,37 +385,6 @@ fn toggle_policy_inner(state: &mut WorldState, region_idx: usize, policy: Policy
                 }
             } else {
                 (Some(format!("{region_name} already has a Medical Center")), false)
-            }
-        }
-        // Intel Station / Advanced Intel: tiered per-region surveillance infrastructure
-        PolicyId::IntelStation => {
-            let region = &state.regions[region_idx];
-            if region.collapsed {
-                (Some(format!("{region_name} has collapsed. Cannot build.")), false)
-            } else if region.intel_level == 0 {
-                // Build Level 1: Intel Station
-                if state.resources.funding < INTEL_STATION_COST {
-                    (Some(format!("Not enough funding (need ¥{:.0})", INTEL_STATION_COST)), false)
-                } else if available_personnel < INTEL_STATION_PERSONNEL {
-                    (Some(format!("Need {} personnel to staff Intel Station", INTEL_STATION_PERSONNEL)), false)
-                } else {
-                    state.resources.funding -= INTEL_STATION_COST;
-                    state.regions[region_idx].intel_level = 1;
-                    (Some(format!("{region_name}: Intel Station operational (detects new pathogens at 3,000 local infections)")), true)
-                }
-            } else if region.intel_level == 1 {
-                // Upgrade to Level 2: Advanced Intel
-                if state.resources.funding < ADVANCED_INTEL_COST {
-                    (Some(format!("Not enough funding (need ¥{:.0})", ADVANCED_INTEL_COST)), false)
-                } else if available_personnel < (ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL) {
-                    (Some(format!("Need {} more personnel for Advanced Intel", ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL)), false)
-                } else {
-                    state.resources.funding -= ADVANCED_INTEL_COST;
-                    state.regions[region_idx].intel_level = 2;
-                    (Some(format!("{region_name}: Advanced Intel operational (detects at 1,000 infections, generates briefings)")), true)
-                }
-            } else {
-                (Some(format!("{region_name} already has Advanced Intel")), false)
             }
         }
         PolicyId::RebuildInfra => {
@@ -1044,7 +1010,6 @@ pub(super) fn enact_decree(state: &mut WorldState, decree: DecreeId, region_idx:
             state.regions[r_idx].collapsed = true;
             state.regions[r_idx].collapsed_at_tick = Some(state.tick);
             state.regions[r_idx].hospital_level = 0;
-            state.regions[r_idx].intel_level = 0;
             // Clear policies — this immediately frees all personnel assigned there
             if let Some(p) = state.policies.get_mut(r_idx) {
                 p.clear_all();

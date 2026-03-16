@@ -20,8 +20,6 @@ use crate::state::{
     NUCLEAR_ANNIHILATION_COST,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     MEDICAL_CENTER_COST, MEDICAL_CENTER_PERSONNEL,
-    INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
-    ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
     REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD,
     DecreeId, PolicyId, POLICY_COUNT,
@@ -174,24 +172,6 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
              0 => "25% lethality reduction, +10 co-op",
              1 => "40% lethality reduction, +25% medicine efficacy, +10 co-op",
              _ => "40% lethality reduction, +25% medicine efficacy",
-         },
-         None, 0.0),
-        (PolicyId::IntelStation,
-         match region.intel_level {
-             0 => "Build Intel Station",
-             1 => "Upgrade → Advanced Intel",
-             _ => "Advanced Intel (built)",
-         },
-         region.intel_level >= 2,
-         match region.intel_level {
-             0 => format!("¥{:.0} + {} pers.", INTEL_STATION_COST, INTEL_STATION_PERSONNEL),
-             1 => format!("¥{:.0} + {} pers.", ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL - INTEL_STATION_PERSONNEL),
-             _ => format!("{} pers. ongoing", ADVANCED_INTEL_PERSONNEL),
-         },
-         match region.intel_level {
-             0 => "Detects new pathogens at 3,000 local infections (vs. 10,000)",
-             1 => "Detects at 1,000 infections. Generates pre-detection briefings at 500.",
-             _ => "Early warning active. Pre-detection surveillance operational.",
          },
          None, 0.0),
         (PolicyId::RebuildInfra,
@@ -349,9 +329,6 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
             }
         } else if *policy_id == PolicyId::FieldHospital && region.hospital_level == 1 {
             // Hospital level 1 built — show [Lv1] not [OFF]
-            "[Lv1]"
-        } else if *policy_id == PolicyId::IntelStation && region.intel_level == 1 {
-            // Intel level 1 built — show [Lv1] not [OFF]
             "[Lv1]"
         } else {
             "[OFF]"

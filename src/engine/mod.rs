@@ -285,11 +285,8 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
         }
     }
 
-    // Disease detection — undetected diseases are revealed when enough infections are
-    // observed. There are two detection paths:
-    // 1. Global: total infected (all regions) >= DETECTION_THRESHOLD * screening multiplier.
-    // 2. Per-region intel: if a region with an Intel Station has enough LOCAL infections,
-    //    the disease is detected early. Thresholds: Basic=3,000, Advanced=1,000.
+    // Disease detection — undetected diseases are revealed when total infections
+    // across all regions reach the global detection threshold (scaled by screening).
     {
         let global_threshold = crate::state::DETECTION_THRESHOLD
             * new.effective_detection_multiplier();
@@ -297,32 +294,12 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
             if new.diseases[disease_idx].detected {
                 continue;
             }
-            let mut global_total: f64 = 0.0;
-            let mut detected = false;
-            let mut detected_via_advanced_intel = false;
-            for region in &new.regions {
-                let local: f64 = region.infections.iter()
-                    .filter(|inf| inf.disease_idx == disease_idx)
-                    .map(|inf| inf.infected)
-                    .sum();
-                global_total += local;
-                // Per-region intel detection
-                let intel_threshold = match region.intel_level {
-                    2 => 1_000.0,
-                    1 => 3_000.0,
-                    _ => f64::INFINITY, // no intel: don't trigger per-region
-                };
-                if local >= intel_threshold {
-                    detected = true;
-                    if region.intel_level >= 2 {
-                        detected_via_advanced_intel = true;
-                    }
-                }
-            }
+            let global_total: f64 = new.regions.iter()
+                .flat_map(|r| r.infections.iter())
+                .filter(|inf| inf.disease_idx == disease_idx)
+                .map(|inf| inf.infected)
+                .sum();
             if global_total >= global_threshold {
-                detected = true;
-            }
-            if detected {
                 let spawned_at = new.diseases[disease_idx].spawned_at_tick;
                 let silent_days = (new.tick.saturating_sub(spawned_at)) as f64
                     / crate::state::TICKS_PER_DAY;
@@ -335,14 +312,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
                 new.diseases[disease_idx].first_detected_regions = detection_regions;
                 new.diseases[disease_idx].detected_day = new.tick as f64 / crate::state::TICKS_PER_DAY;
                 new.diseases[disease_idx].detected = true;
-                // Advanced Intel grants immediate identification — reveals name and
-                // pathogen type without requiring field research.
-                if detected_via_advanced_intel {
-                    let current = new.diseases[disease_idx].knowledge;
-                    if current < crate::state::KNOWLEDGE_NAME {
-                        new.diseases[disease_idx].knowledge = crate::state::KNOWLEDGE_NAME;
-                    }
-                }
                 events.push(GameEvent::DiseaseDetected { disease_idx, silent_days });
                 // Schedule pathogen detection alert crisis. Fires immediately if no
                 // other crisis is active; otherwise queues as pending.
@@ -396,15 +365,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
         }
     }
 
-    // Advanced Intel briefings: warn about undetected diseases before they hit detection
-    // threshold. Advanced Intel (level 2) regions alert at 500 local infections — well
-    // before the 1,000 auto-detection threshold. Fires once per disease.
-    {
-        // Grow tracking vec if new diseases were spawned
-        while new.intel_pre_detection_briefed.len() < new.diseases.len() {
-            new.intel_pre_detection_briefed.push(false);
-        }
-    }
 
     // Fire pending crises immediately — no delay, no spacing.
     if new.active_crisis.is_none() && !new.pending_crises.is_empty() {
@@ -569,7 +529,6 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
             new.regions[i].collapsed = true;
             new.regions[i].collapsed_at_tick = Some(new.tick);
             new.regions[i].hospital_level = 0; // Hospital destroyed (per-region infrastructure)
-            new.regions[i].intel_level = 0; // Intel station destroyed (per-region infrastructure)
             // lab_level is intentionally NOT reset — it's global research infrastructure
             // Clear all policies in the collapsed region
             if let Some(policy) = new.policies.get_mut(i) {
@@ -5473,86 +5432,5 @@ mod tests {
         }
     }
 
-    #[test]
-    fn advanced_intel_grants_knowledge_boost_on_detection() {
-        // Set up a state with an undetected disease and an Advanced Intel station.
-        // When the disease reaches the intel detection threshold (1,000 infections),
-        // it should be detected AND receive a knowledge boost to KNOWLEDGE_NAME.
-        let mut state = AppState::new_default(42);
-
-        // Make the first disease undetected with 0 knowledge
-        state.diseases[0].detected = false;
-        state.diseases[0].knowledge = 0.0;
-
-        // Give region 0 Advanced Intel (level 2)
-        state.regions[0].intel_level = 2;
-
-        // Seed infections just above the Advanced Intel threshold (1,000)
-        let inf = state.regions[0].infections.iter_mut()
-            .find(|inf| inf.disease_idx == 0);
-        if let Some(inf) = inf {
-            inf.infected = 1_100.0;
-        } else {
-            state.regions[0].infections.push(RegionDiseaseState {
-                disease_idx: 0,
-                exposed: 0.0,
-                infected: 1_100.0,
-                dead: 0.0,
-                immune: 0.0,
-            });
-        }
-
-        // Run one tick — should trigger detection via Advanced Intel
-        let (new, tick_events) = tick(&state);
-
-        assert!(new.diseases[0].detected, "disease should be detected via Advanced Intel");
-        assert!(
-            (new.diseases[0].knowledge - crate::state::KNOWLEDGE_NAME).abs() < 0.01,
-            "Advanced Intel detection should grant KNOWLEDGE_NAME ({}) knowledge, got {}",
-            crate::state::KNOWLEDGE_NAME,
-            new.diseases[0].knowledge
-        );
-
-        // IntelAnalysis event was removed (non-actionable noise).
-        // The knowledge boost is the actionable outcome, verified above.
-    }
-
-    #[test]
-    fn normal_detection_does_not_grant_knowledge_boost() {
-        // When a disease is detected via global threshold (not intel),
-        // knowledge should remain at 0.
-        let mut state = AppState::new_default(42);
-
-        state.diseases[0].detected = false;
-        state.diseases[0].knowledge = 0.0;
-        // No intel stations anywhere
-        for r in &mut state.regions {
-            r.intel_level = 0;
-        }
-
-        // Seed infections above global threshold (10,000) across regions
-        for region in &mut state.regions {
-            if let Some(inf) = region.infections.iter_mut().find(|i| i.disease_idx == 0) {
-                inf.infected = 15_000.0;
-            } else {
-                region.infections.push(RegionDiseaseState {
-                    disease_idx: 0,
-                    exposed: 0.0,
-                    infected: 15_000.0,
-                    dead: 0.0,
-                    immune: 0.0,
-                });
-            }
-        }
-
-        let (new, _) = tick(&state);
-
-        assert!(new.diseases[0].detected, "disease should be detected via global threshold");
-        assert!(
-            new.diseases[0].knowledge < 0.01,
-            "normal detection should not grant knowledge boost, got {}",
-            new.diseases[0].knowledge
-        );
-    }
 
 }

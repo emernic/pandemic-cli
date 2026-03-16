@@ -95,26 +95,17 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
             } else {
                 // ── Identity & biology ──
                 let has_research_vector = disease.knowledge >= KNOWLEDGE_PARTIAL_STATS;
-                let has_intel = state.has_advanced_intel_on_disease(i);
-                let show_vector = has_research_vector || has_intel;
                 let mut id_spans: Vec<Span> = vec![
                     Span::styled(
                         format!("    {}", disease.pathogen_type.label()),
                         Style::default().fg(Color::Cyan),
                     ),
                 ];
-                if show_vector {
-                    let vector_color = if has_research_vector { Color::Yellow } else { Color::DarkGray };
+                if has_research_vector {
                     id_spans.push(Span::styled(
                         format!(" · {}", disease.transmission.label()),
-                        Style::default().fg(vector_color),
+                        Style::default().fg(Color::Yellow),
                     ));
-                    if !has_research_vector {
-                        id_spans.push(Span::styled(
-                            " [intel]",
-                            Style::default().fg(Color::DarkGray),
-                        ));
-                    }
                 }
                 if let Some(ref lineage) = disease.parent_lineage {
                     id_spans.push(Span::styled(
@@ -123,15 +114,6 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                     ));
                 }
                 lines.push(Line::from(id_spans));
-
-                // Intel assessment: show mutation risk when Advanced Intel is
-                // monitoring but full research knowledge isn't available yet.
-                if has_intel && !has_research_vector {
-                    lines.push(Line::from(Span::styled(
-                        format!("    Mutation risk: {} [intel]", disease.pathogen_type.mutation_risk_label()),
-                        Style::default().fg(Color::DarkGray),
-                    )));
-                }
 
                 // Special trait warnings on their own line
                 let warnings = disease_warnings(state, i);

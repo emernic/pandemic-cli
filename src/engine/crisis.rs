@@ -2341,7 +2341,6 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                     state.regions[i].collapsed = true;
                     state.regions[i].collapsed_at_tick = Some(state.tick);
                     state.regions[i].hospital_level = 0;
-                    state.regions[i].intel_level = 0;
                     if let Some(policy) = state.policies.get_mut(i) {
                         policy.clear_all();
                     }
