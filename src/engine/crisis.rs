@@ -1178,41 +1178,29 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 LoanLender::Governor { region_idx } => {
                     let region_name = state.regions.get(*region_idx)
                         .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-                    // Find the most expensive active policy in their region to cancel
-                    let policy_name = state.policies.get(*region_idx)
-                        .and_then(|p| {
-                            let traits = state.regions.get(*region_idx).map(|r| r.traits.as_slice()).unwrap_or(&[]);
-                            p.active_policy_costs(traits).into_iter()
-                                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-                                .map(|(policy, _)| policy.display_name().to_string())
-                        })
-                        .unwrap_or_else(|| "your most expensive policy".into());
                     CrisisEvent {
                         title: "Loan Called In".into(),
                         description: format!(
-                            "Gov. {lender_name} of {region_name} is calling in the emergency loan. \
-                             Outstanding balance: ¥{outstanding:.0}. \
-                             Payment is overdue. They want their money now.",
+                            "Gov. {lender_name} of {region_name} demands repayment of ¥{repay_amount:.0}.",
                         ),
                         options: vec![
                             if can_repay {
                                 CrisisOption {
                                     label: format!("Repay ¥{repay_amount:.0}"),
-                                    description: "Settle the debt. Gov. cooperation improves slightly.".into(),
+                                    description: "Clear the debt. Cooperation improves slightly.".into(),
                                     cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
                                 }
                             } else {
                                 CrisisOption {
-                                    label: format!("Repay ¥{repay_amount:.0} (INSUFFICIENT FUNDS)"),
-                                    description: format!("Need ¥{repay_amount:.0}, have ¥{:.0}. Cannot pay.", state.resources.funding),
+                                    label: format!("Repay (need ¥{repay_amount:.0}, have ¥{:.0})", state.resources.funding),
+                                    description: "Insufficient funds.".into(),
                                     cost: Some(CrisisCost { funding: repay_amount, personnel: 0, ..Default::default() }),
                                 }
                             },
                             CrisisOption {
                                 label: "Default".into(),
                                 description: format!(
-                                    "Gov. {lender_name} cancels your {policy_name} in {region_name} \
-                                     and cooperation drops 20.",
+                                    "Cooperation with Gov. {lender_name} drops 40.",
                                 ),
                                 cost: None,
                             },
@@ -2426,42 +2414,16 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
             }
             match lender {
                 LoanLender::Governor { region_idx } => {
-                    // Cancel most expensive policy in their region + cooperation drop
-                    let mut cancelled_name = None;
-                    if let Some(region) = state.regions.get(*region_idx) {
-                        let traits = region.traits.as_slice();
-                        if let Some(policy) = state.policies.get_mut(*region_idx) {
-                            if let Some((pid, _)) = policy.active_policy_costs(traits).into_iter()
-                                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-                            {
-                                if pid == crate::state::PolicyId::BasicScreening {
-                                    cancelled_name = Some(match policy.screening {
-                                        crate::state::ScreeningLevel::Basic => "Basic Screening",
-                                        crate::state::ScreeningLevel::Antigen => "Med Screening",
-                                        crate::state::ScreeningLevel::MassRapid => "Mass Screening",
-                                        crate::state::ScreeningLevel::None => "Screening",
-                                    }.to_string());
-                                    policy.screening = crate::state::ScreeningLevel::None;
-                                } else {
-                                    cancelled_name = Some(pid.display_name().to_string());
-                                    policy.set_bool(pid, false);
-                                }
-                            }
-                        }
-                    }
+                    // Heavy cooperation penalty — policy cancellation was too
+                    // easy to reverse so we use a pure cooperation hit instead.
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
+                        region.governor.cooperation = (region.governor.cooperation - 40.0).max(0.0);
                     }
                     let region_name = state.regions.get(*region_idx)
                         .map(|r| r.name.clone()).unwrap_or_else(|| "Unknown".into());
-                    match cancelled_name {
-                        Some(name) => format!(
-                            "Gov. {lender_name} defaulted. {name} cancelled in {region_name}. Co-Op −20.",
-                        ),
-                        None => format!(
-                            "Gov. {lender_name} defaulted. Co-Op −20 in {region_name}.",
-                        ),
-                    }
+                    format!(
+                        "Defaulted on Gov. {lender_name}'s loan. Co-Op −40 in {region_name}.",
+                    )
                 }
                 LoanLender::Corporation { .. } => {
                     // Personnel intimidation + chairman satisfaction smear campaign
