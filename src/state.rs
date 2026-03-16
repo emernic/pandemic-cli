@@ -2071,6 +2071,11 @@ pub const REBUILD_INFRA_COST_PER_POINT: f64 = 1000.0;
 /// Auto-rebuild threshold: auto-fires when any infrastructure stat drops below this.
 pub const REBUILD_INFRA_AUTO_THRESHOLD: f64 = 0.90;
 
+/// Funding buffer for auto-triggered spending (queued research, auto-repeat, auto-rebuild,
+/// auto-negotiate). Automated spending only fires when funding >= cost + buffer, so
+/// background automation doesn't drain the player's last ¥.
+pub const AUTO_SPENDING_BUFFER: f64 = 100.0;
+
 /// Healthcare: lethality multiplier when stressed (below 50%).
 pub const HEALTHCARE_STRESSED_LETHALITY: f64 = 2.0;
 /// Healthcare: lethality multiplier when critical (below 25%).
