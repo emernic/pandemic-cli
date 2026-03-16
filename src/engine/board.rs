@@ -510,6 +510,52 @@ pub(super) fn on_gdp_policy_enacted(state: &mut WorldState, region_idx: usize) {
     }
 }
 
+/// If the chairman is dead, promote the highest-satisfaction living corporate board member.
+/// Governor-members are not eligible — the chairman is always a corporate leader.
+/// Returns the new chairman's name if a promotion occurred.
+pub(super) fn maybe_promote_chairman(state: &mut WorldState) -> Option<String> {
+    // Check if the current chairman is dead
+    let dead_chair_idx = state.board_members.iter()
+        .position(|m| m.is_chairman && m.dead);
+    let dead_chair_idx = match dead_chair_idx {
+        Some(i) => i,
+        None => return None,
+    };
+
+    // Clear the flag on the dead chairman so there's never two is_chairman = true
+    state.board_members[dead_chair_idx].is_chairman = false;
+
+    // Find the best living corporate leader to promote
+    let best_idx = state.board_members.iter().enumerate()
+        .filter(|(_, m)| !m.dead && matches!(m.role, BoardRole::CorporateLeader { .. }))
+        .max_by(|(_, a), (_, b)| a.satisfaction.partial_cmp(&b.satisfaction).unwrap())
+        .map(|(i, _)| i);
+
+    let idx = match best_idx {
+        Some(i) => i,
+        None => return None, // no living corporate leaders remain
+    };
+
+    state.board_members[idx].is_chairman = true;
+    // Assign a personality if they don't have one (governor-members lack one, but
+    // corporate leaders always have one — this is just defensive)
+    if state.board_members[idx].personality.is_none() {
+        state.board_members[idx].personality = Some(BoardPersonality::Profiteer);
+    }
+    // Update name/title to reflect chairman status
+    if let BoardRole::CorporateLeader { corp_idx } = state.board_members[idx].role {
+        if let Some(corp) = state.corporations.get(corp_idx) {
+            state.board_members[idx].name = format!("Chairman {}", corp.director_surname);
+            state.board_members[idx].title = format!("Chairman of the Board, {}", corp.name);
+        }
+    }
+    // Reset hostility timer — new chairman gets a clean slate
+    state.chairman_hostile_since = None;
+
+    let name = state.board_members[idx].name.clone();
+    Some(name)
+}
+
 /// Apply satisfaction boost to Technocrat board members when research completes.
 pub(super) fn on_research_completed(state: &mut WorldState) {
     for member in state.board_members.iter_mut() {
@@ -835,5 +881,61 @@ mod tests {
             assert_eq!(before_count, after_count,
                 "buying unrelated sector should not add any modifier");
         }
+    }
+
+    #[test]
+    fn chairman_succession_promotes_living_corporate_leader() {
+        let mut state = crate::engine::new_game(42);
+
+        // Find the current chairman
+        let chair_idx = state.board_members.iter().position(|m| m.is_chairman)
+            .expect("should have a chairman");
+        let old_name = state.board_members[chair_idx].name.clone();
+
+        // Kill the chairman
+        state.board_members[chair_idx].dead = true;
+        state.chairman_hostile_since = Some(0); // simulate hostility timer
+
+        // Promote successor
+        let result = maybe_promote_chairman(&mut state);
+        assert!(result.is_some(), "should promote a new chairman");
+
+        let new_name = result.unwrap();
+        assert_ne!(new_name, old_name, "new chairman should be a different person");
+
+        // Verify exactly one living chairman exists
+        let living_chairmen: Vec<_> = state.board_members.iter()
+            .filter(|m| m.is_chairman && !m.dead)
+            .collect();
+        assert_eq!(living_chairmen.len(), 1, "should have exactly one living chairman");
+        assert!(living_chairmen[0].name.starts_with("Chairman "),
+            "new chairman name should start with 'Chairman'");
+
+        // Hostility timer should be reset
+        assert!(state.chairman_hostile_since.is_none(),
+            "hostility timer should reset on succession");
+    }
+
+    #[test]
+    fn no_succession_when_chairman_alive() {
+        let mut state = crate::engine::new_game(42);
+        let result = maybe_promote_chairman(&mut state);
+        assert!(result.is_none(), "should not promote when chairman is alive");
+    }
+
+    #[test]
+    fn no_succession_when_all_corporate_leaders_dead() {
+        let mut state = crate::engine::new_game(42);
+
+        // Kill all corporate leaders (including chairman)
+        for member in &mut state.board_members {
+            if matches!(member.role, BoardRole::CorporateLeader { .. }) {
+                member.dead = true;
+            }
+        }
+
+        let result = maybe_promote_chairman(&mut state);
+        assert!(result.is_none(),
+            "should not promote when no living corporate leaders remain");
     }
 }

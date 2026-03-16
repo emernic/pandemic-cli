@@ -334,6 +334,10 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                     (2, msg.clone(), msg, true)
                 }
             }
+            GameEvent::ChairmanSuccession { name } => {
+                let msg = format!("BOARD: {} promoted to Chairman of the Board", name);
+                (1, msg.clone(), msg, true)
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 
