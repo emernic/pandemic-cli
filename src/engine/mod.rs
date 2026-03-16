@@ -3174,7 +3174,7 @@ mod tests {
     fn crisis_generates_after_min_tick() {
         let mut state = AppState::new_default(42);
         // Run past CRISIS_MIN_TICK — a crisis should eventually appear.
-        // With CRISIS_INTERVAL=840, we need ~5000 ticks for P(no crisis) < 1%.
+        // With CRISIS_INTERVAL=1200, we need ~5000 ticks for P(no crisis) < 1%.
         let mut found_crisis = false;
         for _ in 0..5000 {
             state = state.with_world(tick(&state).0);

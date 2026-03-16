@@ -4649,8 +4649,8 @@ impl CrisisKind {
 
 /// Crisis events start appearing after this many ticks (~3 days).
 pub const CRISIS_MIN_TICK: u64 = (3.0 * TICKS_PER_DAY) as u64;
-/// Average ticks between crises (~7 days).
-pub const CRISIS_INTERVAL: u64 = (7.0 * TICKS_PER_DAY) as u64;
+/// Average ticks between crises (~10 days).
+pub const CRISIS_INTERVAL: u64 = (10.0 * TICKS_PER_DAY) as u64;
 /// Minimum ticks before the same crisis type can repeat (~15 days).
 pub const CRISIS_TYPE_COOLDOWN: u64 = (15.0 * TICKS_PER_DAY) as u64;
 

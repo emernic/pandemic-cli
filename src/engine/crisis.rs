@@ -209,8 +209,8 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
 
     match tag {
         // --- Early-game: bureaucratic/organizational (fade after day 30-50) ---
-        "personnel" | "trial"
-            => fade_out(30.0, 50.0),
+        "personnel" => fade_out(30.0, 50.0) * 0.5,
+        "trial" => fade_out(30.0, 50.0),
 
         // --- Late-game: survival and power struggles (ramp up day 24-40) ---
         "corporate_seizure" | "cult"
