@@ -961,16 +961,7 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState) {
             if !disease.detected || disease.hidden {
                 continue;
             }
-            // Distribute region's total estimate proportionally across diseases.
-            // Without antigen screening, exposed (incubating) people are invisible.
-            let total_real = if shows_exposed {
-                region.detected_infected(&state.diseases)
-            } else {
-                region.detected_symptomatic(&state.diseases)
-            };
-            let this_disease_total = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
-            let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
-            let screened_inf = region.estimated_infected * proportion;
+            let screened_inf = region.screened_infected_for_disease(inf.disease_idx, &state.diseases, shows_exposed);
             // Hide diseases whose screened presence is below display threshold.
             if screened_inf < 1.0 && inf.dead < 1.0 {
                 continue;

@@ -2511,6 +2511,28 @@ impl Region {
             .sum();
         self.estimated_infected * (visible_real / total_real)
     }
+
+    /// Screened infection estimate for a single disease in this region.
+    /// Distributes `estimated_infected` proportionally based on this disease's
+    /// share of total detected infections. `shows_exposed` controls whether
+    /// incubating (exposed) individuals are included in the proportion.
+    pub fn screened_infected_for_disease(&self, disease_idx: usize, diseases: &[Disease], shows_exposed: bool) -> f64 {
+        if self.estimated_infected <= 0.0 {
+            return 0.0;
+        }
+        let total_real: f64 = self.infections.iter()
+            .filter(|inf| diseases.get(inf.disease_idx).is_some_and(|d| d.detected))
+            .map(|inf| if shows_exposed { inf.exposed + inf.infected } else { inf.infected })
+            .sum();
+        if total_real <= 0.0 {
+            return 0.0;
+        }
+        let this_disease: f64 = self.infections.iter()
+            .filter(|inf| inf.disease_idx == disease_idx)
+            .map(|inf| if shows_exposed { inf.exposed + inf.infected } else { inf.infected })
+            .sum();
+        self.estimated_infected * (this_disease / total_real)
+    }
 }
 
 /// Per-disease state within a region: infection, deaths, and immunity.
