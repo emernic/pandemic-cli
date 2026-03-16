@@ -4738,11 +4738,11 @@ pub enum LabTab {
 
 impl LabTab {
     pub const ALL: [LabTab; 5] = [
+        LabTab::Infra,
         LabTab::Sequencing,
         LabTab::Screening,
         LabTab::Trials,
         LabTab::Reactors,
-        LabTab::Infra,
     ];
 
     pub fn label(self) -> &'static str {
@@ -4757,11 +4757,11 @@ impl LabTab {
 
     pub fn index(self) -> usize {
         match self {
-            LabTab::Sequencing => 0,
-            LabTab::Screening => 1,
-            LabTab::Trials => 2,
-            LabTab::Reactors => 3,
-            LabTab::Infra => 4,
+            LabTab::Infra => 0,
+            LabTab::Sequencing => 1,
+            LabTab::Screening => 2,
+            LabTab::Trials => 3,
+            LabTab::Reactors => 4,
         }
     }
 
@@ -4775,7 +4775,7 @@ impl LabTab {
 }
 
 /// Lab panel UI state machine.
-/// Full-screen tabbed view with Sequencing / Screening / Trials / Reactors / Infra tabs.
+/// Full-screen tabbed view with Infra / Sequencing / Screening / Trials / Reactors tabs.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LabUiState {
     /// Browsing items within the active tab.
@@ -5081,7 +5081,7 @@ impl UiState {
                 match panel {
                     Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                     Panel::Lab => {
-                        let tab = self.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                        let tab = self.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Infra);
                         self.lab_ui = Some(LabUiState::Browse { tab });
                     }
                     Panel::Policy => {
@@ -5108,7 +5108,7 @@ impl UiState {
             match panel {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
                 Panel::Lab => {
-                        let tab = self.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                        let tab = self.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Infra);
                         self.lab_ui = Some(LabUiState::Browse { tab });
                     }
                 Panel::Policy => {

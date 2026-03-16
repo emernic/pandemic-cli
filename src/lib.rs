@@ -318,7 +318,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
                             if new.ui.open_panel == Panel::Lab {
-                                let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                                let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Infra);
                                 new.ui.lab_ui = Some(LabUiState::Browse { tab });
                                 new.ui.panel_selection = 0;
                             }
@@ -343,7 +343,7 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::UpgradeLab if result.success => {
-                            let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                            let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Infra);
                             new.ui.lab_ui = Some(LabUiState::Browse { tab });
                             new.ui.panel_selection = 0;
                         }
@@ -1209,10 +1209,14 @@ mod tests {
         let state = apply_action(&state, &Action::JumpToItem { index: 2 });
         assert_eq!(state.ui.panel_selection, 0, "JumpToItem ignored when no panel open");
 
-        // Open research panel (flat list: items depend on game state)
+        // Open lab panel and switch to Sequencing tab (which has ResearchFlatItems)
         let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.panel_selection, 0);
-        let tab = state.ui.lab_ui.as_ref().unwrap().tab();
+        // Navigate to Sequencing tab (default is now Infra which uses InfraItems)
+        let mut state = state;
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
+        let tab = LabTab::Sequencing;
         let max = state.lab_tab_items(tab).len().saturating_sub(1);
 
         // Key '3' → index 2 → should select item at index 2 (or clamp)
@@ -1260,10 +1264,14 @@ mod tests {
     #[test]
     fn panel_hotkey_resets_to_top_when_deep_in_wizard() {
         let state = AppState::new_default(42);
-        // Open research → confirm first item → now at ConfirmProject
+        // Open lab → switch to Sequencing tab → confirm first item → now at ConfirmProject
         let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.open_panel, Panel::Lab);
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
+        // Navigate to Sequencing tab (default is Infra which doesn't use ConfirmProject)
+        let mut state = state;
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
         let state = apply_action(&state, &Action::Confirm);
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::ConfirmProject { .. })));
 

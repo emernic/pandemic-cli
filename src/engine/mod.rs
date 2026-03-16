@@ -1204,7 +1204,7 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
     use crate::action::Action;
     use crate::apply_action;
-    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, AppState, WorldState, GovernorPersonality, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, LabUiState};
+    use crate::state::{Authority, CrisisKind, DecreeId, DeployTarget, AppState, WorldState, GovernorPersonality, LabTab, MedicineUiState, OpsUiState, Panel, PathogenType, PolicyId, PolicyUiState, RegionDiseaseState, LabUiState};
 
     /// Helper: unlock all medicines and mark them tested (for tests that predate the research system).
     fn unlock_all_medicines(state: &mut WorldState) {
@@ -1826,9 +1826,10 @@ mod tests {
         let mut state = AppState::new_default(42);
         state = apply_action(&state, &Action::OpenLab);
 
-        // Opens to Sequencing tab by default
+        // Opens to Infra tab by default; switch to Sequencing for this test
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
-        assert_eq!(state.ui.panel_selection, 0);
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
 
         let tab = state.ui.lab_ui.as_ref().unwrap().tab();
         let items = state.lab_tab_items(tab);
@@ -1857,6 +1858,9 @@ mod tests {
 
         state = apply_action(&state, &Action::OpenLab);
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
+        // Switch to Sequencing tab (default is Infra which doesn't use ConfirmProject)
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
 
         // Confirm first available project → goes to ConfirmProject
         state = apply_action(&state, &Action::Confirm);
@@ -1878,6 +1882,9 @@ mod tests {
         let mut state = AppState::new_default(42);
         // Start a field research project first
         state = apply_action(&state, &Action::OpenLab);
+        // Switch to Sequencing tab (default is Infra)
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
         state = apply_action(&state, &Action::Confirm); // Confirm first available
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::ConfirmProject { .. })));
         state = apply_action(&state, &Action::Confirm); // Start it
@@ -1887,6 +1894,9 @@ mod tests {
         state = apply_action(&state, &Action::ClosePanel);
         state = apply_action(&state, &Action::OpenLab);
         assert!(matches!(state.ui.lab_ui, Some(LabUiState::Browse { .. })));
+        // Switch to Sequencing tab to find the active project
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
         let tab = state.ui.lab_ui.as_ref().unwrap().tab();
         let items = state.lab_tab_items(tab);
         // Find the active item's position in the tab's item list

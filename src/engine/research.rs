@@ -627,9 +627,12 @@ mod tests {
 
     #[test]
     fn research_identify_increases_knowledge() {
+        use crate::state::{LabTab, LabUiState};
         let mut state = AppState::new_default(42);
-        // Start identify project on disease 0 (first item in flat list)
+        // Start identify project on disease 0 (first item in Sequencing tab)
         state = apply_action(&state, &Action::OpenLab);
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
@@ -751,11 +754,14 @@ mod tests {
 
     #[test]
     fn research_requires_funding() {
+        use crate::state::{LabTab, LabUiState};
         let mut state = AppState::new_default(42);
         // Identify costs $350; set funding to $100 so it fails
         state.resources.funding = 100.0;
 
         state = apply_action(&state, &Action::OpenLab);
+        state.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Sequencing });
+        state.ui.panel_selection = 0;
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Try to start
         assert!(state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty(), "should not start without funding");
@@ -1244,8 +1250,10 @@ mod tests {
                 med.doses = 0.0;
             }
         }
-        // Start identify on disease 0 (first item in flat list)
+        // Start identify on disease 0 (first item in Sequencing tab)
         state = apply_action(&state, &Action::OpenLab);
+        state.ui.lab_ui = Some(crate::state::LabUiState::Browse { tab: crate::state::LabTab::Sequencing });
+        state.ui.panel_selection = 0;
         state = apply_action(&state, &Action::Confirm); // ConfirmProject
         state = apply_action(&state, &Action::Confirm); // Start
         assert!(!state.active_research.iter().filter(|p| p.kind.is_field_work()).collect::<Vec<_>>().is_empty());
