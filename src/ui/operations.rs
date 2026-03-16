@@ -261,19 +261,11 @@ fn render_browse(f: &mut Frame, area: Rect, state: &AppState) {
         } else {
             Color::Green
         };
-        let upkeep_per_day = state.resources.personnel as f64
-            * crate::state::PERSONNEL_UPKEEP_COST
-            * crate::state::TICKS_PER_DAY;
-
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(Color::Yellow)),
             Span::styled(
                 "Fire Personnel",
                 Style::default().fg(name_color).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("  ({} available, {} total, ¥{:.0}/day upkeep)", available, state.resources.personnel, upkeep_per_day),
-                Style::default().fg(Color::DarkGray),
             ),
         ]));
         lines.push(Line::from(vec![
