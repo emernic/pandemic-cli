@@ -4655,6 +4655,9 @@ pub struct UiState {
     /// First Enter press sets this; second Enter press sets `home_splash_done`.
     #[serde(default)]
     pub home_splash_revealed: bool,
+    /// Remembered tech-tree selection so the Research panel reopens where you left off.
+    #[serde(default)]
+    pub research_selection: usize,
 }
 
 impl Default for UiState {
@@ -4674,6 +4677,7 @@ impl Default for UiState {
             ledger_ui: None,
             home_splash_done: false,
             home_splash_revealed: false,
+            research_selection: 0,
         }
     }
 }
@@ -4721,6 +4725,10 @@ impl UiState {
     /// panel key resets to the top level instead of closing. Only closes when
     /// already at the top level.
     pub fn toggle_panel(&mut self, panel: Panel) {
+        // Save research selection before switching away
+        if self.open_panel == Panel::Research {
+            self.research_selection = self.panel_selection;
+        }
         if self.open_panel == panel {
             // Check if we're deeper than the top level — if so, reset to top
             let at_top = match panel {
@@ -4756,7 +4764,11 @@ impl UiState {
             // doesn't confuse code that checks sub-state (e.g. selection stabilization).
             self.clear_all_panel_substates();
             self.open_panel = panel;
-            self.panel_selection = 0;
+            self.panel_selection = if panel == Panel::Research {
+                self.research_selection
+            } else {
+                0
+            };
             // Once the player opens any panel, the home splash animation is done.
             self.home_splash_done = true;
             match panel {

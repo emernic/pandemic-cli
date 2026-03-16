@@ -888,6 +888,35 @@ mod tests {
     }
 
     #[test]
+    fn research_panel_remembers_selection() {
+        let state = AppState::new_default(42);
+
+        // Open research, navigate down
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.panel_selection, 0);
+        let state = apply_action(&state, &Action::SelectNext);
+        let sel = state.ui.panel_selection;
+        assert!(sel > 0, "should have moved selection down");
+
+        // Close research panel
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.open_panel, Panel::None);
+
+        // Reopen — should restore previous selection
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.open_panel, Panel::Research);
+        assert_eq!(state.ui.panel_selection, sel,
+            "research panel should remember previous selection");
+
+        // Switch directly to another panel and back
+        let state = apply_action(&state, &Action::OpenThreats);
+        assert_eq!(state.ui.open_panel, Panel::Threats);
+        let state = apply_action(&state, &Action::OpenResearch);
+        assert_eq!(state.ui.panel_selection, sel,
+            "research panel should remember selection after switching panels");
+    }
+
+    #[test]
     fn panel_hotkey_resets_to_top_when_deep_in_wizard() {
         let state = AppState::new_default(42);
         // Open research → confirm first item → now at ConfirmProject
