@@ -327,6 +327,19 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         }
     }
 
+    // Keybind hint at the bottom of the panel
+    if !state.diseases.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  [Enter] Hide/show threat  [Esc] Close",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        lines.push(Line::from(Span::styled(
+            "  [Esc] Close",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
     let block = Block::default()
         .title(" Threats ")
         .borders(Borders::ALL)
