@@ -1489,7 +1489,6 @@ mod tests {
 
     #[test]
     fn medicine_empty_doses_blocks_deployment() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
         let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
@@ -1529,7 +1528,6 @@ mod tests {
     #[test]
     fn medicine_zero_targets_refused() {
         use crate::state::DeployTarget;
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state);
         // Clear region 0 infections so we can test treating with zero targets
@@ -1621,7 +1619,6 @@ mod tests {
         { let d = state.world.diseases[0].clone(); state.world.diseases.push(d); };
         state.diseases[1].detected = true;
 
-        let mut events: Vec<GameEvent> = Vec::new();
         let doses_before = state.medicines[med_idx].doses;
         // Deploy directly via engine API
         let (ok, _msg) = medicine::deploy_medicine(
@@ -1641,7 +1638,6 @@ mod tests {
         // Ensure infections exist (therapeutics need infected population to deploy)
         state.regions[0].get_or_create_infection(0).infected = 50_000.0;
 
-        let mut events: Vec<GameEvent> = Vec::new();
         let funding_before = state.resources.funding;
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, med_idx, 0,
@@ -1654,7 +1650,6 @@ mod tests {
 
     #[test]
     fn tested_medicine_deploys_immediately() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
         let mut state = AppState::new_default(42);
         unlock_all_medicines(&mut state); // tested
@@ -2546,8 +2541,7 @@ mod tests {
         state.resources.funding = 15.0;
         // Start at a realistic tick so the rate limit (once per day) allows firing.
         state.tick = TICKS_PER_DAY as u64;
-        let tick_events;
-        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
+        let (_world, tick_events) = tick(&state);
         assert!(
             tick_events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should emit FundingWarning when runway is low"
@@ -2559,8 +2553,7 @@ mod tests {
         let mut state = AppState::new_default(42);
         state.policies[0].travel_ban = true; // $1/tick
         state.resources.funding = 1000.0; // Plenty of runway after deduction
-        let tick_events;
-        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
+        let (_world, tick_events) = tick(&state);
         assert!(
             !tick_events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should not warn when funding is high"
@@ -2574,8 +2567,7 @@ mod tests {
         // Even with zero funding, warning shouldn't fire because there's
         // nothing to suspend.
         state.resources.funding = 0.0;
-        let tick_events;
-        { let r = tick(&state); state = state.with_world(r.0); tick_events = r.1; }
+        let (_world, tick_events) = tick(&state);
         assert!(
             !tick_events.iter().any(|e| matches!(e, GameEvent::FundingWarning)),
             "should not warn about policy suspension when no policies are active"
@@ -2741,7 +2733,7 @@ mod tests {
     fn new_disease_emerges_mid_game() {
         let mut state = AppState::new_default(42);
         let initial_diseases = state.diseases.len();
-        let initial_medicines = state.medicines.len();
+        let _initial_medicines = state.medicines.len();
 
         // Fast-forward past emergence threshold by running many ticks.
         // With EMERGENCE_MIN_TICK=840 and EMERGENCE_CHANCE=0.0007,
@@ -4173,7 +4165,6 @@ mod tests {
 
     #[test]
     fn deploy_cooldown_blocks_repeat_deployment() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         // Setup: unlock a medicine, seed infection, give funds
         let disease_idx = 0;
@@ -4247,7 +4238,7 @@ mod tests {
         assert_eq!(new_state.death_milestone_tier[0], 1, "should set alert level to 1");
 
         // Second tick should NOT re-fire the same threshold
-        let (state2, tick_events2) = tick(&new_state);
+        let (_state2, tick_events2) = tick(&new_state);
         let escalation2 = tick_events2.iter().find(|e|
             matches!(e, GameEvent::ThreatEscalation { .. })
         );
@@ -4766,7 +4757,7 @@ mod tests {
         assert!(!unlocked_events.is_empty(), "should emit DecreeUnlocked event when crossing threshold");
 
         // Running tick again should NOT re-emit (already unlocked)
-        let (new2, tick_events2) = tick(&new);
+        let (_new2, tick_events2) = tick(&new);
         let unlocked_events2: Vec<_> = tick_events2.iter()
             .filter(|e| matches!(e, GameEvent::DecreeUnlocked { .. }))
             .collect();

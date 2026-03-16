@@ -2084,7 +2084,6 @@ mod tests {
 
     #[test]
     fn standing_order_auto_quarantine_does_not_fire_below_threshold() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = AppState::new_default(42);
         state.resources.authority = Authority::Maximum;
         state.standing_orders.auto_quarantine_at_high = true;
@@ -2444,7 +2443,6 @@ mod tests {
 
     #[test]
     fn auto_rebuild_skips_when_infra_above_threshold() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
         let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -2483,7 +2481,6 @@ mod tests {
 
     #[test]
     fn auto_negotiate_skips_when_cooperation_above_threshold() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::{TICKS_PER_DAY, AUTO_NEGOTIATE_THRESHOLD};
         let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
@@ -2500,7 +2497,6 @@ mod tests {
 
     #[test]
     fn auto_negotiate_skips_dead_governor() {
-        let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TICKS_PER_DAY;
         let mut state = AppState::new_default(42);
         state.resources.funding = 10_000.0;
