@@ -376,8 +376,8 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("Auto-restarted: {}", kind.display_label(&state.diseases, &state.medicines));
                 (8, msg.clone(), msg)
             }
-            GameEvent::CuedResearchStarted { tech } => {
-                let msg = format!("Cued research started: {}", tech.name());
+            GameEvent::QueuedResearchStarted { tech } => {
+                let msg = format!("Queued research started: {}", tech.name());
                 (3, msg.clone(), msg)
             }
             GameEvent::DeployBlocked { medicine_idx } => {

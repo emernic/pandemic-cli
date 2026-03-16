@@ -516,7 +516,7 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
         let all = state.all_available_projects();
         let target_kind = ResearchKind::BasicResearch { tech };
         if let Some(project_idx) = all.iter().position(|k| *k == target_kind) {
-            // Check if we can actually afford it — if not, cue instead
+            // Check if we can actually afford it — if not, queue instead
             let (personnel, _, funding) = state.effective_costs(&all[project_idx]);
             if state.resources.funding >= funding && state.personnel_available() >= personnel {
                 return Some(GameCommand::StartResearch { project_idx, double_personnel: false });
@@ -524,8 +524,8 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
         }
     }
 
-    // Can't start yet (locked, insufficient funding/personnel) — toggle cue
-    Some(GameCommand::ToggleCueTech { tech })
+    // Can't start yet (locked, insufficient funding/personnel) — toggle queue
+    Some(GameCommand::ToggleQueueTech { tech })
 }
 
 fn handle_medicine_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand> {
