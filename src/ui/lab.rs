@@ -808,23 +808,8 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     lines.push(Line::from(""));
-
-    // ── Confirm button ──
-    let confirm_selected = sel == flat_idx;
-    let confirm_style = if confirm_selected {
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::White)
-    };
-    let confirm_marker = if confirm_selected { "▶ " } else { "  " };
     lines.push(Line::from(Span::styled(
-        format!("  {}[Enter] Begin Run", confirm_marker),
-        confirm_style,
-    )));
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Esc] Cancel",
+        "  [Enter] Begin Run  [↑/↓] Select  [Esc] Cancel",
         Style::default().fg(Color::DarkGray),
     )));
 

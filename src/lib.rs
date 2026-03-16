@@ -1038,7 +1038,6 @@ fn sync_screening_form_selection(state: &mut AppState) {
                     unlocked.iter().position(|u| u == s)
                         .map(|pos| (None, None, Some(pos)))
                 }
-                ScreeningFormItem::Confirm => None,
             }
         })
     } else {
