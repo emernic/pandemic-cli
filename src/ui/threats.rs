@@ -251,12 +251,28 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                     }
                 }
 
-                // Region spread
+                // Region spread — only count regions where screening has detected
+                // meaningful infections, to avoid leaking disease presence.
                 let order = grid_reading_order(state.regions.len());
                 let affected: Vec<&str> = order.iter()
-                    .filter_map(|&idx| state.regions.get(idx))
-                    .filter(|r| r.disease_state(i).is_some_and(|inf| inf.infected > 0.0))
-                    .map(|r| r.name.as_str())
+                    .filter_map(|&idx| state.regions.get(idx).map(|r| (idx, r)))
+                    .filter(|&(ri, r)| {
+                        if r.estimated_infected <= 0.0 { return false; }
+                        let shows_exposed = state.screening_shows_exposed(ri);
+                        let total_real = if shows_exposed {
+                            r.detected_infected(&state.diseases)
+                        } else {
+                            r.detected_symptomatic(&state.diseases)
+                        };
+                        if total_real <= 0.0 { return false; }
+                        let this_disease: f64 = r.infections.iter()
+                            .filter(|inf| inf.disease_idx == i)
+                            .map(|inf| if shows_exposed { inf.exposed + inf.infected } else { inf.infected })
+                            .sum();
+                        let screened = r.estimated_infected * (this_disease / total_real);
+                        screened >= 1.0
+                    })
+                    .map(|(_, r)| r.name.as_str())
                     .collect();
                 let spread_color = if affected.len() >= 4 { Color::Red }
                     else if affected.len() >= 2 { Color::Yellow }
