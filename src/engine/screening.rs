@@ -79,16 +79,12 @@ pub(super) fn start_screening(
 
 /// Advance all active screening runs by one tick. Handle completions.
 pub(super) fn tick_screening(state: &mut WorldState, events: &mut Vec<GameEvent>) {
-    let lab_mult = state.lab_speed_multiplier();
-    let biotech_bonus = (0..state.regions.len())
-        .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
-        .fold(0.0_f64, f64::max);
-    let biotech_mult = 1.0 + crate::state::CorporationSector::Biotech.max_bonus_pct() / 100.0 * biotech_bonus;
+    let infra_mult = state.research_infra_multiplier();
 
     // Advance progress on all runs
     for run in &mut state.screening_runs {
         let speed = crate::state::personnel_speed(run.personnel_assigned, run.run_size.personnel());
-        run.progress += speed * lab_mult * biotech_mult;
+        run.progress += speed * infra_mult;
 
         // Generate hits incrementally as wells are tested
         let wells_now = run.wells_tested();
