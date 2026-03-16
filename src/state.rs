@@ -4782,9 +4782,10 @@ pub enum LabUiState {
     /// Confirming a lab upgrade before purchasing.
     ConfirmLabUpgrade { tab: LabTab },
     /// Screening configuration form: single page showing disease, modality,
-    /// and run size all at once. Each section remembers its selection
-    /// independently. `panel_selection` tracks the active field (0=disease,
-    /// 1=modality, 2=run size, 3=confirm).
+    /// and run size all at once. `panel_selection` is a flat index across all
+    /// selectable items (diseases, then unlocked modalities, then unlocked
+    /// sizes, then confirm). The per-section fields below remember the
+    /// player's choice in each section as the cursor moves between them.
     ScreeningConfigForm {
         /// Index into screening_eligible_diseases()
         disease_sel: usize,
