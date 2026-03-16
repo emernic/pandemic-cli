@@ -1062,7 +1062,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
     for (i, reactor) in state.reactors.iter().enumerate() {
         let selected = state.ui.panel_selection == i;
         if selected { selected_line = Some(lines.len()); }
-        render_reactor_vessel(&mut lines, reactor, selected, state);
+        render_reactor_vessel(&mut lines, reactor, i, selected, state);
     }
 
     // Buy reactor button (at index == reactor_count)
@@ -1104,7 +1104,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Render a single reactor vessel as ASCII art.
-fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state::Reactor, selected: bool, state: &AppState) {
+fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state::Reactor, reactor_idx: usize, selected: bool, state: &AppState) {
     let marker = if selected { "▶ " } else { "  " };
 
     let (med_name, batch_progress_pct, status_line) = if let Some(med_idx) = reactor.medicine_idx {
@@ -1171,6 +1171,8 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
     // Vessel body rows (bottom-up fill)
     // Active batch: raw material (░/▒) fills bottom 2/3, solid (▓/█) replaces from bottom as batch progresses
     // Idle/empty: vessel is empty
+    // Active reactors show bubbles rising through the liquid.
+    let vessel_width = 9;
     for row in 0..vessel_height {
         let row_from_bottom = vessel_height - 1 - row;
         let (fill_char, fill_color) = if let Some(progress) = batch_progress_pct {
@@ -1192,13 +1194,49 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
             // Idle or no medicine — empty vessel
             (' ', Color::DarkGray)
         };
-        let fill_str: String = std::iter::repeat(fill_char).take(9).collect();
-        lines.push(Line::from(vec![
+
+        // Build the fill content, injecting bubble characters for active reactors
+        let is_filled_row = batch_progress_pct.is_some() && row_from_bottom < max_fill_rows;
+        let mut fill_chars: Vec<(char, Color)> = vec![(fill_char, fill_color); vessel_width];
+
+        if is_filled_row && is_active {
+            // Bubbles rise upward: use tick to shift bubble positions over time.
+            // Each reactor gets a unique offset so bubbles don't synchronize.
+            let tick = state.world.tick as usize;
+            let seed = reactor_idx.wrapping_mul(7);
+            // Bubbles rise by shifting row_from_bottom with tick
+            // Two bubble columns per reactor, at pseudo-random x positions
+            let bubble_chars = ['°', '·', '○'];
+            for b in 0..2 {
+                // x position: fixed per reactor+bubble, slowly drifts
+                let x = (seed.wrapping_add(b * 4).wrapping_add(tick / 3)) % vessel_width;
+                // y phase: bubble appears at this row every few ticks
+                let phase = (tick.wrapping_add(seed).wrapping_add(b * 3)) % (vessel_height + 2);
+                if phase == row_from_bottom {
+                    let bc = bubble_chars[(tick.wrapping_add(b)) % bubble_chars.len()];
+                    fill_chars[x] = (bc, Color::White);
+                }
+            }
+        }
+
+        let mut spans = vec![
             Span::raw("     "),
             Span::styled(side_l.to_string(), top_style),
-            Span::styled(fill_str, Style::default().fg(fill_color)),
-            Span::styled(side_r.to_string(), top_style),
-        ]));
+        ];
+        // Merge consecutive chars with the same color into single spans
+        let mut run_start = 0;
+        while run_start < fill_chars.len() {
+            let color = fill_chars[run_start].1;
+            let mut run_end = run_start + 1;
+            while run_end < fill_chars.len() && fill_chars[run_end].1 == color {
+                run_end += 1;
+            }
+            let s: String = fill_chars[run_start..run_end].iter().map(|(c, _)| c).collect();
+            spans.push(Span::styled(s, Style::default().fg(color)));
+            run_start = run_end;
+        }
+        spans.push(Span::styled(side_r.to_string(), top_style));
+        lines.push(Line::from(spans));
     }
 
     // Vessel bottom
