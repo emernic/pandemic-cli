@@ -23,12 +23,12 @@ use crate::state::{
     INTEL_STATION_COST, INTEL_STATION_PERSONNEL,
     ADVANCED_INTEL_COST, ADVANCED_INTEL_PERSONNEL,
     SCREENING_BASIC_COST, SCREENING_ANTIGEN_COST, SCREENING_MASS_RAPID_COST,
-    REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR,
+    REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD,
     DecreeId, PolicyId, POLICY_COUNT,
     CONSCRIPT_PERSONNEL_GAIN, CONSCRIPT_INCOME_PENALTY,
     SACRIFICE_INCOME_BONUS, FORTIFY_INFRA_PENALTY,
     COUNTERMEASURE_KILL_FRACTION, COUNTERMEASURE_SPREAD_WITHIN_MULT, COUNTERMEASURE_SPREAD_MULT,
-    MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
+    MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS, AUTO_NEGOTIATE_THRESHOLD,
     policy_display_order, NEGOTIATE_COST, NEGOTIATE_COOPERATION_GAIN,
     BARGAIN_COOPERATION_GAIN, BARGAIN_BLOWHARD_COOPERATION_GAIN,
     BARGAIN_BUFFOON_APPROVAL_COST, BARGAIN_BLOWHARD_FUNDING_COST,
@@ -410,9 +410,9 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
         // Dedicated auto-rebuild hint line (matches auto-negotiate hint style)
         if *policy_id == PolicyId::RebuildInfra {
             let auto_hint = if policy.auto_rebuild_infra {
-                "[X] Auto: ON (rebuilds when infra < 90%)"
+                format!("[X] Auto: ON (rebuilds when infra < {:.0}%)", REBUILD_INFRA_AUTO_THRESHOLD * 100.0)
             } else {
-                "[X] Auto: OFF"
+                "[X] Auto: OFF".to_string()
             };
             lines.push(Line::from(vec![
                 Span::raw("      "),
@@ -559,9 +559,9 @@ fn render_manage(state: &AppState, region_idx: usize) -> (String, Vec<Line<'stat
             }
             // X hotkey hint for auto-negotiate
             let auto_hint = if auto_negotiate {
-                "[X] Auto: ON (negotiates when co-op < 50)"
+                format!("[X] Auto: ON (negotiates when co-op < {:.0})", AUTO_NEGOTIATE_THRESHOLD)
             } else {
-                "[X] Auto: OFF"
+                "[X] Auto: OFF".to_string()
             };
             lines.push(Line::from(vec![
                 Span::raw("      "),
