@@ -8,51 +8,53 @@ use crate::state::{
 };
 
 /// Start a research project. Pure game logic — does NOT modify UI state.
-/// `project_idx` indexes into `state.all_available_projects()`.
+/// Takes a `ResearchKind` directly rather than an index, so the caller doesn't need
+/// to worry about index stability across dynamic list rebuilds.
 ///
 /// Returns (success, message).
-pub(super) fn start_research(state: &mut WorldState, project_idx: usize, double_personnel: bool) -> (bool, Option<String>) {
+pub(super) fn start_research(state: &mut WorldState, kind: &ResearchKind, double_personnel: bool) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
 
+    // Verify this project is actually still available
     let projects = state.all_available_projects();
-
-    if let Some(kind) = projects.get(project_idx) {
-        let (base_personnel, duration, funding_cost) = state.effective_costs(kind);
-        let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
-
-        if state.resources.funding < funding_cost {
-            return (false, Some(super::medicine::insufficient_funds_message(funding_cost, state.resources.funding)));
-        }
-        if state.personnel_available() < personnel {
-            return (false, Some(format!(
-                "Need {} personnel, only {} available",
-                personnel, state.personnel_available(),
-            )));
-        }
-        state.resources.funding -= funding_cost;
-        // Clinical trial speed modifier: Human Trials decree
-        let effective_duration = if matches!(kind, ResearchKind::ClinicalTrial { .. }) {
-            let mut d = duration;
-            if state.enacted_decrees.authorize_human_trials {
-                d *= crate::state::HUMAN_TRIALS_SPEED;
-            }
-            d
-        } else {
-            duration
-        };
-        let project = ResearchProject {
-            kind: kind.clone(),
-            progress: 0.0,
-            required_ticks: effective_duration,
-            personnel_assigned: personnel,
-        };
-
-        state.active_research.push(project);
-        return (true, None);
+    if !projects.contains(kind) {
+        return (false, Some("Project is no longer available".into()));
     }
-    (false, None)
+
+    let (base_personnel, duration, funding_cost) = state.effective_costs(kind);
+    let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
+
+    if state.resources.funding < funding_cost {
+        return (false, Some(super::medicine::insufficient_funds_message(funding_cost, state.resources.funding)));
+    }
+    if state.personnel_available() < personnel {
+        return (false, Some(format!(
+            "Need {} personnel, only {} available",
+            personnel, state.personnel_available(),
+        )));
+    }
+    state.resources.funding -= funding_cost;
+    // Clinical trial speed modifier: Human Trials decree
+    let effective_duration = if matches!(kind, ResearchKind::ClinicalTrial { .. }) {
+        let mut d = duration;
+        if state.enacted_decrees.authorize_human_trials {
+            d *= crate::state::HUMAN_TRIALS_SPEED;
+        }
+        d
+    } else {
+        duration
+    };
+    let project = ResearchProject {
+        kind: kind.clone(),
+        progress: 0.0,
+        required_ticks: effective_duration,
+        personnel_assigned: personnel,
+    };
+
+    state.active_research.push(project);
+    (true, None)
 }
 
 
@@ -462,12 +464,9 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     continue;
                 }
             }
-            let projects = state.all_available_projects();
-            if let Some(idx) = projects.iter().position(|k| k == &project.kind) {
-                let (ok, _) = start_research(state, idx, false);
-                if ok {
-                    events.push(GameEvent::ResearchAutoRestarted { kind: project.kind.clone() });
-                }
+            let (ok, _) = start_research(state, &project.kind, false);
+            if ok {
+                events.push(GameEvent::ResearchAutoRestarted { kind: project.kind.clone() });
             }
         }
     }
@@ -489,16 +488,13 @@ fn try_auto_repeat(state: &mut WorldState, events: &mut Vec<GameEvent>) {
                 continue;
             }
         }
-        let projects = state.all_available_projects();
-        if let Some(idx) = projects.iter().position(|k| k == kind) {
-            let (_, _, cost) = state.effective_costs(&projects[idx]);
-            if state.resources.funding < cost {
-                continue;
-            }
-            let (ok, _) = start_research(state, idx, false);
-            if ok {
-                events.push(GameEvent::ResearchAutoRestarted { kind: kind.clone() });
-            }
+        let (_, _, cost) = state.effective_costs(kind);
+        if state.resources.funding < cost {
+            continue;
+        }
+        let (ok, _) = start_research(state, kind, false);
+        if ok {
+            events.push(GameEvent::ResearchAutoRestarted { kind: kind.clone() });
         }
     }
 }
@@ -527,14 +523,11 @@ fn try_queued_starts(state: &mut WorldState, events: &mut Vec<GameEvent>) {
         }
 
         // Try to start
-        let projects = state.all_available_projects();
         let target_kind = ResearchKind::BasicResearch { tech: *tech };
-        if let Some(idx) = projects.iter().position(|k| *k == target_kind) {
-            let (ok, _) = start_research(state, idx, false);
-            if ok {
-                state.queued_techs.retain(|t| t != tech);
-                events.push(GameEvent::QueuedResearchStarted { tech: *tech });
-            }
+        let (ok, _) = start_research(state, &target_kind, false);
+        if ok {
+            state.queued_techs.retain(|t| t != tech);
+            events.push(GameEvent::QueuedResearchStarted { tech: *tech });
         }
     }
 }
@@ -1029,7 +1022,8 @@ mod tests {
         // With no capacity limits, a 4th project should start if we have resources
         let available = state.all_available_projects();
         assert!(!available.is_empty(), "should still have available projects with 3 active");
-        let (ok, _msg) = super::start_research(&mut state, 0, false);
+        let first_available = available[0].clone();
+        let (ok, _msg) = super::start_research(&mut state, &first_available, false);
         assert!(ok, "should start a 4th project — no capacity limit, only personnel/funding");
         assert!(state.active_research.len() >= 4, "should have 4+ active projects");
     }

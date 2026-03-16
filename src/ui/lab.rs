@@ -73,8 +73,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                 render_tab_content(f, chunks[1], state, *tab);
             }
         }
-        LabUiState::ConfirmProject { project_idx, double_personnel, .. } => {
-            render_confirm(f, chunks[1], state, *project_idx, *double_personnel);
+        LabUiState::ConfirmProject { kind, double_personnel, .. } => {
+            render_confirm(f, chunks[1], state, kind, *double_personnel);
         }
         LabUiState::ConfirmLabUpgrade { .. } => {
             render_confirm_lab_upgrade(f, chunks[1], state);
@@ -377,11 +377,11 @@ fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind,
     lines.push(Line::from(""));
 }
 
-fn render_confirm(f: &mut Frame, area: Rect, state: &AppState, project_idx: usize, double_personnel: bool) {
+fn render_confirm(f: &mut Frame, area: Rect, state: &AppState, kind: &ResearchKind, double_personnel: bool) {
     let mut lines: Vec<Line> = Vec::new();
-    let projects = state.all_available_projects();
 
-    if let Some(kind) = projects.get(project_idx) {
+    // Verify the project is still available; if not, show a cancellation message
+    if state.all_available_projects().contains(kind) {
         let (base_personnel, ticks, funding) = state.effective_costs(kind);
         let personnel = if double_personnel { base_personnel * 2 } else { base_personnel };
         let has_personnel = state.personnel_available() >= personnel;
@@ -459,6 +459,15 @@ fn render_confirm(f: &mut Frame, area: Rect, state: &AppState, project_idx: usiz
                 Style::default().fg(Color::DarkGray),
             )));
         }
+    } else {
+        lines.push(Line::from(Span::styled(
+            "  Project no longer available",
+            Style::default().fg(Color::Red),
+        )));
+        lines.push(Line::from(Span::styled(
+            "  [Esc] Back",
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     let block = Block::default()

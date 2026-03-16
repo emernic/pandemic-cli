@@ -865,8 +865,8 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
                 medicine::deploy_medicine(state, *medicine_idx, *region_idx, target.clone(), &mut events);
             CommandResult { message: msg, success, events: Vec::new() }
         }
-        GameCommand::StartResearch { project_idx, double_personnel } => {
-            let (ok, msg) = research::start_research(state, *project_idx, *double_personnel);
+        GameCommand::StartResearch { kind, double_personnel } => {
+            let (ok, msg) = research::start_research(state, kind, *double_personnel);
             CommandResult { message: msg, success: ok, events: Vec::new() }
         }
         GameCommand::StartScreening { disease_idx, modality, run_size } => {
@@ -2042,13 +2042,13 @@ mod tests {
                         ResearchKind::GenomicSequencing { .. } => 4,
                         _ => 5,
                     });
-                    if let Some((idx, kind)) = best {
+                    if let Some((_idx, kind)) = best {
                         let (personnel, _, cost_funding) = kind.costs(&state.medicines);
                         if state.resources.funding >= cost_funding + 200.0
                             && state.personnel_available() >= personnel
                         {
                             execute_command(&mut state, &GameCommand::StartResearch {
-                                project_idx: idx, double_personnel: false,
+                                kind: kind.clone(), double_personnel: false,
                             });
                         } else {
                             break;
@@ -2499,7 +2499,8 @@ mod tests {
         state.resources.personnel = 25;
         // Start a research project to tie up some personnel
         state.resources.authority = Authority::Maximum;
-        let _ = research::start_research(&mut state, 0, false);
+        let first_kind = state.all_available_projects()[0].clone();
+        let _ = research::start_research(&mut state, &first_kind, false);
         let available = state.personnel_available();
         assert!(available < 25, "some personnel should be busy");
         let result = execute_command(&mut state, &GameCommand::FirePersonnel { count: 100 });

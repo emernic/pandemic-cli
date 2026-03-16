@@ -600,13 +600,13 @@ fn handle_research_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCom
 
     // If prerequisites met and project is available, start immediately
     if tech.prerequisites_met(&state.world) {
-        let all = state.all_available_projects();
         let target_kind = ResearchKind::BasicResearch { tech };
-        if let Some(project_idx) = all.iter().position(|k| *k == target_kind) {
+        let all = state.all_available_projects();
+        if all.contains(&target_kind) {
             // Check if we can actually afford it — if not, queue instead
-            let (personnel, _, funding) = state.effective_costs(&all[project_idx]);
+            let (personnel, _, funding) = state.effective_costs(&target_kind);
             if state.resources.funding >= funding && state.personnel_available() >= personnel {
-                return Some(GameCommand::StartResearch { project_idx, double_personnel: false });
+                return Some(GameCommand::StartResearch { kind: target_kind, double_personnel: false });
             }
         }
     }
@@ -660,12 +660,14 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 ResearchFlatItem::Active(_) => {}
                 // Available projects: go to confirm screen
                 ResearchFlatItem::Available(project_idx) => {
-                    ui.lab_ui = Some(LabUiState::ConfirmProject {
-                        tab,
-                        project_idx: *project_idx,
-                        double_personnel: false,
-                    });
-                    ui.panel_selection = 0;
+                    if let Some(kind) = state.all_available_projects().get(*project_idx).cloned() {
+                        ui.lab_ui = Some(LabUiState::ConfirmProject {
+                            tab,
+                            kind,
+                            double_personnel: false,
+                        });
+                        ui.panel_selection = 0;
+                    }
                 }
                 // Full stockpile: Enter is a no-op
                 ResearchFlatItem::FullStockpile(_) => {}
@@ -690,8 +692,13 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             }
             None
         }
-        Some(LabUiState::ConfirmProject { project_idx, double_personnel, .. }) => {
-            Some(GameCommand::StartResearch { project_idx, double_personnel })
+        Some(LabUiState::ConfirmProject { kind, double_personnel, .. }) => {
+            // If the project is no longer available, cancel gracefully
+            if state.all_available_projects().contains(&kind) {
+                Some(GameCommand::StartResearch { kind, double_personnel })
+            } else {
+                None
+            }
         }
         Some(LabUiState::ConfirmLabUpgrade { .. }) => {
             Some(GameCommand::UpgradeLab)
@@ -791,16 +798,12 @@ fn handle_infra_confirm(ui: &mut UiState, state: &AppState) -> Option<GameComman
             None
         }
         InfraItem::TrainPersonnel => {
-            // Find the index in all_available_projects for TrainPersonnel
-            let available = state.all_available_projects();
-            if let Some(idx) = available.iter().position(|k| matches!(k, ResearchKind::TrainPersonnel)) {
-                ui.lab_ui = Some(LabUiState::ConfirmProject {
-                    tab: LabTab::Infra,
-                    project_idx: idx,
-                    double_personnel: false,
-                });
-                ui.panel_selection = 0;
-            }
+            ui.lab_ui = Some(LabUiState::ConfirmProject {
+                tab: LabTab::Infra,
+                kind: ResearchKind::TrainPersonnel,
+                double_personnel: false,
+            });
+            ui.panel_selection = 0;
             None
         }
         InfraItem::FirePersonnel => {
