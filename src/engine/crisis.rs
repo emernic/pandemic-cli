@@ -1011,15 +1011,20 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         title: format!("{}: Medical Expenses", gov_name),
                         description: format!(
                             "{gov_name} has been hospitalized in {region_name}. They're billing your \
-                             agency for ¥{cost:.0} in \"medical and security expenses.\""),
+                             agency for ¥{cost:.0} in \"medical and security expenses.\" \
+                             The invoice is padded, but {gov_name} runs a tight region."),
                         options: vec![ CrisisOption {
                             label: format!("Pay ¥{cost:.0}"),
-                            description: "Funds disappear into the governor's accounts. Business as usual.".into(),
+                            description: format!(
+                                "Governor recovers. Cooperation +10. Income skim increases \
+                                 permanently. {gov_name} now knows you'll pay."),
                             cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                         },
                         CrisisOption {
                             label: "Refuse".into(),
-                            description: "No medical expenses covered. Chairman approval drops. Income skim increases.".into(),
+                            description: format!(
+                                "Cooperation -15. Income skim still increases. \
+                                 {gov_name}'s condition may worsen without proper care."),
                             cost: None,
                         },
                         ],
@@ -2291,21 +2296,21 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                     "Refused. Governor threatening to take matters into their own hands.".into()
                 }
                 (GovernorPersonality::Operative, 0) => {
-                    // Pay: costs already deducted, cooperation boost
+                    // Pay: governor recovers, cooperation boost, but skim increases
                     if let Some(region) = state.regions.get_mut(*region_idx) {
                         region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
+                        region.governor.income_skim = (region.governor.income_skim + 0.02).min(0.30);
                     }
-                    "Expenses paid. The governor is grateful. Relatively.".into()
+                    "Expenses paid. Governor recovering. The next invoice will be larger.".into()
                 }
                 (GovernorPersonality::Operative, _) => {
-                    // Refuse: chairman satisfaction hit + income skim increase
-                    chairman_satisfaction_hit(state, -0.06);
+                    // Refuse: cooperation drop, skim increase, governor may die
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
+                        region.governor.cooperation = (region.governor.cooperation - 15.0).max(0.0);
                         region.governor.income_skim = (region.governor.income_skim + 0.03).min(0.30);
                     }
                     queue_governor_death_followup(state, *region_idx);
-                    "Refused. The governor is finding other ways to recoup.".into()
+                    "Refused. The governor is finding other ways to cover costs.".into()
                 }
                 (GovernorPersonality::Mobster, 0) => {
                     // Send security detail: personnel cost already deducted
