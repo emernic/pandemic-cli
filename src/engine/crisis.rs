@@ -956,22 +956,19 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                              the governor locked themselves in their residence and won't come out. \
                              Regional policy enforcement has stopped."),
                         options: vec![ CrisisOption {
-                            label: "Leave them alone".into(),
+                            label: "Wait them out".into(),
                             description: format!(
-                                "No intervention. Cooperation drops sharply in {region_name}. \
-                                 If {gov_name} doesn't re-emerge, the region loses its governor."),
+                                "No intrusion. {gov_name} may re-emerge on their own. \
+                                 Cooperation drops. If they don't come back, the region loses its governor."),
                             cost: None,
                         },
                         CrisisOption {
-                            label: "Send advisors (2 personnel for 5d)".into(),
+                            label: "Force entry".into(),
                             description: format!(
-                                "Your people talk {gov_name} through it and keep policy running \
-                                 while they stabilize."),
-                            cost: Some(CrisisCost {
-                                funding: 0.0,
-                                personnel: 2,
-                                operation: Some(OperationSpec { days: 5.0, label: "Governor Advisory Team".into() }),
-                            }),
+                                "Your team breaks into the residence. {gov_name} is alive but \
+                                 furious about the breach. Cooperation drops hard. Supply lines \
+                                 disrupted as the governor retaliates."),
+                            cost: None,
                         },
                         ],
                         kind,
@@ -2260,19 +2257,20 @@ pub(super) fn resolve_crisis(state: &mut WorldState, choice: usize, events: &mut
                     "Refused. The broadcast was not flattering.".into()
                 }
                 (GovernorPersonality::Recluse, 0) => {
-                    // Leave them alone: sharp cooperation drop + possible governor death
+                    // Wait them out: moderate cooperation drop + possible governor death
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.cooperation = (region.governor.cooperation - 25.0).max(0.0);
+                        region.governor.cooperation = (region.governor.cooperation - 10.0).max(0.0);
                     }
                     queue_governor_death_followup(state, *region_idx);
                     "No intervention. The region has no effective leadership.".into()
                 }
                 (GovernorPersonality::Recluse, _) => {
-                    // Send advisors: personnel cost already deducted, cooperation boost
+                    // Force entry: governor alive but furious, cooperation drops hard + supply lines hit
                     if let Some(region) = state.regions.get_mut(*region_idx) {
-                        region.governor.cooperation = (region.governor.cooperation + 10.0).min(100.0);
+                        region.governor.cooperation = (region.governor.cooperation - 20.0).max(0.0);
+                        region.supply_lines = (region.supply_lines - 0.15).max(0.0);
                     }
-                    "Advisors dispatched. Governor is cooperating again.".into()
+                    "Your team broke through. The governor is alive but making you pay for the breach.".into()
                 }
                 (GovernorPersonality::Hardliner, 0) => {
                     // Divert personnel: costs already deducted, cooperation boost
@@ -3265,7 +3263,7 @@ mod tests {
         let cases: Vec<(GovernorPersonality, usize)> = vec![
             (GovernorPersonality::Buffoon, 1),    // Secure corporation (governor unmonitored)
             (GovernorPersonality::Blowhard, 1),   // Refuse
-            (GovernorPersonality::Recluse, 0),    // Leave them alone
+            (GovernorPersonality::Recluse, 0),    // Wait them out
             (GovernorPersonality::Hardliner, 2),  // Refuse
             (GovernorPersonality::Pragmatist, 1),  // Refuse
             (GovernorPersonality::Mobster, 2),     // Refuse
