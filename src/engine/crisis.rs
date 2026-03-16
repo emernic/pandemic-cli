@@ -1284,6 +1284,26 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                 ));
             }
 
+            // Authority preview: tell the player what the board will decide
+            let suggested = state.suggested_authority();
+            let current_auth = state.resources.authority;
+            if suggested > current_auth {
+                memo_lines.push(format!(
+                    "Given the severity of the crisis, the Board has expanded your operational authority from {} to {}.",
+                    current_auth.label(), current_auth.raise().label()
+                ));
+            } else if suggested < current_auth {
+                memo_lines.push(format!(
+                    "The Board has narrowed your operational authority from {} to {}.",
+                    current_auth.label(), current_auth.lower().label()
+                ));
+            } else {
+                memo_lines.push(format!(
+                    "Your operational authority remains at {}.",
+                    current_auth.label()
+                ));
+            }
+
             // Crisis urgency influence on funding
             let urgency = crisis_urgency_boost(state);
             if urgency >= 0.05 {
@@ -1344,26 +1364,6 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         region.name
                     ));
                 }
-            }
-
-            // Authority preview: tell the player what the board will decide
-            let suggested = state.suggested_authority();
-            let current_auth = state.resources.authority;
-            if suggested > current_auth {
-                memo_lines.push(format!(
-                    "Given the severity of the crisis, the Board has expanded your operational authority from {} to {}.",
-                    current_auth.label(), current_auth.raise().label()
-                ));
-            } else if suggested < current_auth {
-                memo_lines.push(format!(
-                    "The Board has narrowed your operational authority from {} to {}.",
-                    current_auth.label(), current_auth.lower().label()
-                ));
-            } else {
-                memo_lines.push(format!(
-                    "Your operational authority remains at {}.",
-                    current_auth.label()
-                ));
             }
 
             // Positive note if things are going well
