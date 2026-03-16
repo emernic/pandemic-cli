@@ -327,6 +327,19 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             new.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Screening });
                             new.ui.panel_selection = 0;
                         }
+                        GameCommand::StartTrial { .. } if result.success => {
+                            new.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Trials });
+                            new.ui.panel_selection = 0;
+                        }
+                        GameCommand::DiscardHit { .. } if result.success => {
+                            // Stay in trial wizard if there are more hits
+                            if new.screening_hits.is_empty() {
+                                new.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Trials });
+                            } else {
+                                new.ui.lab_ui = Some(LabUiState::TrialSelectHit);
+                            }
+                            new.ui.panel_selection = 0;
+                        }
                         GameCommand::UpgradeLab if result.success => {
                             let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
                             new.ui.lab_ui = Some(LabUiState::Browse { tab });
@@ -345,6 +358,33 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             // Reset blocked notification so the player gets
                             // re-notified if deploy is still blocked.
                             new.session.deploy_blocked_notified.remove(med_idx);
+                        }
+                        _ => {}
+                    }
+                    if new.session.status_message.is_none() {
+                        new.session.status_message = result.message;
+                    }
+                }
+            }
+        }
+        Action::Discard => {
+            // Discard screening hit in the trial wizard
+            if new.ui.open_panel == Panel::Lab {
+                if let Some(LabUiState::TrialSelectHit) = &new.ui.lab_ui {
+                    let hit_index = new.ui.panel_selection;
+                    let cmd = GameCommand::DiscardHit { hit_index };
+                    let result = execute_command(&mut new, &cmd);
+                    events::process_events(&mut new, &result.events);
+                    match &cmd {
+                        GameCommand::DiscardHit { .. } if result.success => {
+                            if new.screening_hits.is_empty() {
+                                new.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Trials });
+                            } else {
+                                new.ui.lab_ui = Some(LabUiState::TrialSelectHit);
+                            }
+                            new.ui.panel_selection = new.ui.panel_selection.min(
+                                new.screening_hits.len().saturating_sub(1)
+                            );
                         }
                         _ => {}
                     }
@@ -609,6 +649,12 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                     ui.panel_selection = 0;
                     return None;
                 }
+                // Start New Trial → open trial wizard
+                ResearchFlatItem::StartNewTrial => {
+                    ui.lab_ui = Some(LabUiState::TrialSelectHit);
+                    ui.panel_selection = 0;
+                    return None;
+                }
             }
             None
         }
@@ -668,6 +714,26 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 return Some(GameCommand::ConfigureReactor {
                     reactor_idx,
                     medicine_idx: Some(med_idx),
+                });
+            }
+            None
+        }
+        // Trial wizard: select hit → advance to rigor selection
+        Some(LabUiState::TrialSelectHit) => {
+            if ui.panel_selection < state.screening_hits.len() {
+                ui.lab_ui = Some(LabUiState::TrialSelectRigor {
+                    hit_index: ui.panel_selection,
+                });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        // Trial wizard: select rigor → start trial
+        Some(LabUiState::TrialSelectRigor { hit_index }) => {
+            if let Some(&rigor) = crate::state::TrialRigor::ALL.get(ui.panel_selection) {
+                return Some(GameCommand::StartTrial {
+                    hit_index,
+                    rigor,
                 });
             }
             None
@@ -1316,18 +1382,36 @@ mod tests {
 
     #[test]
     fn medicines_selection_stable_when_new_medicine_unlocked() {
-        use crate::state::{MedicineUiState, Panel};
+        use crate::state::{MedicineUiState, Medicine, TherapyType, MechanismOfAction, Panel};
 
         let mut state = AppState::new_default(42);
         state.ui.open_panel = Panel::Medicines;
         state.ui.medicine_ui = Some(MedicineUiState::BrowseMedicines);
         state.sim_state = SimState::Paused;
 
-        // Unlock two medicines: index 0 and the last one
+        // Add a second unlocked medicine (only Broad-Spectrum exists at startup)
+        state.medicines.push(Medicine {
+            name: "Test Antibiotic".into(),
+            therapy_type: TherapyType::Antibiotic,
+            mechanism: Some(MechanismOfAction::CellWallInhibitor),
+            target_diseases: vec![0],
+            doses: 500_000.0,
+            max_doses: 500_000.0,
+            unlocked: true,
+            tested_against: vec![0],
+            deployed_count: 0,
+            total_treated: 0.0,
+            total_protected: 0.0,
+            manufacturer_corp_idx: None,
+            trial_efficacy: None,
+            side_effect_rate: 0.0,
+            resistance_rate: 0.0,
+            trial_rigor: None,
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        });
         let last_med = state.medicines.len() - 1;
-        assert!(last_med > 0, "need at least 2 medicines");
-        state.medicines[0].unlocked = true;
-        state.medicines[last_med].unlocked = true;
 
         // unlocked_medicine_indices() = [0, last_med]
         let indices = state.unlocked_medicine_indices();

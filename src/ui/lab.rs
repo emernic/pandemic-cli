@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed, ScreeningModality, ScreeningRunSize, WELLS_PER_PLATE};
+use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed, ScreeningModality, ScreeningRunSize, WELLS_PER_PLATE};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the lab panel in its current sub-state.
@@ -39,6 +39,12 @@ pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
         }
         LabUiState::ReactorSelectMedicine { .. } => {
             state.reactor_eligible_medicines().len().saturating_sub(1)
+        }
+        LabUiState::TrialSelectHit => {
+            state.screening_hits.len().saturating_sub(1)
+        }
+        LabUiState::TrialSelectRigor { .. } => {
+            crate::state::TrialRigor::ALL.len().saturating_sub(1)
         }
     }
 }
@@ -83,6 +89,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         }
         LabUiState::ReactorSelectMedicine { reactor_idx } => {
             render_reactor_select_medicine(f, chunks[1], state, *reactor_idx);
+        }
+        LabUiState::TrialSelectHit
+        | LabUiState::TrialSelectRigor { .. } => {
+            render_trial_wizard(f, chunks[1], state, &lab_ui);
         }
     }
 }
@@ -215,6 +225,27 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
                 )));
                 lines.push(Line::from(""));
             }
+            crate::state::ResearchFlatItem::StartNewTrial => {
+                lines.push(Line::from(""));
+                if selected { selected_line = Some(lines.len()); }
+                let marker = if selected { "▶ " } else { "  " };
+                let style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Green)
+                };
+                let hit_count = state.screening_hits.len();
+                lines.push(Line::from(Span::styled(
+                    format!("{}[NEW] Start Clinical Trial ({} hit{} available)",
+                        marker, hit_count, if hit_count == 1 { "" } else { "s" }),
+                    style,
+                )));
+                lines.push(Line::from(Span::styled(
+                    "    Select a screening hit and trial rigor level",
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(""));
+            }
             crate::state::ResearchFlatItem::UpgradeLab => {
                 lines.push(Line::from(""));
                 if selected { selected_line = Some(lines.len()); }
@@ -289,10 +320,12 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [X] Auto  [Esc] Close",
-        Style::default().fg(Color::DarkGray),
-    )));
+    let hint = if tab == LabTab::Trials {
+        "  [↑/↓] Select  [Enter] Start Trial  [D] Discard  [←/→] Tab  [Esc] Close"
+    } else {
+        "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [X] Auto  [Esc] Close"
+    };
+    lines.push(Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))));
 
     let block = Block::default()
         .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
@@ -830,55 +863,115 @@ fn render_screening_wizard(f: &mut Frame, area: Rect, state: &AppState, lab_ui: 
     f.render_widget(widget, area);
 }
 
-/// Label showing the manufacturing corporation for a medicine.
-fn manufacturer_label(med: &Medicine, state: &AppState) -> String {
-    let corp_idx = match med.manufacturer_corp_idx {
-        Some(idx) => idx,
-        None => return String::new(),
-    };
-    let corp = match state.corporations.get(corp_idx) {
-        Some(c) => c,
-        None => return String::new(),
-    };
-    if corp.board_seat {
-        format!(" | Mfg: {} (+Approval)", corp.name)
-    } else {
-        format!(" | Mfg: {}", corp.name)
+/// Render the trial wizard (hit selection → rigor selection).
+fn render_trial_wizard(f: &mut Frame, area: Rect, state: &AppState, lab_ui: &LabUiState) {
+    let selected_idx = state.ui.panel_selection;
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    match lab_ui {
+        LabUiState::TrialSelectHit => {
+            lines.push(Line::from(Span::styled(
+                "  Clinical Trial > Select Screening Hit",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+
+            if state.screening_hits.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    "  No screening hits available. Run screening first.",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            } else {
+                for (i, hit) in state.screening_hits.iter().enumerate() {
+                    let selected = i == selected_idx;
+                    let marker = if selected { "▶ " } else { "  " };
+                    let style = if selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    let disease_name = state.diseases.get(hit.disease_idx)
+                        .map(|d| d.display_name(hit.disease_idx))
+                        .unwrap_or_else(|| "?".to_string());
+                    lines.push(Line::from(Span::styled(
+                        format!("{}{}  {}  Kd: {:.1} nM ({})",
+                            marker, hit.compound_id, hit.modality.label(),
+                            hit.kd_nm, hit.affinity_label()),
+                        style,
+                    )));
+                    lines.push(Line::from(Span::styled(
+                        format!("    vs {}",  disease_name),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  [Enter] Select  [D] Discard  [Esc] Back",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        LabUiState::TrialSelectRigor { hit_index } => {
+            let hit = state.screening_hits.get(*hit_index);
+            let compound_id = hit.map(|h| h.compound_id.as_str()).unwrap_or("?");
+
+            lines.push(Line::from(Span::styled(
+                format!("  Clinical Trial > {} > Select Rigor", compound_id),
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  Higher rigor = accurate stats but slower and more expensive.",
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(Span::styled(
+                "  Lower rigor = fast and cheap but reported stats may be wrong.",
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(""));
+
+            for (i, rigor) in crate::state::TrialRigor::ALL.iter().enumerate() {
+                let selected = i == selected_idx;
+                let marker = if selected { "▶ " } else { "  " };
+                let style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                let (personnel, duration, funding) = rigor.costs();
+                let days = duration / crate::state::TICKS_PER_DAY;
+                lines.push(Line::from(Span::styled(
+                    format!("{}{}", marker, rigor.label()),
+                    style,
+                )));
+                lines.push(Line::from(Span::styled(
+                    format!("    {} — ¥{:.0}, {} personnel, {:.1} days",
+                        rigor.description(), funding, personnel, days),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  [Enter] Begin Trial  [Esc] Back",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        _ => {}
     }
+
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
 }
 
 /// Supplementary detail line for a research project.
 fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
     match kind {
-        ResearchKind::DevelopMedicine { medicine_idx } => {
-            let med = state.medicines.get(*medicine_idx)?;
-            let names: Vec<String> = med.target_diseases.iter()
-                .filter_map(|&d_idx| {
-                    state.diseases.get(d_idx)
-                        .map(|d| d.display_name(d_idx))
-                })
-                .collect();
-            let mfg = manufacturer_label(med, state);
-            if let Some(mech) = med.mechanism {
-                let resist_label = if mech.resistance_rate_multiplier() > 1.2 {
-                    "High"
-                } else if mech.resistance_rate_multiplier() > 0.7 {
-                    "Med"
-                } else {
-                    "Low"
-                };
-                Some(format!("{}: {} | Eff {:.0}%, Resist: {}{}",
-                    mech.tradeoff_label(),
-                    names.join(", "),
-                    mech.efficacy_modifier() * 100.0,
-                    resist_label,
-                    mfg))
-            } else {
-                Some(format!("Targets: {}{}",
-                    names.join(", "),
-                    mfg))
-            }
-        }
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
             let yield_bonus = state.manufacturing_yield_bonus();
@@ -941,14 +1034,11 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
         ResearchKind::BasicResearch { tech } => {
             Some(tech.description().to_string())
         }
-        ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
+        ResearchKind::ClinicalTrial { medicine_idx, rigor, .. } => {
             let med = state.medicines.get(*medicine_idx)?;
-            let is_retrial = med.tested_against.contains(disease_idx);
-            if is_retrial {
-                Some("Re-trial — promotes to primary target (removes cross-reactive penalty)".to_string())
-            } else {
-                Some("First trial — tests efficacy and enables deployment".to_string())
-            }
+            let eff_label = med.reported_efficacy.as_deref().unwrap_or("???");
+            let se_label = med.reported_side_effects.as_deref().unwrap_or("???");
+            Some(format!("{} | Eff: {}  Side Fx: {}", rigor.label(), eff_label, se_label))
         }
     }
 }

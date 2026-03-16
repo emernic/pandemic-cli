@@ -3392,6 +3392,30 @@ pub struct Medicine {
     /// member's satisfaction increases (via a reserves boost to their corporation).
     #[serde(default)]
     pub manufacturer_corp_idx: Option<usize>,
+    /// True efficacy (0.0–1.0), randomized from screening hit Kd during trial creation.
+    /// Only set for medicines created through the trial pipeline. Broad-Spectrum uses
+    /// the old TherapyType::efficacy() system instead. When set, this overrides the
+    /// computed therapy_type × mechanism efficacy.
+    #[serde(default)]
+    pub trial_efficacy: Option<f64>,
+    /// Side effect rate (0.0–1.0). Probability of adverse reaction per deployment.
+    #[serde(default)]
+    pub side_effect_rate: f64,
+    /// Resistance buildup rate (0.0–1.0). How quickly the target disease develops resistance.
+    #[serde(default)]
+    pub resistance_rate: f64,
+    /// Trial rigor used to create this medicine. Determines reported stat accuracy.
+    #[serde(default)]
+    pub trial_rigor: Option<TrialRigor>,
+    /// What the player sees for efficacy — may differ from reality based on trial rigor.
+    #[serde(default)]
+    pub reported_efficacy: Option<String>,
+    /// What the player sees for side effects — may differ from reality.
+    #[serde(default)]
+    pub reported_side_effects: Option<String>,
+    /// What the player sees for resistance — may differ from reality.
+    #[serde(default)]
+    pub reported_resistance: Option<String>,
 }
 
 /// A production reactor for manufacturing medicine doses.
@@ -3512,6 +3536,13 @@ impl Medicine {
                 total_treated: 0.0,
                 total_protected: 0.0,
                 manufacturer_corp_idx: None,
+                trial_efficacy: None,
+                side_effect_rate: 0.0,
+                resistance_rate: 0.0,
+                trial_rigor: None,
+                reported_efficacy: None,
+                reported_side_effects: None,
+                reported_resistance: None,
             }
         }).collect()
     }
@@ -3606,8 +3637,7 @@ impl ResearchProject {
             ResearchKind::IdentifyThreat { disease_idx: d } => *d == disease_idx,
             ResearchKind::GenomicSequencing { disease_idx: d } => *d == disease_idx,
             ResearchKind::ClinicalTrial { disease_idx: d, .. } => *d == disease_idx,
-            ResearchKind::DevelopMedicine { .. }
-            | ResearchKind::ManufactureDoses { .. }
+            ResearchKind::ManufactureDoses { .. }
             | ResearchKind::TrainPersonnel
             | ResearchKind::BasicResearch { .. } => false,
         }
@@ -3806,11 +3836,63 @@ impl ScreeningHit {
 /// Hit probability per well — chance that any given compound shows activity.
 pub const SCREENING_HIT_RATE: f64 = 0.012;
 
+/// Trial rigor level — determines cost, duration, and how accurately
+/// medicine stats are reported to the player after the trial completes.
+/// Higher rigor = more expensive/slow but honest stats.
+/// Lower rigor = cheap/fast but stats may be wildly inaccurate.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrialRigor {
+    /// Expensive, slow, many staff. Stats revealed accurately (real numbers).
+    Full,
+    /// Moderate cost/time. Stats shown with uncertainty ranges.
+    Abbreviated,
+    /// Cheap, fast. Qualitative info only. Side effects might be hidden.
+    Compassionate,
+    /// Near-free, almost instant. Stats shown but could be wildly inaccurate.
+    Charade,
+}
+
+impl TrialRigor {
+    pub const ALL: [TrialRigor; 4] = [
+        TrialRigor::Full,
+        TrialRigor::Abbreviated,
+        TrialRigor::Compassionate,
+        TrialRigor::Charade,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Full => "Full Trial",
+            Self::Abbreviated => "Abbreviated",
+            Self::Compassionate => "Compassionate Use",
+            Self::Charade => "Charade",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Full => "slow and expensive — stats revealed accurately",
+            Self::Abbreviated => "moderate cost — stats shown with ranges",
+            Self::Compassionate => "cheap and fast — qualitative stats only",
+            Self::Charade => "near-free, near-instant — stats may be lies",
+        }
+    }
+
+    /// (personnel, duration_ticks, funding) for this rigor level.
+    pub fn costs(self) -> (u32, f64, f64) {
+        match self {
+            Self::Full =>          (4, 120.0, 400.0),
+            Self::Abbreviated =>   (2, 60.0, 200.0),
+            Self::Compassionate => (1, 25.0, 80.0),
+            Self::Charade =>       (1, 8.0, 20.0),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchKind {
     IdentifyThreat { disease_idx: usize },
-    DevelopMedicine { medicine_idx: usize },
-    ClinicalTrial { medicine_idx: usize, disease_idx: usize },
+    ClinicalTrial { medicine_idx: usize, disease_idx: usize, rigor: TrialRigor },
     ManufactureDoses { medicine_idx: usize },
     /// Sequence a disease's genome to slow its mutation rate permanently.
     GenomicSequencing { disease_idx: usize },
@@ -3825,7 +3907,7 @@ impl ResearchKind {
     pub fn lab_tab(&self) -> Option<LabTab> {
         match self {
             Self::IdentifyThreat { .. } | Self::GenomicSequencing { .. } => Some(LabTab::Sequencing),
-            Self::DevelopMedicine { .. } | Self::TrainPersonnel => Some(LabTab::Screening),
+            Self::TrainPersonnel => Some(LabTab::Screening),
             Self::ClinicalTrial { .. } => Some(LabTab::Trials),
             Self::ManufactureDoses { .. } => Some(LabTab::Reactors),
             Self::BasicResearch { .. } => None,
@@ -3836,7 +3918,6 @@ impl ResearchKind {
     pub fn is_field_work(&self) -> bool {
         matches!(self,
             Self::IdentifyThreat { .. }
-            | Self::ClinicalTrial { .. }
             | Self::GenomicSequencing { .. }
         )
     }
@@ -3858,17 +3939,11 @@ impl ResearchKind {
                     .unwrap_or_else(|| "Unknown".to_string());
                 format!("Identify {}", name)
             }
-            Self::DevelopMedicine { medicine_idx } => {
+            Self::ClinicalTrial { medicine_idx, rigor, .. } => {
                 let name = state.medicines.get(*medicine_idx)
                     .map(|m| m.name.as_str())
                     .unwrap_or("Unknown");
-                format!("Develop {}", name)
-            }
-            Self::ClinicalTrial { medicine_idx, .. } => {
-                let name = state.medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str())
-                    .unwrap_or("Unknown");
-                format!("Trial {}", name)
+                format!("Trial {} ({})", name, rigor.label())
             }
             Self::ManufactureDoses { medicine_idx } => {
                 let name = state.medicines.get(*medicine_idx)
@@ -4088,30 +4163,13 @@ impl BasicTech {
 impl ResearchKind {
     /// Project costs: (personnel, duration_ticks, funding).
     ///
-    /// DevelopMedicine costs depend on mechanism of action: each mechanism has
-    /// a dev_cost_multiplier that scales base costs (3 personnel, 200 ticks, $500).
-    /// Broad-spectrum (multi-target, no mechanism) uses fixed high costs.
+    /// ClinicalTrial costs depend on the trial rigor level.
     /// These are BASE costs. Tech modifiers (RapidSequencing, MetagenomicSurveillance) are
     /// applied in AppState::effective_costs(), not here.
-    pub fn costs(&self, medicines: &[Medicine]) -> (u32, f64, f64) {
+    pub fn costs(&self, _medicines: &[Medicine]) -> (u32, f64, f64) {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
-            ResearchKind::DevelopMedicine { medicine_idx } => {
-                let med = medicines.get(*medicine_idx);
-                let targets = med.map_or(1, |m| m.target_diseases.len());
-                if targets > 1 {
-                    (10, 400.0, 700.0)  // broad: slow and expensive, covers all
-                } else if let Some(mech) = med.and_then(|m| m.mechanism) {
-                    let mult = mech.dev_cost_multiplier();
-                    let personnel = ((3.0 * mult).round() as u32).max(1);
-                    let ticks = (200.0 * mult).round();
-                    let funding = (500.0 * mult).round();
-                    (personnel, ticks, funding)
-                } else {
-                    (4, 280.0, 700.0)   // fallback / prion
-                }
-            }
-            ResearchKind::ClinicalTrial { .. } => (2, 60.0, 200.0),
+            ResearchKind::ClinicalTrial { rigor, .. } => rigor.costs(),
             ResearchKind::ManufactureDoses { .. } => (3, 120.0, 250.0),
             ResearchKind::GenomicSequencing { .. } => (5, 200.0, 500.0),
             ResearchKind::TrainPersonnel => (5, 160.0, 150.0),
@@ -4147,24 +4205,13 @@ impl ResearchKind {
                 };
                 format!("{}: {}", verb, name)
             }
-            ResearchKind::DevelopMedicine { medicine_idx } => {
-                let name = medicines.get(*medicine_idx)
-                    .map(|m| m.name.as_str())
-                    .unwrap_or("Unknown");
-                format!("Develop: {}", name)
-            }
-            ResearchKind::ClinicalTrial { medicine_idx, disease_idx } => {
+            ResearchKind::ClinicalTrial { medicine_idx, disease_idx, rigor } => {
                 let med = medicines.get(*medicine_idx);
                 let med_name = med.map(|m| m.name.as_str()).unwrap_or("Unknown");
                 let dis = diseases.get(*disease_idx)
                     .map(|d| d.display_name(*disease_idx))
                     .unwrap_or_else(|| "Unknown".to_string());
-                let is_retrial = med.map_or(false, |m| m.tested_against.contains(disease_idx));
-                if is_retrial {
-                    format!("Re-trial: {} vs {}", med_name, dis)
-                } else {
-                    format!("Trial: {} vs {}", med_name, dis)
-                }
+                format!("Trial ({}): {} vs {}", rigor.label(), med_name, dis)
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
                 let name = medicines.get(*medicine_idx)
@@ -4492,6 +4539,14 @@ pub enum GameCommand {
         modality: ScreeningModality,
         run_size: ScreeningRunSize,
     },
+    /// Start a clinical trial from a screening hit. Creates a new Medicine
+    /// from the hit and begins a ClinicalTrial research project.
+    StartTrial {
+        hit_index: usize,
+        rigor: TrialRigor,
+    },
+    /// Discard a screening hit the player doesn't want to trial.
+    DiscardHit { hit_index: usize },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
     /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
@@ -4856,6 +4911,10 @@ pub enum LabUiState {
     ScreeningSelectSize { disease_idx: usize, modality: ScreeningModality },
     /// Reactor configuration: select which medicine to assign to a reactor.
     ReactorSelectMedicine { reactor_idx: usize },
+    /// Trial wizard: step 1 — select a screening hit to trial.
+    TrialSelectHit,
+    /// Trial wizard: step 2 — select rigor level for the selected hit.
+    TrialSelectRigor { hit_index: usize },
 }
 
 impl LabUiState {
@@ -4869,6 +4928,8 @@ impl LabUiState {
             | LabUiState::ScreeningSelectModality { .. }
             | LabUiState::ScreeningSelectSize { .. } => LabTab::Screening,
             LabUiState::ReactorSelectMedicine { .. } => LabTab::Reactors,
+            LabUiState::TrialSelectHit
+            | LabUiState::TrialSelectRigor { .. } => LabTab::Trials,
         }
     }
 
@@ -4888,6 +4949,8 @@ pub enum ResearchFlatItem {
     ActiveScreening(usize),
     /// "Start New Run" button in the Screening tab.
     StartNewScreening,
+    /// "Start Trial" button in the Trials tab (only shown when hits exist).
+    StartNewTrial,
     /// An available (startable) project. Index into `all_available_projects()`.
     Available(usize),
     /// Manufacturing with a full stockpile — visible for auto-toggle but not startable.
@@ -4916,7 +4979,8 @@ impl ResearchFlatItem {
             Self::FullStockpile(kind) => Some(kind.clone()),
             Self::UpgradeLab
             | Self::ActiveScreening(_)
-            | Self::StartNewScreening => None,
+            | Self::StartNewScreening
+            | Self::StartNewTrial => None,
         }
     }
 }
@@ -5211,6 +5275,15 @@ impl UiState {
                     }
                     Some(LabUiState::ReactorSelectMedicine { .. }) => {
                         self.lab_ui = Some(LabUiState::Browse { tab: LabTab::Reactors });
+                        self.panel_selection = 0;
+                    }
+                    // Trial wizard: Esc goes back one step
+                    Some(LabUiState::TrialSelectHit) => {
+                        self.lab_ui = Some(LabUiState::Browse { tab: LabTab::Trials });
+                        self.panel_selection = 0;
+                    }
+                    Some(LabUiState::TrialSelectRigor { .. }) => {
+                        self.lab_ui = Some(LabUiState::TrialSelectHit);
                         self.panel_selection = 0;
                     }
                     Some(LabUiState::Browse { .. }) | None => {
@@ -5801,20 +5874,16 @@ impl WorldState {
         regions[region_idx].estimated_infected = infected * ScreeningLevel::None.visibility_rate();
         regions[secondary_idx].estimated_infected = secondary_infected * ScreeningLevel::None.visibility_rate();
 
-        // --- Generate medicines to match diseases ---
-        // One targeted medicine per mechanism per non-prion disease.
-        // Prion diseases get no medicines — they are completely untreatable.
-        let mut medicines: Vec<Medicine> = diseases.iter().enumerate()
-            .flat_map(|(i, d)| Medicine::targeted_medicines(i, d.pathogen_type))
-            .collect();
-
-        // One broad-spectrum medicine targeting all diseases
+        // --- Generate medicines ---
+        // Targeted medicines are no longer pre-created. They are created from
+        // screening hits when the player starts a clinical trial.
+        // Only Broad-Spectrum starts in the medicine list.
         let all_disease_indices: Vec<usize> = (0..diseases.len()).collect();
         // Broad-spectrum therapeutic: starts unlocked at limited supply. A blunt bandaid
         // that slows early disease spread while the player develops targeted medicines.
         // 500K doses depletes within ~10 days as infections grow, forcing investment
         // in the research pipeline. Targeted medicines are 6–7x more effective.
-        medicines.push(Medicine {
+        let medicines: Vec<Medicine> = vec![Medicine {
             name: "Broad-Spectrum".into(),
             therapy_type: TherapyType::BroadSpectrum,
             mechanism: None,
@@ -5827,7 +5896,14 @@ impl WorldState {
             total_treated: 0.0,
             total_protected: 0.0,
             manufacturer_corp_idx: None, // assigned in generate_corporations
-        });
+            trial_efficacy: None,
+            side_effect_rate: 0.0,
+            resistance_rate: 0.0,
+            trial_rigor: None,
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        }];
 
         let num_diseases = diseases.len();
 
@@ -6662,27 +6738,8 @@ impl WorldState {
                 }
             }
         }
-        // Clinical Trial: unlocked medicines not yet tested, OR tested but strain-outdated
-        for (i, med) in self.medicines.iter().enumerate() {
-            if !med.unlocked {
-                continue;
-            }
-            for &d_idx in &med.target_diseases {
-                if !self.disease_has_infected(d_idx) {
-                    continue;
-                }
-                let needs_trial = !med.tested_against.contains(&d_idx);
-                if needs_trial {
-                    let kind = ResearchKind::ClinicalTrial {
-                        medicine_idx: i,
-                        disease_idx: d_idx,
-                    };
-                    if !active_kinds.contains(&&kind) {
-                        projects.push(kind);
-                    }
-                }
-            }
-        }
+        // Clinical trials are now started via the trial wizard (StartTrial command),
+        // not through available_field_projects. They take screening hits as input.
         projects
     }
 
@@ -6765,7 +6822,7 @@ impl WorldState {
     }
 
     /// Items for a specific lab tab, filtered from the flat list.
-    /// Screening tab uses its own item system (screening runs + start button).
+    /// Screening and Trials tabs use their own item systems.
     pub fn lab_tab_items(&self, tab: LabTab) -> Vec<ResearchFlatItem> {
         if tab == LabTab::Screening {
             return self.screening_tab_items();
@@ -6773,6 +6830,9 @@ impl WorldState {
         // Reactors tab renders directly from state.reactors, not through ResearchFlatItem.
         if tab == LabTab::Reactors {
             return Vec::new();
+        }
+        if tab == LabTab::Trials {
+            return self.trials_tab_items();
         }
 
         let all = self.research_flat_items();
@@ -6795,12 +6855,14 @@ impl WorldState {
                 }
                 ResearchFlatItem::FullStockpile(kind) => kind.lab_tab() == Some(tab),
                 ResearchFlatItem::UpgradeLab => tab == LabTab::Sequencing,
-                ResearchFlatItem::ActiveScreening(_) | ResearchFlatItem::StartNewScreening => false,
+                ResearchFlatItem::ActiveScreening(_)
+                | ResearchFlatItem::StartNewScreening
+                | ResearchFlatItem::StartNewTrial => false,
             }
         }).collect()
     }
 
-    /// Items for the Screening tab: active screening runs + "Start New Run" + legacy items.
+    /// Items for the Screening tab: active screening runs + "Start New Run" + TrainPersonnel.
     fn screening_tab_items(&self) -> Vec<ResearchFlatItem> {
         let mut items = Vec::new();
 
@@ -6813,7 +6875,7 @@ impl WorldState {
             items.push(ResearchFlatItem::StartNewScreening);
         }
 
-        // Legacy DevelopMedicine and TrainPersonnel items (coexist during transition)
+        // TrainPersonnel item (lives in Screening tab)
         let all_research = self.research_flat_items();
         let available = self.all_available_projects();
         for item in all_research {
@@ -6834,6 +6896,25 @@ impl WorldState {
                 }
                 _ => {}
             }
+        }
+
+        items
+    }
+
+    /// Items for the Trials tab: active trials + "Start Trial" button + screening hits info.
+    fn trials_tab_items(&self) -> Vec<ResearchFlatItem> {
+        let mut items = Vec::new();
+
+        // Active trial projects
+        for (ai, project) in self.active_research.iter().enumerate() {
+            if matches!(project.kind, ResearchKind::ClinicalTrial { .. }) {
+                items.push(ResearchFlatItem::Active(ai));
+            }
+        }
+
+        // "Start Trial" button if there are screening hits
+        if !self.screening_hits.is_empty() {
+            items.push(ResearchFlatItem::StartNewTrial);
         }
 
         items
@@ -7129,29 +7210,20 @@ impl WorldState {
     }
 
     /// Available applied research projects (excludes currently active).
+    /// DevelopMedicine is gone — medicines are now created from screening hits via trials.
     pub(crate) fn available_applied_projects(&self) -> Vec<ResearchKind> {
         let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel))
+            .filter(|p| matches!(p.kind, ResearchKind::ManufactureDoses { .. } | ResearchKind::TrainPersonnel))
             .map(|p| &p.kind).collect();
         let mut projects = Vec::new();
         for (i, med) in self.medicines.iter().enumerate() {
             if med.unlocked {
-                // Manufacturing is now handled by reactors, not the research pipeline.
-                continue;
-            }
-            // Targeted medicines (Antiviral/Antibiotic) require full study (knowledge 1.0)
-            // plus TargetedDrugDesign tech. Broad-spectrum only needs identification (0.5).
-            let is_targeted = med.therapy_type != TherapyType::BroadSpectrum;
-            let knowledge_threshold = if is_targeted { KNOWLEDGE_FOR_TARGETED } else { KNOWLEDGE_FOR_MEDICINE };
-            let has_knowledge = med.target_diseases.iter().any(|&d_idx| {
-                self.diseases.get(d_idx).map_or(false, |d| d.knowledge >= knowledge_threshold)
-            });
-            let has_tech = !is_targeted
-                || self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
-            if has_knowledge && has_tech {
-                let kind = ResearchKind::DevelopMedicine { medicine_idx: i };
-                if !active_kinds.contains(&&kind) {
-                    projects.push(kind);
+                // Unlocked medicines can be manufactured if doses are depleted
+                if med.doses < med.max_doses {
+                    let kind = ResearchKind::ManufactureDoses { medicine_idx: i };
+                    if !active_kinds.contains(&&kind) {
+                        projects.push(kind);
+                    }
                 }
             }
         }
@@ -7169,88 +7241,6 @@ impl WorldState {
             .filter(|(_, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME)
             .map(|(i, _)| i)
             .collect()
-    }
-
-    /// Diseases that are identified but cannot yet be developed in Applied Research, with reasons.
-    /// Returns (disease_idx, reason_string) for each blocked disease.
-    /// Used to show greyed-out "pending" entries in the Applied Research panel.
-    pub fn blocked_medicine_developments(&self) -> Vec<(usize, String)> {
-        let active_kinds: Vec<&ResearchKind> = self.active_research.iter()
-            .filter(|p| matches!(p.kind, ResearchKind::DevelopMedicine { .. } | ResearchKind::TrainPersonnel))
-            .map(|p| &p.kind).collect();
-        let has_targeted_drug_design = self.unlocked_techs.contains(&BasicTech::TargetedDrugDesign);
-
-        // Collect disease indices already covered by an available or active targeted medicine
-        // development option. (The global BroadSpectrum medicine is always unlocked from game
-        // start — manufacturing is handled by reactors now, not the research pipeline.
-        // Prion diseases have no medicines at all.)
-        let mut covered: std::collections::HashSet<usize> = std::collections::HashSet::new();
-        for kind in self.available_applied_projects() {
-            if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
-                for &d_idx in &self.medicines[medicine_idx].target_diseases {
-                    covered.insert(d_idx);
-                }
-            }
-        }
-        for kind in &active_kinds {
-            if let ResearchKind::DevelopMedicine { medicine_idx } = kind {
-                for &d_idx in &self.medicines[*medicine_idx].target_diseases {
-                    covered.insert(d_idx);
-                }
-            }
-        }
-
-        let mut result = Vec::new();
-        let mut seen_diseases: std::collections::HashSet<usize> = std::collections::HashSet::new();
-
-        // Show identified prion diseases as untreatable (no medicines exist for them)
-        for (i, disease) in self.diseases.iter().enumerate() {
-            if disease.pathogen_type == PathogenType::Prion
-                && disease.detected
-                && disease.knowledge >= KNOWLEDGE_NAME
-            {
-                seen_diseases.insert(i);
-                result.push((i, "Prion — no known therapeutic intervention".to_string()));
-            }
-        }
-
-        for med in &self.medicines {
-            if med.unlocked || med.therapy_type == TherapyType::BroadSpectrum {
-                continue;
-            }
-            let disease_idx = match med.target_diseases.first().copied() {
-                Some(d) => d,
-                None => continue,
-            };
-            if seen_diseases.contains(&disease_idx) || covered.contains(&disease_idx) {
-                continue;
-            }
-            let disease = match self.diseases.get(disease_idx) {
-                Some(d) => d,
-                None => continue,
-            };
-            if disease.knowledge <= 0.0 {
-                continue; // Not identified at all — no entry until player starts Field Research
-            }
-            seen_diseases.insert(disease_idx);
-
-            let has_full_knowledge = disease.knowledge >= KNOWLEDGE_FOR_TARGETED;
-            let reason = match (has_full_knowledge, has_targeted_drug_design) {
-                (true, false) => "Targeted Drug Design required [Basic Research]".to_string(),
-                (false, false) => format!(
-                    "{:.0}% knowledge · Targeted Drug Design required",
-                    disease.knowledge * 100.0
-                ),
-                (false, true) => format!(
-                    "{:.0}% knowledge · continue Field Research",
-                    disease.knowledge * 100.0
-                ),
-                (true, true) => continue, // Should be in covered — skip defensively
-            };
-
-            result.push((disease_idx, reason));
-        }
-        result
     }
 
 }
@@ -7305,30 +7295,15 @@ mod tests {
     #[test]
     fn default_state_has_medicines() {
         let state = AppState::new_default(1);
-        let disease_count = state.diseases.len();
-        assert_eq!(disease_count, 1, "expected 1 starting disease, got {}", disease_count);
-        // One targeted medicine per mechanism per non-prion disease + one broad-spectrum
-        let targeted_count: usize = state.medicines.iter()
-            .filter(|m| m.target_diseases.len() == 1)
-            .count();
-        assert!(targeted_count >= disease_count,
-            "expected at least 1 targeted medicine per disease, got {targeted_count}");
-        assert_eq!(state.medicines.last().unwrap().therapy_type, TherapyType::BroadSpectrum);
-        // Broad-spectrum starts unlocked; all others start locked
-        let broad = state.medicines.last().unwrap();
+        // Only Broad-Spectrum exists at game start (targeted medicines are created
+        // from screening hits when the player starts clinical trials).
+        assert_eq!(state.medicines.len(), 1, "only Broad-Spectrum at startup");
+        let broad = &state.medicines[0];
+        assert_eq!(broad.therapy_type, TherapyType::BroadSpectrum);
         assert!(broad.unlocked, "broad-spectrum should start unlocked");
-        assert!(state.medicines.iter()
-            .filter(|m| m.therapy_type != TherapyType::BroadSpectrum)
-            .all(|m| !m.unlocked),
-            "targeted medicines should start locked");
-        // Each disease should have at least one targeted medicine
-        for i in 0..disease_count {
-            assert!(state.medicines.iter().any(|m| m.target_diseases == vec![i]),
-                "disease {i} should have a targeted medicine");
-        }
+        assert!(broad.mechanism.is_none(), "broad-spectrum has no mechanism");
         // Broad-spectrum targets all diseases
-        let broad = state.medicines.last().unwrap();
-        assert_eq!(broad.target_diseases.len(), disease_count);
+        assert_eq!(broad.target_diseases.len(), state.diseases.len());
     }
 
     #[test]
@@ -7409,111 +7384,13 @@ mod tests {
             "should suggest developing medicine: {:?}", tips);
     }
 
-    #[test]
-    fn targeted_medicine_requires_full_study() {
-        let mut state = AppState::new_default(42);
-        // Reset broad-spectrum to locked so we can test the knowledge-gate logic
-        for med in &mut state.medicines {
-            if med.therapy_type == TherapyType::BroadSpectrum {
-                med.unlocked = false;
-                med.doses = 0.0;
-            }
-        }
-        // Give identification-level knowledge (0.5) — enough for broad-spectrum
-        for d in &mut state.diseases {
-            d.knowledge = KNOWLEDGE_FOR_MEDICINE;
-        }
-        // Unlock TargetedDrugDesign so the tech gate isn't the blocker
-        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
+    // targeted_medicine_requires_full_study — removed: DevelopMedicine no longer exists.
+    // Medicines are created from screening hits via clinical trials.
 
-        let projects = state.available_applied_projects();
-        // Broad-spectrum should be available (only needs knowledge 0.5)
-        let has_broad = projects.iter().any(|k| match k {
-            ResearchKind::DevelopMedicine { medicine_idx } =>
-                state.medicines[*medicine_idx].therapy_type == TherapyType::BroadSpectrum,
-            _ => false,
-        });
-        assert!(has_broad, "broad-spectrum should be available at knowledge 0.5");
+    // mechanism_branching_shows_all_variants — removed: DevelopMedicine no longer exists.
 
-        // Targeted should NOT be available (needs knowledge 1.0)
-        let has_targeted = projects.iter().any(|k| match k {
-            ResearchKind::DevelopMedicine { medicine_idx } =>
-                state.medicines[*medicine_idx].therapy_type != TherapyType::BroadSpectrum,
-            _ => false,
-        });
-        assert!(!has_targeted, "targeted medicine should NOT be available at knowledge 0.5");
-
-        // Now give full study knowledge (1.0) — targeted should unlock
-        for d in &mut state.diseases {
-            d.knowledge = KNOWLEDGE_FULL;
-        }
-        let projects = state.available_applied_projects();
-        let has_targeted = projects.iter().any(|k| match k {
-            ResearchKind::DevelopMedicine { medicine_idx } =>
-                state.medicines[*medicine_idx].therapy_type != TherapyType::BroadSpectrum,
-            _ => false,
-        });
-        assert!(has_targeted, "targeted medicine should be available at knowledge 1.0");
-    }
-
-    #[test]
-    fn mechanism_branching_shows_all_variants() {
-        let mut state = AppState::new_default(42);
-        // Full knowledge + TargetedDrugDesign unlocks all mechanism variants
-        for d in &mut state.diseases {
-            d.knowledge = KNOWLEDGE_FULL;
-        }
-        state.unlocked_techs.push(BasicTech::TargetedDrugDesign);
-
-        let projects = state.available_applied_projects();
-        let develop_projects: Vec<_> = projects.iter()
-            .filter(|k| matches!(k, ResearchKind::DevelopMedicine { .. }))
-            .collect();
-        // Disease 0 (Bacterium in default seed) should have 4 targeted + 1 broad = 5
-        // Or 3 targeted + 1 broad = 4 if virus/fungus
-        // At minimum, we should see more than 2 develop options
-        assert!(develop_projects.len() >= 4,
-            "should have 4+ develop options (all mechanisms + broad), got {}: {:?}",
-            develop_projects.len(),
-            develop_projects.iter().map(|k| match k {
-                ResearchKind::DevelopMedicine { medicine_idx } =>
-                    state.medicines[*medicine_idx].name.clone(),
-                _ => "?".to_string(),
-            }).collect::<Vec<_>>());
-
-        // Each mechanism variant should have different cost multipliers
-        let costs: Vec<_> = develop_projects.iter()
-            .map(|k| match k {
-                ResearchKind::DevelopMedicine { .. } =>
-                    k.costs(&state.medicines),
-                _ => (0, 0.0, 0.0),
-            })
-            .collect();
-        // Should have different costs (not all the same)
-        let unique_costs: std::collections::HashSet<_> = costs.iter()
-            .map(|(p, _, _)| *p)
-            .collect();
-        assert!(unique_costs.len() >= 2,
-            "mechanism variants should have different development costs");
-    }
-
-    #[test]
-    fn mechanism_efficacy_affects_deployment() {
-        let state = AppState::new_default(42);
-        // Disease 0 is always a Bacterium in seed 42 — both mechanisms must exist
-        let fast_idx = state.medicines.iter().position(|m|
-            m.mechanism == Some(MechanismOfAction::CellWallInhibitor)
-        ).expect("CellWallInhibitor medicine should exist for Bacterium");
-        let slow_idx = state.medicines.iter().position(|m|
-            m.mechanism == Some(MechanismOfAction::MetabolicInhibitor)
-        ).expect("MetabolicInhibitor medicine should exist for Bacterium");
-        let fast_eff = state.medicines[fast_idx].effective_efficacy(0, &state.diseases);
-        let slow_eff = state.medicines[slow_idx].effective_efficacy(0, &state.diseases);
-        // Fast mechanism should have higher initial efficacy
-        assert!(fast_eff > slow_eff,
-            "fast mechanism should have higher efficacy: {} vs {}",
-            fast_eff, slow_eff);
-    }
+    // mechanism_efficacy_affects_deployment — removed: targeted medicines no longer exist
+    // at game start; they are created from screening hits.
 
     #[test]
     fn defeat_tips_no_false_never_deployed_after_deploy() {
@@ -7598,7 +7475,7 @@ mod tests {
     #[test]
     fn metagenomic_surveillance_reduces_clinical_trial_duration() {
         let mut state = AppState::new_default(42);
-        let kind = ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0 };
+        let kind = ResearchKind::ClinicalTrial { medicine_idx: 0, disease_idx: 0, rigor: TrialRigor::Full };
         let (_, base_duration, _) = state.effective_costs(&kind);
         state.unlocked_techs.push(BasicTech::MetagenomicSurveillance);
         let (_, fast_duration, _) = state.effective_costs(&kind);
@@ -7638,13 +7515,32 @@ mod tests {
     #[test]
     fn automated_synthesis_prereq_requires_developed_medicine() {
         let mut state = AppState::new_default(42);
-        // No targeted medicines unlocked yet (broad-spectrum starts unlocked but has no mechanism)
-        assert!(state.medicines.iter().all(|m| m.mechanism.is_none() || !m.unlocked));
+        // No targeted medicines exist at startup (only Broad-Spectrum, which has no mechanism)
+        assert!(state.medicines.iter().all(|m| m.mechanism.is_none()));
         assert!(!BasicTech::AutomatedSynthesis.prerequisites_met(&state));
-        // After a targeted medicine is developed, prereq is met
-        // Find first medicine with a mechanism
-        let idx = state.medicines.iter().position(|m| m.mechanism.is_some()).unwrap();
-        state.medicines[idx].unlocked = true;
+        // After a targeted medicine is created (e.g. from screening hit + trial), prereq is met
+        // Manually add a targeted medicine with a mechanism
+        state.medicines.push(Medicine {
+            name: "Test Antibiotic".into(),
+            therapy_type: TherapyType::Antibiotic,
+            mechanism: Some(MechanismOfAction::CellWallInhibitor),
+            target_diseases: vec![0],
+            doses: 0.0,
+            max_doses: 500_000.0,
+            unlocked: true,
+            tested_against: vec![0],
+            deployed_count: 0,
+            total_treated: 0.0,
+            total_protected: 0.0,
+            manufacturer_corp_idx: None,
+            trial_efficacy: None,
+            side_effect_rate: 0.0,
+            resistance_rate: 0.0,
+            trial_rigor: None,
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        });
         assert!(BasicTech::AutomatedSynthesis.prerequisites_met(&state));
     }
 
@@ -7671,18 +7567,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn automated_synthesis_does_not_affect_develop_medicine_duration() {
-        let mut state = AppState::new_default(42);
-        let kind = ResearchKind::DevelopMedicine { medicine_idx: 0 };
-        let (_, base_duration, _) = state.effective_costs(&kind);
-        state.unlocked_techs.push(BasicTech::AutomatedSynthesis);
-        let (_, after_duration, _) = state.effective_costs(&kind);
-        assert!(
-            (base_duration - after_duration).abs() < 0.01,
-            "DevelopMedicine should not be affected by AutomatedSynthesis"
-        );
-    }
+    // automated_synthesis_does_not_affect_develop_medicine_duration — removed:
+    // DevelopMedicine no longer exists.
 
     #[test]
     fn stabilized_formulation_boosts_manufacturing_yield() {

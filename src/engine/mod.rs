@@ -869,6 +869,14 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
             let (ok, msg) = screening::start_screening(state, *disease_idx, *modality, *run_size);
             CommandResult { message: msg, success: ok, events: Vec::new() }
         }
+        GameCommand::StartTrial { hit_index, rigor } => {
+            let (ok, msg) = research::start_trial(state, *hit_index, *rigor);
+            CommandResult { message: msg, success: ok, events: Vec::new() }
+        }
+        GameCommand::DiscardHit { hit_index } => {
+            let (ok, msg) = research::discard_hit(state, *hit_index);
+            CommandResult { message: msg, success: ok, events: Vec::new() }
+        }
         GameCommand::TogglePolicy {
             region_idx,
             policy,
@@ -1203,6 +1211,35 @@ mod tests {
         }
     }
 
+    /// Helper: add a targeted medicine (with mechanism) for disease 0 and return its index.
+    /// Targeted medicines no longer exist at game start — tests that need one must create it.
+    fn add_targeted_medicine(state: &mut WorldState, unlocked: bool, tested: bool) -> usize {
+        use crate::state::{Medicine, TherapyType, MechanismOfAction};
+        let idx = state.medicines.len();
+        state.medicines.push(Medicine {
+            name: "Test Antibiotic".into(),
+            therapy_type: TherapyType::Antibiotic,
+            mechanism: Some(MechanismOfAction::CellWallInhibitor),
+            target_diseases: vec![0],
+            doses: 500_000.0,
+            max_doses: 500_000.0,
+            unlocked,
+            tested_against: if tested { vec![0] } else { vec![] },
+            deployed_count: 0,
+            total_treated: 0.0,
+            total_protected: 0.0,
+            manufacturer_corp_idx: None,
+            trial_efficacy: None,
+            side_effect_rate: 0.0,
+            resistance_rate: 0.0,
+            trial_rigor: None,
+            reported_efficacy: None,
+            reported_side_effects: None,
+            reported_resistance: None,
+        });
+        idx
+    }
+
     /// Helper: mark all diseases as detected (most tests assume this).
     fn detect_all_diseases(state: &mut WorldState) {
         for d in &mut state.diseases {
@@ -1481,10 +1518,12 @@ mod tests {
         unlock_all_medicines(&mut state);
         // Unlock VaccinePlatform so vaccination mode is available
         state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
-        // Find any tested, unlocked targeted medicine
-        let med_idx = state.medicines.iter().position(|m| {
-            m.unlocked && m.mechanism.is_some() && !m.tested_against.is_empty()
-        }).expect("should have a tested targeted medicine");
+        // Create a tested, unlocked targeted medicine with plenty of doses
+        let med_idx = add_targeted_medicine(&mut state, true, true);
+        state.medicines[med_idx].doses = 1_000_000_000.0;
+        state.medicines[med_idx].max_doses = 1_000_000_000.0;
+        // Ensure region 0 has disease 0 infection (vaccine needs an infection entry to add immune)
+        state.regions[0].get_or_create_infection(0).infected = 10_000.0;
 
         let doses_before = state.medicines[med_idx].doses;
         let funding_before = state.resources.funding;
@@ -1691,12 +1730,8 @@ mod tests {
         let mut state = AppState::new_default(42);
         // Ensure infections exist (therapeutics need infected population)
         state.regions[0].get_or_create_infection(0).infected = 50_000.0;
-        // Find any targeted medicine
-        let med_idx = state.medicines.iter().position(|m| {
-            m.mechanism.is_some()
-        }).expect("should have a targeted medicine");
-        // Make it target two diseases and be tested against both
-        state.medicines[med_idx].unlocked = true;
+        // Create a targeted medicine and make it target two diseases
+        let med_idx = add_targeted_medicine(&mut state, true, true);
         state.medicines[med_idx].tested_against = vec![0, 1];
         state.medicines[med_idx].target_diseases = vec![0, 1];
         state.medicines[med_idx].doses = state.medicines[med_idx].max_doses;
@@ -1720,13 +1755,10 @@ mod tests {
     fn untested_medicine_deploy_succeeds_without_confirmation() {
         use crate::state::DeployTarget;
         let mut state = AppState::new_default(42);
-        unlock_untested(&mut state);
+        // Create an unlocked but untested targeted medicine
+        let med_idx = add_targeted_medicine(&mut state, true, false);
         // Ensure infections exist (therapeutics need infected population to deploy)
         state.regions[0].get_or_create_infection(0).infected = 50_000.0;
-        // Find any targeted medicine (untested)
-        let med_idx = state.medicines.iter().position(|m| {
-            m.unlocked && m.mechanism.is_some()
-        }).expect("should have a targeted medicine");
 
         let mut events: Vec<GameEvent> = Vec::new();
         let funding_before = state.resources.funding;
@@ -2042,7 +2074,6 @@ mod tests {
                     let need_personnel = state.personnel_available() < 10;
                     let best = projects.iter().enumerate().min_by_key(|(_, k)| match k {
                         ResearchKind::TrainPersonnel if need_personnel => 0,
-                        ResearchKind::DevelopMedicine { .. } => 1,
                         ResearchKind::ManufactureDoses { .. } => 1,
                         ResearchKind::IdentifyThreat { .. } => 2,
                         ResearchKind::ClinicalTrial { .. } => 3,
@@ -2774,16 +2805,9 @@ mod tests {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::TherapyType;
         let mut state = AppState::new_default(42);
-        // Find first non-prion disease and unlock its targeted medicines
-        let disease_idx = state.diseases.iter().position(|d| {
-            d.pathogen_type != crate::state::PathogenType::Prion
-        }).unwrap();
-        let med_idx = state.medicines.iter().position(|m| {
-            m.target_diseases.contains(&disease_idx)
-                && m.therapy_type != TherapyType::BroadSpectrum
-        }).unwrap();
-        state.medicines[med_idx].unlocked = true;
-        state.medicines[med_idx].tested_against.push(disease_idx);
+        let disease_idx = 0;
+        // Create a targeted medicine for disease 0
+        let med_idx = add_targeted_medicine(&mut state, true, true);
         state.medicines[med_idx].doses = 1_000_000_000.0;
         state.medicines[med_idx].max_doses = 1_000_000_000.0;
         state.resources.funding = 1_000_000.0;
@@ -2837,51 +2861,8 @@ mod tests {
         assert!(bs_res < after_res, "broad-spectrum should build resistance faster than targeted: bs={bs_res} vs targeted={after_res}");
     }
 
-    #[test]
-    fn targeted_medicines_have_mechanism_of_action() {
-        use crate::state::TherapyType;
-
-        let state = AppState::new_default(42);
-        // Disease 0 is never a prion — should have one medicine per mechanism
-        let targeted_meds: Vec<_> = state.medicines.iter()
-            .filter(|m| m.target_diseases.contains(&0)
-                && m.therapy_type != TherapyType::BroadSpectrum)
-            .collect();
-        // One medicine per mechanism.
-        // Bacteria have 4 mechanisms, viruses/fungi have 3.
-        assert!(targeted_meds.len() >= 3,
-            "should have 3+ targeted medicines for disease 0, got {}: {:?}",
-            targeted_meds.len(),
-            targeted_meds.iter().map(|m| &m.name).collect::<Vec<_>>());
-        for med in &targeted_meds {
-            assert!(med.mechanism.is_some(),
-                "targeted medicine '{}' should have a mechanism", med.name);
-        }
-        // Each mechanism should appear exactly once
-        let mut mech_counts: std::collections::HashMap<_, u32> = std::collections::HashMap::new();
-        for med in &targeted_meds {
-            *mech_counts.entry(med.mechanism.unwrap()).or_default() += 1;
-        }
-        for (mech, count) in &mech_counts {
-            assert_eq!(*count, 1,
-                "mechanism {:?} should appear exactly once, got {}", mech, count);
-        }
-        // Each mechanism should have distinct tradeoff properties
-        let fast_mech = targeted_meds.iter()
-            .find(|m| m.mechanism.unwrap().dev_cost_multiplier() < 1.0)
-            .expect("should have a fast/cheap mechanism option");
-        let slow_mech = targeted_meds.iter()
-            .find(|m| m.mechanism.unwrap().dev_cost_multiplier() > 1.0)
-            .expect("should have a slow/expensive mechanism option");
-        assert!(fast_mech.mechanism.unwrap().resistance_rate_multiplier() >
-                slow_mech.mechanism.unwrap().resistance_rate_multiplier(),
-            "fast mechanism should build resistance faster than slow one");
-
-        // Broad-spectrum medicine (last one) should have no mechanism
-        let broad = state.medicines.last().unwrap();
-        assert!(broad.mechanism.is_none(), "broad-spectrum should have no mechanism");
-        assert_eq!(broad.therapy_type, TherapyType::BroadSpectrum);
-    }
+    // targeted_medicines_have_mechanism_of_action — removed: targeted medicines no longer
+    // exist at game start. They are created from screening hits via clinical trials.
 
     #[test]
     fn new_disease_emerges_mid_game() {
@@ -4611,7 +4592,7 @@ mod tests {
         state.medicines[0].unlocked = true;
         state.medicines[0].doses = 1_000_000.0;
         state.medicines[0].max_doses = 1_000_000.0;
-        // NOT tested: tested_against is empty
+        state.medicines[0].tested_against.clear(); // NOT tested
         state.diseases[0].detected = true;
 
         state.regions[0].get_or_create_infection(0).infected = 100_000.0;
