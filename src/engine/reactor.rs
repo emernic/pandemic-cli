@@ -50,8 +50,10 @@ pub(super) fn configure_reactor(
         }
     }
     if medicine_idx.is_some() {
-        // Default to deploying when finished — the common case
-        reactor.auto_deploy = true;
+        // Default to NOT auto-deploying — player must opt in via Lab panel toggle.
+        // This prevents new medicines from silently shipping to all regions
+        // the moment the first batch completes.
+        reactor.auto_deploy = false;
     } else {
         // Clearing the medicine resets toggles
         reactor.auto_deploy = false;
