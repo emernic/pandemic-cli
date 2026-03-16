@@ -56,7 +56,7 @@ fn build_splash_content(state: &AppState) -> Vec<(String, Style)> {
     segments.push(("  Your first priority: send a field research team\n".to_string(), white));
     segments.push(("  to identify what we're dealing with.\n".to_string(), white));
     segments.push(("\n".to_string(), dim));
-    segments.push(("  → Press [R] to open Research and begin\n".to_string(), yellow));
+    segments.push(("  → Press [L] to open the Lab and begin\n".to_string(), yellow));
     segments.push(("    identification.\n".to_string(), yellow));
     segments.push(("  → Press [M] to open Medicines and deploy\n".to_string(), yellow));
     segments.push(("    broad-spectrum treatment against the outbreak.\n".to_string(), yellow));
