@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed, ScreeningModality, ScreeningRunSize, WELLS_PER_PLATE};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the lab panel in its current sub-state.
@@ -16,6 +16,21 @@ pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
             state.lab_tab_items(*tab).len().saturating_sub(1)
         }
         LabUiState::ConfirmProject { .. } | LabUiState::ConfirmLabUpgrade { .. } => 0,
+        LabUiState::ScreeningSelectDisease => {
+            state.screening_eligible_diseases().len().saturating_sub(1)
+        }
+        LabUiState::ScreeningSelectModality { .. } => {
+            ScreeningModality::ALL.iter()
+                .filter(|m| m.is_unlocked(&state.unlocked_techs))
+                .count()
+                .saturating_sub(1)
+        }
+        LabUiState::ScreeningSelectSize { .. } => {
+            ScreeningRunSize::ALL.iter()
+                .filter(|s| s.is_unlocked())
+                .count()
+                .saturating_sub(1)
+        }
     }
 }
 
@@ -47,6 +62,11 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         }
         LabUiState::ConfirmLabUpgrade { .. } => {
             render_confirm_lab_upgrade(f, chunks[1], state);
+        }
+        LabUiState::ScreeningSelectDisease
+        | LabUiState::ScreeningSelectModality { .. }
+        | LabUiState::ScreeningSelectSize { .. } => {
+            render_screening_wizard(f, chunks[1], state, &lab_ui);
         }
     }
 }
@@ -122,7 +142,7 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
         lines.push(Line::from(""));
         let msg = match tab {
             LabTab::Sequencing => "  No pathogens to sequence.",
-            LabTab::Screening => "  No screening targets available.",
+            LabTab::Screening => "  Identify a pathogen first to start screening.",
             LabTab::Trials => "  No trials available.",
             LabTab::Reactors => "  No medicines to manufacture.",
         };
@@ -150,6 +170,31 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
                 let auto_tag = if state.auto_repeat_research.contains(kind) { " AUTO" } else { "" };
                 lines.push(Line::from(Span::styled(
                     format!("{}{}{} [FULL]", marker, kind.display_label(&state.diseases, &state.medicines), auto_tag),
+                    Style::default().fg(Color::DarkGray),
+                )));
+                lines.push(Line::from(""));
+            }
+            crate::state::ResearchFlatItem::ActiveScreening(si) => {
+                if let Some(run) = state.screening_runs.get(*si) {
+                    if selected { selected_line = Some(lines.len()); }
+                    render_active_screening(&mut lines, run, selected, state);
+                }
+            }
+            crate::state::ResearchFlatItem::StartNewScreening => {
+                lines.push(Line::from(""));
+                if selected { selected_line = Some(lines.len()); }
+                let marker = if selected { "▶ " } else { "  " };
+                let style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Green)
+                };
+                lines.push(Line::from(Span::styled(
+                    format!("{}[NEW] Start Screening Run", marker),
+                    style,
+                )));
+                lines.push(Line::from(Span::styled(
+                    "    Screen compound libraries against identified pathogens",
                     Style::default().fg(Color::DarkGray),
                 )));
                 lines.push(Line::from(""));
@@ -195,6 +240,36 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
             format!("  {} (max) — all research 60% faster", state.lab_level_name()),
             Style::default().fg(Color::DarkGray),
         )));
+    }
+
+    // Trials tab: show screening hits awaiting trials
+    if tab == LabTab::Trials && !state.screening_hits.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  ── Screening Hits ──",
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        )));
+        // Group hits by disease
+        let mut hits_by_disease: std::collections::BTreeMap<usize, Vec<&crate::state::ScreeningHit>> = std::collections::BTreeMap::new();
+        for hit in &state.screening_hits {
+            hits_by_disease.entry(hit.disease_idx).or_default().push(hit);
+        }
+        for (d_idx, hits) in &hits_by_disease {
+            let disease_name = state.diseases.get(*d_idx)
+                .map(|d| d.display_name(*d_idx))
+                .unwrap_or_else(|| "?".to_string());
+            lines.push(Line::from(Span::styled(
+                format!("  {} — {} hit{} awaiting trial", disease_name, hits.len(), if hits.len() == 1 { "" } else { "s" }),
+                Style::default().fg(Color::Green),
+            )));
+            for hit in hits {
+                lines.push(Line::from(Span::styled(
+                    format!("    {}  {}  Kd: {:.1} nM ({})",
+                        hit.compound_id, hit.modality.label(), hit.kd_nm, hit.affinity_label()),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
     }
 
     lines.push(Line::from(""));
@@ -431,6 +506,300 @@ fn render_confirm_lab_upgrade(f: &mut Frame, area: Rect, state: &AppState) {
             "  [Esc] Back",
             Style::default().fg(Color::DarkGray),
         )));
+    }
+
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
+}
+
+/// Render an active screening run with well-plate visualization.
+fn render_active_screening(lines: &mut Vec<Line<'static>>, run: &crate::state::ScreeningRun, selected: bool, state: &AppState) {
+    let marker = if selected { "▶ " } else { "  " };
+    let style = if selected {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Cyan)
+    };
+    let disease_name = state.diseases.get(run.disease_idx)
+        .map(|d| d.display_name(run.disease_idx))
+        .unwrap_or_else(|| "?".to_string());
+    lines.push(Line::from(Span::styled(
+        format!("{}[ACTIVE] {} vs {}", marker, run.modality.label(), disease_name),
+        style,
+    )));
+
+    // Well plate visualization
+    let wells_tested = run.wells_tested();
+    let total = run.total_wells();
+    let hits_found = run.hits.len();
+
+    // Show compact plate grid: 12 symbols per plate (each represents 8 wells)
+    let plates = run.plates();
+    let mut plate_spans: Vec<Span> = vec![Span::raw("    ")];
+    for plate in 0..plates {
+        if plate > 0 {
+            plate_spans.push(Span::raw("  "));
+        }
+        let plate_start = plate * WELLS_PER_PLATE;
+        let plate_end = plate_start + WELLS_PER_PLATE;
+        // 12 symbols per plate, each represents 8 wells
+        let mut plate_str = String::new();
+        for sym_idx in 0..12 {
+            let well_start = plate_start + sym_idx * 8;
+            let well_end = (well_start + 8).min(plate_end);
+            if well_end <= wells_tested {
+                // Check if any hit falls in this range
+                let has_hit = run.hits.iter().any(|_| {
+                    // Approximate: distribute hits evenly across tested wells
+                    false // We'll use a simpler visual
+                });
+                if has_hit {
+                    plate_str.push('◉');
+                } else {
+                    plate_str.push('●');
+                }
+            } else if well_start < wells_tested {
+                plate_str.push('●'); // partially tested
+            } else {
+                plate_str.push('○');
+            }
+        }
+        let plate_color = if plate_end <= wells_tested {
+            Color::Green
+        } else if plate_start < wells_tested {
+            Color::Yellow
+        } else {
+            Color::DarkGray
+        };
+        plate_spans.push(Span::styled(plate_str, Style::default().fg(plate_color)));
+    }
+    lines.push(Line::from(plate_spans));
+
+    // Plate labels
+    let mut label_spans: Vec<Span> = vec![Span::raw("    ")];
+    for plate in 0..plates {
+        if plate > 0 {
+            label_spans.push(Span::raw("  "));
+        }
+        label_spans.push(Span::styled(
+            format!("plate {:>2}    ", plate + 1),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+    lines.push(Line::from(label_spans));
+
+    // Status line
+    let pct = (run.progress / run.required_ticks * 100.0).min(100.0);
+    let remaining = (run.required_ticks - run.progress).max(0.0);
+    let speed = personnel_speed(run.personnel_assigned, run.run_size.personnel());
+    let infra_mult = state.research_infra_multiplier();
+    let effective_remaining = if speed * infra_mult > 0.0 {
+        remaining / (speed * infra_mult)
+    } else {
+        remaining
+    };
+    lines.push(Line::from(vec![
+        Span::raw("    "),
+        Span::styled(
+            format!("Screened: {}/{}", wells_tested, total),
+            Style::default().fg(Color::White),
+        ),
+        Span::raw("   "),
+        Span::styled(
+            format!("Hits: ◉ {}", hits_found),
+            Style::default().fg(if hits_found > 0 { Color::Green } else { Color::DarkGray }),
+        ),
+        Span::raw("   "),
+        Span::styled(
+            format!("{} staff", run.personnel_assigned),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::raw("   "),
+        Span::styled(
+            format!("{:.0}%  {}", pct, format_days(effective_remaining)),
+            Style::default().fg(Color::Green),
+        ),
+    ]));
+    lines.push(Line::from(""));
+}
+
+/// Render the screening wizard (disease → modality → run size).
+fn render_screening_wizard(f: &mut Frame, area: Rect, state: &AppState, lab_ui: &LabUiState) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    match lab_ui {
+        LabUiState::ScreeningSelectDisease => {
+            lines.push(Line::from(Span::styled(
+                "  New Screening Run > Select Target",
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  ── Target Disease ──",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+
+            let eligible = state.screening_eligible_diseases();
+            if eligible.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    "  No identified diseases to screen against.",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+            for (i, &d_idx) in eligible.iter().enumerate() {
+                let selected = state.ui.panel_selection == i;
+                let marker = if selected { "▶ " } else { "  " };
+                let disease = &state.diseases[d_idx];
+                let name = disease.display_name(d_idx);
+                let knowledge_pct = (disease.knowledge * 100.0) as u32;
+                let status = if knowledge_pct >= 100 {
+                    "fully sequenced".to_string()
+                } else {
+                    format!("{}% knowledge", knowledge_pct)
+                };
+                let style = if selected {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(format!("  {}{}", marker, name), style),
+                    Span::styled(format!("  ({})", status), Style::default().fg(Color::DarkGray)),
+                ]));
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  [Enter] Select  [Esc] Cancel",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        LabUiState::ScreeningSelectModality { disease_idx } => {
+            let disease_name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| "?".to_string());
+            lines.push(Line::from(Span::styled(
+                format!("  New Screening Run > {} > Modality", disease_name),
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  ── Modality ──",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+
+            let mut selectable_idx = 0;
+            for modality in ScreeningModality::ALL.iter() {
+                let unlocked = modality.is_unlocked(&state.unlocked_techs);
+                if unlocked {
+                    let selected = state.ui.panel_selection == selectable_idx;
+                    let marker = if selected { "▶ " } else { "  " };
+                    let style = if selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    lines.push(Line::from(vec![
+                        Span::styled(format!("  {}{}", marker, modality.label()), style),
+                        Span::styled(
+                            format!("  {}", modality.description()),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]));
+                    selectable_idx += 1;
+                } else {
+                    let lock_reason = modality.required_tech()
+                        .map(|t| format!("need {}", t.name()))
+                        .unwrap_or_else(|| "coming soon".to_string());
+                    lines.push(Line::from(Span::styled(
+                        format!("    {} [LOCKED — {}]", modality.label(), lock_reason),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  [Enter] Select  [Esc] Back",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        LabUiState::ScreeningSelectSize { disease_idx, modality } => {
+            let disease_name = state.diseases.get(*disease_idx)
+                .map(|d| d.display_name(*disease_idx))
+                .unwrap_or_else(|| "?".to_string());
+            lines.push(Line::from(Span::styled(
+                format!("  New Screening Run > {} > {} > Run Size", disease_name, modality.label()),
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  ── Run Size ──",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+
+            let mut selectable_idx = 0;
+            for size in ScreeningRunSize::ALL.iter() {
+                if size.is_unlocked() {
+                    let selected = state.ui.panel_selection == selectable_idx;
+                    let marker = if selected { "▶ " } else { "  " };
+                    let style = if selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    let can_afford = state.resources.funding >= size.funding_cost();
+                    let has_personnel = state.personnel_available() >= size.personnel();
+                    let cost_color = if can_afford { Color::Yellow } else { Color::Red };
+                    let pers_color = if has_personnel { Color::Cyan } else { Color::Red };
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            format!("  {}◆ {:<8}", marker, size.label()),
+                            style,
+                        ),
+                        Span::styled(
+                            format!("{} plates ({} compounds)", size.plates(), size.total_wells()),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::raw("          "),
+                        Span::styled(
+                            format!("~{}  ", format_days(size.base_ticks())),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            format!("{} staff  ", size.personnel()),
+                            Style::default().fg(pers_color),
+                        ),
+                        Span::styled(
+                            format!("¥{:.0}", size.funding_cost()),
+                            Style::default().fg(cost_color),
+                        ),
+                    ]));
+                    selectable_idx += 1;
+                } else {
+                    lines.push(Line::from(Span::styled(
+                        format!("    ◇ {} [LOCKED — need HTS tech]", size.label()),
+                        Style::default().fg(Color::DarkGray),
+                    )));
+                }
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  [Enter] Begin Run  [Esc] Back",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        _ => {} // unreachable for other states
     }
 
     let block = Block::default()
