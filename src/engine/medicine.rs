@@ -180,7 +180,7 @@ fn deliver_shipment(state: &mut WorldState, shipment: &Shipment, rng_misc: &mut 
     inf.infected -= actual;
     apply_immune_and_deaths(inf, actual, adverse_deaths);
     state.regions[reg_idx].dead += adverse_deaths;
-    build_resistance(state, med_idx, disease_idx, true);
+    build_resistance(state, med_idx, disease_idx);
     let net_treated = (actual - adverse_deaths).max(0.0);
     state.medicines[med_idx].total_treated += net_treated;
     let people_treated = net_treated;
@@ -231,10 +231,10 @@ fn apply_immune_and_deaths(
 /// Mechanism-specific multipliers further modify: cheap/fast mechanisms
 /// have high resistance rates, expensive/durable ones have low rates.
 /// CombinationTherapy tech halves all resistance buildup.
-fn build_resistance(state: &mut WorldState, medicine_idx: usize, disease_idx: usize, is_treatment: bool) {
+fn build_resistance(state: &mut WorldState, medicine_idx: usize, disease_idx: usize) {
     let med = &state.medicines[medicine_idx];
     let mechanism = med.mechanism;
-    let base = if is_treatment { 0.006 } else { 0.001 };
+    let base = 0.006;
     let type_mult = match med.therapy_type {
         crate::state::TherapyType::BroadSpectrum => 2.0,
         _ => 1.0,
