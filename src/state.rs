@@ -4759,12 +4759,13 @@ pub enum LabUiState {
     /// sizes). Enter submits from any position. The per-section fields below
     /// remember the player's choice in each section as the cursor moves.
     ScreeningConfigForm {
-        /// Index into screening_eligible_diseases()
-        disease_sel: usize,
-        /// Index into unlocked modalities
-        modality_sel: usize,
-        /// Index into unlocked run sizes
-        run_size_sel: usize,
+        /// Actual disease index (not a position in the eligible list) for stability —
+        /// screening_eligible_diseases() can shift between form open and submit.
+        disease_idx: usize,
+        /// Selected modality (stored as value, not index into filtered list)
+        modality: ScreeningModality,
+        /// Selected run size (stored as value, not index into filtered list)
+        run_size: ScreeningRunSize,
     },
     /// Reactor configuration: select which medicine to assign to a reactor.
     ReactorSelectMedicine { reactor_idx: usize },

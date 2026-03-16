@@ -682,10 +682,20 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 ResearchFlatItem::ActiveScreening(_) => {}
                 // Start New Screening Run → open config form
                 ResearchFlatItem::StartNewScreening => {
+                    let eligible = state.screening_eligible_diseases();
+                    let first_disease = eligible.first().copied().unwrap_or(0);
+                    let first_modality = ScreeningModality::ALL.iter()
+                        .find(|m| m.is_unlocked(&state.unlocked_techs))
+                        .copied()
+                        .unwrap_or(ScreeningModality::ALL[0]);
+                    let first_run_size = ScreeningRunSize::ALL.iter()
+                        .find(|s| s.is_unlocked())
+                        .copied()
+                        .unwrap_or(ScreeningRunSize::ALL[0]);
                     ui.lab_ui = Some(LabUiState::ScreeningConfigForm {
-                        disease_sel: 0,
-                        modality_sel: 0,
-                        run_size_sel: 0,
+                        disease_idx: first_disease,
+                        modality: first_modality,
+                        run_size: first_run_size,
                     });
                     ui.panel_selection = 0;
                     return None;
@@ -711,21 +721,13 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             Some(GameCommand::UpgradeLab)
         }
         // Screening config form: Enter submits from any position
-        Some(LabUiState::ScreeningConfigForm { disease_sel, modality_sel, run_size_sel }) => {
+        Some(LabUiState::ScreeningConfigForm { disease_idx, modality, run_size }) => {
+            // Validate the stored values are still eligible before submitting
             let eligible = state.screening_eligible_diseases();
-            let unlocked_mods: Vec<_> = ScreeningModality::ALL.iter()
-                .filter(|m| m.is_unlocked(&state.unlocked_techs))
-                .copied()
-                .collect();
-            let unlocked_sizes: Vec<_> = ScreeningRunSize::ALL.iter()
-                .filter(|s| s.is_unlocked())
-                .copied()
-                .collect();
-            if let (Some(&disease_idx), Some(&modality), Some(&run_size)) = (
-                eligible.get(disease_sel),
-                unlocked_mods.get(modality_sel),
-                unlocked_sizes.get(run_size_sel),
-            ) {
+            if eligible.contains(&disease_idx)
+                && modality.is_unlocked(&state.unlocked_techs)
+                && run_size.is_unlocked()
+            {
                 return Some(GameCommand::StartScreening {
                     disease_idx,
                     modality,
@@ -1013,29 +1015,11 @@ fn sync_screening_form_selection(state: &mut AppState) {
     // First, compute the new selections without borrowing lab_ui mutably
     let update = if let Some(LabUiState::ScreeningConfigForm { .. }) = &state.ui.lab_ui {
         let items = state.screening_form_items();
-        items.get(state.ui.panel_selection).and_then(|item| {
+        items.get(state.ui.panel_selection).map(|item| {
             match item {
-                ScreeningFormItem::Disease(d_idx) => {
-                    let eligible = state.screening_eligible_diseases();
-                    eligible.iter().position(|&d| d == *d_idx)
-                        .map(|pos| (Some(pos), None, None))
-                }
-                ScreeningFormItem::Modality(m) => {
-                    let unlocked: Vec<_> = ScreeningModality::ALL.iter()
-                        .filter(|mod_| mod_.is_unlocked(&state.unlocked_techs))
-                        .copied()
-                        .collect();
-                    unlocked.iter().position(|u| u == m)
-                        .map(|pos| (None, Some(pos), None))
-                }
-                ScreeningFormItem::RunSize(s) => {
-                    let unlocked: Vec<_> = ScreeningRunSize::ALL.iter()
-                        .filter(|sz| sz.is_unlocked())
-                        .copied()
-                        .collect();
-                    unlocked.iter().position(|u| u == s)
-                        .map(|pos| (None, None, Some(pos)))
-                }
+                ScreeningFormItem::Disease(d_idx) => (Some(*d_idx), None, None),
+                ScreeningFormItem::Modality(m) => (None, Some(*m), None),
+                ScreeningFormItem::RunSize(s) => (None, None, Some(*s)),
             }
         })
     } else {
@@ -1044,11 +1028,11 @@ fn sync_screening_form_selection(state: &mut AppState) {
 
     // Now apply the update
     if let (Some(upd), Some(LabUiState::ScreeningConfigForm {
-        disease_sel, modality_sel, run_size_sel
+        disease_idx, modality, run_size
     })) = (update, &mut state.ui.lab_ui) {
-        if let Some(d) = upd.0 { *disease_sel = d; }
-        if let Some(m) = upd.1 { *modality_sel = m; }
-        if let Some(s) = upd.2 { *run_size_sel = s; }
+        if let Some(d) = upd.0 { *disease_idx = d; }
+        if let Some(m) = upd.1 { *modality = m; }
+        if let Some(s) = upd.2 { *run_size = s; }
     }
 }
 

@@ -661,12 +661,12 @@ fn render_active_screening(lines: &mut Vec<Line<'static>>, run: &crate::state::S
 fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     let sel = state.ui.panel_selection;
 
-    // Get the stored per-section selections
-    let (disease_sel, modality_sel, run_size_sel) = match &state.ui.lab_ui {
-        Some(LabUiState::ScreeningConfigForm { disease_sel, modality_sel, run_size_sel }) => {
-            (*disease_sel, *modality_sel, *run_size_sel)
+    // Get the stored per-section selections (actual values, not indices)
+    let (chosen_disease_idx, chosen_modality, chosen_run_size) = match &state.ui.lab_ui {
+        Some(LabUiState::ScreeningConfigForm { disease_idx, modality, run_size }) => {
+            (*disease_idx, *modality, *run_size)
         }
-        _ => (0, 0, 0),
+        _ => (0, ScreeningModality::ALL[0], ScreeningRunSize::ALL[0]),
     };
 
     let mut lines: Vec<Line> = Vec::new();
@@ -693,9 +693,9 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     let mut flat_idx = 0;
-    for (i, &d_idx) in eligible.iter().enumerate() {
+    for &d_idx in eligible.iter() {
         let cursor_here = sel == flat_idx;
-        let is_chosen = i == disease_sel;
+        let is_chosen = d_idx == chosen_disease_idx;
         let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };
         let disease = &state.diseases[d_idx];
         let name = disease.display_name(d_idx);
@@ -728,12 +728,11 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     )));
     lines.push(Line::from(""));
 
-    let mut unlocked_mod_idx = 0;
     for modality in ScreeningModality::ALL.iter() {
         let unlocked = modality.is_unlocked(&state.unlocked_techs);
         if unlocked {
             let cursor_here = sel == flat_idx;
-            let is_chosen = unlocked_mod_idx == modality_sel;
+            let is_chosen = *modality == chosen_modality;
             let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };
             let style = if cursor_here {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -750,7 +749,6 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
                 ),
             ]));
             flat_idx += 1;
-            unlocked_mod_idx += 1;
         } else {
             let lock_reason = modality.required_tech()
                 .map(|t| format!("need {}", t.name()))
@@ -771,11 +769,10 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     )));
     lines.push(Line::from(""));
 
-    let mut unlocked_size_idx = 0;
     for size in ScreeningRunSize::ALL.iter() {
         if size.is_unlocked() {
             let cursor_here = sel == flat_idx;
-            let is_chosen = unlocked_size_idx == run_size_sel;
+            let is_chosen = *size == chosen_run_size;
             let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };
             let style = if cursor_here {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -814,7 +811,6 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
                 ),
             ]));
             flat_idx += 1;
-            unlocked_size_idx += 1;
         } else {
             lines.push(Line::from(Span::styled(
                 format!("    ◇ {} [LOCKED — need HTS tech]", size.label()),
