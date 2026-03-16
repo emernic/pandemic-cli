@@ -3726,57 +3726,65 @@ impl BasicTech {
         }
     }
 
+    /// Tech-to-tech prerequisite. Returns the BasicTech that must be unlocked
+    /// before this one. Returns None for root techs (which have non-tech
+    /// prerequisites like "identify any pathogen").
+    /// This is the single source of truth for the tech dependency graph —
+    /// both `prerequisites_met()` and the UI's visual edges derive from it.
+    pub fn tech_prereq(&self) -> Option<BasicTech> {
+        match self {
+            // Root techs (non-tech prerequisites only)
+            BasicTech::TargetedDrugDesign => None,
+            BasicTech::RapidSequencing => None,
+            BasicTech::AutomatedSynthesis => None,
+
+            // Column 0 chain
+            BasicTech::MonoclonalAntibodies => Some(BasicTech::TargetedDrugDesign),
+            BasicTech::PhageTherapy => Some(BasicTech::MonoclonalAntibodies),
+            BasicTech::VaccinePlatform => Some(BasicTech::PhageTherapy),
+            BasicTech::ResilientGrids => Some(BasicTech::VaccinePlatform),
+
+            // Column 1 chain
+            BasicTech::ResistanceSurveillance => Some(BasicTech::RapidSequencing),
+            BasicTech::MetagenomicSurveillance => Some(BasicTech::ResistanceSurveillance),
+            BasicTech::EpidemiologicalForecasting => Some(BasicTech::MetagenomicSurveillance),
+            BasicTech::CombinationTherapy => Some(BasicTech::EpidemiologicalForecasting),
+
+            // Column 2 chain
+            BasicTech::StabilizedFormulation => Some(BasicTech::AutomatedSynthesis),
+        }
+    }
+
     /// Whether all prerequisites for this tech are satisfied.
     pub fn prerequisites_met(&self, state: &WorldState) -> bool {
+        // Check tech-to-tech prerequisite
+        if let Some(prereq) = self.tech_prereq() {
+            if !state.unlocked_techs.contains(&prereq) {
+                return false;
+            }
+        }
+
+        // Additional non-tech prerequisites for specific techs
         match self {
-            // ── Column 0: Drug design → interventions ──────────────
             BasicTech::TargetedDrugDesign => {
                 // Prereq: identified any pathogen (any disease with knowledge > 0)
                 state.diseases.iter().any(|d| d.knowledge > 0.0)
             }
-            BasicTech::MonoclonalAntibodies => {
-                state.unlocked_techs.contains(&BasicTech::TargetedDrugDesign)
-            }
-            BasicTech::PhageTherapy => {
-                state.unlocked_techs.contains(&BasicTech::MonoclonalAntibodies)
-            }
-            BasicTech::VaccinePlatform => {
-                state.unlocked_techs.contains(&BasicTech::PhageTherapy)
-            }
-            BasicTech::ResilientGrids => {
-                state.unlocked_techs.contains(&BasicTech::VaccinePlatform)
-            }
-
-            // ── Column 1: Sequencing → surveillance ────────────────
             BasicTech::RapidSequencing => {
                 // Prereq: completed at least one genomic sequencing on any disease
                 state.diseases.iter().any(|d| d.sequencing_count > 0)
             }
-            BasicTech::ResistanceSurveillance => {
-                state.unlocked_techs.contains(&BasicTech::RapidSequencing)
-            }
-            BasicTech::MetagenomicSurveillance => {
-                state.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
-            }
-            BasicTech::EpidemiologicalForecasting => {
-                state.unlocked_techs.contains(&BasicTech::MetagenomicSurveillance)
-            }
-            BasicTech::CombinationTherapy => {
-                // Chain prereq + non-tech prereq: deploy 2+ different medicines
-                state.unlocked_techs.contains(&BasicTech::EpidemiologicalForecasting)
-                    && state.medicines.iter()
-                        .filter(|m| m.deployed_count > 0)
-                        .count() >= 2
-            }
-
-            // ── Column 2: Manufacturing ────────────────────────────
             BasicTech::AutomatedSynthesis => {
                 // Prereq: at least one targeted medicine developed (not broad-spectrum)
                 state.medicines.iter().any(|m| m.mechanism.is_some() && m.unlocked)
             }
-            BasicTech::StabilizedFormulation => {
-                state.unlocked_techs.contains(&BasicTech::AutomatedSynthesis)
+            BasicTech::CombinationTherapy => {
+                // Additional non-tech prereq: deploy 2+ different medicines
+                state.medicines.iter()
+                    .filter(|m| m.deployed_count > 0)
+                    .count() >= 2
             }
+            _ => true,
         }
     }
 

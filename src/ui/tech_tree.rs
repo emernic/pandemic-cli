@@ -60,26 +60,16 @@ fn tree_layout() -> Vec<TechNode> {
     ]
 }
 
-/// Visual edges. Every edge goes from row N to row N+1 only.
+/// Visual edges derived from `BasicTech::tech_prereq()` — single source of truth.
 fn tree_edges() -> Vec<TechEdge> {
-    use BasicTech::*;
-    vec![
-        // Col 0 chain
-        TechEdge { from: TargetedDrugDesign,      to: MonoclonalAntibodies },
-        TechEdge { from: MonoclonalAntibodies,     to: PhageTherapy },
-        TechEdge { from: PhageTherapy,             to: VaccinePlatform },
-        TechEdge { from: VaccinePlatform,          to: ResilientGrids },
-
-        // Col 1 chain
-        TechEdge { from: RapidSequencing,          to: ResistanceSurveillance },
-        TechEdge { from: ResistanceSurveillance,   to: MetagenomicSurveillance },
-        TechEdge { from: MetagenomicSurveillance,  to: EpidemiologicalForecasting },
-        TechEdge { from: EpidemiologicalForecasting, to: CombinationTherapy },
-
-        // Col 2 chain
-        TechEdge { from: AutomatedSynthesis,       to: StabilizedFormulation },
-
-    ]
+    let layout = tree_layout();
+    let mut edges = Vec::new();
+    for node in &layout {
+        if let Some(prereq) = node.tech.tech_prereq() {
+            edges.push(TechEdge { from: prereq, to: node.tech });
+        }
+    }
+    edges
 }
 
 fn find_node(layout: &[TechNode], tech: BasicTech) -> Option<&TechNode> {
