@@ -225,11 +225,12 @@ cargo run -- --snapshot --key right              # navigate panels
 cargo run -- --snapshot --key m --days 0.5       # open medicines, advance half a day
 ```
 
-### Navigation Convention — Left/Right Always Controls Regions
+### Navigation Convention — Left/Right Controls Regions by Default
 
-**Left/right arrow keys always navigate the region map**, even when a panel is open. Up/down arrow keys navigate panel items when a panel is open, or the map when no panel is open.
+**Left/right arrow keys navigate the region map by default.** Up/down arrow keys navigate panel items when a panel is open, or the map when no panel is open. New panels should use up/down only for item navigation — left/right should pass through to the region map.
 
-- **Never use left/right for panel item navigation.** All panel lists (threats, research, medicines, policies) must use up/down only.
+**Exceptions** (panels with 2D navigation needs): the Lab panel uses left/right to switch tabs, and the Research panel uses left/right for tech tree grid navigation. These override left/right because they have inherent horizontal structure. Don't add new overrides without a similar justification.
+
 - Left/right use **reading order with wrap-around**: NA → Europe → Asia → SA → Africa → Oceania → NA (and reverse).
 - Up/down on the map move within the same column (no wrap).
 
