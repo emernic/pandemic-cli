@@ -3085,6 +3085,9 @@ pub const KNOWLEDGE_FOR_TARGETED: f64 = 1.0;
 pub const TICKS_PER_DAY: f64 = 60.0;
 /// Personnel added per completed TrainPersonnel project.
 pub const TRAIN_PERSONNEL_BATCH: u32 = 5;
+/// Fraction of max_doses produced per reactor batch (0.20 = 20%).
+/// With 5 batches to fill from empty, multiple reactors become meaningful.
+pub const REACTOR_BATCH_FRACTION: f64 = 0.20;
 /// Auto-repeat manufacturing only triggers when doses drop to this fraction of max.
 pub const AUTO_MANUFACTURE_THRESHOLD: f64 = 0.25;
 /// Minimum effective efficacy for deployment to fire. Below this threshold,
@@ -4063,7 +4066,7 @@ impl ResearchKind {
         match self {
             ResearchKind::IdentifyThreat { .. } => (5, 160.0, 350.0),
             ResearchKind::ClinicalTrial { rigor, .. } => rigor.costs(),
-            ResearchKind::ManufactureDoses { .. } => (3, 120.0, 250.0),
+            ResearchKind::ManufactureDoses { .. } => (3, 300.0, 150.0),
             ResearchKind::GenomicSequencing { .. } => (5, 200.0, 500.0),
             ResearchKind::TrainPersonnel => (5, 160.0, 150.0),
             ResearchKind::BasicResearch { tech } => match tech {
@@ -6844,13 +6847,6 @@ impl WorldState {
         {
             duration *= 0.75;
         }
-        // ManufactureDoses: scale cost and time by how depleted the stockpile is.
-        // At 0 doses you pay full price; at 90% full you pay 10%.
-        if let ResearchKind::ManufactureDoses { medicine_idx } = kind {
-            let depletion = self.manufacture_depletion_fraction(*medicine_idx);
-            duration *= depletion;
-            funding *= depletion;
-        }
         // Technocrat chairman: 10% research funding discount
         if self.chairman_personality() == Some(BoardPersonality::Technocrat) {
             funding *= 0.9;
@@ -6858,16 +6854,12 @@ impl WorldState {
         (personnel, duration, funding)
     }
 
-    /// Fraction of stockpile that needs manufacturing (0.0 = full, 1.0 = empty).
-    /// Used to scale ManufactureDoses cost and time proportionally.
-    pub fn manufacture_depletion_fraction(&self, medicine_idx: usize) -> f64 {
-        let target = self.medicines.get(medicine_idx)
+    /// Number of doses produced by a single reactor batch for a given medicine.
+    pub fn reactor_batch_output(&self, medicine_idx: usize) -> f64 {
+        let max = self.medicines.get(medicine_idx)
             .map(|m| m.max_doses)
-            .unwrap_or(1.0);
-        let current = self.medicines.get(medicine_idx)
-            .map(|m| m.doses)
             .unwrap_or(0.0);
-        ((target - current) / target).clamp(0.05, 1.0) // minimum 5% so it's never free
+        max * REACTOR_BATCH_FRACTION
     }
 
     /// True if the player has unlocked Resistance Surveillance (can see resistance levels).

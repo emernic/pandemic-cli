@@ -431,8 +431,9 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
             }
             ResearchKind::ManufactureDoses { medicine_idx } => {
                 let m_idx = *medicine_idx;
+                let batch_output = state.reactor_batch_output(m_idx);
                 if let Some(medicine) = state.medicines.get_mut(m_idx) {
-                    medicine.doses = medicine.max_doses;
+                    medicine.doses = (medicine.doses + batch_output).min(medicine.max_doses);
                 }
             }
             ResearchKind::TrainPersonnel => {
@@ -835,9 +836,9 @@ mod tests {
 
 
     #[test]
-    fn manufacture_doses_restores_supply() {
+    fn manufacture_doses_adds_batch_fraction() {
         use crate::engine::execute_command;
-        use crate::state::GameCommand;
+        use crate::state::{GameCommand, REACTOR_BATCH_FRACTION};
 
         let mut state = AppState::new_default(42);
         for med in &mut state.medicines {
@@ -846,6 +847,9 @@ mod tests {
         }
         state.medicines[0].doses = 0.0;
         state.resources.funding = 10000.0;
+
+        let max = state.medicines[0].max_doses;
+        let expected_batch = max * REACTOR_BATCH_FRACTION;
 
         // Configure reactor to produce medicine 0
         execute_command(&mut state, &GameCommand::ConfigureReactor { reactor_idx: 0, medicine_idx: Some(0) });
@@ -864,10 +868,13 @@ mod tests {
         state = state.with_world(tick(&state).0);
 
         assert!(!state.reactors[0].active, "reactor batch should be complete");
+        // Single batch produces REACTOR_BATCH_FRACTION of max_doses, not full stockpile
         assert_eq!(
-            state.medicines[0].doses, state.medicines[0].max_doses,
-            "doses should be restored to max_doses"
+            state.medicines[0].doses, expected_batch,
+            "doses should equal one batch ({}% of max)", REACTOR_BATCH_FRACTION * 100.0
         );
+        assert!(state.medicines[0].doses < state.medicines[0].max_doses,
+            "one batch should NOT fill the entire stockpile");
     }
 
     #[test]
