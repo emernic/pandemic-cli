@@ -8,6 +8,7 @@ mod loans;
 mod medicine;
 mod policy;
 mod research;
+mod screening;
 mod spread;
 
 use rand::Rng;
@@ -105,6 +106,8 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     for _ in 0..research_completions {
         board::on_research_completed(&mut new);
     }
+    // Drug screening progress
+    screening::tick_screening(&mut new, &mut events);
 
     // Auto-deploy medicines to worst-affected regions
     medicine::try_auto_deploy(&mut new, &mut events);
@@ -856,6 +859,10 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
         }
         GameCommand::StartResearch { project_idx, double_personnel } => {
             let (ok, msg) = research::start_research(state, *project_idx, *double_personnel);
+            CommandResult { message: msg, success: ok, events: Vec::new() }
+        }
+        GameCommand::StartScreening { disease_idx, modality, run_size } => {
+            let (ok, msg) = screening::start_screening(state, *disease_idx, *modality, *run_size);
             CommandResult { message: msg, success: ok, events: Vec::new() }
         }
         GameCommand::TogglePolicy {

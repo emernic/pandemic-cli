@@ -391,6 +391,18 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let msg = format!("{} deployment halted — resistance too high", med_name);
                 (3, msg.clone(), msg)
             }
+            GameEvent::ScreeningComplete { disease_idx, hit_count } => {
+                let disease_name = state.diseases.get(*disease_idx)
+                    .map(|d| d.display_name(*disease_idx))
+                    .unwrap_or_else(|| "?".to_string());
+                if *hit_count > 0 {
+                    let msg = format!("SCREENING: {} hit{} found against {}", hit_count, if *hit_count == 1 { "" } else { "s" }, disease_name);
+                    (1, msg.clone(), msg)
+                } else {
+                    let msg = format!("SCREENING: no hits found against {}", disease_name);
+                    (2, msg.clone(), msg)
+                }
+            }
             GameEvent::GameOver | GameEvent::CrisisStarted => continue,
         };
 

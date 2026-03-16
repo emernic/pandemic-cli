@@ -222,6 +222,12 @@ pub struct WorldState {
     /// Whether the board has sent the formal embezzlement warning letter.
     #[serde(default)]
     pub embezzlement_warned: bool,
+    /// Active drug screening runs (compound library screens against pathogens).
+    #[serde(default)]
+    pub screening_runs: Vec<ScreeningRun>,
+    /// Completed screening hits awaiting clinical trials.
+    #[serde(default)]
+    pub screening_hits: Vec<ScreeningHit>,
 }
 
 /// Runtime state combining world, UI, and session data.
@@ -3561,6 +3567,198 @@ impl ResearchProject {
     }
 }
 
+// ── Drug Screening System ──────────────────────────────────────────────
+
+/// Screening modality — the type of compound library used in a screening run.
+/// Chosen by the player at run start; becomes the future medicine's modality.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ScreeningModality {
+    SmallMolecule,
+    MonoclonalAntibody,
+    RnaTherapeutic,
+}
+
+impl ScreeningModality {
+    pub const ALL: [ScreeningModality; 3] = [
+        ScreeningModality::SmallMolecule,
+        ScreeningModality::MonoclonalAntibody,
+        ScreeningModality::RnaTherapeutic,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::SmallMolecule => "Small Molecule",
+            Self::MonoclonalAntibody => "Monoclonal Antibody",
+            Self::RnaTherapeutic => "RNA Therapeutic",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::SmallMolecule => "standard compound library",
+            Self::MonoclonalAntibody => "high specificity, slow",
+            Self::RnaTherapeutic => "programmable, moderate",
+        }
+    }
+
+    /// Tech prerequisite, if any. None means always available.
+    pub fn required_tech(self) -> Option<BasicTech> {
+        match self {
+            Self::SmallMolecule => None,
+            Self::MonoclonalAntibody => Some(BasicTech::MonoclonalAntibodies),
+            Self::RnaTherapeutic => None, // TODO: add RNA tech to tree
+        }
+    }
+
+    /// Whether this modality is currently available (always true if no tech needed).
+    /// RNA Therapeutic is not yet implemented — always locked.
+    pub fn is_unlocked(self, unlocked_techs: &[BasicTech]) -> bool {
+        match self {
+            Self::SmallMolecule => true,
+            Self::MonoclonalAntibody => unlocked_techs.contains(&BasicTech::MonoclonalAntibodies),
+            Self::RnaTherapeutic => false, // locked until RNA tech exists
+        }
+    }
+}
+
+/// Screening run size — determines plate count, cost, duration, and staffing.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ScreeningRunSize {
+    Small,
+    Medium,
+    Large,
+}
+
+impl ScreeningRunSize {
+    pub const ALL: [ScreeningRunSize; 3] = [
+        ScreeningRunSize::Small,
+        ScreeningRunSize::Medium,
+        ScreeningRunSize::Large,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Small => "Small",
+            Self::Medium => "Medium",
+            Self::Large => "Large",
+        }
+    }
+
+    pub fn plates(self) -> u32 {
+        match self {
+            Self::Small => 3,
+            Self::Medium => 5,
+            Self::Large => 10,
+        }
+    }
+
+    /// Total compounds (96 wells per plate).
+    pub fn total_wells(self) -> u32 {
+        self.plates() * WELLS_PER_PLATE
+    }
+
+    pub fn personnel(self) -> u32 {
+        match self {
+            Self::Small => 1,
+            Self::Medium => 3,
+            Self::Large => 5,
+        }
+    }
+
+    pub fn funding_cost(self) -> f64 {
+        match self {
+            Self::Small => 50.0,
+            Self::Medium => 120.0,
+            Self::Large => 300.0,
+        }
+    }
+
+    /// Base duration in ticks.
+    pub fn base_ticks(self) -> f64 {
+        match self {
+            Self::Small => 3.0 * TICKS_PER_DAY,
+            Self::Medium => 5.0 * TICKS_PER_DAY,
+            Self::Large => 8.0 * TICKS_PER_DAY,
+        }
+    }
+
+    /// Whether this size is currently unlocked. Large requires HTS tech (not yet in tree).
+    pub fn is_unlocked(self) -> bool {
+        match self {
+            Self::Small | Self::Medium => true,
+            Self::Large => false, // locked until HTS tech exists
+        }
+    }
+}
+
+pub const WELLS_PER_PLATE: u32 = 96;
+
+/// An active drug screening run.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ScreeningRun {
+    pub disease_idx: usize,
+    pub modality: ScreeningModality,
+    pub run_size: ScreeningRunSize,
+    pub progress: f64,
+    pub required_ticks: f64,
+    pub personnel_assigned: u32,
+    /// Hits found so far (populated incrementally as wells are tested).
+    pub hits: Vec<ScreeningHit>,
+    /// Random seed for deterministic hit generation.
+    pub hit_seed: u64,
+    /// Number of wells already checked for hits (to avoid re-rolling).
+    pub wells_checked_for_hits: u32,
+}
+
+impl ScreeningRun {
+    pub fn total_wells(&self) -> u32 {
+        self.run_size.total_wells()
+    }
+
+    pub fn wells_tested(&self) -> u32 {
+        let frac = (self.progress / self.required_ticks).min(1.0);
+        (frac * self.total_wells() as f64).round() as u32
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.progress >= self.required_ticks
+    }
+
+    pub fn plates(&self) -> u32 {
+        self.run_size.plates()
+    }
+}
+
+/// A screening hit — a compound that showed binding activity.
+/// Proto-medicine: goes to clinical trials to become a real Medicine.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ScreeningHit {
+    pub disease_idx: usize,
+    pub modality: ScreeningModality,
+    /// Binding affinity in nanomolar (lower = stronger binding = better).
+    pub kd_nm: f64,
+    /// Auto-generated compound identifier (e.g., "SM-001", "mAb-003").
+    pub compound_id: String,
+}
+
+impl ScreeningHit {
+    /// Qualitative assessment of binding affinity.
+    pub fn affinity_label(&self) -> &'static str {
+        if self.kd_nm < 1.0 {
+            "Excellent"
+        } else if self.kd_nm < 10.0 {
+            "Strong"
+        } else if self.kd_nm < 100.0 {
+            "Moderate"
+        } else {
+            "Weak"
+        }
+    }
+}
+
+/// Hit probability per well — chance that any given compound shows activity.
+pub const SCREENING_HIT_RATE: f64 = 0.012;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ResearchKind {
     IdentifyThreat { disease_idx: usize },
@@ -4170,6 +4368,11 @@ pub enum GameEvent {
     PolicyAuthorized {
         policy: PolicyId,
     },
+    /// A drug screening run completed.
+    ScreeningComplete {
+        disease_idx: usize,
+        hit_count: usize,
+    },
 }
 
 /// Automation rules that fire during tick when conditions are met.
@@ -4234,6 +4437,12 @@ pub enum GameCommand {
     ToggleCueTech { tech: BasicTech },
     /// Toggle threat visibility (hidden/shown) for aggregate UI displays.
     ToggleThreatVisibility { disease_idx: usize },
+    /// Start a new drug screening run.
+    StartScreening {
+        disease_idx: usize,
+        modality: ScreeningModality,
+        run_size: ScreeningRunSize,
+    },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
     /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
@@ -4579,6 +4788,13 @@ pub enum LabUiState {
     ConfirmProject { tab: LabTab, project_idx: usize, double_personnel: bool },
     /// Confirming a lab upgrade before purchasing.
     ConfirmLabUpgrade { tab: LabTab },
+    /// Screening wizard: step 1 — select target disease.
+    /// Navigation uses `panel_selection`.
+    ScreeningSelectDisease,
+    /// Screening wizard: step 2 — select modality.
+    ScreeningSelectModality { disease_idx: usize },
+    /// Screening wizard: step 3 — select run size and confirm.
+    ScreeningSelectSize { disease_idx: usize, modality: ScreeningModality },
 }
 
 impl LabUiState {
@@ -4588,6 +4804,9 @@ impl LabUiState {
             LabUiState::Browse { tab } => *tab,
             LabUiState::ConfirmProject { tab, .. } => *tab,
             LabUiState::ConfirmLabUpgrade { tab } => *tab,
+            LabUiState::ScreeningSelectDisease
+            | LabUiState::ScreeningSelectModality { .. }
+            | LabUiState::ScreeningSelectSize { .. } => LabTab::Screening,
         }
     }
 
@@ -4603,6 +4822,10 @@ impl LabUiState {
 pub enum ResearchFlatItem {
     /// An active research project (index into `active_research` vec).
     Active(usize),
+    /// An active screening run (index into `screening_runs` vec).
+    ActiveScreening(usize),
+    /// "Start New Run" button in the Screening tab.
+    StartNewScreening,
     /// An available (startable) project. Index into `all_available_projects()`.
     Available(usize),
     /// Manufacturing with a full stockpile — visible for auto-toggle but not startable.
@@ -4629,7 +4852,9 @@ impl ResearchFlatItem {
             Self::Active(idx) => state.active_research.get(*idx).map(|p| p.kind.clone()),
             Self::Available(idx) => state.all_available_projects().get(*idx).cloned(),
             Self::FullStockpile(kind) => Some(kind.clone()),
-            Self::UpgradeLab => None,
+            Self::UpgradeLab
+            | Self::ActiveScreening(_)
+            | Self::StartNewScreening => None,
         }
     }
 }
@@ -4898,6 +5123,21 @@ impl UiState {
                     | Some(LabUiState::ConfirmLabUpgrade { tab }) => {
                         let tab = *tab;
                         self.lab_ui = Some(LabUiState::Browse { tab });
+                        self.panel_selection = 0;
+                    }
+                    // Screening wizard: Esc goes back one step
+                    Some(LabUiState::ScreeningSelectDisease) => {
+                        self.lab_ui = Some(LabUiState::Browse { tab: LabTab::Screening });
+                        self.panel_selection = 0;
+                    }
+                    Some(LabUiState::ScreeningSelectModality { .. }) => {
+                        self.lab_ui = Some(LabUiState::ScreeningSelectDisease);
+                        self.panel_selection = 0;
+                    }
+                    Some(LabUiState::ScreeningSelectSize { disease_idx, .. }) => {
+                        self.lab_ui = Some(LabUiState::ScreeningSelectModality {
+                            disease_idx: *disease_idx,
+                        });
                         self.panel_selection = 0;
                     }
                     Some(LabUiState::Browse { .. }) | None => {
@@ -5576,6 +5816,8 @@ impl WorldState {
             loans: vec![],
             cumulative_policy_spending: 0.0,
             embezzlement_warned: false,
+            screening_runs: Vec::new(),
+            screening_hits: Vec::new(),
         }
     }
 
@@ -5767,7 +6009,8 @@ impl WorldState {
             _ => 0,
         }).sum();
         let crisis_ops: u32 = self.crisis_operations.iter().map(|op| op.personnel).sum();
-        research + policy + hospitals + intel + crisis_ops
+        let screening: u32 = self.screening_runs.iter().map(|r| r.personnel_assigned).sum();
+        research + policy + hospitals + intel + crisis_ops + screening
     }
 
     pub fn personnel_available(&self) -> u32 {
@@ -6422,7 +6665,12 @@ impl WorldState {
     }
 
     /// Items for a specific lab tab, filtered from the flat list.
+    /// Screening tab uses its own item system (screening runs + start button).
     pub fn lab_tab_items(&self, tab: LabTab) -> Vec<ResearchFlatItem> {
+        if tab == LabTab::Screening {
+            return self.screening_tab_items();
+        }
+
         let all = self.research_flat_items();
         all.into_iter().filter(|item| {
             match item {
@@ -6443,8 +6691,48 @@ impl WorldState {
                 }
                 ResearchFlatItem::FullStockpile(kind) => kind.lab_tab() == Some(tab),
                 ResearchFlatItem::UpgradeLab => tab == LabTab::Sequencing,
+                ResearchFlatItem::ActiveScreening(_) | ResearchFlatItem::StartNewScreening => false,
             }
         }).collect()
+    }
+
+    /// Items for the Screening tab: active screening runs + "Start New Run" + legacy items.
+    fn screening_tab_items(&self) -> Vec<ResearchFlatItem> {
+        let mut items = Vec::new();
+
+        // Active screening runs first
+        for i in 0..self.screening_runs.len() {
+            items.push(ResearchFlatItem::ActiveScreening(i));
+        }
+        // "Start New Run" if there are eligible diseases
+        if !self.screening_eligible_diseases().is_empty() {
+            items.push(ResearchFlatItem::StartNewScreening);
+        }
+
+        // Legacy DevelopMedicine and TrainPersonnel items (coexist during transition)
+        let all_research = self.research_flat_items();
+        let available = self.all_available_projects();
+        for item in all_research {
+            match &item {
+                ResearchFlatItem::Active(ai) => {
+                    if let Some(project) = self.active_research.get(*ai) {
+                        if project.kind.lab_tab() == Some(LabTab::Screening) {
+                            items.push(item);
+                        }
+                    }
+                }
+                ResearchFlatItem::Available(avail_idx) => {
+                    if let Some(kind) = available.get(*avail_idx) {
+                        if kind.lab_tab() == Some(LabTab::Screening) {
+                            items.push(item);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        items
     }
 
     /// Project costs adjusted for unlocked technologies.
@@ -6755,6 +7043,14 @@ impl WorldState {
             projects.push(kind);
         }
         projects
+    }
+
+    /// Diseases eligible for drug screening (identified, i.e. knowledge >= KNOWLEDGE_NAME).
+    pub fn screening_eligible_diseases(&self) -> Vec<usize> {
+        self.diseases.iter().enumerate()
+            .filter(|(_, d)| d.detected && d.knowledge >= KNOWLEDGE_NAME)
+            .map(|(i, _)| i)
+            .collect()
     }
 
     /// Diseases that are identified but cannot yet be developed in Applied Research, with reasons.

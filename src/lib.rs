@@ -12,7 +12,7 @@ use state::{
     DecreeId, DECREE_COUNT, GameCommand, GameOutcome, AppState,
     LedgerUiState, MANAGE_NEGOTIATE_POS, MANAGE_BARGAIN_POS,
     MedicineUiState, OpsUiState, Panel, PolicyId, PolicyUiState, POLICY_COUNT,
-    ResearchFlatItem, ResearchKind, LabTab, LabUiState, SimState,
+    ResearchFlatItem, ResearchKind, LabTab, LabUiState, SimState, ScreeningModality, ScreeningRunSize,
     STANDING_ORDER_COUNT, StandingOrderKind, UiState, grid_reading_order, policy_display_order,
 };
 
@@ -299,6 +299,10 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             // Research panel: keep selection in place so player
                             // can see the tech now shows "Researching" state.
                         }
+                        GameCommand::StartScreening { .. } if result.success => {
+                            new.ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Screening });
+                            new.ui.panel_selection = 0;
+                        }
                         GameCommand::UpgradeLab if result.success => {
                             let tab = new.ui.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
                             new.ui.lab_ui = Some(LabUiState::Browse { tab });
@@ -569,6 +573,14 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                 }
                 // Full stockpile: Enter is a no-op
                 ResearchFlatItem::FullStockpile(_) => {}
+                // Active screening runs: Enter is a no-op
+                ResearchFlatItem::ActiveScreening(_) => {}
+                // Start New Screening Run → open wizard
+                ResearchFlatItem::StartNewScreening => {
+                    ui.lab_ui = Some(LabUiState::ScreeningSelectDisease);
+                    ui.panel_selection = 0;
+                    return None;
+                }
             }
             None
         }
@@ -577,6 +589,47 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
         }
         Some(LabUiState::ConfirmLabUpgrade { .. }) => {
             Some(GameCommand::UpgradeLab)
+        }
+        // Screening wizard: select disease → advance to modality
+        Some(LabUiState::ScreeningSelectDisease) => {
+            let eligible = state.screening_eligible_diseases();
+            if let Some(&disease_idx) = eligible.get(ui.panel_selection) {
+                ui.lab_ui = Some(LabUiState::ScreeningSelectModality {
+                    disease_idx,
+                });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        // Screening wizard: select modality → advance to run size
+        Some(LabUiState::ScreeningSelectModality { disease_idx }) => {
+            let unlocked: Vec<_> = ScreeningModality::ALL.iter()
+                .filter(|m| m.is_unlocked(&state.unlocked_techs))
+                .copied()
+                .collect();
+            if let Some(&modality) = unlocked.get(ui.panel_selection) {
+                ui.lab_ui = Some(LabUiState::ScreeningSelectSize {
+                    disease_idx,
+                    modality,
+                });
+                ui.panel_selection = 0;
+            }
+            None
+        }
+        // Screening wizard: select run size → start screening
+        Some(LabUiState::ScreeningSelectSize { disease_idx, modality }) => {
+            let unlocked: Vec<_> = ScreeningRunSize::ALL.iter()
+                .filter(|s| s.is_unlocked())
+                .copied()
+                .collect();
+            if let Some(&run_size) = unlocked.get(ui.panel_selection) {
+                return Some(GameCommand::StartScreening {
+                    disease_idx,
+                    modality,
+                    run_size,
+                });
+            }
+            None
         }
         None => None,
     }
