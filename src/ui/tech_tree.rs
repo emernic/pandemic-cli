@@ -310,13 +310,13 @@ fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize,
             matches!(r.kind, ResearchKind::BasicResearch { tech } if tech == node.tech)
         });
 
-        let is_cued = state.world.cued_techs.contains(&node.tech);
+        let is_queued = state.world.queued_techs.contains(&node.tech);
 
         let (border_color, name_color) = if is_unlocked {
             (Color::Green, Color::Green)
         } else if is_researching {
             (Color::Yellow, Color::Yellow)
-        } else if is_cued {
+        } else if is_queued {
             (Color::Rgb(210, 180, 140), Color::Rgb(210, 180, 140))
         } else if is_available {
             (Color::White, Color::White)
@@ -456,14 +456,14 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicT
         matches!(r.kind, ResearchKind::BasicResearch { tech: t } if t == tech)
     });
 
-    let is_cued = state.world.cued_techs.contains(&tech);
+    let is_queued = state.world.queued_techs.contains(&tech);
 
     let (status_text, status_color) = if is_unlocked {
         ("UNLOCKED", Color::Green)
     } else if active_research.is_some() {
         ("RESEARCHING", Color::Yellow)
-    } else if is_cued {
-        ("CUED", Color::Rgb(210, 180, 140))
+    } else if is_queued {
+        ("QUEUED", Color::Rgb(210, 180, 140))
     } else if is_available {
         ("AVAILABLE", Color::Cyan)
     } else {
