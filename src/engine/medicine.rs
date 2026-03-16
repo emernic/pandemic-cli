@@ -175,7 +175,8 @@ fn deliver_shipment(state: &mut WorldState, shipment: &Shipment, rng_misc: &mut 
         .estimate_treatment(infected, efficacy)
         .min(effective_doses);
     if actual <= 0.0 { return; }
-    let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, infected);
+    let side_effect_rate = state.medicines[med_idx].side_effect_rate;
+    let (adverse, adverse_deaths) = adverse_check(rng_misc, actual, is_tested, side_effect_rate, infected);
     let inf = state.regions[reg_idx].get_or_create_infection(disease_idx);
     inf.infected -= actual;
     apply_immune_and_deaths(inf, actual, adverse_deaths);
@@ -196,13 +197,21 @@ fn deliver_shipment(state: &mut WorldState, shipment: &Shipment, rng_misc: &mut 
     });
 }
 
-/// Roll for adverse reaction on untested medicines.
+/// Roll for adverse reaction during deployment.
+/// Untested medicines use a flat 25% chance (unknown risk). Tested medicines
+/// use the medicine's side_effect_rate from clinical trials — the actual risk
+/// the trial was supposed to reveal.
 /// Returns (adverse_occurred, deaths). Deaths are capped at `max_deaths`
 /// to prevent killing more people than the target population.
-fn adverse_check(rng: &mut impl Rng, actual: f64, is_tested: bool, max_deaths: f64) -> (bool, f64) {
-    if !is_tested {
+fn adverse_check(rng: &mut impl Rng, actual: f64, is_tested: bool, side_effect_rate: f64, max_deaths: f64) -> (bool, f64) {
+    let chance = if is_tested {
+        side_effect_rate
+    } else {
+        0.25
+    };
+    if chance > 0.0 {
         let roll: f64 = rng.r#gen();
-        if roll < 0.25 {
+        if roll < chance {
             let deaths = (actual * 0.2).min(max_deaths);
             return (true, deaths);
         }
@@ -228,8 +237,9 @@ fn apply_immune_and_deaths(
 
 /// Build resistance from deployment pressure. Broad-spectrum drugs build resistance
 /// faster (2x) because broad selection pressure accelerates adaptation.
-/// Mechanism-specific multipliers further modify: cheap/fast mechanisms
-/// have high resistance rates, expensive/durable ones have low rates.
+/// When the medicine has a trial-determined resistance_rate, uses that instead
+/// of the mechanism's generic multiplier — the trial captured how resistant-prone
+/// this specific compound is. Falls back to mechanism multiplier for non-trial medicines.
 /// CombinationTherapy tech halves all resistance buildup.
 fn build_resistance(state: &mut WorldState, medicine_idx: usize, disease_idx: usize) {
     let med = &state.medicines[medicine_idx];
@@ -239,7 +249,15 @@ fn build_resistance(state: &mut WorldState, medicine_idx: usize, disease_idx: us
         crate::state::TherapyType::BroadSpectrum => 2.0,
         _ => 1.0,
     };
-    let mech_mult = mechanism.map(|m| m.resistance_rate_multiplier()).unwrap_or(1.0);
+    // Trial-determined resistance_rate (0.0–1.0) maps to a multiplier range
+    // matching the mechanism multiplier range (~0.3–1.8). Non-trial medicines
+    // fall back to the generic mechanism multiplier.
+    let mech_mult = if med.resistance_rate > 0.0 || med.trial_efficacy.is_some() {
+        // Map 0.0–1.0 to 0.3–1.8 (same range as mechanism multipliers)
+        0.3 + med.resistance_rate * 1.5
+    } else {
+        mechanism.map(|m| m.resistance_rate_multiplier()).unwrap_or(1.0)
+    };
     let combo_mult = state.resistance_multiplier();
     let gain = base * type_mult * mech_mult * combo_mult;
     // Resistance lives on the disease, keyed by mechanism — so deploying
