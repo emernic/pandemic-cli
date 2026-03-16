@@ -434,4 +434,43 @@ mod tests {
             "budget panel should show shipment count");
     }
 
+    #[test]
+    fn screening_form_shows_explicit_submit_row_and_persisted_choices() {
+        use crate::state::{
+            BasicTech, KNOWLEDGE_NAME, LabUiState, Panel, ScreeningFormItem,
+            ScreeningModality, ScreeningRunSize,
+        };
+
+        let mut state = AppState::new_default(42);
+        state.ui.home_splash_done = true;
+        state.ui.open_panel = Panel::Lab;
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = KNOWLEDGE_NAME;
+        state.unlocked_techs.push(BasicTech::MonoclonalAntibodies);
+        state.ui.lab_ui = Some(LabUiState::ScreeningConfigForm {
+            disease_idx: 0,
+            modality: ScreeningModality::MonoclonalAntibody,
+            run_size: ScreeningRunSize::Medium,
+        });
+        state.ui.panel_selection = state.screening_form_items().iter()
+            .position(|item| *item == ScreeningFormItem::Confirm)
+            .expect("screening form should expose a confirm row");
+
+        let screen = render_to_string(&state);
+        let disease_name = state.diseases[0].display_name(0);
+
+        assert!(screen.contains("▶ Start Screening Run"),
+            "screening form should expose an explicit focused submit row");
+        assert!(screen.contains("◆  Monoclonal Antibody"),
+            "screening form should show the committed modality separately from focus");
+        assert!(screen.contains("◆  Medium"),
+            "screening form should show the committed run size separately from focus");
+        assert!(screen.contains(&format!("{disease_name} / Monoclonal Antibody / Medium")),
+            "submit row should summarize the chosen configuration");
+        assert!(screen.contains("[Enter] Select / Start"),
+            "footer should explain Enter selects rows and starts from the submit row");
+        assert!(!screen.contains("[Enter] Begin Run"),
+            "screening form should not imply Enter submits from every row");
+    }
+
 }

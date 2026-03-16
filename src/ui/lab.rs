@@ -670,6 +670,21 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     };
 
     let mut lines: Vec<Line> = Vec::new();
+    let marker = |cursor_here: bool, is_chosen: bool| match (cursor_here, is_chosen) {
+        (true, true) => "▶◆ ",
+        (true, false) => "▶  ",
+        (false, true) => "◆  ",
+        (false, false) => "   ",
+    };
+    let row_style = |cursor_here: bool, is_chosen: bool| {
+        if cursor_here {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else if is_chosen {
+            Style::default().fg(Color::Green)
+        } else {
+            Style::default().fg(Color::White)
+        }
+    };
 
     lines.push(Line::from(Span::styled(
         "  New Screening Run",
@@ -696,7 +711,6 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     for &d_idx in eligible.iter() {
         let cursor_here = sel == flat_idx;
         let is_chosen = d_idx == chosen_disease_idx;
-        let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };
         let disease = &state.diseases[d_idx];
         let name = disease.display_name(d_idx);
         let knowledge_pct = (disease.knowledge * 100.0) as u32;
@@ -705,15 +719,8 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
         } else {
             format!("{}% knowledge", knowledge_pct)
         };
-        let style = if cursor_here {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else if is_chosen {
-            Style::default().fg(Color::Green)
-        } else {
-            Style::default().fg(Color::White)
-        };
         lines.push(Line::from(vec![
-            Span::styled(format!("  {}{}", marker, name), style),
+            Span::styled(format!("  {}{}", marker(cursor_here, is_chosen), name), row_style(cursor_here, is_chosen)),
             Span::styled(format!("  ({})", status), Style::default().fg(Color::DarkGray)),
         ]));
         flat_idx += 1;
@@ -733,16 +740,11 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
         if unlocked {
             let cursor_here = sel == flat_idx;
             let is_chosen = *modality == chosen_modality;
-            let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };
-            let style = if cursor_here {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else if is_chosen {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::White)
-            };
             lines.push(Line::from(vec![
-                Span::styled(format!("  {}{}", marker, modality.label()), style),
+                Span::styled(
+                    format!("  {}{}", marker(cursor_here, is_chosen), modality.label()),
+                    row_style(cursor_here, is_chosen),
+                ),
                 Span::styled(
                     format!("  {}", modality.description()),
                     Style::default().fg(Color::DarkGray),
@@ -773,22 +775,14 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
         if size.is_unlocked(&state.unlocked_techs) {
             let cursor_here = sel == flat_idx;
             let is_chosen = *size == chosen_run_size;
-            let marker = if cursor_here { "▶ " } else if is_chosen { "◆ " } else { "  " };
-            let style = if cursor_here {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else if is_chosen {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::White)
-            };
             let can_afford = state.resources.funding >= size.funding_cost();
             let has_personnel = state.personnel_available() >= size.personnel();
             let cost_color = if can_afford { Color::Yellow } else { Color::Red };
             let pers_color = if has_personnel { Color::Cyan } else { Color::Red };
             lines.push(Line::from(vec![
                 Span::styled(
-                    format!("  {}{:<8}", marker, size.label()),
-                    style,
+                    format!("  {}{:<8}", marker(cursor_here, is_chosen), size.label()),
+                    row_style(cursor_here, is_chosen),
                 ),
                 Span::styled(
                     format!("{} plates ({} compounds)", size.plates(), size.total_wells()),
@@ -820,8 +814,42 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     lines.push(Line::from(""));
+    let chosen_disease_name = state.diseases.get(chosen_disease_idx)
+        .map(|d| d.display_name(chosen_disease_idx))
+        .unwrap_or_else(|| "Unknown pathogen".to_string());
+    let can_submit = eligible.contains(&chosen_disease_idx)
+        && chosen_modality.is_unlocked(&state.unlocked_techs)
+        && chosen_run_size.is_unlocked(&state.unlocked_techs);
+    let confirm_selected = sel == flat_idx;
+    let confirm_style = if confirm_selected {
+        Style::default()
+            .fg(if can_submit { Color::Green } else { Color::Red })
+            .add_modifier(Modifier::BOLD)
+    } else if can_submit {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let confirm_marker = if confirm_selected { "▶ " } else { "  " };
     lines.push(Line::from(Span::styled(
-        "  [Enter] Begin Run  [↑/↓] Select  [Esc] Cancel",
+        format!("  {}Start Screening Run", confirm_marker),
+        confirm_style,
+    )));
+    lines.push(Line::from(vec![
+        Span::raw("    "),
+        Span::styled(
+            format!(
+                "{} / {} / {}",
+                chosen_disease_name,
+                chosen_modality.label(),
+                chosen_run_size.label(),
+            ),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Move  [Enter] Select / Start  [Esc] Cancel",
         Style::default().fg(Color::DarkGray),
     )));
 

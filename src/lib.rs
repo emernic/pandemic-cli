@@ -139,7 +139,6 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.select_next(new.regions.len(), max);
             }
-            sync_screening_form_selection(&mut new);
         }
         Action::SelectPrev => {
             if new.ui.open_panel == Panel::Research {
@@ -150,7 +149,6 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.select_prev(new.regions.len(), max);
             }
-            sync_screening_form_selection(&mut new);
         }
         Action::SelectLeft => {
             if new.ui.open_panel == Panel::Research {
@@ -192,7 +190,6 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 let max = ui::panel_selection_max(&new.ui, &new);
                 new.ui.panel_selection = (*index).min(max);
             }
-            sync_screening_form_selection(&mut new);
         }
         Action::ToggleExtra => {
             // Ledger: switch between Buy and Sell confirmation
@@ -720,19 +717,41 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
         Some(LabUiState::ConfirmLabUpgrade { .. }) => {
             Some(GameCommand::UpgradeLab)
         }
-        // Screening config form: Enter submits from any position
+        // Screening config form: Enter selects the focused option, or starts
+        // the run from the explicit submit row.
         Some(LabUiState::ScreeningConfigForm { disease_idx, modality, run_size }) => {
             // Validate the stored values are still eligible before submitting
-            let eligible = state.screening_eligible_diseases();
-            if eligible.contains(&disease_idx)
-                && modality.is_unlocked(&state.unlocked_techs)
-                && run_size.is_unlocked(&state.unlocked_techs)
-            {
-                return Some(GameCommand::StartScreening {
-                    disease_idx,
-                    modality,
-                    run_size,
-                });
+            let items = state.screening_form_items();
+            match items.get(ui.panel_selection) {
+                Some(ScreeningFormItem::Disease(new_disease_idx)) => {
+                    if let Some(LabUiState::ScreeningConfigForm { disease_idx, .. }) = &mut ui.lab_ui {
+                        *disease_idx = *new_disease_idx;
+                    }
+                }
+                Some(ScreeningFormItem::Modality(new_modality)) => {
+                    if let Some(LabUiState::ScreeningConfigForm { modality, .. }) = &mut ui.lab_ui {
+                        *modality = *new_modality;
+                    }
+                }
+                Some(ScreeningFormItem::RunSize(new_run_size)) => {
+                    if let Some(LabUiState::ScreeningConfigForm { run_size, .. }) = &mut ui.lab_ui {
+                        *run_size = *new_run_size;
+                    }
+                }
+                Some(ScreeningFormItem::Confirm) => {
+                    let eligible = state.screening_eligible_diseases();
+                    if eligible.contains(&disease_idx)
+                        && modality.is_unlocked(&state.unlocked_techs)
+                        && run_size.is_unlocked(&state.unlocked_techs)
+                    {
+                        return Some(GameCommand::StartScreening {
+                            disease_idx,
+                            modality,
+                            run_size,
+                        });
+                    }
+                }
+                None => {}
             }
             None
         }
@@ -1009,33 +1028,6 @@ fn handle_ledger_confirm(ui: &mut UiState, state: &AppState) -> Option<GameComma
     }
 }
 
-/// When panel_selection moves while in ScreeningConfigForm, update the
-/// per-section selection so each section remembers the player's choice.
-fn sync_screening_form_selection(state: &mut AppState) {
-    // First, compute the new selections without borrowing lab_ui mutably
-    let update = if let Some(LabUiState::ScreeningConfigForm { .. }) = &state.ui.lab_ui {
-        let items = state.screening_form_items();
-        items.get(state.ui.panel_selection).map(|item| {
-            match item {
-                ScreeningFormItem::Disease(d_idx) => (Some(*d_idx), None, None),
-                ScreeningFormItem::Modality(m) => (None, Some(*m), None),
-                ScreeningFormItem::RunSize(s) => (None, None, Some(*s)),
-            }
-        })
-    } else {
-        None
-    };
-
-    // Now apply the update
-    if let (Some(upd), Some(LabUiState::ScreeningConfigForm {
-        disease_idx, modality, run_size
-    })) = (update, &mut state.ui.lab_ui) {
-        if let Some(d) = upd.0 { *disease_idx = d; }
-        if let Some(m) = upd.1 { *modality = m; }
-        if let Some(s) = upd.2 { *run_size = s; }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1259,6 +1251,112 @@ mod tests {
         // Press R again at top level — now it closes
         let state = apply_action(&state, &Action::OpenLab);
         assert_eq!(state.ui.open_panel, Panel::None);
+    }
+
+    fn screening_form_state_for_tests() -> AppState {
+        let mut state = AppState::new_default(42);
+        state.diseases[0].detected = true;
+        state.diseases[0].knowledge = crate::state::KNOWLEDGE_NAME;
+        state.unlocked_techs.push(crate::state::BasicTech::MonoclonalAntibodies);
+        state.resources.funding = 10_000.0;
+        state.resources.personnel = 20;
+        state.ui.home_splash_done = true;
+        state.ui.open_panel = Panel::Lab;
+        state.ui.lab_ui = Some(LabUiState::ScreeningConfigForm {
+            disease_idx: 0,
+            modality: ScreeningModality::SmallMolecule,
+            run_size: ScreeningRunSize::Small,
+        });
+        state.ui.panel_selection = 0;
+        state
+    }
+
+    fn screening_form_index(state: &AppState, target: ScreeningFormItem) -> usize {
+        state.screening_form_items().iter()
+            .position(|item| *item == target)
+            .expect("expected screening form item to exist in test state")
+    }
+
+    #[test]
+    fn screening_form_navigation_does_not_mutate_choices() {
+        let state = screening_form_state_for_tests();
+        let monoclonal_idx = screening_form_index(
+            &state,
+            ScreeningFormItem::Modality(ScreeningModality::MonoclonalAntibody),
+        );
+
+        let state = apply_action(&state, &Action::JumpToItem { index: monoclonal_idx });
+
+        assert_eq!(
+            state.ui.panel_selection,
+            monoclonal_idx,
+            "cursor should move to the requested modality row",
+        );
+        assert_eq!(
+            state.ui.lab_ui,
+            Some(LabUiState::ScreeningConfigForm {
+                disease_idx: 0,
+                modality: ScreeningModality::SmallMolecule,
+                run_size: ScreeningRunSize::Small,
+            }),
+            "moving the cursor should not silently change the stored form values",
+        );
+    }
+
+    #[test]
+    fn screening_form_confirm_selects_focused_option_without_submitting() {
+        let state = screening_form_state_for_tests();
+        let monoclonal_idx = screening_form_index(
+            &state,
+            ScreeningFormItem::Modality(ScreeningModality::MonoclonalAntibody),
+        );
+
+        let state = apply_action(&state, &Action::JumpToItem { index: monoclonal_idx });
+        let state = apply_action(&state, &Action::Confirm);
+
+        assert!(state.screening_runs.is_empty(), "selecting an option should not start the run");
+        assert_eq!(
+            state.ui.lab_ui,
+            Some(LabUiState::ScreeningConfigForm {
+                disease_idx: 0,
+                modality: ScreeningModality::MonoclonalAntibody,
+                run_size: ScreeningRunSize::Small,
+            }),
+            "Enter on a modality row should commit that modality and stay in the form",
+        );
+    }
+
+    #[test]
+    fn screening_form_confirm_row_starts_run_with_chosen_values() {
+        let state = screening_form_state_for_tests();
+        let monoclonal_idx = screening_form_index(
+            &state,
+            ScreeningFormItem::Modality(ScreeningModality::MonoclonalAntibody),
+        );
+        let medium_idx = screening_form_index(
+            &state,
+            ScreeningFormItem::RunSize(ScreeningRunSize::Medium),
+        );
+        let confirm_idx = screening_form_index(&state, ScreeningFormItem::Confirm);
+
+        // Choose Monoclonal Antibody.
+        let state = apply_action(&state, &Action::JumpToItem { index: monoclonal_idx });
+        let state = apply_action(&state, &Action::Confirm);
+
+        // Move to Medium run size and choose it.
+        let state = apply_action(&state, &Action::JumpToItem { index: medium_idx });
+        let state = apply_action(&state, &Action::Confirm);
+
+        // Move to the explicit submit row and start the run.
+        let state = apply_action(&state, &Action::JumpToItem { index: confirm_idx });
+        let state = apply_action(&state, &Action::Confirm);
+
+        assert_eq!(state.ui.lab_ui, Some(LabUiState::Browse { tab: LabTab::Screening }));
+        assert_eq!(state.screening_runs.len(), 1, "a screening run should have started");
+        let run = &state.screening_runs[0];
+        assert_eq!(run.disease_idx, 0);
+        assert_eq!(run.modality, ScreeningModality::MonoclonalAntibody);
+        assert_eq!(run.run_size, ScreeningRunSize::Medium);
     }
 
     #[test]
