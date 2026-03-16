@@ -1433,7 +1433,6 @@ mod tests {
             tested_against: vec![0],
             deployed_count: 0,
             total_treated: 0.0,
-            total_protected: 0.0,
             manufacturer_corp_idx: None,
             trial_efficacy: None,
             side_effect_rate: 0.0,

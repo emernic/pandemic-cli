@@ -301,12 +301,6 @@ pub const HISTORY_MAX: usize = 100;
 /// At 1.0, a single deployment of a perfectly matched medicine treats all infected.
 /// Broad-spectrum (0.15 efficacy) treats ~15% per deploy — a bandaid, not a cure.
 pub const TREATMENT_FRACTION: f64 = 1.0;
-/// Fraction of susceptible population vaccinated per deployment (before efficacy).
-/// Vaccination is proportional like treatment. At 0.15, a targeted vaccine (eff 1.0)
-/// covers 15% of susceptible per deploy. Five deployments cover ~56%, ten cover ~80%.
-/// This creates compound returns: each deploy shrinks the susceptible pool, slowing
-/// future infection growth. VaccinePlatform tech (3x) makes this very powerful.
-pub const VACCINATION_FRACTION: f64 = 0.15;
 
 /// Efficacy multiplier when deploying a medicine against a disease it wasn't
 /// specifically developed for, but whose mechanism matches the pathogen type
@@ -3383,9 +3377,6 @@ pub struct Medicine {
     /// Cumulative people treated (moved from infected to immune) across all deployments.
     #[serde(default)]
     pub total_treated: f64,
-    /// Cumulative people protected (vaccinated) across all deployments.
-    #[serde(default)]
-    pub total_protected: f64,
     /// Index into `AppState::corporations` for this medicine's manufacturing partner.
     /// `None` for the starting broad-spectrum medicine (no specific manufacturer).
     /// When development completes and the manufacturer has a board seat, the board
@@ -3465,39 +3456,10 @@ pub struct Shipment {
     pub arrive_tick: u64,
 }
 
-/// Whether a medicine is a vaccine (protects susceptible) or therapeutic (treats infected).
-/// Set at creation time — determines deployment behavior automatically.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MedicineMode {
-    /// Protects susceptible population against infection.
-    Vaccine,
-    /// Treats actively infected population.
-    Therapeutic,
-}
-
-impl Default for MedicineMode {
-    fn default() -> Self {
-        MedicineMode::Therapeutic
-    }
-}
-
-impl MedicineMode {
-    pub fn label(&self) -> &'static str {
-        match self {
-            MedicineMode::Vaccine => "Vaccination",
-            MedicineMode::Therapeutic => "Treatment",
-        }
-    }
-}
-
-/// What a medicine deployment targets: which disease and whether to treat
-/// infected (Therapeutic) or vaccinate susceptible (Vaccine).
-/// VaccinePlatform tech must be unlocked to deploy in Vaccine mode.
+/// What a medicine deployment targets: which disease to treat.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeployTarget {
     pub disease_idx: usize,
-    #[serde(default)]
-    pub mode: MedicineMode,
 }
 
 impl Medicine {
@@ -3507,14 +3469,6 @@ impl Medicine {
         diseases.get(disease_idx)
             .map(|d| d.resistance_factor(self.mechanism))
             .unwrap_or(1.0)
-    }
-
-    /// Estimate how many people a vaccination deployment would protect.
-    /// Returns the number of doses that would be consumed (capped by available doses).
-    /// `vax_multiplier` is 1.0 normally, 3.0 with VaccinePlatform tech.
-    pub fn estimate_vaccination(&self, susceptible: f64, efficacy: f64, vax_multiplier: f64) -> f64 {
-        let target = susceptible * VACCINATION_FRACTION * vax_multiplier * efficacy;
-        target.min(self.doses)
     }
 
     /// Estimate how many people a treatment deployment would treat.
@@ -3918,7 +3872,7 @@ impl ResearchKind {
 
 /// Technology nodes in the Basic Research tech tree.
 /// Each unlocks or enhances capabilities across the game (drug development,
-/// field research speed, vaccination effectiveness, etc.).
+/// field research speed, treatment effectiveness, etc.).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BasicTech {
     // ── Column 0: Drug design → interventions ──────────────────────
@@ -3931,14 +3885,9 @@ pub enum BasicTech {
     /// Unlocks phage therapy development for bacteria.
     /// Prereq: MonoclonalAntibodies.
     PhageTherapy,
-    /// Unlocks vaccination deployment mode for all medicines. Vaccinates 15% of
-    /// susceptible per deploy (3x with the multiplier). Without this tech, medicines
-    /// can only be deployed as therapeutics.
-    /// Prereq: PhageTherapy.
-    VaccinePlatform,
     /// Disease-caused infrastructure degradation (HC/SL/CO) is 20% slower globally.
     /// Does NOT affect policy-triggered drains (travel ban, quarantine, etc.).
-    /// Prereq: VaccinePlatform.
+    /// Prereq: PhageTherapy.
     ResilientGrids,
 
     // ── Column 1: Sequencing → surveillance ──────────────────────
@@ -3982,7 +3931,6 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Phage Therapy",
             BasicTech::RapidSequencing => "Rapid Sequencing",
             BasicTech::MetagenomicSurveillance => "Metagenomic Surveillance",
-            BasicTech::VaccinePlatform => "Vaccine Platform",
             BasicTech::ResistanceSurveillance => "Resistance Surveillance",
             BasicTech::CombinationTherapy => "Combination Therapy",
             BasicTech::AutomatedSynthesis => "Automated Synthesis",
@@ -4000,7 +3948,6 @@ impl BasicTech {
             BasicTech::PhageTherapy => "Bacteriophage-based treatment for bacterial pathogens. Low resistance development.",
             BasicTech::RapidSequencing => "50% faster sequencing. Reveals mutation drift rate and history.",
             BasicTech::MetagenomicSurveillance => "Environmental sample sequencing identifies pathogens without culture. Field research and clinical trials 25% faster.",
-            BasicTech::VaccinePlatform => "Unlocks vaccination deployment mode. Medicines can protect susceptible populations prophylactically.",
             BasicTech::ResistanceSurveillance => "Tracks resistance levels and trends across all deployed medicines.",
             BasicTech::CombinationTherapy => "Multi-drug protocols reduce resistance accumulation from deployments by 50%.",
             BasicTech::AutomatedSynthesis => "Standardized bioreactor protocols cut production cycle time by 35%.",
@@ -4026,8 +3973,7 @@ impl BasicTech {
             BasicTech::MonoclonalAntibodies => &[BasicTech::TargetedDrugDesign],
             BasicTech::PhageTherapy => &[BasicTech::MonoclonalAntibodies],
             // Cross-chain merge: requires both Phage Therapy (col 0) and Metagenomic Surveillance (col 1)
-            BasicTech::VaccinePlatform => &[BasicTech::PhageTherapy, BasicTech::MetagenomicSurveillance],
-            BasicTech::ResilientGrids => &[BasicTech::VaccinePlatform],
+            BasicTech::ResilientGrids => &[BasicTech::PhageTherapy],
 
             // Column 1 chain
             BasicTech::ResistanceSurveillance => &[BasicTech::RapidSequencing],
@@ -4079,8 +4025,7 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign => "Identify any pathogen",
             BasicTech::MonoclonalAntibodies => "Targeted Drug Design",
             BasicTech::PhageTherapy => "Monoclonal Antibodies",
-            BasicTech::VaccinePlatform => "Phage Therapy + Metagenomic Surveillance",
-            BasicTech::ResilientGrids => "Vaccine Platform",
+            BasicTech::ResilientGrids => "Phage Therapy",
             BasicTech::RapidSequencing => "Complete genomic sequencing on any pathogen",
             BasicTech::ResistanceSurveillance => "Rapid Sequencing",
             BasicTech::MetagenomicSurveillance => "Resistance Surveillance",
@@ -4098,7 +4043,6 @@ impl BasicTech {
             BasicTech::TargetedDrugDesign,
             BasicTech::MonoclonalAntibodies,
             BasicTech::PhageTherapy,
-            BasicTech::VaccinePlatform,
             BasicTech::ResilientGrids,
             // Column 1: Sequencing → surveillance
             BasicTech::RapidSequencing,
@@ -4132,7 +4076,6 @@ impl ResearchKind {
                 BasicTech::PhageTherapy => (5, 360.0, 900.0),
                 BasicTech::RapidSequencing => (4, 300.0, 350.0),
                 BasicTech::MetagenomicSurveillance => (4, 280.0, 650.0),
-                BasicTech::VaccinePlatform => (6, 360.0, 1000.0),
                 BasicTech::ResistanceSurveillance => (3, 200.0, 500.0),
                 BasicTech::CombinationTherapy => (4, 300.0, 800.0),
                 BasicTech::AutomatedSynthesis => (4, 200.0, 500.0),
@@ -4356,10 +4299,8 @@ pub enum GameEvent {
         efficiency: f64,
         /// Doses lost to poor targeting (no surveillance to identify who needs treatment).
         doses_wasted: f64,
-        /// People actually treated (moved from infected to immune). 0 if vaccination.
+        /// People actually treated (moved from infected to immune).
         people_treated: f64,
-        /// People actually protected (vaccinated from susceptible pool). 0 if treatment.
-        people_protected: f64,
     },
     /// Emergency sample delivery sent to a region's governor.
     EmergencySampleDelivered {
@@ -4596,7 +4537,7 @@ pub enum CrisisKind {
     TrialShortcut { disease_idx: usize, medicine_idx: usize },
     /// Board member's corporation deploys private security, demands operational control.
     CorporateSeizure { cooperate_loss: u32, board_member_idx: usize, corp_idx: usize },
-    /// Cult blocks vaccination teams in a region.
+    /// Cult blocks supply routes in a region.
     CultBlockade { region_idx: usize },
     // --- Dark comedy events (personality and flavor) ---
 
@@ -5843,7 +5784,6 @@ impl WorldState {
             tested_against: all_disease_indices.clone(),
             deployed_count: 0,
             total_treated: 0.0,
-            total_protected: 0.0,
             manufacturer_corp_idx: None, // assigned in generate_corporations
             trial_efficacy: None,
             side_effect_rate: 0.0,
@@ -6921,21 +6861,6 @@ impl WorldState {
         ((target - current) / target).clamp(0.05, 1.0) // minimum 5% so it's never free
     }
 
-    /// Whether vaccination deployment mode is available (VaccinePlatform tech unlocked).
-    pub fn can_vaccinate(&self) -> bool {
-        self.unlocked_techs.contains(&BasicTech::VaccinePlatform)
-    }
-
-    /// Vaccination effectiveness multiplier. Always 3x when VaccinePlatform is unlocked
-    /// (the tech that enables vaccination also makes it potent).
-    pub fn vaccination_multiplier(&self) -> f64 {
-        if self.unlocked_techs.contains(&BasicTech::VaccinePlatform) {
-            3.0
-        } else {
-            1.0
-        }
-    }
-
     /// True if the player has unlocked Resistance Surveillance (can see resistance levels).
     pub fn has_resistance_surveillance(&self) -> bool {
         self.unlocked_techs.contains(&BasicTech::ResistanceSurveillance)
@@ -7480,7 +7405,6 @@ mod tests {
             tested_against: vec![0],
             deployed_count: 0,
             total_treated: 0.0,
-            total_protected: 0.0,
             manufacturer_corp_idx: None,
             trial_efficacy: None,
             side_effect_rate: 0.0,

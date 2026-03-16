@@ -218,15 +218,8 @@ fn render_browse(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>
             }
 
             // Impact so far (only if medicine has been used)
-            let total_impact = med.total_treated + med.total_protected;
-            if total_impact > 0.0 {
-                let mut impact_parts: Vec<String> = Vec::new();
-                if med.total_treated > 0.0 {
-                    impact_parts.push(format!("{} treated", format_number(med.total_treated)));
-                }
-                if med.total_protected > 0.0 {
-                    impact_parts.push(format!("{} vaccinated", format_number(med.total_protected)));
-                }
+            if med.total_treated > 0.0 {
+                let impact_parts = vec![format!("{} treated", format_number(med.total_treated))];
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(

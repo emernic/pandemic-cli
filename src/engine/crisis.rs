@@ -192,7 +192,7 @@ fn refugee_pol_cost(wave: u8) -> f64 {
 ///
 /// Two main phases:
 /// - Early (day 0-50): bureaucratic/organizational (personnel, trial shortcuts) — fades out
-/// - Late (day 24+): survival and power struggles (corporate seizure, cult, vaccine dispute)
+/// - Late (day 24+): survival and power struggles (corporate seizure, cult)
 fn phase_weight(tag: &str, day: f64) -> f64 {
     // Smooth ramp: 0 at `start`, 1 at `peak`, stays 1 after peak
     let ramp_up = |start: f64, peak: f64| -> f64 {
@@ -213,7 +213,7 @@ fn phase_weight(tag: &str, day: f64) -> f64 {
             => fade_out(30.0, 50.0),
 
         // --- Late-game: survival and power struggles (ramp up day 24-40) ---
-        "corporate_seizure" | "cult" | "vaccine_dispute"
+        "corporate_seizure" | "cult"
             => ramp_up(24.0, 40.0),
 
         // Corporate detention: requires a collapsed region, so can't appear before ~day 10,
@@ -2751,7 +2751,7 @@ mod tests {
         // At day 5, late-game crises (corporate_seizure, cult, etc.) should
         // be absent or extremely rare since they have near-zero weight
         let late_count = tags.iter()
-            .filter(|&&t| matches!(t, "corporate_seizure" | "cult" | "vaccine_dispute"))
+            .filter(|&&t| matches!(t, "corporate_seizure" | "cult"))
             .count();
         assert!(late_count <= 2,
             "at day 5, late-game crises should be rare, got {}/{}",

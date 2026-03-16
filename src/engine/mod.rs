@@ -1227,7 +1227,6 @@ mod tests {
             tested_against: if tested { vec![0] } else { vec![] },
             deployed_count: 0,
             total_treated: 0.0,
-            total_protected: 0.0,
             manufacturer_corp_idx: None,
             trial_efficacy: None,
             side_effect_rate: 0.0,
@@ -1511,45 +1510,6 @@ mod tests {
     }
 
     #[test]
-    fn medicine_vaccination_deployment() {
-        use crate::state::DeployTarget;
-        let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        unlock_all_medicines(&mut state);
-        // Unlock VaccinePlatform so vaccination mode is available
-        state.unlocked_techs.push(crate::state::BasicTech::VaccinePlatform);
-        // Create a tested, unlocked targeted medicine with plenty of doses
-        let med_idx = add_targeted_medicine(&mut state, true, true);
-        state.medicines[med_idx].doses = 1_000_000_000.0;
-        state.medicines[med_idx].max_doses = 1_000_000_000.0;
-        // Ensure region 0 has disease 0 infection (vaccine needs an infection entry to add immune)
-        state.regions[0].get_or_create_infection(0).infected = 10_000.0;
-
-        let doses_before = state.medicines[med_idx].doses;
-        let funding_before = state.resources.funding;
-        // Deploy via engine API using Vaccination mode
-        let (ok, _msg) = medicine::deploy_medicine(
-            &mut state, med_idx, 0,
-            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Vaccine },
-            &mut events,
-        );
-        assert!(ok, "vaccination deploy should succeed");
-        // Dispatch deducts doses immediately (no funding cost), creates a pending shipment
-        assert_eq!(state.resources.funding, funding_before, "no funding cost on deploy");
-        assert!(state.medicines[med_idx].doses < doses_before, "doses deducted on dispatch");
-        assert_eq!(state.pending_shipments.len(), 1, "should have one pending shipment");
-
-        // Advance time and deliver — immune should increase
-        let immune_before = state.regions[0].infections.iter()
-            .find(|i| i.disease_idx == 0).map(|i| i.immune).unwrap_or(0.0);
-        state.tick += crate::state::SHIPPING_TICKS + 1;
-        { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
-        let immune_after = state.regions[0].infections.iter()
-            .find(|i| i.disease_idx == 0).map(|i| i.immune).unwrap_or(0.0);
-        assert!(immune_after > immune_before, "immune should increase after delivery: {immune_before} -> {immune_after}");
-    }
-
-    #[test]
     fn medicine_treatment_deployment() {
         let mut events: Vec<GameEvent> = Vec::new();
         use crate::state::DeployTarget;
@@ -1569,7 +1529,7 @@ mod tests {
         let funding_before = state.resources.funding;
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, ri,
-            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            DeployTarget { disease_idx: 0 },
             &mut events,
         );
         assert!(ok, "deployment should succeed");
@@ -1610,7 +1570,7 @@ mod tests {
         // Deploy directly via engine API (UI flow skips steps now)
         let funding_before = state.resources.funding;
         let (ok, msg) = medicine::deploy_medicine(
-            &mut state, 0, ri, DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            &mut state, 0, ri, DeployTarget { disease_idx: 0 },
             &mut events,
         );
         assert!(!ok, "should fail when empty");
@@ -1647,7 +1607,7 @@ mod tests {
         let funding_before = state.resources.funding;
         let (ok, msg) = medicine::deploy_medicine(
             &mut state, 0, 0,
-            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            DeployTarget { disease_idx: 0 },
             &mut events,
         );
         assert!(!ok, "deploy should fail when no infected targets");
@@ -1744,7 +1704,7 @@ mod tests {
         // Deploy directly via engine API
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, med_idx, 0,
-            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            DeployTarget { disease_idx: 0 },
             &mut events,
         );
         assert!(ok, "multi-target tested medicine should deploy successfully");
@@ -1764,7 +1724,7 @@ mod tests {
         let funding_before = state.resources.funding;
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, med_idx, 0,
-            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            DeployTarget { disease_idx: 0 },
             &mut events,
         );
         // The engine allows deploying untested medicines — no confirmation step needed
@@ -1786,7 +1746,7 @@ mod tests {
         let funding_before = state.resources.funding;
         // Deploy directly via engine API — tested medicine should succeed
         let (ok, _msg) = medicine::deploy_medicine(
-            &mut state, 0, ri, DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            &mut state, 0, ri, DeployTarget { disease_idx: 0 },
             &mut events,
         );
         assert!(ok, "tested medicine should deploy immediately");
@@ -2046,9 +2006,7 @@ mod tests {
         // The 1.10x threshold ensures player actions produce a meaningful (>=10%)
         // survival improvement. Actual median is typically ~1.15-1.20x across seeds.
         //
-        // Strategy: treatment first (removes ~efficacy fraction of infected per deploy),
-        // vaccination second (only with targeted meds — BS vaccination is a dose trap).
-        // Prioritize worst-hit regions.
+        // Strategy: treat worst-hit regions first. Prioritize targeted meds over broad-spectrum.
         use crate::state::{ResearchKind, DeployTarget};
 
         fn simulate_competent(seed: u64) -> f64 {
@@ -2138,8 +2096,6 @@ mod tests {
                 // Treatment removes ~efficacy fraction of infected per deploy and
                 // costs proportional doses. BS (0.15 efficacy) slows disease but
                 // can't stop it — targeted medicines are needed to actually clear it.
-                // BS vaccination burns doses for minimal coverage; vaccinate only
-                // with targeted medicines (which are dose-efficient by design).
                 let min_funding = 200.0;
 
                 // Build list of (region, disease, infected) sorted by severity
@@ -2178,7 +2134,7 @@ mod tests {
                         }
                     }
                     if let Some(med_idx) = best {
-                        let target = DeployTarget { disease_idx: d_idx, mode: crate::state::MedicineMode::Therapeutic };
+                        let target = DeployTarget { disease_idx: d_idx };
                         let result = execute_command(&mut state, &GameCommand::DeployMedicine {
                             medicine_idx: med_idx, region_idx: r_idx, target,
                         });
@@ -2484,7 +2440,7 @@ mod tests {
         // Deploy medicine to region 0 (creates a pending shipment)
         let (ok, _msg) = medicine::deploy_medicine(
             &mut state, 0, 0,
-            DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic },
+            DeployTarget { disease_idx: 0 },
             &mut events,
         );
         assert!(ok, "deployment should succeed despite travel ban");
@@ -2826,7 +2782,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick.clear();
-            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget { disease_idx, mode: crate::state::MedicineMode::Therapeutic }, &mut events);
+            let (_, _) = medicine::deploy_medicine(&mut state, med_idx, 0, DeployTarget { disease_idx }, &mut events);
             // Advance time to deliver this shipment
             state.tick = (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
@@ -2852,7 +2808,7 @@ mod tests {
             }
             state.resources.funding = 1_000_000.0;
             state.regions[0].last_deploy_tick.clear();
-            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget { disease_idx, mode: crate::state::MedicineMode::Therapeutic }, &mut events);
+            let (_, _) = medicine::deploy_medicine(&mut state, bs_idx, 0, DeployTarget { disease_idx }, &mut events);
             state.tick = base_tick + (i as u64 + 1) * (crate::state::SHIPPING_TICKS + 1);
             { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
         }
@@ -4322,7 +4278,7 @@ mod tests {
         state.regions[0].get_or_create_infection(disease_idx).infected = 50_000.0;
 
         // First deploy should succeed
-        let treat = DeployTarget { disease_idx, mode: crate::state::MedicineMode::Therapeutic };
+        let treat = DeployTarget { disease_idx };
         let (nav, msg) = medicine::deploy_medicine(&mut state, med_idx, 0, treat.clone(), &mut events);
         assert!(nav, "first deploy should succeed");
         assert!(msg.unwrap().contains("Shipped"), "should show shipment message");
@@ -4645,7 +4601,7 @@ mod tests {
 
         // Baseline: full infrastructure, deploy and deliver
         let mut baseline = state.clone();
-        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
+        let target = crate::state::DeployTarget { disease_idx: 0 };
         medicine::deploy_medicine(&mut baseline, 0, ri, target.clone(), &mut events);
         assert_eq!(baseline.pending_shipments.len(), 1);
         baseline.tick += crate::state::SHIPPING_TICKS + 1;
@@ -4656,7 +4612,7 @@ mod tests {
         let mut degraded = state.clone();
         degraded.regions[ri].supply_lines = 0.50;
         degraded.regions[ri].healthcare_capacity = 0.50;
-        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
+        let target = crate::state::DeployTarget { disease_idx: 0 };
         medicine::deploy_medicine(&mut degraded, 0, ri, target, &mut events);
         assert_eq!(degraded.pending_shipments.len(), 1);
         degraded.tick += crate::state::SHIPPING_TICKS + 1;
@@ -4685,7 +4641,7 @@ mod tests {
         state.regions[ri].supply_lines = 0.60;
         state.regions[ri].healthcare_capacity = 0.70;
 
-        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
+        let target = crate::state::DeployTarget { disease_idx: 0 };
         medicine::deploy_medicine(&mut state, 0, ri, target, &mut events);
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
@@ -4719,7 +4675,7 @@ mod tests {
 
         // No screening: targeting_efficiency = 0.50
         assert_eq!(state.policies[ri].screening, ScreeningLevel::None);
-        let target = crate::state::DeployTarget { disease_idx: 0, mode: crate::state::MedicineMode::Therapeutic };
+        let target = crate::state::DeployTarget { disease_idx: 0 };
         medicine::deploy_medicine(&mut state, 0, ri, target.clone(), &mut events);
         state.tick += crate::state::SHIPPING_TICKS + 1;
         { let mut rng = state.rng_misc.clone(); medicine::tick_shipments(&mut state, &mut rng, &mut events); }
