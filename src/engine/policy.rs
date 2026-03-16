@@ -29,7 +29,6 @@ use crate::state::{
     SCREENING_DECAY_RATE, SCREENING_RAMP_RATE,
     TICKS_PER_DAY,
     TRAVEL_BAN_PERSONNEL,
-    WATER_SANITATION_PERSONNEL,
 };
 
 /// Return names of active contracts whose ForbidPolicy condition matches the given policy.
@@ -198,7 +197,7 @@ fn toggle_policy_inner(state: &mut WorldState, region_idx: usize, policy: Policy
     // Check POL requirement (only when enabling, not disabling)
     let is_currently_active = match policy {
         PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp
-        | PolicyId::BorderControls | PolicyId::WaterSanitation
+        | PolicyId::BorderControls
         | PolicyId::MartialLaw | PolicyId::NuclearOption => state.policies[region_idx].get_bool(policy),
         PolicyId::BasicScreening => state.policies[region_idx].screening == ScreeningLevel::Basic,
         PolicyId::AntigenScreening => state.policies[region_idx].screening == ScreeningLevel::Antigen,
@@ -228,7 +227,7 @@ fn toggle_policy_inner(state: &mut WorldState, region_idx: usize, policy: Policy
     match policy {
         // Boolean policies: identical toggle logic, different metadata.
         PolicyId::TravelBan | PolicyId::Quarantine | PolicyId::DiscourageHosp
-        | PolicyId::BorderControls | PolicyId::WaterSanitation => {
+        | PolicyId::BorderControls => {
             let (name, personnel, on_msg, off_msg) = match policy {
                 PolicyId::TravelBan => ("Travel Ban",
                       TRAVEL_BAN_PERSONNEL + if low_infra { 1 } else { 0 },
@@ -246,10 +245,6 @@ fn toggle_policy_inner(state: &mut WorldState, region_idx: usize, policy: Policy
                       BORDER_CONTROLS_PERSONNEL + if low_infra { 1 } else { 0 },
                       "Border Controls established",
                       "Border Controls removed"),
-                PolicyId::WaterSanitation => ("Water Sanitation",
-                      WATER_SANITATION_PERSONNEL + if low_infra { 1 } else { 0 },
-                      "Water Sanitation active",
-                      "Water Sanitation suspended"),
                 _ => unreachable!(),
             };
             if state.policies[region_idx].get_bool(policy) {
