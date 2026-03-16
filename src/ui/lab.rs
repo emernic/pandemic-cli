@@ -1293,6 +1293,24 @@ fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, r
                 Style::default().fg(if full { Color::DarkGray } else { Color::Cyan }),
             ),
         ]));
+
+        // Second line: therapy type, target diseases, reported stats
+        let therapy_label = med.therapy_type.label();
+        let targets: String = if med.target_diseases.is_empty() {
+            "All".to_string()
+        } else {
+            med.target_diseases.iter()
+                .filter_map(|&d| state.diseases.get(d).map(|dis| dis.name.as_str()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let eff_label = med.reported_efficacy.as_deref().unwrap_or("???");
+        let se_label = med.reported_side_effects.as_deref().unwrap_or("—");
+        let detail_style = Style::default().fg(Color::DarkGray);
+        lines.push(Line::from(Span::styled(
+            format!("      {} | {} | Eff: {} | Side Fx: {}", therapy_label, targets, eff_label, se_label),
+            detail_style,
+        )));
     }
 
     // Show "Clear assignment" option if reactor currently has a medicine
