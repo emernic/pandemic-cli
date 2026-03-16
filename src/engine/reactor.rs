@@ -146,7 +146,6 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
             let reactor = &mut state.reactors[i];
             reactor.active = false;
             reactor.batch_progress = 0.0;
-            let personnel = reactor.personnel_assigned;
             reactor.personnel_assigned = 0;
 
             if let Some(med_idx) = reactor.medicine_idx {

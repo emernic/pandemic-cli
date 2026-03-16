@@ -29,6 +29,8 @@ pub enum Action {
     GoHome,
     /// Discard the currently selected item (e.g., screening hit in trial wizard).
     Discard,
+    /// Configure/change the selected item (e.g., reassign reactor medicine).
+    Configure,
 }
 
 /// Map a crossterm KeyCode to an Action.
@@ -57,6 +59,7 @@ pub fn key_to_action(key: KeyCode) -> Option<Action> {
         KeyCode::Char('0') => Some(Action::JumpToItem { index: 9 }),
         KeyCode::Home => Some(Action::GoHome),
         KeyCode::Char('d') | KeyCode::Char('D') => Some(Action::Discard),
+        KeyCode::Char('c') | KeyCode::Char('C') => Some(Action::Configure),
         _ => None,
     }
 }
@@ -97,6 +100,7 @@ pub fn string_to_action(s: &str) -> Option<Action> {
         "9" => Some(Action::JumpToItem { index: 8 }),
         "0" => Some(Action::JumpToItem { index: 9 }),
         "home" => Some(Action::GoHome),
+        "c" => Some(Action::Configure),
         _ => None,
     }
 }

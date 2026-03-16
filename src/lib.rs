@@ -394,6 +394,24 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 }
             }
         }
+        Action::Configure => {
+            // Reactors tab: C opens the medicine selector to reassign an idle reactor
+            if new.ui.open_panel == Panel::Lab {
+                if let Some(lab_ui) = &new.ui.lab_ui {
+                    if lab_ui.is_browsing() && lab_ui.tab() == LabTab::Reactors {
+                        let sel = new.ui.panel_selection;
+                        if let Some(reactor) = new.reactors.get(sel) {
+                            if reactor.active {
+                                new.session.status_message = Some("Reactor is running. Wait for the batch to finish.".into());
+                            } else {
+                                new.ui.lab_ui = Some(LabUiState::ReactorSelectMedicine { reactor_idx: sel });
+                                new.ui.panel_selection = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Action::Quit => {} // Handled by the caller
     }
 
@@ -705,16 +723,30 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
             }
             None
         }
-        // Reactor medicine selection: assign the selected medicine
+        // Reactor medicine selection: assign the selected medicine or clear
         Some(LabUiState::ReactorSelectMedicine { reactor_idx }) => {
             let eligible = state.reactor_eligible_medicines();
             if let Some(&med_idx) = eligible.get(ui.panel_selection) {
+                // Selected a medicine
                 ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Reactors });
                 ui.panel_selection = reactor_idx;
                 return Some(GameCommand::ConfigureReactor {
                     reactor_idx,
                     medicine_idx: Some(med_idx),
                 });
+            } else if ui.panel_selection == eligible.len() {
+                // "Clear assignment" option
+                let has_medicine = state.reactors.get(reactor_idx)
+                    .map(|r| r.medicine_idx.is_some())
+                    .unwrap_or(false);
+                if has_medicine {
+                    ui.lab_ui = Some(LabUiState::Browse { tab: LabTab::Reactors });
+                    ui.panel_selection = reactor_idx;
+                    return Some(GameCommand::ConfigureReactor {
+                        reactor_idx,
+                        medicine_idx: None,
+                    });
+                }
             }
             None
         }

@@ -37,8 +37,14 @@ pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
                 .count()
                 .saturating_sub(1)
         }
-        LabUiState::ReactorSelectMedicine { .. } => {
-            state.reactor_eligible_medicines().len().saturating_sub(1)
+        LabUiState::ReactorSelectMedicine { reactor_idx } => {
+            let eligible_count = state.reactor_eligible_medicines().len();
+            let has_medicine = state.reactors.get(*reactor_idx)
+                .map(|r| r.medicine_idx.is_some())
+                .unwrap_or(false);
+            // +1 for "Clear assignment" option if reactor has a medicine assigned
+            let clear_slot = if has_medicine && eligible_count > 0 { 1 } else { 0 };
+            (eligible_count + clear_slot).saturating_sub(1)
         }
         LabUiState::TrialSelectHit => {
             state.screening_hits.len().saturating_sub(1)
@@ -1096,7 +1102,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Enter] Configure/Start  [X] Cycle Auto  [Esc] Close",
+        "  [↑/↓] Select  [Enter] Start  [C] Change Medicine  [X] Cycle Auto  [Esc] Close",
         Style::default().fg(Color::DarkGray),
     )));
 
@@ -1145,7 +1151,7 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
             let current = med.map(|m| m.doses).unwrap_or(0.0);
             let max = med.map(|m| m.max_doses * state.manufacturing_yield_bonus()).unwrap_or(1.0);
             let status = if current >= max { "FULL" } else { "idle" };
-            let hint = if current >= max { "[Enter] reassign" } else { "[Enter] start batch" };
+            let hint = if current >= max { "[C] change medicine" } else { "[Enter] start  [C] change" };
             (name.to_string(), None,
              format!("{} doses ({})  {}", crate::format_number(current), status, hint))
         }
@@ -1265,7 +1271,7 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
 }
 
 /// Render the medicine selection wizard for reactor configuration.
-fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, _reactor_idx: usize) {
+fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, reactor_idx: usize) {
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::from(Span::styled(
@@ -1304,6 +1310,25 @@ fn render_reactor_select_medicine(f: &mut Frame, area: Rect, state: &AppState, _
                 Style::default().fg(if full { Color::DarkGray } else { Color::Cyan }),
             ),
         ]));
+    }
+
+    // Show "Clear assignment" option if reactor currently has a medicine
+    let has_medicine = state.reactors.get(reactor_idx)
+        .map(|r| r.medicine_idx.is_some())
+        .unwrap_or(false);
+    if has_medicine && !eligible.is_empty() {
+        let clear_idx = eligible.len();
+        let selected = state.ui.panel_selection == clear_idx;
+        let marker = if selected { "▶ " } else { "  " };
+        let style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        lines.push(Line::from(Span::styled(
+            format!("  {}Clear assignment", marker),
+            style,
+        )));
     }
 
     lines.push(Line::from(""));
