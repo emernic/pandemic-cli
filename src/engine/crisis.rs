@@ -1714,8 +1714,8 @@ pub(super) fn build_crisis_event(state: &WorldState, kind: CrisisKind) -> Crisis
                         cost: Some(CrisisCost { funding: cost, personnel: 0, ..Default::default() }),
                     },
                     CrisisOption {
-                        label: "Let them die".into(),
-                        description: "They knew the risks. Save the money.".into(),
+                        label: "Refuse evacuation".into(),
+                        description: "Their services are no longer required.".into(),
                         cost: None,
                     },
                 ],
