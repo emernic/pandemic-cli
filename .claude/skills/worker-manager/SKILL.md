@@ -159,4 +159,8 @@ Look for signs that workers are failing before doing useful work: crashing immed
 1. Cancel the cron: use `CronDelete` to remove the `/worker-manager` cron job.
 2. Tell the user clearly: the loop has been stopped, summarize what the logs showed, and ask them to investigate before restarting.
 
-If the logs look healthy (workers completing issues, or no issues available), leave the cron running and briefly report what you saw.
+**If 3 or more consecutive recent workers found no valid issues to pick up** (look for messages like "no available issues", "nothing to pick up", "no valid issues", or similar in the assistant text events):
+1. Cancel the cron: use `CronDelete` to remove the `/worker-manager` cron job.
+2. Tell the user: the backlog is empty and the loop has been stopped to avoid wasting tokens. They can restart it with `/worker-manager` when new issues are filed.
+
+If the logs look healthy (workers completing issues, or only 1–2 consecutive no-issue results), leave the cron running and briefly report what you saw.
