@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn tick_screening_advances_progress_and_completes() {
+    fn tick_screening_advances_wells_proportionally_and_completes() {
         let mut world = state_with_identified_disease();
         let (ok, _) = start_screening(
             &mut world,
@@ -276,9 +276,24 @@ mod tests {
         );
         assert!(ok);
 
+        let total_wells = world.screening_runs[0].total_wells();
         let required_ticks = world.screening_runs[0].required_ticks;
 
-        // Tick enough times to complete (with some margin)
+        // After a few ticks, wells_tested should be proportional to progress
+        for _ in 0..3 {
+            tick_screening(&mut world, &mut Vec::new());
+        }
+        let run = &world.screening_runs[0];
+        let expected_frac = (run.progress / run.required_ticks).min(1.0);
+        let expected_wells = (expected_frac * total_wells as f64).round() as u32;
+        assert_eq!(
+            run.wells_tested(), expected_wells,
+            "wells_tested should track progress proportionally",
+        );
+        assert!(run.wells_tested() > 0, "should have tested some wells after 3 ticks");
+        assert!(run.wells_tested() < total_wells, "should not be done yet");
+
+        // Tick to completion
         let max_ticks = (required_ticks * 2.0) as usize;
         let mut events = Vec::new();
         for _ in 0..max_ticks {
@@ -289,7 +304,6 @@ mod tests {
             tick_screening(&mut world, &mut events);
         }
 
-        // Run should have completed: removed from active runs, hits in global pool
         assert!(
             world.screening_runs.is_empty(),
             "run should complete within {} ticks (required: {})",
