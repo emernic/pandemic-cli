@@ -520,18 +520,22 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicT
     }
 
     let days = ticks_to_days(eff_ticks);
-    let cost_lines = [
-        format!("  Personnel:  {}", eff_personnel),
-        format!("  Duration:   {:.1} days", days),
-        format!("  Funding:    {} \u{00a5}", eff_funding as i64),
+    let red = Style::default().fg(Color::Red);
+    let personnel_unmet = state.world.personnel_available() < eff_personnel;
+    let funding_unmet = state.world.resources.funding < eff_funding;
+
+    let cost_lines: [(String, Style); 3] = [
+        (format!("  Personnel:  {}", eff_personnel), if personnel_unmet { red } else { normal }),
+        (format!("  Duration:   {:.1} days", days), normal),
+        (format!("  Funding:    {} \u{00a5}", eff_funding as i64), if funding_unmet { red } else { normal }),
     ];
 
     // Show base vs effective if tech modifiers are active
     let has_modifier = eff_personnel != personnel || (eff_ticks - ticks).abs() > 0.1 || (eff_funding - funding).abs() > 0.1;
 
-    for line in &cost_lines {
+    for (line, style) in &cost_lines {
         if y >= y_max { break; }
-        buf_write(f, cx, y, line, normal, max_w);
+        buf_write(f, cx, y, line, *style, max_w);
         y += 1;
     }
 
