@@ -467,10 +467,28 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicT
         y += 1;
     }
 
-    // Status tag
+    // Status tag + progress bar (inline)
     if y < y_max {
         buf_write(f, cx, y, status_text, Style::default().fg(status_color).add_modifier(Modifier::BOLD), max_w);
         y += 1;
+    }
+    if let Some(research) = active_research {
+        if y < y_max {
+            let pct = (research.progress / research.required_ticks * 100.0).min(100.0);
+            let bar_w = (max_w as usize).saturating_sub(10).min(30);
+            let filled = ((pct / 100.0) * bar_w as f64).round() as usize;
+            let empty = bar_w.saturating_sub(filled);
+            let bar = format!("  [{}{}] {:.0}%", "█".repeat(filled), "░".repeat(empty), pct);
+            buf_write(f, cx, y, &bar, Style::default().fg(Color::Yellow), max_w);
+            y += 1;
+        }
+        if y < y_max {
+            let remaining_ticks = research.required_ticks - research.progress;
+            let remaining_days = ticks_to_days(remaining_ticks.max(0.0));
+            let eta = format!("  ~{:.1} days remaining", remaining_days);
+            buf_write(f, cx, y, &eta, dim, max_w);
+            y += 1;
+        }
     }
 
     y += 1; // blank line
@@ -535,31 +553,6 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicT
         let base_text = format!("  (base: {} pers, {:.1}d, {}\u{00a5})", personnel, base_days, funding as i64);
         buf_write(f, cx, y, &base_text, dim, max_w);
         y += 1;
-    }
-
-    // --- Research progress (if actively researching) ---
-    if let Some(research) = active_research {
-        y += 1;
-        if y < y_max {
-            buf_write(f, cx, y, "Progress", dim.add_modifier(Modifier::BOLD), max_w);
-            y += 1;
-        }
-        if y < y_max {
-            let pct = (research.progress / research.required_ticks * 100.0).min(100.0);
-            let bar_w = (max_w as usize).saturating_sub(10).min(30);
-            let filled = ((pct / 100.0) * bar_w as f64).round() as usize;
-            let empty = bar_w.saturating_sub(filled);
-            let bar = format!("  [{}{}] {:.0}%", "█".repeat(filled), "░".repeat(empty), pct);
-            buf_write(f, cx, y, &bar, Style::default().fg(Color::Yellow), max_w);
-            y += 1;
-        }
-        if y < y_max {
-            let remaining_ticks = research.required_ticks - research.progress;
-            let remaining_days = ticks_to_days(remaining_ticks.max(0.0));
-            let eta = format!("  ~{:.1} days remaining", remaining_days);
-            buf_write(f, cx, y, &eta, dim, max_w);
-            y += 1;
-        }
     }
 
     // --- Hint line at bottom ---
