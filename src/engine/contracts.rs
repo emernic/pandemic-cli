@@ -308,6 +308,33 @@ fn pick_random_medicine(state: &WorldState, rng: &mut ChaCha8Rng) -> Option<usiz
 
 /// Tick contract condition satisfaction and revoke contracts when it bottoms out.
 pub(super) fn tick_check_contracts(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+    // Terminate contracts whose board member has died
+    let mut dead_indices: Vec<usize> = Vec::new();
+    for (i, c) in state.contracts.iter().enumerate() {
+        if let Some(member) = state.board_members.get(c.board_member_idx) {
+            if member.dead {
+                dead_indices.push(i);
+            }
+        }
+    }
+    for i in dead_indices.into_iter().rev() {
+        let c = state.contracts.remove(i);
+        let member_name = state.board_members.get(c.board_member_idx)
+            .map(|m| m.name.as_str())
+            .unwrap_or("Board member");
+        events.push(GameEvent::ContractRevoked {
+            name: format!("{} died — {} terminated", member_name, c.name),
+            reason: "board member died".to_string(),
+        });
+    }
+
+    // Clear pending offer if the offering member is dead
+    if let Some(offer) = &state.contract_offer {
+        if state.board_members.get(offer.board_member_idx).map_or(false, |m| m.dead) {
+            state.contract_offer = None;
+        }
+    }
+
     // First pass: compute satisfaction changes (need immutable borrow for is_met)
     let updates: Vec<(usize, bool)> = state.contracts.iter().enumerate()
         .map(|(i, c)| (i, c.condition.is_met(state)))
@@ -423,6 +450,7 @@ pub(super) fn tick_offer_contracts(state: &mut WorldState, rng: &mut ChaCha8Rng,
         .collect();
     let eligible_members: Vec<usize> = (0..state.board_members.len())
         .filter(|idx| !members_with_contracts.contains(idx))
+        .filter(|idx| !state.board_members[*idx].dead)
         .collect();
     if eligible_members.is_empty() {
         return;
@@ -693,6 +721,56 @@ mod tests {
 
         assert!(state.contracts.is_empty(), "Contract should be revoked");
         assert!(events.iter().any(|e| matches!(e, GameEvent::ContractRevoked { .. })));
+    }
+
+    #[test]
+    fn dead_member_contract_terminated() {
+        let mut events: Vec<GameEvent> = Vec::new();
+        let mut state = crate::engine::new_game(42);
+        let mut c = make_test_contract(FundingCondition::NoCollapse);
+        c.board_member_idx = 0;
+        state.contracts.push(c);
+
+        // Kill the board member
+        state.board_members[0].dead = true;
+
+        tick_check_contracts(&mut state, &mut events);
+
+        assert!(state.contracts.is_empty(), "Contract should be terminated when member dies");
+        assert!(events.iter().any(|e| matches!(e, GameEvent::ContractRevoked { name, .. } if name.contains("died"))));
+    }
+
+    #[test]
+    fn dead_member_offer_cleared() {
+        let mut events: Vec<GameEvent> = Vec::new();
+        let mut state = crate::engine::new_game(42);
+        let mut offer = make_test_contract(FundingCondition::NoCollapse);
+        offer.board_member_idx = 0;
+        state.contract_offer = Some(offer);
+
+        state.board_members[0].dead = true;
+
+        tick_check_contracts(&mut state, &mut events);
+
+        assert!(state.contract_offer.is_none(), "Pending offer should be cleared when member dies");
+    }
+
+    #[test]
+    fn dead_member_excluded_from_new_offers() {
+        let mut events: Vec<GameEvent> = Vec::new();
+        let mut state = crate::engine::new_game(42);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        state.tick = CONTRACT_FIRST_OFFER_TICK;
+        state.regions[0].dead = 3_000_000.0;
+
+        // Kill all board members
+        for member in &mut state.board_members {
+            member.dead = true;
+        }
+
+        tick_offer_contracts(&mut state, &mut rng, &mut events);
+
+        assert!(state.contract_offer.is_none(), "Dead members should not offer contracts");
     }
 
     #[test]
