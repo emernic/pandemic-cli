@@ -187,41 +187,55 @@ pub(super) fn discard_hit(state: &mut WorldState, hit_index: usize) -> (bool, Op
 }
 
 /// Generate reported stats for a medicine based on trial rigor.
-/// All rigor levels report percentage ranges. Higher rigor = tighter ranges.
-/// Charade gives no useful information (all "???").
-fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, _rng: &mut impl rand::Rng) {
+///
+/// Full: exact percentages. Abbreviated: offset ranges (midpoint ≠ real value).
+/// Compassionate: very wide offset ranges, nearly useless. Charade: no data at all.
+///
+/// The offset is critical: without it, the player can just take the midpoint of the
+/// range to recover the real value, making lower-rigor trials free information.
+fn generate_reported_stats(medicine: &mut Medicine, rigor: TrialRigor, rng: &mut impl rand::Rng) {
     let real_eff = medicine.trial_efficacy.unwrap_or(0.5);
     let real_se = medicine.side_effect_rate;
     let real_res = medicine.resistance_rate;
 
-    /// Format a stat as a percentage range, clamped to 0–100%.
-    fn pct_range(real: f64, half_width: f64) -> String {
-        let lo = ((real - half_width) * 100.0).max(0.0);
-        let hi = ((real + half_width) * 100.0).min(100.0);
-        format!("{:.0}-{:.0}%", lo, hi)
+    /// Build an offset percentage range. The range always contains the real value,
+    /// but the center is shifted randomly so the midpoint is NOT the real value.
+    /// `half_width`: half the total range width. `max_offset`: how far the center
+    /// can shift from the real value (the range is then re-anchored to still contain it).
+    fn offset_pct_range(real: f64, half_width: f64, max_offset: f64, rng: &mut impl rand::Rng) -> String {
+        // Shift center away from real value by up to max_offset in either direction
+        let offset: f64 = (rng.r#gen::<f64>() * 2.0 - 1.0) * max_offset;
+        let center = (real + offset).clamp(half_width, 1.0 - half_width);
+        // Ensure the range still contains the real value by expanding if needed
+        let lo = center - half_width;
+        let hi = center + half_width;
+        // The range must contain real, so clamp lo/hi to guarantee inclusion
+        let lo = lo.min(real);
+        let hi = hi.max(real);
+        let lo_pct = (lo * 100.0).max(0.0);
+        let hi_pct = (hi * 100.0).min(100.0);
+        format!("{:.0}-{:.0}%", lo_pct, hi_pct)
     }
 
     match rigor {
         TrialRigor::Full => {
-            // Precise: exact percentage
             medicine.reported_efficacy = Some(format!("{:.0}%", real_eff * 100.0));
             medicine.reported_side_effects = Some(format!("{:.0}%", real_se * 100.0));
             medicine.reported_resistance = Some(format!("{:.0}%", real_res * 100.0));
         }
         TrialRigor::Abbreviated => {
-            // Moderate uncertainty: ±10% efficacy, ±5% side effects, ±15% resistance
-            medicine.reported_efficacy = Some(pct_range(real_eff, 0.10));
-            medicine.reported_side_effects = Some(pct_range(real_se, 0.05));
-            medicine.reported_resistance = Some(pct_range(real_res, 0.15));
+            // ±15% range, offset up to ±10% — useful but imprecise
+            medicine.reported_efficacy = Some(offset_pct_range(real_eff, 0.15, 0.10, rng));
+            medicine.reported_side_effects = Some(offset_pct_range(real_se, 0.15, 0.10, rng));
+            medicine.reported_resistance = Some(offset_pct_range(real_res, 0.15, 0.10, rng));
         }
         TrialRigor::Compassionate => {
-            // Very wide ranges: ±25% efficacy, ±20% side effects, ±30% resistance
-            medicine.reported_efficacy = Some(pct_range(real_eff, 0.25));
-            medicine.reported_side_effects = Some(pct_range(real_se, 0.20));
-            medicine.reported_resistance = Some(pct_range(real_res, 0.30));
+            // ±35% range, offset up to ±25% — nearly useless, very wide
+            medicine.reported_efficacy = Some(offset_pct_range(real_eff, 0.35, 0.25, rng));
+            medicine.reported_side_effects = Some(offset_pct_range(real_se, 0.35, 0.25, rng));
+            medicine.reported_resistance = Some(offset_pct_range(real_res, 0.35, 0.25, rng));
         }
         TrialRigor::Charade => {
-            // No useful data — you get nothing for skipping a real trial
             medicine.reported_efficacy = Some("???".into());
             medicine.reported_side_effects = Some("???".into());
             medicine.reported_resistance = Some("???".into());
