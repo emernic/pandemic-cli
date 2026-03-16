@@ -1738,8 +1738,7 @@ pub(super) fn activate_crisis(state: &mut WorldState, crisis: CrisisEvent, event
     };
     state.active_crisis = Some(crisis);
     if can_auto {
-        let (message, post_action) = resolve_crisis(state, auto_choice.unwrap(), events);
-        events.push(GameEvent::CrisisAutoResolved { message });
+        let (_message, post_action) = resolve_crisis(state, auto_choice.unwrap(), events);
         post_action
     } else {
         events.push(GameEvent::CrisisStarted);
@@ -1748,16 +1747,12 @@ pub(super) fn activate_crisis(state: &mut WorldState, crisis: CrisisEvent, event
 }
 
 /// Tick all active crisis operations. Complete ones that expire and return their personnel.
-pub(super) fn tick_crisis_operations(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_crisis_operations(state: &mut WorldState) {
     let mut i = 0;
     while i < state.crisis_operations.len() {
         state.crisis_operations[i].ticks_remaining -= 1.0;
         if state.crisis_operations[i].ticks_remaining <= 0.0 {
-            let op = state.crisis_operations.remove(i);
-            events.push(GameEvent::CrisisTeamReturned {
-                label: op.label,
-                personnel: op.personnel,
-            });
+            let _op = state.crisis_operations.remove(i);
         } else {
             i += 1;
         }

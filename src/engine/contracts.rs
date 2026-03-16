@@ -223,7 +223,7 @@ const PATRON_BONUS_DOSE_FRACTION: f64 = 0.20;
 /// Check satisfied contracts for patron bonus eligibility and grant bonuses.
 /// Bonuses are modest one-time perks: funding, personnel, research speed, or dose refill.
 /// The bonus type is determined by the offering board member's personality.
-pub(super) fn tick_patron_bonuses(state: &mut WorldState, rng: &mut ChaCha8Rng, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_patron_bonuses(state: &mut WorldState, rng: &mut ChaCha8Rng) {
     let min_held_ticks = (PATRON_BONUS_MIN_HELD_DAYS * TICKS_PER_DAY) as u64;
     let cooldown_ticks = (PATRON_BONUS_COOLDOWN_DAYS * TICKS_PER_DAY) as u64;
 
@@ -244,13 +244,13 @@ pub(super) fn tick_patron_bonuses(state: &mut WorldState, rng: &mut ChaCha8Rng, 
             continue;
         }
 
-        let member_name = state.board_members.get(member_idx)
+        let _member_name = state.board_members.get(member_idx)
             .map(|m| m.name.clone())
             .unwrap_or_else(|| "Patron".to_string());
         let personality = state.board_members.get(member_idx)
             .and_then(|m| m.personality);
 
-        let description = match personality {
+        let _description = match personality {
             Some(BoardPersonality::Profiteer) | None => {
                 // Emergency funding: lump sum scaled to board budget.
                 let bonus = state.board_budget_per_tick * TICKS_PER_DAY * PATRON_BONUS_FUNDING_DAYS;
@@ -298,10 +298,6 @@ pub(super) fn tick_patron_bonuses(state: &mut WorldState, rng: &mut ChaCha8Rng, 
         };
 
         state.contracts[contract_idx].last_bonus_tick = state.tick;
-        events.push(GameEvent::PatronBonus {
-            member_name,
-            description,
-        });
     }
 }
 
@@ -1277,7 +1273,6 @@ mod tests {
 
     #[test]
     fn patron_bonus_requires_high_satisfaction() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(99);
 
@@ -1301,15 +1296,14 @@ mod tests {
         state.tick = 10000; // Well past min held time.
 
         for _ in 0..1000 {
-            tick_patron_bonuses(&mut state, &mut rng, &mut events);
+            tick_patron_bonuses(&mut state, &mut rng);
         }
-        assert!(events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
+        assert_eq!(state.contracts[0].last_bonus_tick, 0,
             "Low satisfaction contract should not receive patron bonus");
     }
 
     #[test]
     fn patron_bonus_fires_with_high_satisfaction() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
@@ -1332,20 +1326,14 @@ mod tests {
 
         // Run enough ticks that a bonus should fire (1% chance per tick).
         for _ in 0..500 {
-            tick_patron_bonuses(&mut state, &mut rng, &mut events);
+            tick_patron_bonuses(&mut state, &mut rng);
         }
-        let bonus_events: Vec<_> = events.iter()
-            .filter(|e| matches!(e, GameEvent::PatronBonus { .. }))
-            .collect();
-        assert!(!bonus_events.is_empty(),
-            "High satisfaction contract should eventually receive a patron bonus");
         assert!(state.contracts[0].last_bonus_tick > 0,
-            "last_bonus_tick should be updated after bonus");
+            "High satisfaction contract should eventually receive a patron bonus");
     }
 
     #[test]
     fn patron_bonus_respects_cooldown() {
-        let mut events: Vec<GameEvent> = Vec::new();
         let mut state = crate::engine::new_game(42);
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
@@ -1367,11 +1355,11 @@ mod tests {
         state.tick = 9600; // Only 100 ticks since last bonus — within cooldown.
 
         for _ in 0..200 {
-            tick_patron_bonuses(&mut state, &mut rng, &mut events);
+            tick_patron_bonuses(&mut state, &mut rng);
             state.tick += 1;
         }
         // Tick only advanced to ~9800, cooldown is 600 ticks, so no bonus should fire.
-        assert!(events.iter().all(|e| !matches!(e, GameEvent::PatronBonus { .. })),
+        assert_eq!(state.contracts[0].last_bonus_tick, 9500,
             "Should not get bonus during cooldown period");
     }
 }

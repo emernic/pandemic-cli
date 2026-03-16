@@ -315,9 +315,9 @@ fn generate_medicine_name(mechanism: Option<MechanismOfAction>, rng: &mut impl r
 /// (ClinicalTrial and BasicResearch completions boost Technocrat satisfaction).
 pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, events: &mut Vec<GameEvent>) -> u32 {
     // Proactively auto-repeat on idle categories
-    try_auto_repeat(state, events);
+    try_auto_repeat(state);
     // Auto-start queued techs when prerequisites and resources become available
-    try_queued_starts(state, events);
+    try_queued_starts(state);
 
     let mut board_notify_count: u32 = 0;
 
@@ -476,10 +476,7 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     continue;
                 }
             }
-            let (ok, _) = start_research(state, &project.kind, false);
-            if ok {
-                events.push(GameEvent::ResearchAutoRestarted { kind: project.kind.clone() });
-            }
+            let (_ok, _) = start_research(state, &project.kind, false);
         }
     }
 
@@ -488,7 +485,7 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
 
 /// Try to auto-repeat any repeatable research that has auto-repeat enabled.
 /// Called at the start of each tick.
-fn try_auto_repeat(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+fn try_auto_repeat(state: &mut WorldState) {
     let kinds_to_repeat: Vec<ResearchKind> = state.auto_repeat_research.clone();
     for kind in &kinds_to_repeat {
         // Manufacturing only auto-repeats when doses drop to threshold
@@ -504,16 +501,13 @@ fn try_auto_repeat(state: &mut WorldState, events: &mut Vec<GameEvent>) {
         if state.resources.funding < cost {
             continue;
         }
-        let (ok, _) = start_research(state, kind, false);
-        if ok {
-            events.push(GameEvent::ResearchAutoRestarted { kind: kind.clone() });
-        }
+        let (_ok, _) = start_research(state, kind, false);
     }
 }
 
 /// Try to auto-start queued techs whose prerequisites and resources are now available.
 /// Removes techs from the queue once started (or if already unlocked/researching).
-fn try_queued_starts(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+fn try_queued_starts(state: &mut WorldState) {
     let queued: Vec<BasicTech> = state.queued_techs.clone();
     for tech in &queued {
         // Already unlocked or researching — silently remove from queue
@@ -539,7 +533,6 @@ fn try_queued_starts(state: &mut WorldState, events: &mut Vec<GameEvent>) {
         let (ok, _) = start_research(state, &target_kind, false);
         if ok {
             state.queued_techs.retain(|t| t != tech);
-            events.push(GameEvent::QueuedResearchStarted { tech: *tech });
         }
     }
 }

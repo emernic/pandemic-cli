@@ -1,5 +1,5 @@
 use crate::state::{
-    GameEvent, GameOutcome, WorldState, ResearchKind,
+    GameOutcome, WorldState, ResearchKind,
     REACTOR_COST, MAX_REACTORS, Reactor,
     personnel_speed,
 };
@@ -106,7 +106,7 @@ pub(super) fn start_batch(state: &mut WorldState, reactor_idx: usize) -> (bool, 
 }
 
 /// Advance reactor batches by one tick and handle completions.
-pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>) {
+pub(super) fn tick_reactors(state: &mut WorldState) {
     let lab_mult = state.lab_speed_multiplier();
     let biotech_bonus = (0..state.regions.len())
         .map(|r| state.sector_bonus(r, crate::state::CorporationSector::Biotech))
@@ -123,12 +123,7 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
                         .map(|m| if m.max_doses > 0.0 { m.doses / m.max_doses } else { 1.0 })
                         .unwrap_or(1.0);
                     if dose_frac < 1.0 {
-                        let (ok, _) = start_batch(state, i);
-                        if ok {
-                            events.push(GameEvent::ResearchAutoRestarted {
-                                kind: ResearchKind::ManufactureDoses { medicine_idx: med_idx },
-                            });
-                        }
+                        let (_ok, _) = start_batch(state, i);
                     }
                 }
             }
@@ -180,7 +175,7 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
                     state.deploy_enabled[med_idx] = true;
                 }
 
-                events.push(GameEvent::ReactorBatchComplete { medicine_idx: med_idx });
+                // Batch complete for medicine med_idx
             }
         }
     }
