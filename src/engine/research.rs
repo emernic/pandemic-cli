@@ -103,29 +103,29 @@ pub(super) fn start_trial(state: &mut WorldState, compound_id: &str, rigor: Tria
         Some(mechs[idx])
     };
 
-    // Randomize stats from the hit's Kd:
+    // Randomize stats from the hit's Kd, modified by screening modality:
     // Lower Kd = better binding = higher efficacy
     // Kd range is roughly 0.1-500 nM. We map to efficacy 0.3-0.95.
     let kd_factor = (hit.kd_nm.ln() - 0.1_f64.ln()) / (500.0_f64.ln() - 0.1_f64.ln());
     let base_efficacy = 0.95 - (kd_factor.clamp(0.0, 1.0) * 0.65);
     // Add some randomness (±15%)
     let noise: f64 = (state.rng_spread.r#gen::<f64>() - 0.5) * 0.30;
-    let efficacy = (base_efficacy + noise).clamp(0.15, 0.98);
+    let efficacy = ((base_efficacy + noise) * hit.modality.efficacy_multiplier()).clamp(0.15, 0.98);
 
-    // Side effect rate: 0-25%, inversely correlated with rigor (charade hides bad drugs)
-    let side_effect_rate = state.rng_spread.r#gen::<f64>() * 0.25;
+    // Side effect rate: 0-25%, scaled by modality (mAbs are more precise)
+    let side_effect_rate = state.rng_spread.r#gen::<f64>() * 0.25 * hit.modality.side_effect_multiplier();
 
     // Resistance rate: how quickly resistance builds (0.0-1.0 scale, lower is better)
     let resistance_rate: f64 = if let Some(mech) = mechanism {
-        // Fast/cheap mechanisms build resistance faster
+        // Fast/cheap mechanisms build resistance faster, modulated by modality
         let base: f64 = mech.dev_cost_multiplier();
         let mapped: f64 = (1.5 - base) / 0.7; // 1.0 for cheapest, 0.0 for most expensive
-        (mapped * 0.6 + state.rng_spread.r#gen::<f64>() * 0.4).clamp(0.0, 1.0)
+        ((mapped * 0.6 + state.rng_spread.r#gen::<f64>() * 0.4) * hit.modality.resistance_multiplier()).clamp(0.0, 1.0)
     } else {
-        0.5
+        0.5 * hit.modality.resistance_multiplier()
     };
 
-    let max_doses = mechanism.map_or(500_000.0, |m| m.base_doses());
+    let max_doses = mechanism.map_or(500_000.0, |m| m.base_doses()) * hit.modality.dose_multiplier();
 
     // Create the medicine — uses compound_id as temporary name until trial completes
     let medicine = Medicine {
@@ -1329,5 +1329,66 @@ mod tests {
         let a = super::generate_medicine_name(Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
         let b = super::generate_medicine_name(Some(MechanismOfAction::PolymeraseInhibitor), &mut rng2);
         assert_ne!(a, b, "Consecutive calls should produce different names");
+    }
+
+    #[test]
+    fn modality_affects_medicine_stats() {
+        use crate::state::{
+            ScreeningModality, ScreeningHit, TrialRigor, KNOWLEDGE_FULL,
+        };
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        // Helper: create a world with an identified disease and a screening hit
+        fn make_world_with_hit(modality: ScreeningModality) -> crate::state::WorldState {
+            let app = AppState::new_default(42);
+            let mut world = app.world;
+            world.diseases[0].knowledge = KNOWLEDGE_FULL;
+            world.resources.funding = 1_000_000.0;
+            world.resources.personnel = 100;
+            // Reset RNGs to same seed so randomness is identical across calls
+            world.rng_spread = ChaCha8Rng::seed_from_u64(123);
+            world.screening_hits.push(ScreeningHit {
+                disease_idx: 0,
+                modality,
+                kd_nm: 10.0, // same Kd for fair comparison
+                compound_id: format!("TEST-001"),
+                well_index: 0,
+            });
+            world
+        }
+
+        let mut world_sm = make_world_with_hit(ScreeningModality::SmallMolecule);
+        let mut world_mab = make_world_with_hit(ScreeningModality::MonoclonalAntibody);
+        let mut world_rna = make_world_with_hit(ScreeningModality::RnaTherapeutic);
+
+        let (ok_sm, _) = super::start_trial(&mut world_sm, "TEST-001", TrialRigor::Full);
+        let (ok_mab, _) = super::start_trial(&mut world_mab, "TEST-001", TrialRigor::Full);
+        let (ok_rna, _) = super::start_trial(&mut world_rna, "TEST-001", TrialRigor::Full);
+        assert!(ok_sm && ok_mab && ok_rna);
+
+        let med_sm = &world_sm.medicines.last().unwrap();
+        let med_mab = &world_mab.medicines.last().unwrap();
+        let med_rna = &world_rna.medicines.last().unwrap();
+
+        // mAb should have higher efficacy than small molecule
+        assert!(med_mab.trial_efficacy.unwrap() > med_sm.trial_efficacy.unwrap(),
+            "mAb efficacy ({:.3}) should exceed small molecule ({:.3})",
+            med_mab.trial_efficacy.unwrap(), med_sm.trial_efficacy.unwrap());
+
+        // Small molecule should have more max doses than mAb
+        assert!(med_sm.max_doses > med_mab.max_doses,
+            "SmallMolecule doses ({:.0}) should exceed mAb ({:.0})",
+            med_sm.max_doses, med_mab.max_doses);
+
+        // RNA should have lower resistance than small molecule
+        assert!(med_rna.resistance_rate < med_sm.resistance_rate,
+            "RNA resistance ({:.3}) should be lower than SmallMolecule ({:.3})",
+            med_rna.resistance_rate, med_sm.resistance_rate);
+
+        // mAb should have lower side effects than small molecule
+        assert!(med_mab.side_effect_rate < med_sm.side_effect_rate,
+            "mAb side effects ({:.3}) should be lower than SmallMolecule ({:.3})",
+            med_mab.side_effect_rate, med_sm.side_effect_rate);
     }
 }
