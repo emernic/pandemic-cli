@@ -774,7 +774,7 @@ fn render_screening_config_form(f: &mut Frame, area: Rect, state: &AppState) {
             let pers_color = if has_personnel { Color::Cyan } else { Color::Red };
             lines.push(Line::from(vec![
                 Span::styled(
-                    format!("  {}◆ {:<8}", marker, size.label()),
+                    format!("  {}{:<8}", marker, size.label()),
                     style,
                 ),
                 Span::styled(
