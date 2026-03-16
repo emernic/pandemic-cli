@@ -4059,6 +4059,32 @@ impl BasicTech {
         }
     }
 
+    /// Returns individual prerequisites with their description and met status.
+    pub fn prereq_items(&self, state: &WorldState) -> Vec<(&'static str, bool)> {
+        let mut items = Vec::new();
+        // Tech-to-tech prerequisites
+        for prereq in self.tech_prereqs() {
+            items.push((prereq.name(), state.unlocked_techs.contains(prereq)));
+        }
+        // Non-tech prerequisites
+        match self {
+            BasicTech::TargetedDrugDesign => {
+                let met = state.diseases.iter().any(|d| d.knowledge > 0.0);
+                items.push(("Identify any pathogen", met));
+            }
+            BasicTech::RapidSequencing => {
+                let met = state.diseases.iter().any(|d| d.sequencing_count > 0);
+                items.push(("Complete genomic sequencing on any pathogen", met));
+            }
+            BasicTech::CombinationTherapy => {
+                let met = state.medicines.iter().filter(|m| m.deployed_count > 0).count() >= 2;
+                items.push(("Deploy 2+ different medicines", met));
+            }
+            _ => {}
+        }
+        items
+    }
+
     /// All techs in display order (column 0, then column 1, then column 2).
     pub fn all() -> &'static [BasicTech] {
         &[
