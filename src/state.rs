@@ -3694,7 +3694,6 @@ pub enum ScreeningFormItem {
     Disease(usize),
     Modality(ScreeningModality),
     RunSize(ScreeningRunSize),
-    Confirm,
 }
 
 /// An active drug screening run.
@@ -4797,8 +4796,8 @@ pub enum LabUiState {
     /// Screening configuration form: single page showing disease, modality,
     /// and run size all at once. `panel_selection` is a flat index across all
     /// selectable items (diseases, then unlocked modalities, then unlocked
-    /// sizes, then confirm). The per-section fields below remember the
-    /// player's choice in each section as the cursor moves between them.
+    /// sizes). Enter submits from any position. The per-section fields below
+    /// remember the player's choice in each section as the cursor moves.
     ScreeningConfigForm {
         /// Index into screening_eligible_diseases()
         disease_sel: usize,
@@ -7120,7 +7119,7 @@ impl WorldState {
     }
 
     /// Build the flat list of selectable items for the screening config form.
-    /// Order: diseases, then unlocked modalities, then unlocked run sizes, then confirm.
+    /// Order: diseases, then unlocked modalities, then unlocked run sizes.
     pub fn screening_form_items(&self) -> Vec<ScreeningFormItem> {
         let mut items = Vec::new();
         for &d_idx in &self.screening_eligible_diseases() {
@@ -7136,7 +7135,6 @@ impl WorldState {
                 items.push(ScreeningFormItem::RunSize(size));
             }
         }
-        items.push(ScreeningFormItem::Confirm);
         items
     }
 
