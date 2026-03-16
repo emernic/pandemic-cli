@@ -264,7 +264,6 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                                     ResearchFlatItem::Active(idx) => {
                                         new.active_research.get(*idx).map(|p| p.kind.clone())
                                     }
-                                    ResearchFlatItem::FullStockpile(k) => Some(k.clone()),
                                     _ => None,
                                 };
                                 if let Some(kind) = kind {
@@ -677,8 +676,6 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
                         ui.panel_selection = 0;
                     }
                 }
-                // Full stockpile: Enter is a no-op
-                ResearchFlatItem::FullStockpile(_) => {}
                 // Active screening runs: Enter is a no-op
                 ResearchFlatItem::ActiveScreening(_) => {}
                 // Start New Screening Run → open config form
