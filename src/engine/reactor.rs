@@ -165,9 +165,10 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
                     }
                 }
 
-                // Auto-deploy: deploy to worst-affected region
+                // Auto-deploy: enable medicine auto-deployment when batch completes.
+                // This sets deploy_enabled (Medicines panel toggle) so the existing
+                // auto-deploy system dispatches doses to worst-affected regions.
                 if state.reactors[i].auto_deploy {
-                    // Enable auto-deploy for this medicine if not already
                     while state.deploy_enabled.len() <= med_idx {
                         state.deploy_enabled.push(false);
                     }
@@ -178,7 +179,6 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
 
                 // Auto-repeat: will be picked up on next tick
             }
-            let _ = personnel; // personnel returned to pool (no longer in reactor.personnel_assigned)
         }
     }
 }
