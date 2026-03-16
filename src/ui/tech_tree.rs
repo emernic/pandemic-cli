@@ -234,11 +234,8 @@ fn render_tree(f: &mut Frame, area: Rect, state: &AppState, selected_idx: usize,
         let target_top_raw = box_top_raw(to_node.row);
 
         let from_unlocked = state.unlocked_techs.contains(&edge.from);
-        let to_unlocked = state.unlocked_techs.contains(&edge.to);
-        let color = if to_unlocked {
-            Color::Green
-        } else if from_unlocked {
-            Color::Yellow
+        let color = if from_unlocked {
+            Color::White
         } else {
             Color::DarkGray
         };
