@@ -3794,20 +3794,20 @@ impl TrialRigor {
 
     pub fn description(self) -> &'static str {
         match self {
-            Self::Full => "slow and expensive — stats revealed accurately",
-            Self::Abbreviated => "moderate cost — stats shown with ranges",
-            Self::Compassionate => "cheap and fast — qualitative stats only",
-            Self::Charade => "near-free, near-instant — stats may be lies",
+            Self::Full => "slow and expensive — precise stats",
+            Self::Abbreviated => "moderate cost — stats shown as ranges",
+            Self::Compassionate => "cheap — very wide ranges, low confidence",
+            Self::Charade => "near-free — no useful data",
         }
     }
 
     /// (personnel, duration_ticks, funding) for this rigor level.
     pub fn costs(self) -> (u32, f64, f64) {
         match self {
-            Self::Full =>          (4, 120.0, 400.0),
-            Self::Abbreviated =>   (2, 60.0, 200.0),
-            Self::Compassionate => (1, 25.0, 80.0),
-            Self::Charade =>       (1, 8.0, 20.0),
+            Self::Full =>          (4, 600.0, 400.0),
+            Self::Abbreviated =>   (2, 300.0, 200.0),
+            Self::Compassionate => (1, 120.0, 80.0),
+            Self::Charade =>       (1, 60.0, 20.0),
         }
     }
 }
