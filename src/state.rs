@@ -3830,7 +3830,7 @@ impl ResearchKind {
     pub fn lab_tab(&self) -> Option<LabTab> {
         match self {
             Self::IdentifyThreat { .. } | Self::GenomicSequencing { .. } => Some(LabTab::Sequencing),
-            Self::TrainPersonnel => Some(LabTab::Screening),
+            Self::TrainPersonnel => Some(LabTab::Infra),
             Self::ClinicalTrial { .. } => Some(LabTab::Trials),
             Self::ManufactureDoses { .. } => Some(LabTab::Reactors),
             Self::BasicResearch { .. } => None,
@@ -4733,14 +4733,16 @@ pub enum LabTab {
     Screening,
     Trials,
     Reactors,
+    Infra,
 }
 
 impl LabTab {
-    pub const ALL: [LabTab; 4] = [
+    pub const ALL: [LabTab; 5] = [
         LabTab::Sequencing,
         LabTab::Screening,
         LabTab::Trials,
         LabTab::Reactors,
+        LabTab::Infra,
     ];
 
     pub fn label(self) -> &'static str {
@@ -4749,6 +4751,7 @@ impl LabTab {
             LabTab::Screening => "Screening",
             LabTab::Trials => "Trials",
             LabTab::Reactors => "Reactors",
+            LabTab::Infra => "Infra",
         }
     }
 
@@ -4758,6 +4761,7 @@ impl LabTab {
             LabTab::Screening => 1,
             LabTab::Trials => 2,
             LabTab::Reactors => 3,
+            LabTab::Infra => 4,
         }
     }
 
@@ -4840,6 +4844,19 @@ pub enum ResearchFlatItem {
     FullStockpile(ResearchKind),
     /// The lab upgrade button.
     UpgradeLab,
+}
+
+/// Items shown on the Infra tab — infrastructure investments and personnel management.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InfraItem {
+    /// Lab upgrade (level 0→1 or 1→2).
+    UpgradeLab,
+    /// Train new personnel (+5).
+    TrainPersonnel,
+    /// Fire unassigned personnel.
+    FirePersonnel,
+    /// Buy a new production reactor.
+    BuyReactor,
 }
 
 impl ResearchFlatItem {
@@ -6690,10 +6707,7 @@ impl WorldState {
 
         // Manufacturing is now handled by reactors, not the research pipeline.
         // FullStockpile entries are no longer generated here.
-
-        if self.lab_level < 2 {
-            items.push(ResearchFlatItem::UpgradeLab);
-        }
+        // UpgradeLab moved to the Infra tab.
 
         items
     }
@@ -6710,6 +6724,10 @@ impl WorldState {
         }
         if tab == LabTab::Trials {
             return self.trials_tab_items();
+        }
+        // Infra tab uses its own item system (InfraItem), not ResearchFlatItem.
+        if tab == LabTab::Infra {
+            return Vec::new();
         }
 
         let all = self.research_flat_items();
@@ -6731,7 +6749,7 @@ impl WorldState {
                     }
                 }
                 ResearchFlatItem::FullStockpile(kind) => kind.lab_tab() == Some(tab),
-                ResearchFlatItem::UpgradeLab => tab == LabTab::Sequencing,
+                ResearchFlatItem::UpgradeLab => false, // Moved to Infra tab
                 ResearchFlatItem::ActiveScreening(_)
                 | ResearchFlatItem::StartNewScreening
                 | ResearchFlatItem::StartNewTrial => false,
@@ -6739,7 +6757,36 @@ impl WorldState {
         }).collect()
     }
 
-    /// Items for the Screening tab: active screening runs + "Start New Run" + TrainPersonnel.
+    /// Items for the Infra tab: lab upgrades, personnel management, reactor purchasing.
+    pub fn infra_tab_items(&self) -> Vec<InfraItem> {
+        let mut items = Vec::new();
+
+        // Lab upgrade (if not maxed)
+        if self.lab_level < 2 {
+            items.push(InfraItem::UpgradeLab);
+        }
+
+        // Train personnel (if not already training)
+        let already_training = self.active_research.iter()
+            .any(|p| matches!(p.kind, ResearchKind::TrainPersonnel));
+        if !already_training {
+            items.push(InfraItem::TrainPersonnel);
+        }
+
+        // Fire personnel (if any unassigned)
+        if self.personnel_available() > 0 {
+            items.push(InfraItem::FirePersonnel);
+        }
+
+        // Buy reactor (if under max)
+        if self.reactors.len() < MAX_REACTORS {
+            items.push(InfraItem::BuyReactor);
+        }
+
+        items
+    }
+
+    /// Items for the Screening tab: active screening runs + "Start New Run".
     fn screening_tab_items(&self) -> Vec<ResearchFlatItem> {
         let mut items = Vec::new();
 
@@ -6750,29 +6797,6 @@ impl WorldState {
         // "Start New Run" if there are eligible diseases
         if !self.screening_eligible_diseases().is_empty() {
             items.push(ResearchFlatItem::StartNewScreening);
-        }
-
-        // TrainPersonnel item (lives in Screening tab)
-        let all_research = self.research_flat_items();
-        let available = self.all_available_projects();
-        for item in all_research {
-            match &item {
-                ResearchFlatItem::Active(ai) => {
-                    if let Some(project) = self.active_research.get(*ai) {
-                        if project.kind.lab_tab() == Some(LabTab::Screening) {
-                            items.push(item);
-                        }
-                    }
-                }
-                ResearchFlatItem::Available(avail_idx) => {
-                    if let Some(kind) = available.get(*avail_idx) {
-                        if kind.lab_tab() == Some(LabTab::Screening) {
-                            items.push(item);
-                        }
-                    }
-                }
-                _ => {}
-            }
         }
 
         items

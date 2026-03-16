@@ -1832,8 +1832,8 @@ mod tests {
 
         let tab = state.ui.lab_ui.as_ref().unwrap().tab();
         let items = state.lab_tab_items(tab);
+        assert!(!items.is_empty(), "should have at least one selectable item");
         let max = items.len().saturating_sub(1);
-        assert!(max > 0, "should have at least one selectable item");
 
         // Navigate forward through all items
         for i in 1..=max {

@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed, ScreeningModality, ScreeningRunSize, WELLS_PER_PLATE};
+use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed, ScreeningModality, ScreeningRunSize, WELLS_PER_PLATE, InfraItem, REACTOR_COST, MAX_REACTORS};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the lab panel in its current sub-state.
@@ -14,9 +14,10 @@ pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
     match ui_state {
         LabUiState::Browse { tab } => {
             if *tab == LabTab::Reactors {
-                // Reactors tab: one item per reactor + buy button (if under max)
-                let buy_slot = if state.reactors.len() < crate::state::MAX_REACTORS { 1 } else { 0 };
-                (state.reactors.len() + buy_slot).saturating_sub(1)
+                // Reactors tab: one item per reactor (buy moved to Infra)
+                state.reactors.len().saturating_sub(1)
+            } else if *tab == LabTab::Infra {
+                state.infra_tab_items().len().saturating_sub(1)
             } else {
                 state.lab_tab_items(*tab).len().saturating_sub(1)
             }
@@ -66,6 +67,8 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         LabUiState::Browse { tab } => {
             if *tab == LabTab::Reactors {
                 render_reactors_tab(f, chunks[1], state);
+            } else if *tab == LabTab::Infra {
+                render_infra_tab(f, chunks[1], state);
             } else {
                 render_tab_content(f, chunks[1], state, *tab);
             }
@@ -163,6 +166,7 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
             LabTab::Screening => "  Identify a pathogen first to start screening.",
             LabTab::Trials => "  No trials available.",
             LabTab::Reactors => "  No medicines to manufacture.",
+            LabTab::Infra => "  No infrastructure actions available.",
         };
         lines.push(Line::from(Span::styled(msg, Style::default().fg(Color::DarkGray))));
     }
@@ -272,14 +276,7 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
         }
     }
 
-    // Max lab info when fully upgraded (only in Sequencing tab where upgrade lives)
-    if tab == LabTab::Sequencing && state.lab_level >= 2 {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            format!("  {} (max) — all research 60% faster", state.lab_level_name()),
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
+    // (Lab upgrade info moved to Infra tab)
 
     // Trials tab: show screening hits awaiting trials
     if tab == LabTab::Trials && !state.screening_hits.is_empty() {
@@ -1033,29 +1030,202 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
     }
 }
 
+/// Render the Infra tab — lab upgrades, personnel management, reactor purchasing.
+fn render_infra_tab(f: &mut Frame, area: Rect, state: &AppState) {
+    let mut lines: Vec<Line> = Vec::new();
+    let mut selected_line: Option<usize> = None;
+    let items = state.infra_tab_items();
+
+    // ── Status overview ──
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  Lab: ", Style::default().fg(Color::White)),
+        Span::styled(state.lab_level_name(), Style::default().fg(Color::Cyan)),
+        Span::styled(
+            if state.lab_level >= 2 { "  (max)" } else { "" },
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::raw("    "),
+        Span::styled("Personnel: ", Style::default().fg(Color::White)),
+        Span::styled(
+            format!("{}", state.resources.personnel),
+            Style::default().fg(Color::Cyan),
+        ),
+        Span::styled(
+            format!(" ({} avail, ¥{:.0}/day upkeep)",
+                state.personnel_available(),
+                state.resources.personnel as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::raw("    "),
+        Span::styled("Reactors: ", Style::default().fg(Color::White)),
+        Span::styled(
+            format!("{}/{}", state.reactors.len(), MAX_REACTORS),
+            Style::default().fg(Color::Cyan),
+        ),
+    ]));
+    lines.push(Line::from(""));
+
+    // Active TrainPersonnel project (if running)
+    if let Some(project) = state.active_research.iter()
+        .find(|p| matches!(p.kind, ResearchKind::TrainPersonnel))
+    {
+        let pct = (project.progress / project.required_ticks * 100.0).min(100.0);
+        let remaining = (project.required_ticks - project.progress).max(0.0);
+        let p_speed = project.speed(&state.medicines);
+        let infra_mult = state.research_infra_multiplier();
+        let speed = p_speed * infra_mult;
+        let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
+        let auto_tag = if state.auto_repeat_research.contains(&project.kind) { " AUTO" } else { "" };
+
+        lines.push(Line::from(Span::styled(
+            format!("  [ACTIVE]{} Train Personnel (+{})", auto_tag, TRAIN_PERSONNEL_BATCH),
+            Style::default().fg(Color::Cyan),
+        )));
+        let bar_width = 20;
+        let filled = ((pct / 100.0) * bar_width as f64).round() as usize;
+        let empty = bar_width - filled;
+        let bar = format!("{}{}", "▓".repeat(filled), "░".repeat(empty));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(bar, Style::default().fg(Color::Green)),
+            Span::styled(format!("  {:.0}%  {}", pct, format_days(effective_remaining)), Style::default().fg(Color::Green)),
+        ]));
+        lines.push(Line::from(""));
+    }
+
+    // ── Selectable items ──
+    lines.push(Line::from(Span::styled(
+        "  ── Actions ──",
+        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(""));
+
+    for (item_idx, item) in items.iter().enumerate() {
+        let selected = state.ui.panel_selection == item_idx;
+        if selected { selected_line = Some(lines.len()); }
+        let marker = if selected { "▶ " } else { "  " };
+        let sel_style = |base_color: Color| {
+            if selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(base_color)
+            }
+        };
+
+        match item {
+            InfraItem::UpgradeLab => {
+                let (cost, next_name, pct) = if state.lab_level == 0 {
+                    (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
+                } else {
+                    (LAB_LEVEL_2_COST, "Advanced Genomics Center", 60)
+                };
+                let can_afford = state.resources.funding >= cost;
+                lines.push(Line::from(Span::styled(
+                    format!("{}[UPGRADE] Lab: {} → {}", marker, state.lab_level_name(), next_name),
+                    sel_style(Color::Magenta),
+                )));
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("    +{}% research speed", pct),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!("  ¥{:.0}", cost),
+                        Style::default().fg(if can_afford { Color::Cyan } else { Color::Red }),
+                    ),
+                ]));
+            }
+            InfraItem::TrainPersonnel => {
+                let (base_personnel, _, cost) = ResearchKind::TrainPersonnel.costs(&state.medicines);
+                let can_afford = state.resources.funding >= cost
+                    && state.personnel_available() >= base_personnel;
+                let added_upkeep = TRAIN_PERSONNEL_BATCH as f64 * PERSONNEL_UPKEEP_COST * TICKS_PER_DAY;
+                lines.push(Line::from(Span::styled(
+                    format!("{}[HIRE] Train Personnel (+{})", marker, TRAIN_PERSONNEL_BATCH),
+                    sel_style(Color::Green),
+                )));
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("    {} personnel, ¥{:.0}", base_personnel, cost),
+                        Style::default().fg(if can_afford { Color::DarkGray } else { Color::Red }),
+                    ),
+                    Span::styled(
+                        format!("  (+¥{:.0}/day upkeep)", added_upkeep),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
+            InfraItem::FirePersonnel => {
+                let avail = state.personnel_available();
+                let fire_count = avail.min(5);
+                lines.push(Line::from(Span::styled(
+                    format!("{}[FIRE] Dismiss {} Personnel", marker, fire_count),
+                    sel_style(Color::Red),
+                )));
+                lines.push(Line::from(Span::styled(
+                    format!("    {} unassigned available", avail),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+            InfraItem::BuyReactor => {
+                let can_afford = state.resources.funding >= REACTOR_COST;
+                lines.push(Line::from(Span::styled(
+                    format!("{}[BUY] Production Reactor", marker),
+                    sel_style(Color::Green),
+                )));
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("    {}/{} reactors", state.reactors.len(), MAX_REACTORS),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!("  ¥{:.0}", REACTOR_COST),
+                        Style::default().fg(if can_afford { Color::Cyan } else { Color::Red }),
+                    ),
+                ]));
+            }
+        }
+        lines.push(Line::from(""));
+    }
+
+    if items.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  All infrastructure is maxed out.",
+            Style::default().fg(Color::DarkGray),
+        )));
+        lines.push(Line::from(""));
+    }
+
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [Esc] Close",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
+    f.render_widget(widget, area);
+}
+
 /// Render the Reactors tab with ASCII art reactor vessels.
 fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
 
     let reactor_count = state.reactors.len();
-    let can_buy = reactor_count < crate::state::MAX_REACTORS;
 
     // Header line
     let header_text = format!("  {} production reactor{}", reactor_count,
         if reactor_count == 1 { "" } else { "s" });
-    let mut header_spans: Vec<Span> = vec![
-        Span::styled(header_text, Style::default().fg(Color::White)),
-    ];
-    if can_buy {
-        let can_afford = state.resources.funding >= crate::state::REACTOR_COST;
-        header_spans.push(Span::raw("    "));
-        header_spans.push(Span::styled(
-            format!("Buy reactor (¥{:.0})", crate::state::REACTOR_COST),
-            Style::default().fg(if can_afford { Color::Green } else { Color::DarkGray }),
-        ));
-    }
-    lines.push(Line::from(header_spans));
+    lines.push(Line::from(Span::styled(header_text, Style::default().fg(Color::White))));
     lines.push(Line::from(""));
 
     // Render each reactor as ASCII art
@@ -1063,26 +1233,6 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
         let selected = state.ui.panel_selection == i;
         if selected { selected_line = Some(lines.len()); }
         render_reactor_vessel(&mut lines, reactor, selected, state);
-    }
-
-    // Buy reactor button (at index == reactor_count)
-    if can_buy {
-        let buy_selected = state.ui.panel_selection == reactor_count;
-        if buy_selected { selected_line = Some(lines.len()); }
-        let marker = if buy_selected { "▶ " } else { "  " };
-        let can_afford = state.resources.funding >= crate::state::REACTOR_COST;
-        let style = if buy_selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else if can_afford {
-            Style::default().fg(Color::Green)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-        lines.push(Line::from(Span::styled(
-            format!("{}[+] Buy Reactor (¥{:.0})", marker, crate::state::REACTOR_COST),
-            style,
-        )));
-        lines.push(Line::from(""));
     }
 
     lines.push(Line::from(Span::styled(
