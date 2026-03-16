@@ -462,11 +462,13 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &AppState, disease_idx: u
     for &region_idx in &order {
         let region = &state.regions[region_idx];
         if let Some(inf) = region.disease_state(disease_idx) {
-            if inf.exposed + inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
-                continue;
-            }
             let shows_exposed = state.screening_shows_exposed(region_idx);
             let screened = region.screened_infected_for_disease(disease_idx, &state.diseases, shows_exposed);
+            // Hide regions where screening hasn't detected meaningful infections,
+            // unless deaths reveal the disease's presence there.
+            if screened < 1.0 && inf.dead < 1.0 && inf.immune <= 0.0 {
+                continue;
+            }
             let shows_immune = state.policies.get(region_idx)
                 .map(|p| p.screening.shows_immune())
                 .unwrap_or(false);
