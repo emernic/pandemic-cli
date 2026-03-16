@@ -248,15 +248,13 @@ pub struct AppState {
     pub session: SessionState,
 }
 
-// GUARDRAIL: These Deref impls exist so that code holding an AppState can
-// access world fields directly (e.g. `state.diseases` instead of
-// `state.world.diseases`).  This is a deliberate ergonomic shortcut, NOT an
-// invitation to treat AppState and WorldState as interchangeable.
+// GUARDRAIL: This Deref exists only as a legacy ergonomic shortcut for world
+// field reads like `state.diseases`. Do not copy this pattern.
 //
-// In boundary-sensitive code (engine entry points, serialization, lib.rs
-// action routing) prefer explicit `state.world` access so the app/world seam
-// stays visible.  Do not add new Deref-style coercions between AppState and
-// UiState or SessionState — the world shortcut is the sole exception.
+// In new engine/lib/persistence/boundary-sensitive code, write `state.world`
+// explicitly. Do not add new Deref-style coercions between state layers, and
+// do not treat AppState and WorldState as interchangeable types. If explicit
+// access feels awkward, fix the caller or API instead of adding more magic.
 impl std::ops::Deref for AppState {
     type Target = WorldState;
     fn deref(&self) -> &WorldState {
@@ -4983,8 +4981,12 @@ impl AppState {
     /// the full production bootstrap (`initialize_game`). Use this constructor
     /// only when you intentionally need a raw world state — e.g., to test
     /// startup initialization itself or to set up a specific pre-bootstrap
-    /// scenario. This is a pragmatic compromise, not a pattern to copy — do
-    /// not add more constructors that partially duplicate the bootstrap.
+    /// scenario.
+    ///
+    /// Do not use this for real fresh-game setup. Do not add more constructors
+    /// like this. If you need a playable game, call `engine::new_game()`. If
+    /// you need a new creation path, extend `engine::new_game()` or
+    /// `persistence::load_or_create()` instead of cloning this pattern.
     pub fn new_default(seed: u64) -> Self {
         Self {
             world: WorldState::new_default(seed),
@@ -4995,13 +4997,13 @@ impl AppState {
 
     /// Replace the world state, keeping UI and session state.
     ///
-    /// GUARDRAIL: This helper exists mainly for **engine unit tests** that call
-    /// `tick()` directly and need to splice the resulting WorldState back into
-    /// an AppState.  Production (non-test) simulation advancement should go
-    /// through `tick_and_process()` in lib.rs, which constructs the new
-    /// AppState explicitly and also runs event processing and selection
-    /// stabilization.  Prefer that path over manual `with_world()` calls in
-    /// any new non-test code.
+    /// GUARDRAIL: This is mainly a **test helper** for engine tests that call
+    /// `tick()` directly.
+    ///
+    /// Do not use this in new non-test code. If you are advancing the game
+    /// from app code, use `tick_and_process()` in lib.rs. If that path does
+    /// not fit, stop and rethink the boundary instead of stitching a new
+    /// `WorldState` back into an `AppState` by hand.
     pub fn with_world(&self, world: WorldState) -> Self {
         Self {
             world,
@@ -5403,7 +5405,8 @@ impl WorldState {
     /// **Do not add more constructors that duplicate this + `initialize_game`.**
     /// The two existing bootstrap paths — `engine::new_game()` for tests/fresh
     /// games and `persistence::load_or_create()` for saves — are sufficient.
-    /// If you need a new entry point, extend one of those instead.
+    /// If you need a new entry point, extend one of those instead. Do not copy
+    /// this raw constructor into a new helper and then forget to bootstrap it.
     pub fn new_default(seed: u64) -> Self {
 
         // Per-subsystem RNG streams. Emergence uses the raw seed so the

@@ -306,13 +306,14 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 if let Some(cmd) = handle_confirm(&mut new.ui, &state_snapshot) {
                     let result = execute_command(&mut new, &cmd);
                     events::process_events(&mut new, &result.events);
-                    // GUARDRAIL: The block below is coordination logic that
-                    // maps engine results to UI/session state updates.  This
-                    // is the ONE place where command outcomes legitimately
-                    // cross the world→UI boundary.  Keep this pattern contained
-                    // here in lib.rs — engine/ must never import or modify
-                    // UiState, and UI modules must never call execute_command
-                    // directly.
+                    // GUARDRAIL: This match is where command results are
+                    // translated into follow-up UI/session updates.
+                    //
+                    // Do not copy this pattern into engine/, UI modules, or a
+                    // new helper layer. If a command needs UI/session
+                    // follow-up, add that case here. If this block starts
+                    // feeling wrong for a new feature, stop and rethink the
+                    // boundary before adding another shortcut.
                     match &cmd {
                         GameCommand::StartResearch { .. } if result.success => {
                             if new.ui.open_panel == Panel::Lab {
@@ -355,8 +356,15 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                             new.ui.panel_selection = 0;
                         }
                         GameCommand::ToggleDeploy { med_idx } => {
-                            // Reset blocked notification so the player gets
-                            // re-notified if deploy is still blocked.
+                            // GUARDRAIL: DeployBlocked uses a session-scoped
+                            // dedupe cache. Toggling deploy is the one place
+                            // we intentionally clear it so a still-blocked
+                            // medicine can notify again.
+                            //
+                            // Do not start resetting unrelated event caches
+                            // from this command-routing block. If another
+                            // event seems to need the same treatment, rethink
+                            // that event's ownership first.
                             new.session.deploy_blocked_notified.remove(med_idx);
                         }
                         _ => {}

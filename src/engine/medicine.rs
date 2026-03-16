@@ -468,8 +468,13 @@ pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent
             // deploy_medicine() fires MedicineShipped on success
             deploy_medicine(state, med_idx, region_idx, target, events);
         } else {
-            // No valid target found — check if ALL tested diseases are below efficacy
-            // threshold. Dedup happens in process_events via SessionState.
+            // No valid target found. We intentionally emit `DeployBlocked`
+            // from world facts here and let `events::process_events()` dedupe
+            // it in session state.
+            //
+            // Do not copy this pattern to unrelated events. If another event
+            // looks noisy, first ask whether it should fire only on a
+            // transition instead of every tick.
             let all_blocked = tested.iter().all(|&d_idx| {
                 state.medicines[med_idx].effective_efficacy(d_idx, &state.diseases) < crate::state::DEPLOY_MIN_EFFICACY
             });
@@ -479,4 +484,3 @@ pub(super) fn try_auto_deploy(state: &mut WorldState, events: &mut Vec<GameEvent
         }
     }
 }
-

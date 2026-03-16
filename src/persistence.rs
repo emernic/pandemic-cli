@@ -59,7 +59,9 @@ impl From<std::io::Error> for PersistenceError {
 ///
 /// **Do not add more bootstrap entry points.** If you need to create a game
 /// from a new call-site, call `engine::new_game()` (for tests/tools) or
-/// this function (for anything that touches save files).
+/// this function (for anything that touches save files). Do not copy the raw
+/// construction in this function into a fourth startup path. If neither entry
+/// point fits, extend one of them instead.
 pub fn load_or_create(path: Option<&str>, seed: u64) -> Result<LoadedGame, PersistenceError> {
     let (mut world, ui) = match path {
         Some(p) if Path::new(p).exists() => {

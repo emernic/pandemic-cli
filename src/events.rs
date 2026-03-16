@@ -369,8 +369,14 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 (3, msg.clone(), msg)
             }
             GameEvent::DeployBlocked { medicine_idx } => {
-                // Dedup: only notify once per medicine per session.
-                // Engine emits this every tick; we suppress repeats here.
+                // GUARDRAIL: `DeployBlocked` is intentionally deduped here, in
+                // session state, because the engine currently emits it every
+                // tick from world facts.
+                //
+                // Do not cargo-cult this "emit every tick, suppress in the
+                // reducer" pattern to other events. If a future event is too
+                // noisy, first ask whether the engine should emit it only on a
+                // state transition instead.
                 if !state.session.deploy_blocked_notified.insert(*medicine_idx) {
                     continue;
                 }
