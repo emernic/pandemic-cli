@@ -182,27 +182,6 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let notification = format!("{}. Open Orders [O] to enact.", msg);
                 (2, msg, notification)
             }
-            GameEvent::PathogenSuppressed { disease_idx } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "?".to_string());
-                let msg = format!("Suppression complete: {} within-region spread reduced 20%", name);
-                (3, msg.clone(), msg)
-            }
-            GameEvent::PathogenAttenuated { disease_idx } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "?".to_string());
-                let msg = format!("Attenuation complete: {} lethality reduced 30%", name);
-                (3, msg.clone(), msg)
-            }
-            GameEvent::PathogenInterdicted { disease_idx } => {
-                let name = state.diseases.get(*disease_idx)
-                    .map(|d| d.display_name(*disease_idx))
-                    .unwrap_or_else(|| "?".to_string());
-                let msg = format!("Interdiction complete: {} cross-region transmission eliminated", name);
-                (3, msg.clone(), msg)
-            }
             GameEvent::PolicySuspended { region_idx, policy_name } => {
                 let region = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
