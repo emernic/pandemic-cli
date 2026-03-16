@@ -96,6 +96,7 @@ fn resume_preserves_research_wizard_state() {
     let mut state = engine::new_game(42);
     state.ui.open_panel = Panel::Lab;
     state.ui.lab_ui = Some(LabUiState::ConfirmProject {
+        tab: pandemic_cli_lib::state::LabTab::Sequencing,
         project_idx: 0,
         double_personnel: true,
     });
@@ -105,6 +106,7 @@ fn resume_preserves_research_wizard_state() {
     assert_eq!(
         restored.ui.lab_ui,
         Some(LabUiState::ConfirmProject {
+            tab: pandemic_cli_lib::state::LabTab::Sequencing,
             project_idx: 0,
             double_personnel: true,
         }),

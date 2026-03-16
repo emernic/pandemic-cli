@@ -1,64 +1,132 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
-use crate::state::{AppState, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
+use crate::state::{AppState, LabTab, LAB_LEVEL_1_COST, LAB_LEVEL_2_COST, Medicine, PERSONNEL_UPKEEP_COST, ResearchKind, LabUiState, TherapyType, KNOWLEDGE_FOR_MEDICINE, KNOWLEDGE_FULL, KNOWLEDGE_NAME, TICKS_PER_DAY, TRAIN_PERSONNEL_BATCH, format_days, personnel_speed};
 use crate::ui::hint_line;
 
 /// Maximum selection index for the lab panel in its current sub-state.
 pub fn selection_max(ui_state: &LabUiState, state: &AppState) -> usize {
     match ui_state {
-        LabUiState::BrowseAll => {
-            state.research_flat_items().len().saturating_sub(1)
+        LabUiState::Browse { tab } => {
+            state.lab_tab_items(*tab).len().saturating_sub(1)
         }
-        LabUiState::ConfirmProject { .. } | LabUiState::ConfirmLabUpgrade => 0,
+        LabUiState::ConfirmProject { .. } | LabUiState::ConfirmLabUpgrade { .. } => 0,
     }
 }
 
 pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
-    let (title, lines, selected_line) = match &state.ui.lab_ui {
-        Some(LabUiState::BrowseAll) => render_flat(state),
-        Some(LabUiState::ConfirmProject { project_idx, double_personnel }) => {
-            let (t, l) = render_confirm(state, *project_idx, *double_personnel);
-            (t, l, None)
-        }
-        Some(LabUiState::ConfirmLabUpgrade) => {
-            let (t, l) = render_confirm_lab_upgrade(state);
-            (t, l, None)
-        }
-        None => (" Lab ".to_string(), vec![], None),
+    let lab_ui = match &state.ui.lab_ui {
+        Some(ui) => ui.clone(),
+        None => return,
     };
 
+    let tab = lab_ui.tab();
+
+    // Split area: tab bar (4 lines: border + empty + tabs + underline) + content below
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4), // tab bar
+            Constraint::Min(1),   // tab content
+        ])
+        .split(area);
+
+    render_tab_bar(f, chunks[0], tab);
+
+    match &lab_ui {
+        LabUiState::Browse { tab } => {
+            render_tab_content(f, chunks[1], state, *tab);
+        }
+        LabUiState::ConfirmProject { project_idx, double_personnel, .. } => {
+            render_confirm(f, chunks[1], state, *project_idx, *double_personnel);
+        }
+        LabUiState::ConfirmLabUpgrade { .. } => {
+            render_confirm_lab_upgrade(f, chunks[1], state);
+        }
+    }
+}
+
+/// Render the tab bar with navigation arrows.
+fn render_tab_bar(f: &mut Frame, area: Rect, active_tab: LabTab) {
+    let mut spans: Vec<Span> = Vec::new();
+    spans.push(Span::styled(" ◄  ", Style::default().fg(Color::DarkGray)));
+
+    for (i, tab) in LabTab::ALL.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("   "));
+        }
+        if *tab == active_tab {
+            spans.push(Span::styled(
+                tab.label(),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            spans.push(Span::styled(
+                tab.label(),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+    }
+
+    spans.push(Span::styled("  ► ", Style::default().fg(Color::DarkGray)));
+
+    let tab_line = Line::from(spans);
+    // Underline beneath the active tab
+    let mut underline_spans: Vec<Span> = Vec::new();
+    underline_spans.push(Span::raw("    ")); // match ◄ spacing
+    for (i, tab) in LabTab::ALL.iter().enumerate() {
+        if i > 0 {
+            underline_spans.push(Span::raw("   "));
+        }
+        if *tab == active_tab {
+            underline_spans.push(Span::styled(
+                "▔".repeat(tab.label().len()),
+                Style::default().fg(Color::White),
+            ));
+        } else {
+            underline_spans.push(Span::raw(" ".repeat(tab.label().len())));
+        }
+    }
+
+    let lines = vec![
+        Line::from(""),
+        tab_line,
+        Line::from(underline_spans),
+    ];
+
     let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Blue));
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
+        .border_style(Style::default().fg(Color::Blue))
+        .title(" Lab ");
 
-    let inner_height = area.height.saturating_sub(2);
-    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
-
-    let widget = Paragraph::new(lines)
-        .block(block)
-        .scroll((scroll_offset, 0));
+    let widget = Paragraph::new(lines).block(block);
     f.render_widget(widget, area);
 }
 
-/// Render the flat lab panel: one unified list, no section headers.
-fn render_flat(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>) {
+/// Render the content area for the currently active tab.
+fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) {
+    let items = state.lab_tab_items(tab);
+    let available = state.all_available_projects();
     let mut lines: Vec<Line> = Vec::new();
     let mut selected_line: Option<usize> = None;
-    let items = state.research_flat_items();
-    let available = state.all_available_projects();
 
     if items.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  No projects available.",
-            Style::default().fg(Color::DarkGray),
-        )));
+        lines.push(Line::from(""));
+        let msg = match tab {
+            LabTab::Sequencing => "  No pathogens to sequence.",
+            LabTab::Screening => "  No screening targets available.",
+            LabTab::Trials => "  No trials available.",
+            LabTab::Reactors => "  No medicines to manufacture.",
+        };
+        lines.push(Line::from(Span::styled(msg, Style::default().fg(Color::DarkGray))));
     }
 
     for (item_idx, item) in items.iter().enumerate() {
@@ -120,8 +188,8 @@ fn render_flat(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>) 
         }
     }
 
-    // Max lab info when fully upgraded
-    if state.lab_level >= 2 {
+    // Max lab info when fully upgraded (only in Sequencing tab where upgrade lives)
+    if tab == LabTab::Sequencing && state.lab_level >= 2 {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             format!("  {} (max) — all research 60% faster", state.lab_level_name()),
@@ -130,14 +198,22 @@ fn render_flat(state: &AppState) -> (String, Vec<Line<'static>>, Option<usize>) 
     }
 
     lines.push(Line::from(""));
-    if !items.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  [↑/↓] Select  [Enter] Confirm  [X] Auto",
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
+    lines.push(Line::from(Span::styled(
+        "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [X] Auto  [Esc] Close",
+        Style::default().fg(Color::DarkGray),
+    )));
 
-    (" Lab ".to_string(), lines, selected_line)
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let inner_height = area.height.saturating_sub(2);
+    let scroll_offset = crate::ui::scroll_offset_for_selection(&lines, selected_line, inner_height);
+
+    let widget = Paragraph::new(lines)
+        .block(block)
+        .scroll((scroll_offset, 0));
+    f.render_widget(widget, area);
 }
 
 /// Render an active research project (shows progress).
@@ -165,10 +241,16 @@ fn render_active_project(lines: &mut Vec<Line<'static>>, project: &crate::state:
             Style::default().fg(Color::DarkGray),
         )));
     }
-    lines.push(Line::from(Span::styled(
-        format!("    Progress: {:.0}%, {} remaining", pct, format_days(effective_remaining)),
-        Style::default().fg(Color::Green),
-    )));
+    // Progress bar
+    let bar_width = 20;
+    let filled = ((pct / 100.0) * bar_width as f64).round() as usize;
+    let empty = bar_width - filled;
+    let bar = format!("{}{}", "▓".repeat(filled), "░".repeat(empty));
+    lines.push(Line::from(vec![
+        Span::raw("    "),
+        Span::styled(bar, Style::default().fg(Color::Green)),
+        Span::styled(format!("  {:.0}%  {}", pct, format_days(effective_remaining)), Style::default().fg(Color::Green)),
+    ]));
     let speed_tag = if (speed - 1.0).abs() < 0.01 {
         String::new()
     } else {
@@ -212,7 +294,7 @@ fn render_available_project(lines: &mut Vec<Line<'static>>, kind: &ResearchKind,
     lines.push(Line::from(""));
 }
 
-fn render_confirm(state: &AppState, project_idx: usize, double_personnel: bool) -> (String, Vec<Line<'static>>) {
+fn render_confirm(f: &mut Frame, area: Rect, state: &AppState, project_idx: usize, double_personnel: bool) {
     let mut lines: Vec<Line> = Vec::new();
     let projects = state.all_available_projects();
 
@@ -222,9 +304,8 @@ fn render_confirm(state: &AppState, project_idx: usize, double_personnel: bool) 
         let has_personnel = state.personnel_available() >= personnel;
         let has_funding = state.resources.funding >= funding;
 
-        // Breadcrumb
         lines.push(Line::from(Span::styled(
-            "  Lab > Confirm",
+            "  Confirm",
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::from(""));
@@ -261,7 +342,6 @@ fn render_confirm(state: &AppState, project_idx: usize, double_personnel: bool) 
             ),
         ]));
 
-        // Toggle checkbox for 2x personnel
         let checkbox = if double_personnel { "[X]" } else { "[ ]" };
         lines.push(Line::from(vec![
             Span::raw(format!("  {} ", checkbox)),
@@ -271,7 +351,6 @@ fn render_confirm(state: &AppState, project_idx: usize, double_personnel: bool) 
             Span::styled("  [X] toggle", Style::default().fg(Color::DarkGray)),
         ]));
 
-        // Show effective speed based on personnel ratio
         let speed = personnel_speed(personnel, base_personnel);
         let effective_ticks = ticks / speed;
         lines.push(Line::from(vec![
@@ -299,10 +378,15 @@ fn render_confirm(state: &AppState, project_idx: usize, double_personnel: bool) 
         }
     }
 
-    (" Confirm ".to_string(), lines)
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
 }
 
-fn render_confirm_lab_upgrade(state: &AppState) -> (String, Vec<Line<'static>>) {
+fn render_confirm_lab_upgrade(f: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
     let (cost, next_name, pct) = if state.lab_level == 0 {
         (LAB_LEVEL_1_COST, "Enhanced Sequencing", 30)
@@ -312,7 +396,7 @@ fn render_confirm_lab_upgrade(state: &AppState) -> (String, Vec<Line<'static>>) 
     let can_afford = state.resources.funding >= cost;
 
     lines.push(Line::from(Span::styled(
-        "  Lab > Lab Upgrade > Confirm",
+        "  Lab Upgrade > Confirm",
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
@@ -349,11 +433,15 @@ fn render_confirm_lab_upgrade(state: &AppState) -> (String, Vec<Line<'static>>) 
         )));
     }
 
-    (" Confirm Lab Upgrade ".to_string(), lines)
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .border_style(Style::default().fg(Color::Blue));
+
+    let widget = Paragraph::new(lines).block(block);
+    f.render_widget(widget, area);
 }
 
 /// Label showing the manufacturing corporation for a medicine.
-/// Returns " | Mfg: CorpName (+Approval)" or " | Mfg: CorpName" or "".
 fn manufacturer_label(med: &Medicine, state: &AppState) -> String {
     let corp_idx = match med.manufacturer_corp_idx {
         Some(idx) => idx,
@@ -370,7 +458,7 @@ fn manufacturer_label(med: &Medicine, state: &AppState) -> String {
     }
 }
 
-/// Supplementary detail line for a research project (targets, knowledge, etc).
+/// Supplementary detail line for a research project.
 fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
     match kind {
         ResearchKind::DevelopMedicine { medicine_idx } => {
@@ -429,11 +517,7 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
         ResearchKind::IdentifyThreat { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
             if disease.knowledge >= KNOWLEDGE_NAME {
-                // Already identified — explain what further study unlocks
                 let has_targeted_tech = state.unlocked_techs.contains(&crate::state::BasicTech::TargetedDrugDesign);
-                // Broad-spectrum targets all diseases — it's unlockable once ANY disease
-                // reaches KNOWLEDGE_FOR_MEDICINE. Don't mislead player about this disease
-                // "unlocking" broad-spectrum if it's already available or developed.
                 let broad_already_available = state.medicines.iter().any(|m| {
                     m.therapy_type == TherapyType::BroadSpectrum
                         && (m.unlocked

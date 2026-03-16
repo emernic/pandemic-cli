@@ -137,6 +137,7 @@ pub fn render(f: &mut Frame, state: &AppState) {
         // Full-screen panel: no region list, panel gets entire middle area.
         match &state.ui.open_panel {
             Panel::Research => tech_tree::render(f, chunks[1], state, state.ui.panel_selection),
+            Panel::Lab => lab::render(f, chunks[1], state),
             _ => {} // is_full_screen() guarantees we only reach panels handled above
         }
     } else {

@@ -3576,6 +3576,17 @@ pub enum ResearchKind {
 }
 
 impl ResearchKind {
+    /// Which lab tab this research kind belongs to (None for BasicResearch, which is in the tech tree).
+    pub fn lab_tab(&self) -> Option<LabTab> {
+        match self {
+            Self::IdentifyThreat { .. } | Self::GenomicSequencing { .. } => Some(LabTab::Sequencing),
+            Self::DevelopMedicine { .. } | Self::TrainPersonnel => Some(LabTab::Screening),
+            Self::ClinicalTrial { .. } => Some(LabTab::Trials),
+            Self::ManufactureDoses { .. } => Some(LabTab::Reactors),
+            Self::BasicResearch { .. } => None,
+        }
+    }
+
     /// Whether this research takes place in the field (vs. in the lab).
     pub fn is_field_work(&self) -> bool {
         matches!(self,
@@ -4495,7 +4506,7 @@ pub enum Panel {
 impl Panel {
     /// Full-screen panels take over the entire middle area (no region list visible).
     pub fn is_full_screen(&self) -> bool {
-        matches!(self, Panel::Research)
+        matches!(self, Panel::Research | Panel::Lab)
     }
 }
 
@@ -4513,18 +4524,77 @@ pub enum PolicyUiState {
     ManagePolicies { region_idx: usize },
 }
 
+/// Lab tabs — each tab shows a different stage of the research pipeline.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LabTab {
+    Sequencing,
+    Screening,
+    Trials,
+    Reactors,
+}
+
+impl LabTab {
+    pub const ALL: [LabTab; 4] = [
+        LabTab::Sequencing,
+        LabTab::Screening,
+        LabTab::Trials,
+        LabTab::Reactors,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            LabTab::Sequencing => "Sequencing",
+            LabTab::Screening => "Screening",
+            LabTab::Trials => "Trials",
+            LabTab::Reactors => "Reactors",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        match self {
+            LabTab::Sequencing => 0,
+            LabTab::Screening => 1,
+            LabTab::Trials => 2,
+            LabTab::Reactors => 3,
+        }
+    }
+
+    pub fn next(self) -> LabTab {
+        LabTab::ALL[(self.index() + 1) % LabTab::ALL.len()]
+    }
+
+    pub fn prev(self) -> LabTab {
+        LabTab::ALL[(self.index() + LabTab::ALL.len() - 1) % LabTab::ALL.len()]
+    }
+}
+
 /// Lab panel UI state machine.
-/// The lab panel is a flat scrollable list with section headers (like the policy panel).
-/// `BrowseAll` is the only browsing state — no intermediate category screen.
+/// Full-screen tabbed view with Sequencing / Screening / Trials / Reactors tabs.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LabUiState {
-    /// Flat list showing all research projects with section headers.
-    BrowseAll,
+    /// Browsing items within the active tab.
+    Browse { tab: LabTab },
     /// Confirming a project before starting it.
     /// `project_idx` indexes into `all_available_projects()`.
-    ConfirmProject { project_idx: usize, double_personnel: bool },
+    ConfirmProject { tab: LabTab, project_idx: usize, double_personnel: bool },
     /// Confirming a lab upgrade before purchasing.
-    ConfirmLabUpgrade,
+    ConfirmLabUpgrade { tab: LabTab },
+}
+
+impl LabUiState {
+    /// The active tab regardless of which sub-state we're in.
+    pub fn tab(&self) -> LabTab {
+        match self {
+            LabUiState::Browse { tab } => *tab,
+            LabUiState::ConfirmProject { tab, .. } => *tab,
+            LabUiState::ConfirmLabUpgrade { tab } => *tab,
+        }
+    }
+
+    /// Whether we're at the top-level browse state (not in a confirm wizard).
+    pub fn is_browsing(&self) -> bool {
+        matches!(self, LabUiState::Browse { .. })
+    }
 }
 
 /// A selectable item in the flat research panel list.
@@ -4733,7 +4803,7 @@ impl UiState {
             // Check if we're deeper than the top level — if so, reset to top
             let at_top = match panel {
                 Panel::Medicines => matches!(self.medicine_ui, Some(MedicineUiState::BrowseMedicines) | None),
-                Panel::Lab => matches!(self.lab_ui, Some(LabUiState::BrowseAll) | None),
+                Panel::Lab => matches!(self.lab_ui, Some(LabUiState::Browse { .. }) | None),
                 Panel::Policy => matches!(self.policy_ui, Some(PolicyUiState::ManagePolicies { .. }) | None),
                 Panel::Operations => matches!(self.operations_ui, Some(OpsUiState::BrowseOps) | None),
                 Panel::Board => matches!(self.board_ui, Some(BoardUiState::BrowseMembers) | None),
@@ -4749,7 +4819,10 @@ impl UiState {
                 self.panel_selection = 0;
                 match panel {
                     Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
-                    Panel::Lab => self.lab_ui = Some(LabUiState::BrowseAll),
+                    Panel::Lab => {
+                        let tab = self.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                        self.lab_ui = Some(LabUiState::Browse { tab });
+                    }
                     Panel::Policy => {
                         self.policy_ui = Some(PolicyUiState::ManagePolicies { region_idx: self.map_selection });
                     }
@@ -4773,7 +4846,10 @@ impl UiState {
             self.home_splash_done = true;
             match panel {
                 Panel::Medicines => self.medicine_ui = Some(MedicineUiState::BrowseMedicines),
-                Panel::Lab => self.lab_ui = Some(LabUiState::BrowseAll),
+                Panel::Lab => {
+                        let tab = self.lab_ui.as_ref().map(|s| s.tab()).unwrap_or(LabTab::Sequencing);
+                        self.lab_ui = Some(LabUiState::Browse { tab });
+                    }
                 Panel::Policy => {
                     // Go directly to the policies for the currently selected region.
                     // Left/right map navigation (sync_panel_region) keeps this in sync.
@@ -4817,12 +4893,13 @@ impl UiState {
             }
             Panel::Lab => {
                 match &self.lab_ui {
-                    Some(LabUiState::ConfirmProject { .. })
-                    | Some(LabUiState::ConfirmLabUpgrade) => {
-                        self.lab_ui = Some(LabUiState::BrowseAll);
+                    Some(LabUiState::ConfirmProject { tab, .. })
+                    | Some(LabUiState::ConfirmLabUpgrade { tab }) => {
+                        let tab = *tab;
+                        self.lab_ui = Some(LabUiState::Browse { tab });
                         self.panel_selection = 0;
                     }
-                    Some(LabUiState::BrowseAll) | None => {
+                    Some(LabUiState::Browse { .. }) | None => {
                         self.open_panel = Panel::None;
                         self.panel_selection = 0;
                         self.lab_ui = None;
@@ -6329,6 +6406,32 @@ impl WorldState {
         }
 
         items
+    }
+
+    /// Items for a specific lab tab, filtered from the flat list.
+    pub fn lab_tab_items(&self, tab: LabTab) -> Vec<ResearchFlatItem> {
+        let all = self.research_flat_items();
+        all.into_iter().filter(|item| {
+            match item {
+                ResearchFlatItem::Active(ai) => {
+                    if let Some(project) = self.active_research.get(*ai) {
+                        project.kind.lab_tab() == Some(tab)
+                    } else {
+                        false
+                    }
+                }
+                ResearchFlatItem::Available(avail_idx) => {
+                    let available = self.all_available_projects();
+                    if let Some(kind) = available.get(*avail_idx) {
+                        kind.lab_tab() == Some(tab)
+                    } else {
+                        false
+                    }
+                }
+                ResearchFlatItem::FullStockpile(kind) => kind.lab_tab() == Some(tab),
+                ResearchFlatItem::UpgradeLab => tab == LabTab::Sequencing,
+            }
+        }).collect()
     }
 
     /// Project costs adjusted for unlocked technologies.
