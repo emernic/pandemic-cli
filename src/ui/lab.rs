@@ -314,8 +314,6 @@ fn render_tab_content(f: &mut Frame, area: Rect, state: &AppState, tab: LabTab) 
     lines.push(Line::from(""));
     let hint = if tab == LabTab::Trials {
         "  [↑/↓] Select  [Enter] Start Trial  [D] Discard  [←/→] Tab  [Esc] Close"
-    } else if tab == LabTab::Reactors {
-        "  [↑/↓] Select  [Enter] Confirm  [D] Deploy  [X] Repeat  [C] Assign  [←/→] Tab  [Esc] Close"
     } else {
         "  [↑/↓] Select  [Enter] Confirm  [←/→] Tab  [X] Auto  [Esc] Close"
     };
@@ -1088,7 +1086,7 @@ fn render_reactors_tab(f: &mut Frame, area: Rect, state: &AppState) {
     }
 
     lines.push(Line::from(Span::styled(
-        "  [↑/↓] Select  [Enter] Start  [C] Change Medicine  [X] Cycle Auto  [Esc] Close",
+        "  [↑/↓] Select  [Enter] Confirm  [D] Deploy  [X] Repeat  [C] Assign  [Esc] Close",
         Style::default().fg(Color::DarkGray),
     )));
 
@@ -1236,23 +1234,23 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
         Style::default().fg(Color::DarkGray),
     )));
 
-    // Deploy and repeat toggles (each on its own line with keybind hint)
+    // Deploy and repeat toggles (each on its own line)
     if reactor.medicine_idx.is_some() {
-        let deploy_tag = if reactor.auto_deploy { "[X] Deploy when finished" } else { "[ ] Deploy when finished" };
-        let repeat_tag = if reactor.repeat { "[X] Repeat when low" } else { "[ ] Repeat when low" };
+        let deploy_check = if reactor.auto_deploy { "◆" } else { "◇" };
+        let repeat_check = if reactor.repeat { "◆" } else { "◇" };
         lines.push(Line::from(vec![
             Span::raw("     "),
-            Span::styled(deploy_tag, Style::default().fg(
-                if reactor.auto_deploy { Color::Green } else { Color::DarkGray }
-            )),
-            Span::styled("  [D]", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{} Deploy when finished", deploy_check),
+                Style::default().fg(if reactor.auto_deploy { Color::Green } else { Color::DarkGray }),
+            ),
         ]));
         lines.push(Line::from(vec![
             Span::raw("     "),
-            Span::styled(repeat_tag, Style::default().fg(
-                if reactor.repeat { Color::Green } else { Color::DarkGray }
-            )),
-            Span::styled("  [X]", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{} Repeat when low", repeat_check),
+                Style::default().fg(if reactor.repeat { Color::Green } else { Color::DarkGray }),
+            ),
         ]));
     }
 
