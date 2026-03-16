@@ -510,12 +510,13 @@ fn render_detail_panel(f: &mut Frame, area: Rect, state: &AppState, tech: BasicT
         buf_write(f, cx, y, "Prerequisites", dim.add_modifier(Modifier::BOLD), max_w);
         y += 1;
     }
-    if y < y_max {
-        let prereq_met = is_unlocked || is_available;
-        let prereq_color = if prereq_met { Color::Green } else { Color::Yellow };
-        let check = if prereq_met { "+" } else { "-" };
-        let prereq_text = format!(" {} {}", check, tech.prereq_description());
-        buf_write(f, cx, y, &prereq_text, Style::default().fg(prereq_color), max_w);
+    for (desc, met) in tech.prereq_items(&state.world) {
+        if y >= y_max { break; }
+        let met_or_unlocked = is_unlocked || met;
+        let color = if met_or_unlocked { Color::Green } else { Color::Yellow };
+        let check = if met_or_unlocked { "+" } else { "-" };
+        let prereq_text = format!(" {} {}", check, desc);
+        buf_write(f, cx, y, &prereq_text, Style::default().fg(color), max_w);
         y += 1;
     }
 
