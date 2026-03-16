@@ -161,3 +161,219 @@ fn generate_compound_id(modality: ScreeningModality, seq: usize) -> String {
     };
     format!("{}-{:03}", prefix, seq)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{GameEvent, ScreeningModality, ScreeningRunSize, KNOWLEDGE_NAME};
+
+    /// Build a game state with disease 0 identified (knowledge >= KNOWLEDGE_NAME)
+    /// so screening can target it.
+    fn state_with_identified_disease() -> WorldState {
+        let app = crate::engine::new_game(42);
+        let mut world = app.world;
+        // Mark disease 0 as detected and identified
+        world.diseases[0].detected = true;
+        world.diseases[0].knowledge = KNOWLEDGE_NAME;
+        // Ensure enough funding and personnel
+        world.resources.funding = 10_000.0;
+        world.resources.personnel = 20;
+        world
+    }
+
+    #[test]
+    fn start_screening_rejects_unidentified_disease() {
+        let mut world = state_with_identified_disease();
+        world.diseases[0].knowledge = KNOWLEDGE_NAME - 0.01;
+
+        let (ok, msg) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::SmallMolecule,
+            ScreeningRunSize::Small,
+        );
+        assert!(!ok);
+        assert!(msg.unwrap().contains("identified"));
+    }
+
+    #[test]
+    fn start_screening_rejects_insufficient_funding() {
+        let mut world = state_with_identified_disease();
+        world.resources.funding = 1.0; // way below Small cost of 50
+
+        let (ok, msg) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::SmallMolecule,
+            ScreeningRunSize::Small,
+        );
+        assert!(!ok);
+        assert!(msg.unwrap().contains("¥"));
+    }
+
+    #[test]
+    fn start_screening_rejects_insufficient_personnel() {
+        let mut world = state_with_identified_disease();
+        world.resources.personnel = 0;
+
+        let (ok, msg) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::SmallMolecule,
+            ScreeningRunSize::Small,
+        );
+        assert!(!ok);
+        assert!(msg.unwrap().contains("personnel"));
+    }
+
+    #[test]
+    fn start_screening_rejects_locked_modality() {
+        let mut world = state_with_identified_disease();
+        // MonoclonalAntibody requires BasicTech::MonoclonalAntibodies
+        let (ok, msg) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::MonoclonalAntibody,
+            ScreeningRunSize::Small,
+        );
+        assert!(!ok);
+        assert!(msg.unwrap().contains("not yet unlocked"));
+    }
+
+    #[test]
+    fn start_screening_success_deducts_funds_and_creates_run() {
+        let mut world = state_with_identified_disease();
+        let funding_before = world.resources.funding;
+        let cost = ScreeningRunSize::Small.funding_cost();
+
+        let (ok, msg) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::SmallMolecule,
+            ScreeningRunSize::Small,
+        );
+        assert!(ok);
+        assert!(msg.is_none());
+        assert_eq!(world.screening_runs.len(), 1);
+        assert!((world.resources.funding - (funding_before - cost)).abs() < 0.01);
+
+        let run = &world.screening_runs[0];
+        assert_eq!(run.disease_idx, 0);
+        assert_eq!(run.modality, ScreeningModality::SmallMolecule);
+        assert_eq!(run.run_size, ScreeningRunSize::Small);
+        assert_eq!(run.progress, 0.0);
+        assert_eq!(run.personnel_assigned, ScreeningRunSize::Small.personnel());
+    }
+
+    #[test]
+    fn tick_screening_advances_progress_and_completes() {
+        let mut world = state_with_identified_disease();
+        let (ok, _) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::SmallMolecule,
+            ScreeningRunSize::Small,
+        );
+        assert!(ok);
+
+        let required_ticks = world.screening_runs[0].required_ticks;
+
+        // Tick enough times to complete (with some margin)
+        let max_ticks = (required_ticks * 2.0) as usize;
+        let mut events = Vec::new();
+        for _ in 0..max_ticks {
+            if world.screening_runs.is_empty() {
+                break;
+            }
+            events.clear();
+            tick_screening(&mut world, &mut events);
+        }
+
+        // Run should have completed: removed from active runs, hits in global pool
+        assert!(
+            world.screening_runs.is_empty(),
+            "run should complete within {} ticks (required: {})",
+            max_ticks,
+            required_ticks,
+        );
+        assert!(
+            events.iter().any(|e| matches!(e, GameEvent::ScreeningComplete { .. })),
+            "should emit ScreeningComplete event",
+        );
+    }
+
+    #[test]
+    fn hit_generation_is_deterministic() {
+        // Run two identical screenings with the same seed and verify same hits
+        let make_world = || {
+            let mut world = state_with_identified_disease();
+            let (ok, _) = start_screening(
+                &mut world,
+                0,
+                ScreeningModality::SmallMolecule,
+                ScreeningRunSize::Small,
+            );
+            assert!(ok);
+            world
+        };
+
+        let mut world1 = make_world();
+        let mut world2 = make_world();
+
+        // Force identical hit seeds (they come from rng_research which may differ)
+        world2.screening_runs[0].hit_seed = world1.screening_runs[0].hit_seed;
+
+        // Tick both to completion
+        let max_ticks = (world1.screening_runs[0].required_ticks * 2.0) as usize;
+        for _ in 0..max_ticks {
+            let mut e1 = Vec::new();
+            let mut e2 = Vec::new();
+            tick_screening(&mut world1, &mut e1);
+            tick_screening(&mut world2, &mut e2);
+        }
+
+        // Same number of hits with same kd values
+        assert_eq!(world1.screening_hits.len(), world2.screening_hits.len());
+        for (h1, h2) in world1.screening_hits.iter().zip(world2.screening_hits.iter()) {
+            assert!((h1.kd_nm - h2.kd_nm).abs() < 1e-10, "hits should have identical kd_nm");
+            assert_eq!(h1.compound_id, h2.compound_id);
+        }
+    }
+
+    #[test]
+    fn completed_run_hits_move_to_global_pool() {
+        let mut world = state_with_identified_disease();
+        let (ok, _) = start_screening(
+            &mut world,
+            0,
+            ScreeningModality::SmallMolecule,
+            ScreeningRunSize::Medium, // more wells = more likely to get hits
+        );
+        assert!(ok);
+        assert!(world.screening_hits.is_empty());
+
+        // Tick to completion
+        let max_ticks = (world.screening_runs[0].required_ticks * 2.0) as usize;
+        let mut all_events = Vec::new();
+        for _ in 0..max_ticks {
+            let mut events = Vec::new();
+            tick_screening(&mut world, &mut events);
+            all_events.extend(events);
+        }
+
+        // Verify completion event reports correct hit count
+        let complete_event = all_events.iter().find_map(|e| {
+            if let GameEvent::ScreeningComplete { hit_count, .. } = e {
+                Some(*hit_count)
+            } else {
+                None
+            }
+        });
+        assert!(complete_event.is_some(), "should have completion event");
+        assert_eq!(
+            complete_event.unwrap(),
+            world.screening_hits.len(),
+            "event hit_count should match global hits pool size",
+        );
+    }
+}
