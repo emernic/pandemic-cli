@@ -18,7 +18,7 @@ use crate::state::{
     BARGAIN_PRAGMATIST_INCOME_CUT, MAX_PRAGMATIST_INCOME_SKIM,
     BARGAIN_RECLUSE_PERSONNEL_COST,
     BORDER_CONTROLS_PERSONNEL,
-    REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD,
+    REBUILD_INFRA_COST_PER_POINT, REBUILD_INFRA_MAX_REPAIR, REBUILD_INFRA_AUTO_THRESHOLD, AUTO_SPENDING_BUFFER,
     FIELD_HOSPITAL_COST, FIELD_HOSPITAL_PERSONNEL,
     GOVERNOR_ACTION_INTERVAL, GOVERNOR_HOSTILITY_THRESHOLD,
     DISCOURAGE_HOSP_PERSONNEL,
@@ -1182,6 +1182,14 @@ pub(super) fn tick_auto_rebuild(state: &mut WorldState) {
             || region.supply_lines < REBUILD_INFRA_AUTO_THRESHOLD
             || region.civil_order < REBUILD_INFRA_AUTO_THRESHOLD;
         if needs_repair {
+            // Estimate cost to check buffer before committing
+            let hc = (1.0 - region.healthcare_capacity).min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+            let sl = (1.0 - region.supply_lines).min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+            let co = (1.0 - region.civil_order).min(REBUILD_INFRA_MAX_REPAIR).max(0.0);
+            let est_cost = (hc + sl + co) * REBUILD_INFRA_COST_PER_POINT;
+            if state.resources.funding < est_cost + AUTO_SPENDING_BUFFER {
+                continue;
+            }
             let (_msg, _ok) = rebuild_infrastructure(state, region_idx);
         }
     }
@@ -1207,6 +1215,10 @@ pub(super) fn tick_auto_negotiate(state: &mut WorldState) {
             continue;
         }
         if state.regions[region_idx].governor.cooperation < AUTO_NEGOTIATE_THRESHOLD {
+            use crate::state::NEGOTIATE_COST;
+            if state.resources.funding < NEGOTIATE_COST + AUTO_SPENDING_BUFFER {
+                continue;
+            }
             let (_msg, _ok) = negotiate_governor(state, region_idx);
         }
     }

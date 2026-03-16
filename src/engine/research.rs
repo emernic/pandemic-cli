@@ -1,6 +1,6 @@
 use rand::Rng;
 use crate::state::{
-    AUTO_MANUFACTURE_THRESHOLD, BasicTech, GameEvent, GameOutcome, WorldState,
+    AUTO_MANUFACTURE_THRESHOLD, AUTO_SPENDING_BUFFER, BasicTech, GameEvent, GameOutcome, WorldState,
     ResearchKind, ResearchProject, KNOWLEDGE_FULL, KNOWLEDGE_NAME,
     TRAIN_PERSONNEL_BATCH,
     LAB_LEVEL_1_COST, LAB_LEVEL_2_COST,
@@ -477,6 +477,10 @@ pub(super) fn tick_research(state: &mut WorldState, rng: &mut impl rand::Rng, ev
                     continue;
                 }
             }
+            let (_, _, cost) = state.effective_costs(&project.kind);
+            if state.resources.funding < cost + AUTO_SPENDING_BUFFER {
+                continue;
+            }
             let (_ok, _) = start_research(state, &project.kind, false);
         }
     }
@@ -499,7 +503,7 @@ fn try_auto_repeat(state: &mut WorldState) {
             }
         }
         let (_, _, cost) = state.effective_costs(kind);
-        if state.resources.funding < cost {
+        if state.resources.funding < cost + AUTO_SPENDING_BUFFER {
             continue;
         }
         let (_ok, _) = start_research(state, kind, false);
@@ -529,8 +533,12 @@ fn try_queued_starts(state: &mut WorldState) {
             continue;
         }
 
-        // Try to start
+        // Try to start (only if we can afford it with the auto-spending buffer)
         let target_kind = ResearchKind::BasicResearch { tech: *tech };
+        let (_, _, cost) = state.effective_costs(&target_kind);
+        if state.resources.funding < cost + AUTO_SPENDING_BUFFER {
+            continue;
+        }
         let (ok, _) = start_research(state, &target_kind, false);
         if ok {
             state.queued_techs.retain(|t| t != tech);
