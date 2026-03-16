@@ -4808,8 +4808,6 @@ pub enum ResearchFlatItem {
     StartNewTrial,
     /// An available (startable) project. Index into `all_available_projects()`.
     Available(usize),
-    /// Manufacturing with a full stockpile — visible for auto-toggle but not startable.
-    FullStockpile(ResearchKind),
 }
 
 /// Items shown on the Infra tab — infrastructure investments and personnel management.
@@ -4842,7 +4840,6 @@ impl ResearchFlatItem {
         match self {
             Self::Active(idx) => state.active_research.get(*idx).map(|p| p.kind.clone()),
             Self::Available(idx) => state.all_available_projects().get(*idx).cloned(),
-            Self::FullStockpile(kind) => Some(kind.clone()),
             Self::ActiveScreening(_)
             | Self::StartNewScreening
             | Self::StartNewTrial => None,
@@ -6660,7 +6657,6 @@ impl WorldState {
         }
 
         // Manufacturing is now handled by reactors, not the research pipeline.
-        // FullStockpile entries are no longer generated here.
         // UpgradeLab moved to the Infra tab.
 
         items
@@ -6702,7 +6698,6 @@ impl WorldState {
                         false
                     }
                 }
-                ResearchFlatItem::FullStockpile(kind) => kind.lab_tab() == Some(tab),
                 ResearchFlatItem::ActiveScreening(_)
                 | ResearchFlatItem::StartNewScreening
                 | ResearchFlatItem::StartNewTrial => false,
