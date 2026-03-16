@@ -212,7 +212,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 } else {
                     msg.clone()
                 };
-                (10, msg, notification, false)
+                (10, msg, notification, true)
             }
             GameEvent::ArkProtocolActivated { region_idx } => {
                 let region_name = state.regions.get(*region_idx)
@@ -233,7 +233,7 @@ pub(crate) fn process_events(state: &mut AppState, events: &[GameEvent]) {
                 let region_name = state.regions.get(*region_idx)
                     .map(|r| r.name.as_str()).unwrap_or("Unknown");
                 let msg = format!("New governor in {}: {}", region_name, name);
-                (2, msg.clone(), msg, false)
+                (2, msg.clone(), msg, true)
             }
             GameEvent::NuclearImpact { region_idx, killed } => {
                 let region_name = state.regions.get(*region_idx)
