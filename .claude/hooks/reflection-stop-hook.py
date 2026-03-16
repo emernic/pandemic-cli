@@ -7,6 +7,28 @@ REFLECTION_PROMPT = f"You've made significant changes (>{MIN_LINES_CHANGED} line
 SLOP_CHECK_PROMPT = "You've reflected but haven't done a slop check yet. Please run `/slop-check` to look for AI slop patterns before continuing."
 ISSUE_CLEANUP_PROMPT = "You picked up a GitHub issue during this session. Before stopping, make sure: (1) the issue is CLOSED, (2) the `in-progress` label is removed, and (3) any investigate issues you filed are either resolved or still valid. If you already handled this, you can ignore this reminder."
 UNCOMMITTED_CHANGES_PROMPT = "You have uncommitted or unpushed changes. Before stopping, make sure your work is committed, pushed, and merged (or intentionally abandoned). Don't leave work stranded on a local branch."
+UI_PLAYTEST_PROMPT = (
+    "⚠️ UI CHANGES DETECTED — YOU HAVE NOT PLAYTESTED THEM.\n\n"
+    "You changed user-facing code (src/ui/ or src/engine/) but you never ran "
+    "the game in snapshot mode after your last edits. You are about to ship "
+    "something you have never actually looked at.\n\n"
+    "This is not optional. This is not a suggestion. Go run the game RIGHT NOW:\n\n"
+    "  cargo run -- --snapshot [--days N] [--key ...]\n\n"
+    "Open the relevant panel or feature. Look at it. Pretend you are a player "
+    "who has never seen this game before and is seeing your feature for the "
+    "first time. Ask yourself:\n\n"
+    "  - Does this actually make sense? Is it obvious what to do?\n"
+    "  - Does it look right? Is anything misaligned, garbled, or ugly?\n"
+    "  - Does it WORK? Did you try the actual interaction, not just the render?\n"
+    "  - Would you be happy handing this to a real person? Or would they come "
+    "back holding a steaming pile of shit?\n\n"
+    "If something is wrong, FIX IT before shipping. Do not rationalize. Do not "
+    "say 'it looks fine to me' — your visual system does not work like a human's. "
+    "If something looks even slightly off, it IS off. The previous agent who "
+    "built the reactor system never playtested it, and the user got a completely "
+    "broken, unusable feature. Do not repeat that mistake.\n\n"
+    "Run snapshot mode, look at your changes, and verify they actually work."
+)
 
 
 def get_tool_uses(entry):
@@ -94,6 +116,32 @@ def has_unpushed_edits(entries):
     return edits_since_push > 0
 
 
+# Paths that count as user-facing code changes.
+UI_PATHS = ("src/ui/", "src/engine/")
+
+
+def has_ui_changes_without_playtest(entries):
+    """Check if UI/engine files were edited but snapshot mode was never run after.
+
+    Walks backward through entries. If we hit a snapshot run, we're fine — the
+    agent looked at the game after their changes. If we hit UI file edits
+    without having seen a snapshot run first, they never checked their work.
+    """
+    found_ui_edit = False
+    for entry in reversed(entries):
+        for tool in get_tool_uses(entry):
+            if tool["name"] == "Bash":
+                cmd = tool["input"].get("command", "")
+                if "cargo run" in cmd and "--snapshot" in cmd:
+                    # They ran the game — everything before this is fine
+                    return False
+            elif tool["name"] in ("Write", "Edit"):
+                path = tool["input"].get("file_path", "")
+                if any(p in path for p in UI_PATHS):
+                    found_ui_edit = True
+    return found_ui_edit
+
+
 def main():
     data = json.load(sys.stdin)
 
@@ -115,12 +163,17 @@ def main():
         print(json.dumps({"decision": "block", "reason": SLOP_CHECK_PROMPT}))
         return
 
-    # Third check: picked up an issue but didn't close it / remove label?
+    # Third check: UI/engine changes without running the game?
+    if has_ui_changes_without_playtest(entries):
+        print(json.dumps({"decision": "block", "reason": UI_PLAYTEST_PROMPT}))
+        return
+
+    # Fourth check: picked up an issue but didn't close it / remove label?
     if has_unclosed_issue_work(entries):
         print(json.dumps({"decision": "block", "reason": ISSUE_CLEANUP_PROMPT}))
         return
 
-    # Fourth check: file edits after last push/merge?
+    # Fifth check: file edits after last push/merge?
     if has_unpushed_edits(entries):
         print(json.dumps({"decision": "block", "reason": UNCOMMITTED_CHANGES_PROMPT}))
 
