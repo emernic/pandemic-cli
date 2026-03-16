@@ -97,7 +97,8 @@ pub(super) fn tick_screening(state: &mut WorldState, events: &mut Vec<GameEvent>
             let mut hit_rng = ChaCha8Rng::seed_from_u64(
                 run.hit_seed.wrapping_add(run.wells_checked_for_hits as u64),
             );
-            for _ in 0..new_wells {
+            for i in 0..new_wells {
+                let well_idx = run.wells_checked_for_hits + i;
                 if hit_rng.r#gen::<f64>() < SCREENING_HIT_RATE {
                     let kd_nm = generate_kd(&mut hit_rng);
                     let compound_id = generate_compound_id(run.modality, run.hits.len() + 1);
@@ -106,6 +107,7 @@ pub(super) fn tick_screening(state: &mut WorldState, events: &mut Vec<GameEvent>
                         modality: run.modality,
                         kd_nm,
                         compound_id,
+                        well_index: well_idx,
                     });
                 }
             }

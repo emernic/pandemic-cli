@@ -1132,6 +1132,7 @@ mod tests {
             disease_idx: 0,
             modality: ScreeningModality::SmallMolecule,
             kd_nm: 5.0,
+            well_index: 0,
         });
 
         // Start trial WITHOUT human trials decree
@@ -1145,6 +1146,7 @@ mod tests {
             disease_idx: 0,
             modality: ScreeningModality::SmallMolecule,
             kd_nm: 5.0,
+            well_index: 0,
         });
 
         // Enact human trials and start the same trial
