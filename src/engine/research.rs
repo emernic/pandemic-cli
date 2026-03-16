@@ -61,13 +61,13 @@ pub(super) fn start_research(state: &mut WorldState, kind: &ResearchKind, double
 /// Start a clinical trial from a screening hit.
 /// Removes the hit from the pool, creates a new Medicine with randomized stats,
 /// and starts a ClinicalTrial research project.
-pub(super) fn start_trial(state: &mut WorldState, hit_index: usize, rigor: TrialRigor) -> (bool, Option<String>) {
+pub(super) fn start_trial(state: &mut WorldState, compound_id: &str, rigor: TrialRigor) -> (bool, Option<String>) {
     if state.outcome != GameOutcome::Playing {
         return (false, None);
     }
-    if hit_index >= state.screening_hits.len() {
-        return (false, Some("Invalid hit index".into()));
-    }
+    let Some(hit_index) = state.screening_hits.iter().position(|h| h.compound_id == compound_id) else {
+        return (false, Some("Screening hit no longer available".into()));
+    };
 
     let (personnel, duration, funding_cost) = rigor.costs();
     if state.resources.funding < funding_cost {
@@ -178,10 +178,10 @@ pub(super) fn start_trial(state: &mut WorldState, hit_index: usize, rigor: Trial
 }
 
 /// Discard a screening hit the player doesn't want to trial.
-pub(super) fn discard_hit(state: &mut WorldState, hit_index: usize) -> (bool, Option<String>) {
-    if hit_index >= state.screening_hits.len() {
-        return (false, Some("Invalid hit index".into()));
-    }
+pub(super) fn discard_hit(state: &mut WorldState, compound_id: &str) -> (bool, Option<String>) {
+    let Some(hit_index) = state.screening_hits.iter().position(|h| h.compound_id == compound_id) else {
+        return (false, Some("Screening hit no longer available".into()));
+    };
     let hit = state.screening_hits.remove(hit_index);
     (true, Some(format!("Discarded {}", hit.compound_id)))
 }
@@ -1195,7 +1195,7 @@ mod tests {
         });
 
         // Start trial WITHOUT human trials decree
-        let (ok, _) = super::start_trial(&mut state, 0, TrialRigor::Full);
+        let (ok, _) = super::start_trial(&mut state, "TEST-001", TrialRigor::Full);
         assert!(ok, "trial should start");
         let normal_duration = state.active_research.last().unwrap().required_ticks;
         state.active_research.clear();
@@ -1210,7 +1210,7 @@ mod tests {
 
         // Enact human trials and start the same trial
         state.enacted_decrees.authorize_human_trials = true;
-        let (ok, _) = super::start_trial(&mut state, 0, TrialRigor::Full);
+        let (ok, _) = super::start_trial(&mut state, "TEST-002", TrialRigor::Full);
         assert!(ok, "trial should start with human trials");
         let fast_duration = state.active_research.last().unwrap().required_ticks;
 

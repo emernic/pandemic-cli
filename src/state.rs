@@ -4388,11 +4388,11 @@ pub enum GameCommand {
     /// Start a clinical trial from a screening hit. Creates a new Medicine
     /// from the hit and begins a ClinicalTrial research project.
     StartTrial {
-        hit_index: usize,
+        compound_id: String,
         rigor: TrialRigor,
     },
     /// Discard a screening hit the player doesn't want to trial.
-    DiscardHit { hit_index: usize },
+    DiscardHit { compound_id: String },
     /// Upgrade the global research lab (level 0→1 or 1→2). One-time funding cost.
     UpgradeLab,
     /// Repay an outstanding loan in full. `loan_idx` indexes into `state.loans`.
@@ -4771,7 +4771,9 @@ pub enum LabUiState {
     /// Trial wizard: step 1 — select a screening hit to trial.
     TrialSelectHit,
     /// Trial wizard: step 2 — select rigor level for the selected hit.
-    TrialSelectRigor { hit_index: usize },
+    /// Stores compound_id (not an index) for stability — screening_hits can shift
+    /// between wizard steps if a screening run completes during a tick.
+    TrialSelectRigor { compound_id: String },
 }
 
 impl LabUiState {

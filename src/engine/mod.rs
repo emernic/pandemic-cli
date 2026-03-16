@@ -782,12 +782,12 @@ pub fn execute_command(state: &mut WorldState, cmd: &GameCommand) -> CommandResu
             let (ok, msg) = screening::start_screening(state, *disease_idx, *modality, *run_size);
             CommandResult { message: msg, success: ok, events: Vec::new() }
         }
-        GameCommand::StartTrial { hit_index, rigor } => {
-            let (ok, msg) = research::start_trial(state, *hit_index, *rigor);
+        GameCommand::StartTrial { compound_id, rigor } => {
+            let (ok, msg) = research::start_trial(state, compound_id, *rigor);
             CommandResult { message: msg, success: ok, events: Vec::new() }
         }
-        GameCommand::DiscardHit { hit_index } => {
-            let (ok, msg) = research::discard_hit(state, *hit_index);
+        GameCommand::DiscardHit { compound_id } => {
+            let (ok, msg) = research::discard_hit(state, compound_id);
             CommandResult { message: msg, success: ok, events: Vec::new() }
         }
         GameCommand::TogglePolicy {

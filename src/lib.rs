@@ -396,8 +396,10 @@ pub fn apply_action(state: &AppState, action: &Action) -> AppState {
                 }
                 // Discard screening hit in the trial wizard
                 if let Some(LabUiState::TrialSelectHit) = &new.ui.lab_ui {
-                    let hit_index = new.ui.panel_selection;
-                    let cmd = GameCommand::DiscardHit { hit_index };
+                    let compound_id = new.screening_hits.get(new.ui.panel_selection)
+                        .map(|h| h.compound_id.clone())
+                        .unwrap_or_default();
+                    let cmd = GameCommand::DiscardHit { compound_id };
                     let result = execute_command(&mut new, &cmd);
                     events::process_events(&mut new, &result.events);
                     match &cmd {
@@ -761,19 +763,20 @@ fn handle_lab_confirm(ui: &mut UiState, state: &AppState) -> Option<GameCommand>
         }
         // Trial wizard: select hit → advance to rigor selection
         Some(LabUiState::TrialSelectHit) => {
-            if ui.panel_selection < state.screening_hits.len() {
+            if let Some(hit) = state.screening_hits.get(ui.panel_selection) {
+                let compound_id = hit.compound_id.clone();
                 ui.lab_ui = Some(LabUiState::TrialSelectRigor {
-                    hit_index: ui.panel_selection,
+                    compound_id,
                 });
                 ui.panel_selection = 0;
             }
             None
         }
         // Trial wizard: select rigor → start trial
-        Some(LabUiState::TrialSelectRigor { hit_index }) => {
+        Some(LabUiState::TrialSelectRigor { compound_id }) => {
             if let Some(&rigor) = crate::state::TrialRigor::ALL.get(ui.panel_selection) {
                 return Some(GameCommand::StartTrial {
-                    hit_index,
+                    compound_id: compound_id.clone(),
                     rigor,
                 });
             }
