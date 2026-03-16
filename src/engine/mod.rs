@@ -2888,14 +2888,8 @@ mod tests {
             assert_eq!(new_disease.knowledge, 0.0);
             // variant_number should be 0 for newly emerged (non-variant) diseases
 
-            // Matching medicine should exist
-            assert!(state.medicines.len() > initial_medicines);
-            let has_targeted = state.medicines.iter().any(|m| {
-                m.target_diseases.contains(&new_idx) && !m.unlocked
-            });
-            assert!(has_targeted, "new disease should have a matching targeted medicine");
-
-            // Broad-spectrum should also target new disease
+            // Targeted medicines are no longer pre-created — they come from screening hits.
+            // Broad-spectrum should target the new disease.
             let broad = state.medicines.iter().find(|m| {
                 m.therapy_type == crate::state::TherapyType::BroadSpectrum
             });
