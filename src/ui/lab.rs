@@ -933,8 +933,8 @@ fn format_detail(kind: &ResearchKind, state: &AppState) -> Option<String> {
         ResearchKind::ManufactureDoses { medicine_idx } => {
             let med = state.medicines.get(*medicine_idx)?;
             let current = crate::format_number(med.doses);
-            let target = crate::format_number(med.max_doses);
-            Some(format!("{} → {} doses", current, target))
+            let batch = crate::format_number(state.world.reactor_batch_output(*medicine_idx));
+            Some(format!("{} doses (+{}/batch)", current, batch))
         }
         ResearchKind::GenomicSequencing { disease_idx } => {
             let disease = state.diseases.get(*disease_idx)?;
@@ -1240,9 +1240,9 @@ fn render_reactor_vessel(lines: &mut Vec<Line<'static>>, reactor: &crate::state:
             let speed = personnel_speed(reactor.personnel_assigned, base_personnel)
                 * state.research_infra_multiplier();
             let effective_remaining = if speed > 0.0 { remaining / speed } else { remaining };
-            let target = med.map(|m| m.max_doses).unwrap_or(0.0);
+            let batch_output = state.world.reactor_batch_output(med_idx);
             (name.to_string(), Some(pct / 100.0),
-             format!("batch {:.0}%  ▣ {} doses  {}", pct, crate::format_number(target),
+             format!("batch {:.0}%  +{} doses  {}", pct, crate::format_number(batch_output),
                  format_days(effective_remaining)))
         } else {
             // Idle — reactor is empty, show stockpile info in status text only

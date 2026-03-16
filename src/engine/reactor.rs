@@ -155,9 +155,10 @@ pub(super) fn tick_reactors(state: &mut WorldState, events: &mut Vec<GameEvent>)
             reactor.personnel_assigned = 0;
 
             if let Some(med_idx) = reactor.medicine_idx {
-                // Complete manufacturing — restore doses
+                // Complete manufacturing — add a batch of doses (fraction of max)
+                let batch_output = state.reactor_batch_output(med_idx);
                 if let Some(medicine) = state.medicines.get_mut(med_idx) {
-                    medicine.doses = medicine.max_doses;
+                    medicine.doses = (medicine.doses + batch_output).min(medicine.max_doses);
                 }
 
                 // Manufacturer satisfaction boost (same as old ManufactureDoses completion)
