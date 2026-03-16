@@ -132,6 +132,11 @@ pub(crate) fn tick(state: &WorldState) -> (WorldState, Vec<GameEvent>) {
     // Nuclear state transitions — land nukes that have reached their hit tick.
     policy::tick_nuclear(&mut new, &mut events);
 
+    // Chairman succession — if the chairman died (e.g. from a nuke), promote a successor.
+    if let Some(name) = board::maybe_promote_chairman(&mut new) {
+        events.push(GameEvent::ChairmanSuccession { name });
+    }
+
     // Policy costs — suspend unaffordable policies and deduct costs.
     let policy_cost = policy::tick_enforce_costs(&mut new, &mut events);
     new.cumulative_policy_spending += policy_cost;

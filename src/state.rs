@@ -4330,6 +4330,10 @@ pub enum GameEvent {
         disease_idx: usize,
         hit_count: usize,
     },
+    /// A new chairman was promoted after the previous one died.
+    ChairmanSuccession {
+        name: String,
+    },
 }
 
 /// Automation rules that fire during tick when conditions are met.
