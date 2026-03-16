@@ -25,8 +25,9 @@ fn chairman_satisfaction_hit(state: &mut WorldState, amount: f64) {
     }
 }
 
-/// Queue a GovernorDeath crisis after a delay, unless the governor is already dead
-/// or a GovernorDeath is already pending/active for this region.
+/// Queue a GovernorDeath crisis with ~30% probability after a non-stabilize
+/// GovernorSick resolution. Skips if the governor is already dead or a
+/// GovernorDeath is already pending/active for this region.
 fn queue_governor_death_followup(state: &mut WorldState, region_idx: usize) {
     let already_dead = state.regions.get(region_idx).map_or(true, |r| r.governor.dead);
     if already_dead {
@@ -39,7 +40,11 @@ fn queue_governor_death_followup(state: &mut WorldState, region_idx: usize) {
     if already_pending || already_active {
         return;
     }
-    state.pending_crises.push(CrisisKind::GovernorDeath { region_idx });
+    // ~30% chance the governor actually dies after non-stabilize choices
+    let roll: f64 = state.rng_crisis.r#gen();
+    if roll < 0.30 {
+        state.pending_crises.push(CrisisKind::GovernorDeath { region_idx });
+    }
 }
 
 /// Scale a dollar amount relative to current funding.
@@ -3274,12 +3279,9 @@ mod tests {
     }
 
     #[test]
-    fn governor_sick_worst_case_queues_death() {
-        let mut events: Vec<GameEvent> = Vec::new();
-        let mut state = AppState::new_default(42);
-        state.tick = (15.0 * TICKS_PER_DAY) as u64;
-
-        // Test each personality's worst-case option
+    fn governor_sick_worst_case_queues_death_probabilistically() {
+        // Governor death after non-stabilize choices should happen ~30% of the time.
+        // Run each personality across many seeds and check the aggregate rate.
         let cases: Vec<(GovernorPersonality, usize)> = vec![
             (GovernorPersonality::Buffoon, 1),    // Secure corporation (governor unmonitored)
             (GovernorPersonality::Blowhard, 1),   // Refuse
@@ -3289,25 +3291,39 @@ mod tests {
             (GovernorPersonality::Mobster, 2),     // Refuse
         ];
 
-        for (personality, worst_choice) in cases {
-            let mut s = state.clone();
-            s.pending_crises.clear();
-            let region_idx = 0;
-            s.regions[region_idx].governor.personality = personality;
-            s.regions[region_idx].governor.dead = false;
+        let trials = 200;
+        let mut total_deaths = 0;
+        let mut total_trials = 0;
 
-            let kind = CrisisKind::GovernorSick { region_idx };
-            let crisis = build_crisis_event(&s, kind);
-            s.active_crisis = Some(crisis);
-            // Crisis is active — game is blocked via is_blocked()
+        for (personality, worst_choice) in &cases {
+            for seed in 0..trials {
+                let mut events: Vec<GameEvent> = Vec::new();
+                let mut s = AppState::new_default(seed);
+                s.tick = (15.0 * TICKS_PER_DAY) as u64;
+                s.pending_crises.clear();
+                let region_idx = 0;
+                s.regions[region_idx].governor.personality = *personality;
+                s.regions[region_idx].governor.dead = false;
 
-            let (_msg, _) = resolve_crisis(&mut s, worst_choice, &mut events);
+                let kind = CrisisKind::GovernorSick { region_idx };
+                let crisis = build_crisis_event(&s, kind);
+                s.active_crisis = Some(crisis);
 
-            let has_death = s.pending_crises.iter()
-                .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
-            assert!(has_death,
-                "{:?} worst-case (choice {}) should queue GovernorDeath", personality, worst_choice);
+                let (_msg, _) = resolve_crisis(&mut s, *worst_choice, &mut events);
+
+                let has_death = s.pending_crises.iter()
+                    .any(|k| matches!(k, CrisisKind::GovernorDeath { region_idx: ri } if *ri == region_idx));
+                if has_death {
+                    total_deaths += 1;
+                }
+                total_trials += 1;
+            }
         }
+
+        let rate = total_deaths as f64 / total_trials as f64;
+        assert!(rate > 0.15 && rate < 0.45,
+            "Governor death rate should be ~30%, got {:.1}% ({}/{})",
+            rate * 100.0, total_deaths, total_trials);
     }
 
     #[test]
