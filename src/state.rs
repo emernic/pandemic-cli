@@ -4378,7 +4378,7 @@ pub enum GameCommand {
         target: DeployTarget,
     },
     StartResearch {
-        project_idx: usize,
+        kind: ResearchKind,
         double_personnel: bool,
     },
     TogglePolicy {
@@ -4781,8 +4781,9 @@ pub enum LabUiState {
     /// Browsing items within the active tab.
     Browse { tab: LabTab },
     /// Confirming a project before starting it.
-    /// `project_idx` indexes into `all_available_projects()`.
-    ConfirmProject { tab: LabTab, project_idx: usize, double_personnel: bool },
+    /// Stores the `ResearchKind` directly for stability — the dynamic list may change between
+    /// selection and confirmation (e.g. a project completes mid-confirmation).
+    ConfirmProject { tab: LabTab, kind: ResearchKind, double_personnel: bool },
     /// Confirming a lab upgrade before purchasing.
     ConfirmLabUpgrade { tab: LabTab },
     /// Screening configuration form: single page showing disease, modality,
@@ -6674,8 +6675,7 @@ impl WorldState {
 
     /// All available research projects, concatenated.
     /// Field projects first, then Applied, then Basic.
-    /// The index into this list is used by `ResearchFlatItem::Available` and
-    /// `GameCommand::StartResearch`.
+    /// The index into this list is used by `ResearchFlatItem::Available` for display.
     pub fn all_available_projects(&self) -> Vec<ResearchKind> {
         let mut all = self.available_field_projects();
         all.extend(self.available_applied_projects());

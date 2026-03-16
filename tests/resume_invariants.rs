@@ -97,7 +97,7 @@ fn resume_preserves_research_wizard_state() {
     state.ui.open_panel = Panel::Lab;
     state.ui.lab_ui = Some(LabUiState::ConfirmProject {
         tab: pandemic_cli_lib::state::LabTab::Sequencing,
-        project_idx: 0,
+        kind: pandemic_cli_lib::state::ResearchKind::IdentifyThreat { disease_idx: 0 },
         double_personnel: true,
     });
 
@@ -107,7 +107,7 @@ fn resume_preserves_research_wizard_state() {
         restored.ui.lab_ui,
         Some(LabUiState::ConfirmProject {
             tab: pandemic_cli_lib::state::LabTab::Sequencing,
-            project_idx: 0,
+            kind: pandemic_cli_lib::state::ResearchKind::IdentifyThreat { disease_idx: 0 },
             double_personnel: true,
         }),
         "research wizard step lost on resume"
