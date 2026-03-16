@@ -257,19 +257,10 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
                 let affected: Vec<&str> = order.iter()
                     .filter_map(|&idx| state.regions.get(idx).map(|r| (idx, r)))
                     .filter(|&(ri, r)| {
-                        if r.estimated_infected <= 0.0 { return false; }
+                        let dead = r.disease_state(i).map_or(0.0, |inf| inf.dead);
+                        if dead >= 1.0 { return true; }
                         let shows_exposed = state.screening_shows_exposed(ri);
-                        let total_real = if shows_exposed {
-                            r.detected_infected(&state.diseases)
-                        } else {
-                            r.detected_symptomatic(&state.diseases)
-                        };
-                        if total_real <= 0.0 { return false; }
-                        let this_disease: f64 = r.infections.iter()
-                            .filter(|inf| inf.disease_idx == i)
-                            .map(|inf| if shows_exposed { inf.exposed + inf.infected } else { inf.infected })
-                            .sum();
-                        let screened = r.estimated_infected * (this_disease / total_real);
+                        let screened = r.screened_infected_for_disease(i, &state.diseases, shows_exposed);
                         screened >= 1.0
                     })
                     .map(|(_, r)| r.name.as_str())
@@ -474,17 +465,8 @@ fn render_disease_detail(lines: &mut Vec<Line>, state: &AppState, disease_idx: u
             if inf.exposed + inf.infected <= 0.0 && inf.immune <= 0.0 && inf.dead <= 0.0 {
                 continue;
             }
-            // Distribute region's total estimate proportionally across diseases.
-            // Without antigen screening, exposed (incubating) people are invisible.
             let shows_exposed = state.screening_shows_exposed(region_idx);
-            let total_real = if shows_exposed {
-                region.detected_infected(&state.diseases)
-            } else {
-                region.detected_symptomatic(&state.diseases)
-            };
-            let this_disease_total = if shows_exposed { inf.exposed + inf.infected } else { inf.infected };
-            let proportion = if total_real > 0.0 { this_disease_total / total_real } else { 0.0 };
-            let screened = region.estimated_infected * proportion;
+            let screened = region.screened_infected_for_disease(disease_idx, &state.diseases, shows_exposed);
             let shows_immune = state.policies.get(region_idx)
                 .map(|p| p.screening.shows_immune())
                 .unwrap_or(false);
