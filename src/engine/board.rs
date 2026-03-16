@@ -351,7 +351,7 @@ pub(super) fn update_board_satisfaction(state: &mut WorldState) {
 
     // Track chairman hostility duration for Vote of No Confidence
     let chairman_sat = state.board_members.iter()
-        .find(|m| m.is_chairman)
+        .find(|m| m.is_chairman && !m.dead)
         .map(|m| m.satisfaction);
     match chairman_sat {
         Some(sat) if sat < CHAIRMAN_HOSTILE_THRESHOLD => {

@@ -6291,7 +6291,7 @@ impl WorldState {
     /// Returns None if there's no chairman or the chairman is a governor (no personality).
     pub fn chairman_personality(&self) -> Option<BoardPersonality> {
         self.board_members.iter()
-            .find(|m| m.is_chairman)
+            .find(|m| m.is_chairman && !m.dead)
             .and_then(|m| m.personality)
     }
 

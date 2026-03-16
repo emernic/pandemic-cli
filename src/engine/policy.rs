@@ -515,7 +515,7 @@ pub(super) fn bargain_with_governor(state: &mut WorldState, region_idx: usize) -
     match personality {
         GovernorPersonality::Buffoon => {
             // Public Praise — chairman satisfaction hit, cooperation decays fast (tracked in tick)
-            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+            if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman && !m.dead) {
                 chairman.add_modifier(ModifierSource::CrisisEffect, -BARGAIN_BUFFOON_APPROVAL_COST);
             }
             let gov = &mut state.regions[region_idx].governor;
@@ -968,7 +968,7 @@ pub(super) fn tick_governor_actions(state: &mut WorldState, events: &mut Vec<Gam
                     Some(format!("{gov_name} extorted ¥{demand:.0} from {region_name}"))
                 } else {
                     // Can't pay — chairman satisfaction hit instead
-                    if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+                    if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman && !m.dead) {
                         chairman.add_modifier(ModifierSource::CrisisEffect, -0.05);
                     }
                     Some(format!("{gov_name} made threats in {region_name}. International embarrassment."))
@@ -1144,7 +1144,7 @@ pub(super) fn enact_decree(state: &mut WorldState, decree: DecreeId, region_idx:
 
     // Apply chairman satisfaction cost only on successful enactment
     if success {
-        if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman) {
+        if let Some(chairman) = state.board_members.iter_mut().find(|m| m.is_chairman && !m.dead) {
             chairman.add_modifier(ModifierSource::CrisisEffect, chairman_cost);
         }
     }
