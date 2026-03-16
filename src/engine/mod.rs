@@ -25,6 +25,10 @@ use crate::state::{
 /// Initialize game systems that run after basic state construction.
 /// Called once for new games (not for loaded saves that already have this data).
 /// Generates corporations and board members from the initial game state.
+///
+/// Only two call-sites should exist: `new_game()` below and
+/// `persistence::load_or_create()`. Do not add more — see the doc comments
+/// on `WorldState::new_default()` and `persistence::load_or_create()` for why.
 pub fn initialize_game(state: &mut WorldState) {
     if state.corporations.is_empty() {
         corporations::generate_corporations(state);
@@ -47,14 +51,15 @@ pub fn initialize_game(state: &mut WorldState) {
 
 /// Create a fully bootstrapped game state ready for play.
 ///
-/// This is the canonical way to create a new game in tests and production.
+/// This is the **canonical constructor** for a new game in tests and tools.
 /// It constructs the raw world state and then runs `initialize_game()` to
-/// fill in corporations, board members, and board budget — the same path
-/// that `persistence::load_or_create()` uses for new saves.
+/// fill in corporations, board members, and board budget — the same bootstrap
+/// that `persistence::load_or_create()` applies to new saves.
 ///
 /// Use this instead of `AppState::new_default()` for any test that is meant
 /// to represent a real day-0 game. Use `AppState::new_default()` only when
-/// you intentionally need a raw, pre-bootstrap world state.
+/// you intentionally need a raw, pre-bootstrap world state (e.g., testing
+/// `initialize_game()` itself).
 pub fn new_game(seed: u64) -> crate::state::AppState {
     let mut world = WorldState::new_default(seed);
     initialize_game(&mut world);

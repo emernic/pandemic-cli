@@ -50,6 +50,16 @@ impl From<std::io::Error> for PersistenceError {
 /// This is the single entry point for obtaining a ready-to-run `AppState`.
 /// It handles: file I/O, deserialization, migration, and game-system bootstrap
 /// (`initialize_game`). Both interactive and snapshot callers use this.
+///
+/// **Why this constructs `WorldState` directly instead of calling `engine::new_game()`:**
+/// For *loaded* saves we already have a deserialized `WorldState` + `UiState` pair,
+/// so we only need `initialize_game()` as a no-op guard (it checks `.is_empty()`).
+/// For *new* games we need the same raw constructor + `initialize_game()` path.
+/// Unifying both branches here avoids duplicating the load-vs-create logic.
+///
+/// **Do not add more bootstrap entry points.** If you need to create a game
+/// from a new call-site, call `engine::new_game()` (for tests/tools) or
+/// this function (for anything that touches save files).
 pub fn load_or_create(path: Option<&str>, seed: u64) -> Result<LoadedGame, PersistenceError> {
     let (mut world, ui) = match path {
         Some(p) if Path::new(p).exists() => {

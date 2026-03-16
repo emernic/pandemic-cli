@@ -4760,7 +4760,8 @@ impl AppState {
     /// the full production bootstrap (`initialize_game`). Use this constructor
     /// only when you intentionally need a raw world state — e.g., to test
     /// startup initialization itself or to set up a specific pre-bootstrap
-    /// scenario.
+    /// scenario. This is a pragmatic compromise, not a pattern to copy — do
+    /// not add more constructors that partially duplicate the bootstrap.
     pub fn new_default(seed: u64) -> Self {
         Self {
             world: WorldState::new_default(seed),
@@ -5133,6 +5134,18 @@ impl WorldState {
         self.sim_state.is_running() && !self.is_blocked()
     }
 
+    /// Create a raw, pre-bootstrap `WorldState` with regions, RNG streams,
+    /// and a single starting disease, but **no corporations, board members,
+    /// or board budget**.
+    ///
+    /// This is intentionally incomplete — callers that need a playable game
+    /// must follow up with [`engine::initialize_game()`] (or, better, use
+    /// [`engine::new_game()`] which does both steps).
+    ///
+    /// **Do not add more constructors that duplicate this + `initialize_game`.**
+    /// The two existing bootstrap paths — `engine::new_game()` for tests/fresh
+    /// games and `persistence::load_or_create()` for saves — are sufficient.
+    /// If you need a new entry point, extend one of those instead.
     pub fn new_default(seed: u64) -> Self {
 
         // Per-subsystem RNG streams. Emergence uses the raw seed so the
