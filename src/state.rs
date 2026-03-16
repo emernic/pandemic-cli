@@ -3575,7 +3575,7 @@ impl ScreeningModality {
         match self {
             Self::SmallMolecule => "easy to manufacture, resistance-prone",
             Self::MonoclonalAntibody => "high efficacy, low yield",
-            Self::RnaTherapeutic => "resistance-resistant, balanced",
+            Self::RnaTherapeutic => "durable, balanced",
         }
     }
 
