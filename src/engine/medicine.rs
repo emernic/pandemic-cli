@@ -332,20 +332,29 @@ pub(super) fn emergency_sample_delivery(
     let mut adverse = false;
 
     if has_untested_match {
-        // Untested medicine: 25% chance of adverse reaction
+        // Untested medicine: 25% chance of adverse reaction (unknown risk)
         let roll: f64 = rng.r#gen();
         if roll < 0.25 {
-            // Adverse reaction: governor loses trust
             adverse = true;
             cooperation_change = -10.0;
         } else {
-            // Untested but no reaction: moderate cooperation boost
             cooperation_change = 10.0;
         }
 
     } else if has_tested_match {
-        // Tested medicine for an active disease: strong cooperation boost
-        cooperation_change = 20.0;
+        // Tested medicine: use trial-determined side_effect_rate
+        let side_effect_rate = state.medicines[medicine_idx].side_effect_rate;
+        if side_effect_rate > 0.0 {
+            let roll: f64 = rng.r#gen();
+            if roll < side_effect_rate {
+                adverse = true;
+                cooperation_change = -10.0;
+            } else {
+                cooperation_change = 20.0;
+            }
+        } else {
+            cooperation_change = 20.0;
+        }
     } else {
         // No active diseases in region or medicine doesn't target them: small boost
         cooperation_change = 8.0;
