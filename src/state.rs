@@ -3508,21 +3508,28 @@ impl Medicine {
     }
 
     /// Combined efficacy when deploying this medicine against a disease.
-    /// Factors: therapy type × mechanism × cross-reactivity × resistance.
+    /// When trial_efficacy is set (from clinical trials), uses that as the base
+    /// instead of the deterministic therapy_type × mechanism calculation.
+    /// Cross-reactivity and resistance modifiers still apply on top.
     pub fn effective_efficacy(&self, disease_idx: usize, diseases: &[Disease]) -> f64 {
-        let therapy_efficacy = diseases.get(disease_idx)
-            .map(|d| self.therapy_type.efficacy(&d.pathogen_type))
-            .unwrap_or(0.0);
-        let mechanism_eff = self.mechanism
-            .map(|m| m.efficacy_modifier())
-            .unwrap_or(1.0);
+        let base_efficacy = if let Some(trial_eff) = self.trial_efficacy {
+            trial_eff
+        } else {
+            let therapy_efficacy = diseases.get(disease_idx)
+                .map(|d| self.therapy_type.efficacy(&d.pathogen_type))
+                .unwrap_or(0.0);
+            let mechanism_eff = self.mechanism
+                .map(|m| m.efficacy_modifier())
+                .unwrap_or(1.0);
+            therapy_efficacy * mechanism_eff
+        };
         let cross_reactive = if self.is_cross_reactive(disease_idx) {
             CROSS_REACTIVE_PENALTY
         } else {
             1.0
         };
         let resistance = self.resistance_factor(disease_idx, diseases);
-        therapy_efficacy * mechanism_eff * cross_reactive * resistance
+        base_efficacy * cross_reactive * resistance
     }
 
 }
