@@ -3723,6 +3723,8 @@ pub struct ScreeningHit {
     pub kd_nm: f64,
     /// Auto-generated compound identifier (e.g., "SM-001", "mAb-003").
     pub compound_id: String,
+    /// Which well (0-based index) this hit was found in.
+    pub well_index: u32,
 }
 
 impl ScreeningHit {
